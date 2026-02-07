@@ -1,7 +1,237 @@
 // Arg prompt render method - extracted from render_prompts.rs
 // This file is included via include!() macro in main.rs
 
+#[inline]
+fn prompt_actions_dialog_offsets(padding_sm: f32, border_thin: f32) -> (f32, f32) {
+    // Keep dialog anchored just below the shared header + divider.
+    let top = crate::panel::HEADER_TOTAL_HEIGHT + padding_sm - border_thin;
+    let right = padding_sm;
+    (top, right)
+}
+
+#[inline]
+fn running_status_text(context: &str) -> String {
+    crate::panel::running_status_message(context)
+}
+
+#[inline]
+fn prompt_footer_colors_for_prompt(
+    design_colors: &crate::designs::DesignColors,
+    is_light_mode: bool,
+) -> PromptFooterColors {
+    PromptFooterColors {
+        accent: design_colors.accent,
+        text_muted: design_colors.text_muted,
+        border: design_colors.border,
+        background: design_colors.background_selected,
+        is_light_mode,
+    }
+}
+
+#[inline]
+fn prompt_footer_config_with_status(
+    primary_label: &str,
+    show_secondary: bool,
+    helper_text: Option<String>,
+    info_label: Option<String>,
+) -> PromptFooterConfig {
+    let mut config = PromptFooterConfig::new()
+        .primary_label(primary_label)
+        .primary_shortcut("↵")
+        .secondary_label("Actions")
+        .secondary_shortcut("⌘K")
+        .show_secondary(show_secondary);
+
+    if let Some(helper) = helper_text {
+        config = config.helper_text(helper);
+    }
+
+    if let Some(info) = info_label {
+        config = config.info_label(info);
+    }
+
+    config
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ArgSubmitOutcome {
+    SubmitChoice(String),
+    SubmitText(String),
+    InvalidEmpty,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ArgHelperStatus {
+    NavigateChoices,
+    NoMatchesSubmitTypedValue,
+    TypeValueToContinue,
+    SubmitTypedValue,
+}
+
+#[inline]
+fn resolve_arg_submit_outcome(
+    selected_choice_value: Option<&str>,
+    input_text: &str,
+) -> ArgSubmitOutcome {
+    if let Some(value) = selected_choice_value {
+        return ArgSubmitOutcome::SubmitChoice(value.to_string());
+    }
+
+    if input_text.is_empty() {
+        return ArgSubmitOutcome::InvalidEmpty;
+    }
+
+    ArgSubmitOutcome::SubmitText(input_text.to_string())
+}
+
+#[inline]
+fn resolve_arg_helper_status(
+    has_choices: bool,
+    filtered_choices_len: usize,
+    input_is_empty: bool,
+) -> ArgHelperStatus {
+    if has_choices && filtered_choices_len > 0 {
+        return ArgHelperStatus::NavigateChoices;
+    }
+
+    if has_choices && !input_is_empty {
+        return ArgHelperStatus::NoMatchesSubmitTypedValue;
+    }
+
+    if input_is_empty {
+        return ArgHelperStatus::TypeValueToContinue;
+    }
+
+    ArgHelperStatus::SubmitTypedValue
+}
+
+#[inline]
+fn arg_helper_status_text(status: ArgHelperStatus) -> String {
+    match status {
+        ArgHelperStatus::NavigateChoices => {
+            running_status_text("use ↑/↓ to choose, Enter to continue")
+        }
+        ArgHelperStatus::NoMatchesSubmitTypedValue => {
+            running_status_text("no matches · Enter submits typed value")
+        }
+        ArgHelperStatus::TypeValueToContinue => running_status_text("type a value and press Enter"),
+        ArgHelperStatus::SubmitTypedValue => {
+            running_status_text("press Enter to submit typed value")
+        }
+    }
+}
+
+#[inline]
+fn resolve_arg_tab_completion(
+    filtered: &[(usize, &Choice)],
+    selected_index: usize,
+) -> Option<String> {
+    if filtered.is_empty() {
+        return None;
+    }
+
+    if filtered.len() == 1 {
+        return filtered.first().map(|(_, choice)| choice.name.clone());
+    }
+
+    filtered
+        .get(selected_index)
+        .or_else(|| filtered.first())
+        .map(|(_, choice)| choice.name.clone())
+}
+
 impl ScriptListApp {
+    #[inline]
+    fn arg_prompt_has_choices(&self) -> bool {
+        matches!(&self.current_view, AppView::ArgPrompt { choices, .. } if !choices.is_empty())
+    }
+
+    #[inline]
+    fn sync_arg_prompt_after_text_change(
+        &mut self,
+        prev_original_idx: Option<usize>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let has_choices = self.arg_prompt_has_choices();
+        let (new_selected_idx, filtered_len) = {
+            let filtered = self.filtered_arg_choices();
+            let new_idx = if let Some(prev_idx) = prev_original_idx {
+                filtered
+                    .iter()
+                    .position(|(orig_idx, _)| *orig_idx == prev_idx)
+                    .unwrap_or(0)
+            } else {
+                0
+            };
+
+            (new_idx, filtered.len())
+        };
+
+        self.arg_selected_index = new_selected_idx;
+
+        // Defer resize through window_ops to avoid RefCell borrow conflicts during native callbacks.
+        let (view_type, item_count) = if filtered_len == 0 {
+            if has_choices {
+                (ViewType::ArgPromptWithChoices, 0)
+            } else {
+                (ViewType::ArgPromptNoChoices, 0)
+            }
+        } else {
+            (ViewType::ArgPromptWithChoices, filtered_len)
+        };
+        let target_height = crate::window_resize::height_for_view(view_type, item_count);
+        crate::window_ops::queue_resize(f32::from(target_height), window, &mut *cx);
+    }
+
+    #[inline]
+    fn resolve_current_arg_submit_outcome(&self) -> ArgSubmitOutcome {
+        let filtered = self.filtered_arg_choices();
+        let selected_choice_value = filtered
+            .get(self.arg_selected_index)
+            .map(|(_, choice)| choice.value.as_str());
+        resolve_arg_submit_outcome(selected_choice_value, self.arg_input.text())
+    }
+
+    #[inline]
+    fn submit_arg_prompt_from_current_state(&mut self, prompt_id: &str, cx: &mut Context<Self>) {
+        match self.resolve_current_arg_submit_outcome() {
+            ArgSubmitOutcome::SubmitChoice(value) | ArgSubmitOutcome::SubmitText(value) => {
+                self.submit_prompt_response(prompt_id.to_string(), Some(value), cx);
+            }
+            ArgSubmitOutcome::InvalidEmpty => {
+                self.show_hud("Type a value to continue".to_string(), Some(1500), cx);
+            }
+        }
+    }
+
+    #[inline]
+    fn apply_arg_tab_completion(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let (completion_text, prev_original_idx) = {
+            let filtered = self.filtered_arg_choices();
+            (
+                resolve_arg_tab_completion(&filtered, self.arg_selected_index),
+                filtered
+                    .get(self.arg_selected_index)
+                    .map(|(original_idx, _)| *original_idx),
+            )
+        };
+
+        let Some(completion_text) = completion_text else {
+            return false;
+        };
+
+        if self.arg_input.text() == completion_text {
+            return true;
+        }
+
+        self.arg_input.set_text(completion_text);
+        self.arg_input.move_to_end(false);
+        self.sync_arg_prompt_after_text_change(prev_original_idx, window, cx);
+        cx.notify();
+        true
+    }
+
     /// Render the arg input text with cursor and selection highlight
     fn render_arg_input_text(&self, text_primary: u32, accent_color: u32) -> gpui::Div {
         let text = self.arg_input.text();
@@ -105,6 +335,8 @@ impl ScriptListApp {
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
         let design_visual = tokens.visual();
+        let (actions_dialog_top, actions_dialog_right) =
+            prompt_actions_dialog_offsets(design_spacing.padding_sm, design_visual.border_thin);
 
         // Key handler for arg prompt
         let prompt_id = id.clone();
@@ -210,18 +442,14 @@ impl ScriptListApp {
                     return;
                 }
 
+                if key.eq_ignore_ascii_case("tab") && !has_cmd && !modifiers.alt && !modifiers.shift
+                {
+                    this.apply_arg_tab_completion(window, cx);
+                    return;
+                }
+
                 if ui_foundation::is_key_enter(key) {
-                    let filtered = this.filtered_arg_choices();
-                    if let Some((_, choice)) = filtered.get(this.arg_selected_index) {
-                        // Case 1: There are filtered choices - submit the selected one
-                        let value = choice.value.clone();
-                        this.submit_prompt_response(prompt_id.clone(), Some(value), cx);
-                    } else if !this.arg_input.is_empty() {
-                        // Case 2: No choices but user typed something - submit input text
-                        let value = this.arg_input.text().to_string();
-                        this.submit_prompt_response(prompt_id.clone(), Some(value), cx);
-                    }
-                    // Case 3: No choices and no input - do nothing (prevent empty submissions)
+                    this.submit_arg_prompt_from_current_state(&prompt_id, cx);
                     return;
                 }
 
@@ -247,51 +475,7 @@ impl ScriptListApp {
                 if handled {
                     // If text changed (not just cursor move), update selection and resize
                     if this.arg_input.text() != old_text {
-                        // Compute the new filtered list (based on new text)
-                        // Extract the data we need to avoid borrow conflicts
-                        let (new_selected_idx, filtered_len, has_choices) = {
-                            let filtered = this.filtered_arg_choices();
-
-                            // Try to find the previously selected item in the new filtered list
-                            let new_idx = if let Some(prev_idx) = prev_original_idx {
-                                filtered
-                                    .iter()
-                                    .position(|(orig_idx, _)| *orig_idx == prev_idx)
-                                    .unwrap_or(0)
-                            } else {
-                                0
-                            };
-
-                            // Check if there are any choices at all
-                            let has_choices =
-                                if let AppView::ArgPrompt { choices, .. } = &this.current_view {
-                                    !choices.is_empty()
-                                } else {
-                                    false
-                                };
-
-                            (new_idx, filtered.len(), has_choices)
-                        };
-
-                        // Now update selection (borrow is dropped)
-                        this.arg_selected_index = new_selected_idx;
-
-                        // DEFERRED RESIZE: Avoid RefCell borrow error by deferring window resize
-                        // to next frame. The native macOS setFrame:display:animate: call triggers
-                        // callbacks that try to borrow the RefCell while GPUI still holds it.
-                        let (view_type, item_count) = if filtered_len == 0 {
-                            if has_choices {
-                                (ViewType::ArgPromptWithChoices, 0)
-                            } else {
-                                (ViewType::ArgPromptNoChoices, 0)
-                            }
-                        } else {
-                            (ViewType::ArgPromptWithChoices, filtered_len)
-                        };
-                        // Use window_ops for coalesced resize (avoids Timer::after pattern)
-                        let target_height =
-                            crate::window_resize::height_for_view(view_type, item_count);
-                        crate::window_ops::queue_resize(f32::from(target_height), window, &mut *cx);
+                        this.sync_arg_prompt_after_text_change(prev_original_idx, window, cx);
                     }
                     cx.notify();
                 }
@@ -320,7 +504,7 @@ impl ScriptListApp {
                 .text_center()
                 .text_color(rgb(design_colors.text_muted))
                 .font_family(design_typography.font_family)
-                .child("No choices match your filter")
+                .child("No choices match your filter · press Enter to use typed value")
                 .into_any_element()
         } else {
             // P0: Use uniform_list for virtualized scrolling of arg choices
@@ -400,7 +584,7 @@ impl ScriptListApp {
                             .flex_row()
                             .items_center()
                             .h(px(input_height)) // Fixed height for consistent vertical centering
-                            .text_xl()
+                            .text_size(px(design_typography.font_size_lg))
                             .text_color(if input_is_empty {
                                 rgb(text_muted)
                             } else {
@@ -461,13 +645,22 @@ impl ScriptListApp {
             })
             // Footer with unified actions
             .child({
-                let footer_colors = PromptFooterColors::from_theme(&self.theme);
-                let footer_config = PromptFooterConfig::new()
-                    .primary_label("Submit")
-                    .primary_shortcut("↵")
-                    .secondary_label("Actions")
-                    .secondary_shortcut("⌘K")
-                    .show_secondary(has_actions);
+                let footer_colors =
+                    prompt_footer_colors_for_prompt(&design_colors, !self.theme.is_dark_mode());
+                let helper_status =
+                    resolve_arg_helper_status(has_choices, filtered_choices_len, input_is_empty);
+                let helper_text = Some(arg_helper_status_text(helper_status));
+                let info_label = if has_choices {
+                    Some(format!("{filtered_choices_len} options"))
+                } else {
+                    None
+                };
+                let footer_config = prompt_footer_config_with_status(
+                    "Continue",
+                    has_actions,
+                    helper_text,
+                    info_label,
+                );
 
                 // Create click handlers
                 let prompt_id_for_primary = id.clone();
@@ -478,22 +671,10 @@ impl ScriptListApp {
                     .on_primary_click(Box::new(move |_, _window, cx| {
                         if let Some(app) = handle_primary.upgrade() {
                             app.update(cx, |this, cx| {
-                                let filtered = this.filtered_arg_choices();
-                                if let Some((_, choice)) = filtered.get(this.arg_selected_index) {
-                                    let value = choice.value.clone();
-                                    this.submit_prompt_response(
-                                        prompt_id_for_primary.clone(),
-                                        Some(value),
-                                        cx,
-                                    );
-                                } else if !this.arg_input.is_empty() {
-                                    let value = this.arg_input.text().to_string();
-                                    this.submit_prompt_response(
-                                        prompt_id_for_primary.clone(),
-                                        Some(value),
-                                        cx,
-                                    );
-                                }
+                                this.submit_arg_prompt_from_current_state(
+                                    &prompt_id_for_primary,
+                                    cx,
+                                );
                             });
                         }
                     }))
@@ -544,13 +725,148 @@ impl ScriptListApp {
                             .child(
                                 div()
                                     .absolute()
-                                    .top(px(52.)) // Clear the header bar (~44px header + 8px margin)
-                                    .right(px(8.))
+                                    .top(px(actions_dialog_top))
+                                    .right(px(actions_dialog_right))
                                     .child(dialog),
                             ),
                     )
                 },
             )
             .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::designs::{get_tokens, DesignColors, DesignVariant};
+    use crate::protocol::Choice;
+
+    fn choice(name: &str, value: &str) -> Choice {
+        Choice::new(name.to_string(), value.to_string())
+    }
+
+    #[test]
+    fn prompt_actions_dialog_offsets_match_legacy_defaults() {
+        let tokens = get_tokens(DesignVariant::Default);
+        let spacing = tokens.spacing();
+        let visual = tokens.visual();
+
+        let (top, right) = prompt_actions_dialog_offsets(spacing.padding_sm, visual.border_thin);
+        assert_eq!(top, 52.0);
+        assert_eq!(right, 8.0);
+    }
+
+    #[test]
+    fn prompt_footer_config_has_consistent_actions_defaults() {
+        let config =
+            prompt_footer_config_with_status("Continue", true, Some("Running".into()), None);
+        assert_eq!(config.primary_label, "Continue");
+        assert_eq!(config.primary_shortcut, "↵");
+        assert_eq!(config.secondary_label, "Actions");
+        assert_eq!(config.secondary_shortcut, "⌘K");
+        assert!(config.show_secondary);
+        assert_eq!(config.helper_text.as_deref(), Some("Running"));
+    }
+
+    #[test]
+    fn prompt_footer_colors_use_selected_background_for_surface() {
+        let mut design_colors = DesignColors::default();
+        design_colors.background_secondary = 0x123456;
+        design_colors.background_selected = 0xabcdef;
+
+        let footer_colors = prompt_footer_colors_for_prompt(&design_colors, true);
+
+        assert_eq!(footer_colors.background, 0xabcdef);
+        assert!(footer_colors.is_light_mode);
+    }
+
+    #[test]
+    fn test_footer_surface_color_uses_legacy_light_gray_in_light_mode() {
+        let footer = crate::components::prompt_footer::PromptFooterColors {
+            accent: 0,
+            text_muted: 0,
+            border: 0,
+            background: 0x000000,
+            is_light_mode: true,
+        };
+
+        assert_eq!(
+            crate::components::prompt_footer::footer_surface_rgba(footer),
+            0xf2f1f1ff
+        );
+    }
+
+    #[test]
+    fn running_status_text_is_contextual() {
+        assert_eq!(
+            running_status_text("awaiting input"),
+            "Script running · awaiting input"
+        );
+    }
+
+    #[test]
+    fn test_resolve_arg_submit_outcome_returns_invalid_when_input_is_empty() {
+        let outcome = resolve_arg_submit_outcome(None, "");
+        assert_eq!(outcome, ArgSubmitOutcome::InvalidEmpty);
+    }
+
+    #[test]
+    fn test_resolve_arg_submit_outcome_returns_selected_choice_value_when_available() {
+        let outcome = resolve_arg_submit_outcome(Some("selected-choice"), "typed value");
+        assert_eq!(
+            outcome,
+            ArgSubmitOutcome::SubmitChoice("selected-choice".to_string())
+        );
+    }
+
+    #[test]
+    fn test_resolve_arg_submit_outcome_returns_raw_text_when_no_selection_and_non_empty_input() {
+        let outcome = resolve_arg_submit_outcome(None, "typed value");
+        assert_eq!(
+            outcome,
+            ArgSubmitOutcome::SubmitText("typed value".to_string())
+        );
+    }
+
+    #[test]
+    fn test_resolve_arg_helper_status_returns_no_match_hint_when_choices_filtered_out() {
+        let status = resolve_arg_helper_status(true, 0, false);
+        assert_eq!(status, ArgHelperStatus::NoMatchesSubmitTypedValue);
+        assert_eq!(
+            arg_helper_status_text(status),
+            "Script running · no matches · Enter submits typed value"
+        );
+    }
+
+    #[test]
+    fn test_resolve_arg_tab_completion_returns_single_choice_when_single_match() {
+        let choices = [choice("Alpha", "alpha")];
+        let filtered: Vec<(usize, &Choice)> = choices.iter().enumerate().collect();
+        assert_eq!(
+            resolve_arg_tab_completion(&filtered, 0),
+            Some("Alpha".to_string())
+        );
+    }
+
+    #[test]
+    fn test_resolve_arg_tab_completion_uses_selected_choice_when_multiple_matches() {
+        let choices = [choice("Alpha", "alpha"), choice("Bravo", "bravo")];
+        let filtered: Vec<(usize, &Choice)> = choices.iter().enumerate().collect();
+        assert_eq!(
+            resolve_arg_tab_completion(&filtered, 1),
+            Some("Bravo".to_string())
+        );
+    }
+
+    #[test]
+    fn test_resolve_arg_tab_completion_falls_back_to_first_choice_when_selection_is_oob() {
+        let choices = [choice("Alpha", "alpha"), choice("Bravo", "bravo")];
+        let filtered: Vec<(usize, &Choice)> = choices.iter().enumerate().collect();
+        assert_eq!(
+            resolve_arg_tab_completion(&filtered, 99),
+            Some("Alpha".to_string())
+        );
     }
 }

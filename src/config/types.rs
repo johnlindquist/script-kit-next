@@ -183,6 +183,108 @@ impl Default for ContentPadding {
 }
 
 // ============================================
+// WATCHER + LAYOUT CONFIG
+// ============================================
+
+/// File watcher tuning values.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WatcherConfig {
+    /// Debounce window for file-system events.
+    #[serde(default = "default_watcher_debounce_ms")]
+    pub debounce_ms: u64,
+    /// Event storm threshold before collapsing to full reload.
+    #[serde(default = "default_watcher_storm_threshold")]
+    pub storm_threshold: usize,
+    /// Initial supervisor restart delay.
+    #[serde(default = "default_watcher_initial_backoff_ms")]
+    pub initial_backoff_ms: u64,
+    /// Maximum supervisor restart delay.
+    #[serde(default = "default_watcher_max_backoff_ms")]
+    pub max_backoff_ms: u64,
+    /// Maximum consecutive notify errors before restart.
+    #[serde(default = "default_watcher_max_notify_errors")]
+    pub max_notify_errors: u32,
+}
+
+fn default_watcher_debounce_ms() -> u64 {
+    DEFAULT_WATCHER_DEBOUNCE_MS
+}
+fn default_watcher_storm_threshold() -> usize {
+    DEFAULT_WATCHER_STORM_THRESHOLD
+}
+fn default_watcher_initial_backoff_ms() -> u64 {
+    DEFAULT_WATCHER_INITIAL_BACKOFF_MS
+}
+fn default_watcher_max_backoff_ms() -> u64 {
+    DEFAULT_WATCHER_MAX_BACKOFF_MS
+}
+fn default_watcher_max_notify_errors() -> u32 {
+    DEFAULT_WATCHER_MAX_NOTIFY_ERRORS
+}
+
+impl Default for WatcherConfig {
+    fn default() -> Self {
+        Self {
+            debounce_ms: DEFAULT_WATCHER_DEBOUNCE_MS,
+            storm_threshold: DEFAULT_WATCHER_STORM_THRESHOLD,
+            initial_backoff_ms: DEFAULT_WATCHER_INITIAL_BACKOFF_MS,
+            max_backoff_ms: DEFAULT_WATCHER_MAX_BACKOFF_MS,
+            max_notify_errors: DEFAULT_WATCHER_MAX_NOTIFY_ERRORS,
+        }
+    }
+}
+
+/// Core launcher sizing configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LayoutConfig {
+    /// Standard list/panel height in pixels.
+    #[serde(default = "default_layout_standard_height")]
+    pub standard_height: f32,
+    /// Full-height content views (editor, terminal) in pixels.
+    #[serde(default = "default_layout_max_height")]
+    pub max_height: f32,
+}
+
+fn default_layout_standard_height() -> f32 {
+    DEFAULT_LAYOUT_STANDARD_HEIGHT
+}
+fn default_layout_max_height() -> f32 {
+    DEFAULT_LAYOUT_MAX_HEIGHT
+}
+
+impl Default for LayoutConfig {
+    fn default() -> Self {
+        Self {
+            standard_height: DEFAULT_LAYOUT_STANDARD_HEIGHT,
+            max_height: DEFAULT_LAYOUT_MAX_HEIGHT,
+        }
+    }
+}
+
+/// Theme selection preferences loaded from user settings.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ThemeSelectionPreferences {
+    /// Optional preset identifier (for example: "catppuccin-mocha").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preset_id: Option<String>,
+}
+
+/// User preferences loaded from `<SK_PATH>/kit/settings.json`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ScriptKitUserPreferences {
+    /// Launcher/window layout settings.
+    #[serde(default)]
+    pub layout: LayoutConfig,
+    /// Theme selection settings.
+    #[serde(default)]
+    pub theme: ThemeSelectionPreferences,
+}
+
+// ============================================
 // COMMAND CONFIG
 // ============================================
 
@@ -319,7 +421,7 @@ impl Default for ClaudeCodeConfig {
 // HOTKEY CONFIG
 // ============================================
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct HotkeyConfig {
     pub modifiers: Vec<String>,
     pub key: String,
@@ -438,12 +540,28 @@ impl HotkeyConfig {
     }
 }
 
+fn default_main_hotkey() -> HotkeyConfig {
+    HotkeyConfig {
+        modifiers: vec!["meta".to_string()],
+        key: "Semicolon".to_string(),
+    }
+}
+
+fn default_ai_hotkey_enabled() -> bool {
+    DEFAULT_AI_HOTKEY_ENABLED
+}
+
+fn default_logs_hotkey_enabled() -> bool {
+    DEFAULT_LOGS_HOTKEY_ENABLED
+}
+
 // ============================================
 // MAIN CONFIG
 // ============================================
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
+    #[serde(default = "default_main_hotkey")]
     pub hotkey: HotkeyConfig,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bun_path: Option<String>,
@@ -499,6 +617,13 @@ pub struct Config {
     /// Hotkey for opening AI Chat window (default: Cmd+Shift+Space)
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "aiHotkey")]
     pub ai_hotkey: Option<HotkeyConfig>,
+    /// Whether AI hotkey is enabled (default: true)
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "aiHotkeyEnabled"
+    )]
+    pub ai_hotkey_enabled: Option<bool>,
     /// Hotkey for toggling log capture (default: Cmd+Shift+L)
     #[serde(
         default,
@@ -506,6 +631,19 @@ pub struct Config {
         rename = "logsHotkey"
     )]
     pub logs_hotkey: Option<HotkeyConfig>,
+    /// Whether logs hotkey is enabled (default: true)
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "logsHotkeyEnabled"
+    )]
+    pub logs_hotkey_enabled: Option<bool>,
+    /// Watcher tuning settings
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub watcher: Option<WatcherConfig>,
+    /// Window/layout sizing settings
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layout: Option<LayoutConfig>,
     /// Per-command configuration overrides (shortcuts, visibility)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub commands: Option<HashMap<String, CommandConfig>>,
@@ -522,10 +660,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
-            hotkey: HotkeyConfig {
-                modifiers: vec!["meta".to_string()],
-                key: "Semicolon".to_string(), // Cmd+; matches main.rs default
-            },
+            hotkey: default_main_hotkey(),
             bun_path: None,           // Will use system PATH if not specified
             editor: None,             // Will use $EDITOR or fallback to "code"
             padding: None,            // Will use ContentPadding::default() via getter
@@ -538,7 +673,11 @@ impl Default for Config {
             suggested: None,          // Will use SuggestedConfig::default() via getter
             notes_hotkey: None,       // Will use HotkeyConfig::default_notes_hotkey() via getter
             ai_hotkey: None,          // Will use HotkeyConfig::default_ai_hotkey() via getter
+            ai_hotkey_enabled: None,  // Defaults to true via getter
             logs_hotkey: None,        // Will use HotkeyConfig::default_logs_hotkey() via getter
+            logs_hotkey_enabled: None, // Defaults to true via getter
+            watcher: None,            // Will use WatcherConfig::default() via getter
+            layout: None,             // Will use LayoutConfig::default() via getter
             commands: None,           // No per-command overrides by default
             claude_code: None,        // Will use ClaudeCodeConfig::default() via getter
         }
@@ -612,20 +751,54 @@ impl Config {
         self.notes_hotkey.clone()
     }
 
-    /// Returns the AI hotkey configuration, or default (Cmd+Shift+Space) if not configured
-    #[allow(dead_code)]
-    pub fn get_ai_hotkey(&self) -> HotkeyConfig {
-        self.ai_hotkey
-            .clone()
-            .unwrap_or_else(HotkeyConfig::default_ai_hotkey)
+    /// Returns true if AI hotkey registration is enabled.
+    pub fn is_ai_hotkey_enabled(&self) -> bool {
+        self.ai_hotkey_enabled
+            .unwrap_or_else(default_ai_hotkey_enabled)
     }
 
-    /// Returns the logs hotkey configuration, or default (Cmd+Shift+L) if not configured
+    /// Returns true if logs hotkey registration is enabled.
+    pub fn is_logs_hotkey_enabled(&self) -> bool {
+        self.logs_hotkey_enabled
+            .unwrap_or_else(default_logs_hotkey_enabled)
+    }
+
+    /// Returns the AI hotkey configuration when enabled.
+    /// Falls back to default (Cmd+Shift+Space) when enabled but not configured.
     #[allow(dead_code)]
-    pub fn get_logs_hotkey(&self) -> HotkeyConfig {
-        self.logs_hotkey
-            .clone()
-            .unwrap_or_else(HotkeyConfig::default_logs_hotkey)
+    pub fn get_ai_hotkey(&self) -> Option<HotkeyConfig> {
+        if !self.is_ai_hotkey_enabled() {
+            return None;
+        }
+        Some(
+            self.ai_hotkey
+                .clone()
+                .unwrap_or_else(HotkeyConfig::default_ai_hotkey),
+        )
+    }
+
+    /// Returns the logs hotkey configuration when enabled.
+    /// Falls back to default (Cmd+Shift+L) when enabled but not configured.
+    #[allow(dead_code)]
+    pub fn get_logs_hotkey(&self) -> Option<HotkeyConfig> {
+        if !self.is_logs_hotkey_enabled() {
+            return None;
+        }
+        Some(
+            self.logs_hotkey
+                .clone()
+                .unwrap_or_else(HotkeyConfig::default_logs_hotkey),
+        )
+    }
+
+    /// Returns watcher tuning config, or defaults.
+    pub fn get_watcher(&self) -> WatcherConfig {
+        self.watcher.clone().unwrap_or_default()
+    }
+
+    /// Returns layout sizing config, or defaults.
+    pub fn get_layout(&self) -> LayoutConfig {
+        self.layout.clone().unwrap_or_default()
     }
 
     /// Returns command configuration for a specific command ID, or None if not configured.

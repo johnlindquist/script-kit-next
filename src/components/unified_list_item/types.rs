@@ -7,6 +7,13 @@ use gpui::*;
 use std::ops::Range;
 use std::sync::Arc;
 
+/// A precomputed text segment for highlighted content rendering.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HighlightFragment {
+    pub text: SharedString,
+    pub is_highlighted: bool,
+}
+
 // =============================================================================
 // TextContent - Title/Subtitle with optional highlight ranges
 // =============================================================================
@@ -25,6 +32,7 @@ pub enum TextContent {
     Highlighted {
         text: SharedString,
         ranges: Vec<Range<usize>>,
+        fragments: Arc<[HighlightFragment]>,
     },
 
     /// Custom element (for special rendering needs).
@@ -40,6 +48,7 @@ impl TextContent {
     /// Create highlighted text content with byte ranges.
     pub fn highlighted(text: impl Into<SharedString>, ranges: Vec<Range<usize>>) -> Self {
         let text = text.into();
+        let fragments = build_highlight_fragments(text.as_ref(), &ranges);
 
         #[cfg(debug_assertions)]
         {
@@ -60,7 +69,11 @@ impl TextContent {
             }
         }
 
-        Self::Highlighted { text, ranges }
+        Self::Highlighted {
+            text,
+            ranges,
+            fragments: fragments.into(),
+        }
     }
 
     /// Create custom element content.
@@ -76,6 +89,62 @@ impl TextContent {
             Self::Custom(_) => None,
         }
     }
+
+    /// Get precomputed highlight fragments for render hot-path reuse.
+    pub(crate) fn highlight_fragments(&self) -> Option<&[HighlightFragment]> {
+        match self {
+            Self::Highlighted { fragments, .. } => Some(fragments.as_ref()),
+            _ => None,
+        }
+    }
+}
+
+fn build_highlight_fragments(text: &str, ranges: &[Range<usize>]) -> Vec<HighlightFragment> {
+    if ranges.is_empty() {
+        return vec![HighlightFragment {
+            text: text.to_string().into(),
+            is_highlighted: false,
+        }];
+    }
+
+    let mut fragments = Vec::with_capacity(ranges.len().saturating_mul(2).saturating_add(1));
+    let mut current_byte = 0;
+
+    for range in ranges {
+        if range.start > current_byte && range.start <= text.len() {
+            let slice = &text[current_byte..range.start];
+            if !slice.is_empty() {
+                fragments.push(HighlightFragment {
+                    text: slice.to_string().into(),
+                    is_highlighted: false,
+                });
+            }
+        }
+
+        if range.end > range.start && range.start < text.len() && range.end <= text.len() {
+            let slice = &text[range.start..range.end];
+            if !slice.is_empty() {
+                fragments.push(HighlightFragment {
+                    text: slice.to_string().into(),
+                    is_highlighted: true,
+                });
+            }
+        }
+
+        current_byte = range.end;
+    }
+
+    if current_byte < text.len() {
+        let slice = &text[current_byte..];
+        if !slice.is_empty() {
+            fragments.push(HighlightFragment {
+                text: slice.to_string().into(),
+                is_highlighted: false,
+            });
+        }
+    }
+
+    fragments
 }
 
 // =============================================================================
@@ -151,11 +220,11 @@ pub enum TrailingContent {
 /// Layout density for list items.
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub enum Density {
-    /// Comfortable spacing (48px height).
+    /// Comfortable spacing (canonical list row height).
     #[default]
     Comfortable,
 
-    /// Compact spacing (40px height).
+    /// Compact spacing (canonical list row height with tighter internals).
     Compact,
 }
 
@@ -177,9 +246,10 @@ pub struct ListItemLayout {
 impl ListItemLayout {
     /// Compute layout from density.
     pub fn from_density(density: Density) -> Self {
+        let canonical_height = crate::list_item::LIST_ITEM_HEIGHT;
         match density {
             Density::Comfortable => Self {
-                height: 48.0,
+                height: canonical_height,
                 padding_x: 12.0,
                 padding_y: 6.0,
                 gap: 8.0,
@@ -187,7 +257,7 @@ impl ListItemLayout {
                 radius: 6.0,
             },
             Density::Compact => Self {
-                height: 40.0,
+                height: canonical_height,
                 padding_x: 8.0,
                 padding_y: 4.0,
                 gap: 6.0,
@@ -254,4 +324,4 @@ impl UnifiedListItemColors {
 }
 
 /// Height for section headers in grouped lists.
-pub const SECTION_HEADER_HEIGHT: f32 = 24.0;
+pub const SECTION_HEADER_HEIGHT: f32 = crate::list_item::SECTION_HEADER_HEIGHT;

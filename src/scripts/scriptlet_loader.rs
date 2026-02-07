@@ -61,7 +61,7 @@ pub(crate) fn extract_code_block(text: &str) -> Option<(String, String)> {
 
         // Get the language specifier (rest of line)
         if let Some(newline_pos) = after_fence.find('\n') {
-            let language = after_fence[..newline_pos].trim().to_string();
+            let language = after_fence[..newline_pos].trim();
             let code_start = start + 3 + newline_pos + 1;
 
             // Find closing fence
@@ -74,7 +74,7 @@ pub(crate) fn extract_code_block(text: &str) -> Option<(String, String)> {
                 }
 
                 let code = text[code_start..code_start + end_pos].trim().to_string();
-                return Some((language, code));
+                return Some((language.to_owned(), code));
             }
         }
 

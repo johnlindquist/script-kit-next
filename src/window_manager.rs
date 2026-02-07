@@ -82,41 +82,51 @@ use crate::logging;
 // This ensures a single source of truth for window roles across the codebase
 pub use crate::window_state::WindowRole;
 
-/// A thread-safe wrapper for NSWindow ID pointers.
+/// Stable window registration data captured at register time.
 ///
-/// # Safety
-///
-/// This wrapper implements `Send` and `Sync` because:
-/// 1. NSWindow IDs are stable identifiers that don't change
-/// 2. macOS allows accessing window metadata from any thread
-/// 3. Actual window mutations must still occur on the main thread
-///    (enforced by the caller, not this module)
-///
-/// The pointer is stored as a raw address to avoid lifetime issues.
+/// We store non-owning metadata (pointer address + window number) and resolve
+/// to a live `NSWindow*` on each read. This prevents returning stale pointers
+/// from a long-lived cache when windows are destroyed/recreated.
 #[cfg(target_os = "macos")]
-#[derive(Debug, Clone, Copy)]
-struct WindowId(usize);
-
-#[cfg(target_os = "macos")]
-impl WindowId {
-    /// Create a new WindowId from a native window pointer
-    fn from_id(window: id) -> Self {
-        Self(window as usize)
-    }
-
-    /// Convert back to a native window pointer
-    fn to_id(self) -> id {
-        self.0 as id
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RegisteredWindowHandle {
+    window_ptr_addr: usize,
+    window_number: i64,
 }
 
-// Safety: The window ID is just a numeric identifier. Accessing window
-// properties is safe from any thread on macOS. Mutations are done on
-// the main thread by the caller.
 #[cfg(target_os = "macos")]
-unsafe impl Send for WindowId {}
-#[cfg(target_os = "macos")]
-unsafe impl Sync for WindowId {}
+impl RegisteredWindowHandle {
+    /// Capture identifying metadata from a live NSWindow pointer.
+    #[cfg(not(test))]
+    fn from_window(window: id) -> Option<Self> {
+        if window == nil {
+            return None;
+        }
+
+        let window_number: i64 = unsafe { msg_send![window, windowNumber] };
+        if window_number <= 0 {
+            return None;
+        }
+
+        Some(Self {
+            window_ptr_addr: window as usize,
+            window_number,
+        })
+    }
+
+    /// Test-only constructor that avoids Objective-C calls on mock pointers.
+    #[cfg(test)]
+    fn from_window(window: id) -> Option<Self> {
+        if window == nil {
+            return None;
+        }
+
+        Some(Self {
+            window_ptr_addr: window as usize,
+            window_number: 0,
+        })
+    }
+}
 
 /// Thread-safe window registry.
 ///
@@ -124,8 +134,8 @@ unsafe impl Sync for WindowId {}
 /// Access this through the module-level functions, not directly.
 #[cfg(target_os = "macos")]
 struct WindowManager {
-    /// Map of window roles to their native window IDs (wrapped for thread safety)
-    windows: HashMap<WindowRole, WindowId>,
+    /// Map of window roles to captured registration metadata.
+    windows: HashMap<WindowRole, RegisteredWindowHandle>,
 }
 
 #[cfg(target_os = "macos")]
@@ -143,19 +153,29 @@ impl WindowManager {
             "WINDOW_MGR",
             &format!("Registering window: {:?} -> {:?}", role, window_id),
         );
-        self.windows.insert(role, WindowId::from_id(window_id));
+        if let Some(handle) = RegisteredWindowHandle::from_window(window_id) {
+            self.windows.insert(role, handle);
+        } else {
+            logging::log(
+                "WINDOW_MGR",
+                &format!(
+                    "WARNING: Skipping registration for {:?}: invalid NSWindow handle",
+                    role
+                ),
+            );
+        }
     }
 
-    /// Get a window by role
-    fn get(&self, role: WindowRole) -> Option<id> {
-        self.windows.get(&role).map(|wid| wid.to_id())
+    /// Get captured registration metadata by role.
+    fn get_handle(&self, role: WindowRole) -> Option<RegisteredWindowHandle> {
+        self.windows.get(&role).copied()
     }
 
     /// Remove a window registration
     #[allow(dead_code)]
-    fn unregister(&mut self, role: WindowRole) -> Option<id> {
+    fn unregister(&mut self, role: WindowRole) -> Option<RegisteredWindowHandle> {
         logging::log("WINDOW_MGR", &format!("Unregistering window: {:?}", role));
-        self.windows.remove(&role).map(|wid| wid.to_id())
+        self.windows.remove(&role)
     }
 
     /// Check if a role is registered
@@ -175,6 +195,62 @@ fn get_manager() -> &'static Mutex<WindowManager> {
     WINDOW_MANAGER.get_or_init(|| Mutex::new(WindowManager::new()))
 }
 
+#[cfg(target_os = "macos")]
+#[cfg(not(test))]
+fn is_main_thread() -> bool {
+    unsafe {
+        if let Some(thread_class) = objc::runtime::Class::get("NSThread") {
+            let result: bool = msg_send![thread_class, isMainThread];
+            result
+        } else {
+            false
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+#[cfg(test)]
+fn is_main_thread() -> bool {
+    true
+}
+
+#[cfg(target_os = "macos")]
+#[cfg(not(test))]
+fn resolve_live_window(handle: RegisteredWindowHandle) -> Option<id> {
+    unsafe {
+        let app: id = NSApp();
+        if app == nil {
+            return None;
+        }
+
+        let windows: id = msg_send![app, windows];
+        if windows == nil {
+            return None;
+        }
+
+        let count: usize = msg_send![windows, count];
+        for index in 0..count {
+            let window: id = msg_send![windows, objectAtIndex: index];
+            if window == nil {
+                continue;
+            }
+
+            let window_number: i64 = msg_send![window, windowNumber];
+            if window as usize == handle.window_ptr_addr && window_number == handle.window_number {
+                return Some(window);
+            }
+        }
+    }
+
+    None
+}
+
+#[cfg(target_os = "macos")]
+#[cfg(test)]
+fn resolve_live_window(handle: RegisteredWindowHandle) -> Option<id> {
+    Some(handle.window_ptr_addr as id)
+}
+
 // ============================================================================
 // Public API - macOS Implementation
 // ============================================================================
@@ -191,6 +267,17 @@ fn get_manager() -> &'static Mutex<WindowManager> {
 #[cfg(target_os = "macos")]
 #[tracing::instrument(skip(window_id), fields(role = ?role))]
 pub fn register_window(role: WindowRole, window_id: id) {
+    if !is_main_thread() {
+        logging::log(
+            "WINDOW_MGR",
+            &format!(
+                "WARNING: register_window for {:?} ignored off main thread",
+                role
+            ),
+        );
+        return;
+    }
+
     if let Ok(mut manager) = get_manager().lock() {
         manager.register(role, window_id);
     } else {
@@ -207,12 +294,44 @@ pub fn register_window(role: WindowRole, window_id: id) {
 /// The native window ID if registered, None otherwise
 #[cfg(target_os = "macos")]
 pub fn get_window(role: WindowRole) -> Option<id> {
-    if let Ok(manager) = get_manager().lock() {
-        manager.get(role)
+    if !is_main_thread() {
+        logging::log(
+            "WINDOW_MGR",
+            &format!("WARNING: get_window({:?}) called off main thread", role),
+        );
+        return None;
+    }
+
+    let handle = if let Ok(manager) = get_manager().lock() {
+        manager.get_handle(role)
     } else {
         logging::log("WINDOW_MGR", "ERROR: Failed to acquire lock for get");
         None
+    };
+
+    let handle = handle?;
+
+    if let Some(window) = resolve_live_window(handle) {
+        return Some(window);
     }
+
+    logging::log(
+        "WINDOW_MGR",
+        &format!("INFO: Pruning stale window handle for {:?}", role),
+    );
+
+    if let Ok(mut manager) = get_manager().lock() {
+        if manager.get_handle(role) == Some(handle) {
+            manager.unregister(role);
+        }
+    } else {
+        logging::log(
+            "WINDOW_MGR",
+            "ERROR: Failed to acquire lock for stale prune",
+        );
+    }
+
+    None
 }
 
 /// Convenience function to get the main window.
@@ -240,6 +359,14 @@ pub fn get_main_window() -> Option<id> {
 #[cfg(target_os = "macos")]
 #[tracing::instrument(skip_all)]
 pub fn find_and_register_main_window() -> bool {
+    if !is_main_thread() {
+        logging::log(
+            "WINDOW_MGR",
+            "WARNING: find_and_register_main_window called off main thread",
+        );
+        return false;
+    }
+
     // Expected main window dimensions (with tolerance)
     const EXPECTED_WIDTH: f64 = 750.0;
     const WIDTH_TOLERANCE: f64 = 50.0;
@@ -310,12 +437,25 @@ pub fn find_and_register_main_window() -> bool {
 #[cfg(target_os = "macos")]
 #[allow(dead_code)]
 pub fn unregister_window(role: WindowRole) -> Option<id> {
-    if let Ok(mut manager) = get_manager().lock() {
+    if !is_main_thread() {
+        logging::log(
+            "WINDOW_MGR",
+            &format!(
+                "WARNING: unregister_window for {:?} ignored off main thread",
+                role
+            ),
+        );
+        return None;
+    }
+
+    let handle = if let Ok(mut manager) = get_manager().lock() {
         manager.unregister(role)
     } else {
         logging::log("WINDOW_MGR", "ERROR: Failed to acquire lock for unregister");
         None
-    }
+    };
+
+    handle.and_then(resolve_live_window)
 }
 
 /// Check if a window role is currently registered.
@@ -328,11 +468,7 @@ pub fn unregister_window(role: WindowRole) -> Option<id> {
 #[cfg(target_os = "macos")]
 #[allow(dead_code)]
 pub fn is_window_registered(role: WindowRole) -> bool {
-    if let Ok(manager) = get_manager().lock() {
-        manager.is_registered(role)
-    } else {
-        false
-    }
+    get_window(role).is_some()
 }
 
 // ============================================================================
@@ -411,16 +547,16 @@ mod tests {
     mod macos_tests {
         use super::super::*;
 
-        /// Test WindowId wrapper
+        /// Test registration handle wrapper
         #[test]
-        fn test_window_id_wrapper() {
+        fn test_registered_window_handle_wrapper() {
             let ptr_value: usize = 0x12345678;
             let mock_id = ptr_value as id;
 
-            let window_id = WindowId::from_id(mock_id);
-            let recovered = window_id.to_id();
-
-            assert_eq!(recovered as usize, ptr_value);
+            let handle =
+                RegisteredWindowHandle::from_window(mock_id).expect("mock pointer should work");
+            assert_eq!(handle.window_ptr_addr, ptr_value);
+            assert_eq!(handle.window_number, 0);
         }
 
         /// Test basic registration and retrieval
@@ -484,16 +620,19 @@ mod tests {
 
             // Initially empty
             assert!(!manager.is_registered(WindowRole::Main));
-            assert!(manager.get(WindowRole::Main).is_none());
+            assert!(manager.get_handle(WindowRole::Main).is_none());
 
             // Register
             manager.register(WindowRole::Main, mock_id);
             assert!(manager.is_registered(WindowRole::Main));
-            assert_eq!(manager.get(WindowRole::Main), Some(mock_id));
+            assert_eq!(
+                manager.get_handle(WindowRole::Main),
+                RegisteredWindowHandle::from_window(mock_id)
+            );
 
             // Unregister
             let removed = manager.unregister(WindowRole::Main);
-            assert_eq!(removed, Some(mock_id));
+            assert_eq!(removed, RegisteredWindowHandle::from_window(mock_id));
             assert!(!manager.is_registered(WindowRole::Main));
         }
     }

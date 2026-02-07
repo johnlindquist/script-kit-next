@@ -1,6 +1,154 @@
 // Form prompt render method - extracted from render_prompts.rs
 // This file is included via include!() macro in main.rs
 
+use gpui_component::scroll::ScrollableElement;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FormEnterBehavior {
+    Submit,
+    ForwardToField,
+    Ignore,
+}
+
+#[inline]
+fn form_enter_behavior(
+    key: &str,
+    has_cmd: bool,
+    focused_field_is_textarea: bool,
+) -> FormEnterBehavior {
+    if !ui_foundation::is_key_enter(key) {
+        return FormEnterBehavior::Ignore;
+    }
+
+    if focused_field_is_textarea && !has_cmd {
+        return FormEnterBehavior::ForwardToField;
+    }
+
+    FormEnterBehavior::Submit
+}
+
+#[inline]
+fn focused_form_field_is_textarea(form: &FormPromptState) -> bool {
+    form.fields
+        .get(form.focused_index)
+        .and_then(|(field, _)| field.field_type.as_deref())
+        .is_some_and(|field_type| field_type.eq_ignore_ascii_case("textarea"))
+}
+
+#[inline]
+fn form_footer_status_text(focused_field_is_textarea: bool) -> String {
+    if focused_field_is_textarea {
+        running_status_text("press ⌘↵ to submit (Enter adds a new line)")
+    } else {
+        running_status_text("press Enter to submit")
+    }
+}
+
+#[inline]
+fn form_field_value_for_validation(
+    field_entity: &crate::form_prompt::FormFieldEntity,
+    cx: &App,
+) -> String {
+    match field_entity {
+        crate::form_prompt::FormFieldEntity::TextField(entity) => {
+            entity.read(cx).value().to_string()
+        }
+        crate::form_prompt::FormFieldEntity::TextArea(entity) => {
+            entity.read(cx).value().to_string()
+        }
+        crate::form_prompt::FormFieldEntity::Checkbox(entity) => {
+            if entity.read(cx).is_checked() {
+                "true".to_string()
+            } else {
+                "false".to_string()
+            }
+        }
+    }
+}
+
+#[inline]
+fn is_valid_email_submit_value(value: &str) -> bool {
+    if value.is_empty() {
+        return true;
+    }
+
+    if value
+        .chars()
+        .any(|ch| ch.is_control() || ch.is_whitespace())
+    {
+        return false;
+    }
+
+    let mut parts = value.split('@');
+    let local = parts.next().unwrap_or_default();
+    let domain = parts.next().unwrap_or_default();
+
+    if local.is_empty() || domain.is_empty() || parts.next().is_some() {
+        return false;
+    }
+
+    if domain.starts_with('.') || domain.ends_with('.') {
+        return false;
+    }
+
+    domain.contains('.')
+}
+
+#[inline]
+fn is_valid_number_submit_value(value: &str) -> bool {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return true;
+    }
+    trimmed.parse::<f64>().is_ok()
+}
+
+#[inline]
+fn form_field_value_is_valid_for_submit(field_type: Option<&str>, value: &str) -> bool {
+    match field_type {
+        Some(field_type) if field_type.eq_ignore_ascii_case("email") => {
+            is_valid_email_submit_value(value)
+        }
+        Some(field_type) if field_type.eq_ignore_ascii_case("number") => {
+            is_valid_number_submit_value(value)
+        }
+        _ => true,
+    }
+}
+
+#[inline]
+fn collect_form_submit_validation_errors(form: &FormPromptState, cx: &App) -> Vec<String> {
+    let mut invalid_fields = Vec::new();
+
+    for (field_definition, field_entity) in &form.fields {
+        let value = form_field_value_for_validation(field_entity, cx);
+        if form_field_value_is_valid_for_submit(field_definition.field_type.as_deref(), &value) {
+            continue;
+        }
+
+        let field_type = field_definition
+            .field_type
+            .as_deref()
+            .unwrap_or("text")
+            .to_string();
+        invalid_fields.push(format!("{} ({})", field_definition.name, field_type));
+    }
+
+    invalid_fields
+}
+
+#[inline]
+fn form_submit_validation_message(invalid_fields: &[String]) -> String {
+    if invalid_fields.len() == 1 {
+        format!("Fix invalid field before submitting: {}", invalid_fields[0])
+    } else {
+        format!(
+            "Fix invalid fields before submitting: {}",
+            invalid_fields.join(", ")
+        )
+    }
+}
+
 impl ScriptListApp {
     fn render_form_prompt(
         &mut self,
@@ -16,10 +164,18 @@ impl ScriptListApp {
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
         let design_visual = tokens.visual();
+        let (actions_dialog_top, actions_dialog_right) =
+            prompt_actions_dialog_offsets(design_spacing.padding_sm, design_visual.border_thin);
 
         // Get prompt ID and field count from entity
-        let prompt_id = entity.read(cx).id.clone();
-        let field_count = entity.read(cx).fields.len();
+        let (prompt_id, field_count, focused_field_is_textarea) = {
+            let form_state = entity.read(cx);
+            (
+                form_state.id.clone(),
+                form_state.fields.len(),
+                focused_form_field_is_textarea(form_state),
+            )
+        };
 
         // Clone entity for closures
         let entity_for_submit = entity.clone();
@@ -103,13 +259,34 @@ impl ScriptListApp {
 
                 // Handle form-level keys (Enter, Escape, Tab) at this level
                 // Forward all other keys to the focused form field for text input
-                if ui_foundation::is_key_enter(key) {
-                    // Enter submits the form - collect all field values
-                    logging::log("KEY", "Enter in FormPrompt - submitting form");
-                    let values = entity_for_submit.read(cx).collect_values(cx);
-                    logging::log("FORM", &format!("Form values: {}", values));
-                    this.submit_prompt_response(prompt_id_for_key.clone(), Some(values), cx);
-                    return;
+                let focused_field_is_textarea = {
+                    let form = entity_for_submit.read(cx);
+                    focused_form_field_is_textarea(form)
+                };
+                match form_enter_behavior(key, has_cmd, focused_field_is_textarea) {
+                    FormEnterBehavior::Submit => {
+                        let validation_errors = {
+                            let form = entity_for_submit.read(cx);
+                            collect_form_submit_validation_errors(form, cx)
+                        };
+                        if !validation_errors.is_empty() {
+                            let message = form_submit_validation_message(&validation_errors);
+                            this.show_hud(message, Some(3000), cx);
+                            return;
+                        }
+
+                        logging::log("KEY", "Enter in FormPrompt - submitting form");
+                        let values = entity_for_submit.read(cx).collect_values(cx);
+                        this.submit_prompt_response(prompt_id_for_key.clone(), Some(values), cx);
+                        return;
+                    }
+                    FormEnterBehavior::ForwardToField => {
+                        entity_for_input.update(cx, |form, cx| {
+                            form.handle_key_input(event, cx);
+                        });
+                        return;
+                    }
+                    FormEnterBehavior::Ignore => {}
                 }
 
                 // Note: "escape" is handled by handle_global_shortcut_with_options above
@@ -176,18 +353,21 @@ impl ScriptListApp {
                     .flex_1()
                     .w_full()
                     .min_h(px(0.))
-                    .overflow_y_hidden() // Clip content at container boundary
+                    .overflow_y_scrollbar()
                     .p(px(design_spacing.padding_xl))
                     // Render the form entity (contains all fields)
                     .child(entity.clone()),
             )
             // Unified footer with PromptFooter component
             .child({
-                let footer_colors = PromptFooterColors::from_theme(&self.theme);
-                let footer_config = PromptFooterConfig::new()
-                    .primary_label("Submit Form")
-                    .primary_shortcut("↵")
-                    .show_secondary(has_actions);
+                let footer_colors =
+                    prompt_footer_colors_for_prompt(&design_colors, !self.theme.is_dark_mode());
+                let footer_config = prompt_footer_config_with_status(
+                    "Continue",
+                    has_actions,
+                    Some(form_footer_status_text(focused_field_is_textarea)),
+                    Some(format!("{field_count} fields")),
+                );
 
                 let handle_actions = cx.entity().downgrade();
 
@@ -233,10 +413,83 @@ impl ScriptListApp {
                                     .inset_0()
                                     .on_click(backdrop_click),
                             )
-                            .child(div().absolute().top(px(52.)).right(px(8.)).child(dialog)),
+                            .child(
+                                div()
+                                    .absolute()
+                                    .top(px(actions_dialog_top))
+                                    .right(px(actions_dialog_right))
+                                    .child(dialog),
+                            ),
                     )
                 },
             )
             .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod form_prompt_render_tests {
+    use super::*;
+
+    #[test]
+    fn form_enter_behavior_submits_non_textarea_on_enter() {
+        assert_eq!(
+            form_enter_behavior("enter", false, false),
+            FormEnterBehavior::Submit
+        );
+    }
+
+    #[test]
+    fn form_enter_behavior_forwards_textarea_enter_without_cmd() {
+        assert_eq!(
+            form_enter_behavior("enter", false, true),
+            FormEnterBehavior::ForwardToField
+        );
+    }
+
+    #[test]
+    fn form_enter_behavior_submits_textarea_on_cmd_enter() {
+        assert_eq!(
+            form_enter_behavior("enter", true, true),
+            FormEnterBehavior::Submit
+        );
+    }
+
+    #[test]
+    fn form_footer_status_text_mentions_cmd_enter_for_textarea() {
+        assert_eq!(
+            form_footer_status_text(true),
+            running_status_text("press ⌘↵ to submit (Enter adds a new line)")
+        );
+    }
+
+    #[test]
+    fn form_footer_status_text_mentions_enter_for_non_textarea() {
+        assert_eq!(
+            form_footer_status_text(false),
+            running_status_text("press Enter to submit")
+        );
+    }
+
+    #[test]
+    fn form_field_value_is_valid_for_submit_accepts_common_valid_inputs() {
+        assert!(form_field_value_is_valid_for_submit(
+            Some("email"),
+            "user@example.com"
+        ));
+        assert!(form_field_value_is_valid_for_submit(Some("number"), "42.5"));
+        assert!(form_field_value_is_valid_for_submit(Some("number"), ""));
+    }
+
+    #[test]
+    fn form_field_value_is_valid_for_submit_rejects_invalid_email_and_number() {
+        assert!(!form_field_value_is_valid_for_submit(
+            Some("email"),
+            "invalid-email"
+        ));
+        assert!(!form_field_value_is_valid_for_submit(
+            Some("number"),
+            "12abc"
+        ));
     }
 }

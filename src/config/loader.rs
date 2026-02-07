@@ -2,14 +2,224 @@
 //!
 //! Handles loading and parsing the config.ts file using bun.
 
+use serde::de::DeserializeOwned;
+use serde_json::{Map, Value};
 use std::path::PathBuf;
 use std::process::Command;
 use tempfile::NamedTempFile;
 use tracing::{info, instrument, warn};
 
-use super::types::Config;
+use super::types::{Config, ScriptKitUserPreferences};
 
-/// Load configuration from ~/.scriptkit/kit/config.ts
+fn config_ts_path() -> PathBuf {
+    crate::setup::get_kit_path().join("kit").join("config.ts")
+}
+
+fn settings_json_path() -> PathBuf {
+    crate::setup::get_kit_path()
+        .join("kit")
+        .join("settings.json")
+}
+
+fn parse_optional_field<T>(
+    object: &Map<String, Value>,
+    field: &'static str,
+    correlation_id: &str,
+) -> Option<T>
+where
+    T: DeserializeOwned,
+{
+    let Some(raw) = object.get(field) else {
+        return None;
+    };
+
+    match serde_json::from_value::<Option<T>>(raw.clone()) {
+        Ok(parsed) => parsed,
+        Err(error) => {
+            warn!(
+                correlation_id = %correlation_id,
+                field,
+                error = %error,
+                "Config field failed validation; using default for this field"
+            );
+            None
+        }
+    }
+}
+
+fn parse_required_field<T>(
+    object: &Map<String, Value>,
+    field: &'static str,
+    fallback: T,
+    correlation_id: &str,
+) -> T
+where
+    T: DeserializeOwned,
+{
+    let Some(raw) = object.get(field) else {
+        return fallback;
+    };
+
+    match serde_json::from_value::<T>(raw.clone()) {
+        Ok(parsed) => parsed,
+        Err(error) => {
+            warn!(
+                correlation_id = %correlation_id,
+                field,
+                error = %error,
+                "Required config field failed validation; using default"
+            );
+            fallback
+        }
+    }
+}
+
+fn recover_config_fields(value: Value, correlation_id: &str) -> Config {
+    let Some(object) = value.as_object() else {
+        warn!(
+            correlation_id = %correlation_id,
+            "Config root is not an object; using defaults"
+        );
+        return Config::default();
+    };
+
+    let defaults = Config::default();
+    Config {
+        hotkey: parse_required_field(object, "hotkey", defaults.hotkey.clone(), correlation_id),
+        bun_path: parse_optional_field(object, "bun_path", correlation_id),
+        editor: parse_optional_field(object, "editor", correlation_id),
+        padding: parse_optional_field(object, "padding", correlation_id),
+        editor_font_size: parse_optional_field(object, "editorFontSize", correlation_id),
+        terminal_font_size: parse_optional_field(object, "terminalFontSize", correlation_id),
+        ui_scale: parse_optional_field(object, "uiScale", correlation_id),
+        built_ins: parse_optional_field(object, "builtIns", correlation_id),
+        process_limits: parse_optional_field(object, "processLimits", correlation_id),
+        clipboard_history_max_text_length: parse_optional_field(
+            object,
+            "clipboardHistoryMaxTextLength",
+            correlation_id,
+        ),
+        suggested: parse_optional_field(object, "suggested", correlation_id),
+        notes_hotkey: parse_optional_field(object, "notesHotkey", correlation_id),
+        ai_hotkey: parse_optional_field(object, "aiHotkey", correlation_id),
+        ai_hotkey_enabled: parse_optional_field(object, "aiHotkeyEnabled", correlation_id),
+        logs_hotkey: parse_optional_field(object, "logsHotkey", correlation_id),
+        logs_hotkey_enabled: parse_optional_field(object, "logsHotkeyEnabled", correlation_id),
+        watcher: parse_optional_field(object, "watcher", correlation_id),
+        layout: parse_optional_field(object, "layout", correlation_id),
+        commands: parse_optional_field(object, "commands", correlation_id),
+        claude_code: parse_optional_field(object, "claudeCode", correlation_id),
+    }
+}
+
+fn parse_config_json(json_str: &str, correlation_id: &str) -> Config {
+    let parsed_json = match serde_json::from_str::<Value>(json_str.trim()) {
+        Ok(value) => value,
+        Err(error) => {
+            warn!(
+                correlation_id = %correlation_id,
+                error = %error,
+                "Config output was not valid JSON; using defaults"
+            );
+            return Config::default();
+        }
+    };
+
+    match serde_json::from_value::<Config>(parsed_json.clone()) {
+        Ok(config) => config,
+        Err(error) => {
+            warn!(
+                correlation_id = %correlation_id,
+                error = %error,
+                "Config parse failed; recovering valid fields"
+            );
+            recover_config_fields(parsed_json, correlation_id)
+        }
+    }
+}
+
+fn recover_user_preferences_fields(value: Value, correlation_id: &str) -> ScriptKitUserPreferences {
+    let Some(object) = value.as_object() else {
+        warn!(
+            correlation_id = %correlation_id,
+            "User preferences root is not an object; using defaults"
+        );
+        return ScriptKitUserPreferences::default();
+    };
+
+    let defaults = ScriptKitUserPreferences::default();
+    ScriptKitUserPreferences {
+        layout: parse_required_field(object, "layout", defaults.layout, correlation_id),
+        theme: parse_required_field(object, "theme", defaults.theme, correlation_id),
+    }
+}
+
+fn parse_user_preferences_json(json_str: &str, correlation_id: &str) -> ScriptKitUserPreferences {
+    let parsed_json = match serde_json::from_str::<Value>(json_str.trim()) {
+        Ok(value) => value,
+        Err(error) => {
+            warn!(
+                correlation_id = %correlation_id,
+                error = %error,
+                "User preferences JSON was invalid; using defaults"
+            );
+            return ScriptKitUserPreferences::default();
+        }
+    };
+
+    match serde_json::from_value::<ScriptKitUserPreferences>(parsed_json.clone()) {
+        Ok(preferences) => preferences,
+        Err(error) => {
+            warn!(
+                correlation_id = %correlation_id,
+                error = %error,
+                "User preferences parse failed; recovering valid fields"
+            );
+            recover_user_preferences_fields(parsed_json, correlation_id)
+        }
+    }
+}
+
+/// Load user preferences from `<SK_PATH>/kit/settings.json` (or `~/.scriptkit/kit/settings.json`)
+///
+/// This file is intentionally JSON (not TypeScript) so runtime readers can parse
+/// lightweight preferences (layout/theme) without invoking Bun.
+pub fn load_user_preferences() -> ScriptKitUserPreferences {
+    let correlation_id = format!("settings_load:{}", uuid::Uuid::new_v4());
+    let settings_path = settings_json_path();
+
+    if !settings_path.exists() {
+        info!(
+            correlation_id = %correlation_id,
+            path = %settings_path.display(),
+            "Settings file not found, using defaults"
+        );
+        return ScriptKitUserPreferences::default();
+    }
+
+    match std::fs::read_to_string(&settings_path) {
+        Ok(contents) => {
+            let preferences = parse_user_preferences_json(&contents, &correlation_id);
+            info!(
+                correlation_id = %correlation_id,
+                path = %settings_path.display(),
+                "Successfully loaded user preferences"
+            );
+            preferences
+        }
+        Err(error) => {
+            warn!(
+                correlation_id = %correlation_id,
+                path = %settings_path.display(),
+                error = %error,
+                "Failed to read settings file, using defaults"
+            );
+            ScriptKitUserPreferences::default()
+        }
+    }
+}
+
+/// Load configuration from `<SK_PATH>/kit/config.ts` (or `~/.scriptkit/kit/config.ts`)
 ///
 /// This function:
 /// 1. Checks if the config file exists
@@ -20,11 +230,16 @@ use super::types::Config;
 /// Returns Config::default() if any step fails.
 #[instrument(name = "load_config")]
 pub fn load_config() -> Config {
-    let config_path = PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/config.ts").as_ref());
+    let correlation_id = format!("config_load:{}", uuid::Uuid::new_v4());
+    let config_path = config_ts_path();
 
     // Check if config file exists
     if !config_path.exists() {
-        info!(path = %config_path.display(), "Config file not found, using defaults");
+        info!(
+            correlation_id = %correlation_id,
+            path = %config_path.display(),
+            "Config file not found, using defaults"
+        );
         return Config::default();
     }
 
@@ -33,7 +248,11 @@ pub fn load_config() -> Config {
     let tmp_js = match NamedTempFile::new() {
         Ok(file) => file,
         Err(e) => {
-            warn!(error = %e, "Failed to create temporary file, using defaults");
+            warn!(
+                correlation_id = %correlation_id,
+                error = %e,
+                "Failed to create temporary file, using defaults"
+            );
             return Config::default();
         }
     };
@@ -48,12 +267,17 @@ pub fn load_config() -> Config {
 
     match build_output {
         Err(e) => {
-            warn!(error = %e, "Failed to transpile config with bun, using defaults");
+            warn!(
+                correlation_id = %correlation_id,
+                error = %e,
+                "Failed to transpile config with bun, using defaults"
+            );
             return Config::default();
         }
         Ok(output) => {
             if !output.status.success() {
                 warn!(
+                    correlation_id = %correlation_id,
                     stderr = %String::from_utf8_lossy(&output.stderr),
                     "bun build failed, using defaults"
                 );
@@ -73,56 +297,30 @@ pub fn load_config() -> Config {
 
     match json_output {
         Err(e) => {
-            warn!(error = %e, "Failed to execute bun to extract JSON, using defaults");
+            warn!(
+                correlation_id = %correlation_id,
+                error = %e,
+                "Failed to execute bun to extract JSON, using defaults"
+            );
             Config::default()
         }
         Ok(output) => {
             if !output.status.success() {
                 warn!(
+                    correlation_id = %correlation_id,
                     stderr = %String::from_utf8_lossy(&output.stderr),
                     "bun execution failed, using defaults"
                 );
                 Config::default()
             } else {
-                // Step 3: Parse the JSON output into Config struct
                 let json_str = String::from_utf8_lossy(&output.stdout);
-                match serde_json::from_str::<Config>(json_str.trim()) {
-                    Ok(config) => {
-                        info!(path = %config_path.display(), "Successfully loaded config");
-                        config
-                    }
-                    Err(e) => {
-                        // Provide helpful error message for common config mistakes
-                        let error_hint = if e.to_string().contains("missing field `hotkey`") {
-                            "\n\nHint: Your config.ts must include a 'hotkey' field. Example:\n\
-                            import type { Config } from \"@scriptkit/sdk\";\n\n\
-                            export default {\n\
-                              hotkey: {\n\
-                                modifiers: [\"meta\"],\n\
-                                key: \"Semicolon\"\n\
-                              }\n\
-                            } satisfies Config;"
-                        } else if e.to_string().contains("missing field `modifiers`")
-                            || e.to_string().contains("missing field `key`")
-                        {
-                            "\n\nHint: The 'hotkey' field requires 'modifiers' (array) and 'key' (string). Example:\n\
-                            hotkey: {\n\
-                              modifiers: [\"meta\"],  // \"meta\", \"ctrl\", \"alt\", \"shift\"\n\
-                              key: \"Digit0\"         // e.g., \"Semicolon\", \"KeyK\", \"Digit0\"\n\
-                            }"
-                        } else {
-                            ""
-                        };
-
-                        warn!(
-                            error = %e,
-                            json_output = %json_str,
-                            hint = %error_hint,
-                            "Failed to parse config JSON, using defaults"
-                        );
-                        Config::default()
-                    }
-                }
+                let config = parse_config_json(&json_str, &correlation_id);
+                info!(
+                    correlation_id = %correlation_id,
+                    path = %config_path.display(),
+                    "Successfully loaded config"
+                );
+                config
             }
         }
     }
@@ -130,6 +328,8 @@ pub fn load_config() -> Config {
 
 #[cfg(test)]
 mod tests {
+    use super::{parse_config_json, parse_user_preferences_json};
+    use crate::config::HotkeyConfig;
     use std::fs;
 
     /// Code audit test: Verify all config.ts path references use the authoritative path.
@@ -194,5 +394,93 @@ mod tests {
                 violations.join("\n\n")
             );
         }
+    }
+
+    #[test]
+    fn test_config_loader_preserves_valid_fields_when_one_field_invalid() {
+        let json = r#"{
+            "hotkey": { "modifiers": ["meta"], "key": "Semicolon" },
+            "editor": "nvim",
+            "watcher": { "debounceMs": "bad-type", "stormThreshold": 321 }
+        }"#;
+
+        let config = parse_config_json(json, "test-correlation-id");
+
+        // Valid fields remain intact
+        assert_eq!(config.editor.as_deref(), Some("nvim"));
+        assert_eq!(config.hotkey.key, "Semicolon");
+        // Invalid watcher field should fall back per-field while preserving valid watcher fields
+        let watcher = config.get_watcher();
+        assert_eq!(watcher.storm_threshold, 321);
+        assert_eq!(
+            watcher.debounce_ms,
+            super::super::defaults::DEFAULT_WATCHER_DEBOUNCE_MS
+        );
+    }
+
+    #[test]
+    fn test_config_loader_uses_default_hotkey_when_hotkey_missing_or_invalid() {
+        let missing_hotkey = r#"{
+            "editor": "vim"
+        }"#;
+        let missing_config = parse_config_json(missing_hotkey, "test-correlation-id");
+        assert_eq!(
+            missing_config.hotkey,
+            HotkeyConfig {
+                modifiers: vec!["meta".to_string()],
+                key: "Semicolon".to_string(),
+            }
+        );
+
+        let invalid_hotkey = r#"{
+            "hotkey": { "modifiers": "meta", "key": 7 },
+            "editor": "hx"
+        }"#;
+        let invalid_config = parse_config_json(invalid_hotkey, "test-correlation-id");
+        assert_eq!(
+            invalid_config.hotkey,
+            HotkeyConfig {
+                modifiers: vec!["meta".to_string()],
+                key: "Semicolon".to_string(),
+            }
+        );
+        assert_eq!(invalid_config.editor.as_deref(), Some("hx"));
+    }
+
+    #[test]
+    fn test_user_preferences_loader_parses_layout_and_theme_preset() {
+        let json = r#"{
+            "layout": { "standardHeight": 640, "maxHeight": 920 },
+            "theme": { "presetId": "catppuccin-mocha" }
+        }"#;
+
+        let preferences = parse_user_preferences_json(json, "test-correlation-id");
+
+        assert_eq!(preferences.layout.standard_height, 640.0);
+        assert_eq!(preferences.layout.max_height, 920.0);
+        assert_eq!(
+            preferences.theme.preset_id.as_deref(),
+            Some("catppuccin-mocha")
+        );
+    }
+
+    #[test]
+    fn test_user_preferences_loader_recovers_from_invalid_layout_field() {
+        let json = r#"{
+            "layout": { "standardHeight": "bad", "maxHeight": 920 },
+            "theme": { "presetId": "nord" }
+        }"#;
+
+        let preferences = parse_user_preferences_json(json, "test-correlation-id");
+
+        assert_eq!(
+            preferences.layout.standard_height,
+            super::super::defaults::DEFAULT_LAYOUT_STANDARD_HEIGHT
+        );
+        assert_eq!(
+            preferences.layout.max_height,
+            super::super::defaults::DEFAULT_LAYOUT_MAX_HEIGHT
+        );
+        assert_eq!(preferences.theme.preset_id.as_deref(), Some("nord"));
     }
 }

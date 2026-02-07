@@ -202,7 +202,8 @@ impl Shortcut {
     }
 
     fn key_display(&self) -> String {
-        match self.key.as_str() {
+        let canonical_key = canonicalize_key(&self.key);
+        match canonical_key.as_str() {
             "enter" => "↵",
             "escape" => "⎋",
             "tab" => "⇥",
@@ -217,13 +218,14 @@ impl Shortcut {
             "end" => "↘",
             "pageup" => "⇞",
             "pagedown" => "⇟",
-            k => return k.to_uppercase(),
+            key => return key.to_uppercase(),
         }
         .to_string()
     }
 
     fn key_display_text(&self) -> String {
-        match self.key.as_str() {
+        let canonical_key = canonicalize_key(&self.key);
+        match canonical_key.as_str() {
             "enter" => "Enter",
             "escape" => "Esc",
             "tab" => "Tab",
@@ -238,12 +240,13 @@ impl Shortcut {
             "end" => "End",
             "pageup" => "PageUp",
             "pagedown" => "PageDown",
-            k => return k.to_uppercase(),
+            key => return key.to_uppercase(),
         }
         .to_string()
     }
 
     pub fn to_canonical_string(&self) -> String {
+        let canonical_key = canonicalize_key(&self.key);
         let mut parts: Vec<&str> = Vec::new();
         if self.modifiers.alt {
             parts.push("alt");
@@ -257,7 +260,7 @@ impl Shortcut {
         if self.modifiers.shift {
             parts.push("shift");
         }
-        parts.push(&self.key);
+        parts.push(canonical_key.as_str());
         parts.join("+")
     }
 

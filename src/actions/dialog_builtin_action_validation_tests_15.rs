@@ -21,15 +21,11 @@
 mod tests {
     use super::super::builders::*;
     use super::super::command_bar::CommandBarConfig;
-    use super::super::dialog::{
-        build_grouped_items_static, coerce_action_selection, ActionsDialog, GroupedActionItem,
-    };
     use super::super::types::*;
     use crate::clipboard_history::ContentType;
     use crate::designs::icon_variations::IconName;
     use crate::file_search::FileInfo;
     use crate::prompts::PathInfo;
-    use crate::scriptlets::{Scriptlet, ScriptletAction};
     use std::collections::HashSet;
 
     fn action_ids(actions: &[Action]) -> Vec<String> {

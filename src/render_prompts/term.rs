@@ -1,7 +1,97 @@
 // Term prompt render method - extracted from render_prompts.rs
 // This file is included via include!() macro in main.rs
 
+const TERM_PROMPT_KEY_CONTEXT: &str = "term_prompt";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TermPromptActionsMode {
+    SdkActions,
+    TerminalCommands,
+}
+
+#[inline]
+fn term_prompt_actions_mode(has_sdk_actions: bool) -> TermPromptActionsMode {
+    if has_sdk_actions {
+        TermPromptActionsMode::SdkActions
+    } else {
+        TermPromptActionsMode::TerminalCommands
+    }
+}
+
+#[inline]
+fn should_block_escape_for_non_dismissable_term(
+    is_quick_terminal: bool,
+    show_actions_popup: bool,
+    key: &str,
+) -> bool {
+    !is_quick_terminal && !show_actions_popup && ui_foundation::is_key_escape(key)
+}
+
+#[inline]
+fn terminal_action_from_id(action_id: &str) -> Option<crate::terminal::TerminalAction> {
+    use crate::terminal::TerminalAction;
+
+    match action_id {
+        "clear" => Some(TerminalAction::Clear),
+        "copy" => Some(TerminalAction::Copy),
+        "copy_all" => Some(TerminalAction::CopyAll),
+        "copy_last_command" => Some(TerminalAction::CopyLastCommand),
+        "copy_last_output" => Some(TerminalAction::CopyLastOutput),
+        "paste" => Some(TerminalAction::Paste),
+        "select_all" => Some(TerminalAction::SelectAll),
+        "scroll_to_top" => Some(TerminalAction::ScrollToTop),
+        "scroll_to_bottom" => Some(TerminalAction::ScrollToBottom),
+        "scroll_page_up" => Some(TerminalAction::ScrollPageUp),
+        "scroll_page_down" => Some(TerminalAction::ScrollPageDown),
+        "find" => Some(TerminalAction::Find),
+        "interrupt" => Some(TerminalAction::Interrupt),
+        "kill" => Some(TerminalAction::Kill),
+        "suspend" => Some(TerminalAction::Suspend),
+        "quit" => Some(TerminalAction::Quit),
+        "send_eof" => Some(TerminalAction::SendEOF),
+        "reset" => Some(TerminalAction::Reset),
+        "new_shell" => Some(TerminalAction::NewShell),
+        "restart" => Some(TerminalAction::Restart),
+        "zoom_in" => Some(TerminalAction::ZoomIn),
+        "zoom_out" => Some(TerminalAction::ZoomOut),
+        "reset_zoom" => Some(TerminalAction::ResetZoom),
+        _ => None,
+    }
+}
+
 impl ScriptListApp {
+    #[inline]
+    fn toggle_term_prompt_actions(
+        &mut self,
+        actions_mode: TermPromptActionsMode,
+        cx: &mut Context<Self>,
+        window: &mut Window,
+    ) {
+        match actions_mode {
+            TermPromptActionsMode::SdkActions => self.toggle_arg_actions(cx, window),
+            TermPromptActionsMode::TerminalCommands => self.toggle_terminal_commands(cx, window),
+        }
+    }
+
+    #[inline]
+    fn execute_term_prompt_action_by_id(&mut self, action_id: &str, cx: &mut Context<Self>) -> bool {
+        let Some(action) = terminal_action_from_id(action_id) else {
+            return false;
+        };
+
+        let terminal_entity = match &self.current_view {
+            AppView::TermPrompt { entity, .. } => entity.clone(),
+            AppView::QuickTerminalView { entity } => entity.clone(),
+            _ => return false,
+        };
+
+        terminal_entity.update(cx, |term_prompt, cx| {
+            term_prompt.execute_action(action, cx);
+        });
+
+        true
+    }
+
     fn render_term_prompt(
         &mut self,
         entity: Entity<term_prompt::TermPrompt>,
@@ -9,6 +99,14 @@ impl ScriptListApp {
     ) -> AnyElement {
         let has_actions =
             self.sdk_actions.is_some() && !self.sdk_actions.as_ref().unwrap().is_empty();
+        let actions_mode = term_prompt_actions_mode(has_actions);
+
+        // Use design tokens for shared prompt spacing constants.
+        let tokens = get_tokens(self.current_design);
+        let design_spacing = tokens.spacing();
+        let design_visual = tokens.visual();
+        let (actions_dialog_top, actions_dialog_right) =
+            prompt_actions_dialog_offsets(design_spacing.padding_sm, design_visual.border_thin);
 
         // Sync suppress_keys with actions popup state so terminal ignores keys when popup is open
         let show_actions = self.show_actions_popup;
@@ -28,7 +126,7 @@ impl ScriptListApp {
         let content_height = window_resize::layout::MAX_HEIGHT;
 
         // Key handler for Cmd+K actions toggle
-        let has_actions_for_handler = has_actions;
+        let actions_mode_for_handler = actions_mode;
         let handle_key = cx.listener(
             move |this: &mut Self,
                   event: &gpui::KeyDownEvent,
@@ -43,19 +141,35 @@ impl ScriptListApp {
                     return;
                 }
 
-                let key_str = event.keystroke.key.to_lowercase();
+                let key = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
+                let is_quick_terminal = matches!(this.current_view, AppView::QuickTerminalView { .. });
+
+                if should_block_escape_for_non_dismissable_term(
+                    is_quick_terminal,
+                    this.show_actions_popup,
+                    key,
+                ) {
+                    let correlation_id = logging::current_correlation_id();
+                    logging::log_debug(
+                        "KEY",
+                        &format!(
+                            "{TERM_PROMPT_KEY_CONTEXT}: swallow non-dismissable escape (correlation_id={correlation_id})"
+                        ),
+                    );
+                    return;
+                }
 
                 // For QuickTerminalView (built-in utility): ESC returns to main menu or closes window
                 // This is different from TermPrompt (SDK prompt) which doesn't respond to ESC
-                if matches!(this.current_view, AppView::QuickTerminalView { .. }) {
-                    if key_str == "escape" && !this.show_actions_popup {
+                if is_quick_terminal {
+                    if ui_foundation::is_key_escape(key) && !this.show_actions_popup {
                         logging::log("KEY", "ESC in QuickTerminalView");
                         this.go_back_or_close(window, cx);
                         return;
                     }
 
-                    if has_cmd && key_str == "w" {
+                    if has_cmd && key.eq_ignore_ascii_case("w") {
                         logging::log("KEY", "Cmd+W - closing window");
                         this.close_and_reset_window(cx);
                         return;
@@ -70,14 +184,18 @@ impl ScriptListApp {
                     return;
                 }
 
-                let key = event.keystroke.key.as_str();
                 let key_char = event.keystroke.key_char.as_deref();
-                let has_cmd = event.keystroke.modifiers.platform;
 
                 // Check for Cmd+K to toggle actions popup (if actions are available)
-                if has_cmd && ui_foundation::is_key_k(key) && has_actions_for_handler {
-                    logging::log("KEY", "Cmd+K in TermPrompt - calling toggle_arg_actions");
-                    this.toggle_arg_actions(cx, window);
+                if has_cmd && ui_foundation::is_key_k(key) {
+                    let correlation_id = logging::current_correlation_id();
+                    logging::log(
+                        "KEY",
+                        &format!(
+                            "{TERM_PROMPT_KEY_CONTEXT}: Cmd+K toggles actions (mode={actions_mode_for_handler:?}, correlation_id={correlation_id})"
+                        ),
+                    );
+                    this.toggle_term_prompt_actions(actions_mode_for_handler, cx, window);
                     return;
                 }
 
@@ -93,7 +211,21 @@ impl ScriptListApp {
                     cx,
                 ) {
                     ActionsRoute::Execute { action_id } => {
-                        this.trigger_action_by_name(&action_id, cx);
+                        if this.trigger_action_by_name(&action_id, cx) {
+                            return;
+                        }
+
+                        if this.execute_term_prompt_action_by_id(&action_id, cx) {
+                            return;
+                        }
+
+                        let correlation_id = logging::current_correlation_id();
+                        logging::log_debug(
+                            "KEY",
+                            &format!(
+                                "{TERM_PROMPT_KEY_CONTEXT}: unhandled actions dialog selection (action_id={action_id}, correlation_id={correlation_id})"
+                            ),
+                        );
                         return;
                     }
                     ActionsRoute::Handled => {
@@ -110,9 +242,12 @@ impl ScriptListApp {
                 let shortcut_key =
                     shortcuts::keystroke_to_shortcut(&key_lower, &event.keystroke.modifiers);
                 if let Some(action_name) = this.action_shortcuts.get(&shortcut_key).cloned() {
+                    let correlation_id = logging::current_correlation_id();
                     logging::log(
                         "KEY",
-                        &format!("SDK action shortcut matched: {}", action_name),
+                        &format!(
+                            "{TERM_PROMPT_KEY_CONTEXT}: SDK action shortcut matched (action={action_name}, shortcut={shortcut_key}, correlation_id={correlation_id})"
+                        ),
                     );
                     this.trigger_action_by_name(&action_name, cx);
                 }
@@ -128,11 +263,12 @@ impl ScriptListApp {
         let footer_config = PromptFooterConfig::new()
             .primary_label("Close")
             .primary_shortcut("⌘W")
-            .show_secondary(has_actions);
+            .show_secondary(true);
 
         // Handlers for footer buttons
         let handle_close = cx.entity().downgrade();
         let handle_actions = cx.entity().downgrade();
+        let actions_mode_for_footer = actions_mode;
 
         // Container with explicit height. We wrap the entity in a sized div because
         // GPUI entities don't automatically inherit parent flex sizing.
@@ -146,7 +282,8 @@ impl ScriptListApp {
             .w_full()
             .h(content_height)
             .overflow_hidden()
-            .on_key_down(handle_key)
+            .key_context(TERM_PROMPT_KEY_CONTEXT)
+            .capture_key_down(handle_key)
             // Terminal content takes remaining space
             .child(div().flex_1().min_h(px(0.)).overflow_hidden().child(entity))
             // Footer at the bottom
@@ -162,7 +299,7 @@ impl ScriptListApp {
                     .on_secondary_click(Box::new(move |_, window, cx| {
                         if let Some(app) = handle_actions.upgrade() {
                             app.update(cx, |this, cx| {
-                                this.toggle_arg_actions(cx, window);
+                                this.toggle_term_prompt_actions(actions_mode_for_footer, cx, window);
                             });
                         }
                     })),
@@ -199,10 +336,73 @@ impl ScriptListApp {
                                     .inset_0()
                                     .on_click(backdrop_click),
                             )
-                            .child(div().absolute().top(px(52.)).right(px(8.)).child(dialog)),
+                            .child(
+                                div()
+                                    .absolute()
+                                    .top(px(actions_dialog_top))
+                                    .right(px(actions_dialog_right))
+                                    .child(dialog),
+                            ),
                     )
                 },
             )
             .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod term_prompt_render_tests {
+    use super::*;
+
+    #[test]
+    fn test_term_prompt_actions_mode_uses_sdk_actions_when_present() {
+        assert_eq!(term_prompt_actions_mode(true), TermPromptActionsMode::SdkActions);
+    }
+
+    #[test]
+    fn test_term_prompt_actions_mode_defaults_to_terminal_commands_without_sdk_actions() {
+        assert_eq!(
+            term_prompt_actions_mode(false),
+            TermPromptActionsMode::TerminalCommands,
+        );
+    }
+
+    #[test]
+    fn test_term_prompt_escape_does_not_close_sdk_terminal_when_non_dismissable() {
+        assert!(should_block_escape_for_non_dismissable_term(
+            false, false, "escape"
+        ));
+        assert!(should_block_escape_for_non_dismissable_term(
+            false, false, "Esc"
+        ));
+        assert!(!should_block_escape_for_non_dismissable_term(
+            false, false, "enter"
+        ));
+        assert!(!should_block_escape_for_non_dismissable_term(
+            true, false, "escape"
+        ));
+        assert!(!should_block_escape_for_non_dismissable_term(
+            false, true, "escape"
+        ));
+    }
+
+    #[test]
+    fn test_terminal_action_from_id_maps_primary_command_palette_actions() {
+        use crate::terminal::TerminalAction;
+
+        assert_eq!(terminal_action_from_id("clear"), Some(TerminalAction::Clear));
+        assert_eq!(
+            terminal_action_from_id("copy_all"),
+            Some(TerminalAction::CopyAll),
+        );
+        assert_eq!(
+            terminal_action_from_id("scroll_to_top"),
+            Some(TerminalAction::ScrollToTop),
+        );
+        assert_eq!(
+            terminal_action_from_id("reset_zoom"),
+            Some(TerminalAction::ResetZoom),
+        );
+        assert_eq!(terminal_action_from_id("unknown"), None);
     }
 }

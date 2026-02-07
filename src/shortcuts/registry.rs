@@ -113,6 +113,7 @@ pub struct ShortcutRegistry {
     id_to_index: HashMap<String, usize>,
     user_overrides: HashMap<String, Option<Shortcut>>,
     disabled: HashSet<String>,
+    effective_shortcut_index: HashMap<ShortcutContext, HashMap<String, usize>>,
 }
 
 impl Default for ShortcutRegistry {
@@ -128,6 +129,7 @@ impl ShortcutRegistry {
             id_to_index: HashMap::new(),
             user_overrides: HashMap::new(),
             disabled: HashSet::new(),
+            effective_shortcut_index: HashMap::new(),
         }
     }
 
@@ -140,10 +142,12 @@ impl ShortcutRegistry {
             self.bindings.push(binding);
             self.id_to_index.insert(id, index);
         }
+        self.rebuild_effective_shortcut_index();
     }
 
     pub fn unregister(&mut self, id: &str) {
         self.disabled.insert(id.to_string());
+        self.rebuild_effective_shortcut_index();
     }
 
     pub fn get(&self, id: &str) -> Option<&ShortcutBinding> {
@@ -167,11 +171,13 @@ impl ShortcutRegistry {
             self.disabled.remove(id);
         }
         self.user_overrides.insert(id.to_string(), shortcut);
+        self.rebuild_effective_shortcut_index();
     }
 
     pub fn clear_override(&mut self, id: &str) {
         self.user_overrides.remove(id);
         self.disabled.remove(id);
+        self.rebuild_effective_shortcut_index();
     }
 
     pub fn is_disabled(&self, id: &str) -> bool {
@@ -189,46 +195,17 @@ impl ShortcutRegistry {
         keystroke: &gpui::Keystroke,
         contexts: &[ShortcutContext],
     ) -> Option<&str> {
+        let canonical_keystroke = Self::canonical_keystroke(keystroke);
+
         for context in contexts {
-            // Collect all matches in this context
-            let mut matches: Vec<(&ShortcutBinding, bool)> = Vec::new();
-
-            for binding in &self.bindings {
-                if binding.context != *context || self.disabled.contains(&binding.id) {
-                    continue;
+            if let Some(binding_index) = self
+                .effective_shortcut_index
+                .get(context)
+                .and_then(|by_shortcut| by_shortcut.get(&canonical_keystroke))
+            {
+                if let Some(binding) = self.bindings.get(*binding_index) {
+                    return Some(&binding.id);
                 }
-
-                let has_user_override = self.user_overrides.contains_key(&binding.id);
-                let shortcut = if let Some(override_opt) = self.user_overrides.get(&binding.id) {
-                    match override_opt {
-                        Some(s) => s.clone(),
-                        None => continue, // Disabled via override
-                    }
-                } else {
-                    binding.default_shortcut.clone()
-                };
-
-                if shortcut.matches_keystroke(keystroke) {
-                    matches.push((binding, has_user_override));
-                }
-            }
-
-            // If we have matches, return the highest priority one
-            if !matches.is_empty() {
-                // Sort by: user_override first, then source priority, then registration order
-                matches.sort_by(|(a, a_override), (b, b_override)| {
-                    // User override always wins
-                    match (a_override, b_override) {
-                        (true, false) => std::cmp::Ordering::Less,
-                        (false, true) => std::cmp::Ordering::Greater,
-                        _ => {
-                            // Same override status: compare source priority
-                            a.source.priority().cmp(&b.source.priority())
-                        }
-                    }
-                });
-
-                return Some(&matches[0].0.id);
             }
         }
         None
@@ -714,6 +691,86 @@ impl ShortcutRegistry {
                 .unwrap_or_else(|| Some(binding.default_shortcut.clone()));
             (binding, effective)
         })
+    }
+
+    fn canonical_keystroke(keystroke: &gpui::Keystroke) -> String {
+        Shortcut::new(
+            keystroke.key.to_lowercase(),
+            super::types::Modifiers {
+                cmd: keystroke.modifiers.platform,
+                ctrl: keystroke.modifiers.control,
+                alt: keystroke.modifiers.alt,
+                shift: keystroke.modifiers.shift,
+            },
+        )
+        .to_canonical_string()
+    }
+
+    fn effective_shortcut_for_binding(&self, binding: &ShortcutBinding) -> Option<Shortcut> {
+        if self.disabled.contains(&binding.id) {
+            return None;
+        }
+
+        if let Some(override_opt) = self.user_overrides.get(&binding.id) {
+            return override_opt.clone();
+        }
+
+        Some(binding.default_shortcut.clone())
+    }
+
+    fn has_active_user_override(&self, binding_id: &str) -> bool {
+        self.user_overrides
+            .get(binding_id)
+            .is_some_and(|override_shortcut| override_shortcut.is_some())
+    }
+
+    fn should_replace_index_winner(&self, candidate_idx: usize, existing_idx: usize) -> bool {
+        let candidate = &self.bindings[candidate_idx];
+        let existing = &self.bindings[existing_idx];
+
+        let candidate_override = self.has_active_user_override(&candidate.id);
+        let existing_override = self.has_active_user_override(&existing.id);
+
+        if candidate_override != existing_override {
+            return candidate_override;
+        }
+
+        let candidate_priority = candidate.source.priority();
+        let existing_priority = existing.source.priority();
+        if candidate_priority != existing_priority {
+            return candidate_priority < existing_priority;
+        }
+
+        candidate_idx < existing_idx
+    }
+
+    fn rebuild_effective_shortcut_index(&mut self) {
+        self.effective_shortcut_index.clear();
+
+        for (index, binding) in self.bindings.iter().enumerate() {
+            let Some(effective_shortcut) = self.effective_shortcut_for_binding(binding) else {
+                continue;
+            };
+
+            let canonical = effective_shortcut.to_canonical_string();
+            let existing_idx = self
+                .effective_shortcut_index
+                .get(&binding.context)
+                .and_then(|by_shortcut| by_shortcut.get(&canonical))
+                .copied();
+
+            let should_replace = match existing_idx {
+                Some(existing_idx) => self.should_replace_index_winner(index, existing_idx),
+                None => true,
+            };
+
+            if should_replace {
+                self.effective_shortcut_index
+                    .entry(binding.context)
+                    .or_default()
+                    .insert(canonical, index);
+            }
+        }
     }
 }
 

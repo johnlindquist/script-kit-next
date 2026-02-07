@@ -14,8 +14,11 @@ impl ScriptListApp {
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
         let design_colors = tokens.colors();
-        let _design_spacing = tokens.spacing();
+        let design_spacing = tokens.spacing();
+        let design_typography = tokens.typography();
         let design_visual = tokens.visual();
+        let (actions_dialog_top, actions_dialog_right) =
+            prompt_actions_dialog_offsets(design_spacing.padding_sm, design_visual.border_thin);
 
         // Key handler for Cmd+K actions toggle (at parent level to intercept before DivPrompt)
         let has_actions_for_handler = has_actions;
@@ -39,6 +42,7 @@ impl ScriptListApp {
                 if !this.show_actions_popup
                     && this.handle_global_shortcut_with_options(event, true, cx)
                 {
+                    cx.stop_propagation();
                     return;
                 }
 
@@ -50,6 +54,7 @@ impl ScriptListApp {
                 if has_cmd && ui_foundation::is_key_k(key) && has_actions_for_handler {
                     logging::log("KEY", "Cmd+K in DivPrompt - calling toggle_arg_actions");
                     this.toggle_arg_actions(cx, window);
+                    cx.stop_propagation();
                     return;
                 }
 
@@ -66,9 +71,13 @@ impl ScriptListApp {
                 ) {
                     ActionsRoute::Execute { action_id } => {
                         this.trigger_action_by_name(&action_id, cx);
+                        cx.stop_propagation();
+                        return;
                     }
                     ActionsRoute::Handled => {
                         // Key consumed by actions dialog
+                        cx.stop_propagation();
+                        return;
                     }
                     ActionsRoute::NotHandled => {
                         // Actions popup not open - check SDK action shortcuts
@@ -87,6 +96,8 @@ impl ScriptListApp {
                                 ),
                             );
                             this.trigger_action_by_name(&action_name, cx);
+                            cx.stop_propagation();
+                            return;
                         }
                     }
                 }
@@ -103,46 +114,65 @@ impl ScriptListApp {
         // Use explicit height from layout constants
         let content_height = window_resize::layout::STANDARD_HEIGHT;
 
-        // Footer colors and handlers for PromptFooter
-        let footer_colors = PromptFooterColors {
-            accent: design_colors.accent,
-            text_muted: design_colors.text_muted,
-            border: design_colors.border,
-            background: design_colors.background_selected, // Match selected item bg
-            is_light_mode: !self.theme.is_dark_mode(),
-        };
-
-        // Footer config with Submit as primary action
-        let footer_config = PromptFooterConfig::new()
-            .primary_label("Submit")
-            .primary_shortcut("↵")
-            .show_secondary(has_actions);
+        // Footer colors and config aligned with other interactive prompts.
+        let footer_colors =
+            prompt_footer_colors_for_prompt(&design_colors, !self.theme.is_dark_mode());
+        let footer_config = prompt_footer_config_with_status(
+            "Continue",
+            has_actions,
+            Some(running_status_text("review output and press Enter")),
+            Some("Output".to_string()),
+        );
 
         // Create click handlers for footer
         let handle_submit = cx.entity().downgrade();
         let handle_actions = cx.entity().downgrade();
         let prompt_id = id.clone();
 
-        div()
-            .relative() // Needed for absolute positioned overlays
-            .flex()
-            .flex_col()
-            .when_some(vibrancy_bg, |d, bg| d.bg(bg)) // VIBRANCY: Only apply bg when vibrancy disabled
-            // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
-            .w_full()
+        crate::components::prompt_shell_container(design_visual.radius_lg, vibrancy_bg)
             .h(content_height)
-            .overflow_hidden()
-            .rounded(px(design_visual.radius_lg))
             .track_focus(&self.focus_handle) // Required to receive key events
             .on_key_down(handle_key)
-            // Content area - flex-1 to fill remaining space above footer
+            // Header + content shell
             .child(
                 div()
                     .flex_1()
                     .w_full()
                     .min_h(px(0.)) // Critical: allows flex children to size properly
                     .overflow_hidden()
-                    .child(entity.clone()),
+                    .child(
+                        div()
+                            .w_full()
+                            .px(px(HEADER_PADDING_X))
+                            .py(px(HEADER_PADDING_Y))
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(HEADER_GAP))
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(rgb(design_colors.text_primary))
+                                    .font_family(design_typography.font_family)
+                                    .child("Script Output"),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(rgb(design_colors.text_muted))
+                                    .font_family(design_typography.font_family)
+                                    .child("Enter to continue"),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .mx(px(design_spacing.padding_lg))
+                            .h(px(design_visual.border_thin))
+                            .bg(rgba((design_colors.border << 8) | 0x60)),
+                    )
+                    .child(crate::components::prompt_shell_content(entity.clone())),
             )
             // Footer with Submit button and Actions
             .child(
@@ -196,7 +226,13 @@ impl ScriptListApp {
                                     .inset_0()
                                     .on_click(backdrop_click),
                             )
-                            .child(div().absolute().top(px(52.)).right(px(8.)).child(dialog)),
+                            .child(
+                                div()
+                                    .absolute()
+                                    .top(px(actions_dialog_top))
+                                    .right(px(actions_dialog_right))
+                                    .child(dialog),
+                            ),
                     )
                 },
             )

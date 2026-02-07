@@ -271,12 +271,17 @@ impl MenuCache {
 // Helper Functions
 // ============================================================================
 
-/// Create a CFString from a Rust string
-fn create_cf_string(s: &str) -> CFStringRef {
-    unsafe {
-        let c_str = std::ffi::CString::new(s).unwrap();
+/// Create a CFString from a Rust string.
+fn try_create_cf_string(s: &str) -> Result<CFStringRef> {
+    let c_str = std::ffi::CString::new(s)
+        .with_context(|| format!("CFString input contains interior NUL: {:?}", s))?;
+    let cf_string = unsafe {
         CFStringCreateWithCString(std::ptr::null(), c_str.as_ptr(), kCFStringEncodingUTF8)
+    };
+    if cf_string.is_null() {
+        bail!("CFStringCreateWithCString returned null for input: {:?}", s);
     }
+    Ok(cf_string)
 }
 
 /// Convert a CFString to a Rust String
@@ -320,7 +325,7 @@ fn cf_release(cf: CFTypeRef) {
 
 /// Get an attribute value from an AXUIElement
 fn get_ax_attribute(element: AXUIElementRef, attribute: &str) -> Result<CFTypeRef> {
-    let attr_str = create_cf_string(attribute);
+    let attr_str = try_create_cf_string(attribute)?;
     let mut value: CFTypeRef = std::ptr::null();
 
     let result =

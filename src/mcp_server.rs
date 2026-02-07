@@ -10,6 +10,7 @@
 // Allow dead code - ServerHandle methods provide full lifecycle API for future use
 #![allow(dead_code)]
 
+use crate::logging;
 use crate::mcp_protocol::{self, JsonRpcResponse};
 use anyhow::{Context, Result};
 use std::fs;
@@ -325,8 +326,6 @@ fn handle_connection(mut stream: TcpStream, expected_token: &str) -> Result<()> 
     reader.read_line(&mut request_line)?;
     let request_line = request_line.trim();
 
-    debug!("Request: {}", request_line);
-
     // Parse method and path
     let parts: Vec<&str> = request_line.split_whitespace().collect();
     if parts.len() < 2 {
@@ -335,6 +334,26 @@ fn handle_connection(mut stream: TcpStream, expected_token: &str) -> Result<()> 
 
     let method = parts[0];
     let path = parts[1];
+    let path_slug = path.trim_matches('/').replace('/', "_");
+    let correlation_id = format!(
+        "mcp:{}:{}:{}",
+        method.to_lowercase(),
+        if path_slug.is_empty() {
+            "root".to_string()
+        } else {
+            path_slug
+        },
+        uuid::Uuid::new_v4()
+    );
+    let _request_guard = logging::set_correlation_id(correlation_id.clone());
+    debug!(
+        category = "MCP",
+        event_type = "mcp_http_request",
+        method = method,
+        path = path,
+        correlation_id = %correlation_id,
+        "Received MCP HTTP request"
+    );
 
     // Read headers
     let mut headers = std::collections::HashMap::new();
@@ -411,8 +430,14 @@ fn handle_rpc_request(
     let mut body = vec![0u8; content_length];
     reader.read_exact(&mut body)?;
     let body_str = String::from_utf8_lossy(&body);
-
-    debug!("RPC request body: {}", body_str);
+    let body_summary = logging::summarize_payload(&body_str);
+    debug!(
+        category = "MCP",
+        event_type = "mcp_rpc_request_body",
+        content_length = content_length,
+        payload_summary = %body_summary,
+        "Received MCP RPC request body"
+    );
 
     // Load scripts and scriptlets for context-aware responses
     // This allows resources/read and tools/list to return actual data

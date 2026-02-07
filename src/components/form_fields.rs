@@ -19,6 +19,7 @@
 #![allow(dead_code)]
 
 use gpui::*;
+use gpui_component::scroll::ScrollableElement;
 use std::sync::{Arc, Mutex};
 
 use crate::protocol::Field;
@@ -57,6 +58,61 @@ fn slice_by_char_range(s: &str, start_char: usize, end_char: usize) -> &str {
     &s[start_b..end_b]
 }
 
+fn is_partial_number_value(candidate: &str) -> bool {
+    if candidate.is_empty() {
+        return true;
+    }
+
+    let mut chars = candidate.chars().peekable();
+    if matches!(chars.peek(), Some('+' | '-')) {
+        chars.next();
+    }
+
+    let mut saw_decimal = false;
+    for ch in chars {
+        match ch {
+            '0'..='9' => {}
+            '.' if !saw_decimal => {
+                saw_decimal = true;
+            }
+            _ => return false,
+        }
+    }
+
+    true
+}
+
+fn is_partial_email_value(candidate: &str) -> bool {
+    let mut at_sign_count = 0usize;
+    for ch in candidate.chars() {
+        if ch.is_control() || ch.is_whitespace() {
+            return false;
+        }
+        if ch == '@' {
+            at_sign_count += 1;
+            if at_sign_count > 1 {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+pub(crate) fn form_field_type_allows_candidate_value(
+    field_type: Option<&str>,
+    candidate: &str,
+) -> bool {
+    match field_type {
+        Some(field_type) if field_type.eq_ignore_ascii_case("number") => {
+            is_partial_number_value(candidate)
+        }
+        Some(field_type) if field_type.eq_ignore_ascii_case("email") => {
+            is_partial_email_value(candidate)
+        }
+        _ => true,
+    }
+}
+
 // Tunables for click-to-position. These are *approximations*.
 const TEXTFIELD_CHAR_WIDTH_PX: f32 = 8.0;
 const TEXTAREA_LINE_HEIGHT_PX: f32 = 24.0;
@@ -89,11 +145,20 @@ pub struct FormFieldColors {
     pub checkbox_checked: u32,
     /// Checkbox check mark color
     pub checkbox_mark: u32,
+    /// Shared input font size token for all editable field text
+    pub input_font_size: f32,
+    /// Shared label font size token for labels, hints, and inline indicators
+    pub label_font_size: f32,
 }
 
 impl FormFieldColors {
     /// Create FormFieldColors from a Theme
     pub fn from_theme(theme: &crate::theme::Theme) -> Self {
+        let ui_font_size = theme.get_fonts().ui_size;
+        let cursor_color = theme
+            .get_cursor_style(true)
+            .map(|cursor| cursor.color)
+            .unwrap_or(theme.colors.accent.selected);
         Self {
             background: theme.colors.background.search_box,
             background_focused: theme.colors.background.main,
@@ -102,14 +167,17 @@ impl FormFieldColors {
             label: theme.colors.text.secondary,
             border: theme.colors.ui.border,
             border_focused: theme.colors.accent.selected,
-            cursor: 0x00ffff, // Cyan cursor
+            cursor: cursor_color,
             checkbox_checked: theme.colors.accent.selected,
             checkbox_mark: theme.colors.background.main,
+            input_font_size: (ui_font_size + 2.0).max(12.0),
+            label_font_size: (ui_font_size - 2.0).max(10.0),
         }
     }
 
     /// Create FormFieldColors from design colors
     pub fn from_design(colors: &crate::designs::DesignColors) -> Self {
+        let typography = crate::designs::DesignTypography::default();
         Self {
             background: colors.background_secondary,
             background_focused: colors.background,
@@ -118,27 +186,18 @@ impl FormFieldColors {
             label: colors.text_secondary,
             border: colors.border,
             border_focused: colors.accent,
-            cursor: 0x00ffff,
+            cursor: colors.accent,
             checkbox_checked: colors.accent,
             checkbox_mark: colors.background,
+            input_font_size: typography.font_size_lg,
+            label_font_size: typography.font_size_sm,
         }
     }
 }
 
 impl Default for FormFieldColors {
     fn default() -> Self {
-        Self {
-            background: 0x2d2d30,
-            background_focused: 0x1e1e1e,
-            text: 0xffffff,
-            placeholder: 0x808080,
-            label: 0xcccccc,
-            border: 0x464647,
-            border_focused: 0xfbbf24, // Script Kit yellow/gold
-            cursor: 0x00ffff,
-            checkbox_checked: 0xfbbf24,
-            checkbox_mark: 0x1e1e1e,
-        }
+        Self::from_theme(&crate::theme::Theme::default())
     }
 }
 
@@ -364,6 +423,27 @@ impl FormTextField {
         self.state.set_value(self.value.clone());
     }
 
+    fn candidate_value_with_inserted_text(&self, text: &str) -> String {
+        let mut next = self.value.clone();
+        let mut insert_position = self.cursor_position;
+
+        if let Some((start, end)) = self.selection_range() {
+            if start != end {
+                drain_char_range(&mut next, start, end);
+                insert_position = start;
+            }
+        }
+
+        let insert_byte = byte_idx_from_char_idx(&next, insert_position);
+        next.insert_str(insert_byte, text);
+        next
+    }
+
+    fn allows_text_insertion_for_field_type(&self, text: &str) -> bool {
+        let candidate = self.candidate_value_with_inserted_text(text);
+        form_field_type_allows_candidate_value(self.field.field_type.as_deref(), &candidate)
+    }
+
     fn move_left(&mut self, extend_selection: bool) {
         if !extend_selection && self.has_selection() {
             if let Some((start, _)) = self.selection_range() {
@@ -470,7 +550,9 @@ impl FormTextField {
     fn paste(&mut self, cx: &mut Context<Self>) {
         if let Some(item) = cx.read_from_clipboard() {
             if let Some(text) = item.text() {
-                self.insert_text_at_cursor(&text);
+                if self.allows_text_insertion_for_field_type(&text) {
+                    self.insert_text_at_cursor(&text);
+                }
             }
         }
     }
@@ -542,7 +624,10 @@ impl FormTextField {
         if !cmd {
             if let Some(ref key_char) = event.keystroke.key_char {
                 let s = key_char.to_string();
-                if !s.is_empty() && !s.chars().all(|c| c.is_control()) {
+                if !s.is_empty()
+                    && !s.chars().all(|c| c.is_control())
+                    && self.allows_text_insertion_for_field_type(&s)
+                {
                     self.insert_text_at_cursor(&s);
                     cx.notify();
                 }
@@ -641,7 +726,7 @@ impl Render for FormTextField {
                 // Text before cursor
                 .child(
                     div()
-                        .text_lg()
+                        .text_size(px(colors.input_font_size))
                         .text_color(rgb(colors.text))
                         .child(text_before.to_string()),
                 );
@@ -654,7 +739,7 @@ impl Render for FormTextField {
             // Text after cursor
             content.child(
                 div()
-                    .text_lg()
+                    .text_size(px(colors.input_font_size))
                     .text_color(rgb(colors.text))
                     .child(text_after.to_string()),
             )
@@ -668,7 +753,7 @@ impl Render for FormTextField {
                 // Placeholder when not focused
                 content = content.child(
                     div()
-                        .text_lg()
+                        .text_size(px(colors.input_font_size))
                         .text_color(rgb(colors.placeholder))
                         .child(placeholder),
                 );
@@ -690,7 +775,7 @@ impl Render for FormTextField {
             container = container.child(
                 div()
                     .w(rems(7.5))
-                    .text_sm()
+                    .text_size(px(colors.label_font_size))
                     .text_color(rgb(colors.label))
                     .font_weight(FontWeight::MEDIUM)
                     .child(label_text),
@@ -1204,12 +1289,12 @@ impl Render for FormTextArea {
             div()
                 .flex()
                 .flex_col()
-                .text_sm()
+                .text_size(px(colors.input_font_size))
                 .text_color(rgb(colors.text))
                 .child(display_text)
         } else {
             div()
-                .text_sm()
+                .text_size(px(colors.input_font_size))
                 .text_color(rgb(colors.placeholder))
                 .child(placeholder)
         };
@@ -1231,7 +1316,7 @@ impl Render for FormTextArea {
                 div()
                     .w(rems(7.5))
                     .pt(rems(0.5)) // Align with textarea padding
-                    .text_sm()
+                    .text_size(px(colors.label_font_size))
                     .text_color(rgb(colors.label))
                     .font_weight(FontWeight::MEDIUM)
                     .child(label_text),
@@ -1256,7 +1341,8 @@ impl Render for FormTextArea {
                 .border_color(border_color)
                 .rounded(px(6.))
                 .cursor_text()
-                .overflow_hidden()
+                .overflow_x_hidden()
+                .overflow_y_scrollbar()
                 // Text content or placeholder
                 .child(text_content),
         )
@@ -1398,7 +1484,7 @@ impl Render for FormCheckbox {
         if checked {
             checkbox_box = checkbox_box.child(
                 div()
-                    .text_sm()
+                    .text_size(px(colors.label_font_size))
                     .text_color(rgb(colors.checkbox_mark))
                     .font_weight(FontWeight::BOLD)
                     .child("✓"),
@@ -1433,7 +1519,12 @@ impl Render for FormCheckbox {
                     // Checkbox box
                     .child(checkbox_box)
                     // Label
-                    .child(div().text_sm().text_color(rgb(colors.text)).child(label)),
+                    .child(
+                        div()
+                            .text_size(px(colors.label_font_size))
+                            .text_color(rgb(colors.text))
+                            .child(label),
+                    ),
             )
     }
 }

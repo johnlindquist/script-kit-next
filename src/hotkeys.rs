@@ -363,23 +363,25 @@ pub fn update_hotkeys(cfg: &config::Config) {
     }
 
     // Update AI hotkey
-    let ai_config = cfg.get_ai_hotkey();
-    if let Some((mods, code)) = parse_hotkey_config(&ai_config) {
-        let display = hotkey_config_to_display(&ai_config);
-        rebind_hotkey_transactional(&manager_guard, HotkeyAction::Ai, mods, code, &display);
+    if let Some(ai_config) = cfg.get_ai_hotkey() {
+        if let Some((mods, code)) = parse_hotkey_config(&ai_config) {
+            let display = hotkey_config_to_display(&ai_config);
+            rebind_hotkey_transactional(&manager_guard, HotkeyAction::Ai, mods, code, &display);
+        }
     }
 
     // Update logs hotkey
-    let logs_config = cfg.get_logs_hotkey();
-    if let Some((mods, code)) = parse_hotkey_config(&logs_config) {
-        let display = hotkey_config_to_display(&logs_config);
-        rebind_hotkey_transactional(
-            &manager_guard,
-            HotkeyAction::ToggleLogs,
-            mods,
-            code,
-            &display,
-        );
+    if let Some(logs_config) = cfg.get_logs_hotkey() {
+        if let Some((mods, code)) = parse_hotkey_config(&logs_config) {
+            let display = hotkey_config_to_display(&logs_config);
+            rebind_hotkey_transactional(
+                &manager_guard,
+                HotkeyAction::ToggleLogs,
+                mods,
+                code,
+                &display,
+            );
+        }
     }
 }
 
@@ -776,6 +778,24 @@ pub fn set_ai_hotkey_handler<F: Fn() + Send + Sync + 'static>(handler: F) {
     *storage.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(handler));
 }
 
+fn clone_hotkey_handler_with_poison_recovery(
+    storage: &std::sync::Mutex<Option<HotkeyHandler>>,
+    handler_kind: &'static str,
+) -> Option<HotkeyHandler> {
+    match storage.lock() {
+        Ok(handler) => handler.clone(),
+        Err(poisoned) => {
+            tracing::warn!(
+                handler_kind = %handler_kind,
+                attempted = "clone_hotkey_handler",
+                state = "poisoned_lock",
+                "Recovered from poisoned hotkey handler mutex"
+            );
+            poisoned.into_inner().clone()
+        }
+    }
+}
+
 #[cfg(target_os = "macos")]
 mod gcd {
     use std::ffi::c_void;
@@ -841,6 +861,17 @@ mod gcd {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct HotkeyEvent {
+    pub correlation_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ScriptHotkeyEvent {
+    pub command_id: String,
+    pub correlation_id: String,
+}
+
 /// Dispatch the Notes hotkey handler to the main thread.
 ///
 /// Strategy (mutually exclusive to prevent double-fire):
@@ -850,22 +881,21 @@ mod gcd {
 /// This works even before the main window is activated because GCD dispatch
 /// directly integrates with the NSApplication run loop that GPUI uses.
 #[tracing::instrument(skip_all)]
-fn dispatch_notes_hotkey() {
+fn dispatch_notes_hotkey(event: HotkeyEvent) {
     // Check if a direct handler is registered (takes priority over channel)
-    let handler = NOTES_HANDLER
-        .get_or_init(|| std::sync::Mutex::new(None))
-        .lock()
-        .unwrap()
-        .clone();
+    let handler_storage = NOTES_HANDLER.get_or_init(|| std::sync::Mutex::new(None));
+    let handler = clone_hotkey_handler_with_poison_recovery(handler_storage, "notes");
 
     if let Some(handler) = handler {
         // Handler is set - use direct GCD dispatch (skip channel to avoid double-fire)
+        let correlation_id = event.correlation_id.clone();
         gcd::dispatch_to_main(move || {
+            let _guard = logging::set_correlation_id(correlation_id);
             handler();
         });
     } else {
         // No handler - use channel approach for async polling
-        if notes_hotkey_channel().0.try_send(()).is_err() {
+        if notes_hotkey_channel().0.try_send(event).is_err() {
             logging::log("HOTKEY", "Notes hotkey channel full/closed");
         }
         // Dispatch an empty closure to wake GPUI's event loop
@@ -882,22 +912,21 @@ fn dispatch_notes_hotkey() {
 /// - If a handler is registered: use it directly via GCD dispatch
 /// - Otherwise: send to channel for async polling
 #[tracing::instrument(skip_all)]
-fn dispatch_ai_hotkey() {
+fn dispatch_ai_hotkey(event: HotkeyEvent) {
     // Check if a direct handler is registered (takes priority over channel)
-    let handler = AI_HANDLER
-        .get_or_init(|| std::sync::Mutex::new(None))
-        .lock()
-        .unwrap()
-        .clone();
+    let handler_storage = AI_HANDLER.get_or_init(|| std::sync::Mutex::new(None));
+    let handler = clone_hotkey_handler_with_poison_recovery(handler_storage, "ai");
 
     if let Some(handler) = handler {
         // Handler is set - use direct GCD dispatch (skip channel to avoid double-fire)
+        let correlation_id = event.correlation_id.clone();
         gcd::dispatch_to_main(move || {
+            let _guard = logging::set_correlation_id(correlation_id);
             handler();
         });
     } else {
         // No handler - use channel approach for async polling
-        if ai_hotkey_channel().0.try_send(()).is_err() {
+        if ai_hotkey_channel().0.try_send(event).is_err() {
             logging::log("HOTKEY", "AI hotkey channel full/closed");
         }
         // Dispatch an empty closure to wake GPUI's event loop
@@ -909,65 +938,81 @@ fn dispatch_ai_hotkey() {
 
 // HOTKEY_CHANNEL: Event-driven async_channel for hotkey events (replaces AtomicBool polling)
 #[allow(dead_code)]
-static HOTKEY_CHANNEL: OnceLock<(async_channel::Sender<()>, async_channel::Receiver<()>)> =
-    OnceLock::new();
+static HOTKEY_CHANNEL: OnceLock<(
+    async_channel::Sender<HotkeyEvent>,
+    async_channel::Receiver<HotkeyEvent>,
+)> = OnceLock::new();
 
 /// Get the hotkey channel, initializing it on first access.
 #[allow(dead_code)]
-pub(crate) fn hotkey_channel() -> &'static (async_channel::Sender<()>, async_channel::Receiver<()>)
-{
+pub(crate) fn hotkey_channel() -> &'static (
+    async_channel::Sender<HotkeyEvent>,
+    async_channel::Receiver<HotkeyEvent>,
+) {
     HOTKEY_CHANNEL.get_or_init(|| async_channel::bounded(10))
 }
 
 // SCRIPT_HOTKEY_CHANNEL: Channel for script shortcut events (sends script path)
 #[allow(dead_code)]
 static SCRIPT_HOTKEY_CHANNEL: OnceLock<(
-    async_channel::Sender<String>,
-    async_channel::Receiver<String>,
+    async_channel::Sender<ScriptHotkeyEvent>,
+    async_channel::Receiver<ScriptHotkeyEvent>,
 )> = OnceLock::new();
 
 /// Get the script hotkey channel, initializing it on first access.
 #[allow(dead_code)]
 pub(crate) fn script_hotkey_channel() -> &'static (
-    async_channel::Sender<String>,
-    async_channel::Receiver<String>,
+    async_channel::Sender<ScriptHotkeyEvent>,
+    async_channel::Receiver<ScriptHotkeyEvent>,
 ) {
     SCRIPT_HOTKEY_CHANNEL.get_or_init(|| async_channel::bounded(10))
 }
 
 // NOTES_HOTKEY_CHANNEL: Channel for notes hotkey events
 #[allow(dead_code)]
-static NOTES_HOTKEY_CHANNEL: OnceLock<(async_channel::Sender<()>, async_channel::Receiver<()>)> =
-    OnceLock::new();
+static NOTES_HOTKEY_CHANNEL: OnceLock<(
+    async_channel::Sender<HotkeyEvent>,
+    async_channel::Receiver<HotkeyEvent>,
+)> = OnceLock::new();
 
 /// Get the notes hotkey channel, initializing it on first access.
 #[allow(dead_code)]
-pub(crate) fn notes_hotkey_channel(
-) -> &'static (async_channel::Sender<()>, async_channel::Receiver<()>) {
+pub(crate) fn notes_hotkey_channel() -> &'static (
+    async_channel::Sender<HotkeyEvent>,
+    async_channel::Receiver<HotkeyEvent>,
+) {
     NOTES_HOTKEY_CHANNEL.get_or_init(|| async_channel::bounded(10))
 }
 
 // AI_HOTKEY_CHANNEL: Channel for AI hotkey events
 #[allow(dead_code)]
-static AI_HOTKEY_CHANNEL: OnceLock<(async_channel::Sender<()>, async_channel::Receiver<()>)> =
-    OnceLock::new();
+static AI_HOTKEY_CHANNEL: OnceLock<(
+    async_channel::Sender<HotkeyEvent>,
+    async_channel::Receiver<HotkeyEvent>,
+)> = OnceLock::new();
 
 /// Get the AI hotkey channel, initializing it on first access.
 #[allow(dead_code)]
-pub(crate) fn ai_hotkey_channel(
-) -> &'static (async_channel::Sender<()>, async_channel::Receiver<()>) {
+pub(crate) fn ai_hotkey_channel() -> &'static (
+    async_channel::Sender<HotkeyEvent>,
+    async_channel::Receiver<HotkeyEvent>,
+) {
     AI_HOTKEY_CHANNEL.get_or_init(|| async_channel::bounded(10))
 }
 
 // LOGS_HOTKEY_CHANNEL: Channel for log capture toggle events
 #[allow(dead_code)]
-static LOGS_HOTKEY_CHANNEL: OnceLock<(async_channel::Sender<()>, async_channel::Receiver<()>)> =
-    OnceLock::new();
+static LOGS_HOTKEY_CHANNEL: OnceLock<(
+    async_channel::Sender<HotkeyEvent>,
+    async_channel::Receiver<HotkeyEvent>,
+)> = OnceLock::new();
 
 /// Get the logs hotkey channel, initializing it on first access.
 #[allow(dead_code)]
-pub(crate) fn logs_hotkey_channel(
-) -> &'static (async_channel::Sender<()>, async_channel::Receiver<()>) {
+pub(crate) fn logs_hotkey_channel() -> &'static (
+    async_channel::Sender<HotkeyEvent>,
+    async_channel::Receiver<HotkeyEvent>,
+) {
     LOGS_HOTKEY_CHANNEL.get_or_init(|| async_channel::bounded(10))
 }
 
@@ -1123,12 +1168,12 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
             register_builtin_hotkey(&manager_guard, HotkeyAction::Notes, &notes_hotkey);
         }
         // Register AI and logs hotkeys
-        register_builtin_hotkey(&manager_guard, HotkeyAction::Ai, &config.get_ai_hotkey());
-        register_builtin_hotkey(
-            &manager_guard,
-            HotkeyAction::ToggleLogs,
-            &config.get_logs_hotkey(),
-        );
+        if let Some(ai_hotkey) = config.get_ai_hotkey() {
+            register_builtin_hotkey(&manager_guard, HotkeyAction::Ai, &ai_hotkey);
+        }
+        if let Some(logs_hotkey) = config.get_logs_hotkey() {
+            register_builtin_hotkey(&manager_guard, HotkeyAction::ToggleLogs, &logs_hotkey);
+        }
 
         // Register script shortcuts
         let mut script_count = 0;
@@ -1278,12 +1323,18 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
                 match action {
                     Some(HotkeyAction::Main) => {
                         // Set correlation ID for this hotkey event
-                        let _guard =
-                            logging::set_correlation_id(format!("hotkey:main:{}", Uuid::new_v4()));
+                        let correlation_id = format!("hotkey:main:{}", Uuid::new_v4());
+                        let _guard = logging::set_correlation_id(correlation_id.clone());
 
                         let count = HOTKEY_TRIGGER_COUNT.fetch_add(1, Ordering::Relaxed);
                         // NON-BLOCKING: Use try_send to prevent hotkey thread from blocking
-                        if hotkey_channel().0.try_send(()).is_err() {
+                        if hotkey_channel()
+                            .0
+                            .try_send(HotkeyEvent {
+                                correlation_id: correlation_id.clone(),
+                            })
+                            .is_err()
+                        {
                             logging::log("HOTKEY", "Main hotkey channel full/closed");
                         }
                         logging::log(
@@ -1293,27 +1344,27 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
                     }
                     Some(HotkeyAction::Notes) => {
                         // Set correlation ID for this hotkey event
-                        let _guard =
-                            logging::set_correlation_id(format!("hotkey:notes:{}", Uuid::new_v4()));
+                        let correlation_id = format!("hotkey:notes:{}", Uuid::new_v4());
+                        let _guard = logging::set_correlation_id(correlation_id.clone());
 
                         logging::log(
                             "HOTKEY",
                             "Notes hotkey pressed - dispatching to main thread",
                         );
-                        dispatch_notes_hotkey();
+                        dispatch_notes_hotkey(HotkeyEvent { correlation_id });
                     }
                     Some(HotkeyAction::Ai) => {
                         // Set correlation ID for this hotkey event
-                        let _guard =
-                            logging::set_correlation_id(format!("hotkey:ai:{}", Uuid::new_v4()));
+                        let correlation_id = format!("hotkey:ai:{}", Uuid::new_v4());
+                        let _guard = logging::set_correlation_id(correlation_id.clone());
 
                         logging::log("HOTKEY", "AI hotkey pressed - dispatching to main thread");
-                        dispatch_ai_hotkey();
+                        dispatch_ai_hotkey(HotkeyEvent { correlation_id });
                     }
                     Some(HotkeyAction::ToggleLogs) => {
                         // Set correlation ID for this hotkey event
-                        let _guard =
-                            logging::set_correlation_id(format!("hotkey:logs:{}", Uuid::new_v4()));
+                        let correlation_id = format!("hotkey:logs:{}", Uuid::new_v4());
+                        let _guard = logging::set_correlation_id(correlation_id.clone());
 
                         logging::log("HOTKEY", "Logs hotkey pressed - toggling log capture");
                         // Toggle capture immediately (no need for main thread dispatch)
@@ -1332,23 +1383,31 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
                             );
                         }
                         // Send to channel for UI notification (HUD)
-                        if logs_hotkey_channel().0.try_send(()).is_err() {
+                        if logs_hotkey_channel()
+                            .0
+                            .try_send(HotkeyEvent { correlation_id })
+                            .is_err()
+                        {
                             logging::log("HOTKEY", "Logs hotkey channel full/closed");
                         }
                     }
                     Some(HotkeyAction::Script(path)) => {
                         // Set correlation ID for this hotkey event
-                        let _guard = logging::set_correlation_id(format!(
-                            "hotkey:script:{}:{}",
-                            path,
-                            Uuid::new_v4()
-                        ));
+                        let correlation_id = format!("hotkey:script:{}:{}", path, Uuid::new_v4());
+                        let _guard = logging::set_correlation_id(correlation_id.clone());
 
                         // Start benchmark timing for hotkey → chat latency analysis
                         logging::bench_start(&format!("hotkey:{}", path));
                         logging::log("HOTKEY", &format!("Script shortcut triggered: {}", path));
                         // NON-BLOCKING: Use try_send to prevent hotkey thread from blocking
-                        if script_hotkey_channel().0.try_send(path.clone()).is_err() {
+                        if script_hotkey_channel()
+                            .0
+                            .try_send(ScriptHotkeyEvent {
+                                command_id: path.clone(),
+                                correlation_id,
+                            })
+                            .is_err()
+                        {
                             logging::log(
                                 "HOTKEY",
                                 &format!("Script channel full/closed for {}", path),
@@ -1487,24 +1546,63 @@ mod tests {
         while hotkey_channel().1.try_recv().is_ok() {}
         while script_hotkey_channel().1.try_recv().is_ok() {}
 
-        hotkey_channel().0.send_blocking(()).expect("send hotkey");
+        hotkey_channel()
+            .0
+            .send_blocking(HotkeyEvent {
+                correlation_id: "cid-main".to_string(),
+            })
+            .expect("send hotkey");
         assert!(matches!(
             script_hotkey_channel().1.try_recv(),
             Err(TryRecvError::Empty)
         ));
-        assert!(hotkey_channel().1.try_recv().is_ok());
+        let hotkey_event = hotkey_channel().1.try_recv().expect("recv hotkey");
+        assert_eq!(hotkey_event.correlation_id, "cid-main");
 
         script_hotkey_channel()
             .0
-            .send_blocking("script".to_string())
+            .send_blocking(ScriptHotkeyEvent {
+                command_id: "script".to_string(),
+                correlation_id: "cid-script".to_string(),
+            })
             .expect("send script hotkey");
-        assert_eq!(
-            script_hotkey_channel()
-                .1
-                .try_recv()
-                .expect("recv script hotkey"),
-            "script"
+        let script_event = script_hotkey_channel()
+            .1
+            .try_recv()
+            .expect("recv script hotkey");
+        assert_eq!(script_event.command_id, "script");
+        assert_eq!(script_event.correlation_id, "cid-script");
+    }
+
+    #[test]
+    fn test_hotkey_handler_mutex_poison_recovery() {
+        let storage = std::sync::Arc::new(std::sync::Mutex::new(Some(
+            Arc::new(|| {}) as HotkeyHandler
+        )));
+        let poison_storage = std::sync::Arc::clone(&storage);
+
+        let _ = std::thread::spawn(move || {
+            let _guard = poison_storage.lock().unwrap();
+            panic!("poison handler lock");
+        })
+        .join();
+
+        assert!(
+            storage.is_poisoned(),
+            "mutex should be poisoned for this test"
         );
+
+        let recovered = clone_hotkey_handler_with_poison_recovery(
+            storage.as_ref(),
+            "test_hotkey_handler_mutex_poison_recovery",
+        );
+        assert!(
+            recovered.is_some(),
+            "poison recovery should still return the existing handler"
+        );
+
+        // Verify the mutex remains usable after recovery.
+        *storage.lock().unwrap_or_else(|e| e.into_inner()) = None;
     }
 
     // =============================================================================

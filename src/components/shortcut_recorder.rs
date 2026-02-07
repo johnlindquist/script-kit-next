@@ -23,11 +23,13 @@
 use crate::components::button::{Button, ButtonColors, ButtonVariant};
 use crate::logging;
 use crate::theme::Theme;
+use crate::transitions;
 use gpui::{
     div, prelude::*, px, rgb, rgba, App, Context, FocusHandle, Focusable, IntoElement, Render,
     Window,
 };
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 /// Constants for shortcut recorder styling
 const MODAL_WIDTH: f32 = 420.0;
@@ -37,6 +39,31 @@ const KEY_DISPLAY_PADDING: f32 = 16.0;
 const KEYCAP_SIZE: f32 = 44.0;
 const KEYCAP_GAP: f32 = 8.0;
 const BUTTON_GAP: f32 = 12.0;
+const OVERLAY_ANIMATION_DURATION_MS: u64 = 140;
+const OVERLAY_MODAL_ENTRY_OFFSET_PX: f32 = 12.0;
+const OVERLAY_MODAL_START_OPACITY: f32 = 0.82;
+
+#[derive(Clone, Copy, Debug)]
+struct OverlayAppearStyle {
+    backdrop_opacity: f32,
+    modal_opacity: f32,
+    modal_offset_y: f32,
+    complete: bool,
+}
+
+fn compute_overlay_appear_style(elapsed: Duration) -> OverlayAppearStyle {
+    let progress =
+        (elapsed.as_secs_f32() / (OVERLAY_ANIMATION_DURATION_MS as f32 / 1000.0)).clamp(0.0, 1.0);
+    let eased = transitions::ease_out_quad(progress);
+    let modal_opacity = OVERLAY_MODAL_START_OPACITY + ((1.0 - OVERLAY_MODAL_START_OPACITY) * eased);
+
+    OverlayAppearStyle {
+        backdrop_opacity: eased,
+        modal_opacity,
+        modal_offset_y: OVERLAY_MODAL_ENTRY_OFFSET_PX * (1.0 - eased),
+        complete: progress >= 1.0,
+    }
+}
 
 /// Pre-computed colors for ShortcutRecorder rendering
 #[derive(Clone, Copy, Debug)]
@@ -69,7 +96,7 @@ impl ShortcutRecorderColors {
     /// Create colors from theme reference
     pub fn from_theme(theme: &Theme) -> Self {
         Self {
-            overlay_bg: 0x000000,
+            overlay_bg: theme.colors.background.main,
             modal_bg: theme.colors.background.main,
             border: theme.colors.ui.border,
             text_primary: theme.colors.text.primary,
@@ -86,19 +113,7 @@ impl ShortcutRecorderColors {
 
 impl Default for ShortcutRecorderColors {
     fn default() -> Self {
-        Self {
-            overlay_bg: 0x000000,
-            modal_bg: 0x1e1e1e,
-            border: 0x464647,
-            text_primary: 0xffffff,
-            text_secondary: 0xcccccc,
-            text_muted: 0x808080,
-            accent: 0xfbbf24,
-            warning: 0xf59e0b,
-            key_display_bg: 0x3c3c3c,
-            keycap_bg: 0x2d2d30,
-            keycap_border: 0x464647,
-        }
+        Self::from_theme(&Theme::default())
     }
 }
 
@@ -280,6 +295,10 @@ pub struct ShortcutRecorder {
     pub is_recording: bool,
     /// Pending action for the parent to handle (polled after render)
     pub pending_action: Option<RecorderAction>,
+    /// Timestamp for enter animation start (fade/slide-in)
+    overlay_animation_started_at: Instant,
+    /// Ensures we schedule at most one animation tick task at a time
+    overlay_animation_tick_scheduled: bool,
 }
 
 impl ShortcutRecorder {
@@ -305,6 +324,8 @@ impl ShortcutRecorder {
             conflict_checker: None,
             is_recording: true,
             pending_action: None,
+            overlay_animation_started_at: Instant::now(),
+            overlay_animation_tick_scheduled: false,
         }
     }
 
@@ -492,6 +513,32 @@ impl ShortcutRecorder {
         self.theme = theme;
     }
 
+    fn overlay_appear_style(&self) -> OverlayAppearStyle {
+        compute_overlay_appear_style(self.overlay_animation_started_at.elapsed())
+    }
+
+    fn schedule_overlay_animation_tick_if_needed(
+        &mut self,
+        animation_complete: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if animation_complete || self.overlay_animation_tick_scheduled {
+            return;
+        }
+
+        self.overlay_animation_tick_scheduled = true;
+        cx.spawn(async move |this, cx| {
+            gpui::Timer::after(Duration::from_millis(16)).await;
+            let _ = cx.update(|cx| {
+                let _ = this.update(cx, |recorder, cx| {
+                    recorder.overlay_animation_tick_scheduled = false;
+                    cx.notify();
+                });
+            });
+        })
+        .detach();
+    }
+
     /// Render a single keycap
     fn render_keycap(&self, key: &str) -> impl IntoElement {
         let colors = self.colors;
@@ -623,6 +670,8 @@ impl Render for ShortcutRecorder {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = self.colors;
         let button_colors = ButtonColors::from_theme(&self.theme);
+        let overlay_appear = self.overlay_appear_style();
+        self.schedule_overlay_animation_tick_if_needed(overlay_appear.complete, cx);
 
         // Determine button states
         let can_save = self.shortcut.is_complete() && self.conflict.is_none();
@@ -816,6 +865,7 @@ impl Render for ShortcutRecorder {
                     .absolute()
                     .inset_0()
                     .bg(rgba((colors.overlay_bg << 8) | 0x80)) // 50% opacity
+                    .opacity(overlay_appear.backdrop_opacity)
                     .on_click(backdrop_cancel),
             )
             // Modal container - centered on top of backdrop
@@ -826,6 +876,8 @@ impl Render for ShortcutRecorder {
                     .flex()
                     .items_center()
                     .justify_center()
+                    .mt(px(overlay_appear.modal_offset_y))
+                    .opacity(overlay_appear.modal_opacity)
                     .child(modal),
             )
     }
@@ -904,5 +956,33 @@ mod tests {
         let colors = ShortcutRecorderColors::default();
         assert_eq!(colors.accent, 0xfbbf24);
         assert_eq!(colors.warning, 0xf59e0b);
+    }
+
+    #[test]
+    fn test_shortcut_recorder_colors_from_theme_uses_theme_overlay_token() {
+        let mut theme = Theme::default();
+        theme.colors.background.main = 0x2b3c4d;
+
+        let colors = ShortcutRecorderColors::from_theme(&theme);
+        assert_eq!(colors.overlay_bg, 0x2b3c4d);
+    }
+
+    #[test]
+    fn test_compute_overlay_appear_style_starts_hidden_offset_and_transparent() {
+        let style = compute_overlay_appear_style(Duration::from_millis(0));
+        assert_eq!(style.backdrop_opacity, 0.0);
+        assert!(style.modal_offset_y > 0.0);
+        assert!(style.modal_opacity < 1.0);
+        assert!(!style.complete);
+    }
+
+    #[test]
+    fn test_compute_overlay_appear_style_reaches_full_visibility_after_duration() {
+        let style =
+            compute_overlay_appear_style(Duration::from_millis(OVERLAY_ANIMATION_DURATION_MS));
+        assert!((style.backdrop_opacity - 1.0).abs() < 0.001);
+        assert!((style.modal_offset_y - 0.0).abs() < 0.001);
+        assert!((style.modal_opacity - 1.0).abs() < 0.001);
+        assert!(style.complete);
     }
 }

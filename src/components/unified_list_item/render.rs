@@ -5,7 +5,6 @@
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;
-use std::ops::Range;
 
 use crate::designs::icon_variations::{icon_name_from_str, IconName};
 
@@ -371,8 +370,12 @@ fn render_text_content(
             .line_height(px(line_height))
             .child(text.clone()),
 
-        TextContent::Highlighted { text, ranges } => {
-            let spans = split_text_by_ranges(text, ranges, base_color, highlight_color);
+        TextContent::Highlighted { .. } => {
+            let spans = render_highlight_fragments(
+                content.highlight_fragments().unwrap_or_default(),
+                base_color,
+                highlight_color,
+            );
             div()
                 .when(is_title, |d| d.text_sm())
                 .when(!is_title, |d| d.text_xs())
@@ -391,50 +394,30 @@ fn render_text_content(
     }
 }
 
-fn split_text_by_ranges(
-    text: &str,
-    ranges: &[Range<usize>],
+fn render_highlight_fragments(
+    fragments: &[HighlightFragment],
     base_color: Rgba,
     highlight_color: Rgba,
 ) -> Vec<Div> {
-    if ranges.is_empty() {
-        return vec![div().text_color(base_color).child(text.to_string())];
+    if fragments.is_empty() {
+        return Vec::new();
     }
 
-    let mut result = Vec::new();
-    let mut current_byte = 0;
-
-    for range in ranges {
-        if range.start > current_byte && range.start <= text.len() {
-            let slice = &text[current_byte..range.start];
-            if !slice.is_empty() {
-                result.push(div().text_color(base_color).child(slice.to_string()));
-            }
-        }
-
-        if range.end > range.start && range.start < text.len() && range.end <= text.len() {
-            let slice = &text[range.start..range.end];
-            if !slice.is_empty() {
-                result.push(
-                    div()
-                        .text_color(highlight_color)
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child(slice.to_string()),
-                );
-            }
-        }
-
-        current_byte = range.end;
-    }
-
-    if current_byte < text.len() {
-        let slice = &text[current_byte..];
-        if !slice.is_empty() {
-            result.push(div().text_color(base_color).child(slice.to_string()));
+    let mut spans = Vec::with_capacity(fragments.len());
+    for fragment in fragments {
+        if fragment.is_highlighted {
+            spans.push(
+                div()
+                    .text_color(highlight_color)
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(fragment.text.clone()),
+            );
+        } else {
+            spans.push(div().text_color(base_color).child(fragment.text.clone()));
         }
     }
 
-    result
+    spans
 }
 
 // =============================================================================

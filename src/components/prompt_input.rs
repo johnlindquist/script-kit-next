@@ -29,6 +29,10 @@
 
 use gpui::*;
 
+use super::input_tokens::{
+    INPUT_PLACEHOLDER_ARG, INPUT_PLACEHOLDER_DEFAULT, INPUT_PLACEHOLDER_MAIN_MENU,
+    INPUT_PLACEHOLDER_SEARCH,
+};
 use crate::config::Config;
 use crate::panel::{CURSOR_GAP_X, CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y, CURSOR_WIDTH};
 use crate::theme::Theme;
@@ -111,7 +115,7 @@ pub struct PromptInputConfig {
 impl Default for PromptInputConfig {
     fn default() -> Self {
         Self {
-            placeholder: "Type to search...".to_string(),
+            placeholder: INPUT_PLACEHOLDER_DEFAULT.to_string(),
             show_path_prefix: false,
             enable_selection: true,
             enable_clipboard: true,
@@ -137,7 +141,7 @@ impl PromptInputConfig {
     /// - Full selection and clipboard support
     pub fn search() -> Self {
         Self {
-            placeholder: "Search...".to_string(),
+            placeholder: INPUT_PLACEHOLDER_SEARCH.to_string(),
             show_path_prefix: true,
             enable_selection: true,
             enable_clipboard: true,
@@ -156,7 +160,7 @@ impl PromptInputConfig {
     /// - No path prefix
     pub fn arg() -> Self {
         Self {
-            placeholder: "Enter a value...".to_string(),
+            placeholder: INPUT_PLACEHOLDER_ARG.to_string(),
             show_path_prefix: false,
             enable_selection: true,
             enable_clipboard: true,
@@ -175,7 +179,7 @@ impl PromptInputConfig {
     /// - No path prefix
     pub fn main_menu() -> Self {
         Self {
-            placeholder: "Script Kit".to_string(),
+            placeholder: INPUT_PLACEHOLDER_MAIN_MENU.to_string(),
             show_path_prefix: false,
             enable_selection: false, // Main menu typically doesn't need selection
             enable_clipboard: false, // Main menu typically doesn't need clipboard

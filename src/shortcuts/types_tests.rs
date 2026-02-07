@@ -245,6 +245,16 @@ fn display_windows_special_keys() {
     );
 }
 
+#[test]
+fn display_normalizes_arrow_alias_key_names() {
+    let s = Shortcut {
+        key: "arrowup".to_string(),
+        modifiers: Modifiers::shift(),
+    };
+    assert_eq!(s.display_for_platform(Platform::MacOS), "⇧↑");
+    assert_eq!(s.display_for_platform(Platform::Windows), "Shift+Up");
+}
+
 // ========================
 // Canonical String Tests
 // ========================
@@ -267,6 +277,15 @@ fn to_canonical_string_roundtrip() {
     let canonical = s.to_canonical_string();
     let reparsed = Shortcut::parse(&canonical).unwrap();
     assert_eq!(s, reparsed);
+}
+
+#[test]
+fn to_canonical_string_normalizes_arrow_alias_key_names() {
+    let s = Shortcut {
+        key: "arrowdown".to_string(),
+        modifiers: Modifiers::cmd(),
+    };
+    assert_eq!(s.to_canonical_string(), "cmd+down");
 }
 
 // ========================

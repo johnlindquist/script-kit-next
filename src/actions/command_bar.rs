@@ -26,6 +26,7 @@
 //! }
 //! ```
 
+use super::dialog::GroupedActionItem;
 use super::types::{Action, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle};
 use super::window::{
     close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
@@ -34,8 +35,95 @@ use super::window::{
 use super::ActionsDialog;
 use crate::logging;
 use crate::theme;
+use crate::ui_foundation::{is_key_backspace, is_key_down, is_key_enter, is_key_escape, is_key_up};
 use gpui::{App, AppContext, Context, Entity, FocusHandle, Window};
 use std::sync::Arc;
+
+const COMMAND_BAR_PAGE_JUMP: usize = 8;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CommandBarKeyIntent {
+    MoveUp,
+    MoveDown,
+    MoveHome,
+    MoveEnd,
+    MovePageUp,
+    MovePageDown,
+    ExecuteSelected,
+    Close,
+    Backspace,
+    TypeChar(char),
+}
+
+#[inline]
+fn command_bar_key_intent(key: &str, modifiers: &gpui::Modifiers) -> Option<CommandBarKeyIntent> {
+    if is_key_up(key) {
+        return Some(CommandBarKeyIntent::MoveUp);
+    }
+    if is_key_down(key) {
+        return Some(CommandBarKeyIntent::MoveDown);
+    }
+    if key.eq_ignore_ascii_case("home") {
+        return Some(CommandBarKeyIntent::MoveHome);
+    }
+    if key.eq_ignore_ascii_case("end") {
+        return Some(CommandBarKeyIntent::MoveEnd);
+    }
+    if key.eq_ignore_ascii_case("pageup") {
+        return Some(CommandBarKeyIntent::MovePageUp);
+    }
+    if key.eq_ignore_ascii_case("pagedown") {
+        return Some(CommandBarKeyIntent::MovePageDown);
+    }
+    if is_key_enter(key) {
+        return Some(CommandBarKeyIntent::ExecuteSelected);
+    }
+    if is_key_escape(key) {
+        return Some(CommandBarKeyIntent::Close);
+    }
+    if is_key_backspace(key) || key.eq_ignore_ascii_case("delete") {
+        return Some(CommandBarKeyIntent::Backspace);
+    }
+
+    if !modifiers.platform && !modifiers.control && !modifiers.alt {
+        if let Some(ch) = key.chars().next() {
+            if ch.is_alphanumeric() || ch.is_whitespace() || ch == '-' || ch == '_' {
+                return Some(CommandBarKeyIntent::TypeChar(ch));
+            }
+        }
+    }
+
+    None
+}
+
+#[inline]
+fn is_selectable_row(row: &GroupedActionItem) -> bool {
+    matches!(row, GroupedActionItem::Item(_))
+}
+
+fn first_selectable_index(rows: &[GroupedActionItem]) -> Option<usize> {
+    rows.iter().position(is_selectable_row)
+}
+
+fn last_selectable_index(rows: &[GroupedActionItem]) -> Option<usize> {
+    rows.iter().rposition(is_selectable_row)
+}
+
+fn selectable_index_at_or_before(rows: &[GroupedActionItem], start: usize) -> Option<usize> {
+    if rows.is_empty() {
+        return None;
+    }
+    let clamped = start.min(rows.len() - 1);
+    (0..=clamped).rev().find(|&ix| is_selectable_row(&rows[ix]))
+}
+
+fn selectable_index_at_or_after(rows: &[GroupedActionItem], start: usize) -> Option<usize> {
+    if rows.is_empty() {
+        return None;
+    }
+    let clamped = start.min(rows.len() - 1);
+    (clamped..rows.len()).find(|&ix| is_selectable_row(&rows[ix]))
+}
 
 /// Configuration presets for common CommandBar use cases
 #[derive(Debug, Clone)]
@@ -417,6 +505,77 @@ impl CommandBar {
         }
     }
 
+    /// Jump to first action in the list.
+    pub fn select_first(&mut self, cx: &mut App) {
+        if let Some(dialog) = &self.dialog {
+            dialog.update(cx, |d, cx| {
+                if let Some(first) = first_selectable_index(&d.grouped_items) {
+                    d.selected_index = first;
+                    d.list_state.scroll_to_reveal_item(d.selected_index);
+                    cx.notify();
+                }
+            });
+            notify_actions_window(cx);
+        }
+    }
+
+    /// Jump to last action in the list.
+    pub fn select_last(&mut self, cx: &mut App) {
+        if let Some(dialog) = &self.dialog {
+            dialog.update(cx, |d, cx| {
+                if let Some(last) = last_selectable_index(&d.grouped_items) {
+                    d.selected_index = last;
+                    d.list_state.scroll_to_reveal_item(d.selected_index);
+                    cx.notify();
+                }
+            });
+            notify_actions_window(cx);
+        }
+    }
+
+    /// Move one page up in the list.
+    pub fn select_page_up(&mut self, cx: &mut App) {
+        if let Some(dialog) = &self.dialog {
+            dialog.update(cx, |d, cx| {
+                if d.grouped_items.is_empty() {
+                    return;
+                }
+
+                let target = d.selected_index.saturating_sub(COMMAND_BAR_PAGE_JUMP);
+                if let Some(next_index) = selectable_index_at_or_before(&d.grouped_items, target)
+                    .or_else(|| first_selectable_index(&d.grouped_items))
+                {
+                    d.selected_index = next_index;
+                    d.list_state.scroll_to_reveal_item(d.selected_index);
+                    cx.notify();
+                }
+            });
+            notify_actions_window(cx);
+        }
+    }
+
+    /// Move one page down in the list.
+    pub fn select_page_down(&mut self, cx: &mut App) {
+        if let Some(dialog) = &self.dialog {
+            dialog.update(cx, |d, cx| {
+                if d.grouped_items.is_empty() {
+                    return;
+                }
+
+                let last_index = d.grouped_items.len() - 1;
+                let target = (d.selected_index + COMMAND_BAR_PAGE_JUMP).min(last_index);
+                if let Some(next_index) = selectable_index_at_or_after(&d.grouped_items, target)
+                    .or_else(|| last_selectable_index(&d.grouped_items))
+                {
+                    d.selected_index = next_index;
+                    d.list_state.scroll_to_reveal_item(d.selected_index);
+                    cx.notify();
+                }
+            });
+            notify_actions_window(cx);
+        }
+    }
+
     /// Set cursor visibility (for blink animation)
     pub fn set_cursor_visible(&mut self, visible: bool, cx: &mut App) {
         if let Some(dialog) = &self.dialog {
@@ -491,43 +650,52 @@ pub trait CommandBarHost {
             return false;
         }
 
-        match key {
-            "up" | "arrowup" => {
+        match command_bar_key_intent(key, modifiers) {
+            Some(CommandBarKeyIntent::MoveUp) => {
                 self.command_bar_mut().select_prev(cx);
                 true
             }
-            "down" | "arrowdown" => {
+            Some(CommandBarKeyIntent::MoveDown) => {
                 self.command_bar_mut().select_next(cx);
                 true
             }
-            "enter" | "return" => {
+            Some(CommandBarKeyIntent::MoveHome) => {
+                self.command_bar_mut().select_first(cx);
+                true
+            }
+            Some(CommandBarKeyIntent::MoveEnd) => {
+                self.command_bar_mut().select_last(cx);
+                true
+            }
+            Some(CommandBarKeyIntent::MovePageUp) => {
+                self.command_bar_mut().select_page_up(cx);
+                true
+            }
+            Some(CommandBarKeyIntent::MovePageDown) => {
+                self.command_bar_mut().select_page_down(cx);
+                true
+            }
+            Some(CommandBarKeyIntent::ExecuteSelected) => {
                 if let Some(action_id) = self.command_bar_mut().execute_selected_action(cx) {
                     self.execute_action(&action_id, window, cx);
                 }
                 true
             }
-            "escape" => {
+            Some(CommandBarKeyIntent::Close) => {
                 if self.command_bar().config.close_on_escape {
                     self.command_bar_mut().close(cx);
                 }
                 true
             }
-            "backspace" | "delete" => {
+            Some(CommandBarKeyIntent::Backspace) => {
                 self.command_bar_mut().handle_backspace(cx);
                 true
             }
-            _ => {
-                // Handle printable characters for search
-                if !modifiers.platform && !modifiers.control && !modifiers.alt {
-                    if let Some(ch) = key.chars().next() {
-                        if ch.is_alphanumeric() || ch.is_whitespace() || ch == '-' || ch == '_' {
-                            self.command_bar_mut().handle_char(ch, cx);
-                            return true;
-                        }
-                    }
-                }
-                false
+            Some(CommandBarKeyIntent::TypeChar(ch)) => {
+                self.command_bar_mut().handle_char(ch, cx);
+                true
             }
+            None => false,
         }
     }
 }
@@ -587,5 +755,50 @@ mod tests {
             config.dialog_config.search_position,
             SearchPosition::Hidden
         ));
+    }
+
+    #[test]
+    fn test_command_bar_key_intent_supports_aliases_and_jump_keys() {
+        let no_mods = gpui::Modifiers::default();
+
+        assert_eq!(
+            command_bar_key_intent("return", &no_mods),
+            Some(CommandBarKeyIntent::ExecuteSelected)
+        );
+        assert_eq!(
+            command_bar_key_intent("esc", &no_mods),
+            Some(CommandBarKeyIntent::Close)
+        );
+        assert_eq!(
+            command_bar_key_intent("home", &no_mods),
+            Some(CommandBarKeyIntent::MoveHome)
+        );
+        assert_eq!(
+            command_bar_key_intent("end", &no_mods),
+            Some(CommandBarKeyIntent::MoveEnd)
+        );
+        assert_eq!(
+            command_bar_key_intent("pageup", &no_mods),
+            Some(CommandBarKeyIntent::MovePageUp)
+        );
+        assert_eq!(
+            command_bar_key_intent("pagedown", &no_mods),
+            Some(CommandBarKeyIntent::MovePageDown)
+        );
+    }
+
+    #[test]
+    fn test_selectable_index_helpers_skip_section_headers() {
+        let rows = vec![
+            GroupedActionItem::SectionHeader("System".to_string()),
+            GroupedActionItem::Item(0),
+            GroupedActionItem::SectionHeader("Script".to_string()),
+            GroupedActionItem::Item(1),
+        ];
+
+        assert_eq!(first_selectable_index(&rows), Some(1));
+        assert_eq!(last_selectable_index(&rows), Some(3));
+        assert_eq!(selectable_index_at_or_before(&rows, 2), Some(1));
+        assert_eq!(selectable_index_at_or_after(&rows, 2), Some(3));
     }
 }

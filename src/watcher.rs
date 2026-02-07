@@ -9,6 +9,8 @@ use std::time::{Duration, Instant};
 
 use tracing::{debug, info, warn};
 
+use crate::{config, setup};
+
 /// Internal control messages for watcher threads
 enum ControlMsg {
     /// Signal from notify callback with a file event
@@ -18,15 +20,49 @@ enum ControlMsg {
 }
 
 /// Debounce configuration
-const DEBOUNCE_MS: u64 = 500;
+const DEBOUNCE_MS: u64 = config::defaults::DEFAULT_WATCHER_DEBOUNCE_MS;
 /// Storm threshold: if more than this many unique paths pending, collapse to FullReload
-const STORM_THRESHOLD: usize = 200;
+const STORM_THRESHOLD: usize = config::defaults::DEFAULT_WATCHER_STORM_THRESHOLD;
 /// Initial backoff delay for supervisor restart (ms)
-const INITIAL_BACKOFF_MS: u64 = 100;
+const INITIAL_BACKOFF_MS: u64 = config::defaults::DEFAULT_WATCHER_INITIAL_BACKOFF_MS;
 /// Maximum backoff delay for supervisor restart (ms)
-const MAX_BACKOFF_MS: u64 = 30_000; // 30 seconds
+const MAX_BACKOFF_MS: u64 = config::defaults::DEFAULT_WATCHER_MAX_BACKOFF_MS;
 /// Maximum consecutive notify errors before logging warning
-const MAX_NOTIFY_ERRORS: u32 = 10;
+const MAX_NOTIFY_ERRORS: u32 = config::defaults::DEFAULT_WATCHER_MAX_NOTIFY_ERRORS;
+
+#[derive(Debug, Clone, Copy)]
+struct WatcherSettings {
+    debounce_ms: u64,
+    storm_threshold: usize,
+    initial_backoff_ms: u64,
+    max_backoff_ms: u64,
+    max_notify_errors: u32,
+}
+
+impl Default for WatcherSettings {
+    fn default() -> Self {
+        Self {
+            debounce_ms: DEBOUNCE_MS,
+            storm_threshold: STORM_THRESHOLD,
+            initial_backoff_ms: INITIAL_BACKOFF_MS,
+            max_backoff_ms: MAX_BACKOFF_MS,
+            max_notify_errors: MAX_NOTIFY_ERRORS,
+        }
+    }
+}
+
+fn load_watcher_settings() -> WatcherSettings {
+    let watcher = config::load_config().get_watcher();
+    WatcherSettings {
+        debounce_ms: watcher.debounce_ms,
+        storm_threshold: watcher.storm_threshold.max(1),
+        initial_backoff_ms: watcher.initial_backoff_ms.max(1),
+        max_backoff_ms: watcher
+            .max_backoff_ms
+            .max(watcher.initial_backoff_ms.max(1)),
+        max_notify_errors: watcher.max_notify_errors.max(1),
+    }
+}
 
 /// Check if an event kind is relevant (not just Access events)
 fn is_relevant_event_kind(kind: &notify::EventKind) -> bool {

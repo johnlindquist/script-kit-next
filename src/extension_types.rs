@@ -453,9 +453,9 @@ fn extract_named_inputs(content: &str) -> Vec<String> {
                 && !trimmed.starts_with('#')
                 && !trimmed.starts_with('/')
                 && trimmed != "else"
-                && !inputs.contains(&trimmed.to_string())
+                && !inputs.iter().any(|existing| existing == trimmed)
             {
-                inputs.push(trimmed.to_string());
+                inputs.push(trimmed.to_owned());
             }
         }
     }

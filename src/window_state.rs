@@ -19,7 +19,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::logging;
-use crate::platform::DisplayBounds;
+use crate::windows::DisplayBounds;
 
 // ============================================================================
 // Save Suppression (for reset operations)
@@ -386,6 +386,43 @@ pub fn save_main_position_for_display(display: &DisplayBounds, bounds: Persisted
             key, bounds.x, bounds.y, bounds.width, bounds.height
         ),
     );
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MainPositionSaveOutcome {
+    SavedPerDisplay,
+    SavedLegacyOnly,
+    Suppressed,
+}
+
+/// Save main window bounds using per-display persistence when possible.
+///
+/// Falls back to legacy `main` bounds when no matching display can be found.
+#[must_use]
+pub fn save_main_position_with_display_detection(
+    bounds: PersistedWindowBounds,
+    displays: &[DisplayBounds],
+) -> MainPositionSaveOutcome {
+    if is_save_suppressed() {
+        logging::log(
+            "WINDOW_STATE",
+            "Skipping main save - position saving is suppressed",
+        );
+        return MainPositionSaveOutcome::Suppressed;
+    }
+
+    if let Some(display) = find_display_for_bounds(&bounds, displays) {
+        save_main_position_for_display(display, bounds);
+        MainPositionSaveOutcome::SavedPerDisplay
+    } else {
+        // Keep legacy persistence as a fallback when display detection fails.
+        save_window_bounds(WindowRole::Main, bounds);
+        logging::log(
+            "WINDOW_STATE",
+            "Could not determine display for main window bounds; saved legacy main bounds only",
+        );
+        MainPositionSaveOutcome::SavedLegacyOnly
+    }
 }
 
 #[allow(dead_code)]

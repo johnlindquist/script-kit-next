@@ -787,6 +787,9 @@ pub struct SetupResult {
 pub fn get_kit_path() -> PathBuf {
     // Check for SK_PATH override first
     if let Ok(sk_path) = std::env::var(SK_PATH_ENV) {
+        if let Ok(expanded) = shellexpand::full(&sk_path) {
+            return PathBuf::from(expanded.as_ref());
+        }
         return PathBuf::from(shellexpand::tilde(&sk_path).as_ref());
     }
 
@@ -2069,6 +2072,19 @@ mod tests {
         assert!(!path.to_string_lossy().contains("~"));
         assert!(path.to_string_lossy().contains(".config/kit"));
         std::env::remove_var(SK_PATH_ENV);
+    }
+
+    #[test]
+    fn test_get_kit_path_with_env_var_expansion() {
+        let env_var = "SCRIPT_KIT_TEST_SK_PATH_ROOT";
+        std::env::set_var(env_var, "/tmp/script-kit-env-root");
+        std::env::set_var(SK_PATH_ENV, format!("${env_var}/kit"));
+
+        let path = get_kit_path();
+        assert_eq!(path, PathBuf::from("/tmp/script-kit-env-root/kit"));
+
+        std::env::remove_var(SK_PATH_ENV);
+        std::env::remove_var(env_var);
     }
 
     /// Comprehensive setup verification test

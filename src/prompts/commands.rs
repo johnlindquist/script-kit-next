@@ -10,7 +10,7 @@
 //! Based on patterns from GitHub Copilot and Raycast.
 
 /// Types of slash commands available
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SlashCommandType {
     /// Explain code or concepts clearly
     Explain,
@@ -25,6 +25,45 @@ pub enum SlashCommandType {
 }
 
 impl SlashCommandType {
+    pub const fn all() -> &'static [SlashCommandType] {
+        &[
+            SlashCommandType::Explain,
+            SlashCommandType::Fix,
+            SlashCommandType::Test,
+            SlashCommandType::Improve,
+            SlashCommandType::Summarize,
+        ]
+    }
+
+    /// Parse a user-provided command keyword (without slash) to a typed command.
+    pub fn from_keyword(keyword: &str) -> Option<Self> {
+        match keyword {
+            "explain" => Some(SlashCommandType::Explain),
+            "fix" => Some(SlashCommandType::Fix),
+            "test" | "tests" => Some(SlashCommandType::Test),
+            "improve" => Some(SlashCommandType::Improve),
+            "summarize" | "summary" => Some(SlashCommandType::Summarize),
+            _ => None,
+        }
+    }
+
+    /// All accepted command keywords (canonical name first, then aliases).
+    pub fn keywords(&self) -> &'static [&'static str] {
+        match self {
+            SlashCommandType::Explain => &["explain"],
+            SlashCommandType::Fix => &["fix"],
+            SlashCommandType::Test => &["test", "tests"],
+            SlashCommandType::Improve => &["improve"],
+            SlashCommandType::Summarize => &["summarize", "summary"],
+        }
+    }
+
+    pub fn matches_keyword_prefix(&self, prefix: &str) -> bool {
+        self.keywords()
+            .iter()
+            .any(|keyword| keyword.starts_with(prefix))
+    }
+
     /// Get the system prompt prefix for this command type
     pub fn system_context(&self) -> &'static str {
         match self {
@@ -129,61 +168,40 @@ impl SlashCommand {
 }
 
 /// Available slash command options for autocomplete
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CommandOption {
-    /// Display label (e.g., "explain")
-    pub label: String,
-    /// Description shown in autocomplete
-    pub description: String,
-    /// Icon name (optional)
-    pub icon: Option<String>,
     /// The command type this option creates
     pub kind: SlashCommandType,
 }
 
 impl CommandOption {
+    pub fn label(&self) -> &'static str {
+        self.kind.name()
+    }
+
+    pub fn description(&self) -> &'static str {
+        self.kind.description()
+    }
+
+    pub fn icon(&self) -> &'static str {
+        self.kind.icon()
+    }
+
     /// Get all available command options
     pub fn all() -> Vec<Self> {
-        vec![
-            CommandOption {
-                label: "explain".to_string(),
-                description: "Explain code or concepts".to_string(),
-                icon: Some("book-open".to_string()),
-                kind: SlashCommandType::Explain,
-            },
-            CommandOption {
-                label: "fix".to_string(),
-                description: "Fix errors in code".to_string(),
-                icon: Some("wrench".to_string()),
-                kind: SlashCommandType::Fix,
-            },
-            CommandOption {
-                label: "test".to_string(),
-                description: "Generate unit tests".to_string(),
-                icon: Some("beaker".to_string()),
-                kind: SlashCommandType::Test,
-            },
-            CommandOption {
-                label: "improve".to_string(),
-                description: "Improve code or writing".to_string(),
-                icon: Some("sparkles".to_string()),
-                kind: SlashCommandType::Improve,
-            },
-            CommandOption {
-                label: "summarize".to_string(),
-                description: "Summarize content".to_string(),
-                icon: Some("document-text".to_string()),
-                kind: SlashCommandType::Summarize,
-            },
-        ]
+        SlashCommandType::all()
+            .iter()
+            .copied()
+            .map(|kind| CommandOption { kind })
+            .collect()
     }
 
     /// Filter options by prefix
     pub fn filter_by_prefix(prefix: &str) -> Vec<Self> {
-        let prefix_lower = prefix.to_lowercase();
+        let prefix_lower = prefix.to_ascii_lowercase();
         Self::all()
             .into_iter()
-            .filter(|opt| opt.label.to_lowercase().starts_with(&prefix_lower))
+            .filter(|opt| opt.kind.matches_keyword_prefix(&prefix_lower))
             .collect()
     }
 }
@@ -208,20 +226,13 @@ pub fn parse_command(input: &str) -> Option<SlashCommand> {
         return None;
     }
 
-    let command_name = &after_slash[..command_end].to_lowercase();
+    let command_keyword = after_slash[..command_end].to_ascii_lowercase();
     let argument = after_slash[command_end..].trim().to_string();
 
-    // Match command name to type
-    let kind = match command_name.as_str() {
-        "explain" => SlashCommandType::Explain,
-        "fix" => SlashCommandType::Fix,
-        "test" | "tests" => SlashCommandType::Test,
-        "improve" => SlashCommandType::Improve,
-        "summarize" | "summary" => SlashCommandType::Summarize,
-        _ => return None,
-    };
+    let kind = SlashCommandType::from_keyword(&command_keyword)?;
 
-    let raw = format!("/{}", command_name);
+    // Always store canonical raw command token (e.g. "/test" for "/tests").
+    let raw = format!("/{}", kind.name());
     Some(SlashCommand::new(kind, raw, argument))
 }
 
@@ -245,17 +256,9 @@ pub fn get_incomplete_command(input: &str, cursor_pos: usize) -> Option<(usize, 
         .chars()
         .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
     {
-        // Don't show autocomplete for already-complete commands
-        let known_commands = [
-            "explain",
-            "fix",
-            "test",
-            "tests",
-            "improve",
-            "summarize",
-            "summary",
-        ];
-        if !known_commands.contains(&after_slash.to_lowercase().as_str()) {
+        // Don't show autocomplete for already-complete commands.
+        let keyword = after_slash.to_ascii_lowercase();
+        if SlashCommandType::from_keyword(&keyword).is_none() {
             return Some((slash_pos, after_slash.to_string()));
         }
     }
@@ -344,10 +347,17 @@ mod tests {
     fn test_filter_by_prefix() {
         let options = CommandOption::filter_by_prefix("ex");
         assert_eq!(options.len(), 1);
-        assert_eq!(options[0].label, "explain");
+        assert_eq!(options[0].label(), "explain");
 
         let options = CommandOption::filter_by_prefix("");
         assert_eq!(options.len(), 5); // All commands
+    }
+
+    #[test]
+    fn test_filter_by_prefix_matches_aliases() {
+        let options = CommandOption::filter_by_prefix("tests");
+        assert_eq!(options.len(), 1);
+        assert_eq!(options[0].kind, SlashCommandType::Test);
     }
 
     #[test]
@@ -376,5 +386,14 @@ mod tests {
         let cmd = parse_command("/summary of the article");
         assert!(cmd.is_some());
         assert_eq!(cmd.unwrap().kind, SlashCommandType::Summarize);
+    }
+
+    #[test]
+    fn test_parse_command_aliases_use_canonical_raw_name() {
+        let tests_alias = parse_command("/tests write tests for this").expect("tests alias");
+        assert_eq!(tests_alias.raw, "/test");
+
+        let summary_alias = parse_command("/summary of the article").expect("summary alias");
+        assert_eq!(summary_alias.raw, "/summarize");
     }
 }

@@ -20,10 +20,23 @@ use std::path::Path;
 use crate::agents::types::{
     Agent, AgentBackend, AgentFrontmatter, MdflowInput, MdflowInputType, MdflowInputs,
 };
+use tracing::warn;
+
+/// Agent parsing errors for malformed file content.
+#[derive(Debug, thiserror::Error)]
+pub enum AgentParseError {
+    #[error("frontmatter started with '---' but missing closing '---' delimiter")]
+    MissingFrontmatterClosingDelimiter,
+    #[error("invalid frontmatter YAML: {0}")]
+    InvalidFrontmatterYaml(#[from] serde_yaml::Error),
+}
 
 /// Parse YAML frontmatter from markdown content
 ///
-/// Returns `None` if no valid frontmatter is found.
+/// Returns:
+/// - `Ok(None)` when content has no frontmatter
+/// - `Ok(Some(...))` when frontmatter is present and valid
+/// - `Err(...)` when frontmatter delimiters/YAML are malformed
 /// Frontmatter must:
 /// - Start with `---` on the first line (after optional whitespace)
 /// - End with `---` on its own line
@@ -36,31 +49,33 @@ use crate::agents::types::{
 /// model: sonnet
 /// ---
 /// ```
-pub fn parse_frontmatter(content: &str) -> Option<AgentFrontmatter> {
+pub fn parse_frontmatter(content: &str) -> Result<Option<AgentFrontmatter>, AgentParseError> {
     let trimmed = content.trim_start();
 
     // Must start with ---
     if !trimmed.starts_with("---") {
-        return None;
+        return Ok(None);
     }
 
     // Find closing ---
     let after_first = &trimmed[3..];
-    let end_pos = after_first.find("\n---")?;
+    let end_pos = after_first
+        .find("\n---")
+        .ok_or(AgentParseError::MissingFrontmatterClosingDelimiter)?;
     let yaml_content = after_first[..end_pos].trim();
 
     if yaml_content.is_empty() {
-        return Some(AgentFrontmatter::default());
+        return Ok(Some(AgentFrontmatter::default()));
     }
 
     // Parse as generic YAML
-    let raw: HashMap<String, serde_yaml::Value> = serde_yaml::from_str(yaml_content).ok()?;
+    let raw: HashMap<String, serde_yaml::Value> = serde_yaml::from_str(yaml_content)?;
 
-    extract_frontmatter_fields(raw)
+    Ok(Some(extract_frontmatter_fields(raw)))
 }
 
 /// Extract frontmatter fields from raw YAML
-fn extract_frontmatter_fields(raw: HashMap<String, serde_yaml::Value>) -> Option<AgentFrontmatter> {
+fn extract_frontmatter_fields(raw: HashMap<String, serde_yaml::Value>) -> AgentFrontmatter {
     let mut fm = AgentFrontmatter {
         raw: raw.clone(),
         ..Default::default()
@@ -107,7 +122,7 @@ fn extract_frontmatter_fields(raw: HashMap<String, serde_yaml::Value>) -> Option
         }
     }
 
-    Some(fm)
+    fm
 }
 
 /// Parse `_inputs` from frontmatter
@@ -281,7 +296,18 @@ pub fn parse_agent(path: &Path, content: &str) -> Option<Agent> {
     let interactive_from_filename = is_interactive_filename(filename);
 
     // Parse frontmatter
-    let frontmatter = parse_frontmatter(content).unwrap_or_default();
+    let frontmatter = match parse_frontmatter(content) {
+        Ok(Some(frontmatter)) => frontmatter,
+        Ok(None) => AgentFrontmatter::default(),
+        Err(error) => {
+            warn!(
+                path = %path.display(),
+                %error,
+                "Skipping agent file due to malformed frontmatter"
+            );
+            return None;
+        }
+    };
 
     // Override backend if _command is specified
     if let Some(ref cmd) = frontmatter.command {
@@ -317,6 +343,12 @@ pub fn parse_agent(path: &Path, content: &str) -> Option<Agent> {
 mod tests {
     use super::*;
 
+    fn parse_frontmatter_ok(content: &str) -> AgentFrontmatter {
+        parse_frontmatter(content)
+            .expect("frontmatter parse should not fail")
+            .expect("frontmatter should exist")
+    }
+
     // === Frontmatter parsing tests ===
 
     #[test]
@@ -326,7 +358,7 @@ model: opus
 ---
 Hello world"#;
 
-        let fm = parse_frontmatter(content).unwrap();
+        let fm = parse_frontmatter_ok(content);
         assert!(fm.raw.contains_key("model"));
         assert_eq!(fm.raw.get("model").and_then(|v| v.as_str()), Some("opus"));
     }
@@ -343,7 +375,7 @@ model: sonnet
 ---
 Prompt here"#;
 
-        let fm = parse_frontmatter(content).unwrap();
+        let fm = parse_frontmatter_ok(content);
         assert_eq!(fm.sk_name, Some("Review PR".to_string()));
         assert_eq!(
             fm.sk_description,
@@ -359,7 +391,33 @@ Prompt here"#;
     #[test]
     fn test_parse_frontmatter_no_frontmatter() {
         let content = "Just markdown content without frontmatter";
-        assert!(parse_frontmatter(content).is_none());
+        assert!(matches!(parse_frontmatter(content), Ok(None)));
+    }
+
+    #[test]
+    fn test_parse_agent_invalid_frontmatter_returns_none() {
+        let path = Path::new("/path/to/bad-frontmatter.claude.md");
+        let content = r#"---
+_sk_name: "Broken
+model: sonnet
+---
+Prompt"#;
+
+        assert!(parse_agent(path, content).is_none());
+    }
+
+    #[test]
+    fn test_parse_frontmatter_invalid_yaml_returns_error() {
+        let content = r#"---
+_sk_name: "Broken
+model: sonnet
+---
+Prompt"#;
+
+        assert!(matches!(
+            parse_frontmatter(content),
+            Err(AgentParseError::InvalidFrontmatterYaml(_))
+        ));
     }
 
     #[test]
@@ -368,7 +426,7 @@ Prompt here"#;
 ---
 Content"#;
 
-        let fm = parse_frontmatter(content).unwrap();
+        let fm = parse_frontmatter_ok(content);
         assert!(fm.raw.is_empty());
     }
 
@@ -379,7 +437,7 @@ _interactive: true
 ---
 Prompt"#;
 
-        let fm = parse_frontmatter(content).unwrap();
+        let fm = parse_frontmatter_ok(content);
         assert_eq!(fm.interactive, Some(true));
     }
 
@@ -390,7 +448,7 @@ _i: true
 ---
 Prompt"#;
 
-        let fm = parse_frontmatter(content).unwrap();
+        let fm = parse_frontmatter_ok(content);
         assert_eq!(fm.interactive, Some(true));
     }
 
@@ -401,7 +459,7 @@ _command: ollama
 ---
 Prompt"#;
 
-        let fm = parse_frontmatter(content).unwrap();
+        let fm = parse_frontmatter_ok(content);
         assert_eq!(fm.command, Some("ollama".to_string()));
     }
 
@@ -412,7 +470,7 @@ _cwd: /tmp
 ---
 Prompt"#;
 
-        let fm = parse_frontmatter(content).unwrap();
+        let fm = parse_frontmatter_ok(content);
         assert_eq!(fm.cwd, Some("/tmp".to_string()));
     }
 
@@ -425,7 +483,7 @@ _env:
 ---
 Prompt"#;
 
-        let fm = parse_frontmatter(content).unwrap();
+        let fm = parse_frontmatter_ok(content);
         let env = fm.env.unwrap();
         assert_eq!(env.get("NODE_ENV"), Some(&"production".to_string()));
         assert_eq!(env.get("DEBUG"), Some(&"true".to_string()));
@@ -442,7 +500,7 @@ _inputs:
 ---
 Prompt"#;
 
-        let fm = parse_frontmatter(content).unwrap();
+        let fm = parse_frontmatter_ok(content);
         match fm.inputs {
             Some(MdflowInputs::Legacy(names)) => {
                 assert_eq!(names, vec!["feature_name", "confirm_deploy"]);
@@ -465,7 +523,7 @@ _inputs:
 ---
 Prompt"#;
 
-        let fm = parse_frontmatter(content).unwrap();
+        let fm = parse_frontmatter_ok(content);
         match fm.inputs {
             Some(MdflowInputs::Typed(inputs)) => {
                 assert!(inputs.contains_key("feature_name"));
@@ -497,7 +555,7 @@ _inputs:
 ---
 Prompt"#;
 
-        let fm = parse_frontmatter(content).unwrap();
+        let fm = parse_frontmatter_ok(content);
         match fm.inputs {
             Some(MdflowInputs::Typed(inputs)) => {
                 let env = inputs.get("environment").unwrap();

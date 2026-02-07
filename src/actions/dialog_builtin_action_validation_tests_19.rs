@@ -20,7 +20,6 @@ mod tests {
     use crate::designs::icon_variations::IconName;
     use crate::file_search::{FileInfo, FileType};
     use crate::prompts::PathInfo;
-    use crate::scriptlets::{Scriptlet, ScriptletAction};
     use std::collections::HashSet;
 
     fn action_ids(actions: &[Action]) -> Vec<String> {

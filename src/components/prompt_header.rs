@@ -15,6 +15,47 @@ use crate::panel::{CURSOR_GAP_X, CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y, CURSOR_WIDTH
 use crate::theme::Theme;
 use crate::ui_foundation::{hstack, HexColorExt};
 
+/// Path prefix text is clipped/truncated beyond this width to preserve query visibility.
+pub const HEADER_PATH_PREFIX_MAX_WIDTH_PX: f32 = 320.0;
+/// Reserved action slot width when running in compact density mode.
+pub const HEADER_ACTIONS_MIN_WIDTH_COMPACT_PX: f32 = 168.0;
+/// Reserved action slot width for the default header density.
+pub const HEADER_ACTIONS_MIN_WIDTH_NORMAL_PX: f32 = 200.0;
+/// Reserved action slot width for expanded action labels/shortcuts.
+pub const HEADER_ACTIONS_MIN_WIDTH_EXPANDED_PX: f32 = 236.0;
+
+/// Horizontal density policy for the right-side actions slot.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum HeaderActionsDensity {
+    /// Tight layout for narrower prompt widths.
+    Compact,
+    /// Default layout used by existing prompts.
+    #[default]
+    Normal,
+    /// Wider layout when action labels require more room.
+    Expanded,
+}
+
+impl HeaderActionsDensity {
+    /// Reserved minimum width for actions/search area.
+    pub fn reserved_min_width_px(self) -> f32 {
+        match self {
+            Self::Compact => HEADER_ACTIONS_MIN_WIDTH_COMPACT_PX,
+            Self::Normal => HEADER_ACTIONS_MIN_WIDTH_NORMAL_PX,
+            Self::Expanded => HEADER_ACTIONS_MIN_WIDTH_EXPANDED_PX,
+        }
+    }
+
+    /// Width of the inline actions-mode search field.
+    pub fn actions_search_width_px(self) -> f32 {
+        match self {
+            Self::Compact => 116.0,
+            Self::Normal => 130.0,
+            Self::Expanded => 144.0,
+        }
+    }
+}
+
 /// Pre-computed colors for PromptHeader rendering
 ///
 /// This struct holds the primitive color values needed for header rendering,
@@ -37,11 +78,24 @@ pub struct PromptHeaderColors {
     pub border: u32,
     /// Logo icon color (for icons on accent background)
     pub logo_icon: u32,
+    /// Hover overlay color with alpha (Format: 0xRRGGBBAA)
+    pub hover_overlay: u32,
+    /// Primary input text size (header search text)
+    pub input_font_size: f32,
+    /// Supporting text size (hints, search labels, helper text)
+    pub supporting_font_size: f32,
+    /// Caption text size (badges and compact key hints)
+    pub caption_font_size: f32,
 }
 
 impl PromptHeaderColors {
+    fn overlay_with_alpha(base_color: u32, alpha: u8) -> u32 {
+        ((base_color & 0x00ff_ffff) << 8) | (alpha as u32)
+    }
+
     /// Create PromptHeaderColors from theme reference
     pub fn from_theme(theme: &Theme) -> Self {
+        let ui_font_size = theme.get_fonts().ui_size;
         Self {
             text_primary: theme.colors.text.primary,
             text_muted: theme.colors.text.muted,
@@ -50,13 +104,17 @@ impl PromptHeaderColors {
             background: theme.colors.background.main,
             search_box_bg: theme.colors.background.search_box,
             border: theme.colors.ui.border,
-            // Black for maximum contrast on yellow/gold accent background
-            logo_icon: 0x000000,
+            logo_icon: theme.colors.text.on_accent,
+            hover_overlay: Self::overlay_with_alpha(theme.colors.accent.selected_subtle, 0x26),
+            input_font_size: (ui_font_size + 2.0).max(12.0),
+            supporting_font_size: (ui_font_size - 2.0).max(10.0),
+            caption_font_size: (ui_font_size - 4.0).max(9.0),
         }
     }
 
     /// Create PromptHeaderColors from design colors for design system support
     pub fn from_design(colors: &DesignColors) -> Self {
+        let typography = crate::designs::DesignTypography::default();
         Self {
             text_primary: colors.text_primary,
             text_muted: colors.text_muted,
@@ -66,22 +124,17 @@ impl PromptHeaderColors {
             search_box_bg: colors.background_secondary,
             border: colors.border,
             logo_icon: colors.text_on_accent,
+            hover_overlay: Self::overlay_with_alpha(colors.background_selected, 0x26),
+            input_font_size: typography.font_size_lg,
+            supporting_font_size: typography.font_size_sm,
+            caption_font_size: typography.font_size_xs,
         }
     }
 }
 
 impl Default for PromptHeaderColors {
     fn default() -> Self {
-        Self {
-            text_primary: 0xffffff,
-            text_muted: 0x808080,
-            text_dimmed: 0x666666,
-            accent: 0xfbbf24, // Script Kit yellow/gold
-            background: 0x1e1e1e,
-            search_box_bg: 0x2d2d30,
-            border: 0x464647,
-            logo_icon: 0x000000, // Black for contrast on yellow
-        }
+        Self::from_theme(&Theme::default())
     }
 }
 
@@ -110,6 +163,8 @@ pub struct PromptHeaderConfig {
     pub is_focused: bool,
     /// Whether to show the "Ask AI" hint with Tab badge
     pub show_ask_ai_hint: bool,
+    /// Width reservation policy for the right-side actions area.
+    pub actions_density: HeaderActionsDensity,
 }
 
 impl Default for PromptHeaderConfig {
@@ -126,6 +181,7 @@ impl Default for PromptHeaderConfig {
             actions_search_text: String::new(),
             is_focused: true,
             show_ask_ai_hint: false,
+            actions_density: HeaderActionsDensity::Normal,
         }
     }
 }
@@ -201,6 +257,12 @@ impl PromptHeaderConfig {
         self.show_ask_ai_hint = show;
         self
     }
+
+    /// Set the action-slot density policy
+    pub fn actions_density(mut self, density: HeaderActionsDensity) -> Self {
+        self.actions_density = density;
+        self
+    }
 }
 
 /// Callback type for button click events
@@ -267,12 +329,19 @@ impl PromptHeader {
         };
 
         // Build input container using hstack() helper
-        let mut input = hstack().flex_1().text_lg().text_color(text_color);
+        let mut input = hstack()
+            .flex_1()
+            .text_size(px(colors.input_font_size))
+            .text_color(text_color);
 
         // Path prefix (if present)
         if let Some(ref prefix) = self.config.path_prefix {
             input = input.child(
                 div()
+                    .max_w(px(HEADER_PATH_PREFIX_MAX_WIDTH_PX))
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .text_ellipsis()
                     .text_color(colors.text_muted.to_rgb())
                     .child(prefix.clone()),
             );
@@ -349,7 +418,7 @@ impl PromptHeader {
             border: colors.border,
             focus_ring: colors.accent,
             focus_tint: colors.background,
-            hover_overlay: 0xffffff26, // White at ~15% alpha (dark mode default)
+            hover_overlay: colors.hover_overlay,
         };
 
         let on_primary = self.on_primary_click.clone();
@@ -410,11 +479,12 @@ impl PromptHeader {
         };
 
         // Build the search input element using hstack() helper
+        let search_width = self.config.actions_density.actions_search_width_px();
         let mut search_input = hstack()
             .flex_shrink_0()
-            .w(px(130.))
-            .min_w(px(130.))
-            .max_w(px(130.))
+            .w(px(search_width))
+            .min_w(px(search_width))
+            .max_w(px(search_width))
             .h(rems(1.5))
             .min_h(rems(1.5))
             .max_h(rems(1.5))
@@ -431,7 +501,7 @@ impl PromptHeader {
                     .accent
                     .rgba8(if search_is_empty { 0x20 } else { 0x40 }),
             )
-            .text_sm()
+            .text_size(px(colors.supporting_font_size))
             .text_color(if search_is_empty {
                 colors.text_muted.to_rgb()
             } else {
@@ -472,7 +542,7 @@ impl PromptHeader {
             .child(
                 div()
                     .text_color(colors.text_dimmed.to_rgb())
-                    .text_xs()
+                    .text_size(px(colors.caption_font_size))
                     .child("⌘K"),
             )
             // Search input display
@@ -481,7 +551,7 @@ impl PromptHeader {
                 div()
                     .mx(rems(0.25))
                     .text_color(colors.text_dimmed.rgba8(0x60))
-                    .text_sm()
+                    .text_size(px(colors.supporting_font_size))
                     .child("|"),
             )
     }
@@ -499,7 +569,7 @@ impl PromptHeader {
             // "Ask AI" text in muted color
             .child(
                 div()
-                    .text_sm()
+                    .text_size(px(colors.supporting_font_size))
                     .text_color(colors.text_muted.to_rgb())
                     .child("Ask AI"),
             )
@@ -512,7 +582,7 @@ impl PromptHeader {
                     .rounded(px(4.))
                     .border_1()
                     .border_color(colors.border.to_rgb())
-                    .text_xs()
+                    .text_size(px(colors.caption_font_size))
                     .text_color(colors.text_muted.to_rgb())
                     .child("Tab"),
             )
@@ -600,7 +670,7 @@ impl RenderOnce for PromptHeader {
             div()
                 .relative()
                 .flex_shrink_0()
-                .min_w(px(200.)) // Minimum width for buttons to be visible
+                .min_w(px(self.config.actions_density.reserved_min_width_px()))
                 .h(rems(1.75))
                 .flex()
                 .items_center()
@@ -613,11 +683,19 @@ impl RenderOnce for PromptHeader {
     }
 }
 
-// Note: Tests omitted for this module due to GPUI macro recursion limit issues.
-// The PromptHeader component is integration-tested via the main application's
-// prompt rendering in main.rs.
-//
-// Verified traits:
-// - PromptHeaderColors: Copy, Clone, Debug, Default
-// - PromptHeaderConfig: Clone, Debug, Default + builder pattern
-// - PromptHeader: builder pattern with .on_primary_click(), .on_actions_click()
+#[cfg(test)]
+mod tests {
+    use super::PromptHeaderColors;
+    use crate::theme::Theme;
+
+    #[test]
+    fn test_prompt_header_colors_from_theme_uses_on_accent_text_token_for_logo() {
+        let mut theme = Theme::default();
+        theme.colors.text.on_accent = 0x223344;
+
+        let colors = PromptHeaderColors::from_theme(&theme);
+        assert_eq!(colors.logo_icon, 0x223344);
+    }
+}
+
+// PromptHeader rendering behavior is integration-tested through app-level prompt flows.

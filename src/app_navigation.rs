@@ -2,6 +2,54 @@
 // This file is included via include!() macro in main.rs
 // Contains: move_selection_up, move_selection_down, scroll_to_selected, etc.
 
+#[inline]
+fn page_down_target_index(
+    grouped_items: &[GroupedListItem],
+    selected_index: usize,
+    page_size: usize,
+) -> usize {
+    let Some(last_selectable) = grouped_items
+        .iter()
+        .rposition(|item| matches!(item, GroupedListItem::Item(_)))
+    else {
+        return selected_index;
+    };
+
+    if selected_index >= last_selectable {
+        return selected_index;
+    }
+
+    let mut remaining = page_size;
+    let mut target = selected_index;
+    for i in (selected_index + 1)..=last_selectable {
+        if matches!(grouped_items.get(i), Some(GroupedListItem::Item(_))) {
+            target = i;
+            remaining -= 1;
+            if remaining == 0 {
+                break;
+            }
+        }
+    }
+
+    target
+}
+
+#[inline]
+fn wheel_scroll_target_index(current_item: usize, item_count: usize, delta_lines: f32) -> usize {
+    if item_count == 0 {
+        return 0;
+    }
+
+    let max_item = item_count.saturating_sub(1);
+    let items_to_scroll = (-delta_lines).round() as i32;
+    (current_item as i32 + items_to_scroll).clamp(0, max_item as i32) as usize
+}
+
+#[inline]
+fn validated_selection_index(grouped_items: &[GroupedListItem], selected_index: usize) -> usize {
+    list_item::coerce_selection(grouped_items, selected_index).unwrap_or(0)
+}
+
 impl ScriptListApp {
     fn move_selection_up(&mut self, cx: &mut Context<Self>) {
         // Switch to keyboard mode and clear hover to prevent dual-highlight
@@ -214,17 +262,7 @@ impl ScriptListApp {
 
         // Count ~10 selectable items downward from current position
         const PAGE_SIZE: usize = 10;
-        let mut remaining = PAGE_SIZE;
-        let mut target = self.selected_index;
-        for i in (self.selected_index + 1)..=last {
-            if matches!(grouped_items.get(i), Some(GroupedListItem::Item(_))) {
-                target = i;
-                remaining -= 1;
-                if remaining == 0 {
-                    break;
-                }
-            }
-        }
+        let target = page_down_target_index(&grouped_items, self.selected_index, PAGE_SIZE);
 
         if target != self.selected_index {
             self.selected_index = target;
@@ -422,14 +460,12 @@ impl ScriptListApp {
         // Get grouped results to find valid bounds
         let (grouped_items, _) = self.get_grouped_results_cached();
         let grouped_items = grouped_items.clone();
-        let max_item = grouped_items.len().saturating_sub(1);
+        let item_count = grouped_items.len();
 
-        // Convert delta to items (negative delta = scroll down in content = move to higher indices)
-        // Round to avoid tiny scrolls being ignored
+        // Convert delta to a clamped item index. Rounding acts as lightweight coalescing
+        // so tiny high-frequency deltas do not trigger noisy per-event moves.
+        let new_item = wheel_scroll_target_index(current_item, item_count, delta_lines);
         let items_to_scroll = (-delta_lines).round() as i32;
-
-        // Calculate new target item, clamping to valid range
-        let new_item = (current_item as i32 + items_to_scroll).clamp(0, max_item as i32) as usize;
 
         tracing::debug!(
             target: "SCROLL_STATE",
@@ -519,19 +555,22 @@ impl ScriptListApp {
         self.fallback_mode = false;
         self.cached_fallbacks.clear();
 
-        if let Some(valid_idx) = list_item::coerce_selection(&grouped_items, self.selected_index) {
-            if self.selected_index != valid_idx {
-                self.selected_index = valid_idx;
-                cx.notify();
-                return true;
-            }
-        } else {
+        let valid_idx = validated_selection_index(&grouped_items, self.selected_index);
+        if valid_idx == 0
+            && !grouped_items
+                .iter()
+                .any(|item| matches!(item, GroupedListItem::Item(_)))
+        {
             // No selectable items (list is all headers) - reset to 0
             if self.selected_index != 0 {
                 self.selected_index = 0;
                 cx.notify();
                 return true;
             }
+        } else if self.selected_index != valid_idx {
+            self.selected_index = valid_idx;
+            cx.notify();
+            return true;
         }
 
         false
@@ -577,5 +616,58 @@ impl ScriptListApp {
             }
         })
         .detach();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{page_down_target_index, validated_selection_index, wheel_scroll_target_index};
+    use crate::list_item::GroupedListItem;
+
+    #[test]
+    fn test_move_selection_page_down_clamps_to_last_item() {
+        let rows = vec![
+            GroupedListItem::SectionHeader("Suggested".to_string(), None),
+            GroupedListItem::Item(0),
+            GroupedListItem::Item(1),
+            GroupedListItem::SectionHeader("Main".to_string(), None),
+            GroupedListItem::Item(2),
+        ];
+
+        assert_eq!(page_down_target_index(&rows, 1, 10), 4);
+        assert_eq!(page_down_target_index(&rows, 4, 10), 4);
+    }
+
+    #[test]
+    fn test_handle_scroll_wheel_coalesces_rapid_deltas() {
+        let item_count = 20;
+        let start = 7;
+
+        let after_first = wheel_scroll_target_index(start, item_count, 0.2);
+        let after_second = wheel_scroll_target_index(after_first, item_count, 0.2);
+        let after_third = wheel_scroll_target_index(after_second, item_count, -0.2);
+
+        assert_eq!(after_first, start);
+        assert_eq!(after_second, start);
+        assert_eq!(after_third, start);
+    }
+
+    #[test]
+    fn test_validate_selection_bounds_recovers_from_out_of_range_index() {
+        let rows = vec![
+            GroupedListItem::SectionHeader("Suggested".to_string(), None),
+            GroupedListItem::Item(0),
+            GroupedListItem::Item(1),
+            GroupedListItem::SectionHeader("Main".to_string(), None),
+            GroupedListItem::Item(2),
+        ];
+        let headers_only = vec![
+            GroupedListItem::SectionHeader("A".to_string(), None),
+            GroupedListItem::SectionHeader("B".to_string(), None),
+        ];
+
+        assert_eq!(validated_selection_index(&rows, 999), 4);
+        assert_eq!(validated_selection_index(&rows, 0), 1);
+        assert_eq!(validated_selection_index(&headers_only, 4), 0);
     }
 }

@@ -18,7 +18,7 @@
 mod tests {
     use crate::actions::builders::*;
     use crate::actions::command_bar::CommandBarConfig;
-    use crate::actions::dialog::{build_grouped_items_static, ActionsDialog};
+    use crate::actions::dialog::ActionsDialog;
     use crate::actions::types::{Action, ActionCategory, AnchorPosition, ScriptInfo, SectionStyle};
     use crate::actions::window::{count_section_headers, WindowPosition};
     use crate::clipboard_history::ContentType;
@@ -26,7 +26,6 @@ mod tests {
     use crate::file_search::{FileInfo, FileType};
     use crate::prompts::PathInfo;
     use crate::protocol::ProtocolAction;
-    use crate::scriptlets::Scriptlet;
 
     // =========================================================================
     // 1. ScriptInfo::with_action_verb: custom verb in primary action title

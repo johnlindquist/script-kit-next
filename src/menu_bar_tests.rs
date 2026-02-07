@@ -10,6 +10,15 @@ use super::*;
 // =========================================================================
 
 #[test]
+fn test_try_create_cf_string_rejects_interior_nul() {
+    let error = try_create_cf_string("AX\0Title").expect_err("interior NUL should fail");
+    assert!(
+        error.to_string().contains("interior NUL"),
+        "error should describe invalid CFString input: {error}"
+    );
+}
+
+#[test]
 fn test_parse_menu_item_title_simple() {
     // Simple menu item title without any decoration
     let item = MenuBarItem {

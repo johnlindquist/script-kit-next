@@ -263,6 +263,84 @@ impl NucleoCtx {
     }
 }
 
+/// Reusable highlight matcher that keeps ASCII fast-path behavior and
+/// falls back to Unicode-safe nucleo indices when needed.
+struct SearchHighlightMatchCtx {
+    query_lower: String,
+    unicode_ctx: Option<UnicodeHighlightCtx>,
+}
+
+impl SearchHighlightMatchCtx {
+    fn new(query: &str) -> Self {
+        Self {
+            query_lower: query.to_lowercase(),
+            unicode_ctx: None,
+        }
+    }
+
+    #[inline]
+    fn indices_for(&mut self, haystack: &str) -> (bool, Vec<usize>) {
+        if self.query_lower.is_empty() {
+            return (false, Vec::new());
+        }
+
+        if is_ascii_pair(haystack, &self.query_lower) {
+            return fuzzy_match_with_indices_ascii(haystack, &self.query_lower);
+        }
+
+        self.unicode_ctx
+            .get_or_insert_with(|| UnicodeHighlightCtx::new(&self.query_lower))
+            .indices_for(haystack)
+    }
+}
+
+/// Unicode-safe fuzzy index matcher backed by nucleo Pattern::indices.
+struct UnicodeHighlightCtx {
+    pattern: Pattern,
+    matcher: Matcher,
+    haystack_buf: Vec<char>,
+    indices_buf: Vec<u32>,
+}
+
+impl UnicodeHighlightCtx {
+    fn new(query_lower: &str) -> Self {
+        Self {
+            pattern: Pattern::parse(
+                query_lower,
+                nucleo_matcher::pattern::CaseMatching::Ignore,
+                nucleo_matcher::pattern::Normalization::Smart,
+            ),
+            matcher: Matcher::new(nucleo_matcher::Config::DEFAULT),
+            haystack_buf: Vec::with_capacity(64),
+            indices_buf: Vec::with_capacity(query_lower.chars().count()),
+        }
+    }
+
+    #[inline]
+    fn indices_for(&mut self, haystack: &str) -> (bool, Vec<usize>) {
+        self.haystack_buf.clear();
+        self.indices_buf.clear();
+
+        let utf32 = Utf32Str::new(haystack, &mut self.haystack_buf);
+        if self
+            .pattern
+            .indices(utf32, &mut self.matcher, &mut self.indices_buf)
+            .is_none()
+        {
+            return (false, Vec::new());
+        }
+
+        // Pattern::indices can append unsorted duplicates when multiple atoms
+        // contribute. Normalize once before passing to rendering.
+        self.indices_buf.sort_unstable();
+        self.indices_buf.dedup();
+
+        let mut indices = Vec::with_capacity(self.indices_buf.len());
+        indices.extend(self.indices_buf.iter().map(|idx| *idx as usize));
+        (true, indices)
+    }
+}
+
 /// Compute match indices for a search result on-demand (lazy evaluation)
 ///
 /// This function is called by the UI layer only for visible rows, avoiding
@@ -279,23 +357,21 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
         return MatchIndices::default();
     }
 
-    let query_lower = query.to_lowercase();
+    let mut highlight_ctx = SearchHighlightMatchCtx::new(query);
 
     match result {
         SearchResult::Script(sm) => {
             let mut indices = MatchIndices::default();
 
             // Try name first
-            let (name_matched, name_indices) =
-                fuzzy_match_with_indices_ascii(&sm.script.name, &query_lower);
+            let (name_matched, name_indices) = highlight_ctx.indices_for(&sm.script.name);
             if name_matched {
                 indices.name_indices = name_indices;
             }
 
             // Also compute description indices for highlighting
             if let Some(ref desc) = sm.script.description {
-                let (desc_matched, desc_indices) =
-                    fuzzy_match_with_indices_ascii(desc, &query_lower);
+                let (desc_matched, desc_indices) = highlight_ctx.indices_for(desc);
                 if desc_matched {
                     indices.description_indices = desc_indices;
                 }
@@ -303,8 +379,7 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
 
             // If name didn't match, fall back to filename
             if indices.name_indices.is_empty() {
-                let (filename_matched, filename_indices) =
-                    fuzzy_match_with_indices_ascii(&sm.filename, &query_lower);
+                let (filename_matched, filename_indices) = highlight_ctx.indices_for(&sm.filename);
                 if filename_matched {
                     indices.filename_indices = filename_indices;
                 }
@@ -316,16 +391,14 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
             let mut indices = MatchIndices::default();
 
             // Try name first
-            let (name_matched, name_indices) =
-                fuzzy_match_with_indices_ascii(&sm.scriptlet.name, &query_lower);
+            let (name_matched, name_indices) = highlight_ctx.indices_for(&sm.scriptlet.name);
             if name_matched {
                 indices.name_indices = name_indices;
             }
 
             // Also compute description indices for highlighting
             if let Some(ref desc) = sm.scriptlet.description {
-                let (desc_matched, desc_indices) =
-                    fuzzy_match_with_indices_ascii(desc, &query_lower);
+                let (desc_matched, desc_indices) = highlight_ctx.indices_for(desc);
                 if desc_matched {
                     indices.description_indices = desc_indices;
                 }
@@ -334,7 +407,7 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
             // If name didn't match, fall back to file path
             if indices.name_indices.is_empty() {
                 if let Some(ref fp) = sm.display_file_path {
-                    let (fp_matched, fp_indices) = fuzzy_match_with_indices_ascii(fp, &query_lower);
+                    let (fp_matched, fp_indices) = highlight_ctx.indices_for(fp);
                     if fp_matched {
                         indices.filename_indices = fp_indices;
                     }
@@ -346,15 +419,13 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
         SearchResult::BuiltIn(bm) => {
             let mut indices = MatchIndices::default();
 
-            let (name_matched, name_indices) =
-                fuzzy_match_with_indices_ascii(&bm.entry.name, &query_lower);
+            let (name_matched, name_indices) = highlight_ctx.indices_for(&bm.entry.name);
             if name_matched {
                 indices.name_indices = name_indices;
             }
 
             // Also compute description indices for highlighting
-            let (desc_matched, desc_indices) =
-                fuzzy_match_with_indices_ascii(&bm.entry.description, &query_lower);
+            let (desc_matched, desc_indices) = highlight_ctx.indices_for(&bm.entry.description);
             if desc_matched {
                 indices.description_indices = desc_indices;
             }
@@ -364,8 +435,7 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
         SearchResult::App(am) => {
             let mut indices = MatchIndices::default();
 
-            let (name_matched, name_indices) =
-                fuzzy_match_with_indices_ascii(&am.app.name, &query_lower);
+            let (name_matched, name_indices) = highlight_ctx.indices_for(&am.app.name);
             if name_matched {
                 indices.name_indices = name_indices;
             }
@@ -376,15 +446,13 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
             let mut indices = MatchIndices::default();
 
             // Try app name first, then title
-            let (app_matched, app_indices) =
-                fuzzy_match_with_indices_ascii(&wm.window.app, &query_lower);
+            let (app_matched, app_indices) = highlight_ctx.indices_for(&wm.window.app);
             if app_matched {
                 indices.name_indices = app_indices;
                 return indices;
             }
 
-            let (title_matched, title_indices) =
-                fuzzy_match_with_indices_ascii(&wm.window.title, &query_lower);
+            let (title_matched, title_indices) = highlight_ctx.indices_for(&wm.window.title);
             if title_matched {
                 indices.filename_indices = title_indices;
             }
@@ -395,8 +463,7 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
             let mut indices = MatchIndices::default();
 
             // Try name first
-            let (name_matched, name_indices) =
-                fuzzy_match_with_indices_ascii(&am.agent.name, &query_lower);
+            let (name_matched, name_indices) = highlight_ctx.indices_for(&am.agent.name);
             if name_matched {
                 indices.name_indices = name_indices;
                 return indices;
@@ -404,8 +471,7 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
 
             // Fall back to description
             if let Some(ref desc) = am.agent.description {
-                let (desc_matched, desc_indices) =
-                    fuzzy_match_with_indices_ascii(desc, &query_lower);
+                let (desc_matched, desc_indices) = highlight_ctx.indices_for(desc);
                 if desc_matched {
                     indices.filename_indices = desc_indices;
                 }
@@ -417,8 +483,7 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
             let mut indices = MatchIndices::default();
 
             // Try name match for fallback items
-            let (name_matched, name_indices) =
-                fuzzy_match_with_indices_ascii(fm.fallback.name(), &query_lower);
+            let (name_matched, name_indices) = highlight_ctx.indices_for(fm.fallback.name());
             if name_matched {
                 indices.name_indices = name_indices;
             }
@@ -1807,6 +1872,45 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_compute_match_indices_for_result_handles_unicode_normalization_in_name() {
+        let scripts = vec![make_script("Café Utility", Some("Unicode accent test"))];
+        let mut matches = fuzzy_search_scripts(&scripts, "cafe");
+        assert!(
+            !matches.is_empty(),
+            "Expected fuzzy search to match Unicode-normalized script name"
+        );
+
+        let result = SearchResult::Script(matches.remove(0));
+        let indices = compute_match_indices_for_result(&result, "cafe");
+
+        assert!(
+            !indices.name_indices.is_empty(),
+            "Unicode-normalized name match should produce highlight indices"
+        );
+    }
+
+    #[test]
+    fn test_compute_match_indices_for_result_handles_unicode_normalization_in_description() {
+        let scripts = vec![make_script(
+            "Invoice Tool",
+            Some("Résumé template generator"),
+        )];
+        let mut matches = fuzzy_search_scripts(&scripts, "resume");
+        assert!(
+            !matches.is_empty(),
+            "Expected fuzzy search to match Unicode-normalized description"
+        );
+
+        let result = SearchResult::Script(matches.remove(0));
+        let indices = compute_match_indices_for_result(&result, "resume");
+
+        assert!(
+            !indices.description_indices.is_empty(),
+            "Unicode-normalized description match should produce highlight indices"
+        );
+    }
+
     // ============================================
     // Shortcut search tests
     // ============================================
@@ -2549,6 +2653,27 @@ mod tests {
             ..Default::default()
         };
         assert!(!script_passes_prefix_filter(&script, &parsed));
+    }
+
+    #[test]
+    fn test_builtin_prefix_filter_allows_command_type_and_rejects_non_builtin_types() {
+        let command_filter = parse_query_prefix("type:command");
+        assert!(
+            builtin_passes_prefix_filter(&command_filter),
+            "type:command should include built-ins"
+        );
+
+        let builtin_filter = parse_query_prefix("type:builtins");
+        assert!(
+            builtin_passes_prefix_filter(&builtin_filter),
+            "type:builtins should include built-ins"
+        );
+
+        let script_filter = parse_query_prefix("type:script");
+        assert!(
+            !builtin_passes_prefix_filter(&script_filter),
+            "type:script should exclude built-ins"
+        );
     }
 
     #[test]

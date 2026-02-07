@@ -8,7 +8,6 @@
 //! - FontConfig, Theme
 
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -87,10 +86,10 @@ pub struct BackgroundOpacity {
     pub search_box: f32,
     /// Log panel opacity (default: 0.40)
     pub log_panel: f32,
-    /// Selected list item background opacity (default: 0.35)
+    /// Selected list item background opacity (default: 0.33)
     #[serde(default = "default_selected_opacity")]
     pub selected: f32,
-    /// Hovered list item background opacity (default: 0.25)
+    /// Hovered list item background opacity (default: 0.22)
     #[serde(default = "default_hover_opacity")]
     pub hover: f32,
     /// Preview panel background opacity (default: 0.0)
@@ -125,11 +124,11 @@ pub struct BackgroundOpacity {
 }
 
 fn default_selected_opacity() -> f32 {
-    0.15 // Selection with vibrancy — bumped from 0.12 for clearer active-item indication
+    0.33 // Selection with vibrancy — increased for clearer active-item contrast
 }
 
 fn default_hover_opacity() -> f32 {
-    0.09 // Hover feedback — bumped from 0.07 for more visible mouse-tracking cue
+    0.22 // Hover feedback — increased for clearer pointer/selection tracking
 }
 
 fn default_preview_opacity() -> f32 {
@@ -202,8 +201,8 @@ impl BackgroundOpacity {
             title_bar: 0.30,                 // Title bar areas
             search_box: 0.40,                // Search input backgrounds
             log_panel: 0.40,                 // Log/terminal panels
-            selected: 0.15, // Selected list item highlight — bumped from 0.12 for clearer indication
-            hover: 0.09,    // Hovered list item highlight — bumped from 0.07 for visible tracking
+            selected: 0.33, // Selected list item highlight — improved visibility on vibrancy
+            hover: 0.22,    // Hovered list item highlight — clearer state affordance
             preview: 0.0,   // Preview panel (0 = fully transparent)
             dialog: 0.15,   // Dialogs/popups - very low opacity, let vibrancy blur show through
             input: 0.30,    // Input fields
@@ -232,8 +231,8 @@ impl BackgroundOpacity {
             title_bar: 0.85,                 // Match main for consistency
             search_box: 0.90,                // 90% - matches POC input_area_bg
             log_panel: 0.90,                 // Slightly more opaque for terminal readability
-            selected: 0.20, // Light mode selection - stronger overlay for visibility on vibrancy
-            hover: 0.12,    // Visible hover on light vibrancy backgrounds
+            selected: 0.36, // Light mode selection - tuned for stronger non-text contrast
+            hover: 0.26,    // Light mode hover - visible on bright vibrancy backgrounds
             preview: 0.0,   // Preview panel (0 = fully transparent)
             dialog: 0.85,   // Dialogs match main
             input: 0.90,    // Input fields - 90% like POC input_area_bg
@@ -1145,8 +1144,8 @@ impl Theme {
                 title_bar: (base.title_bar * 0.9).clamp(0.0, 1.0),
                 search_box: (base.search_box * 0.9).clamp(0.0, 1.0),
                 log_panel: (base.log_panel * 0.9).clamp(0.0, 1.0),
-                selected: (base.selected * 0.9).clamp(0.0, 1.0),
-                hover: (base.hover * 0.9).clamp(0.0, 1.0),
+                selected: base.selected,
+                hover: base.hover,
                 preview: (base.preview * 0.9).clamp(0.0, 1.0),
                 dialog: (base.dialog * 0.9).clamp(0.0, 1.0),
                 input: (base.input * 0.9).clamp(0.0, 1.0),
@@ -1311,7 +1310,58 @@ fn detect_system_appearance_uncached() -> bool {
     }
 }
 
-/// Load theme from ~/.scriptkit/kit/theme.json
+fn default_theme_from_system_appearance() -> Theme {
+    if detect_system_appearance() {
+        Theme::dark_default()
+    } else {
+        Theme::light_default()
+    }
+}
+
+fn theme_from_user_preferences(
+    preferences: &crate::config::ScriptKitUserPreferences,
+    correlation_id: &str,
+) -> Option<Theme> {
+    let preset_id = preferences.theme.preset_id.as_ref()?.trim();
+    if preset_id.is_empty() {
+        warn!(
+            correlation_id = %correlation_id,
+            "Theme preset id in settings is empty; ignoring"
+        );
+        return None;
+    }
+
+    let preset = super::presets::all_presets()
+        .into_iter()
+        .find(|candidate| candidate.id == preset_id);
+
+    match preset {
+        Some(selected) => {
+            debug!(
+                correlation_id = %correlation_id,
+                preset_id = selected.id,
+                preset_name = selected.name,
+                "Using theme preset from user preferences"
+            );
+            Some(selected.create_theme())
+        }
+        None => {
+            warn!(
+                correlation_id = %correlation_id,
+                preset_id,
+                "Unknown theme preset id in settings; falling back to theme file/default"
+            );
+            None
+        }
+    }
+}
+
+fn load_theme_from_user_preferences(correlation_id: &str) -> Option<Theme> {
+    let preferences = crate::config::load_user_preferences();
+    theme_from_user_preferences(&preferences, correlation_id)
+}
+
+/// Load theme from `<SK_PATH>/kit/theme.json` (or `~/.scriptkit/kit/theme.json`)
 ///
 /// Colors should be specified as decimal integers in the JSON file.
 /// For example, 0x1e1e1e (hex) = 1980410 (decimal).
@@ -1348,18 +1398,23 @@ fn detect_system_appearance_uncached() -> bool {
 /// If system appearance detection is not available, defaults to dark mode.
 /// Logs errors to stderr but doesn't fail the application.
 pub fn load_theme() -> Theme {
-    let theme_path = PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/theme.json").as_ref());
+    let correlation_id = format!("theme_load:{}", uuid::Uuid::new_v4());
+
+    if let Some(theme) = load_theme_from_user_preferences(&correlation_id) {
+        log_theme_config(&theme);
+        return theme;
+    }
+
+    let theme_path = crate::setup::get_kit_path().join("kit").join("theme.json");
 
     // Check if theme file exists
     if !theme_path.exists() {
-        warn!(path = %theme_path.display(), "Theme file not found, using defaults based on system appearance");
-        // Auto-select based on system appearance
-        let is_dark = detect_system_appearance();
-        let theme = if is_dark {
-            Theme::dark_default()
-        } else {
-            Theme::light_default()
-        };
+        warn!(
+            correlation_id = %correlation_id,
+            path = %theme_path.display(),
+            "Theme file not found, using defaults based on system appearance"
+        );
+        let theme = default_theme_from_system_appearance();
         log_theme_config(&theme);
         return theme;
     }
@@ -1367,19 +1422,23 @@ pub fn load_theme() -> Theme {
     // Read and parse the JSON file
     match std::fs::read_to_string(&theme_path) {
         Err(e) => {
-            error!(path = %theme_path.display(), error = %e, "Failed to read theme file, using defaults");
-            let is_dark = detect_system_appearance();
-            let theme = if is_dark {
-                Theme::dark_default()
-            } else {
-                Theme::light_default()
-            };
+            error!(
+                correlation_id = %correlation_id,
+                path = %theme_path.display(),
+                error = %e,
+                "Failed to read theme file, using defaults"
+            );
+            let theme = default_theme_from_system_appearance();
             log_theme_config(&theme);
             theme
         }
         Ok(contents) => match serde_json::from_str::<Theme>(&contents) {
             Ok(mut theme) => {
-                debug!(path = %theme_path.display(), "Successfully loaded theme");
+                debug!(
+                    correlation_id = %correlation_id,
+                    path = %theme_path.display(),
+                    "Successfully loaded theme"
+                );
 
                 // Key behavior: When appearance is Auto, use system appearance to
                 // determine which color scheme to use (light or dark).
@@ -1404,6 +1463,7 @@ pub fn load_theme() -> Theme {
                     }
 
                     debug!(
+                        correlation_id = %correlation_id,
                         system_appearance = if is_system_dark { "dark" } else { "light" },
                         "Using light theme colors (system is in light mode)"
                     );
@@ -1420,17 +1480,13 @@ pub fn load_theme() -> Theme {
             }
             Err(e) => {
                 error!(
+                    correlation_id = %correlation_id,
                     path = %theme_path.display(),
                     error = %e,
                     "Failed to parse theme JSON, using defaults"
                 );
-                debug!(content = %contents, "Malformed theme file content");
-                let is_dark = detect_system_appearance();
-                let theme = if is_dark {
-                    Theme::dark_default()
-                } else {
-                    Theme::light_default()
-                };
+                debug!(correlation_id = %correlation_id, content = %contents, "Malformed theme file content");
+                let theme = default_theme_from_system_appearance();
                 log_theme_config(&theme);
                 theme
             }
@@ -1552,4 +1608,53 @@ fn log_theme_config(theme: &Theme) {
         info = format!("#{:06x}", theme.colors.ui.info),
         "Theme status colors"
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{LayoutConfig, ScriptKitUserPreferences, ThemeSelectionPreferences};
+
+    fn preferences_with_preset(preset_id: Option<&str>) -> ScriptKitUserPreferences {
+        ScriptKitUserPreferences {
+            layout: LayoutConfig::default(),
+            theme: ThemeSelectionPreferences {
+                preset_id: preset_id.map(ToString::to_string),
+            },
+        }
+    }
+
+    #[test]
+    fn test_theme_from_user_preferences_loads_matching_preset() {
+        let preferences = preferences_with_preset(Some("nord"));
+
+        let from_preferences =
+            theme_from_user_preferences(&preferences, "test-correlation").expect("theme expected");
+        let expected = crate::theme::presets::all_presets()
+            .into_iter()
+            .find(|preset| preset.id == "nord")
+            .expect("preset should exist")
+            .create_theme();
+
+        assert_eq!(
+            from_preferences.colors.background.main,
+            expected.colors.background.main
+        );
+        assert_eq!(
+            from_preferences.colors.accent.selected,
+            expected.colors.accent.selected
+        );
+    }
+
+    #[test]
+    fn test_theme_from_user_preferences_returns_none_for_unknown_preset() {
+        let preferences = preferences_with_preset(Some("unknown-preset-id"));
+        assert!(theme_from_user_preferences(&preferences, "test-correlation").is_none());
+    }
+
+    #[test]
+    fn test_theme_from_user_preferences_returns_none_when_preset_unset() {
+        let preferences = preferences_with_preset(None);
+        assert!(theme_from_user_preferences(&preferences, "test-correlation").is_none());
+    }
 }

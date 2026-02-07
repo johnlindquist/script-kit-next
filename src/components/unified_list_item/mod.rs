@@ -5,8 +5,11 @@
 mod render;
 mod types;
 
-pub use render::*;
-pub use types::*;
+pub use render::{SectionHeader, UnifiedListItem};
+pub use types::{
+    Density, ItemState, LeadingContent, ListItemLayout, TextContent, TrailingContent,
+    UnifiedListItemColors, SECTION_HEADER_HEIGHT,
+};
 
 // Re-export from existing list_item for backwards compatibility
 #[allow(unused_imports)]

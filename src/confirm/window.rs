@@ -21,12 +21,47 @@ use std::sync::{Mutex, OnceLock};
 
 use super::constants::{CONFIRM_HEIGHT, CONFIRM_WIDTH};
 use super::dialog::{ConfirmCallback, ConfirmDialog};
+use crate::ui_foundation::{is_key_enter, is_key_escape, is_key_left, is_key_right};
 
 /// Global singleton for the confirm window handle
 static CONFIRM_WINDOW: OnceLock<Mutex<Option<WindowHandle<Root>>>> = OnceLock::new();
 
 /// Global singleton for the confirm dialog entity (for keyboard event dispatch)
 static CONFIRM_DIALOG: OnceLock<Mutex<Option<Entity<ConfirmDialog>>>> = OnceLock::new();
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ConfirmKeyAction {
+    Submit,
+    Cancel,
+    ToggleFocus,
+    FocusCancel,
+    FocusConfirm,
+}
+
+#[inline]
+fn confirm_key_action(key: &str) -> Option<ConfirmKeyAction> {
+    if is_key_enter(key) || key.eq_ignore_ascii_case("space") || key == " " {
+        return Some(ConfirmKeyAction::Submit);
+    }
+
+    if is_key_escape(key) {
+        return Some(ConfirmKeyAction::Cancel);
+    }
+
+    if key.eq_ignore_ascii_case("tab") {
+        return Some(ConfirmKeyAction::ToggleFocus);
+    }
+
+    if is_key_left(key) {
+        return Some(ConfirmKeyAction::FocusCancel);
+    }
+
+    if is_key_right(key) {
+        return Some(ConfirmKeyAction::FocusConfirm);
+    }
+
+    None
+}
 
 /// ConfirmWindow wrapper that renders the ConfirmDialog entity
 pub struct ConfirmWindow {
@@ -73,24 +108,16 @@ impl Render for ConfirmWindow {
                 &format!("ConfirmWindow on_key_down received: key='{}'", key),
             );
 
-            match key {
-                // Enter/Return = submit current selection
-                "enter" | "return" => {
+            match confirm_key_action(key) {
+                Some(ConfirmKeyAction::Submit) => {
                     crate::logging::log("CONFIRM", "Enter pressed - submitting");
                     this.dialog.update(cx, |d, _cx| d.submit());
                 }
-                // Space = submit current selection
-                " " | "space" => {
-                    crate::logging::log("CONFIRM", "Space pressed - submitting");
-                    this.dialog.update(cx, |d, _cx| d.submit());
-                }
-                // Escape = cancel
-                "escape" | "esc" => {
+                Some(ConfirmKeyAction::Cancel) => {
                     crate::logging::log("CONFIRM", "Escape pressed - cancelling");
                     this.dialog.update(cx, |d, _cx| d.cancel());
                 }
-                // Tab = toggle between buttons
-                "tab" => {
+                Some(ConfirmKeyAction::ToggleFocus) => {
                     this.dialog.update(cx, |d, cx| {
                         d.toggle_focus(cx);
                         crate::logging::log(
@@ -100,19 +127,17 @@ impl Render for ConfirmWindow {
                     });
                     cx.notify();
                 }
-                // Left arrow = focus cancel button (index 0)
-                "left" | "arrowleft" => {
+                Some(ConfirmKeyAction::FocusCancel) => {
                     crate::logging::log("CONFIRM", "Left arrow - focusing cancel");
                     this.dialog.update(cx, |d, cx| d.focus_cancel(cx));
                     cx.notify();
                 }
-                // Right arrow = focus confirm button (index 1)
-                "right" | "arrowright" => {
+                Some(ConfirmKeyAction::FocusConfirm) => {
                     crate::logging::log("CONFIRM", "Right arrow - focusing confirm");
                     this.dialog.update(cx, |d, cx| d.focus_confirm(cx));
                     cx.notify();
                 }
-                _ => {}
+                None => {}
             }
         });
 
@@ -372,27 +397,18 @@ pub fn dispatch_confirm_key(key: &str, cx: &mut App) -> bool {
         &format!("Dispatching key to confirm dialog: {}", key),
     );
 
-    match key {
-        // Enter = submit current selection and close
-        "enter" | "Enter" => {
+    match confirm_key_action(key) {
+        Some(ConfirmKeyAction::Submit) => {
             dialog.update(cx, |d, _cx| d.submit());
             close_confirm_window(cx);
             true
         }
-        // Space = activate focused button (standard HTML UX)
-        "space" | "Space" | " " => {
-            dialog.update(cx, |d, _cx| d.submit());
-            close_confirm_window(cx);
-            true
-        }
-        // Escape = cancel and close
-        "escape" | "Escape" => {
+        Some(ConfirmKeyAction::Cancel) => {
             dialog.update(cx, |d, _cx| d.cancel());
             close_confirm_window(cx);
             true
         }
-        // Tab = toggle focus between buttons
-        "tab" | "Tab" => {
+        Some(ConfirmKeyAction::ToggleFocus) => {
             dialog.update(cx, |d, cx| {
                 d.toggle_focus(cx);
                 crate::logging::log(
@@ -403,18 +419,67 @@ pub fn dispatch_confirm_key(key: &str, cx: &mut App) -> bool {
             notify_confirm_window(cx);
             true
         }
-        // Left arrow = focus cancel button
-        "left" | "arrowleft" | "Left" | "ArrowLeft" => {
+        Some(ConfirmKeyAction::FocusCancel) => {
             dialog.update(cx, |d, cx| d.focus_cancel(cx));
             notify_confirm_window(cx);
             true
         }
-        // Right arrow = focus confirm button
-        "right" | "arrowright" | "Right" | "ArrowRight" => {
+        Some(ConfirmKeyAction::FocusConfirm) => {
             dialog.update(cx, |d, cx| d.focus_confirm(cx));
             notify_confirm_window(cx);
             true
         }
-        _ => false,
+        None => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{confirm_key_action, ConfirmKeyAction};
+
+    #[test]
+    fn test_dispatch_confirm_key_submits_on_enter() {
+        assert_eq!(confirm_key_action("enter"), Some(ConfirmKeyAction::Submit));
+        assert_eq!(confirm_key_action("return"), Some(ConfirmKeyAction::Submit));
+    }
+
+    #[test]
+    fn test_dispatch_confirm_key_cancels_on_escape() {
+        assert_eq!(confirm_key_action("escape"), Some(ConfirmKeyAction::Cancel));
+        assert_eq!(confirm_key_action("esc"), Some(ConfirmKeyAction::Cancel));
+    }
+
+    #[test]
+    fn test_dispatch_confirm_key_toggles_focus_on_tab() {
+        assert_eq!(
+            confirm_key_action("tab"),
+            Some(ConfirmKeyAction::ToggleFocus)
+        );
+    }
+
+    #[test]
+    fn test_dispatch_confirm_key_accepts_left_right_and_arrow_variants() {
+        assert_eq!(
+            confirm_key_action("left"),
+            Some(ConfirmKeyAction::FocusCancel)
+        );
+        assert_eq!(
+            confirm_key_action("right"),
+            Some(ConfirmKeyAction::FocusConfirm)
+        );
+        assert_eq!(
+            confirm_key_action("arrowleft"),
+            Some(ConfirmKeyAction::FocusCancel)
+        );
+        assert_eq!(
+            confirm_key_action("arrowright"),
+            Some(ConfirmKeyAction::FocusConfirm)
+        );
+    }
+
+    #[test]
+    fn test_dispatch_confirm_key_submits_on_space_aliases() {
+        assert_eq!(confirm_key_action("space"), Some(ConfirmKeyAction::Submit));
+        assert_eq!(confirm_key_action(" "), Some(ConfirmKeyAction::Submit));
     }
 }

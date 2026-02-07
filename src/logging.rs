@@ -207,7 +207,49 @@ fn category_to_code(category: &str) -> char {
         "TRAY" => 'H',   // Tray is part of Hotkey subsystem
         "DESIGN" => 'D', // Design system
         "BENCH" => 'B',  // B for Benchmark timing
-        _ => '-',        // Unknown category
+        "WARN" | "WARNING" => 'X',
+        "WINDOW_STATE" | "WINDOW_OPS" | "WINDOW_REG" => 'W',
+        "CHAT" | "AI" | "ACTIONS" | "ACTIONS_THEME" | "COMMAND_BAR" | "PROMPTS" | "PANEL"
+        | "EDITOR" | "DIV" | "FIELD" | "SHORTCUT" | "ALIAS" | "ALIAS_INPUT" | "CONFIRM"
+        | "SEARCH" | "FALLBACK" | "KEYWORD" | "HUD" => 'U',
+        "DEBUG_GRID" => 'D',
+        "SCRIPTLET_PARSE" => 'G',
+        "CLICK" => 'M',
+        "MCP" => 'S',
+        "CLIPBOARD" | "DEEPLINK" | "TEST" | "SCHEDULER" | "SHUTDOWN" | "SECRETS" | "PROC" => 'A',
+        "OCR" | "FONT" | "VIBRANCY" => 'T',
+        _ => '-', // Unknown category
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LegacyLogLevel {
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
+}
+
+impl LegacyLogLevel {
+    fn as_json_label(self) -> &'static str {
+        match self {
+            Self::Error => "ERROR",
+            Self::Warn => "WARN",
+            Self::Info => "INFO",
+            Self::Debug => "DEBUG",
+            Self::Trace => "TRACE",
+        }
+    }
+}
+
+fn legacy_level_for_category(category: &str) -> LegacyLogLevel {
+    match category.to_uppercase().as_str() {
+        "ERROR" => LegacyLogLevel::Error,
+        "WARN" | "WARNING" => LegacyLogLevel::Warn,
+        "DEBUG" => LegacyLogLevel::Debug,
+        "TRACE" => LegacyLogLevel::Trace,
+        _ => LegacyLogLevel::Info,
     }
 }
 
@@ -232,17 +274,27 @@ fn infer_category_from_target(target: &str) -> char {
         'T' // Theme
     } else if target.contains("window_manager") || target.contains("window_control") {
         'W' // Window manager
-    } else if target.contains("stdin") || target.contains("protocol") {
+    } else if target.contains("stdin") || target.contains("protocol") || target.contains("mcp") {
         'S' // Stdin/protocol
     } else if target.contains("hotkey") || target.contains("tray") {
         'H' // Hotkey
     } else if target.contains("scripts") || target.contains("file_search") {
         'G' // Script loaGing (not execution)
+    } else if target.contains("window_state")
+        || target.contains("window_ops")
+        || target.contains("window_reg")
+    {
+        'W' // Window state/ops
     } else if target.contains("config") {
         'N' // coNfig
     } else if target.contains("watcher")
         || target.contains("clipboard")
         || target.contains("logging")
+        || target.contains("main")
+        || target.contains("deeplink")
+        || target.contains("scheduler")
+        || target.contains("shutdown")
+        || target.contains("window")
     {
         'A' // App lifecycle/subsystems
     } else if target.contains("panel")
@@ -252,6 +304,10 @@ fn infer_category_from_target(target: &str) -> char {
         || target.contains("term_prompt")
         || target.contains("pty")
         || target.contains("syntax")
+        || target.contains("app_impl")
+        || target.contains("actions")
+        || target.contains("ai")
+        || target.contains("notes")
     {
         'U' // UI components
     } else if target.contains("perf") {
@@ -973,25 +1029,60 @@ pub fn log(category: &str, message: &str) {
     add_to_buffer(category, message);
 
     let correlation_id = current_correlation_id();
+    let level = legacy_level_for_category(category);
 
     // Write to capture file if capture is enabled
     if is_capture_enabled() {
         let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ");
         let json_line = format!(
-            r#"{{"timestamp":"{}","level":"INFO","category":"{}","correlation_id":"{}","message":"{}"}}"#,
-            timestamp, category, correlation_id, message
+            r#"{{"timestamp":"{}","level":"{}","category":"{}","correlation_id":"{}","message":"{}"}}"#,
+            timestamp,
+            level.as_json_label(),
+            category,
+            correlation_id,
+            message
         );
         write_to_capture(&json_line);
     }
 
-    // Use tracing for actual logging
-    tracing::info!(
-        category = category,
-        correlation_id = %correlation_id,
-        legacy = true,
-        "{}",
-        message
-    );
+    // Preserve intended severity for legacy category-only callsites.
+    match level {
+        LegacyLogLevel::Error => tracing::error!(
+            category = category,
+            correlation_id = %correlation_id,
+            legacy = true,
+            "{}",
+            message
+        ),
+        LegacyLogLevel::Warn => tracing::warn!(
+            category = category,
+            correlation_id = %correlation_id,
+            legacy = true,
+            "{}",
+            message
+        ),
+        LegacyLogLevel::Info => tracing::info!(
+            category = category,
+            correlation_id = %correlation_id,
+            legacy = true,
+            "{}",
+            message
+        ),
+        LegacyLogLevel::Debug => tracing::debug!(
+            category = category,
+            correlation_id = %correlation_id,
+            legacy = true,
+            "{}",
+            message
+        ),
+        LegacyLogLevel::Trace => tracing::trace!(
+            category = category,
+            correlation_id = %correlation_id,
+            legacy = true,
+            "{}",
+            message
+        ),
+    }
 }
 
 /// Add a log entry to the in-memory buffer for UI display
@@ -1993,6 +2084,14 @@ mod tests {
             ("RESIZE", 'Z'),
             ("DESIGN", 'D'),
             ("BENCH", 'B'), // New: Benchmark timing
+            ("CHAT", 'U'),
+            ("AI", 'U'),
+            ("ACTIONS", 'U'),
+            ("WINDOW_STATE", 'W'),
+            ("DEBUG_GRID", 'D'),
+            ("MCP", 'S'),
+            ("WARN", 'X'),
+            ("SCRIPTLET_PARSE", 'G'),
         ];
 
         for (category, expected_code) in mappings {
@@ -2104,12 +2203,31 @@ mod tests {
             infer_category_from_target("script_kit_gpui::window_control"),
             'W'
         );
+        assert_eq!(
+            infer_category_from_target("script_kit_gpui::window_state"),
+            'W'
+        );
     }
 
     #[test]
     fn test_infer_category_unknown() {
-        assert_eq!(infer_category_from_target("script_kit_gpui::main"), '-');
+        assert_eq!(infer_category_from_target("script_kit_gpui::main"), 'A');
+        assert_eq!(infer_category_from_target("script_kit_gpui::ai"), 'U');
+        assert_eq!(
+            infer_category_from_target("script_kit_gpui::mcp_server"),
+            'S'
+        );
         assert_eq!(infer_category_from_target("unknown::module"), '-');
+    }
+
+    #[test]
+    fn test_legacy_level_for_category() {
+        assert_eq!(legacy_level_for_category("ERROR"), LegacyLogLevel::Error);
+        assert_eq!(legacy_level_for_category("WARN"), LegacyLogLevel::Warn);
+        assert_eq!(legacy_level_for_category("WARNING"), LegacyLogLevel::Warn);
+        assert_eq!(legacy_level_for_category("DEBUG"), LegacyLogLevel::Debug);
+        assert_eq!(legacy_level_for_category("TRACE"), LegacyLogLevel::Trace);
+        assert_eq!(legacy_level_for_category("UI"), LegacyLogLevel::Info);
     }
 
     // -------------------------------------------------------------------------

@@ -3,8 +3,12 @@
 //! Validates dialog-internal logic: selection coercion, grouped item building,
 //! shortcut formatting, shortcut keycap parsing, fuzzy matching, and scoring.
 
-use super::dialog::{build_grouped_items_static, coerce_action_selection, GroupedActionItem};
-use super::types::{Action, ActionCategory, SectionStyle};
+use super::dialog::{
+    build_grouped_items_static, coerce_action_selection, initial_selection_index,
+    resolve_selected_protocol_action_index, should_rebuild_grouped_items_for_config_change,
+    GroupedActionItem,
+};
+use super::types::{Action, ActionCategory, ActionsDialogConfig, SectionStyle};
 
 // ============================================================
 // Helper
@@ -257,6 +261,21 @@ fn parse_keycaps_simple_symbol() {
 }
 
 #[test]
+fn action_subtitle_is_hidden_even_when_description_exists() {
+    let action = Action::new(
+        "copy",
+        "Copy to Clipboard",
+        Some("Copy without pasting".to_string()),
+        ActionCategory::ScriptContext,
+    );
+    assert_eq!(
+        super::dialog::action_subtitle_for_display(&action),
+        None,
+        "Action subtitles should not be rendered in the popup UI"
+    );
+}
+
+#[test]
 fn parse_keycaps_letter() {
     let keycaps = super::dialog::ActionsDialog::parse_shortcut_keycaps("⌘E");
     assert_eq!(keycaps, vec!["⌘", "E"]);
@@ -416,4 +435,74 @@ fn action_config_default_values() {
     assert_eq!(config.anchor, super::types::AnchorPosition::Bottom);
     assert!(!config.show_icons);
     assert!(!config.show_footer);
+}
+
+// ============================================================
+// 8. Constructor/config/sdk helper behavior
+// ============================================================
+
+#[test]
+fn initial_selection_index_skips_header_row() {
+    let rows = vec![
+        GroupedActionItem::SectionHeader("Actions".into()),
+        GroupedActionItem::Item(0),
+    ];
+    assert_eq!(initial_selection_index(&rows), 1);
+}
+
+#[test]
+fn config_change_requires_rebuild_when_section_style_changes() {
+    let previous = ActionsDialogConfig {
+        section_style: SectionStyle::Separators,
+        ..ActionsDialogConfig::default()
+    };
+    let next = ActionsDialogConfig {
+        section_style: SectionStyle::Headers,
+        ..ActionsDialogConfig::default()
+    };
+
+    assert!(should_rebuild_grouped_items_for_config_change(
+        &previous, &next
+    ));
+}
+
+#[test]
+fn config_change_does_not_require_rebuild_when_section_style_same() {
+    let previous = ActionsDialogConfig {
+        search_position: super::types::SearchPosition::Bottom,
+        section_style: SectionStyle::Separators,
+        ..ActionsDialogConfig::default()
+    };
+    let next = ActionsDialogConfig {
+        search_position: super::types::SearchPosition::Top,
+        section_style: SectionStyle::Separators,
+        ..ActionsDialogConfig::default()
+    };
+
+    assert!(!should_rebuild_grouped_items_for_config_change(
+        &previous, &next
+    ));
+}
+
+#[test]
+fn selected_protocol_action_uses_visible_index_mapping() {
+    // Visible action #1 should map to original protocol action index #3.
+    let visible_to_protocol = vec![0, 3];
+    let selected_action_index = Some(1);
+
+    assert_eq!(
+        resolve_selected_protocol_action_index(selected_action_index, &visible_to_protocol),
+        Some(3)
+    );
+}
+
+#[test]
+fn selected_protocol_action_mapping_returns_none_for_out_of_bounds() {
+    let visible_to_protocol = vec![0];
+    let selected_action_index = Some(2);
+
+    assert_eq!(
+        resolve_selected_protocol_action_index(selected_action_index, &visible_to_protocol),
+        None
+    );
 }

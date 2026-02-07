@@ -76,6 +76,10 @@ pub struct ToastColors {
 }
 
 impl ToastColors {
+    fn overlay_with_alpha(base_color: u32, alpha: u8) -> u32 {
+        ((base_color & 0x00ff_ffff) << 8) | (alpha as u32)
+    }
+
     /// Create ToastColors from theme reference for a specific variant
     pub fn from_theme(theme: &crate::theme::Theme, variant: ToastVariant) -> Self {
         let colors = &theme.colors;
@@ -95,7 +99,7 @@ impl ToastColors {
             action_text: colors.accent.selected,
             action_background: colors.accent.selected_subtle,
             dismiss: colors.text.muted,
-            details_bg: 0x00000020, // Black at ~12.5% opacity for subtle darkening
+            details_bg: Self::overlay_with_alpha(colors.accent.selected_subtle, 0x20),
         }
     }
 
@@ -119,7 +123,7 @@ impl ToastColors {
             action_text: design_colors.accent,
             action_background: design_colors.background_selected,
             dismiss: design_colors.text_muted,
-            details_bg: 0x00000020, // Black at ~12.5% opacity for subtle darkening
+            details_bg: Self::overlay_with_alpha(design_colors.background_selected, 0x20),
         }
     }
 
@@ -133,16 +137,7 @@ impl ToastColors {
 
 impl Default for ToastColors {
     fn default() -> Self {
-        Self {
-            background: 0x2d2d2d,
-            text: 0xffffff,
-            icon: 0x3b82f6, // Blue for info (default)
-            border: 0x3b82f6,
-            action_text: 0xfbbf24,
-            action_background: 0x2a2a2a,
-            dismiss: 0x808080,
-            details_bg: 0x00000020, // Black at ~12.5% opacity
-        }
+        Self::from_theme(&crate::theme::Theme::default(), ToastVariant::Info)
     }
 }
 
@@ -414,7 +409,7 @@ impl RenderOnce for Toast {
                     border: colors.border,
                     focus_ring: colors.action_text,
                     focus_tint: colors.action_background,
-                    hover_overlay: 0xffffff26, // White at ~15% alpha (dark mode default for toasts)
+                    hover_overlay: ToastColors::overlay_with_alpha(colors.action_background, 0x26),
                 };
                 let action_btn = Button::new(label.clone(), button_colors)
                     .variant(ButtonVariant::Ghost)
@@ -454,13 +449,13 @@ impl RenderOnce for Toast {
             let button_colors = ButtonColors {
                 text_color: colors.dismiss,
                 text_hover: colors.text,
-                background: 0x00000000,     // transparent
-                background_hover: 0xffffff, // white hover overlay applied via variant
+                background: 0x00000000, // transparent
+                background_hover: colors.action_background,
                 accent: colors.dismiss,
                 border: 0x00000000, // no border
                 focus_ring: colors.dismiss,
-                focus_tint: 0x00000000,
-                hover_overlay: 0xffffff26, // White at ~15% alpha (dark mode default for toasts)
+                focus_tint: colors.action_background,
+                hover_overlay: ToastColors::overlay_with_alpha(colors.action_background, 0x26),
             };
             Some(
                 Button::new("×", button_colors)
@@ -553,20 +548,29 @@ impl Toast {
     }
 }
 
-// Note: Tests omitted for this module due to GPUI macro recursion limit issues.
-// The Toast component is integration-tested via the main application's
-// toast notification display.
-//
-// Verified traits:
-// - ToastColors: Copy, Clone, Debug, Default
-// - ToastVariant: Copy, Clone, Debug, PartialEq, Eq, Default
-// - Toast: builder pattern with .variant(), .duration_ms(), .dismissible(), .details(), .action()
-//
-// Key behaviors verified:
-// - ToastVariant::default() returns Info
-// - ToastVariant icons: Success="✓", Warning="⚠", Error="✕", Info="ℹ"
-// - ToastVariant::from_severity() maps ErrorSeverity appropriately
-// - ToastColors::default() provides sensible dark theme defaults
-// - Toast::new() sets default 5000ms duration, dismissible=true
-// - Toast::persistent() sets duration_ms to None
-// - ToastColors::with_opacity() correctly shifts and appends alpha
+#[cfg(test)]
+mod tests {
+    use super::{ToastColors, ToastVariant};
+    use crate::designs::DesignColors;
+    use crate::theme::Theme;
+
+    #[test]
+    fn test_toast_colors_from_theme_uses_selected_subtle_for_details_background() {
+        let mut theme = Theme::default();
+        theme.colors.accent.selected_subtle = 0x334455;
+
+        let colors = ToastColors::from_theme(&theme, ToastVariant::Info);
+        assert_eq!(colors.details_bg, 0x33445520);
+    }
+
+    #[test]
+    fn test_toast_colors_from_design_uses_selected_background_for_details_background() {
+        let mut design = DesignColors::default();
+        design.background_selected = 0x556677;
+
+        let colors = ToastColors::from_design(&design, ToastVariant::Info);
+        assert_eq!(colors.details_bg, 0x55667720);
+    }
+}
+
+// Toast rendering behavior is integration-tested through app-level smoke flows.

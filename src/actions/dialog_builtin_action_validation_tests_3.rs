@@ -2242,7 +2242,7 @@ fn score_fuzzy_match_subsequence() {
     let action = Action::new(
         "reveal_in_finder",
         "Reveal in Finder",
-        Some("Show in Finder".to_string()),
+        Some("Reveal in Finder".to_string()),
         ActionCategory::ScriptContext,
     );
     // "rif" is a subsequence of "reveal in finder"

@@ -3,6 +3,20 @@
 // Contains: execute_builtin, execute_app, execute_window_focus
 
 impl ScriptListApp {
+    fn system_action_feedback_message(
+        &self,
+        action_type: &builtins::SystemActionType,
+    ) -> Option<String> {
+        let dark_mode_enabled = if matches!(action_type, builtins::SystemActionType::ToggleDarkMode)
+        {
+            system_actions::is_dark_mode().ok()
+        } else {
+            None
+        };
+
+        builtins::system_action_hud_message(*action_type, dark_mode_enabled)
+    }
+
     fn execute_builtin(&mut self, entry: &builtins::BuiltInEntry, cx: &mut Context<Self>) {
         logging::log(
             "EXEC",
@@ -87,8 +101,13 @@ impl ScriptListApp {
                             "ERROR",
                             &format!("Failed to open confirmation modal: {}", e),
                         );
-                        // If modal fails, just proceed without confirmation (fallback)
-                        let _ = confirm_sender.try_send((entry_id.clone(), true));
+                        logging::log(
+                            "EXEC",
+                            &format!(
+                                "Skipping dangerous action '{}' because confirmation modal failed to open",
+                                entry_id
+                            ),
+                        );
                     }
                 })
                 .ok();
@@ -443,7 +462,14 @@ impl ScriptListApp {
                     match result {
                         Ok(()) => {
                             logging::log("EXEC", "System action executed successfully");
-                            self.close_and_reset_window(cx);
+                            if let Some(message) = self.system_action_feedback_message(action_type)
+                            {
+                                cx.notify();
+                                self.show_hud(message, Some(2000), cx);
+                                self.hide_main_and_reset(cx);
+                            } else {
+                                self.close_and_reset_window(cx);
+                            }
                         }
                         Err(e) => {
                             logging::log("ERROR", &format!("System action failed: {}", e));
@@ -539,9 +565,51 @@ impl ScriptListApp {
                     }
 
                     AiCommandType::ClearConversation => {
-                        // TODO: Implement clear conversation
-                        if let Err(e) = ai::open_ai_window(cx) {
-                            logging::log("ERROR", &format!("AI command failed: {}", e));
+                        match ai::clear_all_chats() {
+                            Ok(()) => {
+                                // Force a fresh AI window state so cleared history is reflected immediately.
+                                ai::close_ai_window(cx);
+                                if let Err(e) = ai::open_ai_window(cx) {
+                                    logging::log(
+                                        "ERROR",
+                                        &format!(
+                                            "AI history cleared but failed to reopen AI window: {}",
+                                            e
+                                        ),
+                                    );
+                                    self.toast_manager.push(
+                                        components::toast::Toast::error(
+                                            format!(
+                                                "AI history cleared, but failed to open AI: {}",
+                                                e
+                                            ),
+                                            &self.theme,
+                                        )
+                                        .duration_ms(Some(5000)),
+                                    );
+                                    cx.notify();
+                                } else {
+                                    self.show_hud(
+                                        "Cleared AI conversations".to_string(),
+                                        Some(2000),
+                                        cx,
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                logging::log(
+                                    "ERROR",
+                                    &format!("Failed to clear AI conversations: {}", e),
+                                );
+                                self.toast_manager.push(
+                                    components::toast::Toast::error(
+                                        format!("Failed to clear AI conversations: {}", e),
+                                        &self.theme,
+                                    )
+                                    .duration_ms(Some(5000)),
+                                );
+                                cx.notify();
+                            }
                         }
                     }
 
@@ -1006,7 +1074,7 @@ impl ScriptListApp {
             }
 
             // =========================================================================
-            // Utility Commands (Scratch Pad, Quick Terminal)
+            // Utility Commands (Scratch Pad, Quick Terminal, Process Manager)
             // =========================================================================
             builtins::BuiltInFeature::UtilityCommand(cmd_type) => {
                 logging::log(
@@ -1026,6 +1094,62 @@ impl ScriptListApp {
                         // Mark as opened from main menu - ESC will return to main menu
                         self.opened_from_main_menu = true;
                         self.open_quick_terminal(cx);
+                    }
+                    UtilityCommandType::ProcessManager => {
+                        let process_count = crate::process_manager::PROCESS_MANAGER.active_count();
+                        let report =
+                            crate::process_manager::PROCESS_MANAGER.format_active_process_report(8);
+
+                        logging::log(
+                            "EXEC",
+                            &format!(
+                                "correlation_id=process-manager-inspect active_process_count={}",
+                                process_count
+                            ),
+                        );
+
+                        // Always copy details so users can inspect full paths quickly.
+                        let clipboard_item = gpui::ClipboardItem::new_string(report.clone());
+                        cx.write_to_clipboard(clipboard_item);
+
+                        if process_count == 0 {
+                            self.show_hud(
+                                "No running scripts. Process report copied.".to_string(),
+                                Some(2200),
+                                cx,
+                            );
+                        } else {
+                            self.show_hud(
+                                format!(
+                                    "{} running script process(es). Details copied.",
+                                    process_count
+                                ),
+                                Some(2600),
+                                cx,
+                            );
+                        }
+                    }
+                    UtilityCommandType::StopAllProcesses => {
+                        let process_count = crate::process_manager::PROCESS_MANAGER.active_count();
+                        logging::log(
+                            "EXEC",
+                            &format!(
+                                "correlation_id=process-manager-stop-all requested_count={}",
+                                process_count
+                            ),
+                        );
+
+                        if process_count == 0 {
+                            self.show_hud("No running scripts to stop.".to_string(), Some(2200), cx);
+                        } else {
+                            crate::process_manager::PROCESS_MANAGER.kill_all_processes();
+                            self.show_hud(
+                                format!("Stopped {} running script process(es).", process_count),
+                                Some(2600),
+                                cx,
+                            );
+                            self.close_and_reset_window(cx);
+                        }
                     }
                 }
             }
@@ -1828,6 +1952,7 @@ impl ScriptListApp {
     }
 
     /// Open the webcam prompt
+    #[cfg(target_os = "macos")]
     fn open_webcam(&mut self, cx: &mut Context<Self>) {
         logging::log("EXEC", "Opening Webcam prompt");
 
@@ -1929,6 +2054,45 @@ impl ScriptListApp {
         self.focused_input = FocusedInput::None;
         self.pending_focus = Some(FocusTarget::AppRoot);
 
+        resize_to_view_sync(ViewType::DivPrompt, 0);
+        cx.notify();
+    }
+
+    /// Open the webcam prompt
+    #[cfg(not(target_os = "macos"))]
+    fn open_webcam(&mut self, cx: &mut Context<Self>) {
+        logging::log("EXEC", "Opening Webcam prompt (unsupported platform)");
+
+        let focus_handle = self.focus_handle.clone();
+        let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
+            std::sync::Arc::new(|_id: String, _value: Option<String>| {});
+
+        let webcam_prompt = prompts::WebcamPrompt::new(
+            "webcam".to_string(),
+            focus_handle,
+            submit_callback,
+            std::sync::Arc::clone(&self.theme),
+        );
+
+        let entity = cx.new(|_| webcam_prompt);
+        entity.update(cx, |prompt, cx| {
+            prompt.set_error(
+                "Webcam capture is only supported on macOS".to_string(),
+                cx,
+            );
+        });
+
+        self.toast_manager.push(
+            components::toast::Toast::error(
+                "Webcam capture is only supported on macOS",
+                &self.theme,
+            )
+            .duration_ms(Some(4000)),
+        );
+
+        self.current_view = AppView::WebcamView { entity };
+        self.focused_input = FocusedInput::None;
+        self.pending_focus = Some(FocusTarget::AppRoot);
         resize_to_view_sync(ViewType::DivPrompt, 0);
         cx.notify();
     }
@@ -2095,7 +2259,14 @@ impl ScriptListApp {
                     match result {
                         Ok(()) => {
                             logging::log("EXEC", "Confirmed system action executed successfully");
-                            self.close_and_reset_window(cx);
+                            if let Some(message) = self.system_action_feedback_message(action_type)
+                            {
+                                cx.notify();
+                                self.show_hud(message, Some(2000), cx);
+                                self.hide_main_and_reset(cx);
+                            } else {
+                                self.close_and_reset_window(cx);
+                            }
                         }
                         Err(e) => {
                             logging::log(

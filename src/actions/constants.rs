@@ -62,7 +62,7 @@ mod tests {
         // Calculate max visible items that can fit in the popup
         // This helps verify scroll virtualization is worthwhile
         let max_visible = (POPUP_MAX_HEIGHT / ACTION_ITEM_HEIGHT) as usize;
-        // With 400px max height and 44px items, ~9 items fit
+        // With 400px max height and 36px items, ~11 items fit
         assert!(max_visible >= 8, "Should fit at least 8 items");
         assert!(max_visible <= 15, "Sanity check on max visible");
     }

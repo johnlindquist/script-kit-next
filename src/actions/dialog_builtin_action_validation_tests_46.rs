@@ -5,16 +5,13 @@
 
 use crate::actions::builders::*;
 use crate::actions::dialog::{
-    build_grouped_items_static, coerce_action_selection, ActionsDialog, GroupedActionItem,
+    build_grouped_items_static, coerce_action_selection, GroupedActionItem,
 };
-use crate::actions::types::{
-    Action, ActionCategory, ActionsDialogConfig, ScriptInfo, SectionStyle,
-};
+use crate::actions::types::{Action, ActionCategory, ScriptInfo, SectionStyle};
 use crate::clipboard_history::ContentType;
 use crate::designs::icon_variations::IconName;
 use crate::file_search::{FileInfo, FileType};
 use crate::prompts::PathInfo;
-use crate::scriptlets::{Scriptlet, ScriptletAction};
 
 // =========== 1. Action::with_shortcut_opt: Some vs None ===========
 

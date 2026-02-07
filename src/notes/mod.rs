@@ -20,13 +20,22 @@
 //! launcher. It uses gpui-component for UI components (Input, Sidebar, Button, etc.)
 //! and follows the Root wrapper pattern required by gpui-component.
 //!
+//! # API Visibility
+//!
+//! Storage internals are private implementation details of the notes window.
+//!
+//! ```compile_fail
+//! use script_kit_gpui::notes::save_note;
+//! use script_kit_gpui::notes::get_all_notes;
+//! ```
+//!
 
 // Allow dead code in this module - many functions are designed for future use
 #![allow(dead_code)]
 
 mod actions_panel;
 mod browse_panel;
-pub mod code_highlight;
+pub(crate) mod code_highlight;
 mod markdown;
 mod markdown_highlighting;
 mod model;
@@ -42,10 +51,6 @@ pub use actions_panel::{NotesAction, NotesActionCallback, NotesActionItem, Notes
 pub use browse_panel::{BrowsePanel, NoteAction, NoteListItem};
 
 // Re-export key types - suppress unused warnings since these are public API
-#[allow(unused_imports)]
-pub use model::*;
-#[allow(unused_imports)]
-pub use storage::*;
 #[allow(unused_imports)]
 pub use window::{
     close_notes_window, is_notes_window, is_notes_window_open, open_notes_window, quick_capture,

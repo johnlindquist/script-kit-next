@@ -874,6 +874,87 @@ pub fn reveal_in_finder(path: &str) -> Result<(), String> {
     }
 }
 
+fn terminal_working_directory(path: &str, is_dir: bool) -> String {
+    if is_dir {
+        path.to_string()
+    } else {
+        std::path::Path::new(path)
+            .parent()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|| path.to_string())
+    }
+}
+
+/// Open a terminal window at the target path.
+///
+/// Returns the resolved working directory used to launch the terminal.
+pub fn open_in_terminal(path: &str, is_dir: bool) -> Result<String, String> {
+    let dir_path = terminal_working_directory(path, is_dir);
+
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+
+        let escaped_dir_path = crate::utils::escape_applescript_string(&dir_path);
+        let script = format!(
+            r#"tell application "Terminal"
+                do script "cd " & quoted form of "{}"
+                activate
+            end tell"#,
+            escaped_dir_path
+        );
+
+        Command::new("osascript")
+            .args(["-e", &script])
+            .spawn()
+            .map_err(|e| format!("Failed to open terminal: {}", e))?;
+        Ok(dir_path)
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = path;
+        let _ = is_dir;
+        Err("Open in Terminal is currently only supported on macOS".to_string())
+    }
+}
+
+/// Move a path to Trash.
+pub fn move_to_trash(path: &str) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+
+        let escaped_path = crate::utils::escape_applescript_string(path);
+        let script = format!(
+            r#"tell application "Finder"
+                delete POSIX file "{}"
+            end tell"#,
+            escaped_path
+        );
+
+        let mut child = Command::new("osascript")
+            .args(["-e", &script])
+            .spawn()
+            .map_err(|e| format!("Failed to spawn trash command: {}", e))?;
+
+        let status = child
+            .wait()
+            .map_err(|e| format!("Failed to wait for trash command: {}", e))?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err(format!("Trash command exited with status: {}", status))
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = path;
+        Err("Move to Trash is currently only supported on macOS".to_string())
+    }
+}
+
 /// Preview a file using Quick Look (macOS)
 #[allow(dead_code)]
 pub fn quick_look(path: &str) -> Result<(), String> {
@@ -909,7 +990,7 @@ pub fn open_with(path: &str) -> Result<(), String> {
                 set theFile to POSIX file "{}"
                 open information window of theFile
             end tell"#,
-            path.replace('"', r#"\""#)
+            crate::utils::escape_applescript_string(path)
         );
         Command::new("osascript")
             .args(["-e", &script])
@@ -939,7 +1020,7 @@ pub fn show_info(path: &str) -> Result<(), String> {
                 set theFile to POSIX file "{}"
                 open information window of theFile
             end tell"#,
-            path.replace('"', r#"\""#)
+            crate::utils::escape_applescript_string(path)
         );
         Command::new("osascript")
             .args(["-e", &script])
@@ -1382,17 +1463,33 @@ pub fn filter_results_with_nucleo(
     results: &[FileResult],
     filter_pattern: &str,
 ) -> Vec<(usize, FileResult, u32)> {
+    rank_file_results_nucleo(results, filter_pattern)
+        .into_iter()
+        .map(|(idx, score)| (idx, results[idx].clone(), score))
+        .collect()
+}
+
+/// Core nucleo ranking helper returning only (index, score).
+///
+/// This keeps sorting/ranking allocations minimal and lets callers choose
+/// whether they need owned copies or borrowed references.
+fn rank_file_results_nucleo(results: &[FileResult], filter_pattern: &str) -> Vec<(usize, u32)> {
     use crate::scripts::NucleoCtx;
 
     let mut nucleo = NucleoCtx::new(filter_pattern);
-    let mut scored: Vec<(usize, FileResult, u32)> = results
+    let mut scored: Vec<(usize, u32)> = results
         .iter()
         .enumerate()
-        .filter_map(|(idx, r)| nucleo.score(&r.name).map(|score| (idx, r.clone(), score)))
+        .filter_map(|(idx, r)| nucleo.score(&r.name).map(|score| (idx, score)))
         .collect();
 
-    // Sort by score descending (higher = better match)
-    scored.sort_by(|a, b| b.2.cmp(&a.2));
+    // Sort by score descending (higher = better match), then by name to
+    // keep ranking deterministic when scores tie.
+    scored.sort_by(|a, b| {
+        b.1.cmp(&a.1)
+            .then_with(|| results[a.0].name.cmp(&results[b.0].name))
+            .then_with(|| a.0.cmp(&b.0))
+    });
 
     scored
 }
@@ -1413,20 +1510,10 @@ pub fn filter_results_nucleo_simple<'a>(
     results: &'a [FileResult],
     filter_pattern: &str,
 ) -> Vec<(usize, &'a FileResult)> {
-    use crate::scripts::NucleoCtx;
-
-    let mut nucleo = NucleoCtx::new(filter_pattern);
-    let mut scored: Vec<(usize, &FileResult, u32)> = results
-        .iter()
-        .enumerate()
-        .filter_map(|(idx, r)| nucleo.score(&r.name).map(|score| (idx, r, score)))
-        .collect();
-
-    // Sort by score descending (higher = better match)
-    scored.sort_by(|a, b| b.2.cmp(&a.2));
-
-    // Return without scores
-    scored.into_iter().map(|(idx, r, _)| (idx, r)).collect()
+    rank_file_results_nucleo(results, filter_pattern)
+        .into_iter()
+        .map(|(idx, _)| (idx, &results[idx]))
+        .collect()
 }
 
 #[cfg(test)]
@@ -1954,6 +2041,31 @@ mod tests {
     }
 
     #[test]
+    fn test_filter_results_nucleo_empty_pattern_uses_name_tiebreaker() {
+        let results = vec![
+            FileResult {
+                path: "/test/zeta.txt".to_string(),
+                name: "zeta.txt".to_string(),
+                size: 100,
+                modified: 0,
+                file_type: FileType::Document,
+            },
+            FileResult {
+                path: "/test/alpha.txt".to_string(),
+                name: "alpha.txt".to_string(),
+                size: 200,
+                modified: 0,
+                file_type: FileType::Document,
+            },
+        ];
+
+        let filtered = filter_results_nucleo_simple(&results, "");
+        assert_eq!(filtered.len(), 2);
+        assert_eq!(filtered[0].1.name, "alpha.txt");
+        assert_eq!(filtered[1].1.name, "zeta.txt");
+    }
+
+    #[test]
     fn test_filter_results_nucleo_exact_match() {
         let results = vec![
             FileResult {
@@ -2197,5 +2309,45 @@ mod tests {
         // The function expects trailing slash, but should handle edge cases gracefully
         assert_eq!(parent_dir_display("/foo/bar"), Some("/foo/".to_string()));
         assert_eq!(parent_dir_display("~/foo"), Some("~/".to_string()));
+    }
+
+    #[test]
+    fn test_terminal_working_directory_uses_directory_path_when_is_dir() {
+        let resolved = terminal_working_directory("/tmp/projects", true);
+        assert_eq!(resolved, "/tmp/projects");
+    }
+
+    #[test]
+    fn test_terminal_working_directory_uses_parent_for_file_paths() {
+        let resolved = terminal_working_directory("/tmp/projects/readme.md", false);
+        assert_eq!(resolved, "/tmp/projects");
+    }
+
+    #[test]
+    fn test_terminal_working_directory_falls_back_to_original_path_without_parent() {
+        let resolved = terminal_working_directory("readme.md", false);
+        assert_eq!(resolved, "readme.md");
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn test_open_in_terminal_returns_explicit_unsupported_error_on_non_macos() {
+        let error = open_in_terminal("/tmp/projects/readme.md", false).unwrap_err();
+        assert!(
+            error.contains("only supported on macOS"),
+            "error should explain platform limitation, got: {}",
+            error
+        );
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn test_move_to_trash_returns_explicit_unsupported_error_on_non_macos() {
+        let error = move_to_trash("/tmp/projects/readme.md").unwrap_err();
+        assert!(
+            error.contains("only supported on macOS"),
+            "error should explain platform limitation, got: {}",
+            error
+        );
     }
 }

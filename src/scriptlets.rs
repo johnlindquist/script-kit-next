@@ -18,6 +18,7 @@ use crate::metadata_parser::TypedMetadata;
 use crate::schema_parser::Schema;
 use crate::scriptlet_metadata::parse_codefence_metadata;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tracing::{debug, warn};
@@ -139,25 +140,25 @@ pub fn tool_type_to_icon(tool: &str) -> &'static str {
 /// 2. Bundle frontmatter default icon
 /// 3. Tool-type default icon
 #[allow(dead_code)] // Public API for future use
-pub fn resolve_scriptlet_icon(
-    metadata: &ScriptletMetadata,
-    frontmatter: Option<&BundleFrontmatter>,
+pub fn resolve_scriptlet_icon<'a>(
+    metadata: &'a ScriptletMetadata,
+    frontmatter: Option<&'a BundleFrontmatter>,
     tool: &str,
-) -> String {
+) -> Cow<'a, str> {
     // Check scriptlet metadata first (via extra field for now)
     if let Some(icon) = metadata.extra.get("icon") {
-        return icon.clone();
+        return Cow::Borrowed(icon.as_str());
     }
 
     // Check bundle frontmatter
     if let Some(fm) = frontmatter {
         if let Some(ref icon) = fm.icon {
-            return icon.clone();
+            return Cow::Borrowed(icon.as_str());
         }
     }
 
     // Fall back to tool default
-    tool_type_to_icon(tool).to_string()
+    Cow::Borrowed(tool_type_to_icon(tool))
 }
 
 // ============================================================================
@@ -411,9 +412,9 @@ fn extract_named_inputs(content: &str) -> Vec<String> {
                 && !trimmed.starts_with('#')
                 && !trimmed.starts_with('/')
                 && trimmed != "else"
-                && !inputs.contains(&trimmed.to_string())
+                && !inputs.iter().any(|existing| existing == trimmed)
             {
-                inputs.push(trimmed.to_string());
+                inputs.push(trimmed.to_owned());
             }
         }
     }
@@ -509,9 +510,11 @@ pub fn extract_code_block_nested(text: &str) -> Option<(String, String)> {
             }
         } else {
             // Check for closing fence (same type, same or more chars)
-            if is_matching_fence_end(trimmed, fence_type.unwrap(), fence_count) {
-                found = true;
-                break;
+            if let Some(current_fence_type) = fence_type {
+                if is_matching_fence_end(trimmed, current_fence_type, fence_count) {
+                    found = true;
+                    break;
+                }
             }
             code_lines.push(line);
         }
@@ -628,7 +631,14 @@ fn extract_h3_actions(section_text: &str) -> Vec<ScriptletAction> {
         // Once we've found and passed the main code, look for H3s
         if found_main_code && trimmed.starts_with("### ") {
             // Found an H3 - extract its content until the next H3 or end of section
-            let h3_name = trimmed.strip_prefix("### ").unwrap().trim().to_string();
+            let Some(h3_name) = trimmed
+                .strip_prefix("### ")
+                .map(str::trim)
+                .map(str::to_string)
+            else {
+                i += 1;
+                continue;
+            };
             if h3_name.is_empty() {
                 i += 1;
                 continue;
@@ -718,7 +728,14 @@ pub fn parse_actions_file(content: &str) -> Vec<ScriptletAction> {
 
         // Look for H3 headers - these are actions
         if trimmed.starts_with("### ") {
-            let h3_name = trimmed.strip_prefix("### ").unwrap().trim().to_string();
+            let Some(h3_name) = trimmed
+                .strip_prefix("### ")
+                .map(str::trim)
+                .map(str::to_string)
+            else {
+                i += 1;
+                continue;
+            };
             if h3_name.is_empty() {
                 i += 1;
                 continue;
@@ -760,9 +777,7 @@ pub fn parse_actions_file(content: &str) -> Vec<ScriptletAction> {
 /// For `foo.bar.md`, returns `foo.bar.actions.md`
 #[allow(dead_code)]
 pub fn get_actions_file_path(md_path: &std::path::Path) -> std::path::PathBuf {
-    let stem = md_path.file_stem().unwrap_or_default().to_string_lossy();
-    let parent = md_path.parent().unwrap_or(std::path::Path::new(""));
-    parent.join(format!("{}.actions.md", stem))
+    md_path.with_extension("actions.md")
 }
 
 /// Load shared actions from a companion `.actions.md` file if it exists
@@ -862,11 +877,10 @@ pub fn parse_markdown_as_scriptlets(content: &str, source_path: Option<&str>) ->
             let metadata = parse_html_comment_metadata(section_text);
 
             // Extract code block - prefer codefence result if available, else use legacy extraction
-            let code_block = if let Some(ref code_block) = codefence_result.code {
-                Some((code_block.language.clone(), code_block.content.clone()))
-            } else {
-                extract_code_block_nested(section_text)
-            };
+            let code_block = codefence_result
+                .code
+                .map(|code_block| (code_block.language, code_block.content))
+                .or_else(|| extract_code_block_nested(section_text));
 
             if let Some((tool_str, mut code)) = code_block {
                 // Prepend global code if exists and tool matches
@@ -972,11 +986,13 @@ fn split_by_headers(content: &str) -> Vec<MarkdownSection<'_>> {
                 fence_count = fence_info.1;
                 continue;
             }
-        } else if is_matching_fence_end(trimmed, fence_type.unwrap(), fence_count) {
-            in_fence = false;
-            fence_type = None;
-            fence_count = 0;
-            continue;
+        } else if let Some(current_fence_type) = fence_type {
+            if is_matching_fence_end(trimmed, current_fence_type, fence_count) {
+                in_fence = false;
+                fence_type = None;
+                fence_count = 0;
+                continue;
+            }
         }
 
         // Only split on headers outside of fences
@@ -1118,11 +1134,10 @@ fn parse_single_scriptlet(
     let metadata = parse_html_comment_metadata(section_text);
 
     // Extract code block - prefer codefence result if available
-    let code_block = if let Some(ref code_block) = codefence_result.code {
-        Some((code_block.language.clone(), code_block.content.clone()))
-    } else {
-        extract_code_block_nested(section_text)
-    };
+    let code_block = codefence_result
+        .code
+        .map(|code_block| (code_block.language, code_block.content))
+        .or_else(|| extract_code_block_nested(section_text));
 
     let (tool_str, mut code) = code_block.ok_or_else(|| {
         ScriptletValidationError::new(
@@ -1209,11 +1224,13 @@ fn split_by_headers_with_line_numbers(content: &str) -> Vec<MarkdownSectionWithL
                 fence_count = fence_info.1;
                 continue;
             }
-        } else if is_matching_fence_end(trimmed, fence_type.unwrap(), fence_count) {
-            in_fence = false;
-            fence_type = None;
-            fence_count = 0;
-            continue;
+        } else if let Some(current_fence_type) = fence_type {
+            if is_matching_fence_end(trimmed, current_fence_type, fence_count) {
+                in_fence = false;
+                fence_type = None;
+                fence_count = 0;
+                continue;
+            }
         }
 
         // Only split on headers outside of fences
@@ -1336,8 +1353,7 @@ fn process_conditionals_impl(content: &str, flags: &HashMap<String, bool>) -> St
             if let Some(end_tag) = find_closing_braces(content, i + 3) {
                 let directive = &content[i + 3..end_tag];
 
-                if directive.starts_with("if ") {
-                    let flag_name = directive.strip_prefix("if ").unwrap().trim();
+                if let Some(flag_name) = directive.strip_prefix("if ").map(str::trim) {
                     let remaining = &content[end_tag + 2..];
                     let (processed, consumed) = process_if_block(remaining, flag_name, flags);
                     result.push_str(&processed);
@@ -1349,8 +1365,12 @@ fn process_conditionals_impl(content: &str, flags: &HashMap<String, bool>) -> St
 
         // Not a conditional, just copy the character
         if i < content.len() {
-            result.push(content[i..].chars().next().unwrap());
-            i += content[i..].chars().next().unwrap().len_utf8();
+            if let Some(next_char) = content[i..].chars().next() {
+                result.push(next_char);
+                i += next_char.len_utf8();
+            } else {
+                break;
+            }
         } else {
             break;
         }
@@ -1429,7 +1449,11 @@ fn process_if_block(
                 let tag = format!("{{{{{}}}}}", inner_trimmed);
                 if in_else {
                     if current_else_if_flag.is_some() {
-                        else_if_chains.last_mut().unwrap().1.push_str(&tag);
+                        if let Some((_, chain_content)) = else_if_chains.last_mut() {
+                            chain_content.push_str(&tag);
+                        } else {
+                            else_content.push_str(&tag);
+                        }
                     } else {
                         else_content.push_str(&tag);
                     }
@@ -1445,7 +1469,11 @@ fn process_if_block(
                     let tag = "{{/if}}";
                     if in_else {
                         if current_else_if_flag.is_some() {
-                            else_if_chains.last_mut().unwrap().1.push_str(tag);
+                            if let Some((_, chain_content)) = else_if_chains.last_mut() {
+                                chain_content.push_str(tag);
+                            } else {
+                                else_content.push_str(tag);
+                            }
                         } else {
                             else_content.push_str(tag);
                         }
@@ -1457,11 +1485,13 @@ fn process_if_block(
                 in_else = true;
                 current_else_if_flag = None;
             } else if inner_trimmed.starts_with("else if ") && depth == 1 {
-                let else_if_flag = inner_trimmed
+                let Some(else_if_flag) = inner_trimmed
                     .strip_prefix("else if ")
-                    .unwrap()
-                    .trim()
-                    .to_string();
+                    .map(str::trim)
+                    .map(str::to_string)
+                else {
+                    continue;
+                };
                 in_else = true;
                 current_else_if_flag = Some(else_if_flag.clone());
                 else_if_chains.push((else_if_flag, String::new()));
@@ -1470,7 +1500,11 @@ fn process_if_block(
                 let tag = format!("{{{{{}}}}}", inner);
                 if in_else {
                     if current_else_if_flag.is_some() {
-                        else_if_chains.last_mut().unwrap().1.push_str(&tag);
+                        if let Some((_, chain_content)) = else_if_chains.last_mut() {
+                            chain_content.push_str(&tag);
+                        } else {
+                            else_content.push_str(&tag);
+                        }
                     } else {
                         else_content.push_str(&tag);
                     }
@@ -1480,7 +1514,11 @@ fn process_if_block(
             }
         } else if in_else {
             if current_else_if_flag.is_some() {
-                else_if_chains.last_mut().unwrap().1.push(c);
+                if let Some((_, chain_content)) = else_if_chains.last_mut() {
+                    chain_content.push(c);
+                } else {
+                    else_content.push(c);
+                }
             } else {
                 else_content.push(c);
             }

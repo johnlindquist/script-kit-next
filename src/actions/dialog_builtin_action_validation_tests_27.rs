@@ -27,7 +27,6 @@ use crate::clipboard_history::ContentType;
 use crate::designs::icon_variations::IconName;
 use crate::file_search::{FileInfo, FileType};
 use crate::prompts::PathInfo;
-use crate::scriptlets::{Scriptlet, ScriptletAction};
 
 // ─────────────────────────────────────────────
 // 1. Clipboard: frontmost_app_name dynamic paste title

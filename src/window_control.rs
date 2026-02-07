@@ -236,12 +236,17 @@ pub enum TilePosition {
 // Helper Functions
 // ============================================================================
 
-/// Create a CFString from a Rust string
-fn create_cf_string(s: &str) -> CFStringRef {
-    unsafe {
-        let c_str = std::ffi::CString::new(s).unwrap();
+/// Create a CFString from a Rust string.
+fn try_create_cf_string(s: &str) -> Result<CFStringRef> {
+    let c_str = std::ffi::CString::new(s)
+        .with_context(|| format!("CFString input contains interior NUL: {:?}", s))?;
+    let cf_string = unsafe {
         CFStringCreateWithCString(std::ptr::null(), c_str.as_ptr(), kCFStringEncodingUTF8)
+    };
+    if cf_string.is_null() {
+        bail!("CFStringCreateWithCString returned null for input: {:?}", s);
     }
+    Ok(cf_string)
 }
 
 /// Convert a CFString to a Rust String
@@ -295,7 +300,7 @@ fn cf_retain(cf: CFTypeRef) -> CFTypeRef {
 
 /// Get an attribute value from an AXUIElement
 fn get_ax_attribute(element: AXUIElementRef, attribute: &str) -> Result<CFTypeRef> {
-    let attr_str = create_cf_string(attribute);
+    let attr_str = try_create_cf_string(attribute)?;
     let mut value: CFTypeRef = std::ptr::null();
 
     let result =
@@ -313,7 +318,7 @@ fn get_ax_attribute(element: AXUIElementRef, attribute: &str) -> Result<CFTypeRe
 
 /// Set an attribute value on an AXUIElement
 fn set_ax_attribute(element: AXUIElementRef, attribute: &str, value: CFTypeRef) -> Result<()> {
-    let attr_str = create_cf_string(attribute);
+    let attr_str = try_create_cf_string(attribute)?;
 
     let result = unsafe { AXUIElementSetAttributeValue(element, attr_str, value) };
 
@@ -328,7 +333,7 @@ fn set_ax_attribute(element: AXUIElementRef, attribute: &str, value: CFTypeRef) 
 
 /// Perform an action on an AXUIElement
 fn perform_ax_action(element: AXUIElementRef, action: &str) -> Result<()> {
-    let action_str = create_cf_string(action);
+    let action_str = try_create_cf_string(action)?;
 
     let result = unsafe { AXUIElementPerformAction(element, action_str) };
 
@@ -458,6 +463,23 @@ use std::sync::{Mutex, OnceLock};
 /// Global window cache using OnceLock (std alternative to lazy_static)
 static WINDOW_CACHE: OnceLock<Mutex<HashMap<u32, usize>>> = OnceLock::new();
 
+/// An owned cached window reference retained while in use.
+struct OwnedCachedWindowRef {
+    window_ref: AXUIElementRef,
+}
+
+impl OwnedCachedWindowRef {
+    fn as_ptr(&self) -> AXUIElementRef {
+        self.window_ref
+    }
+}
+
+impl Drop for OwnedCachedWindowRef {
+    fn drop(&mut self) {
+        cf_release(self.window_ref as CFTypeRef);
+    }
+}
+
 /// Get or initialize the window cache
 fn get_cache() -> &'static Mutex<HashMap<u32, usize>> {
     WINDOW_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
@@ -465,15 +487,25 @@ fn get_cache() -> &'static Mutex<HashMap<u32, usize>> {
 
 fn cache_window(id: u32, window_ref: AXUIElementRef) {
     if let Ok(mut cache) = get_cache().lock() {
-        cache.insert(id, window_ref as usize);
+        if let Some(previous) = cache.insert(id, window_ref as usize) {
+            // The cache owns retained window references. Replacing an entry must
+            // release the previous retained pointer to avoid leaks.
+            cf_release(previous as CFTypeRef);
+        }
     }
 }
 
-fn get_cached_window(id: u32) -> Option<AXUIElementRef> {
-    get_cache()
-        .lock()
-        .ok()
-        .and_then(|cache| cache.get(&id).map(|&ptr| ptr as AXUIElementRef))
+fn get_cached_window(id: u32) -> Option<OwnedCachedWindowRef> {
+    let cache = get_cache().lock().ok()?;
+    let ptr = *cache.get(&id)?;
+    let retained = cf_retain(ptr as CFTypeRef) as AXUIElementRef;
+    if retained.is_null() {
+        None
+    } else {
+        Some(OwnedCachedWindowRef {
+            window_ref: retained,
+        })
+    }
 }
 
 fn clear_window_cache() {
@@ -858,7 +890,7 @@ pub fn move_window(window_id: u32, x: i32, y: i32) -> Result<()> {
         })
         .context("Window not found")?;
 
-    set_window_position(window, x, y)?;
+    set_window_position(window.as_ptr(), x, y)?;
     info!(window_id, x, y, "Moved window");
     Ok(())
 }
@@ -881,7 +913,7 @@ pub fn resize_window(window_id: u32, width: u32, height: u32) -> Result<()> {
         })
         .context("Window not found")?;
 
-    set_window_size(window, width, height)?;
+    set_window_size(window.as_ptr(), width, height)?;
     info!(window_id, width, height, "Resized window");
     Ok(())
 }
@@ -904,8 +936,8 @@ pub fn set_window_bounds(window_id: u32, bounds: Bounds) -> Result<()> {
         .context("Window not found")?;
 
     // Set position first, then size
-    set_window_position(window, bounds.x, bounds.y)?;
-    set_window_size(window, bounds.width, bounds.height)?;
+    set_window_position(window.as_ptr(), bounds.x, bounds.y)?;
+    set_window_size(window.as_ptr(), bounds.width, bounds.height)?;
 
     info!(
         window_id,
@@ -935,8 +967,7 @@ pub fn minimize_window(window_id: u32) -> Result<()> {
         .context("Window not found")?;
 
     // Use AXMinimized attribute to minimize
-    let true_value = create_cf_string("1");
-    let minimize_attr = create_cf_string("AXMinimized");
+    let minimize_attr = try_create_cf_string("AXMinimized")?;
 
     // AXMinimized expects a CFBoolean, so we need to use the attribute differently
     // Actually, we should perform the press action on the minimize button
@@ -949,10 +980,9 @@ pub fn minimize_window(window_id: u32) -> Result<()> {
             static kCFBooleanTrue: CFTypeRef;
         }
 
-        let result = AXUIElementSetAttributeValue(window, minimize_attr, kCFBooleanTrue);
+        let result = AXUIElementSetAttributeValue(window.as_ptr(), minimize_attr, kCFBooleanTrue);
 
         cf_release(minimize_attr);
-        cf_release(true_value);
 
         if result != kAXErrorSuccess {
             bail!("Failed to minimize window: error {}", result);
@@ -983,14 +1013,14 @@ pub fn maximize_window(window_id: u32) -> Result<()> {
         .context("Window not found")?;
 
     // Get current position to determine which display the window is on
-    let (current_x, current_y) = get_window_position(window).unwrap_or((0, 0));
+    let (current_x, current_y) = get_window_position(window.as_ptr()).unwrap_or((0, 0));
 
     // Get the display bounds (accounting for menu bar and dock)
     let display_bounds = get_visible_display_bounds(current_x, current_y);
 
     // Set the window to fill the visible area
-    set_window_position(window, display_bounds.x, display_bounds.y)?;
-    set_window_size(window, display_bounds.width, display_bounds.height)?;
+    set_window_position(window.as_ptr(), display_bounds.x, display_bounds.y)?;
+    set_window_size(window.as_ptr(), display_bounds.width, display_bounds.height)?;
 
     info!(window_id, "Maximized window");
     Ok(())
@@ -1015,15 +1045,15 @@ pub fn tile_window(window_id: u32, position: TilePosition) -> Result<()> {
         .context("Window not found")?;
 
     // Get current position to determine which display the window is on
-    let (current_x, current_y) = get_window_position(window).unwrap_or((0, 0));
+    let (current_x, current_y) = get_window_position(window.as_ptr()).unwrap_or((0, 0));
 
     // Get the visible display bounds (accounting for menu bar and dock)
     let display = get_visible_display_bounds(current_x, current_y);
 
     let bounds = calculate_tile_bounds(&display, position);
 
-    set_window_position(window, bounds.x, bounds.y)?;
-    set_window_size(window, bounds.width, bounds.height)?;
+    set_window_position(window.as_ptr(), bounds.x, bounds.y)?;
+    set_window_size(window.as_ptr(), bounds.width, bounds.height)?;
 
     info!(window_id, ?position, "Tiled window");
     Ok(())
@@ -1049,7 +1079,7 @@ pub fn close_window(window_id: u32) -> Result<()> {
         .context("Window not found")?;
 
     // Get the close button and press it
-    if let Ok(close_button) = get_ax_attribute(window, "AXCloseButton") {
+    if let Ok(close_button) = get_ax_attribute(window.as_ptr(), "AXCloseButton") {
         perform_ax_action(close_button as AXUIElementRef, "AXPress")?;
         cf_release(close_button);
     } else {
@@ -1077,7 +1107,7 @@ pub fn focus_window(window_id: u32) -> Result<()> {
         .context("Window not found")?;
 
     // Raise the window
-    perform_ax_action(window, "AXRaise")?;
+    perform_ax_action(window.as_ptr(), "AXRaise")?;
 
     // Also activate the owning application
     let pid = (window_id >> 16) as i32;
@@ -1127,8 +1157,8 @@ fn move_to_adjacent_display(window_id: u32, next: bool) -> Result<()> {
         })
         .context("Window not found")?;
 
-    let (current_x, current_y) = get_window_position(window).unwrap_or((0, 0));
-    let (current_width, current_height) = get_window_size(window).unwrap_or((800, 600));
+    let (current_x, current_y) = get_window_position(window.as_ptr()).unwrap_or((0, 0));
+    let (current_width, current_height) = get_window_size(window.as_ptr()).unwrap_or((800, 600));
 
     let displays = get_all_display_bounds()?;
     if displays.len() <= 1 {
@@ -1168,8 +1198,8 @@ fn move_to_adjacent_display(window_id: u32, next: bool) -> Result<()> {
     let new_width = (current_width as f64 * scale_x).min(target_display.width as f64) as u32;
     let new_height = (current_height as f64 * scale_y).min(target_display.height as f64) as u32;
 
-    set_window_position(window, new_x, new_y)?;
-    set_window_size(window, new_width, new_height)?;
+    set_window_position(window.as_ptr(), new_x, new_y)?;
+    set_window_size(window.as_ptr(), new_width, new_height)?;
 
     info!(
         window_id,
@@ -1536,6 +1566,16 @@ fn calculate_tile_bounds(display: &Bounds, position: TilePosition) -> Bounds {
 mod tests {
     use super::*;
 
+    #[cfg(target_os = "macos")]
+    fn cf_get_retain_count(cf: CFTypeRef) -> isize {
+        #[link(name = "CoreFoundation", kind = "framework")]
+        extern "C" {
+            fn CFGetRetainCount(cf: CFTypeRef) -> isize;
+        }
+
+        unsafe { CFGetRetainCount(cf) }
+    }
+
     #[test]
     fn test_bounds_new() {
         let bounds = Bounds::new(10, 20, 100, 200);
@@ -1590,6 +1630,75 @@ mod tests {
     fn test_tile_position_equality() {
         assert_eq!(TilePosition::LeftHalf, TilePosition::LeftHalf);
         assert_ne!(TilePosition::LeftHalf, TilePosition::RightHalf);
+    }
+
+    #[test]
+    fn test_try_create_cf_string_rejects_interior_nul() {
+        let error = try_create_cf_string("AX\0Title").expect_err("interior NUL should fail");
+        assert!(
+            error.to_string().contains("interior NUL"),
+            "error should describe invalid CFString input: {error}"
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_window_cache_releases_previous_pointer_on_overwrite() {
+        clear_window_cache();
+
+        let window_id = 0xCAFE_1000;
+        let first_window =
+            try_create_cf_string("window-cache-overwrite-first").expect("valid CFString literal");
+        let second_window =
+            try_create_cf_string("window-cache-overwrite-second").expect("valid CFString literal");
+
+        cache_window(window_id, cf_retain(first_window) as AXUIElementRef);
+        let first_after_insert = cf_get_retain_count(first_window);
+
+        cache_window(window_id, cf_retain(second_window) as AXUIElementRef);
+        let first_after_overwrite = cf_get_retain_count(first_window);
+
+        assert_eq!(
+            first_after_overwrite + 1,
+            first_after_insert,
+            "cache overwrite should release old retained window pointer"
+        );
+
+        clear_window_cache();
+        cf_release(first_window);
+        cf_release(second_window);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_window_cache_get_returns_owned_reference_and_releases_on_drop() {
+        clear_window_cache();
+
+        let window_id = 0xCAFE_2000;
+        let window =
+            try_create_cf_string("window-cache-owned-get").expect("valid CFString literal");
+        cache_window(window_id, cf_retain(window) as AXUIElementRef);
+
+        let before_get = cf_get_retain_count(window);
+        let owned = get_cached_window(window_id).expect("window should exist in cache");
+        assert_eq!(owned.as_ptr(), window as AXUIElementRef);
+
+        let during_get = cf_get_retain_count(window);
+        assert_eq!(
+            during_get,
+            before_get + 1,
+            "get_cached_window should retain before returning"
+        );
+
+        drop(owned);
+        let after_drop = cf_get_retain_count(window);
+        assert_eq!(
+            after_drop, before_get,
+            "dropping owned cached window should release retained reference"
+        );
+
+        clear_window_cache();
+        cf_release(window);
     }
 
     #[test]

@@ -17,7 +17,7 @@ use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, T
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::notes::code_highlight::{highlight_code_lines, CodeLine, CodeSpan};
 use crate::theme::PromptColors;
@@ -39,7 +39,7 @@ struct InlineSpan {
     link_url: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct ListState {
     ordered: bool,
     start: usize,
@@ -61,6 +61,12 @@ struct CodeBlockState {
     code: String,
 }
 
+#[derive(Debug)]
+struct ImageState {
+    url: String,
+    alt_text: String,
+}
+
 // ---------------------------------------------------------------------------
 // Cached intermediate representation
 // ---------------------------------------------------------------------------
@@ -71,6 +77,7 @@ struct ListItem {
     spans: Vec<InlineSpan>,
     /// `Some(true)` = checked `[x]`, `Some(false)` = unchecked `[ ]`, `None` = regular item
     checked: Option<bool>,
+    nested_lists: Vec<ListState>,
 }
 
 /// Cached intermediate representation of a parsed markdown block.
@@ -96,7 +103,7 @@ enum ParsedBlock {
         lang_label: String,
         lines: Vec<CodeLine>,
         /// Raw code text for copy-to-clipboard functionality
-        raw_code: String,
+        raw_code: Arc<str>,
         quote_depth: usize,
     },
     Table {
@@ -109,13 +116,68 @@ enum ParsedBlock {
     },
 }
 
-static MARKDOWN_CACHE: OnceLock<Mutex<HashMap<u64, Vec<ParsedBlock>>>> = OnceLock::new();
+static MARKDOWN_CACHE: OnceLock<Mutex<HashMap<u64, Arc<Vec<ParsedBlock>>>>> = OnceLock::new();
+static MARKDOWN_VOLATILE_SCOPE_COUNTER: AtomicU64 = AtomicU64::new(1);
+const INFERRED_SCOPE_PREFIX_CHARS: usize = 256;
 
 fn markdown_cache_key(text: &str, is_dark: bool) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     text.hash(&mut hasher);
     is_dark.hash(&mut hasher);
     hasher.finish()
+}
+
+fn stable_markdown_scope_hash(scope: Option<&str>) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    match scope {
+        Some(scope) => {
+            "scoped".hash(&mut hasher);
+            scope.hash(&mut hasher);
+        }
+        None => {
+            // Unscoped renders need unique IDs to avoid collisions when the same
+            // markdown appears in multiple places at once. These IDs are stable
+            // only within a single render pass.
+            let nonce = MARKDOWN_VOLATILE_SCOPE_COUNTER.fetch_add(1, Ordering::Relaxed);
+            "volatile".hash(&mut hasher);
+            nonce.hash(&mut hasher);
+        }
+    }
+    hasher.finish()
+}
+
+fn scoped_markdown_element_id(
+    scope_hash: u64,
+    kind: &str,
+    primary_index: usize,
+    secondary_index: usize,
+) -> SharedString {
+    SharedString::from(format!(
+        "md-{scope_hash:016x}-{kind}-{primary_index}-{secondary_index}"
+    ))
+}
+
+fn scoped_markdown_numeric_key(
+    scope_hash: u64,
+    kind: &str,
+    primary_index: usize,
+    secondary_index: usize,
+) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    scope_hash.hash(&mut hasher);
+    kind.hash(&mut hasher);
+    primary_index.hash(&mut hasher);
+    secondary_index.hash(&mut hasher);
+    hasher.finish()
+}
+
+fn inferred_markdown_scope_hash(text: &str) -> u64 {
+    let prefix_end = text
+        .char_indices()
+        .nth(INFERRED_SCOPE_PREFIX_CHARS)
+        .map(|(idx, _)| idx)
+        .unwrap_or(text.len());
+    stable_markdown_scope_hash(Some(&text[..prefix_end]))
 }
 
 // ---------------------------------------------------------------------------
@@ -127,7 +189,6 @@ fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
     options.insert(Options::ENABLE_STRIKETHROUGH);
     options.insert(Options::ENABLE_TABLES);
     options.insert(Options::ENABLE_TASKLISTS);
-    options.insert(Options::ENABLE_FOOTNOTES);
     options.insert(Options::ENABLE_SMART_PUNCTUATION);
 
     let parser = Parser::new_ext(text, options);
@@ -136,11 +197,11 @@ fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
     let mut spans: Vec<InlineSpan> = Vec::new();
     let mut style_stack: Vec<InlineStyle> = vec![InlineStyle::default()];
     let mut heading_level: Option<u32> = None;
-    let mut list_state: Option<ListState> = None;
-    let mut current_item: Option<Vec<InlineSpan>> = None;
-    let mut current_item_checked: Option<bool> = None;
+    let mut list_stack: Vec<ListState> = Vec::new();
+    let mut list_item_stack: Vec<ListItem> = Vec::new();
     let mut quote_depth: usize = 0;
     let mut code_block: Option<CodeBlockState> = None;
+    let mut image_state: Option<ImageState> = None;
     let mut current_link_url: Option<String> = None;
     let mut table_state: Option<TableState> = None;
     let mut in_table_cell: bool = false;
@@ -154,15 +215,18 @@ fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
                     spans.clear();
                 }
                 Tag::List(start) => {
-                    list_state = Some(ListState {
+                    list_stack.push(ListState {
                         ordered: start.is_some(),
                         start: start.unwrap_or(1) as usize,
                         items: Vec::new(),
                     });
                 }
                 Tag::Item => {
-                    current_item = Some(Vec::new());
-                    current_item_checked = None;
+                    list_item_stack.push(ListItem {
+                        spans: Vec::new(),
+                        checked: None,
+                        nested_lists: Vec::new(),
+                    });
                     spans.clear();
                 }
                 Tag::BlockQuote(_) => {
@@ -173,6 +237,12 @@ fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
                 Tag::Link { dest_url, .. } => {
                     push_style(&mut style_stack, |style| style.link = true);
                     current_link_url = Some(dest_url.to_string());
+                }
+                Tag::Image { dest_url, .. } => {
+                    image_state = Some(ImageState {
+                        url: dest_url.to_string(),
+                        alt_text: String::new(),
+                    });
                 }
                 Tag::Strikethrough => {
                     push_style(&mut style_stack, |style| style.strikethrough = true)
@@ -211,8 +281,8 @@ fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
             Event::End(tag) => match tag {
                 TagEnd::Paragraph => {
                     if !spans.is_empty() {
-                        if let Some(item_spans) = current_item.as_mut() {
-                            item_spans.append(&mut spans);
+                        if let Some(item) = list_item_stack.last_mut() {
+                            item.spans.append(&mut spans);
                         } else {
                             blocks.push(ParsedBlock::Paragraph {
                                 spans: spans.clone(),
@@ -234,27 +304,29 @@ fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
                     }
                 }
                 TagEnd::Item => {
-                    if let Some(mut item_spans) = current_item.take() {
-                        if !spans.is_empty() {
-                            item_spans.append(&mut spans);
-                        }
-                        if let Some(list) = list_state.as_mut() {
-                            list.items.push(ListItem {
-                                spans: item_spans,
-                                checked: current_item_checked.take(),
-                            });
+                    if !spans.is_empty() {
+                        if let Some(item) = list_item_stack.last_mut() {
+                            item.spans.append(&mut spans);
                         }
                     }
-                    current_item_checked = None;
+                    if let Some(item) = list_item_stack.pop() {
+                        if let Some(list) = list_stack.last_mut() {
+                            list.items.push(item);
+                        }
+                    }
                 }
                 TagEnd::List(_) => {
-                    if let Some(list) = list_state.take() {
-                        blocks.push(ParsedBlock::ListBlock {
-                            ordered: list.ordered,
-                            start: list.start,
-                            items: list.items,
-                            quote_depth,
-                        });
+                    if let Some(list) = list_stack.pop() {
+                        if let Some(parent_item) = list_item_stack.last_mut() {
+                            parent_item.nested_lists.push(list);
+                        } else {
+                            blocks.push(ParsedBlock::ListBlock {
+                                ordered: list.ordered,
+                                start: list.start,
+                                items: list.items,
+                                quote_depth,
+                            });
+                        }
                     }
                 }
                 TagEnd::BlockQuote(_) => {
@@ -264,15 +336,28 @@ fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
                     pop_style(&mut style_stack);
                     current_link_url = None;
                 }
+                TagEnd::Image => {
+                    if let Some(image) = image_state.take() {
+                        let alt_text = image.alt_text.trim();
+                        let label = if alt_text.is_empty() {
+                            "[Image]".to_string()
+                        } else {
+                            format!("[Image: {}]", alt_text)
+                        };
+                        let mut style = *style_stack.last().unwrap_or(&InlineStyle::default());
+                        style.link = true;
+                        push_text_span(&mut spans, &label, style, Some(image.url.as_str()));
+                    }
+                }
                 TagEnd::Emphasis | TagEnd::Strong | TagEnd::Strikethrough => {
                     pop_style(&mut style_stack);
                 }
                 TagEnd::CodeBlock => {
                     if let Some(block) = code_block.take() {
                         let lang_label = block.language.as_deref().unwrap_or("").trim().to_string();
-                        let raw_code = block.code.clone();
                         let lines =
                             highlight_code_lines(&block.code, block.language.as_deref(), is_dark);
+                        let raw_code: Arc<str> = Arc::from(block.code);
                         blocks.push(ParsedBlock::CodeBlock {
                             lang_label,
                             lines,
@@ -317,29 +402,53 @@ fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
             Event::Text(text) => {
                 if let Some(block) = code_block.as_mut() {
                     block.code.push_str(&text);
+                } else if let Some(image) = image_state.as_mut() {
+                    image.alt_text.push_str(&text);
                 } else {
                     let style = *style_stack.last().unwrap_or(&InlineStyle::default());
                     push_text_span(&mut spans, &text, style, current_link_url.as_deref());
                 }
             }
             Event::Code(code) => {
-                let mut style = *style_stack.last().unwrap_or(&InlineStyle::default());
-                style.code = true;
-                push_text_span(&mut spans, &code, style, current_link_url.as_deref());
+                if let Some(image) = image_state.as_mut() {
+                    image.alt_text.push_str(&code);
+                } else {
+                    let mut style = *style_stack.last().unwrap_or(&InlineStyle::default());
+                    style.code = true;
+                    push_text_span(&mut spans, &code, style, current_link_url.as_deref());
+                }
             }
-            Event::SoftBreak | Event::HardBreak => {
-                let style = *style_stack.last().unwrap_or(&InlineStyle::default());
-                push_text_span(&mut spans, " ", style, current_link_url.as_deref());
+            Event::SoftBreak => {
+                if let Some(image) = image_state.as_mut() {
+                    image.alt_text.push(' ');
+                } else {
+                    let style = *style_stack.last().unwrap_or(&InlineStyle::default());
+                    push_text_span(&mut spans, " ", style, current_link_url.as_deref());
+                }
+            }
+            Event::HardBreak => {
+                if let Some(image) = image_state.as_mut() {
+                    image.alt_text.push('\n');
+                } else {
+                    let style = *style_stack.last().unwrap_or(&InlineStyle::default());
+                    push_text_span(&mut spans, "\n", style, current_link_url.as_deref());
+                }
             }
             Event::Rule => {
                 blocks.push(ParsedBlock::HorizontalRule { quote_depth });
             }
             Event::Html(html) => {
-                let style = *style_stack.last().unwrap_or(&InlineStyle::default());
-                push_text_span(&mut spans, &html, style, current_link_url.as_deref());
+                if let Some(image) = image_state.as_mut() {
+                    image.alt_text.push_str(&html);
+                } else {
+                    let style = *style_stack.last().unwrap_or(&InlineStyle::default());
+                    push_text_span(&mut spans, &html, style, current_link_url.as_deref());
+                }
             }
             Event::TaskListMarker(checked) => {
-                current_item_checked = Some(checked);
+                if let Some(item) = list_item_stack.last_mut() {
+                    item.checked = Some(checked);
+                }
             }
             _ => {}
         }
@@ -355,15 +464,30 @@ fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
 // Phase 2: Vec<ParsedBlock> → GPUI elements  (every frame, cheap)
 // ---------------------------------------------------------------------------
 
-fn build_markdown_elements(blocks: &[ParsedBlock], colors: &PromptColors) -> Vec<AnyElement> {
+fn build_markdown_elements(
+    blocks: &[ParsedBlock],
+    colors: &PromptColors,
+    render_scope_hash: u64,
+) -> Vec<AnyElement> {
     let mut elements: Vec<AnyElement> = Vec::new();
+    let mut block_index: usize = 0;
 
     for block in blocks {
         match block {
             ParsedBlock::Paragraph { spans, quote_depth } => {
                 if !spans.is_empty() {
-                    let element = render_inline_spans(spans, colors).w_full();
-                    push_block(&mut elements, element, *quote_depth, colors);
+                    let current_block = next_markdown_block_index(&mut block_index);
+                    let element =
+                        render_inline_spans(spans, colors, render_scope_hash, current_block, 0)
+                            .w_full();
+                    push_scoped_block(
+                        &mut elements,
+                        element,
+                        *quote_depth,
+                        colors,
+                        render_scope_hash,
+                        current_block,
+                    );
                 }
             }
             ParsedBlock::Heading {
@@ -372,16 +496,25 @@ fn build_markdown_elements(blocks: &[ParsedBlock], colors: &PromptColors) -> Vec
                 quote_depth,
             } => {
                 if !spans.is_empty() {
-                    let mut heading = render_inline_spans(spans, colors)
-                        .w_full()
-                        .text_color(rgb(colors.text_primary));
+                    let current_block = next_markdown_block_index(&mut block_index);
+                    let mut heading =
+                        render_inline_spans(spans, colors, render_scope_hash, current_block, 0)
+                            .w_full()
+                            .text_color(rgb(colors.text_primary));
                     heading = match level {
                         1 => heading.text_lg().font_weight(FontWeight::BOLD),
                         2 => heading.text_base().font_weight(FontWeight::SEMIBOLD),
                         3 => heading.text_sm().font_weight(FontWeight::SEMIBOLD),
                         _ => heading.text_sm().font_weight(FontWeight::MEDIUM),
                     };
-                    push_block(&mut elements, heading, *quote_depth, colors);
+                    push_scoped_block(
+                        &mut elements,
+                        heading,
+                        *quote_depth,
+                        colors,
+                        render_scope_hash,
+                        current_block,
+                    );
                 }
             }
             ParsedBlock::ListBlock {
@@ -390,51 +523,17 @@ fn build_markdown_elements(blocks: &[ParsedBlock], colors: &PromptColors) -> Vec
                 items,
                 quote_depth,
             } => {
-                for (index, item) in items.iter().enumerate() {
-                    // Task list checkbox or regular marker
-                    let marker_element: AnyElement = if let Some(checked) = item.checked {
-                        // Task list: render a checkbox indicator
-                        let (symbol, color) = if checked {
-                            ("\u{2611}", rgb(colors.accent_color)) // ☑ checked
-                        } else {
-                            ("\u{2610}", rgb(colors.text_tertiary)) // ☐ unchecked
-                        };
-                        div()
-                            .flex_shrink_0()
-                            .text_color(color)
-                            .child(symbol.to_string())
-                            .into_any_element()
-                    } else {
-                        let marker = if *ordered {
-                            format!("{}.", start + index)
-                        } else {
-                            "\u{2022}".to_string()
-                        };
-                        div()
-                            .flex_shrink_0()
-                            .text_color(rgb(colors.text_tertiary))
-                            .child(marker)
-                            .into_any_element()
-                    };
-                    // Checked items get muted text color (strikethrough style)
-                    let content = render_inline_spans(&item.spans, colors).min_w_0().flex_1();
-                    let content = if item.checked == Some(true) {
-                        content
-                            .text_color(rgb(colors.text_tertiary))
-                            .into_any_element()
-                    } else {
-                        content.into_any_element()
-                    };
-                    let row = div()
-                        .flex()
-                        .flex_row()
-                        .w_full()
-                        .gap(px(6.0))
-                        .text_sm()
-                        .child(marker_element)
-                        .child(content);
-                    push_block(&mut elements, row, *quote_depth, colors);
-                }
+                append_list_items(
+                    &mut elements,
+                    *ordered,
+                    *start,
+                    items,
+                    *quote_depth,
+                    colors,
+                    0,
+                    render_scope_hash,
+                    &mut block_index,
+                );
             }
             ParsedBlock::CodeBlock {
                 lang_label,
@@ -442,19 +541,51 @@ fn build_markdown_elements(blocks: &[ParsedBlock], colors: &PromptColors) -> Vec
                 raw_code,
                 quote_depth,
             } => {
-                let element = build_code_block_element(lang_label, lines, raw_code, colors);
-                push_block(&mut elements, element, *quote_depth, colors);
+                let current_block = next_markdown_block_index(&mut block_index);
+                let element = build_code_block_element(
+                    lang_label,
+                    lines,
+                    raw_code,
+                    colors,
+                    scoped_markdown_element_id(render_scope_hash, "code", current_block, 0),
+                    scoped_markdown_numeric_key(render_scope_hash, "code-copy", current_block, 0),
+                );
+                push_scoped_block(
+                    &mut elements,
+                    element,
+                    *quote_depth,
+                    colors,
+                    render_scope_hash,
+                    current_block,
+                );
             }
             ParsedBlock::Table {
                 headers,
                 rows,
                 quote_depth,
             } => {
-                let element = build_table_element(headers, rows, colors);
-                push_block(&mut elements, element, *quote_depth, colors);
+                let current_block = next_markdown_block_index(&mut block_index);
+                let element =
+                    build_table_element(headers, rows, colors, render_scope_hash, current_block);
+                push_scoped_block(
+                    &mut elements,
+                    element,
+                    *quote_depth,
+                    colors,
+                    render_scope_hash,
+                    current_block,
+                );
             }
             ParsedBlock::HorizontalRule { quote_depth } => {
-                push_block(&mut elements, render_hr(colors), *quote_depth, colors);
+                let current_block = next_markdown_block_index(&mut block_index);
+                push_scoped_block(
+                    &mut elements,
+                    render_hr(colors),
+                    *quote_depth,
+                    colors,
+                    render_scope_hash,
+                    current_block,
+                );
             }
         }
     }
@@ -462,8 +593,89 @@ fn build_markdown_elements(blocks: &[ParsedBlock], colors: &PromptColors) -> Vec
     elements
 }
 
-/// Global counter for generating unique code block IDs
-static CODE_BLOCK_COUNTER: AtomicU64 = AtomicU64::new(0);
+fn append_list_items(
+    elements: &mut Vec<AnyElement>,
+    ordered: bool,
+    start: usize,
+    items: &[ListItem],
+    quote_depth: usize,
+    colors: &PromptColors,
+    depth: usize,
+    render_scope_hash: u64,
+    block_index: &mut usize,
+) {
+    for (index, item) in items.iter().enumerate() {
+        let current_block = next_markdown_block_index(block_index);
+
+        // Task list checkbox or regular marker
+        let marker_element: AnyElement = if let Some(checked) = item.checked {
+            let (symbol, color) = if checked {
+                ("\u{2611}", rgb(colors.accent_color)) // ☑ checked
+            } else {
+                ("\u{2610}", rgb(colors.text_tertiary)) // ☐ unchecked
+            };
+            div()
+                .flex_shrink_0()
+                .text_color(color)
+                .child(symbol.to_string())
+                .into_any_element()
+        } else {
+            let marker = list_marker(ordered, start, index);
+            div()
+                .flex_shrink_0()
+                .text_color(rgb(colors.text_tertiary))
+                .child(marker)
+                .into_any_element()
+        };
+
+        // Checked items get muted text color (strikethrough style)
+        let content =
+            render_inline_spans(&item.spans, colors, render_scope_hash, current_block, depth)
+                .min_w_0()
+                .flex_1();
+        let content = if item.checked == Some(true) {
+            content
+                .text_color(rgb(colors.text_tertiary))
+                .into_any_element()
+        } else {
+            content.into_any_element()
+        };
+
+        let mut row = div()
+            .flex()
+            .flex_row()
+            .w_full()
+            .gap(px(6.0))
+            .text_sm()
+            .child(marker_element)
+            .child(content);
+        if depth > 0 {
+            row = row.pl(px(depth as f32 * 14.0));
+        }
+        push_scoped_block(
+            elements,
+            row,
+            quote_depth,
+            colors,
+            render_scope_hash,
+            current_block,
+        );
+
+        for nested_list in &item.nested_lists {
+            append_list_items(
+                elements,
+                nested_list.ordered,
+                nested_list.start,
+                &nested_list.items,
+                quote_depth,
+                colors,
+                depth + 1,
+                render_scope_hash,
+                block_index,
+            );
+        }
+    }
+}
 
 /// Tracks the last-copied code block ID and the instant it was copied.
 /// Used to show brief "Copied!" feedback on the copy button.
@@ -490,18 +702,19 @@ fn is_code_block_recently_copied(block_id: u64) -> bool {
 fn build_code_block_element(
     lang_label: &str,
     lines: &[CodeLine],
-    raw_code: &str,
+    raw_code: &Arc<str>,
     colors: &PromptColors,
+    code_block_element_id: SharedString,
+    copy_state_id: u64,
 ) -> gpui::Stateful<gpui::Div> {
-    let block_id = CODE_BLOCK_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let group_name: SharedString = format!("code-block-{}", block_id).into();
+    let group_name: SharedString = format!("code-block-{}", copy_state_id).into();
 
-    let code_for_copy = raw_code.to_string();
+    let code_for_copy = raw_code.clone();
     let header_border_color = rgba((colors.quote_border << 8) | 0x30);
     let text_tertiary = colors.text_tertiary;
 
     let mut code_container = div()
-        .id(SharedString::from(format!("codeblock-{}", block_id)))
+        .id(code_block_element_id)
         .group(group_name.clone())
         .w_full()
         .mt(px(4.0))
@@ -544,11 +757,11 @@ fn build_code_block_element(
                 })
                 // Copy button - visible on hover, shows "Copied!" feedback
                 .child({
-                    let is_just_copied = is_code_block_recently_copied(block_id);
-                    let copy_block_id = block_id;
+                    let is_just_copied = is_code_block_recently_copied(copy_state_id);
+                    let copy_block_id = copy_state_id;
                     let hover_bg = rgba((colors.quote_border << 8) | 0x30);
                     div()
-                        .id(SharedString::from(format!("copy-code-{}", block_id)))
+                        .id(SharedString::from(format!("copy-code-{}", copy_state_id)))
                         .flex()
                         .items_center()
                         .gap(px(3.))
@@ -561,7 +774,9 @@ fn build_code_block_element(
                         })
                         .hover(|s| s.bg(hover_bg))
                         .on_click(move |_event, _window, cx| {
-                            cx.write_to_clipboard(ClipboardItem::new_string(code_for_copy.clone()));
+                            cx.write_to_clipboard(ClipboardItem::new_string(
+                                code_for_copy.to_string(),
+                            ));
                             mark_code_block_copied(copy_block_id);
                         })
                         .child(if is_just_copied {
@@ -625,6 +840,8 @@ fn build_table_element(
     headers: &[Vec<InlineSpan>],
     rows: &[Vec<Vec<InlineSpan>>],
     colors: &PromptColors,
+    render_scope_hash: u64,
+    block_index: usize,
 ) -> gpui::Div {
     let border_color = rgba((colors.quote_border << 8) | 0x40);
     let header_bg = rgba((colors.code_bg << 8) | 0xC0);
@@ -650,7 +867,7 @@ fn build_table_element(
             .bg(header_bg)
             .border_b_1()
             .border_color(border_color);
-        for cell_spans in headers {
+        for (cell_index, cell_spans) in headers.iter().enumerate() {
             header_row = header_row.child(
                 div()
                     .flex_1()
@@ -660,7 +877,13 @@ fn build_table_element(
                     .text_xs()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(rgb(colors.text_primary))
-                    .child(render_inline_spans(cell_spans, colors)),
+                    .child(render_inline_spans(
+                        cell_spans,
+                        colors,
+                        render_scope_hash,
+                        block_index,
+                        cell_index,
+                    )),
             );
         }
         table = table.child(header_row);
@@ -677,7 +900,7 @@ fn build_table_element(
         if !is_last {
             row_div = row_div.border_b_1().border_color(border_color);
         }
-        for cell_spans in row {
+        for (cell_index, cell_spans) in row.iter().enumerate() {
             row_div = row_div.child(
                 div()
                     .flex_1()
@@ -686,7 +909,13 @@ fn build_table_element(
                     .py(px(5.0))
                     .text_xs()
                     .text_color(rgb(colors.text_primary))
-                    .child(render_inline_spans(cell_spans, colors)),
+                    .child(render_inline_spans(
+                        cell_spans,
+                        colors,
+                        render_scope_hash,
+                        block_index,
+                        headers.len() + (row_idx * 16) + cell_index,
+                    )),
             );
         }
         table = table.child(row_div);
@@ -703,10 +932,26 @@ fn build_table_element(
 ///
 /// Uses a global cache to avoid re-parsing markdown and re-highlighting code
 /// on every render frame. The cache is keyed on (content hash, dark-mode flag).
-pub fn render_markdown(text: &str, colors: &PromptColors) -> impl IntoElement {
+pub fn render_markdown(text: &str, colors: &PromptColors) -> gpui::Div {
+    render_markdown_with_scope(text, colors, None)
+}
+
+/// Render markdown with a stable scope identifier.
+///
+/// When `scope` is stable across updates (for example: assistant message ID while
+/// streaming), interactive element IDs remain stable too, allowing GPUI to reuse
+/// unchanged subtrees instead of replacing the entire markdown tree every tick.
+pub fn render_markdown_with_scope(
+    text: &str,
+    colors: &PromptColors,
+    scope: Option<&str>,
+) -> gpui::Div {
     // Check cache for parsed blocks
     let key = markdown_cache_key(text, colors.is_dark);
     let cache = MARKDOWN_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let render_scope_hash = scope
+        .map(|s| stable_markdown_scope_hash(Some(s)))
+        .unwrap_or_else(|| inferred_markdown_scope_hash(text));
 
     let parsed_blocks = if let Ok(guard) = cache.lock() {
         guard.get(&key).cloned()
@@ -715,7 +960,7 @@ pub fn render_markdown(text: &str, colors: &PromptColors) -> impl IntoElement {
     };
 
     let parsed_blocks = parsed_blocks.unwrap_or_else(|| {
-        let blocks = parse_markdown(text, colors.is_dark);
+        let blocks = Arc::new(parse_markdown(text, colors.is_dark));
         if let Ok(mut guard) = cache.lock() {
             // Cap cache size to prevent unbounded growth.
             // Use a high limit to avoid full-cache clears during streaming,
@@ -728,7 +973,7 @@ pub fn render_markdown(text: &str, colors: &PromptColors) -> impl IntoElement {
         blocks
     });
 
-    let elements = build_markdown_elements(&parsed_blocks, colors);
+    let elements = build_markdown_elements(parsed_blocks.as_slice(), colors, render_scope_hash);
 
     div()
         .flex()
@@ -768,6 +1013,32 @@ fn code_block_language(kind: &CodeBlockKind) -> Option<String> {
     }
 }
 
+fn list_marker(ordered: bool, start: usize, index: usize) -> String {
+    if ordered {
+        format!("{}.", start + index)
+    } else {
+        "\u{2022}".to_string()
+    }
+}
+
+fn is_allowed_markdown_url(url: &str) -> bool {
+    let trimmed = url.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+
+    let lowercase = trimmed.to_ascii_lowercase();
+    if lowercase.starts_with("http://")
+        || lowercase.starts_with("https://")
+        || lowercase.starts_with("mailto:")
+    {
+        return true;
+    }
+
+    // Relative links and bare hosts (without scheme) are allowed.
+    !trimmed.contains(':')
+}
+
 fn push_style(stack: &mut Vec<InlineStyle>, update: impl FnOnce(&mut InlineStyle)) {
     let mut next = *stack.last().unwrap_or(&InlineStyle::default());
     update(&mut next);
@@ -802,12 +1073,17 @@ fn push_text_span(
     });
 }
 
-fn push_block(
-    blocks: &mut Vec<AnyElement>,
+fn next_markdown_block_index(block_index: &mut usize) -> usize {
+    let current = *block_index;
+    *block_index += 1;
+    current
+}
+
+fn into_quoted_block(
     element: impl IntoElement,
     quote_depth: usize,
     colors: &PromptColors,
-) {
+) -> AnyElement {
     let mut element = element.into_any_element();
     if quote_depth > 0 {
         element = div()
@@ -821,7 +1097,30 @@ fn push_block(
             .child(element)
             .into_any_element();
     }
-    blocks.push(element);
+    element
+}
+
+fn push_scoped_block(
+    blocks: &mut Vec<AnyElement>,
+    element: impl IntoElement,
+    quote_depth: usize,
+    colors: &PromptColors,
+    render_scope_hash: u64,
+    block_index: usize,
+) {
+    let quoted = into_quoted_block(element, quote_depth, colors);
+    blocks.push(
+        div()
+            .id(scoped_markdown_element_id(
+                render_scope_hash,
+                "block",
+                block_index,
+                0,
+            ))
+            .w_full()
+            .child(quoted)
+            .into_any_element(),
+    );
 }
 
 /// Counter for generating unique link element IDs (needed for on_click handlers).
@@ -832,6 +1131,7 @@ fn style_span(
     style: &InlineStyle,
     colors: &PromptColors,
     link_url: Option<&str>,
+    link_element_id: Option<SharedString>,
 ) -> AnyElement {
     if style.code {
         return div()
@@ -848,19 +1148,34 @@ fn style_span(
     // Clickable link with URL — needs .id() for interactivity
     if style.link {
         if let Some(url) = link_url {
-            let link_id = NEXT_LINK_ID.fetch_add(1, Ordering::Relaxed);
+            let fallback_id = NEXT_LINK_ID.fetch_add(1, Ordering::Relaxed);
+            let id = link_element_id
+                .unwrap_or_else(|| SharedString::from(format!("md-link-{fallback_id}")));
             let url_owned = url.to_string();
             let accent = rgb(colors.accent_color);
+            if is_allowed_markdown_url(url) {
+                return div()
+                    .id(id.clone())
+                    .text_color(accent)
+                    .border_b_1()
+                    .border_color(rgba((colors.accent_color << 8) | 0x40))
+                    .cursor_pointer()
+                    .hover(|s| s.opacity(0.7))
+                    .on_click(move |_, _window, _cx| {
+                        let _ = open::that(&url_owned);
+                    })
+                    .when(style.bold, |d| d.font_weight(FontWeight::BOLD))
+                    .when(style.italic, |d| d.italic())
+                    .child(text.to_string())
+                    .into_any_element();
+            }
+
             return div()
-                .id(SharedString::from(format!("md-link-{}", link_id)))
+                .id(id)
                 .text_color(accent)
                 .border_b_1()
                 .border_color(rgba((colors.accent_color << 8) | 0x40))
-                .cursor_pointer()
-                .hover(|s| s.opacity(0.7))
-                .on_click(move |_, _window, _cx| {
-                    let _ = open::that(&url_owned);
-                })
+                .opacity(0.7)
                 .when(style.bold, |d| d.font_weight(FontWeight::BOLD))
                 .when(style.italic, |d| d.italic())
                 .child(text.to_string())
@@ -895,7 +1210,13 @@ fn style_span(
     piece.into_any_element()
 }
 
-fn render_inline_spans(spans: &[InlineSpan], colors: &PromptColors) -> gpui::Div {
+fn render_inline_spans(
+    spans: &[InlineSpan],
+    colors: &PromptColors,
+    render_scope_hash: u64,
+    block_index: usize,
+    span_group_index: usize,
+) -> gpui::Div {
     // Fast path: single plain-text span — render as simple text child.
     // Avoids flex_wrap entirely so text wraps naturally at word boundaries.
     if spans.len() == 1 && spans[0].style == InlineStyle::default() && spans[0].link_url.is_none() {
@@ -910,20 +1231,42 @@ fn render_inline_spans(spans: &[InlineSpan], colors: &PromptColors) -> gpui::Div
     // instead of character boundaries (which happens when a long text span has
     // min_w_0 allowing it to shrink to width 0).
     let mut row = div().flex().flex_row().flex_wrap().min_w_0().text_sm();
+    let link_kind = format!("link-{}", span_group_index);
+    let mut link_index: usize = 0;
 
     for span in spans {
         let url = span.link_url.as_deref();
         if span.style.code {
             // Code spans stay as single units (they have bg/padding)
-            row = row.child(style_span(&span.text, &span.style, colors, url));
+            row = row.child(style_span(&span.text, &span.style, colors, url, None));
         } else if span.style.link && url.is_some() {
             // Link spans: keep as a single unit so the underline is continuous
-            row = row.child(style_span(&span.text, &span.style, colors, url));
+            let current_link = link_index;
+            link_index += 1;
+            row = row.child(style_span(
+                &span.text,
+                &span.style,
+                colors,
+                url,
+                Some(scoped_markdown_element_id(
+                    render_scope_hash,
+                    link_kind.as_str(),
+                    block_index,
+                    current_link,
+                )),
+            ));
         } else {
-            // Split text at whitespace for natural word wrapping
-            for word in span.text.split_inclusive(char::is_whitespace) {
-                if !word.is_empty() {
-                    row = row.child(style_span(word, &span.style, colors, url));
+            // Split text at whitespace for natural word wrapping while preserving hard breaks.
+            for line_segment in span.text.split_inclusive('\n') {
+                let has_break = line_segment.ends_with('\n');
+                let segment = line_segment.strip_suffix('\n').unwrap_or(line_segment);
+                for word in segment.split_inclusive(char::is_whitespace) {
+                    if !word.is_empty() {
+                        row = row.child(style_span(word, &span.style, colors, url, None));
+                    }
+                }
+                if has_break {
+                    row = row.child(div().w_full().h(px(0.0)));
                 }
             }
         }
@@ -1036,7 +1379,6 @@ fn parse_markdown_blocks(text: &str) -> Vec<TestBlock> {
     options.insert(Options::ENABLE_STRIKETHROUGH);
     options.insert(Options::ENABLE_TABLES);
     options.insert(Options::ENABLE_TASKLISTS);
-    options.insert(Options::ENABLE_FOOTNOTES);
     options.insert(Options::ENABLE_SMART_PUNCTUATION);
 
     let parser = Parser::new_ext(text, options);
@@ -1045,10 +1387,10 @@ fn parse_markdown_blocks(text: &str) -> Vec<TestBlock> {
     let mut spans: Vec<InlineSpan> = Vec::new();
     let mut style_stack: Vec<InlineStyle> = vec![InlineStyle::default()];
     let mut heading_level: Option<u32> = None;
-    let mut list_state: Option<ListState> = None;
-    let mut current_item: Option<Vec<InlineSpan>> = None;
-    let mut current_item_checked: Option<bool> = None;
+    let mut list_stack: Vec<ListState> = Vec::new();
+    let mut list_item_stack: Vec<ListItem> = Vec::new();
     let mut code_block: Option<CodeBlockState> = None;
+    let mut image_state: Option<ImageState> = None;
     let mut table_state: Option<TableState> = None;
 
     for event in parser {
@@ -1060,20 +1402,29 @@ fn parse_markdown_blocks(text: &str) -> Vec<TestBlock> {
                     spans.clear();
                 }
                 Tag::List(start) => {
-                    list_state = Some(ListState {
+                    list_stack.push(ListState {
                         ordered: start.is_some(),
                         start: start.unwrap_or(1) as usize,
                         items: Vec::new(),
                     });
                 }
                 Tag::Item => {
-                    current_item = Some(Vec::new());
-                    current_item_checked = None;
+                    list_item_stack.push(ListItem {
+                        spans: Vec::new(),
+                        checked: None,
+                        nested_lists: Vec::new(),
+                    });
                     spans.clear();
                 }
                 Tag::Emphasis => push_style(&mut style_stack, |s| s.italic = true),
                 Tag::Strong => push_style(&mut style_stack, |s| s.bold = true),
                 Tag::Link { .. } => push_style(&mut style_stack, |s| s.link = true),
+                Tag::Image { dest_url, .. } => {
+                    image_state = Some(ImageState {
+                        url: dest_url.to_string(),
+                        alt_text: String::new(),
+                    });
+                }
                 Tag::CodeBlock(kind) => {
                     code_block = Some(CodeBlockState {
                         language: code_block_language(&kind),
@@ -1107,8 +1458,8 @@ fn parse_markdown_blocks(text: &str) -> Vec<TestBlock> {
             Event::End(tag) => match tag {
                 TagEnd::Paragraph => {
                     if !spans.is_empty() {
-                        if let Some(item_spans) = current_item.as_mut() {
-                            item_spans.append(&mut spans);
+                        if let Some(item) = list_item_stack.last_mut() {
+                            item.spans.append(&mut spans);
                         } else {
                             let text: String = spans.iter().map(|s| s.text.as_str()).collect();
                             blocks.push(TestBlock::Paragraph(text));
@@ -1125,36 +1476,23 @@ fn parse_markdown_blocks(text: &str) -> Vec<TestBlock> {
                     }
                 }
                 TagEnd::Item => {
-                    if let Some(mut item_spans) = current_item.take() {
-                        if !spans.is_empty() {
-                            item_spans.append(&mut spans);
-                        }
-                        if let Some(list) = list_state.as_mut() {
-                            list.items.push(ListItem {
-                                spans: item_spans,
-                                checked: current_item_checked.take(),
-                            });
+                    if !spans.is_empty() {
+                        if let Some(item) = list_item_stack.last_mut() {
+                            item.spans.append(&mut spans);
                         }
                     }
-                    current_item_checked = None;
+                    if let Some(item) = list_item_stack.pop() {
+                        if let Some(list) = list_stack.last_mut() {
+                            list.items.push(item);
+                        }
+                    }
                 }
                 TagEnd::List(_) => {
-                    if let Some(list) = list_state.take() {
-                        for (index, item) in list.items.iter().enumerate() {
-                            let marker = if let Some(checked) = item.checked {
-                                if checked {
-                                    "\u{2611}".to_string() // ☑
-                                } else {
-                                    "\u{2610}".to_string() // ☐
-                                }
-                            } else if list.ordered {
-                                format!("{}.", list.start + index)
-                            } else {
-                                "\u{2022}".to_string()
-                            };
-                            let item_text: String =
-                                item.spans.iter().map(|s| s.text.as_str()).collect();
-                            blocks.push(TestBlock::ListItem(marker, item_text));
+                    if let Some(list) = list_stack.pop() {
+                        if let Some(parent_item) = list_item_stack.last_mut() {
+                            parent_item.nested_lists.push(list);
+                        } else {
+                            flatten_test_list(&list, 0, &mut blocks);
                         }
                     }
                 }
@@ -1206,6 +1544,19 @@ fn parse_markdown_blocks(text: &str) -> Vec<TestBlock> {
                 TagEnd::Emphasis | TagEnd::Strong | TagEnd::Link | TagEnd::Strikethrough => {
                     pop_style(&mut style_stack);
                 }
+                TagEnd::Image => {
+                    if let Some(image) = image_state.take() {
+                        let alt_text = image.alt_text.trim();
+                        let label = if alt_text.is_empty() {
+                            "[Image]".to_string()
+                        } else {
+                            format!("[Image: {}]", alt_text)
+                        };
+                        let mut style = *style_stack.last().unwrap_or(&InlineStyle::default());
+                        style.link = true;
+                        push_text_span(&mut spans, &label, style, Some(image.url.as_str()));
+                    }
+                }
                 TagEnd::CodeBlock => {
                     if let Some(block) = code_block.take() {
                         blocks.push(TestBlock::CodeBlock(block.language, block.code));
@@ -1216,31 +1567,76 @@ fn parse_markdown_blocks(text: &str) -> Vec<TestBlock> {
             Event::Text(text) => {
                 if let Some(block) = code_block.as_mut() {
                     block.code.push_str(&text);
+                } else if let Some(image) = image_state.as_mut() {
+                    image.alt_text.push_str(&text);
                 } else {
                     let style = *style_stack.last().unwrap_or(&InlineStyle::default());
                     push_text_span(&mut spans, &text, style, None);
                 }
             }
             Event::Code(code) => {
-                let mut style = *style_stack.last().unwrap_or(&InlineStyle::default());
-                style.code = true;
-                push_text_span(&mut spans, &code, style, None);
+                if let Some(image) = image_state.as_mut() {
+                    image.alt_text.push_str(&code);
+                } else {
+                    let mut style = *style_stack.last().unwrap_or(&InlineStyle::default());
+                    style.code = true;
+                    push_text_span(&mut spans, &code, style, None);
+                }
             }
-            Event::SoftBreak | Event::HardBreak => {
-                let style = *style_stack.last().unwrap_or(&InlineStyle::default());
-                push_text_span(&mut spans, " ", style, None);
+            Event::SoftBreak => {
+                if let Some(image) = image_state.as_mut() {
+                    image.alt_text.push(' ');
+                } else {
+                    let style = *style_stack.last().unwrap_or(&InlineStyle::default());
+                    push_text_span(&mut spans, " ", style, None);
+                }
+            }
+            Event::HardBreak => {
+                if let Some(image) = image_state.as_mut() {
+                    image.alt_text.push('\n');
+                } else {
+                    let style = *style_stack.last().unwrap_or(&InlineStyle::default());
+                    push_text_span(&mut spans, "\n", style, None);
+                }
             }
             Event::Rule => {
                 blocks.push(TestBlock::Hr);
             }
             Event::TaskListMarker(checked) => {
-                current_item_checked = Some(checked);
+                if let Some(item) = list_item_stack.last_mut() {
+                    item.checked = Some(checked);
+                }
             }
             _ => {}
         }
     }
 
     blocks
+}
+
+#[cfg(test)]
+fn flatten_test_list(list: &ListState, depth: usize, blocks: &mut Vec<TestBlock>) {
+    for (index, item) in list.items.iter().enumerate() {
+        let marker = if let Some(checked) = item.checked {
+            if checked {
+                "\u{2611}".to_string() // ☑
+            } else {
+                "\u{2610}".to_string() // ☐
+            }
+        } else {
+            list_marker(list.ordered, list.start, index)
+        };
+        let depth_prefix = "  ".repeat(depth);
+        let item_text: String = item.spans.iter().map(|s| s.text.as_str()).collect();
+        blocks.push(TestBlock::ListItem(
+            format!("{}{}", depth_prefix, marker),
+            item_text,
+        ));
+
+        for nested_list in &item.nested_lists {
+            flatten_test_list(nested_list, depth + 1, blocks);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1271,6 +1667,21 @@ mod tests {
                 TestBlock::ListItem("1.".into(), "Alpha".into()),
                 TestBlock::ListItem("2.".into(), "Beta".into()),
                 TestBlock::ListItem("3.".into(), "Gamma".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn nested_lists_preserve_parent_child_structure() {
+        let md = "1. Parent\n   - Child A\n   - Child B\n2. Next\n";
+        let blocks = parse_markdown_blocks(md);
+        assert_eq!(
+            blocks,
+            vec![
+                TestBlock::ListItem("1.".into(), "Parent".into()),
+                TestBlock::ListItem("  \u{2022}".into(), "Child A".into()),
+                TestBlock::ListItem("  \u{2022}".into(), "Child B".into()),
+                TestBlock::ListItem("2.".into(), "Next".into()),
             ]
         );
     }
@@ -1417,6 +1828,81 @@ mod tests {
                     vec!["Bob".into(), "25".into()],
                 ]
             )]
+        );
+    }
+
+    #[test]
+    fn hard_break_preserves_line_break() {
+        let md = "line one  \nline two\n";
+        let blocks = parse_markdown_blocks(md);
+        assert_eq!(
+            blocks,
+            vec![TestBlock::Paragraph("line one\nline two".into())]
+        );
+    }
+
+    #[test]
+    fn markdown_image_preserves_alt_text_and_url() {
+        let md = "![diagram](https://example.com/diagram.png)\n";
+        let blocks = parse_markdown(md, true);
+        assert_eq!(blocks.len(), 1);
+
+        match &blocks[0] {
+            ParsedBlock::Paragraph { spans, .. } => {
+                assert_eq!(spans.len(), 1);
+                assert_eq!(spans[0].text, "[Image: diagram]");
+                assert!(spans[0].style.link);
+                assert_eq!(
+                    spans[0].link_url.as_deref(),
+                    Some("https://example.com/diagram.png")
+                );
+            }
+            other => panic!("expected paragraph block, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn markdown_link_url_allowlist_rejects_unsafe_schemes() {
+        assert!(is_allowed_markdown_url("https://example.com"));
+        assert!(is_allowed_markdown_url("http://example.com"));
+        assert!(is_allowed_markdown_url("mailto:test@example.com"));
+        assert!(is_allowed_markdown_url("relative/path"));
+        assert!(!is_allowed_markdown_url("file:///tmp/secrets.txt"));
+        assert!(!is_allowed_markdown_url("javascript:alert(1)"));
+        assert!(!is_allowed_markdown_url("data:text/html,hello"));
+    }
+
+    #[test]
+    fn markdown_scope_hash_is_deterministic_for_same_scope() {
+        let first = stable_markdown_scope_hash(Some("assistant-msg-123"));
+        let second = stable_markdown_scope_hash(Some("assistant-msg-123"));
+        let other = stable_markdown_scope_hash(Some("assistant-msg-456"));
+
+        assert_eq!(first, second);
+        assert_ne!(first, other);
+    }
+
+    #[test]
+    fn scoped_markdown_element_id_is_stable_and_indexed() {
+        let scope_hash = stable_markdown_scope_hash(Some("assistant-msg-123"));
+        let block_a = scoped_markdown_element_id(scope_hash, "block", 7, 0);
+        let block_a_again = scoped_markdown_element_id(scope_hash, "block", 7, 0);
+        let block_b = scoped_markdown_element_id(scope_hash, "block", 8, 0);
+
+        assert_eq!(block_a, block_a_again);
+        assert_ne!(block_a, block_b);
+    }
+
+    #[test]
+    fn inferred_scope_hash_stays_stable_for_appended_content_after_prefix_window() {
+        let stable_prefix = "a".repeat(INFERRED_SCOPE_PREFIX_CHARS + 32);
+        let baseline = format!("{stable_prefix}\n\n- item 1");
+        let appended = format!("{baseline}\n- item 2\n- item 3");
+
+        assert_eq!(
+            inferred_markdown_scope_hash(&baseline),
+            inferred_markdown_scope_hash(&appended),
+            "Appended tail content should not change inferred scope hash once prefix window is filled",
         );
     }
 }

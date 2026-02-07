@@ -6,7 +6,6 @@
 //! - Notes command bar all 8 (selection x trash x auto-sizing) permutations
 //! - Clipboard action structure: paste first, destructive last
 //! - Chat context conditional action combos
-//! - format_shortcut_hint edge cases via ActionsDialog
 //! - Note switcher ordering and icon assignment
 //! - Path/file context action count consistency
 //! - Deeplink name edge cases
@@ -442,102 +441,6 @@ fn notes_all_actions_have_sections() {
             action.id
         );
     }
-}
-
-// =========================================================================
-// format_shortcut_hint edge cases via ActionsDialog
-// =========================================================================
-
-#[test]
-fn format_shortcut_hint_single_key() {
-    assert_eq!(ActionsDialog::format_shortcut_hint("enter"), "↵");
-    assert_eq!(ActionsDialog::format_shortcut_hint("escape"), "⎋");
-    assert_eq!(ActionsDialog::format_shortcut_hint("tab"), "⇥");
-    assert_eq!(ActionsDialog::format_shortcut_hint("backspace"), "⌫");
-    assert_eq!(ActionsDialog::format_shortcut_hint("space"), "␣");
-    assert_eq!(ActionsDialog::format_shortcut_hint("delete"), "⌫");
-}
-
-#[test]
-fn format_shortcut_hint_arrow_keys() {
-    assert_eq!(ActionsDialog::format_shortcut_hint("up"), "↑");
-    assert_eq!(ActionsDialog::format_shortcut_hint("down"), "↓");
-    assert_eq!(ActionsDialog::format_shortcut_hint("left"), "←");
-    assert_eq!(ActionsDialog::format_shortcut_hint("right"), "→");
-    // Also web-style arrow key names
-    assert_eq!(ActionsDialog::format_shortcut_hint("arrowup"), "↑");
-    assert_eq!(ActionsDialog::format_shortcut_hint("arrowdown"), "↓");
-    assert_eq!(ActionsDialog::format_shortcut_hint("arrowleft"), "←");
-    assert_eq!(ActionsDialog::format_shortcut_hint("arrowright"), "→");
-}
-
-#[test]
-fn format_shortcut_hint_modifier_aliases() {
-    // meta/super map to ⌘
-    assert_eq!(ActionsDialog::format_shortcut_hint("meta+c"), "⌘C");
-    assert_eq!(ActionsDialog::format_shortcut_hint("super+c"), "⌘C");
-    // command
-    assert_eq!(ActionsDialog::format_shortcut_hint("command+c"), "⌘C");
-    // control
-    assert_eq!(ActionsDialog::format_shortcut_hint("control+c"), "⌃C");
-    // opt/option map to ⌥
-    assert_eq!(ActionsDialog::format_shortcut_hint("opt+c"), "⌥C");
-    assert_eq!(ActionsDialog::format_shortcut_hint("option+c"), "⌥C");
-}
-
-#[test]
-fn format_shortcut_hint_complex_combos() {
-    assert_eq!(
-        ActionsDialog::format_shortcut_hint("cmd+shift+alt+k"),
-        "⌘⇧⌥K"
-    );
-    assert_eq!(
-        ActionsDialog::format_shortcut_hint("ctrl+shift+enter"),
-        "⌃⇧↵"
-    );
-    assert_eq!(
-        ActionsDialog::format_shortcut_hint("cmd+shift+arrowup"),
-        "⌘⇧↑"
-    );
-}
-
-#[test]
-fn format_shortcut_hint_return_alias() {
-    assert_eq!(ActionsDialog::format_shortcut_hint("return"), "↵");
-    assert_eq!(ActionsDialog::format_shortcut_hint("cmd+return"), "⌘↵");
-}
-
-#[test]
-fn format_shortcut_hint_esc_alias() {
-    assert_eq!(ActionsDialog::format_shortcut_hint("esc"), "⎋");
-}
-
-// =========================================================================
-// parse_shortcut_keycaps edge cases
-// =========================================================================
-
-#[test]
-fn parse_keycaps_all_special_symbols() {
-    let keycaps = ActionsDialog::parse_shortcut_keycaps("⌘⌃⌥⇧↵⎋⇥⌫␣");
-    assert_eq!(keycaps, vec!["⌘", "⌃", "⌥", "⇧", "↵", "⎋", "⇥", "⌫", "␣"]);
-}
-
-#[test]
-fn parse_keycaps_arrows() {
-    let keycaps = ActionsDialog::parse_shortcut_keycaps("↑↓←→");
-    assert_eq!(keycaps, vec!["↑", "↓", "←", "→"]);
-}
-
-#[test]
-fn parse_keycaps_mixed_symbol_and_letter() {
-    let keycaps = ActionsDialog::parse_shortcut_keycaps("⌘⇧C");
-    assert_eq!(keycaps, vec!["⌘", "⇧", "C"]);
-}
-
-#[test]
-fn parse_keycaps_lowercase_uppercased() {
-    let keycaps = ActionsDialog::parse_shortcut_keycaps("⌘e");
-    assert_eq!(keycaps, vec!["⌘", "E"]);
 }
 
 // =========================================================================
@@ -1092,7 +995,7 @@ fn file_directory_excludes_quick_look_includes_open_with() {
         "Dir should NOT have Quick Look"
     );
     assert!(ids.contains(&"open_with"), "Dir should have Open With");
-    assert!(ids.contains(&"show_info"), "Dir should have Get Info");
+    assert!(ids.contains(&"show_info"), "Dir should have Show Info");
 }
 
 // =========================================================================

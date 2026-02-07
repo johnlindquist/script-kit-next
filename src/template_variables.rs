@@ -203,18 +203,20 @@ pub fn extract_variable_names(content: &str) -> Vec<String> {
     let mut names = Vec::new();
     let mut seen = std::collections::HashSet::new();
 
-    // Extract ${variable} patterns
-    let mut i = 0;
-    let chars: Vec<char> = content.chars().collect();
-    while i < chars.len() {
-        // Check for ${
-        if i + 1 < chars.len() && chars[i] == '$' && chars[i + 1] == '{' {
-            i += 2; // Skip ${
+    let mut chars = content.chars().peekable();
+    while let Some(ch) = chars.next() {
+        // Extract ${variable} patterns
+        if ch == '$' && chars.peek() == Some(&'{') {
+            chars.next(); // consume '{'
             let mut name = String::new();
-            while i < chars.len() && chars[i] != '}' {
-                name.push(chars[i]);
-                i += 1;
+
+            for next_char in chars.by_ref() {
+                if next_char == '}' {
+                    break;
+                }
+                name.push(next_char);
             }
+
             if !name.is_empty() && !seen.contains(&name) {
                 // Skip JS-style expressions like "await clipboard.readText()"
                 if !name.contains(' ') && !name.contains('(') {
@@ -222,17 +224,22 @@ pub fn extract_variable_names(content: &str) -> Vec<String> {
                     names.push(name);
                 }
             }
+            continue;
         }
-        // Check for {{
-        else if i + 1 < chars.len() && chars[i] == '{' && chars[i + 1] == '{' {
-            i += 2; // Skip {{
+
+        // Extract {{variable}} patterns
+        if ch == '{' && chars.peek() == Some(&'{') {
+            chars.next(); // consume second '{'
             let mut name = String::new();
-            while i < chars.len()
-                && !(chars[i] == '}' && i + 1 < chars.len() && chars[i + 1] == '}')
-            {
-                name.push(chars[i]);
-                i += 1;
+
+            while let Some(next_char) = chars.next() {
+                if next_char == '}' && chars.peek() == Some(&'}') {
+                    chars.next(); // consume second '}'
+                    break;
+                }
+                name.push(next_char);
             }
+
             let name = name.trim().to_string();
             if !name.is_empty() && !seen.contains(&name) {
                 // Skip conditional syntax like #if, /if
@@ -241,9 +248,7 @@ pub fn extract_variable_names(content: &str) -> Vec<String> {
                     names.push(name);
                 }
             }
-            i += 1; // Skip first }
         }
-        i += 1;
     }
 
     names

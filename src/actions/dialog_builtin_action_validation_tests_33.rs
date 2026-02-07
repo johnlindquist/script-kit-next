@@ -13,8 +13,7 @@ use crate::actions::builders::{
 use crate::actions::command_bar::CommandBarConfig;
 use crate::actions::dialog::{build_grouped_items_static, coerce_action_selection, ActionsDialog};
 use crate::actions::types::{
-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
-    SectionStyle,
+    Action, ActionCategory, AnchorPosition, ScriptInfo, SearchPosition, SectionStyle,
 };
 use crate::clipboard_history::ContentType;
 use crate::designs::icon_variations::IconName;

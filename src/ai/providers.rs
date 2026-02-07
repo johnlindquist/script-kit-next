@@ -128,12 +128,106 @@ fn simplify_auth_error(detail: &str) -> String {
 
 /// Default timeouts for API requests
 const CONNECT_TIMEOUT_SECS: u64 = 10;
-const READ_TIMEOUT_SECS: u64 = 60;
+const SEND_TIMEOUT_SECS: u64 = 30;
+const RESPONSE_TIMEOUT_SECS: u64 = 30;
+const READ_TIMEOUT_SECS: u64 = 120;
+const GLOBAL_TIMEOUT_SECS: u64 = 180;
+const HTTP_MAX_ATTEMPTS: usize = 3;
+const HTTP_RETRY_BASE_DELAY_MS: u64 = 250;
+
+fn should_retry_http_status(status: u16) -> bool {
+    matches!(status, 408 | 429 | 500..=599)
+}
+
+fn should_retry_transport_error(error: &ureq::Error) -> bool {
+    matches!(
+        error,
+        ureq::Error::Timeout(_)
+            | ureq::Error::Io(_)
+            | ureq::Error::HostNotFound
+            | ureq::Error::ConnectionFailed
+            | ureq::Error::Protocol(_)
+            | ureq::Error::BodyStalled
+    )
+}
+
+fn retry_delay_for_attempt(attempt: usize) -> Duration {
+    let exponent = (attempt.saturating_sub(1)).min(5);
+    let multiplier = 1_u64 << exponent;
+    Duration::from_millis(HTTP_RETRY_BASE_DELAY_MS.saturating_mul(multiplier))
+}
+
+fn send_json_with_retry(
+    provider_name: &str,
+    operation: &str,
+    make_request: impl Fn() -> std::result::Result<ureq::http::Response<ureq::Body>, ureq::Error>,
+) -> Result<ureq::http::Response<ureq::Body>> {
+    let correlation_id = crate::logging::current_correlation_id();
+
+    for attempt in 1..=HTTP_MAX_ATTEMPTS {
+        match make_request() {
+            Ok(response) => {
+                let status = response.status().as_u16();
+                if should_retry_http_status(status) && attempt < HTTP_MAX_ATTEMPTS {
+                    let delay = retry_delay_for_attempt(attempt);
+                    tracing::warn!(
+                        correlation_id = %correlation_id,
+                        provider = provider_name,
+                        operation = operation,
+                        attempt,
+                        max_attempts = HTTP_MAX_ATTEMPTS,
+                        status,
+                        retry_in_ms = delay.as_millis() as u64,
+                        "Retrying AI API request after retryable HTTP status"
+                    );
+                    std::thread::sleep(delay);
+                    continue;
+                }
+
+                return Ok(response);
+            }
+            Err(error) => {
+                if should_retry_transport_error(&error) && attempt < HTTP_MAX_ATTEMPTS {
+                    let delay = retry_delay_for_attempt(attempt);
+                    tracing::warn!(
+                        correlation_id = %correlation_id,
+                        provider = provider_name,
+                        operation = operation,
+                        attempt,
+                        max_attempts = HTTP_MAX_ATTEMPTS,
+                        error = %error,
+                        retry_in_ms = delay.as_millis() as u64,
+                        "Retrying AI API request after transient transport error"
+                    );
+                    std::thread::sleep(delay);
+                    continue;
+                }
+
+                return Err(anyhow!(error)).context(format!(
+                    "{} request failed (attempted={} attempt={}/{})",
+                    provider_name, operation, attempt, HTTP_MAX_ATTEMPTS
+                ));
+            }
+        }
+    }
+
+    Err(anyhow!(
+        "{} request failed before sending (attempted={} state=unexpected_retry_exit)",
+        provider_name,
+        operation
+    ))
+}
 
 /// Create a ureq::Agent with standard timeouts for API requests.
 fn create_agent() -> ureq::Agent {
     ureq::Agent::config_builder()
+        .http_status_as_error(false)
+        .https_only(true)
+        .timeout_global(Some(Duration::from_secs(GLOBAL_TIMEOUT_SECS)))
         .timeout_connect(Some(Duration::from_secs(CONNECT_TIMEOUT_SECS)))
+        .timeout_send_request(Some(Duration::from_secs(SEND_TIMEOUT_SECS)))
+        .timeout_send_body(Some(Duration::from_secs(SEND_TIMEOUT_SECS)))
+        .timeout_recv_response(Some(Duration::from_secs(RESPONSE_TIMEOUT_SECS)))
         .timeout_recv_body(Some(Duration::from_secs(READ_TIMEOUT_SECS)))
         .build()
         .new_agent()
@@ -474,16 +568,17 @@ impl AiProvider for OpenAiProvider {
             "Sending non-streaming request to OpenAI"
         );
 
-        let response = self
-            .agent
-            .post(self.api_url())
-            .header("Content-Type", "application/json")
-            .header(
-                "Authorization",
-                &format!("Bearer {}", self.config.api_key()),
-            )
-            .send_json(&body)
-            .context("Network error connecting to OpenAI")?;
+        let response = send_json_with_retry("OpenAI", "send_message", || {
+            self.agent
+                .post(self.api_url())
+                .header("Content-Type", "application/json")
+                .header(
+                    "Authorization",
+                    &format!("Bearer {}", self.config.api_key()),
+                )
+                .send_json(&body)
+        })
+        .context("Network error connecting to OpenAI")?;
 
         // Check HTTP status and extract meaningful error if not 2xx
         let response = handle_http_response(response, "OpenAI")?;
@@ -528,17 +623,18 @@ impl AiProvider for OpenAiProvider {
             "Starting streaming request to OpenAI"
         );
 
-        let response = self
-            .agent
-            .post(self.api_url())
-            .header("Content-Type", "application/json")
-            .header(
-                "Authorization",
-                &format!("Bearer {}", self.config.api_key()),
-            )
-            .header("Accept", "text/event-stream")
-            .send_json(&body)
-            .context("Network error connecting to OpenAI")?;
+        let response = send_json_with_retry("OpenAI", "stream_message", || {
+            self.agent
+                .post(self.api_url())
+                .header("Content-Type", "application/json")
+                .header(
+                    "Authorization",
+                    &format!("Bearer {}", self.config.api_key()),
+                )
+                .header("Accept", "text/event-stream")
+                .send_json(&body)
+        })
+        .context("Network error connecting to OpenAI")?;
 
         // Check HTTP status and extract meaningful error if not 2xx
         let response = handle_http_response(response, "OpenAI")?;
@@ -737,14 +833,15 @@ impl AiProvider for AnthropicProvider {
             "Sending non-streaming request to Anthropic"
         );
 
-        let response = self
-            .agent
-            .post(self.api_url())
-            .header("Content-Type", "application/json")
-            .header("x-api-key", self.config.api_key())
-            .header("anthropic-version", ANTHROPIC_VERSION)
-            .send_json(&body)
-            .context("Network error connecting to Anthropic")?;
+        let response = send_json_with_retry("Anthropic", "send_message", || {
+            self.agent
+                .post(self.api_url())
+                .header("Content-Type", "application/json")
+                .header("x-api-key", self.config.api_key())
+                .header("anthropic-version", ANTHROPIC_VERSION)
+                .send_json(&body)
+        })
+        .context("Network error connecting to Anthropic")?;
 
         // Check HTTP status and extract meaningful error if not 2xx
         let response = handle_http_response(response, "Anthropic")?;
@@ -790,15 +887,16 @@ impl AiProvider for AnthropicProvider {
             "Starting streaming request to Anthropic"
         );
 
-        let response = self
-            .agent
-            .post(self.api_url())
-            .header("Content-Type", "application/json")
-            .header("x-api-key", self.config.api_key())
-            .header("anthropic-version", ANTHROPIC_VERSION)
-            .header("Accept", "text/event-stream")
-            .send_json(&body)
-            .context("Network error connecting to Anthropic")?;
+        let response = send_json_with_retry("Anthropic", "stream_message", || {
+            self.agent
+                .post(self.api_url())
+                .header("Content-Type", "application/json")
+                .header("x-api-key", self.config.api_key())
+                .header("anthropic-version", ANTHROPIC_VERSION)
+                .header("Accept", "text/event-stream")
+                .send_json(&body)
+        })
+        .context("Network error connecting to Anthropic")?;
 
         // Check HTTP status and extract meaningful error if not 2xx
         let response = handle_http_response(response, "Anthropic")?;
@@ -1177,16 +1275,17 @@ impl AiProvider for VercelGatewayProvider {
             "Sending non-streaming request to Vercel Gateway"
         );
 
-        let response = self
-            .agent
-            .post(&self.api_url())
-            .header("Content-Type", "application/json")
-            .header(
-                "Authorization",
-                &format!("Bearer {}", self.config.api_key()),
-            )
-            .send_json(&body)
-            .context("Network error connecting to Vercel AI Gateway")?;
+        let response = send_json_with_retry("Vercel AI Gateway", "send_message", || {
+            self.agent
+                .post(&self.api_url())
+                .header("Content-Type", "application/json")
+                .header(
+                    "Authorization",
+                    &format!("Bearer {}", self.config.api_key()),
+                )
+                .send_json(&body)
+        })
+        .context("Network error connecting to Vercel AI Gateway")?;
 
         // Check HTTP status and extract meaningful error if not 2xx
         let response = handle_http_response(response, "Vercel AI Gateway")?;
@@ -1231,17 +1330,18 @@ impl AiProvider for VercelGatewayProvider {
             "Starting streaming request to Vercel Gateway"
         );
 
-        let response = self
-            .agent
-            .post(&self.api_url())
-            .header("Content-Type", "application/json")
-            .header(
-                "Authorization",
-                &format!("Bearer {}", self.config.api_key()),
-            )
-            .header("Accept", "text/event-stream")
-            .send_json(&body)
-            .context("Network error connecting to Vercel AI Gateway")?;
+        let response = send_json_with_retry("Vercel AI Gateway", "stream_message", || {
+            self.agent
+                .post(&self.api_url())
+                .header("Content-Type", "application/json")
+                .header(
+                    "Authorization",
+                    &format!("Bearer {}", self.config.api_key()),
+                )
+                .header("Accept", "text/event-stream")
+                .send_json(&body)
+        })
+        .context("Network error connecting to Vercel AI Gateway")?;
 
         // Check HTTP status and extract meaningful error if not 2xx
         let response = handle_http_response(response, "Vercel AI Gateway")?;
@@ -2421,6 +2521,53 @@ mod tests {
         let detail = "Invalid API key provided";
         let result = simplify_auth_error(detail);
         assert_eq!(result, detail);
+    }
+
+    #[test]
+    fn test_create_agent_disables_status_errors_and_enforces_https() {
+        let agent = create_agent();
+        let config = agent.config();
+
+        assert!(
+            !config.http_status_as_error(),
+            "Agent must pass non-2xx responses through so handle_http_response can parse API error bodies"
+        );
+        assert!(
+            config.https_only(),
+            "Agent must enforce HTTPS transport for AI API requests"
+        );
+    }
+
+    #[test]
+    fn test_should_retry_http_status_when_transient() {
+        for status in [408, 429, 500, 502, 503, 504] {
+            assert!(
+                should_retry_http_status(status),
+                "status {status} should be retryable"
+            );
+        }
+    }
+
+    #[test]
+    fn test_should_not_retry_http_status_when_permanent_client_error() {
+        for status in [400, 401, 403, 404, 422] {
+            assert!(
+                !should_retry_http_status(status),
+                "status {status} should not be retryable"
+            );
+        }
+    }
+
+    #[test]
+    fn test_should_retry_transport_error_timeout() {
+        let err = ureq::Error::Timeout(ureq::Timeout::Connect);
+        assert!(should_retry_transport_error(&err));
+    }
+
+    #[test]
+    fn test_should_not_retry_transport_error_bad_uri() {
+        let err = ureq::Error::BadUri("missing scheme".to_string());
+        assert!(!should_retry_transport_error(&err));
     }
 
     // ================= Claude Code CLI Provider Tests =================

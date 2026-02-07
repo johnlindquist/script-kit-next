@@ -26,7 +26,8 @@ impl HotkeyPoller {
         cx.spawn(async move |_this, cx: &mut AsyncApp| {
             logging::log("HOTKEY", "Hotkey listener started (event-driven via async_channel)");
 
-            while let Ok(()) = hotkeys::hotkey_channel().1.recv().await {
+            while let Ok(hotkey_event) = hotkeys::hotkey_channel().1.recv().await {
+                let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
                 logging::log("VISIBILITY", "");
                 logging::log("VISIBILITY", "╔════════════════════════════════════════════════════════════╗");
                 logging::log("VISIBILITY", "║  HOTKEY TRIGGERED - TOGGLE WINDOW                          ║");
@@ -254,7 +255,9 @@ impl ScriptHotkeyPoller {
         cx.spawn(async move |_this, cx: &mut AsyncApp| {
             logging::log("HOTKEY", "Script hotkey listener started");
 
-            while let Ok(command_id) = hotkeys::script_hotkey_channel().1.recv().await {
+            while let Ok(hotkey_event) = hotkeys::script_hotkey_channel().1.recv().await {
+                let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
+                let command_id = hotkey_event.command_id;
                 logging::bench_log("channel_received");
                 logging::log(
                     "HOTKEY",
@@ -316,7 +319,8 @@ impl NotesHotkeyPoller {
         cx.spawn(async move |_this, cx: &mut AsyncApp| {
             logging::log("HOTKEY", "Notes hotkey listener started");
 
-            while let Ok(()) = hotkeys::notes_hotkey_channel().1.recv().await {
+            while let Ok(hotkey_event) = hotkeys::notes_hotkey_channel().1.recv().await {
+                let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
                 logging::log("HOTKEY", "Notes hotkey triggered - opening notes window");
 
                 let _ = cx.update(move |cx: &mut App| {
@@ -345,7 +349,8 @@ impl AiHotkeyPoller {
         cx.spawn(async move |_this, cx: &mut AsyncApp| {
             logging::log("HOTKEY", "AI hotkey listener started");
 
-            while let Ok(()) = hotkeys::ai_hotkey_channel().1.recv().await {
+            while let Ok(hotkey_event) = hotkeys::ai_hotkey_channel().1.recv().await {
+                let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
                 logging::log("HOTKEY", "AI hotkey triggered - opening AI window");
 
                 let _ = cx.update(move |cx: &mut App| {

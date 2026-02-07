@@ -38,6 +38,7 @@
 //! because they need SDK-side execution.
 
 use crate::designs::icon_variations::IconName;
+use std::collections::HashSet;
 
 use super::types::{Action, ActionCategory, ScriptInfo};
 use crate::clipboard_history::ContentType;
@@ -103,11 +104,11 @@ pub fn get_file_context_actions(file_info: &FileInfo) -> Vec<Action> {
         );
     }
 
-    // Show in Finder (Cmd+Enter)
+    // Reveal in Finder (Cmd+Enter)
     actions.push(
         Action::new(
             "reveal_in_finder",
-            "Show in Finder",
+            "Reveal in Finder",
             Some("Reveal in Finder".to_string()),
             ActionCategory::ScriptContext,
         )
@@ -145,7 +146,7 @@ pub fn get_file_context_actions(file_info: &FileInfo) -> Vec<Action> {
     actions.push(
         Action::new(
             "show_info",
-            "Get Info",
+            "Show Info",
             Some("Show file information in Finder".to_string()),
             ActionCategory::ScriptContext,
         )
@@ -189,7 +190,7 @@ pub fn get_path_context_actions(path_info: &PathInfo) -> Vec<Action> {
         .with_shortcut("⌘⇧C"),
         Action::new(
             "open_in_finder",
-            "Open in Finder",
+            "Reveal in Finder",
             Some("Reveal in Finder".to_string()),
             ActionCategory::ScriptContext,
         )
@@ -273,14 +274,41 @@ pub fn to_deeplink_name(name: &str) -> String {
 
 /// Format a shortcut string for display in the UI
 /// Converts "cmd+shift+c" to "⌘⇧C"
-fn format_shortcut_hint(shortcut: &str) -> String {
-    shortcut
-        .replace("cmd", "⌘")
-        .replace("ctrl", "⌃")
-        .replace("alt", "⌥")
-        .replace("shift", "⇧")
-        .replace("+", "")
-        .to_uppercase()
+pub(crate) fn format_shortcut_hint(shortcut: &str) -> String {
+    let mut result = String::new();
+    let parts: Vec<&str> = shortcut.split('+').collect();
+
+    for (i, part) in parts.iter().enumerate() {
+        let part_lower = part.trim().to_lowercase();
+        let formatted = match part_lower.as_str() {
+            // Modifier keys
+            "cmd" | "command" | "meta" | "super" => "⌘",
+            "ctrl" | "control" => "⌃",
+            "alt" | "opt" | "option" => "⌥",
+            "shift" => "⇧",
+            // Special keys
+            "enter" | "return" => "↵",
+            "escape" | "esc" => "⎋",
+            "tab" => "⇥",
+            "backspace" | "delete" => "⌫",
+            "space" => "␣",
+            "up" | "arrowup" => "↑",
+            "down" | "arrowdown" => "↓",
+            "left" | "arrowleft" => "←",
+            "right" | "arrowright" => "→",
+            // Regular letters/numbers
+            _ => {
+                if i == parts.len() - 1 {
+                    result.push_str(&part.trim().to_uppercase());
+                    continue;
+                }
+                part.trim()
+            }
+        };
+        result.push_str(formatted);
+    }
+
+    result
 }
 
 /// Convert scriptlet-defined actions (from H3 headers) to Action structs for the UI
@@ -320,6 +348,9 @@ pub fn get_scriptlet_defined_actions(scriptlet: &Scriptlet) -> Vec<Action> {
             if let Some(ref shortcut) = sa.shortcut {
                 action = action.with_shortcut(format_shortcut_hint(shortcut));
             }
+
+            // Group scriptlet-defined actions with primary/operational actions.
+            action = action.with_section("Actions");
 
             // Mark as scriptlet action for routing
             // has_action=true means this needs special handling (execute the action code)
@@ -362,6 +393,7 @@ pub fn get_scriptlet_context_actions_with_custom(
     scriptlet: Option<&Scriptlet>,
 ) -> Vec<Action> {
     let mut actions = Vec::new();
+    let mut destructive_actions = Vec::new();
 
     // 1. Primary action - Run the scriptlet
     actions.push(
@@ -371,7 +403,8 @@ pub fn get_scriptlet_context_actions_with_custom(
             Some(format!("{} this item", script.action_verb)),
             ActionCategory::ScriptContext,
         )
-        .with_shortcut("↵"),
+        .with_shortcut("↵")
+        .with_section("Actions"),
     );
 
     // 2. Custom actions from H3 headers
@@ -385,29 +418,32 @@ pub fn get_scriptlet_context_actions_with_custom(
             Action::new(
                 "update_shortcut",
                 "Update Keyboard Shortcut",
-                Some("Change the keyboard shortcut".to_string()),
+                Some("Change the keyboard shortcut for this item".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⌘⇧K"),
+            .with_shortcut("⌘⇧K")
+            .with_section("Edit"),
         );
-        actions.push(
+        destructive_actions.push(
             Action::new(
                 "remove_shortcut",
                 "Remove Keyboard Shortcut",
-                Some("Remove the current keyboard shortcut".to_string()),
+                Some("Remove the keyboard shortcut from this item".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⌘⌥K"),
+            .with_shortcut("⌘⌥K")
+            .with_section("Destructive"),
         );
     } else {
         actions.push(
             Action::new(
                 "add_shortcut",
                 "Add Keyboard Shortcut",
-                Some("Set a keyboard shortcut".to_string()),
+                Some("Set a keyboard shortcut for this item".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⌘⇧K"),
+            .with_shortcut("⌘⇧K")
+            .with_section("Edit"),
         );
     }
 
@@ -417,29 +453,32 @@ pub fn get_scriptlet_context_actions_with_custom(
             Action::new(
                 "update_alias",
                 "Update Alias",
-                Some("Change the alias trigger".to_string()),
+                Some("Change the alias trigger for this item".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⌘⇧A"),
+            .with_shortcut("⌘⇧A")
+            .with_section("Edit"),
         );
-        actions.push(
+        destructive_actions.push(
             Action::new(
                 "remove_alias",
                 "Remove Alias",
-                Some("Remove the current alias".to_string()),
+                Some("Remove the alias trigger from this item".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⌘⌥A"),
+            .with_shortcut("⌘⌥A")
+            .with_section("Destructive"),
         );
     } else {
         actions.push(
             Action::new(
                 "add_alias",
                 "Add Alias",
-                Some("Set an alias trigger (type alias + space to run)".to_string()),
+                Some("Set an alias trigger for this item (type alias + space to run)".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⌘⇧A"),
+            .with_shortcut("⌘⇧A")
+            .with_section("Edit"),
         );
     }
 
@@ -451,17 +490,19 @@ pub fn get_scriptlet_context_actions_with_custom(
             Some("Open the markdown file in $EDITOR".to_string()),
             ActionCategory::ScriptContext,
         )
-        .with_shortcut("⌘E"),
+        .with_shortcut("⌘E")
+        .with_section("Edit"),
     );
 
     actions.push(
         Action::new(
             "reveal_scriptlet_in_finder",
             "Reveal in Finder",
-            Some("Show scriptlet bundle in Finder".to_string()),
+            Some("Reveal scriptlet bundle in Finder".to_string()),
             ActionCategory::ScriptContext,
         )
-        .with_shortcut("⌘⇧F"),
+        .with_shortcut("⌘⇧F")
+        .with_section("Share"),
     );
 
     actions.push(
@@ -471,7 +512,8 @@ pub fn get_scriptlet_context_actions_with_custom(
             Some("Copy scriptlet bundle path to clipboard".to_string()),
             ActionCategory::ScriptContext,
         )
-        .with_shortcut("⌘⇧C"),
+        .with_shortcut("⌘⇧C")
+        .with_section("Share"),
     );
 
     actions.push(
@@ -481,7 +523,8 @@ pub fn get_scriptlet_context_actions_with_custom(
             Some("Copy entire file content to clipboard".to_string()),
             ActionCategory::ScriptContext,
         )
-        .with_shortcut("⌘⌥C"),
+        .with_shortcut("⌘⌥C")
+        .with_section("Share"),
     );
 
     // 6. Copy deeplink
@@ -496,18 +539,25 @@ pub fn get_scriptlet_context_actions_with_custom(
             )),
             ActionCategory::ScriptContext,
         )
-        .with_shortcut("⌘⇧D"),
+        .with_shortcut("⌘⇧D")
+        .with_section("Share"),
     );
 
     // 7. Reset Ranking (if suggested)
     if script.is_suggested {
-        actions.push(Action::new(
-            "reset_ranking",
-            "Reset Ranking",
-            Some("Remove this item from Suggested section".to_string()),
-            ActionCategory::ScriptContext,
-        ));
+        destructive_actions.push(
+            Action::new(
+                "reset_ranking",
+                "Reset Ranking",
+                Some("Remove this item from Suggested section".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌃⌘R")
+            .with_section("Destructive"),
+        );
     }
+
+    actions.extend(destructive_actions);
 
     actions
 }
@@ -526,6 +576,7 @@ pub fn get_scriptlet_context_actions_with_custom(
 /// - Reset Ranking: Only shown if `is_suggested=true`
 pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
     let mut actions = Vec::new();
+    let mut destructive_actions = Vec::new();
 
     tracing::debug!(
         target: "script_kit::actions",
@@ -548,7 +599,8 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
             Some(format!("{} this item", script.action_verb)),
             ActionCategory::ScriptContext,
         )
-        .with_shortcut("↵"),
+        .with_shortcut("↵")
+        .with_section("Actions"),
     );
 
     // Dynamic shortcut actions based on whether a shortcut already exists
@@ -560,19 +612,21 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
             Action::new(
                 "update_shortcut",
                 "Update Keyboard Shortcut",
-                Some("Change the keyboard shortcut".to_string()),
+                Some("Change the keyboard shortcut for this item".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⌘⇧K"),
+            .with_shortcut("⌘⇧K")
+            .with_section("Edit"),
         );
-        actions.push(
+        destructive_actions.push(
             Action::new(
                 "remove_shortcut",
                 "Remove Keyboard Shortcut",
-                Some("Remove the current keyboard shortcut".to_string()),
+                Some("Remove the keyboard shortcut from this item".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⌘⌥K"),
+            .with_shortcut("⌘⌥K")
+            .with_section("Destructive"),
         );
     } else {
         // No shortcut - show Add option
@@ -580,10 +634,11 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
             Action::new(
                 "add_shortcut",
                 "Add Keyboard Shortcut",
-                Some("Set a keyboard shortcut".to_string()),
+                Some("Set a keyboard shortcut for this item".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⌘⇧K"),
+            .with_shortcut("⌘⇧K")
+            .with_section("Edit"),
         );
     }
 
@@ -596,19 +651,21 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
             Action::new(
                 "update_alias",
                 "Update Alias",
-                Some("Change the alias trigger".to_string()),
+                Some("Change the alias trigger for this item".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⌘⇧A"),
+            .with_shortcut("⌘⇧A")
+            .with_section("Edit"),
         );
-        actions.push(
+        destructive_actions.push(
             Action::new(
                 "remove_alias",
                 "Remove Alias",
-                Some("Remove the current alias".to_string()),
+                Some("Remove the alias trigger from this item".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⌘⌥A"),
+            .with_shortcut("⌘⌥A")
+            .with_section("Destructive"),
         );
     } else {
         // No alias - show Add option
@@ -616,10 +673,11 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
             Action::new(
                 "add_alias",
                 "Add Alias",
-                Some("Set an alias trigger (type alias + space to run)".to_string()),
+                Some("Set an alias trigger for this item (type alias + space to run)".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⌘⇧A"),
+            .with_shortcut("⌘⇧A")
+            .with_section("Edit"),
         );
     }
 
@@ -632,7 +690,8 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 Some("Open in $EDITOR".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⌘E"),
+            .with_shortcut("⌘E")
+            .with_section("Edit"),
         );
 
         actions.push(
@@ -642,17 +701,19 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 Some("Show script execution logs".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⌘L"),
+            .with_shortcut("⌘L")
+            .with_section("Edit"),
         );
 
         actions.push(
             Action::new(
                 "reveal_in_finder",
                 "Reveal in Finder",
-                Some("Show script file in Finder".to_string()),
+                Some("Reveal script file in Finder".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⌘⇧F"),
+            .with_shortcut("⌘⇧F")
+            .with_section("Share"),
         );
 
         actions.push(
@@ -662,7 +723,8 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 Some("Copy script path to clipboard".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⌘⇧C"),
+            .with_shortcut("⌘⇧C")
+            .with_section("Share"),
         );
 
         actions.push(
@@ -672,7 +734,8 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 Some("Copy entire file content to clipboard".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⌘⌥C"),
+            .with_shortcut("⌘⌥C")
+            .with_section("Share"),
         );
     }
 
@@ -685,17 +748,19 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 Some("Open the markdown file in $EDITOR".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⌘E"),
+            .with_shortcut("⌘E")
+            .with_section("Edit"),
         );
 
         actions.push(
             Action::new(
                 "reveal_scriptlet_in_finder",
                 "Reveal in Finder",
-                Some("Show scriptlet bundle in Finder".to_string()),
+                Some("Reveal scriptlet bundle in Finder".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⌘⇧F"),
+            .with_shortcut("⌘⇧F")
+            .with_section("Share"),
         );
 
         actions.push(
@@ -705,7 +770,8 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 Some("Copy scriptlet bundle path to clipboard".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⌘⇧C"),
+            .with_shortcut("⌘⇧C")
+            .with_section("Share"),
         );
 
         actions.push(
@@ -715,7 +781,8 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 Some("Copy entire file content to clipboard".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⌘⌥C"),
+            .with_shortcut("⌘⌥C")
+            .with_section("Share"),
         );
     }
 
@@ -728,17 +795,19 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 Some("Open the agent file in $EDITOR".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⌘E"),
+            .with_shortcut("⌘E")
+            .with_section("Edit"),
         );
 
         actions.push(
             Action::new(
                 "reveal_in_finder",
                 "Reveal in Finder",
-                Some("Show agent file in Finder".to_string()),
+                Some("Reveal agent file in Finder".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⌘⇧F"),
+            .with_shortcut("⌘⇧F")
+            .with_section("Share"),
         );
 
         actions.push(
@@ -748,7 +817,8 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 Some("Copy agent path to clipboard".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⌘⇧C"),
+            .with_shortcut("⌘⇧C")
+            .with_section("Share"),
         );
 
         actions.push(
@@ -758,7 +828,8 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 Some("Copy entire file content to clipboard".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⌘⌥C"),
+            .with_shortcut("⌘⌥C")
+            .with_section("Share"),
         );
     }
 
@@ -774,27 +845,56 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
             )),
             ActionCategory::ScriptContext,
         )
-        .with_shortcut("⌘⇧D"),
+        .with_shortcut("⌘⇧D")
+        .with_section("Share"),
     );
 
     // Reset Ranking - only available for items that are suggested (have frecency data)
     if script.is_suggested {
-        actions.push(Action::new(
-            "reset_ranking",
-            "Reset Ranking",
-            Some("Remove this item from Suggested section".to_string()),
-            ActionCategory::ScriptContext,
-        ));
+        destructive_actions.push(
+            Action::new(
+                "reset_ranking",
+                "Reset Ranking",
+                Some("Remove this item from Suggested section".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌃⌘R")
+            .with_section("Destructive"),
+        );
+    }
+
+    actions.extend(destructive_actions);
+    let mut seen_ids = HashSet::new();
+    let mut duplicate_ids = Vec::new();
+    let deduped_actions: Vec<Action> = actions
+        .into_iter()
+        .filter(|action| {
+            if seen_ids.insert(action.id.clone()) {
+                true
+            } else {
+                duplicate_ids.push(action.id.clone());
+                false
+            }
+        })
+        .collect();
+
+    if !duplicate_ids.is_empty() {
+        tracing::warn!(
+            target: "script_kit::actions",
+            name = %script.name,
+            duplicate_ids = ?duplicate_ids,
+            "Deduplicated overlapping script context action IDs"
+        );
     }
 
     tracing::debug!(
         target: "script_kit::actions",
-        action_count = actions.len(),
-        action_ids = ?actions.iter().map(|a| a.id.as_str()).collect::<Vec<_>>(),
+        action_count = deduped_actions.len(),
+        action_ids = ?deduped_actions.iter().map(|a| a.id.as_str()).collect::<Vec<_>>(),
         "Created script context actions"
     );
 
-    actions
+    deduped_actions
 }
 
 /// Predefined global actions
@@ -1720,6 +1820,57 @@ mod tests {
     }
 
     #[test]
+    fn test_shortcut_and_alias_actions_use_explicit_descriptions() {
+        let script_without_shortcut_or_alias =
+            ScriptInfo::new("my-script", "/path/to/my-script.ts");
+        let actions = get_script_context_actions(&script_without_shortcut_or_alias);
+
+        let add_shortcut = actions.iter().find(|a| a.id == "add_shortcut").unwrap();
+        assert_eq!(
+            add_shortcut.description.as_deref(),
+            Some("Set a keyboard shortcut for this item")
+        );
+
+        let add_alias = actions.iter().find(|a| a.id == "add_alias").unwrap();
+        assert_eq!(
+            add_alias.description.as_deref(),
+            Some("Set an alias trigger for this item (type alias + space to run)")
+        );
+
+        let script_with_shortcut_and_alias = ScriptInfo::with_shortcut_and_alias(
+            "my-script",
+            "/path/to/my-script.ts",
+            Some("cmd+shift+m".to_string()),
+            Some("ms".to_string()),
+        );
+        let actions = get_script_context_actions(&script_with_shortcut_and_alias);
+
+        let update_shortcut = actions.iter().find(|a| a.id == "update_shortcut").unwrap();
+        assert_eq!(
+            update_shortcut.description.as_deref(),
+            Some("Change the keyboard shortcut for this item")
+        );
+
+        let remove_shortcut = actions.iter().find(|a| a.id == "remove_shortcut").unwrap();
+        assert_eq!(
+            remove_shortcut.description.as_deref(),
+            Some("Remove the keyboard shortcut from this item")
+        );
+
+        let update_alias = actions.iter().find(|a| a.id == "update_alias").unwrap();
+        assert_eq!(
+            update_alias.description.as_deref(),
+            Some("Change the alias trigger for this item")
+        );
+
+        let remove_alias = actions.iter().find(|a| a.id == "remove_alias").unwrap();
+        assert_eq!(
+            remove_alias.description.as_deref(),
+            Some("Remove the alias trigger from this item")
+        );
+    }
+
+    #[test]
     fn test_to_deeplink_name() {
         // Test the deeplink name conversion
         assert_eq!(to_deeplink_name("My Script"), "my-script");
@@ -1797,7 +1948,7 @@ mod tests {
         // Should NOT have open_directory (not a directory)
         assert!(!actions.iter().any(|a| a.id == "open_directory"));
 
-        // On macOS, should have Quick Look, Open With, Get Info
+        // On macOS, should have Quick Look, Open With, Show Info
         #[cfg(target_os = "macos")]
         {
             assert!(actions.iter().any(|a| a.id == "quick_look"));
@@ -1830,7 +1981,7 @@ mod tests {
         #[cfg(target_os = "macos")]
         {
             assert!(!actions.iter().any(|a| a.id == "quick_look"));
-            // But should have Open With and Get Info
+            // But should have Open With and Show Info
             assert!(actions.iter().any(|a| a.id == "open_with"));
             assert!(actions.iter().any(|a| a.id == "show_info"));
         }
@@ -2008,7 +2159,8 @@ mod tests {
     fn test_format_shortcut_hint_basic() {
         assert_eq!(format_shortcut_hint("cmd+c"), "⌘C");
         assert_eq!(format_shortcut_hint("cmd+shift+c"), "⌘⇧C");
-        assert_eq!(format_shortcut_hint("ctrl+alt+delete"), "⌃⌥DELETE");
+        assert_eq!(format_shortcut_hint("ctrl+alt+delete"), "⌃⌥⌫");
+        assert_eq!(format_shortcut_hint("meta+v"), "⌘V");
     }
 
     #[test]

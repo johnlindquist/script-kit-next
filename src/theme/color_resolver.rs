@@ -24,6 +24,22 @@
 //! let resolver = ColorResolver::new(&theme, self.current_design);
 //! let empty_text_color = resolver.text_muted();
 //! ```
+//!
+//! ## API Visibility Contract
+//!
+//! Resolver internals are implementation details; call sites should use
+//! semantic accessor methods instead of reading struct fields directly.
+//! ```compile_fail
+//! use script_kit_gpui::designs::DesignVariant;
+//! use script_kit_gpui::theme::{ColorResolver, Theme, TypographyResolver};
+//!
+//! let theme = Theme::default();
+//! let colors = ColorResolver::new(&theme, DesignVariant::Default);
+//! let _ = colors.text_primary;
+//!
+//! let typography = TypographyResolver::new(&theme, DesignVariant::Default);
+//! let _ = typography.font_family;
+//! ```
 
 use crate::designs::{get_tokens, DesignVariant};
 use crate::theme::types::Theme;
@@ -34,39 +50,39 @@ use crate::theme::types::Theme;
 /// routes to the correct source (theme or design tokens) based on the
 /// current design variant.
 #[derive(Debug, Clone, Copy)]
-#[allow(dead_code)] // Fields are public API for incremental adoption
+#[allow(dead_code)] // Internal token cache; not all fields are consumed yet.
 pub struct ColorResolver {
     // Cached colors extracted from theme or design tokens
     // All colors are stored as u32 hex values (0xRRGGBB)
 
     // Background colors
-    pub background: u32,
-    pub background_secondary: u32,
-    pub background_tertiary: u32,
-    pub background_selected: u32,
-    pub background_hover: u32,
+    background: u32,
+    background_secondary: u32,
+    background_tertiary: u32,
+    background_selected: u32,
+    background_hover: u32,
 
     // Text colors
-    pub text_primary: u32,
-    pub text_secondary: u32,
-    pub text_muted: u32,
-    pub text_dimmed: u32,
-    pub text_on_accent: u32,
+    text_primary: u32,
+    text_secondary: u32,
+    text_muted: u32,
+    text_dimmed: u32,
+    text_on_accent: u32,
 
     // Accent colors
-    pub accent: u32,
-    pub accent_secondary: u32,
-    pub success: u32,
-    pub warning: u32,
-    pub error: u32,
+    accent: u32,
+    accent_secondary: u32,
+    success: u32,
+    warning: u32,
+    error: u32,
 
     // Border colors
-    pub border: u32,
-    pub border_subtle: u32,
-    pub border_focus: u32,
+    border: u32,
+    border_subtle: u32,
+    border_focus: u32,
 
     // Shadow
-    pub shadow: u32,
+    shadow: u32,
 }
 
 #[allow(dead_code)]
@@ -181,19 +197,29 @@ impl ColorResolver {
     pub fn border_color(&self) -> u32 {
         self.border
     }
+
+    /// Get the dimmed text color
+    pub fn dimmed_text_color(&self) -> u32 {
+        self.text_dimmed
+    }
+
+    /// Get the secondary background color
+    pub fn secondary_background_color(&self) -> u32 {
+        self.background_secondary
+    }
 }
 
 /// Unified typography resolution that works with both theme and design tokens
 #[derive(Debug, Clone, Copy)]
-#[allow(dead_code)]
+#[allow(dead_code)] // Incremental migration away from direct design token access.
 pub struct TypographyResolver {
-    pub font_family: &'static str,
-    pub font_family_mono: &'static str,
-    pub font_size_xs: f32,
-    pub font_size_sm: f32,
-    pub font_size_md: f32,
-    pub font_size_lg: f32,
-    pub font_size_xl: f32,
+    font_family: &'static str,
+    font_family_mono: &'static str,
+    font_size_xs: f32,
+    font_size_sm: f32,
+    font_size_md: f32,
+    font_size_lg: f32,
+    font_size_xl: f32,
 }
 
 #[allow(dead_code)]
@@ -219,27 +245,31 @@ impl TypographyResolver {
     }
 
     /// Get the monospace font family
-    #[allow(dead_code)]
     pub fn mono_font(&self) -> &'static str {
         self.font_family_mono
+    }
+
+    /// Get extra-large font size token
+    pub fn font_size_xl(&self) -> f32 {
+        self.font_size_xl
     }
 }
 
 /// Unified spacing resolution that works with both theme and design tokens
 #[derive(Debug, Clone, Copy)]
-#[allow(dead_code)]
+#[allow(dead_code)] // Incremental migration away from direct design token access.
 pub struct SpacingResolver {
-    pub padding_xs: f32,
-    pub padding_sm: f32,
-    pub padding_md: f32,
-    pub padding_lg: f32,
-    pub padding_xl: f32,
-    pub gap_sm: f32,
-    pub gap_md: f32,
-    pub gap_lg: f32,
-    pub margin_sm: f32,
-    pub margin_md: f32,
-    pub margin_lg: f32,
+    padding_xs: f32,
+    padding_sm: f32,
+    padding_md: f32,
+    padding_lg: f32,
+    padding_xl: f32,
+    gap_sm: f32,
+    gap_md: f32,
+    gap_lg: f32,
+    margin_sm: f32,
+    margin_md: f32,
+    margin_lg: f32,
 }
 
 #[allow(dead_code)]
@@ -262,6 +292,11 @@ impl SpacingResolver {
             margin_lg: spacing.margin_lg,
         }
     }
+
+    /// Get large margin token
+    pub fn margin_lg(&self) -> f32 {
+        self.margin_lg
+    }
 }
 
 #[cfg(test)]
@@ -274,9 +309,9 @@ mod tests {
         let resolver = ColorResolver::new(&theme, DesignVariant::Default);
 
         // Should use theme colors
-        assert_eq!(resolver.text_primary, theme.colors.text.primary);
-        assert_eq!(resolver.text_muted, theme.colors.text.muted);
-        assert_eq!(resolver.accent, theme.colors.accent.selected);
+        assert_eq!(resolver.primary_text_color(), theme.colors.text.primary);
+        assert_eq!(resolver.empty_text_color(), theme.colors.text.muted);
+        assert_eq!(resolver.primary_accent(), theme.colors.accent.selected);
     }
 
     #[test]
@@ -289,9 +324,9 @@ mod tests {
         let tokens = get_tokens(DesignVariant::Minimal);
         let design_colors = tokens.colors();
 
-        assert_eq!(resolver.text_primary, design_colors.text_primary);
-        assert_eq!(resolver.text_muted, design_colors.text_muted);
-        assert_eq!(resolver.accent, design_colors.accent);
+        assert_eq!(resolver.primary_text_color(), design_colors.text_primary);
+        assert_eq!(resolver.empty_text_color(), design_colors.text_muted);
+        assert_eq!(resolver.primary_accent(), design_colors.accent);
     }
 
     #[test]
@@ -299,9 +334,9 @@ mod tests {
         let theme = Theme::default();
         let resolver = ColorResolver::new(&theme, DesignVariant::Default);
 
-        assert_eq!(resolver.empty_text_color(), resolver.text_muted);
-        assert_eq!(resolver.primary_text_color(), resolver.text_primary);
-        assert_eq!(resolver.main_background(), resolver.background);
+        assert_eq!(resolver.empty_text_color(), theme.colors.text.muted);
+        assert_eq!(resolver.primary_text_color(), theme.colors.text.primary);
+        assert_eq!(resolver.main_background(), theme.colors.background.main);
     }
 
     #[test]
@@ -331,14 +366,15 @@ mod tests {
 
             // All variants should have different bg and text for contrast
             assert_ne!(
-                resolver.background, resolver.text_primary,
+                resolver.main_background(),
+                resolver.primary_text_color(),
                 "Variant {:?} has no contrast",
                 variant
             );
 
             // All colors should be valid hex values
-            assert!(resolver.text_primary <= 0xFFFFFF);
-            assert!(resolver.accent <= 0xFFFFFF);
+            assert!(resolver.primary_text_color() <= 0xFFFFFF);
+            assert!(resolver.primary_accent() <= 0xFFFFFF);
         }
     }
 }

@@ -1,7 +1,21 @@
 # Cargo configuration for script-kit-gpui
 #
-# Run tests with single thread to avoid race condition in syntect's
-# static resource cleanup during parallel test teardown.
+# Keep local `cargo test` parallel by default for faster iteration.
+# Use `cargo test-serial` only when diagnosing teardown races.
+
+[alias]
+test-serial = "test -- --test-threads=1"
+
+[target.'cfg(target_os = "macos")']
+linker = "clang"
+rustflags = [
+  "-C",
+  "split-debuginfo=unpacked",
+  "-C",
+  "link-arg=-Wl,-dead_strip",
+]
 
 [env]
-RUST_TEST_THREADS = "1"
+CARGO_INCREMENTAL = "1"
+CARGO_PROFILE_DEV_INCREMENTAL = "true"
+CARGO_PROFILE_TEST_INCREMENTAL = "true"

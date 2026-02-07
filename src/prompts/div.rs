@@ -7,15 +7,15 @@
 //! - Simple keyboard: Enter or Escape to submit
 
 use gpui::{
-    div, prelude::*, px, rgb, rgba, Context, Div, FocusHandle, Focusable, FontWeight, Hsla, Point,
-    Render, ScrollHandle, Window,
+    div, prelude::*, px, rgb, rgba, Context, Div, FocusHandle, Focusable, FontWeight, Hsla, Render,
+    ScrollHandle, Window,
 };
 use std::sync::Arc;
 
 use crate::designs::{get_tokens, DesignVariant};
 use crate::logging;
 use crate::theme;
-use crate::ui_foundation::get_vibrancy_background;
+use crate::ui_foundation::{get_vibrancy_background, is_key_enter, is_key_escape};
 use crate::utils::{parse_color, parse_html, HtmlElement, TailwindStyles};
 
 use super::SubmitCallback;
@@ -27,7 +27,7 @@ pub struct ContainerOptions {
     pub background: Option<String>,
     /// Padding in pixels, or None to use default
     pub padding: Option<ContainerPadding>,
-    /// Opacity (0-100), applies to entire container
+    /// Opacity (0-100), applies to the container background color
     pub opacity: Option<u8>,
     /// Tailwind classes for the content container
     pub container_classes: Option<String>,
@@ -121,6 +121,11 @@ fn parse_hex_color(hex: &str) -> Option<Hsla> {
     }
 }
 
+#[inline]
+fn is_div_submit_key(key: &str) -> bool {
+    is_key_enter(key) || is_key_escape(key)
+}
+
 /// Convert RGB u32 to Hsla with optional opacity
 fn rgb_to_hsla(color: u32, opacity: Option<u8>) -> Hsla {
     let r = ((color >> 16) & 0xFF) as f32 / 255.0;
@@ -128,6 +133,11 @@ fn rgb_to_hsla(color: u32, opacity: Option<u8>) -> Hsla {
     let b = (color & 0xFF) as f32 / 255.0;
     let a = opacity.map(|o| o as f32 / 100.0).unwrap_or(1.0);
     Hsla::from(gpui::Rgba { r, g, b, a })
+}
+
+#[inline]
+fn default_container_padding(variant: DesignVariant) -> f32 {
+    get_tokens(variant).spacing().padding_md
 }
 
 /// DivPrompt - HTML content display
@@ -150,8 +160,6 @@ pub struct DivPrompt {
     pub container_options: ContainerOptions,
     /// Scroll handle for tracking scroll position
     pub scroll_handle: ScrollHandle,
-    /// Cached scroll offset for scrollbar rendering
-    scroll_offset: Point<f32>,
     /// Pre-extracted prompt colors for efficient rendering (Copy, 28 bytes)
     /// Avoids re-extracting colors from theme on every render
     prompt_colors: theme::PromptColors,
@@ -231,14 +239,8 @@ impl DivPrompt {
             design_variant,
             container_options,
             scroll_handle: ScrollHandle::new(),
-            scroll_offset: Point::default(),
             prompt_colors,
         }
-    }
-
-    /// Get the current scroll offset (Y position in pixels)
-    pub fn scroll_offset_y(&self) -> f32 {
-        self.scroll_offset.y
     }
 
     /// Submit - always with None value (just acknowledgment)
@@ -309,11 +311,176 @@ impl RenderContext {
             on_link_click: None,
         }
     }
+}
 
-    fn with_link_callback(mut self, callback: LinkClickCallback) -> Self {
-        self.on_link_click = Some(callback);
-        self
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct DivInlineStyle {
+    bold: bool,
+    italic: bool,
+    code: bool,
+    link_href: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DivInlineSegment {
+    text: String,
+    style: DivInlineStyle,
+}
+
+fn collect_inline_segments(elements: &[HtmlElement]) -> Vec<DivInlineSegment> {
+    let mut segments = Vec::new();
+    append_inline_segments(elements, &DivInlineStyle::default(), &mut segments);
+    segments
+}
+
+fn append_inline_segments(
+    elements: &[HtmlElement],
+    style: &DivInlineStyle,
+    out: &mut Vec<DivInlineSegment>,
+) {
+    for element in elements {
+        match element {
+            HtmlElement::Text(text) => push_inline_segment(out, text.clone(), style.clone()),
+            HtmlElement::Bold(children) => {
+                let mut nested = style.clone();
+                nested.bold = true;
+                append_inline_segments(children, &nested, out);
+            }
+            HtmlElement::Italic(children) => {
+                let mut nested = style.clone();
+                nested.italic = true;
+                append_inline_segments(children, &nested, out);
+            }
+            HtmlElement::InlineCode(code) => {
+                let mut nested = style.clone();
+                nested.code = true;
+                push_inline_segment(out, code.clone(), nested);
+            }
+            HtmlElement::Link { href, children } => {
+                let mut nested = style.clone();
+                nested.link_href = Some(href.clone());
+                append_inline_segments(children, &nested, out);
+            }
+            HtmlElement::LineBreak => push_inline_segment(out, "\n".to_string(), style.clone()),
+            HtmlElement::Header { children, .. }
+            | HtmlElement::Paragraph(children)
+            | HtmlElement::ListItem(children)
+            | HtmlElement::Blockquote(children)
+            | HtmlElement::Div { children, .. }
+            | HtmlElement::Span { children, .. } => append_inline_segments(children, style, out),
+            HtmlElement::UnorderedList(items) | HtmlElement::OrderedList(items) => {
+                for (idx, item) in items.iter().enumerate() {
+                    if idx > 0 {
+                        push_inline_segment(out, "\n".to_string(), style.clone());
+                    }
+                    if let HtmlElement::ListItem(children) = item {
+                        append_inline_segments(children, style, out);
+                    }
+                }
+            }
+            HtmlElement::CodeBlock { code, .. } => {
+                push_inline_segment(out, code.clone(), style.clone())
+            }
+            HtmlElement::HorizontalRule => {
+                push_inline_segment(out, "---".to_string(), style.clone())
+            }
+        }
     }
+}
+
+fn push_inline_segment(out: &mut Vec<DivInlineSegment>, text: String, style: DivInlineStyle) {
+    if text.is_empty() {
+        return;
+    }
+
+    if let Some(last) = out.last_mut() {
+        if last.style == style {
+            last.text.push_str(&text);
+            return;
+        }
+    }
+
+    out.push(DivInlineSegment { text, style });
+}
+
+fn render_inline_content(elements: &[HtmlElement], ctx: &RenderContext) -> Div {
+    render_inline_segments(&collect_inline_segments(elements), ctx)
+}
+
+fn render_inline_segments(segments: &[DivInlineSegment], ctx: &RenderContext) -> Div {
+    let mut row = div()
+        .flex()
+        .flex_row()
+        .flex_wrap()
+        .items_baseline()
+        .min_w(px(0.));
+
+    for segment in segments {
+        if segment.style.code || segment.style.link_href.is_some() {
+            row = row.child(render_inline_segment_piece(
+                &segment.text,
+                &segment.style,
+                ctx,
+            ));
+            continue;
+        }
+
+        for line_segment in segment.text.split_inclusive('\n') {
+            let has_break = line_segment.ends_with('\n');
+            let body = line_segment.strip_suffix('\n').unwrap_or(line_segment);
+
+            for word in body.split_inclusive(char::is_whitespace) {
+                if word.is_empty() {
+                    continue;
+                }
+                row = row.child(render_inline_segment_piece(word, &segment.style, ctx));
+            }
+
+            if has_break {
+                row = row.child(div().w_full().h(px(0.0)));
+            }
+        }
+    }
+
+    row
+}
+
+fn render_inline_segment_piece(text: &str, style: &DivInlineStyle, ctx: &RenderContext) -> Div {
+    let mut piece = div().child(text.to_string());
+
+    if style.code {
+        piece = piece
+            .px(px(4.0))
+            .py(px(1.0))
+            .bg(rgba((ctx.code_bg << 8) | 0x80))
+            .rounded(px(3.0))
+            .font_family("Menlo")
+            .text_xs()
+            .text_color(rgb(ctx.accent_color));
+    }
+
+    if let Some(href) = style.link_href.as_ref() {
+        piece = piece.text_color(rgb(ctx.accent_color)).cursor_pointer();
+        if let Some(callback) = &ctx.on_link_click {
+            let cb = callback.clone();
+            let href_for_click = href.clone();
+            piece = piece.on_mouse_down(
+                gpui::MouseButton::Left,
+                move |_event, _window, cx: &mut gpui::App| {
+                    cb(&href_for_click, cx);
+                },
+            );
+        }
+    }
+
+    if style.bold {
+        piece = piece.font_weight(FontWeight::BOLD);
+    }
+    if style.italic {
+        piece = piece.italic();
+    }
+
+    piece
 }
 
 /// Render a vector of HtmlElements as a GPUI Div
@@ -348,9 +515,6 @@ fn render_element(element: &HtmlElement, ctx: RenderContext) -> Div {
                 _ => 14.0,
             };
 
-            // Collect all text content from children
-            let text_content = collect_text(children);
-
             // User-specified pixel size - not converted to rem
             div()
                 .w_full()
@@ -358,30 +522,34 @@ fn render_element(element: &HtmlElement, ctx: RenderContext) -> Div {
                 .font_weight(FontWeight::BOLD)
                 .text_color(rgb(ctx.text_primary))
                 .mb(px(8.0))
-                .child(text_content)
+                .child(render_inline_content(children, &ctx))
         }
 
-        HtmlElement::Paragraph(children) => {
-            // Collect all text content from children
-            let text_content = collect_text(children);
-
-            div()
-                .w_full()
-                .text_sm()
-                .text_color(rgb(ctx.text_secondary))
-                .mb(px(8.0))
-                .child(text_content)
-        }
+        HtmlElement::Paragraph(children) => div()
+            .w_full()
+            .text_sm()
+            .text_color(rgb(ctx.text_secondary))
+            .mb(px(8.0))
+            .child(render_inline_content(children, &ctx)),
 
         HtmlElement::Bold(children) => {
-            let text_content = collect_text(children);
-            div().font_weight(FontWeight::BOLD).child(text_content)
+            let mut style = DivInlineStyle::default();
+            style.bold = true;
+            let mut segments = Vec::new();
+            append_inline_segments(children, &style, &mut segments);
+            div()
+                .w_full()
+                .child(render_inline_segments(&segments, &ctx))
         }
 
         HtmlElement::Italic(children) => {
-            // GPUI doesn't have native italic support, so we use a slightly different color
-            let text_content = collect_text(children);
-            div().text_color(rgb(ctx.text_tertiary)).child(text_content)
+            let mut style = DivInlineStyle::default();
+            style.italic = true;
+            let mut segments = Vec::new();
+            append_inline_segments(children, &style, &mut segments);
+            div()
+                .w_full()
+                .child(render_inline_segments(&segments, &ctx))
         }
 
         HtmlElement::InlineCode(code) => div()
@@ -394,16 +562,35 @@ fn render_element(element: &HtmlElement, ctx: RenderContext) -> Div {
             .text_color(rgb(ctx.accent_color))
             .child(code.clone()),
 
-        HtmlElement::CodeBlock { code, .. } => div()
-            .w_full()
-            .p(px(12.0))
-            .mb(px(8.0))
-            .bg(rgba((ctx.code_bg << 8) | 0xC0))
-            .rounded(px(6.0))
-            .font_family("Menlo")
-            .text_sm()
-            .text_color(rgb(ctx.text_primary))
-            .child(code.clone()),
+        HtmlElement::CodeBlock { language, code } => {
+            let mut block = div()
+                .w_full()
+                .p(px(12.0))
+                .mb(px(8.0))
+                .bg(rgba((ctx.code_bg << 8) | 0xC0))
+                .rounded(px(6.0))
+                .flex()
+                .flex_col()
+                .gap_1();
+
+            if let Some(lang) = language.as_ref().filter(|lang| !lang.is_empty()) {
+                block = block.child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(ctx.text_tertiary))
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(lang.clone()),
+                );
+            }
+
+            block.child(
+                div()
+                    .font_family("Menlo")
+                    .text_sm()
+                    .text_color(rgb(ctx.text_primary))
+                    .child(code.clone()),
+            )
+        }
 
         HtmlElement::UnorderedList(items) => {
             let mut list = div()
@@ -416,7 +603,6 @@ fn render_element(element: &HtmlElement, ctx: RenderContext) -> Div {
 
             for item in items {
                 if let HtmlElement::ListItem(children) = item {
-                    let text_content = collect_text(children);
                     list = list.child(
                         div()
                             .flex()
@@ -430,7 +616,7 @@ fn render_element(element: &HtmlElement, ctx: RenderContext) -> Div {
                                 div()
                                     .flex_1()
                                     .text_color(rgb(ctx.text_secondary))
-                                    .child(text_content),
+                                    .child(render_inline_content(children, &ctx)),
                             ),
                     );
                 }
@@ -450,7 +636,6 @@ fn render_element(element: &HtmlElement, ctx: RenderContext) -> Div {
 
             for (index, item) in items.iter().enumerate() {
                 if let HtmlElement::ListItem(children) = item {
-                    let text_content = collect_text(children);
                     list = list.child(
                         div()
                             .flex()
@@ -467,7 +652,7 @@ fn render_element(element: &HtmlElement, ctx: RenderContext) -> Div {
                                 div()
                                     .flex_1()
                                     .text_color(rgb(ctx.text_secondary))
-                                    .child(text_content),
+                                    .child(render_inline_content(children, &ctx)),
                             ),
                     );
                 }
@@ -478,48 +663,32 @@ fn render_element(element: &HtmlElement, ctx: RenderContext) -> Div {
 
         HtmlElement::ListItem(children) => {
             // Standalone list item (shouldn't normally happen, but handle gracefully)
-            let text_content = collect_text(children);
             div()
                 .w_full()
                 .text_color(rgb(ctx.text_secondary))
-                .child(text_content)
+                .child(render_inline_content(children, &ctx))
         }
 
-        HtmlElement::Blockquote(children) => {
-            let text_content = collect_text(children);
-            div()
-                .w_full()
-                .pl(px(16.0))
-                .py(px(8.0))
-                .mb(px(8.0))
-                .border_l_4()
-                .border_color(rgb(ctx.quote_border))
-                .text_color(rgb(ctx.text_tertiary))
-                .child(text_content)
-        }
+        HtmlElement::Blockquote(children) => div()
+            .w_full()
+            .pl(px(16.0))
+            .py(px(8.0))
+            .mb(px(8.0))
+            .border_l_4()
+            .border_color(rgb(ctx.quote_border))
+            .text_color(rgb(ctx.text_tertiary))
+            .child(render_inline_content(children, &ctx)),
 
         HtmlElement::HorizontalRule => div().w_full().h(px(1.0)).my(px(12.0)).bg(rgb(ctx.hr_color)),
 
         HtmlElement::Link { href, children } => {
-            // Links are styled and clickable
-            let text_content = collect_text(children);
-            let mut link_div = div()
-                .text_color(rgb(ctx.accent_color))
-                .cursor_pointer()
-                .child(text_content);
-
-            if let Some(ref callback) = ctx.on_link_click {
-                let cb = callback.clone();
-                let href_for_click = href.clone();
-                link_div = link_div.on_mouse_down(
-                    gpui::MouseButton::Left,
-                    move |_event, _window, cx: &mut gpui::App| {
-                        cb(&href_for_click, cx);
-                    },
-                );
-            }
-
-            link_div
+            let mut style = DivInlineStyle::default();
+            style.link_href = Some(href.clone());
+            let mut segments = Vec::new();
+            append_inline_segments(children, &style, &mut segments);
+            div()
+                .w_full()
+                .child(render_inline_segments(&segments, &ctx))
         }
 
         HtmlElement::LineBreak => {
@@ -700,158 +869,6 @@ fn apply_tailwind_styles(mut element: Div, class_string: &str) -> Div {
     element
 }
 
-/// Collect all text content from HTML elements into a single string
-fn collect_text(elements: &[HtmlElement]) -> String {
-    let mut result = String::new();
-
-    for element in elements {
-        match element {
-            HtmlElement::Text(text) => result.push_str(text),
-            HtmlElement::Bold(children) => result.push_str(&collect_text(children)),
-            HtmlElement::Italic(children) => result.push_str(&collect_text(children)),
-            HtmlElement::InlineCode(code) => {
-                result.push('`');
-                result.push_str(code);
-                result.push('`');
-            }
-            HtmlElement::Link { children, .. } => result.push_str(&collect_text(children)),
-            HtmlElement::LineBreak => result.push('\n'),
-            HtmlElement::Header { children, .. }
-            | HtmlElement::Paragraph(children)
-            | HtmlElement::ListItem(children)
-            | HtmlElement::Blockquote(children)
-            | HtmlElement::Div { children, .. }
-            | HtmlElement::Span { children, .. } => {
-                result.push_str(&collect_text(children));
-            }
-            HtmlElement::UnorderedList(items) | HtmlElement::OrderedList(items) => {
-                for item in items {
-                    result.push_str(&collect_text(std::slice::from_ref(item)));
-                    result.push(' ');
-                }
-            }
-            HtmlElement::CodeBlock { code, .. } => {
-                result.push_str(code);
-            }
-            HtmlElement::HorizontalRule => {
-                result.push_str("---");
-            }
-        }
-    }
-
-    result
-}
-
-/// Render an inline element (text, bold, italic, code, link)
-fn render_inline(element: &HtmlElement, ctx: RenderContext) -> Div {
-    match element {
-        HtmlElement::Text(text) => div().child(text.clone()),
-
-        HtmlElement::Bold(children) => {
-            let ctx_clone = ctx.clone();
-            div()
-                .flex()
-                .flex_row()
-                .items_baseline()
-                .font_weight(FontWeight::BOLD)
-                .children(
-                    children
-                        .iter()
-                        .map(move |c| render_inline(c, ctx_clone.clone())),
-                )
-        }
-
-        HtmlElement::Italic(children) => {
-            let ctx_clone = ctx.clone();
-            div()
-                .flex()
-                .flex_row()
-                .items_baseline()
-                .text_color(rgb(ctx.text_tertiary))
-                .children(
-                    children
-                        .iter()
-                        .map(move |c| render_inline(c, ctx_clone.clone())),
-                )
-        }
-
-        HtmlElement::InlineCode(code) => div()
-            .px(px(4.0))
-            .py(px(1.0))
-            .bg(rgba((ctx.code_bg << 8) | 0x80))
-            .rounded(px(3.0))
-            .font_family("Menlo")
-            .text_xs()
-            .text_color(rgb(ctx.accent_color))
-            .child(code.clone()),
-
-        HtmlElement::Link { children, .. } => {
-            let ctx_clone = ctx.clone();
-            div()
-                .flex()
-                .flex_row()
-                .items_baseline()
-                .text_color(rgb(ctx.accent_color))
-                .children(
-                    children
-                        .iter()
-                        .map(move |c| render_inline(c, ctx_clone.clone())),
-                )
-        }
-
-        HtmlElement::LineBreak => div().h(px(14.0)),
-
-        // Block elements appearing inline - just render their content
-        HtmlElement::Header { children, .. }
-        | HtmlElement::Paragraph(children)
-        | HtmlElement::ListItem(children)
-        | HtmlElement::Blockquote(children)
-        | HtmlElement::Div { children, .. }
-        | HtmlElement::Span { children, .. } => {
-            let ctx_clone = ctx.clone();
-            div().flex().flex_row().items_baseline().children(
-                children
-                    .iter()
-                    .map(move |c| render_inline(c, ctx_clone.clone())),
-            )
-        }
-
-        HtmlElement::UnorderedList(items) | HtmlElement::OrderedList(items) => {
-            // Flatten list items inline
-            let ctx_clone = ctx.clone();
-            div()
-                .flex()
-                .flex_row()
-                .items_baseline()
-                .children(items.iter().filter_map(move |item| {
-                    if let HtmlElement::ListItem(children) = item {
-                        let ctx_inner = ctx_clone.clone();
-                        Some(
-                            div().flex().flex_row().children(
-                                children
-                                    .iter()
-                                    .map(move |c| render_inline(c, ctx_inner.clone())),
-                            ),
-                        )
-                    } else {
-                        None
-                    }
-                }))
-        }
-
-        HtmlElement::CodeBlock { code, .. } => div()
-            .px(px(4.0))
-            .py(px(1.0))
-            .bg(rgba((ctx.code_bg << 8) | 0x80))
-            .rounded(px(3.0))
-            .font_family("Menlo")
-            .text_xs()
-            .child(code.clone()),
-
-        HtmlElement::HorizontalRule => div().w(px(20.0)).h(px(1.0)).bg(rgb(ctx.hr_color)),
-    }
-}
-
 impl Focusable for DivPrompt {
     fn focus_handle(&self, _cx: &gpui::App) -> FocusHandle {
         self.focus_handle.clone()
@@ -868,12 +885,15 @@ impl Render for DivPrompt {
             move |this: &mut Self,
                   event: &gpui::KeyDownEvent,
                   _window: &mut Window,
-                  _cx: &mut Context<Self>| {
-                let key_str = event.keystroke.key.to_lowercase();
+                  cx: &mut Context<Self>| {
+                let modifiers = &event.keystroke.modifiers;
+                if modifiers.platform || modifiers.control || modifiers.alt {
+                    return;
+                }
 
-                match key_str.as_str() {
-                    "enter" | "escape" => this.submit(),
-                    _ => {}
+                if is_div_submit_key(event.keystroke.key.as_str()) {
+                    this.submit();
+                    cx.stop_propagation();
                 }
             },
         );
@@ -885,26 +905,11 @@ impl Render for DivPrompt {
         // This allows us to call back into the DivPrompt to handle submit:value links
         let weak_handle = cx.entity().downgrade();
         let on_link_click: LinkClickCallback = Arc::new(move |href: &str, cx: &mut gpui::App| {
-            logging::log("DIV", &format!("Link clicked: {}", href));
-
-            if let Some(value) = href.strip_prefix("submit:") {
-                // submit:value links - need entity context to call on_submit
-                let value_owned = value.to_string();
-                if let Some(entity) = weak_handle.upgrade() {
-                    entity.update(cx, |this, _cx| {
-                        this.submit_with_value(value_owned);
-                    });
-                }
-            } else if href.starts_with("http://") || href.starts_with("https://") {
-                if let Err(e) = open::that(href) {
-                    logging::log("DIV", &format!("Failed to open URL {}: {}", href, e));
-                }
-            } else if href.starts_with("file://") {
-                if let Err(e) = open::that(href) {
-                    logging::log("DIV", &format!("Failed to open file {}: {}", href, e));
-                }
-            } else {
-                logging::log("DIV", &format!("Unknown link protocol: {}", href));
+            let href_owned = href.to_string();
+            if let Some(entity) = weak_handle.upgrade() {
+                entity.update(cx, move |this, _cx| {
+                    this.handle_link_click(&href_owned);
+                });
             }
         });
 
@@ -956,9 +961,10 @@ impl Render for DivPrompt {
                 get_vibrancy_background(&self.theme).map(Hsla::from)
             };
 
-        // Determine container padding - use uniform padding for consistent appearance
-        // Default to 12px (matching config default) for balanced top/left spacing
-        let container_padding = self.container_options.get_padding(12.0);
+        // Determine container padding from design tokens for consistent prompt spacing.
+        let container_padding = self
+            .container_options
+            .get_padding(default_container_padding(self.design_variant));
 
         // Generate semantic IDs for div prompt elements
         let panel_semantic_id = format!("panel:content-{}", self.id);
@@ -1077,5 +1083,57 @@ mod tests {
 
         // Should not panic
         let _ = render_elements(&elements, ctx);
+    }
+
+    #[test]
+    fn test_default_container_padding_follows_design_spacing() {
+        for variant in [
+            DesignVariant::Default,
+            DesignVariant::Minimal,
+            DesignVariant::Compact,
+        ] {
+            let expected = get_tokens(variant).spacing().padding_md;
+            assert_eq!(default_container_padding(variant), expected);
+        }
+    }
+
+    #[test]
+    fn test_collect_inline_segments_preserves_nested_inline_styles_when_html_contains_formatting() {
+        let elements = parse_html(
+            "<p>Hello <strong>Bold</strong> <em>Italic</em> <code>const x = 1;</code></p>",
+        );
+        let segments = collect_inline_segments(&elements);
+
+        assert!(segments
+            .iter()
+            .any(|segment| segment.text == "Bold" && segment.style.bold));
+        assert!(segments
+            .iter()
+            .any(|segment| segment.text == "Italic" && segment.style.italic));
+        assert!(segments
+            .iter()
+            .any(|segment| segment.text == "const x = 1;" && segment.style.code));
+    }
+
+    #[test]
+    fn test_collect_inline_segments_preserves_link_target_when_html_contains_nested_link_text() {
+        let elements =
+            parse_html("<p>Open <a href=\"submit:continue\"><strong>Continue</strong></a></p>");
+        let segments = collect_inline_segments(&elements);
+
+        assert!(segments.iter().any(|segment| {
+            segment.text == "Continue"
+                && segment.style.bold
+                && segment.style.link_href.as_deref() == Some("submit:continue")
+        }));
+    }
+
+    #[test]
+    fn test_is_div_submit_key_handles_enter_return_escape_and_esc() {
+        assert!(is_div_submit_key("enter"));
+        assert!(is_div_submit_key("return"));
+        assert!(is_div_submit_key("escape"));
+        assert!(is_div_submit_key("esc"));
+        assert!(!is_div_submit_key("tab"));
     }
 }
