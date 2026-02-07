@@ -1,5 +1,6 @@
 use super::*;
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod tests {
     use std::collections::HashMap;
 
@@ -225,20 +226,26 @@ mod tests {
             Would you like me to create a list on a different topic?\n";
 
         let mut offset = 0;
+        let mut revealed = String::new();
+        let mut boundary_count = 0usize;
 
-        // Simulate word-by-word reveal (is_done = false)
-        loop {
-            match next_reveal_boundary(content, offset) {
-                Some(new_offset) if new_offset > offset => {
-                    offset = new_offset;
-                }
-                _ => break, // partial word or end
-            }
+        while let Some(new_offset) = next_reveal_boundary(content, offset) {
+            assert!(
+                new_offset > offset,
+                "Reveal boundary must always advance. offset={offset}, new_offset={new_offset}"
+            );
+            revealed.push_str(&content[offset..new_offset]);
+            offset = new_offset;
+            boundary_count += 1;
         }
 
-        // Simulate final flush (is_done = true) — always set to full content
-        let revealed = content.to_string();
+        // Simulate the final "flush remainder" pass done when streaming finishes.
+        revealed.push_str(&content[offset..]);
 
+        assert!(
+            boundary_count > 1,
+            "Multi-line content should reveal progressively before final flush"
+        );
         assert_eq!(revealed, content);
     }
 
@@ -249,6 +256,8 @@ mod tests {
         let content = "- First\n- Second\n- Third item with longer text\n\nParagraph after.\n";
         let mut offset = 0;
         let mut prev = 0;
+        let mut reconstructed = String::new();
+        let mut boundary_count = 0usize;
         while let Some(new_offset) = next_reveal_boundary(content, offset) {
             assert!(
                 new_offset > prev,
@@ -256,15 +265,24 @@ mod tests {
                 prev,
                 new_offset
             );
+            assert!(
+                content.is_char_boundary(new_offset),
+                "Offset {} must be on a UTF-8 char boundary",
+                new_offset
+            );
+            reconstructed.push_str(&content[offset..new_offset]);
             prev = new_offset;
             offset = new_offset;
+            boundary_count += 1;
         }
-        // After reveal loop, flush remainder
+        reconstructed.push_str(&content[offset..]);
         assert!(
-            offset <= content.len(),
-            "Final offset {} exceeds content length {}",
-            offset,
-            content.len()
+            boundary_count > 0,
+            "Expected at least one progressive boundary for newline-delimited input"
+        );
+        assert!(
+            reconstructed == content,
+            "Reconstructed content must match original without gaps or duplication"
         );
     }
 
@@ -333,9 +351,10 @@ mod tests {
         let result = std::panic::catch_unwind(|| {
             next_chat_scroll_follow_state(true, ChatScrollDirection::Down, usize::MAX, 10)
         });
+        let follow_manual = result.expect("Large indices should not panic while computing state");
         assert!(
-            result.is_ok(),
-            "Large indices should not panic while computing follow state"
+            !follow_manual,
+            "Large indices should saturate near-bottom detection and re-enable auto-follow"
         );
     }
 }
