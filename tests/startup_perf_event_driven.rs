@@ -1,11 +1,23 @@
 use std::fs;
 
-fn read_app_impl_source() -> String {
-    fs::read_to_string("src/app_impl.rs").expect("failed to read src/app_impl.rs")
+fn read_source(path: &str) -> String {
+    fs::read_to_string(path).unwrap_or_else(|err| panic!("failed to read {path}: {err}"))
+}
+
+fn read_script_list_startup_source() -> String {
+    read_source("src/app_impl/startup.rs")
+}
+
+fn read_prompt_ai_source() -> String {
+    read_source("src/app_impl/prompt_ai.rs")
 }
 
 fn read_main_source() -> String {
-    fs::read_to_string("src/main.rs").expect("failed to read src/main.rs")
+    read_source("src/main.rs")
+}
+
+fn read_main_startup_bootstrap_source() -> String {
+    read_source("src/main_entry/app_run_setup.rs")
 }
 
 fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
@@ -33,15 +45,15 @@ fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
 
 #[test]
 fn test_script_list_app_new_uses_event_driven_receive_when_loading_startup_data() {
-    let source = read_app_impl_source();
-    let body = function_body(&source, "fn new(");
+    let source = read_script_list_startup_source();
+    let body = function_body(&source, "pub(crate) fn new(");
 
     assert!(
         body.contains("rx.recv().await"),
         "ScriptListApp::new should await channel receive instead of polling"
     );
     assert!(
-        !body.contains("rx.try_recv()"),
+        !body.contains("try_recv("),
         "ScriptListApp::new should not poll with try_recv()"
     );
     assert!(
@@ -52,7 +64,7 @@ fn test_script_list_app_new_uses_event_driven_receive_when_loading_startup_data(
 
 #[test]
 fn test_rebuild_provider_registry_async_uses_event_driven_receive_when_refreshing_registry() {
-    let source = read_app_impl_source();
+    let source = read_prompt_ai_source();
     let body = function_body(&source, "pub fn rebuild_provider_registry_async");
 
     assert!(
@@ -71,17 +83,23 @@ fn test_rebuild_provider_registry_async_uses_event_driven_receive_when_refreshin
 
 #[test]
 fn test_main_defers_tray_initialization_until_after_window_creation_for_first_render() {
-    let source = read_main_source();
+    let main_source = read_main_source();
+    assert!(
+        main_source.contains("include!(\"main_entry/app_run_setup.rs\");"),
+        "main.rs should include main_entry/app_run_setup.rs for startup wiring"
+    );
+
+    let source = read_main_startup_bootstrap_source();
 
     let window_open_log_idx = source
         .find("Window opened, creating ScriptListApp wrapped in Root")
-        .expect("missing window-open log in main.rs");
+        .expect("missing window-open log in app_run_setup.rs");
     let tray_init_idx = source
         .find("Tray icon initialized successfully (deferred)")
-        .expect("missing deferred tray init log in main.rs");
+        .expect("missing deferred tray init log in app_run_setup.rs");
     let deferred_timer_idx = source
         .find("Duration::from_millis(1)")
-        .expect("missing deferred tray init timer in main.rs");
+        .expect("missing deferred tray init timer in app_run_setup.rs");
 
     assert!(
         tray_init_idx > window_open_log_idx,
@@ -95,7 +113,13 @@ fn test_main_defers_tray_initialization_until_after_window_creation_for_first_re
 
 #[test]
 fn test_main_tray_handler_uses_event_driven_receive_when_processing_menu_events() {
-    let source = read_main_source();
+    let main_source = read_main_source();
+    assert!(
+        main_source.contains("include!(\"main_entry/app_run_setup.rs\");"),
+        "main.rs should include main_entry/app_run_setup.rs for startup wiring"
+    );
+
+    let source = read_main_startup_bootstrap_source();
 
     let tray_block_start = source
         .find("Tray menu event handler started (event-driven)")
