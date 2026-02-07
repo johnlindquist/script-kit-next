@@ -19,22 +19,22 @@ use super::{find_ignore_ascii_case, NucleoCtx, MIN_FUZZY_QUERY_LEN};
 pub fn fuzzy_search_windows(windows: &[WindowInfo], query: &str) -> Vec<WindowMatch> {
     if query.is_empty() {
         // If no query, return all windows with equal score, sorted by app name then title
-        let mut matches: Vec<WindowMatch> = windows
-            .iter()
-            .map(|w| WindowMatch {
-                window: w.clone(),
+        let mut matches: Vec<usize> = (0..windows.len()).collect();
+        matches.sort_by(|a_idx, b_idx| match windows[*a_idx].app.cmp(&windows[*b_idx].app) {
+            Ordering::Equal => windows[*a_idx].title.cmp(&windows[*b_idx].title),
+            other => other,
+        });
+        return matches
+            .into_iter()
+            .map(|index| WindowMatch {
+                window: windows[index].clone(),
                 score: 0,
             })
             .collect();
-        matches.sort_by(|a, b| match a.window.app.cmp(&b.window.app) {
-            Ordering::Equal => a.window.title.cmp(&b.window.title),
-            other => other,
-        });
-        return matches;
     }
 
     let query_lower = query.to_lowercase();
-    let mut matches = Vec::new();
+    let mut matches: Vec<(usize, i32)> = Vec::with_capacity(windows.len());
 
     // Create nucleo context once for all windows - reuses buffer across calls
     let mut nucleo = NucleoCtx::new(&query_lower);
@@ -44,7 +44,7 @@ pub fn fuzzy_search_windows(windows: &[WindowInfo], query: &str) -> Vec<WindowMa
     // Gate nucleo fuzzy matching on minimum query length to reduce noise
     let use_nucleo = query_lower.len() >= MIN_FUZZY_QUERY_LEN;
 
-    for window in windows {
+    for (index, window) in windows.iter().enumerate() {
         let mut score = 0i32;
 
         // Score by app name match - highest priority
@@ -82,21 +82,24 @@ pub fn fuzzy_search_windows(windows: &[WindowInfo], query: &str) -> Vec<WindowMa
         }
 
         if score > 0 {
-            matches.push(WindowMatch {
-                window: window.clone(),
-                score,
-            });
+            matches.push((index, score));
         }
     }
 
     // Sort by score (highest first), then by app name, then by title for ties
-    matches.sort_by(|a, b| match b.score.cmp(&a.score) {
-        Ordering::Equal => match a.window.app.cmp(&b.window.app) {
-            Ordering::Equal => a.window.title.cmp(&b.window.title),
+    matches.sort_by(|(a_idx, a_score), (b_idx, b_score)| match b_score.cmp(a_score) {
+        Ordering::Equal => match windows[*a_idx].app.cmp(&windows[*b_idx].app) {
+            Ordering::Equal => windows[*a_idx].title.cmp(&windows[*b_idx].title),
             other => other,
         },
         other => other,
     });
 
     matches
+        .into_iter()
+        .map(|(index, score)| WindowMatch {
+            window: windows[index].clone(),
+            score,
+        })
+        .collect()
 }
