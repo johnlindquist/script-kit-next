@@ -178,4 +178,63 @@ mod tests {
         assert!(script.is_suggested);
         assert_eq!(script.frecency_path, Some("frecency:path".to_string()));
     }
+
+    #[test]
+    fn test_script_info_default_sets_safe_empty_context() {
+        let info = ScriptInfo::default();
+        assert_eq!(info.name, "");
+        assert_eq!(info.path, "");
+        assert!(!info.is_script);
+        assert!(!info.is_scriptlet);
+        assert!(!info.is_agent);
+        assert_eq!(info.action_verb, "Run");
+        assert!(info.shortcut.is_none());
+        assert!(info.alias.is_none());
+        assert!(!info.is_suggested);
+        assert!(info.frecency_path.is_none());
+    }
+
+    #[test]
+    fn test_script_info_with_all_treats_whitespace_shortcut_and_alias_as_missing() {
+        let info = ScriptInfo::with_all(
+            "test",
+            "/path/to/test.ts",
+            true,
+            "Run",
+            Some("   ".to_string()),
+            Some("\n\t".to_string()),
+        );
+        assert!(info.shortcut.is_none());
+        assert!(info.alias.is_none());
+    }
+
+    #[test]
+    fn test_script_info_with_action_verb_defaults_to_run_when_verb_is_blank() {
+        let info = ScriptInfo::with_action_verb("test", "/path/to/test.ts", true, "   ");
+        assert_eq!(info.action_verb, "Run");
+    }
+
+    #[test]
+    fn test_script_info_with_frecency_disables_suggested_when_path_is_missing() {
+        let info =
+            ScriptInfo::new("test", "/path/to/test.ts").with_frecency(true, Some(" ".into()));
+        assert!(!info.is_suggested);
+        assert!(info.frecency_path.is_none());
+    }
+
+    #[test]
+    fn test_script_info_from_str_tuple_creates_script() {
+        let info = ScriptInfo::from(("test-script", "/path/to/test.ts"));
+        assert_eq!(info.name, "test-script");
+        assert_eq!(info.path, "/path/to/test.ts");
+        assert!(info.is_script);
+    }
+
+    #[test]
+    fn test_script_info_from_string_tuple_creates_script() {
+        let info = ScriptInfo::from(("test-script".to_string(), "/path/to/test.ts".to_string()));
+        assert_eq!(info.name, "test-script");
+        assert_eq!(info.path, "/path/to/test.ts");
+        assert!(info.is_script);
+    }
 }
