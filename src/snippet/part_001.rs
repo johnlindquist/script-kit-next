@@ -216,6 +216,17 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_parse_placeholder_keeps_escaped_closing_brace_literal() {
+        let snippet = ParsedSnippet::parse("${1:foo\\}}");
+
+        assert_eq!(snippet.text, "foo}");
+
+        let t1 = snippet.get_tabstop(1).unwrap();
+        assert_eq!(t1.placeholder.as_deref(), Some("foo}"));
+        assert_eq!(t1.ranges, vec![(0, 4)]);
+    }
+
     // --- Tests for update_tabstops_after_edit ---
 
     #[test]
@@ -321,6 +332,21 @@ mod tests {
 
         // First range expands, second range shifts
         assert_eq!(snippet.tabstops[0].ranges, vec![(0, 5), (10, 13)]);
+    }
+
+    #[test]
+    fn test_update_tabstops_clamps_range_when_delete_exceeds_current_tabstop() {
+        // Deleting beyond the edited tabstop should not underflow indices.
+        let mut snippet = ParsedSnippet::parse("${1:abc}${2:def}");
+        assert_eq!(snippet.tabstops[0].ranges, vec![(0, 3)]);
+        assert_eq!(snippet.tabstops[1].ranges, vec![(3, 6)]);
+
+        // Delete five chars from position 0 while editing the first tabstop.
+        // This fully removes tabstop 1 and consumes two chars from tabstop 2.
+        snippet.update_tabstops_after_edit(0, 0, 5, 0);
+
+        assert_eq!(snippet.tabstops[0].ranges, vec![(0, 0)]);
+        assert_eq!(snippet.tabstops[1].ranges, vec![(0, 1)]);
     }
 
     #[test]
@@ -434,6 +460,17 @@ export default function ${1:Component}() {
 
         assert_eq!(snippet.tabstops.len(), 1);
         assert_eq!(snippet.tabstop_order(), vec![0]);
+    }
+
+    #[test]
+    fn test_parse_merges_all_ranges_when_template_contains_multiple_final_cursors() {
+        let snippet = ParsedSnippet::parse("$0 and $0");
+
+        assert_eq!(snippet.text, " and ");
+        assert_eq!(snippet.tabstop_order(), vec![0]);
+
+        let t0 = snippet.get_tabstop(0).unwrap();
+        assert_eq!(t0.ranges, vec![(0, 0), (5, 5)]);
     }
 
     #[test]
