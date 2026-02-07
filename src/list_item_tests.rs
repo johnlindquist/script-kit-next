@@ -5,7 +5,9 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::list_item::format_shortcut_display;
+    use crate::list_item::{
+        format_shortcut_display, should_show_search_description, should_show_search_shortcut,
+    };
 
     #[test]
     fn test_format_shortcut_display_plus_delimited() {
@@ -44,5 +46,48 @@ mod tests {
     fn test_format_shortcut_display_mixed_format() {
         // Plus and space mixed (e.g., "cmd + shift + k")
         assert_eq!(format_shortcut_display("cmd + shift + k"), "⌘⇧K");
+    }
+
+    #[test]
+    fn test_should_show_search_shortcut_only_for_selected_or_hovered_rows() {
+        assert!(!should_show_search_shortcut(
+            true,  // is_filtering
+            false, // selected
+            false  // hovered
+        ));
+        assert!(should_show_search_shortcut(
+            true, // is_filtering
+            true, // selected
+            false
+        ));
+        assert!(should_show_search_shortcut(
+            true,  // is_filtering
+            false, // selected
+            true   // hovered
+        ));
+    }
+
+    #[test]
+    fn test_should_show_search_description_only_when_selected_hovered_or_description_matches() {
+        assert!(!should_show_search_description(
+            false, // selected
+            false, // hovered
+            false  // has_description_match
+        ));
+        assert!(should_show_search_description(
+            true,  // selected
+            false, // hovered
+            false
+        ));
+        assert!(should_show_search_description(
+            false, // selected
+            true,  // hovered
+            false
+        ));
+        assert!(should_show_search_description(
+            false, // selected
+            false, // hovered
+            true   // has_description_match
+        ));
     }
 }

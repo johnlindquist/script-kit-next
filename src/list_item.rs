@@ -81,6 +81,8 @@ const DESC_FONT_SIZE: f32 = 12.0;
 const DESC_LINE_HEIGHT: f32 = 16.0;
 /// Keyboard shortcut badge font size
 const BADGE_FONT_SIZE: f32 = 11.0;
+/// Search-mode shortcut font size (kept compact to reduce clutter)
+const SEARCH_SHORTCUT_FONT_SIZE: f32 = 10.0;
 /// Tool/language badge font size (e.g. "ts", "bash")
 const TOOL_BADGE_FONT_SIZE: f32 = 10.0;
 /// Source hint font size (e.g. "main", "cleanshot")
@@ -134,6 +136,8 @@ const SECTION_GAP: f32 = 6.0;
 
 /// 85% opacity — used for selected description text
 const ALPHA_STRONG: u32 = 0xD9;
+/// 70% opacity — selected description remains secondary to the item title
+const ALPHA_DESC_SELECTED: u32 = 0xB3;
 /// 72% opacity — used for non-selected item names
 /// Softer than ALPHA_STRONG to let non-selected items recede (Raycast/Spotlight pattern)
 const ALPHA_NAME_QUIET: u32 = 0xB8;
@@ -151,6 +155,10 @@ const ALPHA_DESC_QUIET: u32 = 0x59;
 /// 70% opacity — used for source hint text
 /// (Bumped from 65% for WCAG-friendlier contrast on vibrancy)
 const ALPHA_HINT: u32 = 0xB3;
+/// 60% opacity — subtle type labels during search
+const ALPHA_TYPE_LABEL: u32 = 0x99;
+/// 75% opacity — subtle matched-character tint without high-contrast flash
+const ALPHA_MATCH_HIGHLIGHT: u32 = 0xBF;
 /// 65% opacity — used for section header count
 /// (Bumped from 60% for better readability of numeric info)
 const ALPHA_SUBTLE: u32 = 0xA6;
@@ -581,6 +589,27 @@ pub fn format_shortcut_display(shortcut: &str) -> String {
     result
 }
 
+/// Search rows keep shortcuts only on the actively focused row to avoid right-side noise.
+pub(crate) fn should_show_search_shortcut(
+    is_filtering: bool,
+    selected: bool,
+    hovered: bool,
+) -> bool {
+    if !is_filtering {
+        return true;
+    }
+    selected || hovered
+}
+
+/// Search rows keep descriptions only when they add context for the current focus or match.
+pub(crate) fn should_show_search_description(
+    selected: bool,
+    hovered: bool,
+    has_description_match: bool,
+) -> bool {
+    selected || hovered || has_description_match
+}
+
 /// Callback type for hover events on list items.
 /// The callback receives the item index and a boolean indicating hover state (true = entered, false = left).
 pub type OnHoverCallback = Box<dyn Fn(usize, bool) + 'static>;
@@ -625,7 +654,7 @@ pub struct ListItem {
     /// Character indices in the description that match the search query (for fuzzy highlight)
     /// When present, matched characters are rendered with accent color for visual emphasis
     description_highlight_indices: Option<Vec<usize>>,
-    /// Type tag shown as a subtle colored pill (e.g., "Script", "Snippet", "App")
+    /// Type tag shown as subtle colored text (e.g., "Script", "Snippet", "App")
     /// Only shown during search mode to help distinguish mixed result types
     type_tag: Option<TypeTag>,
     /// Source/kit name (e.g., "main", "cleanshot") shown as subtle text during search
@@ -635,7 +664,7 @@ pub struct ListItem {
     tool_badge: Option<String>,
 }
 
-/// Type tag displayed as a colored pill on list items during search
+/// Type tag displayed as subtle colored text on list items during search
 #[derive(Clone, Debug)]
 pub struct TypeTag {
     /// Display label (e.g., "Script", "Snippet", "App")
@@ -817,7 +846,7 @@ impl ListItem {
         self
     }
 
-    /// Set a type tag to show as a colored pill (e.g., "Script", "Snippet")
+    /// Set a type tag to show as subtle colored text (e.g., "Script", "Snippet")
     /// Only used during search mode to distinguish mixed result types
     pub fn type_tag(mut self, tag: TypeTag) -> Self {
         self.type_tag = Some(tag);
@@ -978,13 +1007,12 @@ impl RenderOnce for ListItem {
             // Build StyledText with highlighted matched characters
             let index_set: HashSet<usize> = indices.iter().copied().collect();
             let highlight_color = if self.selected {
-                rgb(colors.accent_selected)
-            } else {
                 rgb(colors.text_primary)
+            } else {
+                rgba((colors.text_primary << 8) | ALPHA_MATCH_HIGHLIGHT)
             };
             let highlight_style = HighlightStyle {
                 color: Some(highlight_color.into()),
-                font_weight: Some(FontWeight::BOLD),
                 ..Default::default()
             };
 
@@ -998,9 +1026,9 @@ impl RenderOnce for ListItem {
 
             // Base text color is more muted when highlighting to create contrast
             let base_color = if self.selected {
-                rgb(colors.text_secondary)
+                rgba((colors.text_secondary << 8) | ALPHA_HINT)
             } else {
-                rgb(colors.text_muted)
+                rgba((colors.text_muted << 8) | ALPHA_NAME_QUIET)
             };
 
             let styled = StyledText::new(self.name.to_string()).with_highlights(highlights);
@@ -1036,17 +1064,19 @@ impl RenderOnce for ListItem {
         item_content = item_content.child(name_element);
 
         // Description - progressive disclosure pattern (Spotlight/Raycast style)
-        // Only show descriptions when they add value:
-        // - Selected item: always show (detail context)
-        // - Hovered item: show on hover (peek preview)
-        // - Search active: show when filtering (match context with highlights)
-        // - Default: hidden to reduce visual density and make the list scannable
+        // Search mode keeps rows quieter by showing descriptions only when focused
+        // or when the description itself contains a search match.
         if let Some(desc) = self.description {
-            let show_description = self.selected || self.hovered || is_filtering;
+            let has_description_match = self.description_highlight_indices.is_some();
+            let show_description = if is_filtering {
+                should_show_search_description(self.selected, self.hovered, has_description_match)
+            } else {
+                self.selected || self.hovered
+            };
 
             if show_description {
                 let desc_alpha = if self.selected {
-                    ALPHA_STRONG
+                    ALPHA_DESC_SELECTED
                 } else {
                     ALPHA_DESC_QUIET
                 };
@@ -1056,10 +1086,13 @@ impl RenderOnce for ListItem {
                 {
                     // Build StyledText with highlighted matched characters in description
                     let index_set: HashSet<usize> = desc_indices.iter().copied().collect();
-                    let highlight_color = rgb(colors.accent_selected);
+                    let highlight_color = if self.selected {
+                        rgba((colors.text_primary << 8) | ALPHA_MATCH_HIGHLIGHT)
+                    } else {
+                        rgba((colors.text_secondary << 8) | ALPHA_HINT)
+                    };
                     let highlight_style = HighlightStyle {
                         color: Some(highlight_color.into()),
-                        font_weight: Some(FontWeight::SEMIBOLD),
                         ..Default::default()
                     };
 
@@ -1073,7 +1106,7 @@ impl RenderOnce for ListItem {
                     }
 
                     let base_alpha = if self.selected {
-                        ALPHA_STRONG
+                        ALPHA_DESC_SELECTED
                     } else {
                         ALPHA_DESC_QUIET
                     };
@@ -1105,20 +1138,34 @@ impl RenderOnce for ListItem {
         // Shortcut badge (if present) - right-aligned with kbd-style rendering
         // Uses macOS-native modifier symbols (⌘, ⇧, ⌥, ⌃) for a native feel
         let shortcut_element = if let Some(sc) = self.shortcut {
-            let display_text = format_shortcut_display(&sc);
-            let badge_border = (colors.text_dimmed << 8) | ALPHA_BORDER;
-            div()
-                .text_size(px(BADGE_FONT_SIZE))
-                .font_family(FONT_MONO)
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(rgba((colors.text_muted << 8) | ALPHA_READABLE))
-                .px(px(BADGE_PADDING_X))
-                .py(px(BADGE_PADDING_Y))
-                .rounded(px(BADGE_RADIUS))
-                .bg(rgba((colors.text_dimmed << 8) | ALPHA_TINT_LIGHT))
-                .border_1()
-                .border_color(rgba(badge_border))
-                .child(display_text)
+            let show_shortcut =
+                should_show_search_shortcut(is_filtering, self.selected, self.hovered);
+            if show_shortcut {
+                let display_text = format_shortcut_display(&sc);
+                if is_filtering {
+                    div()
+                        .text_size(px(SEARCH_SHORTCUT_FONT_SIZE))
+                        .font_family(FONT_MONO)
+                        .text_color(rgba((colors.text_dimmed << 8) | ALPHA_HINT))
+                        .child(display_text)
+                } else {
+                    let badge_border = (colors.text_dimmed << 8) | ALPHA_BORDER;
+                    div()
+                        .text_size(px(BADGE_FONT_SIZE))
+                        .font_family(FONT_MONO)
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(rgba((colors.text_muted << 8) | ALPHA_READABLE))
+                        .px(px(BADGE_PADDING_X))
+                        .py(px(BADGE_PADDING_Y))
+                        .rounded(px(BADGE_RADIUS))
+                        .bg(rgba((colors.text_dimmed << 8) | ALPHA_TINT_LIGHT))
+                        .border_1()
+                        .border_color(rgba(badge_border))
+                        .child(display_text)
+                }
+            } else {
+                div()
+            }
         } else {
             div()
         };
@@ -1166,13 +1213,12 @@ impl RenderOnce for ListItem {
                     .flex_shrink_0()
                     .gap(px(ITEM_ACCESSORIES_GAP));
 
-                // Tool badge, source hint, and type tag use progressive disclosure:
-                // Only shown on selected/hovered items or during search.
-                // Shortcut badges always visible (keyboard discoverability).
+                // Tool badge, source hint, and type tag use progressive disclosure.
+                // Search mode intentionally strips noisy metadata to keep rows calm.
                 let show_accessories = self.selected || self.hovered || is_filtering;
 
                 // Tool/language badge for scriptlets (e.g., "ts", "bash")
-                if show_accessories {
+                if show_accessories && !is_filtering {
                     if let Some(ref badge) = self.tool_badge {
                         let badge_bg = (colors.text_dimmed << 8) | ALPHA_TINT_MEDIUM;
                         accessories = accessories.child(
@@ -1190,7 +1236,7 @@ impl RenderOnce for ListItem {
                 }
 
                 // Source/kit hint (e.g., "main", "cleanshot") - very subtle
-                if show_accessories {
+                if show_accessories && !is_filtering {
                     if let Some(ref hint) = self.source_hint {
                         accessories = accessories.child(
                             div()
@@ -1201,21 +1247,13 @@ impl RenderOnce for ListItem {
                     }
                 }
 
-                // Type tag pill (shown during search to distinguish result types)
+                // Type tag stays visible during search, but as quiet text instead of a pill badge.
                 if let Some(ref tag) = self.type_tag {
-                    let tag_bg = (tag.color << 8) | ALPHA_TAG_BG;
-                    let tag_border = (tag.color << 8) | ALPHA_TAG_BORDER;
                     accessories = accessories.child(
                         div()
                             .text_size(px(TYPE_TAG_FONT_SIZE))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(rgb(tag.color))
-                            .px(px(TYPE_TAG_PADDING_X))
-                            .py(px(TYPE_TAG_PADDING_Y))
-                            .rounded(px(TYPE_TAG_RADIUS))
-                            .bg(rgba(tag_bg))
-                            .border_1()
-                            .border_color(rgba(tag_border))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(rgba((tag.color << 8) | ALPHA_TYPE_LABEL))
                             .child(tag.label),
                     );
                 }
