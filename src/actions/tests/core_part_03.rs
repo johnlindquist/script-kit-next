@@ -1,3 +1,5 @@
+use super::*;
+
     #[test]
     fn test_alias_actions_dynamic() {
         // Test that alias actions change based on existing alias
@@ -153,4 +155,130 @@
             default_closes.should_close(),
             "close: None should default to true"
         );
+    }
+
+    #[test]
+    fn test_protocol_action_deserializes_default_routing_flags() {
+        let parsed: ProtocolAction = serde_json::from_str(r#"{"name":"Default Action"}"#)
+            .expect("ProtocolAction should deserialize with defaults");
+
+        assert_eq!(parsed.name, "Default Action");
+        assert!(!parsed.has_action, "hasAction should default to false");
+        assert!(parsed.is_visible(), "visible should default to true");
+        assert!(parsed.should_close(), "close should default to true");
+    }
+
+    #[test]
+    fn test_protocol_action_deserializes_explicit_camel_case_flags() {
+        let parsed: ProtocolAction = serde_json::from_str(
+            r#"{
+                "name":"SDK Action",
+                "hasAction":true,
+                "visible":false,
+                "close":false,
+                "shortcut":"cmd+k",
+                "value":"route-me"
+            }"#,
+        )
+        .expect("ProtocolAction should deserialize camelCase flags");
+
+        assert!(parsed.has_action);
+        assert!(!parsed.is_visible());
+        assert!(!parsed.should_close());
+        assert_eq!(parsed.shortcut.as_deref(), Some("cmd+k"));
+        assert_eq!(parsed.value.as_deref(), Some("route-me"));
+    }
+
+    #[test]
+    fn test_scriptlet_custom_actions_are_converted_with_sdk_routing() {
+        let script = ScriptInfo::scriptlet("Quick Open", "/path/to/urls.md#quick-open", None, None);
+        let mut scriptlet = crate::scriptlets::Scriptlet::new(
+            "Quick Open".to_string(),
+            "bash".to_string(),
+            "echo test".to_string(),
+        );
+        scriptlet.actions.push(crate::scriptlets::ScriptletAction {
+            name: "Copy to Clipboard".to_string(),
+            command: "copy-to-clipboard".to_string(),
+            tool: "bash".to_string(),
+            code: "echo '{{selection}}' | pbcopy".to_string(),
+            inputs: vec!["selection".to_string()],
+            shortcut: Some("cmd+shift+c".to_string()),
+            description: Some("Copy current selection".to_string()),
+        });
+
+        let actions = get_scriptlet_context_actions_with_custom(&script, Some(&scriptlet));
+
+        assert_eq!(actions[0].id, "run_script");
+        assert_eq!(actions[1].id, "scriptlet_action:copy-to-clipboard");
+
+        let custom = actions
+            .iter()
+            .find(|a| a.id == "scriptlet_action:copy-to-clipboard")
+            .expect("custom scriptlet action should exist");
+        assert!(custom.has_action, "custom scriptlet actions must route to SDK");
+        assert_eq!(custom.value.as_deref(), Some("copy-to-clipboard"));
+        assert_eq!(custom.shortcut.as_deref(), Some("⌘⇧C"));
+        assert_eq!(custom.section.as_deref(), Some("Actions"));
+    }
+
+    #[test]
+    fn test_note_switcher_preview_description_truncates_and_includes_relative_time() {
+        let preview = "a".repeat(65);
+        let notes = vec![NoteSwitcherNoteInfo {
+            id: "note-1".to_string(),
+            title: "Preview Note".to_string(),
+            char_count: 999,
+            is_current: false,
+            is_pinned: false,
+            preview,
+            relative_time: "2m ago".to_string(),
+        }];
+
+        let actions = get_note_switcher_actions(&notes);
+        let description = actions[0]
+            .description
+            .as_deref()
+            .expect("description should be present");
+        assert_eq!(description, format!("{}… · 2m ago", "a".repeat(60)));
+    }
+
+    #[test]
+    fn test_ai_command_bar_extended_actions_have_expected_sections() {
+        let actions = get_ai_command_bar_actions();
+
+        let export = actions
+            .iter()
+            .find(|a| a.id == "export_markdown")
+            .expect("missing export_markdown action");
+        assert_eq!(export.section.as_deref(), Some("Export"));
+        assert!(export.icon.is_some());
+
+        let branch = actions
+            .iter()
+            .find(|a| a.id == "branch_from_last")
+            .expect("missing branch_from_last action");
+        assert_eq!(branch.section.as_deref(), Some("Actions"));
+        assert!(branch.icon.is_some());
+
+        let help = actions
+            .iter()
+            .find(|a| a.id == "toggle_shortcuts_help")
+            .expect("missing toggle_shortcuts_help action");
+        assert_eq!(help.section.as_deref(), Some("Help"));
+        assert_eq!(help.shortcut.as_deref(), Some("⌘/"));
+    }
+
+    #[test]
+    fn test_script_context_run_title_uses_custom_action_verb() {
+        let script =
+            ScriptInfo::with_action_verb("Window Switcher", "builtin:windows", false, "Switch to");
+        let actions = get_script_context_actions(&script);
+        let run_action = actions
+            .iter()
+            .find(|a| a.id == "run_script")
+            .expect("run_script action should exist");
+
+        assert_eq!(run_action.title, "Switch to \"Window Switcher\"");
+        assert_eq!(run_action.description.as_deref(), Some("Switch to this item"));
     }
