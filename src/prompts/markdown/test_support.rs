@@ -1,6 +1,16 @@
 use super::*;
 
 #[cfg(test)]
+fn flush_spans_to_active_list_item(spans: &mut Vec<InlineSpan>, list_item_stack: &mut [ListItem]) {
+    if spans.is_empty() {
+        return;
+    }
+    if let Some(item) = list_item_stack.last_mut() {
+        item.spans.append(spans);
+    }
+}
+
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum TestBlock {
     /// A paragraph with concatenated text content.
@@ -50,6 +60,7 @@ pub(super) fn parse_markdown_blocks(text: &str) -> Vec<TestBlock> {
                     spans.clear();
                 }
                 Tag::List(start) => {
+                    flush_spans_to_active_list_item(&mut spans, &mut list_item_stack);
                     list_stack.push(ListState {
                         ordered: start.is_some(),
                         start: start.unwrap_or(1) as usize,
@@ -106,29 +117,29 @@ pub(super) fn parse_markdown_blocks(text: &str) -> Vec<TestBlock> {
             Event::End(tag) => match tag {
                 TagEnd::Paragraph => {
                     if !spans.is_empty() {
-                        if let Some(item) = list_item_stack.last_mut() {
-                            item.spans.append(&mut spans);
+                        if !list_item_stack.is_empty() {
+                            flush_spans_to_active_list_item(&mut spans, &mut list_item_stack);
                         } else {
-                            let text: String = spans.iter().map(|s| s.text.as_str()).collect();
+                            let text: String = std::mem::take(&mut spans)
+                                .iter()
+                                .map(|s| s.text.as_str())
+                                .collect();
                             blocks.push(TestBlock::Paragraph(text));
-                            spans.clear();
                         }
                     }
                 }
                 TagEnd::Heading(_) => {
                     if !spans.is_empty() {
                         let level = heading_level.take().unwrap_or(3);
-                        let text: String = spans.iter().map(|s| s.text.as_str()).collect();
+                        let text: String = std::mem::take(&mut spans)
+                            .iter()
+                            .map(|s| s.text.as_str())
+                            .collect();
                         blocks.push(TestBlock::Heading(level, text));
-                        spans.clear();
                     }
                 }
                 TagEnd::Item => {
-                    if !spans.is_empty() {
-                        if let Some(item) = list_item_stack.last_mut() {
-                            item.spans.append(&mut spans);
-                        }
-                    }
+                    flush_spans_to_active_list_item(&mut spans, &mut list_item_stack);
                     if let Some(item) = list_item_stack.pop() {
                         if let Some(list) = list_stack.last_mut() {
                             list.items.push(item);
@@ -146,27 +157,27 @@ pub(super) fn parse_markdown_blocks(text: &str) -> Vec<TestBlock> {
                 }
                 TagEnd::TableCell => {
                     if let Some(ts) = table_state.as_mut() {
-                        let cell_text: String = spans.iter().map(|s| s.text.as_str()).collect();
+                        let cell_text: String = std::mem::take(&mut spans)
+                            .iter()
+                            .map(|s| s.text.as_str())
+                            .collect();
                         ts.current_row.push(vec![InlineSpan {
                             text: cell_text,
                             style: InlineStyle::default(),
                             link_url: None,
                         }]);
                     }
-                    spans.clear();
                 }
                 TagEnd::TableHead => {
                     if let Some(ts) = table_state.as_mut() {
-                        ts.headers = ts.current_row.clone();
-                        ts.current_row.clear();
+                        ts.headers = std::mem::take(&mut ts.current_row);
                         ts.in_head = false;
                     }
                 }
                 TagEnd::TableRow => {
                     if let Some(ts) = table_state.as_mut() {
                         if !ts.in_head {
-                            ts.rows.push(ts.current_row.clone());
-                            ts.current_row.clear();
+                            ts.rows.push(std::mem::take(&mut ts.current_row));
                         }
                     }
                 }

@@ -219,6 +219,62 @@ fn markdown_image_preserves_alt_text_and_url() {
 }
 
 #[test]
+fn linked_markdown_image_uses_outer_link_destination() {
+    let md = "[![diagram](https://example.com/diagram.png)](https://example.com/docs)\n";
+    let blocks = parse_markdown(md, true);
+    assert_eq!(blocks.len(), 1);
+
+    match &blocks[0] {
+        ParsedBlock::Paragraph { spans, .. } => {
+            assert_eq!(spans.len(), 1);
+            assert_eq!(spans[0].text, "[Image: diagram]");
+            assert!(spans[0].style.link);
+            assert_eq!(
+                spans[0].link_url.as_deref(),
+                Some("https://example.com/docs")
+            );
+        }
+        other => panic!("expected paragraph block, got: {other:?}"),
+    }
+}
+
+#[test]
+fn nested_list_parent_text_is_preserved_in_parse_markdown() {
+    let md = "1. Parent\n   - Child A\n   - Child B\n";
+    let blocks = parse_markdown(md, true);
+    assert_eq!(blocks.len(), 1);
+
+    match &blocks[0] {
+        ParsedBlock::ListBlock { items, .. } => {
+            assert_eq!(items.len(), 1);
+            let parent_text: String = items[0]
+                .spans
+                .iter()
+                .map(|span| span.text.as_str())
+                .collect();
+            assert_eq!(parent_text, "Parent");
+            assert_eq!(items[0].nested_lists.len(), 1);
+
+            let child_list = &items[0].nested_lists[0];
+            assert_eq!(child_list.items.len(), 2);
+            let child_a: String = child_list.items[0]
+                .spans
+                .iter()
+                .map(|span| span.text.as_str())
+                .collect();
+            let child_b: String = child_list.items[1]
+                .spans
+                .iter()
+                .map(|span| span.text.as_str())
+                .collect();
+            assert_eq!(child_a, "Child A");
+            assert_eq!(child_b, "Child B");
+        }
+        other => panic!("expected list block, got: {other:?}"),
+    }
+}
+
+#[test]
 fn markdown_link_url_allowlist_rejects_unsafe_schemes() {
     assert!(is_allowed_markdown_url("https://example.com"));
     assert!(is_allowed_markdown_url("http://example.com"));
