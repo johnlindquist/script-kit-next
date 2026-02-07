@@ -29,8 +29,8 @@ impl<R: Read> JsonlReader<R> {
                     return Ok(LineRead::Eof);
                 }
 
-                let line = String::from_utf8_lossy(&self.byte_buffer).into_owned();
-                return Ok(LineRead::Line(line));
+                self.decode_line_buffer();
+                return Ok(LineRead::Line);
             }
 
             saw_any_data = true;
@@ -70,18 +70,21 @@ impl<R: Read> JsonlReader<R> {
                     }
                 }
 
-                let raw = String::from_utf8_lossy(&self.byte_buffer).into_owned();
-                return Ok(LineRead::TooLong {
-                    raw,
-                    raw_len: total_bytes,
-                });
+                self.decode_line_buffer();
+                return Ok(LineRead::TooLong { raw_len: total_bytes });
             }
 
             if newline_pos.is_some() {
-                let line = String::from_utf8_lossy(&self.byte_buffer).into_owned();
-                return Ok(LineRead::Line(line));
+                self.decode_line_buffer();
+                return Ok(LineRead::Line);
             }
         }
+    }
+
+    fn decode_line_buffer(&mut self) {
+        self.line_buffer.clear();
+        let decoded = String::from_utf8_lossy(&self.byte_buffer);
+        self.line_buffer.push_str(decoded.as_ref());
     }
 
     /// Read the next message from the stream
@@ -98,10 +101,7 @@ impl<R: Read> JsonlReader<R> {
                     debug!("Reached end of JSONL stream");
                     return Ok(None);
                 }
-                LineRead::Line(line) => {
-                    self.line_buffer.clear();
-                    self.line_buffer.push_str(&line);
-
+                LineRead::Line => {
                     let trimmed = self.line_buffer.trim_end_matches(['\r', '\n']);
                     debug!(
                         bytes_read = self.line_buffer.len(),
@@ -114,7 +114,7 @@ impl<R: Read> JsonlReader<R> {
                     let msg = parse_message(trimmed)?;
                     return Ok(Some(msg));
                 }
-                LineRead::TooLong { raw_len, .. } => {
+                LineRead::TooLong { raw_len } => {
                     return Err(Box::new(std::io::Error::new(
                         ErrorKind::InvalidData,
                         format!(
@@ -159,10 +159,7 @@ impl<R: Read> JsonlReader<R> {
                     debug!("Reached end of JSONL stream");
                     return Ok(None);
                 }
-                LineRead::Line(line) => {
-                    self.line_buffer.clear();
-                    self.line_buffer.push_str(&line);
-
+                LineRead::Line => {
                     let trimmed = self.line_buffer.trim_end_matches(['\r', '\n']);
                     if trimmed.trim().is_empty() {
                         debug!("Skipping empty line in JSONL stream");
@@ -281,8 +278,8 @@ impl<R: Read> JsonlReader<R> {
                         }
                     }
                 }
-                LineRead::TooLong { raw, raw_len } => {
-                    let (preview, _) = log_preview(&raw);
+                LineRead::TooLong { raw_len } => {
+                    let (preview, _) = log_preview(&self.line_buffer);
                     let issue = ParseIssue::new(
                         ParseIssueKind::LineTooLong,
                         None,

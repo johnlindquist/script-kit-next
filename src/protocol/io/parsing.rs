@@ -20,8 +20,8 @@ const MAX_PROTOCOL_LINE_BYTES: usize = 64 * 1024;
 
 enum LineRead {
     Eof,
-    Line(String),
-    TooLong { raw: String, raw_len: usize },
+    Line,
+    TooLong { raw_len: usize },
 }
 
 /// Get a truncated preview of raw JSON for logging
@@ -174,8 +174,10 @@ impl ParseIssue {
 /// * `ParseResult` - Classified parse result
 ///
 /// # Performance
-/// This function uses single-parse optimization: it parses to serde_json::Value
-/// first, then converts to Message. This avoids double-parsing on unknown types.
+/// This function takes a happy-path fast path:
+/// - First parse directly to `Message` (single parse for normal traffic)
+/// - Only on error, parse to `serde_json::Value` to classify the failure
+///   (missing type, unknown type, or invalid payload).
 ///
 /// # Security
 /// Raw JSON is truncated to 200 chars in logs to prevent leaking sensitive data
@@ -184,41 +186,35 @@ impl ParseIssue {
 fn parse_message_graceful(line: &str) -> ParseResult {
     let (preview, _raw_len) = log_preview(line);
 
-    // P1-11 FIX: Single parse - parse to Value first, then convert
-    // This avoids double-parsing: previously we tried Message first, then Value on failure
-    let value: serde_json::Value = match serde_json::from_str(line) {
-        Ok(v) => v,
-        Err(e) => {
-            // Don't log here - caller (JsonlReader) handles logging
-            return ParseResult::ParseError(e);
-        }
-    };
-
-    // Check for type field and extract it as owned String before consuming value
-    let msg_type: String = match value.get("type").and_then(|t| t.as_str()) {
-        Some(t) => t.to_string(),
-        None => {
-            // Missing type field
-            return ParseResult::MissingType {
-                raw: preview.to_string(),
-            };
-        }
-    };
-
-    // Try to convert Value to Message (consumes value)
-    match serde_json::from_value::<Message>(value) {
+    // Fast path for valid known protocol traffic.
+    match serde_json::from_str::<Message>(line) {
         Ok(msg) => ParseResult::Ok(msg),
-        Err(e) => {
-            let error_str = e.to_string();
-            // Classify as UnknownType only when the unknown variant token matches
-            // the top-level message type field; other unknown variants are payload errors.
+        Err(message_err) => {
+            // On failure, classify by inspecting JSON shape/type field.
+            let value: serde_json::Value = match serde_json::from_str(line) {
+                Ok(v) => v,
+                Err(e) => {
+                    // Don't log here - caller (JsonlReader) handles logging
+                    return ParseResult::ParseError(e);
+                }
+            };
+
+            let msg_type: String = match value.get("type").and_then(|t| t.as_str()) {
+                Some(t) => t.to_string(),
+                None => {
+                    return ParseResult::MissingType {
+                        raw: preview.to_string(),
+                    };
+                }
+            };
+
+            let error_str = message_err.to_string();
             if is_unknown_message_type_error(&error_str, &msg_type) {
                 ParseResult::UnknownType {
                     message_type: msg_type,
                     raw: preview.to_string(),
                 }
             } else {
-                // Known type but invalid payload
                 ParseResult::InvalidPayload {
                     message_type: msg_type,
                     error: error_str,
