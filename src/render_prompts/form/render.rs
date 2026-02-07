@@ -209,8 +209,7 @@ impl ScriptListApp {
             )
             // Unified footer with PromptFooter component
             .child({
-                let footer_colors =
-                    prompt_footer_colors_for_prompt(&design_colors, !self.theme.is_dark_mode());
+                let footer_colors = PromptFooterColors::from_theme(&self.theme);
                 let footer_config = prompt_footer_config_with_status(
                     "Continue",
                     has_actions,
@@ -260,6 +259,7 @@ impl ScriptListApp {
                                     .id("form-actions-backdrop")
                                     .absolute()
                                     .inset_0()
+                                    .cursor_pointer()
                                     .on_click(backdrop_click),
                             )
                             .child(
@@ -273,5 +273,24 @@ impl ScriptListApp {
                 },
             )
             .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod form_prompt_render_backdrop_tests {
+    const FORM_RENDER_SOURCE: &str = include_str!("render.rs");
+
+    #[test]
+    fn test_form_actions_backdrop_uses_cursor_pointer_when_clickable() {
+        assert!(
+            FORM_RENDER_SOURCE.contains(".id(\"form-actions-backdrop\")"),
+            "form actions backdrop id should remain present for click target wiring"
+        );
+        assert!(
+            FORM_RENDER_SOURCE.contains(
+                ".cursor_pointer()\n                                    .on_click(backdrop_click)"
+            ),
+            "form actions backdrop should advertise clickability with cursor_pointer"
+        );
     }
 }

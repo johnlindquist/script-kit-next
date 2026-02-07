@@ -411,8 +411,7 @@ impl ScriptListApp {
             })
             // Footer with unified actions
             .child({
-                let footer_colors =
-                    prompt_footer_colors_for_prompt(&design_colors, !self.theme.is_dark_mode());
+                let footer_colors = PromptFooterColors::from_theme(&self.theme);
                 let helper_status =
                     resolve_arg_helper_status(has_choices, filtered_choices_len, input_is_empty);
                 let helper_text = Some(arg_helper_status_text(helper_status));
@@ -485,6 +484,7 @@ impl ScriptListApp {
                                     .id("arg-actions-backdrop")
                                     .absolute()
                                     .inset_0()
+                                    .cursor_pointer()
                                     .on_click(backdrop_click),
                             )
                             // Dialog positioned at top-right
@@ -499,5 +499,24 @@ impl ScriptListApp {
                 },
             )
             .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod arg_prompt_render_backdrop_tests {
+    const ARG_RENDER_SOURCE: &str = include_str!("render.rs");
+
+    #[test]
+    fn test_arg_actions_backdrop_uses_cursor_pointer_when_clickable() {
+        assert!(
+            ARG_RENDER_SOURCE.contains(".id(\"arg-actions-backdrop\")"),
+            "arg actions backdrop id should remain present for click target wiring"
+        );
+        assert!(
+            ARG_RENDER_SOURCE.contains(
+                ".cursor_pointer()\n                                    .on_click(backdrop_click)"
+            ),
+            "arg actions backdrop should advertise clickability with cursor_pointer"
+        );
     }
 }

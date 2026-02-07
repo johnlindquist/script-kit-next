@@ -66,7 +66,6 @@ impl ScriptListApp {
 
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
-        let design_colors = tokens.colors();
         let design_spacing = tokens.spacing();
         let design_visual = tokens.visual();
         let (actions_dialog_top, actions_dialog_right) =
@@ -270,8 +269,7 @@ impl ScriptListApp {
                 let entity_weak = entity_for_footer.downgrade();
                 let prompt_id_for_submit = prompt_id.clone();
 
-                let footer_colors =
-                    prompt_footer_colors_for_prompt(&design_colors, !self.theme.is_dark_mode());
+                let footer_colors = PromptFooterColors::from_theme(&self.theme);
 
                 // Snippet guidance stays first, with editor submit/actions hints appended.
                 let helper_text = Some(editor_footer_helper_text(snippet_helper_text.as_deref()));
@@ -341,6 +339,7 @@ impl ScriptListApp {
                                     .id("editor-actions-backdrop")
                                     .absolute()
                                     .inset_0()
+                                    .cursor_pointer()
                                     .on_click(backdrop_click),
                             )
                             .child(
@@ -415,5 +414,21 @@ mod editor_prompt_tests {
             editor_footer_helper_text(Some("Tab 1 of 2 · \"$1\" · Tab to continue, Esc to exit"));
         assert!(helper.starts_with("Tab 1 of 2"));
         assert!(helper.contains(EDITOR_PROMPT_SHORTCUT_HINT_SUFFIX));
+    }
+
+    #[test]
+    fn test_editor_actions_backdrop_uses_cursor_pointer_when_clickable() {
+        const EDITOR_RENDER_SOURCE: &str = include_str!("editor.rs");
+
+        assert!(
+            EDITOR_RENDER_SOURCE.contains(".id(\"editor-actions-backdrop\")"),
+            "editor actions backdrop id should remain present for click target wiring"
+        );
+        assert!(
+            EDITOR_RENDER_SOURCE.contains(
+                ".cursor_pointer()\n                                    .on_click(backdrop_click)"
+            ),
+            "editor actions backdrop should advertise clickability with cursor_pointer"
+        );
     }
 }

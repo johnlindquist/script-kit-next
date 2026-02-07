@@ -78,12 +78,10 @@ impl ScriptListApp {
                     ActionsRoute::Execute { action_id } => {
                         this.trigger_action_by_name(&action_id, cx);
                         cx.stop_propagation();
-                        return;
                     }
                     ActionsRoute::Handled => {
                         // Key consumed by actions dialog
                         cx.stop_propagation();
-                        return;
                     }
                     ActionsRoute::NotHandled => {
                         // Actions popup not open - check SDK action shortcuts
@@ -103,7 +101,6 @@ impl ScriptListApp {
                             );
                             this.trigger_action_by_name(&action_name, cx);
                             cx.stop_propagation();
-                            return;
                         }
                     }
                 }
@@ -121,8 +118,7 @@ impl ScriptListApp {
         let content_height = window_resize::layout::STANDARD_HEIGHT;
 
         // Footer colors and config aligned with other interactive prompts.
-        let footer_colors =
-            prompt_footer_colors_for_prompt(&design_colors, !self.theme.is_dark_mode());
+        let footer_colors = PromptFooterColors::from_theme(&self.theme);
         let footer_config = prompt_footer_config_with_status(
             "Continue",
             has_actions,
@@ -230,6 +226,7 @@ impl ScriptListApp {
                                     .id("div-actions-backdrop")
                                     .absolute()
                                     .inset_0()
+                                    .cursor_pointer()
                                     .on_click(backdrop_click),
                             )
                             .child(
@@ -243,5 +240,24 @@ impl ScriptListApp {
                 },
             )
             .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod div_prompt_render_backdrop_tests {
+    const DIV_RENDER_SOURCE: &str = include_str!("div.rs");
+
+    #[test]
+    fn test_div_actions_backdrop_uses_cursor_pointer_when_clickable() {
+        assert!(
+            DIV_RENDER_SOURCE.contains(".id(\"div-actions-backdrop\")"),
+            "div actions backdrop id should remain present for click target wiring"
+        );
+        assert!(
+            DIV_RENDER_SOURCE.contains(
+                ".cursor_pointer()\n                                    .on_click(backdrop_click)"
+            ),
+            "div actions backdrop should advertise clickability with cursor_pointer"
+        );
     }
 }
