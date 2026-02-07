@@ -179,6 +179,7 @@ impl AppWatcher {
             .tx
             .take()
             .ok_or_else(|| std::io::Error::other("watcher already started"))?;
+        let settings = load_watcher_settings();
 
         let stop_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let thread_stop_flag = stop_flag.clone();
@@ -189,7 +190,7 @@ impl AppWatcher {
         let user_apps_path = PathBuf::from(shellexpand::tilde("~/Applications").as_ref());
 
         let thread_handle = thread::spawn(move || {
-            Self::supervisor_loop(system_apps_path, user_apps_path, tx, thread_stop_flag);
+            Self::supervisor_loop(system_apps_path, user_apps_path, tx, thread_stop_flag, settings);
         });
 
         self.watcher_thread = Some(thread_handle);
@@ -202,6 +203,7 @@ impl AppWatcher {
         user_apps_path: PathBuf,
         out_tx: async_channel::Sender<AppReloadEvent>,
         stop_flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        settings: WatcherSettings,
     ) {
         let mut attempt: u32 = 0;
 
@@ -220,6 +222,7 @@ impl AppWatcher {
                 control_rx,
                 control_tx,
                 stop_flag.clone(),
+                settings,
             ) {
                 Ok(()) => {
                     info!(watcher = "apps", "App watcher completed normally");
@@ -230,7 +233,7 @@ impl AppWatcher {
                         break;
                     }
 
-                    let backoff = compute_backoff(attempt);
+                    let backoff = compute_backoff(attempt, settings);
                     warn!(
                         error = %e,
                         watcher = "apps",
@@ -258,6 +261,7 @@ impl AppWatcher {
         control_rx: Receiver<ControlMsg>,
         callback_tx: Sender<ControlMsg>,
         stop_flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        settings: WatcherSettings,
     ) -> NotifyResult<()> {
         let mut watcher: Box<dyn Watcher> = Box::new(recommended_watcher({
             let tx = callback_tx.clone();
@@ -299,7 +303,7 @@ impl AppWatcher {
         }
 
         let mut consecutive_errors: u32 = 0;
-        let debounce = Duration::from_millis(DEBOUNCE_MS);
+        let debounce = Duration::from_millis(settings.debounce_ms);
         let mut pending: HashMap<PathBuf, (AppReloadEvent, Instant)> = HashMap::new();
         // Global FullReload state: when set, supersedes all per-file events
         let mut full_reload_at: Option<Instant> = None;
@@ -313,7 +317,7 @@ impl AppWatcher {
             let deadline = next_app_deadline(&pending, full_reload_at, debounce);
             let timeout = deadline
                 .map(|dl| dl.saturating_duration_since(Instant::now()))
-                .unwrap_or(Duration::from_millis(500));
+                .unwrap_or(Duration::from_millis(settings.health_check_interval_ms));
 
             let msg = match control_rx.recv_timeout(timeout) {
                 Ok(m) => Some(m),
@@ -341,7 +345,7 @@ impl AppWatcher {
                         "notify delivered error"
                     );
 
-                    if consecutive_errors >= MAX_NOTIFY_ERRORS {
+                    if consecutive_errors >= settings.max_notify_errors {
                         warn!(
                             watcher = "apps",
                             consecutive_errors = consecutive_errors,
@@ -417,10 +421,10 @@ impl AppWatcher {
                         }
 
                         // Storm coalescing: if too many pending events, collapse to FullReload
-                        if pending.len() >= STORM_THRESHOLD {
+                        if pending.len() >= settings.storm_threshold {
                             warn!(
                                 pending_count = pending.len(),
-                                threshold = STORM_THRESHOLD,
+                                threshold = settings.storm_threshold,
                                 "App event storm detected, collapsing to FullReload"
                             );
                             full_reload_at = Some(Instant::now());

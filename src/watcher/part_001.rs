@@ -23,6 +23,7 @@ impl ThemeWatcher {
             .tx
             .take()
             .ok_or_else(|| std::io::Error::other("watcher already started"))?;
+        let settings = load_watcher_settings();
 
         let stop_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let thread_stop_flag = stop_flag.clone();
@@ -31,7 +32,7 @@ impl ThemeWatcher {
         let target_path = PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/theme.json").as_ref());
 
         let thread_handle = thread::spawn(move || {
-            Self::supervisor_loop(target_path, tx, thread_stop_flag);
+            Self::supervisor_loop(target_path, tx, thread_stop_flag, settings);
         });
 
         self.watcher_thread = Some(thread_handle);
@@ -43,6 +44,7 @@ impl ThemeWatcher {
         target_path: PathBuf,
         out_tx: Sender<ThemeReloadEvent>,
         stop_flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        settings: WatcherSettings,
     ) {
         let mut attempt: u32 = 0;
 
@@ -60,6 +62,7 @@ impl ThemeWatcher {
                 control_rx,
                 control_tx,
                 stop_flag.clone(),
+                settings,
             ) {
                 Ok(()) => {
                     info!(watcher = "theme", "Theme watcher completed normally");
@@ -70,7 +73,7 @@ impl ThemeWatcher {
                         break;
                     }
 
-                    let backoff = compute_backoff(attempt);
+                    let backoff = compute_backoff(attempt, settings);
                     warn!(
                         error = %e,
                         watcher = "theme",
@@ -97,6 +100,7 @@ impl ThemeWatcher {
         control_rx: Receiver<ControlMsg>,
         callback_tx: Sender<ControlMsg>,
         stop_flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        settings: WatcherSettings,
     ) -> NotifyResult<()> {
         let target_name: OsString = target_path
             .file_name()
@@ -122,7 +126,7 @@ impl ThemeWatcher {
         );
 
         let mut consecutive_errors: u32 = 0;
-        let debounce = Duration::from_millis(DEBOUNCE_MS);
+        let debounce = Duration::from_millis(settings.debounce_ms);
         let mut deadline: Option<Instant> = None;
 
         loop {
@@ -132,7 +136,7 @@ impl ThemeWatcher {
 
             let timeout = deadline
                 .map(|dl| dl.saturating_duration_since(Instant::now()))
-                .unwrap_or(Duration::from_millis(500));
+                .unwrap_or(Duration::from_millis(settings.health_check_interval_ms));
 
             let msg = match control_rx.recv_timeout(timeout) {
                 Ok(m) => Some(m),
@@ -167,7 +171,7 @@ impl ThemeWatcher {
                         "notify delivered error"
                     );
 
-                    if consecutive_errors >= MAX_NOTIFY_ERRORS {
+                    if consecutive_errors >= settings.max_notify_errors {
                         warn!(
                             watcher = "theme",
                             consecutive_errors = consecutive_errors,

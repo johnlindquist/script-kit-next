@@ -88,7 +88,6 @@ impl Config {
     }
 
     /// Returns the process limits configuration, or defaults if not configured
-    #[allow(dead_code)] // Will be used by process_manager module
     pub fn get_process_limits(&self) -> ProcessLimits {
         sanitize_process_limits(self.process_limits.clone().unwrap_or_default())
     }

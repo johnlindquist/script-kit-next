@@ -24,6 +24,8 @@ const INITIAL_BACKOFF_MS: u64 = config::defaults::DEFAULT_WATCHER_INITIAL_BACKOF
 const MAX_BACKOFF_MS: u64 = config::defaults::DEFAULT_WATCHER_MAX_BACKOFF_MS;
 /// Maximum consecutive notify errors before logging warning
 const MAX_NOTIFY_ERRORS: u32 = config::defaults::DEFAULT_WATCHER_MAX_NOTIFY_ERRORS;
+/// Default interval for periodic health checks when idle
+const HEALTH_CHECK_INTERVAL_MS: u64 = config::defaults::DEFAULT_HEALTH_CHECK_INTERVAL_MS;
 #[derive(Debug, Clone, Copy)]
 struct WatcherSettings {
     debounce_ms: u64,
@@ -31,6 +33,7 @@ struct WatcherSettings {
     initial_backoff_ms: u64,
     max_backoff_ms: u64,
     max_notify_errors: u32,
+    health_check_interval_ms: u64,
 }
 impl Default for WatcherSettings {
     fn default() -> Self {
@@ -40,29 +43,38 @@ impl Default for WatcherSettings {
             initial_backoff_ms: INITIAL_BACKOFF_MS,
             max_backoff_ms: MAX_BACKOFF_MS,
             max_notify_errors: MAX_NOTIFY_ERRORS,
+            health_check_interval_ms: HEALTH_CHECK_INTERVAL_MS,
         }
     }
 }
-fn load_watcher_settings() -> WatcherSettings {
-    let watcher = config::load_config().get_watcher();
+fn watcher_settings_from_config(app_config: &config::Config) -> WatcherSettings {
+    let watcher = app_config.get_watcher();
+    let process_limits = app_config.get_process_limits();
     WatcherSettings {
-        debounce_ms: watcher.debounce_ms,
+        debounce_ms: watcher.debounce_ms.max(1),
         storm_threshold: watcher.storm_threshold.max(1),
         initial_backoff_ms: watcher.initial_backoff_ms.max(1),
         max_backoff_ms: watcher
             .max_backoff_ms
             .max(watcher.initial_backoff_ms.max(1)),
         max_notify_errors: watcher.max_notify_errors.max(1),
+        health_check_interval_ms: process_limits.health_check_interval_ms.max(1),
     }
+}
+fn load_watcher_settings() -> WatcherSettings {
+    let app_config = config::load_config();
+    watcher_settings_from_config(&app_config)
 }
 /// Check if an event kind is relevant (not just Access events)
 fn is_relevant_event_kind(kind: &notify::EventKind) -> bool {
     !matches!(kind, notify::EventKind::Access(_))
 }
 /// Compute exponential backoff delay, capped at MAX_BACKOFF_MS
-fn compute_backoff(attempt: u32) -> Duration {
-    let delay_ms = INITIAL_BACKOFF_MS.saturating_mul(2u64.saturating_pow(attempt));
-    Duration::from_millis(delay_ms.min(MAX_BACKOFF_MS))
+fn compute_backoff(attempt: u32, settings: WatcherSettings) -> Duration {
+    let delay_ms = settings
+        .initial_backoff_ms
+        .saturating_mul(2u64.saturating_pow(attempt));
+    Duration::from_millis(delay_ms.min(settings.max_backoff_ms))
 }
 /// Sleep with interruptible checks against a stop flag
 /// Returns true if sleep completed, false if stop was signaled
@@ -138,6 +150,7 @@ impl ConfigWatcher {
             .tx
             .take()
             .ok_or_else(|| std::io::Error::other("watcher already started"))?;
+        let settings = load_watcher_settings();
 
         let stop_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let thread_stop_flag = stop_flag.clone();
@@ -146,7 +159,7 @@ impl ConfigWatcher {
         let target_path = PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/config.ts").as_ref());
 
         let thread_handle = thread::spawn(move || {
-            Self::supervisor_loop(target_path, tx, thread_stop_flag);
+            Self::supervisor_loop(target_path, tx, thread_stop_flag, settings);
         });
 
         self.watcher_thread = Some(thread_handle);
@@ -158,6 +171,7 @@ impl ConfigWatcher {
         target_path: PathBuf,
         out_tx: Sender<ConfigReloadEvent>,
         stop_flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        settings: WatcherSettings,
     ) {
         let mut attempt: u32 = 0;
 
@@ -176,6 +190,7 @@ impl ConfigWatcher {
                 control_rx,
                 control_tx,
                 stop_flag.clone(),
+                settings,
             ) {
                 Ok(()) => {
                     // Normal shutdown (via stop flag)
@@ -187,7 +202,7 @@ impl ConfigWatcher {
                         break;
                     }
 
-                    let backoff = compute_backoff(attempt);
+                    let backoff = compute_backoff(attempt, settings);
                     warn!(
                         error = %e,
                         watcher = "config",
@@ -217,6 +232,7 @@ impl ConfigWatcher {
         control_rx: Receiver<ControlMsg>,
         callback_tx: Sender<ControlMsg>,
         stop_flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        settings: WatcherSettings,
     ) -> NotifyResult<()> {
         let target_name: OsString = target_path
             .file_name()
@@ -244,7 +260,7 @@ impl ConfigWatcher {
 
         let mut consecutive_errors: u32 = 0;
 
-        let debounce = Duration::from_millis(DEBOUNCE_MS);
+        let debounce = Duration::from_millis(settings.debounce_ms);
         let mut deadline: Option<Instant> = None;
 
         loop {
@@ -256,7 +272,7 @@ impl ConfigWatcher {
             // Use a timeout even when no deadline to periodically check stop flag
             let timeout = deadline
                 .map(|dl| dl.saturating_duration_since(Instant::now()))
-                .unwrap_or(Duration::from_millis(500));
+                .unwrap_or(Duration::from_millis(settings.health_check_interval_ms));
 
             let msg = match control_rx.recv_timeout(timeout) {
                 Ok(m) => Some(m),
@@ -293,7 +309,7 @@ impl ConfigWatcher {
                     );
 
                     // If too many consecutive errors, return Err to trigger supervisor restart
-                    if consecutive_errors >= MAX_NOTIFY_ERRORS {
+                    if consecutive_errors >= settings.max_notify_errors {
                         warn!(
                             watcher = "config",
                             consecutive_errors = consecutive_errors,

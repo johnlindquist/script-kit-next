@@ -244,18 +244,45 @@
         assert_eq!(received, ScriptReloadEvent::FullReload);
     }
     #[test]
+    fn test_watcher_settings_uses_process_health_interval_when_configured() {
+        let app_config = crate::config::Config {
+            watcher: Some(crate::config::WatcherConfig {
+                debounce_ms: 250,
+                storm_threshold: 50,
+                initial_backoff_ms: 125,
+                max_backoff_ms: 4_000,
+                max_notify_errors: 9,
+            }),
+            process_limits: Some(crate::config::ProcessLimits {
+                max_memory_mb: Some(1024),
+                max_runtime_seconds: Some(300),
+                health_check_interval_ms: 12_345,
+            }),
+            ..crate::config::Config::default()
+        };
+
+        let settings = watcher_settings_from_config(&app_config);
+        assert_eq!(settings.debounce_ms, 250);
+        assert_eq!(settings.storm_threshold, 50);
+        assert_eq!(settings.initial_backoff_ms, 125);
+        assert_eq!(settings.max_backoff_ms, 4_000);
+        assert_eq!(settings.max_notify_errors, 9);
+        assert_eq!(settings.health_check_interval_ms, 12_345);
+    }
+    #[test]
     fn test_compute_backoff_initial() {
         // First attempt should use initial backoff
-        let delay = compute_backoff(0);
+        let delay = compute_backoff(0, WatcherSettings::default());
         assert_eq!(delay, Duration::from_millis(INITIAL_BACKOFF_MS));
     }
     #[test]
     fn test_compute_backoff_exponential() {
         // Each attempt should double the delay
-        let delay0 = compute_backoff(0);
-        let delay1 = compute_backoff(1);
-        let delay2 = compute_backoff(2);
-        let delay3 = compute_backoff(3);
+        let settings = WatcherSettings::default();
+        let delay0 = compute_backoff(0, settings);
+        let delay1 = compute_backoff(1, settings);
+        let delay2 = compute_backoff(2, settings);
+        let delay3 = compute_backoff(3, settings);
 
         assert_eq!(delay0, Duration::from_millis(100));
         assert_eq!(delay1, Duration::from_millis(200));
@@ -265,13 +292,13 @@
     #[test]
     fn test_compute_backoff_capped() {
         // High attempts should be capped at MAX_BACKOFF_MS
-        let delay = compute_backoff(20); // 2^20 * 100ms would be huge
+        let delay = compute_backoff(20, WatcherSettings::default()); // 2^20 * 100ms would be huge
         assert_eq!(delay, Duration::from_millis(MAX_BACKOFF_MS));
     }
     #[test]
     fn test_compute_backoff_no_overflow() {
         // Even with u32::MAX attempts, should not panic
-        let delay = compute_backoff(u32::MAX);
+        let delay = compute_backoff(u32::MAX, WatcherSettings::default());
         assert_eq!(delay, Duration::from_millis(MAX_BACKOFF_MS));
     }
     #[test]
