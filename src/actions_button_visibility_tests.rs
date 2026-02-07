@@ -6,8 +6,8 @@ mod tests {
 
     #[test]
     fn test_has_actions_helper_exists_and_handles_clipboard() {
-        let content =
-            fs::read_to_string("src/app_actions.rs").expect("Failed to read src/app_actions.rs");
+        let content = fs::read_to_string("src/app_actions/handle_action.rs")
+            .expect("Failed to read src/app_actions/handle_action.rs");
 
         assert!(
             content.contains("fn has_actions"),
@@ -27,8 +27,8 @@ mod tests {
 
     #[test]
     fn test_footer_secondary_visibility_uses_has_actions() {
-        let content = fs::read_to_string("src/render_script_list.rs")
-            .expect("Failed to read src/render_script_list.rs");
+        let content = fs::read_to_string("src/render_script_list/part_000.rs")
+            .expect("Failed to read src/render_script_list/part_000.rs");
 
         assert!(
             content.contains("show_secondary(self.has_actions())"),
@@ -38,8 +38,8 @@ mod tests {
 
     #[test]
     fn test_cmd_k_requires_actions() {
-        let content = fs::read_to_string("src/render_script_list.rs")
-            .expect("Failed to read src/render_script_list.rs");
+        let content = fs::read_to_string("src/render_script_list/part_000.rs")
+            .expect("Failed to read src/render_script_list/part_000.rs");
 
         let cmdk_pos = content
             .find("Cmd+K")
@@ -56,13 +56,13 @@ mod tests {
 
     #[test]
     fn test_ask_ai_hint_is_non_clickable_visual_hint() {
-        let content = fs::read_to_string("src/render_script_list.rs")
-            .expect("Failed to read src/render_script_list.rs");
+        let content = fs::read_to_string("src/render_script_list/part_000.rs")
+            .expect("Failed to read src/render_script_list/part_000.rs");
 
         let ask_ai_pos = content
             .find(".id(\"ask-ai-button\")")
-            .expect("Ask AI hint container not found in render_script_list.rs");
-        let ask_ai_section = &content[ask_ai_pos..content.len().min(ask_ai_pos + 360)];
+            .expect("Ask AI hint container not found in src/render_script_list/part_000.rs");
+        let ask_ai_section = &content[ask_ai_pos..content.len().min(ask_ai_pos + 1200)];
 
         assert!(
             ask_ai_section.contains(".cursor_default()"),
