@@ -11,6 +11,14 @@ use super::types::{
     OverlayAppearStyle, RecordedShortcut, RecorderAction, ShortcutConflict, ShortcutRecorderColors,
 };
 
+fn has_recording_modifier(modifiers: gpui::Modifiers) -> bool {
+    modifiers.platform || modifiers.control || modifiers.alt || modifiers.shift
+}
+
+fn should_finish_recording(key: &str, is_modifier_key: bool, modifiers: gpui::Modifiers) -> bool {
+    !is_modifier_key && !key.is_empty() && has_recording_modifier(modifiers)
+}
+
 /// Shortcut Recorder Modal Component
 ///
 /// A modal dialog for recording keyboard shortcuts with visual feedback.
@@ -197,21 +205,32 @@ impl ShortcutRecorder {
         );
 
         if !is_modifier_key && !key.is_empty() {
-            // Got a real key, record it
-            self.shortcut.key = Some(key.to_uppercase());
-            self.is_recording = false;
+            if should_finish_recording(key, is_modifier_key, modifiers) {
+                // Got a real key with at least one modifier, finalize recording
+                self.shortcut.key = Some(key.to_uppercase());
+                self.is_recording = false;
 
-            logging::log(
-                "SHORTCUT",
-                &format!(
-                    "Recorded shortcut: {} (config: {})",
-                    self.shortcut.to_display_string(),
-                    self.shortcut.to_config_string()
-                ),
-            );
+                logging::log(
+                    "SHORTCUT",
+                    &format!(
+                        "Recorded shortcut: {} (config: {})",
+                        self.shortcut.to_display_string(),
+                        self.shortcut.to_config_string()
+                    ),
+                );
 
-            // Check for conflicts
-            self.check_conflict();
+                // Check for conflicts
+                self.check_conflict();
+            } else {
+                self.shortcut.key = None;
+                logging::log(
+                    "SHORTCUT",
+                    &format!(
+                        "Ignored key press without modifiers while recording: key='{}'",
+                        key
+                    ),
+                );
+            }
         } else if is_modifier_key {
             // For modifier-only keypresses, log that we're showing live feedback
             logging::log(
@@ -283,5 +302,28 @@ impl ShortcutRecorder {
             });
         })
         .detach();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_finish_recording;
+
+    #[test]
+    fn test_should_finish_recording_does_not_complete_without_modifiers() {
+        assert!(!should_finish_recording(
+            "k",
+            false,
+            gpui::Modifiers::default()
+        ));
+    }
+
+    #[test]
+    fn test_should_finish_recording_completes_with_modifier_and_non_modifier_key() {
+        let modifiers = gpui::Modifiers {
+            platform: true,
+            ..gpui::Modifiers::default()
+        };
+        assert!(should_finish_recording("k", false, modifiers));
     }
 }
