@@ -131,6 +131,9 @@ impl ScriptListApp {
     fn handle_action(&mut self, action_id: String, cx: &mut Context<Self>) {
         logging::log("UI", &format!("Action selected: {}", action_id));
 
+        let should_transition_to_script_list =
+            should_transition_to_script_list_after_action(&self.current_view);
+
         let selected_clipboard_entry = if action_id.starts_with("clipboard_") {
             self.selected_clipboard_entry()
         } else {
@@ -415,8 +418,10 @@ impl ScriptListApp {
             _ => {}
         }
 
-        // Close the dialog and return to script list.
-        self.transition_to_script_list_after_action(cx);
+        // Only script-list-hosted actions should force a ScriptList transition.
+        if should_transition_to_script_list {
+            self.transition_to_script_list_after_action(cx);
+        }
 
         match action_id.as_str() {
             "create_script" => {
@@ -2400,7 +2405,7 @@ impl ScriptListApp {
                     }
                 } else {
                     self.show_hud(
-                        selection_required_message_for_action(&action_id).to_string(),
+                        selection_required_message_for_action(action_id).to_string(),
                         Some(2000),
                         cx,
                     );
