@@ -188,7 +188,7 @@ pub struct Config {
     /// Suggested section configuration (frecency-based ranking)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub suggested: Option<SuggestedConfig>,
-    /// Hotkey for opening Notes window (default: Cmd+Shift+N)
+    /// Hotkey for opening Notes window (no default; user-configured only)
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -237,4 +237,3 @@ pub struct Config {
     )]
     pub claude_code: Option<ClaudeCodeConfig>,
 }
-

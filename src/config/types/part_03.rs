@@ -12,7 +12,7 @@ impl Default for Config {
             process_limits: None,     // Will use ProcessLimits::default() via getter
             clipboard_history_max_text_length: None, // Will use default via getter
             suggested: None,          // Will use SuggestedConfig::default() via getter
-            notes_hotkey: None,       // Will use HotkeyConfig::default_notes_hotkey() via getter
+            notes_hotkey: None,       // No default shortcut; must be explicitly configured
             ai_hotkey: None,          // Will use HotkeyConfig::default_ai_hotkey() via getter
             ai_hotkey_enabled: None,  // Defaults to true via getter
             logs_hotkey: None,        // Will use HotkeyConfig::default_logs_hotkey() via getter
@@ -23,6 +23,20 @@ impl Default for Config {
             claude_code: None,        // Will use ClaudeCodeConfig::default() via getter
         }
     }
+}
+
+fn sanitize_positive_f32(value: Option<f32>, fallback: f32) -> f32 {
+    match value {
+        Some(value) if value.is_finite() && value > 0.0 => value,
+        _ => fallback,
+    }
+}
+
+fn sanitize_process_limits(mut limits: ProcessLimits) -> ProcessLimits {
+    if limits.health_check_interval_ms == 0 {
+        limits.health_check_interval_ms = DEFAULT_HEALTH_CHECK_INTERVAL_MS;
+    }
+    limits
 }
 
 impl Config {
@@ -45,20 +59,19 @@ impl Config {
     /// Returns the editor font size, or DEFAULT_EDITOR_FONT_SIZE if not configured
     #[allow(dead_code)] // Will be used by EditorPrompt worker
     pub fn get_editor_font_size(&self) -> f32 {
-        self.editor_font_size.unwrap_or(DEFAULT_EDITOR_FONT_SIZE)
+        sanitize_positive_f32(self.editor_font_size, DEFAULT_EDITOR_FONT_SIZE)
     }
 
     /// Returns the terminal font size, or DEFAULT_TERMINAL_FONT_SIZE if not configured
     #[allow(dead_code)] // Will be used by TermPrompt worker
     pub fn get_terminal_font_size(&self) -> f32 {
-        self.terminal_font_size
-            .unwrap_or(DEFAULT_TERMINAL_FONT_SIZE)
+        sanitize_positive_f32(self.terminal_font_size, DEFAULT_TERMINAL_FONT_SIZE)
     }
 
     /// Returns the UI scale factor, or DEFAULT_UI_SCALE if not configured
     #[allow(dead_code)] // Will be used for UI scaling
     pub fn get_ui_scale(&self) -> f32 {
-        self.ui_scale.unwrap_or(DEFAULT_UI_SCALE)
+        sanitize_positive_f32(self.ui_scale, DEFAULT_UI_SCALE)
     }
 
     /// Returns the built-in features configuration, or defaults if not configured
@@ -77,7 +90,7 @@ impl Config {
     /// Returns the process limits configuration, or defaults if not configured
     #[allow(dead_code)] // Will be used by process_manager module
     pub fn get_process_limits(&self) -> ProcessLimits {
-        self.process_limits.clone().unwrap_or_default()
+        sanitize_process_limits(self.process_limits.clone().unwrap_or_default())
     }
 
     /// Returns the suggested section configuration, or defaults if not configured
@@ -138,6 +151,7 @@ impl Config {
     }
 
     /// Returns layout sizing config, or defaults.
+    #[allow(dead_code)]
     pub fn get_layout(&self) -> LayoutConfig {
         self.layout.clone().unwrap_or_default()
     }
@@ -193,4 +207,3 @@ impl Config {
         self.claude_code.clone().unwrap_or_default()
     }
 }
-

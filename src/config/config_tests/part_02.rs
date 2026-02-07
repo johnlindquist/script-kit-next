@@ -309,6 +309,17 @@ fn test_config_get_editor_font_size_custom() {
 }
 
 #[test]
+fn test_config_get_editor_font_size_uses_default_for_invalid_values() {
+    for invalid in [0.0, -1.0, f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+        let config = Config {
+            editor_font_size: Some(invalid),
+            ..Config::default()
+        };
+        assert_eq!(config.get_editor_font_size(), DEFAULT_EDITOR_FONT_SIZE);
+    }
+}
+
+#[test]
 fn test_config_get_terminal_font_size_default() {
     let config = Config::default();
     assert_eq!(config.get_terminal_font_size(), DEFAULT_TERMINAL_FONT_SIZE);
@@ -346,6 +357,17 @@ fn test_config_get_terminal_font_size_custom() {
 }
 
 #[test]
+fn test_config_get_terminal_font_size_uses_default_for_invalid_values() {
+    for invalid in [0.0, -4.0, f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+        let config = Config {
+            terminal_font_size: Some(invalid),
+            ..Config::default()
+        };
+        assert_eq!(config.get_terminal_font_size(), DEFAULT_TERMINAL_FONT_SIZE);
+    }
+}
+
+#[test]
 fn test_config_get_ui_scale_default() {
     let config = Config::default();
     assert_eq!(config.get_ui_scale(), DEFAULT_UI_SCALE);
@@ -380,6 +402,17 @@ fn test_config_get_ui_scale_custom() {
     };
 
     assert_eq!(config.get_ui_scale(), 1.5);
+}
+
+#[test]
+fn test_config_get_ui_scale_uses_default_for_invalid_values() {
+    for invalid in [0.0, -0.5, f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+        let config = Config {
+            ui_scale: Some(invalid),
+            ..Config::default()
+        };
+        assert_eq!(config.get_ui_scale(), DEFAULT_UI_SCALE);
+    }
 }
 
 #[test]
