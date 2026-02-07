@@ -1,14 +1,14 @@
 use super::*;
 
 impl ScriptListApp {
-    fn toggle_logs(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn toggle_logs(&mut self, cx: &mut Context<Self>) {
         self.show_logs = !self.show_logs;
         cx.notify();
     }
 
     /// Hide the mouse cursor while typing.
     /// The cursor will be shown again when the mouse moves.
-    fn hide_mouse_cursor(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn hide_mouse_cursor(&mut self, cx: &mut Context<Self>) {
         if !self.mouse_cursor_hidden {
             self.mouse_cursor_hidden = true;
             crate::platform::hide_cursor_until_mouse_moves();
@@ -18,7 +18,7 @@ impl ScriptListApp {
 
     /// Show the mouse cursor (called when mouse moves).
     /// Also switches to Mouse input mode to re-enable hover effects.
-    fn show_mouse_cursor(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn show_mouse_cursor(&mut self, cx: &mut Context<Self>) {
         // Switch to mouse mode to re-enable hover effects
         self.input_mode = InputMode::Mouse;
 
@@ -30,7 +30,7 @@ impl ScriptListApp {
 
     /// Calculate view type and item count for window sizing.
     /// Extracted from update_window_size for reuse.
-    fn calculate_window_size_params(&mut self) -> Option<(ViewType, usize)> {
+    pub(crate) fn calculate_window_size_params(&mut self) -> Option<(ViewType, usize)> {
         match &self.current_view {
             AppView::ScriptList => {
                 // Get grouped results which includes section headers (cached)
@@ -157,7 +157,7 @@ impl ScriptListApp {
     /// during GPUI's render or event processing.
     ///
     /// Use this version when you have access to `window` and `cx`.
-    fn update_window_size_deferred(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn update_window_size_deferred(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some((view_type, item_count)) = self.calculate_window_size_params() {
             crate::window_resize::defer_resize_to_view(view_type, item_count, window, &mut *cx);
         }
@@ -170,14 +170,14 @@ impl ScriptListApp {
     /// RefCell borrow panics.
     ///
     /// Prefer `update_window_size_deferred` when you have window/cx access.
-    fn update_window_size(&mut self) {
+    pub(crate) fn update_window_size(&mut self) {
         if let Some((view_type, item_count)) = self.calculate_window_size_params() {
             let target_height = height_for_view(view_type, item_count);
             resize_first_window_to_height(target_height);
         }
     }
 
-    fn set_prompt_input(&mut self, text: String, cx: &mut Context<Self>) {
+    pub(crate) fn set_prompt_input(&mut self, text: String, cx: &mut Context<Self>) {
         match &mut self.current_view {
             AppView::ArgPrompt { .. } => {
                 self.arg_input.set_text(text);
@@ -243,7 +243,7 @@ impl ScriptListApp {
     }
 
     /// Helper to get filtered arg choices without cloning
-    fn get_filtered_arg_choices<'a>(&self, choices: &'a [Choice]) -> Vec<&'a Choice> {
+    pub(crate) fn get_filtered_arg_choices<'a>(&self, choices: &'a [Choice]) -> Vec<&'a Choice> {
         if self.arg_input.is_empty() {
             choices.iter().collect()
         } else {
@@ -255,7 +255,7 @@ impl ScriptListApp {
         }
     }
 
-    fn focus_main_filter(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn focus_main_filter(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.focused_input = FocusedInput::MainFilter;
         let input_state = self.gpui_input_state.clone();
         input_state.update(cx, |state, cx| {

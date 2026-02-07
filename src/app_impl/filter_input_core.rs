@@ -1,7 +1,7 @@
 use super::*;
 
 impl ScriptListApp {
-    fn current_view_uses_shared_filter_input(&self) -> bool {
+    pub(crate) fn current_view_uses_shared_filter_input(&self) -> bool {
         matches!(
             self.current_view,
             AppView::ClipboardHistoryView { .. }
@@ -13,7 +13,7 @@ impl ScriptListApp {
         )
     }
 
-    fn sync_builtin_query_state(
+    pub(crate) fn sync_builtin_query_state(
         query: &mut String,
         selected_index: &mut usize,
         new_text: &str,
@@ -27,7 +27,7 @@ impl ScriptListApp {
         true
     }
 
-    fn clear_builtin_query_state(query: &mut String, selected_index: &mut usize) {
+    pub(crate) fn clear_builtin_query_state(query: &mut String, selected_index: &mut usize) {
         query.clear();
         *selected_index = 0;
     }

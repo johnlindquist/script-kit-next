@@ -219,7 +219,7 @@
                 ),
             );
         }
-
+}
         // Build provider registry in background to avoid blocking UI when opening AI chat
         {
             let config_clone = app.config.clone();
@@ -260,5 +260,3 @@
                 });
             })
             .detach();
-        }
-

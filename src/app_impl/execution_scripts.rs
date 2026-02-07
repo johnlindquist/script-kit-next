@@ -1,7 +1,7 @@
 use super::*;
 
 impl ScriptListApp {
-    fn execute_scriptlet(&mut self, scriptlet: &scripts::Scriptlet, cx: &mut Context<Self>) {
+    pub(crate) fn execute_scriptlet(&mut self, scriptlet: &scripts::Scriptlet, cx: &mut Context<Self>) {
         logging::log(
             "EXEC",
             &format!(
@@ -230,7 +230,7 @@ impl ScriptListApp {
     /// Execute a script or scriptlet by its file path
     /// Used by global shortcuts to directly invoke scripts
     #[allow(dead_code)]
-    fn execute_script_by_path(&mut self, path: &str, cx: &mut Context<Self>) {
+    pub(crate) fn execute_script_by_path(&mut self, path: &str, cx: &mut Context<Self>) {
         logging::log("EXEC", &format!("Executing script by path: {}", path));
 
         // Check if it's a scriptlet (contains #)
@@ -419,5 +419,4 @@ impl ScriptListApp {
         true
     }
 
-    /// Cancel the currently running script and clean up all state
 }

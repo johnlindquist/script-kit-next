@@ -1,7 +1,7 @@
 use super::*;
 
 impl ScriptListApp {
-    fn queue_filter_compute(&mut self, value: String, cx: &mut Context<Self>) {
+    pub(crate) fn queue_filter_compute(&mut self, value: String, cx: &mut Context<Self>) {
         // P3: Debounce expensive search/window resize work.
         // Use 8ms debounce (half a frame) to batch rapid keystrokes.
         logging::log(
@@ -55,7 +55,7 @@ impl ScriptListApp {
         }
     }
 
-    fn set_filter_text_immediate(
+    pub(crate) fn set_filter_text_immediate(
         &mut self,
         text: String,
         window: &mut Window,
@@ -109,11 +109,11 @@ impl ScriptListApp {
         cx.notify();
     }
 
-    fn clear_filter(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn clear_filter(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.set_filter_text_immediate(String::new(), window, cx);
     }
 
-    fn sync_filter_input_if_needed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn sync_filter_input_if_needed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // Sync placeholder if pending
         if let Some(placeholder) = self.pending_placeholder.take() {
             self.gpui_input_state.update(cx, |state, cx| {

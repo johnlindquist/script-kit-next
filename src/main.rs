@@ -257,7 +257,6 @@ pub use script_kit_gpui::{is_main_window_visible, set_main_window_visible};
 static PANEL_CONFIGURED: AtomicBool = AtomicBool::new(false); // Track if floating panel has been configured (one-time setup on first show)
 static SHUTDOWN_REQUESTED: AtomicBool = AtomicBool::new(false); // Track if shutdown signal received (prevents new script spawns)
 
-
 include!("main_sections/deeplink.rs");
 include!("main_sections/window_visibility.rs");
 include!("main_sections/fallbacks.rs");
@@ -269,10 +268,10 @@ include!("main_sections/app_state.rs");
 include!("app_impl/mod.rs");
 
 // Script execution logic (execute_interactive) extracted
-include!("execute_script.rs");
+include!("execute_script/mod.rs");
 
 // Prompt message handling (handle_prompt_message) extracted
-include!("prompt_handler.rs");
+include!("prompt_handler/mod.rs");
 
 // App navigation methods (selection movement, scrolling)
 include!("app_navigation.rs");
@@ -285,7 +284,6 @@ include!("app_actions.rs");
 
 // Layout calculation methods (build_component_bounds, build_layout_info)
 include!("app_layout.rs");
-
 
 include!("main_sections/render_impl.rs");
 // Render methods extracted to app_render.rs for maintainability
@@ -305,11 +303,9 @@ include!("render_prompts/path.rs");
 include!("render_prompts/other.rs");
 
 // Script list render method
-include!("render_script_list.rs");
-
+include!("render_script_list/mod.rs");
 
 fn main() {
-    include!("main_entry/preflight.rs");
     include!("main_entry/app_run_setup.rs");
 }
 #[cfg(test)]

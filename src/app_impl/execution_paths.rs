@@ -1,7 +1,7 @@
 use super::*;
 
 impl ScriptListApp {
-    fn execute_path_action(
+    pub(crate) fn execute_path_action(
         &mut self,
         action_id: &str,
         path_info: &PathInfo,
@@ -386,5 +386,4 @@ impl ScriptListApp {
         cx.notify();
     }
 
-    /// Execute a scriptlet (simple code snippet from .md file)
 }

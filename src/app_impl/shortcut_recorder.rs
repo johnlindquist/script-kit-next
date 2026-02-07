@@ -1,7 +1,7 @@
 use super::*;
 
 impl ScriptListApp {
-    fn edit_script(&mut self, path: &std::path::Path) {
+    pub(crate) fn edit_script(&mut self, path: &std::path::Path) {
         let editor = self.config.get_editor();
         logging::log(
             "UI",
@@ -27,7 +27,7 @@ impl ScriptListApp {
     /// NOTE: This is the legacy approach. For new code, use `show_shortcut_recorder()` instead
     /// which provides an inline modal UI for recording shortcuts.
     #[allow(dead_code)]
-    fn open_config_for_shortcut(&mut self, command_id: &str) {
+    pub(crate) fn open_config_for_shortcut(&mut self, command_id: &str) {
         let config_path = shellexpand::tilde("~/.scriptkit/kit/config.ts").to_string();
         let editor = self.config.get_editor();
 
@@ -85,7 +85,7 @@ impl ScriptListApp {
 
     /// Create config.ts template with keyboard shortcut documentation
     #[allow(dead_code)]
-    fn create_config_template(path: &std::path::Path) -> std::io::Result<()> {
+    pub(crate) fn create_config_template(path: &std::path::Path) -> std::io::Result<()> {
         use std::io::Write;
         let template = r#"// Script Kit Configuration
 // https://scriptkit.com/docs/config
@@ -168,7 +168,7 @@ export default {
     /// * `command_id` - The unique identifier for the command (e.g., "builtin/clipboard-history")
     /// * `command_name` - Human-readable name of the command
     /// * `cx` - The context for UI updates
-    fn show_shortcut_recorder(
+    pub(crate) fn show_shortcut_recorder(
         &mut self,
         command_id: String,
         command_name: String,
@@ -221,7 +221,7 @@ export default {
     ///
     /// The recorder is created once and persisted to maintain keyboard focus.
     /// Callbacks use cx.entity() to communicate back to the parent app.
-    fn render_shortcut_recorder_overlay(
+    pub(crate) fn render_shortcut_recorder_overlay(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -356,7 +356,7 @@ export default {
     /// Handle saving a shortcut from the recorder.
     ///
     /// This saves the shortcut to ~/.scriptkit/shortcuts.json and updates the registry.
-    fn handle_shortcut_save(
+    pub(crate) fn handle_shortcut_save(
         &mut self,
         recorded: &crate::components::shortcut_recorder::RecordedShortcut,
         cx: &mut Context<Self>,
@@ -436,9 +436,4 @@ export default {
         // Close the recorder and restore focus
         self.close_shortcut_recorder(cx);
     }
-
-    /// Show the alias input overlay for configuring a command alias.
-    ///
-    /// The alias input allows users to set a text alias that can be typed
-    /// in the main menu to quickly run a command.
 }

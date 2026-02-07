@@ -1,7 +1,7 @@
 use super::*;
 
 impl ScriptListApp {
-    fn webcam_photo_directory() -> std::path::PathBuf {
+    pub(crate) fn webcam_photo_directory() -> std::path::PathBuf {
         if let Some(home) = dirs::home_dir() {
             let desktop = home.join("Desktop");
             if desktop.exists() {
@@ -18,7 +18,7 @@ impl ScriptListApp {
     }
 
     #[cfg(target_os = "macos")]
-    fn encode_webcam_frame_to_png(
+    pub(crate) fn encode_webcam_frame_to_png(
         pixel_buffer: &core_video::pixel_buffer::CVPixelBuffer,
     ) -> Result<Vec<u8>, String> {
         use image::ImageEncoder;
@@ -113,7 +113,7 @@ impl ScriptListApp {
     }
 
     #[cfg(target_os = "macos")]
-    fn capture_webcam_photo(&mut self, cx: &mut Context<Self>) -> bool {
+    pub(crate) fn capture_webcam_photo(&mut self, cx: &mut Context<Self>) -> bool {
         let pixel_buffer = match &self.current_view {
             AppView::WebcamView { entity } => entity.read(cx).pixel_buffer.clone(),
             _ => None,
@@ -181,7 +181,7 @@ impl ScriptListApp {
     }
 
     #[cfg(not(target_os = "macos"))]
-    fn capture_webcam_photo(&mut self, cx: &mut Context<Self>) -> bool {
+    pub(crate) fn capture_webcam_photo(&mut self, cx: &mut Context<Self>) -> bool {
         logging::log(
             "ACTIONS",
             "capture_webcam_photo requested on unsupported platform",
@@ -195,7 +195,7 @@ impl ScriptListApp {
         false
     }
 
-    fn webcam_actions_for_dialog() -> Vec<crate::actions::Action> {
+    pub(crate) fn webcam_actions_for_dialog() -> Vec<crate::actions::Action> {
         use crate::actions::{Action, ActionCategory};
 
         vec![
@@ -216,7 +216,7 @@ impl ScriptListApp {
         ]
     }
 
-    fn execute_webcam_action(&mut self, action_id: &str, cx: &mut Context<Self>) {
+    pub(crate) fn execute_webcam_action(&mut self, action_id: &str, cx: &mut Context<Self>) {
         match action_id {
             "capture" => {
                 logging::log("ACTIONS", "execute_webcam_action: capture");
@@ -242,25 +242,4 @@ impl ScriptListApp {
             }
         }
     }
-
-    // ========================================================================
-    // Actions Dialog Routing - Shared key routing for all prompt types
-    // ========================================================================
-
-    /// Route keyboard events to the actions dialog when open.
-    ///
-    /// This centralizes the duplicated key routing logic from all render_prompts/*.rs
-    /// files into a single location, eliminating ~80 lines of duplicated code per prompt.
-    ///
-    /// # Arguments
-    /// * `key` - The key string from the KeyDownEvent (case-insensitive)
-    /// * `key_char` - Optional key_char from the event for printable character input
-    /// * `host` - Which type of host is routing (determines focus restoration behavior)
-    /// * `window` - Window reference for focus operations
-    /// * `cx` - Context for entity updates and notifications
-    ///
-    /// # Returns
-    /// * `ActionsRoute::NotHandled` - Actions popup not open, route to normal handlers
-    /// * `ActionsRoute::Handled` - Key was consumed by the actions dialog
-    /// * `ActionsRoute::Execute { action_id }` - User selected an action, caller should execute it
 }

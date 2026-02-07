@@ -14,6 +14,7 @@
 //! - `dialog`: ActionsDialog struct and implementation
 //! - `window`: Separate vibrancy window for actions panel
 
+#[path = "builders_rewire.rs"]
 mod builders;
 mod command_bar;
 mod constants;

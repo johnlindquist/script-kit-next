@@ -195,4 +195,3 @@
             }
         });
         app.gpui_input_subscriptions.push(tab_interceptor);
-

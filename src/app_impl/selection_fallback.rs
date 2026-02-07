@@ -1,7 +1,7 @@
 use super::*;
 
 impl ScriptListApp {
-    fn filtered_scripts(&self) -> Vec<Arc<scripts::Script>> {
+    pub(crate) fn filtered_scripts(&self) -> Vec<Arc<scripts::Script>> {
         let filter_text = self.filter_text();
         if filter_text.is_empty() {
             self.scripts.clone()
@@ -17,7 +17,7 @@ impl ScriptListApp {
 
     /// Find a script or scriptlet by alias (case-insensitive exact match)
     /// Uses O(1) registry lookup instead of O(n) iteration
-    fn find_alias_match(&self, alias: &str) -> Option<AliasMatch> {
+    pub(crate) fn find_alias_match(&self, alias: &str) -> Option<AliasMatch> {
         let alias_lower = alias.to_lowercase();
 
         // O(1) lookup in registry
@@ -88,7 +88,7 @@ impl ScriptListApp {
         None
     }
 
-    fn execute_selected(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn execute_selected(&mut self, cx: &mut Context<Self>) {
         // Record input to history if filter has meaningful text
         if !self.filter_text.trim().is_empty() {
             self.input_history.add_entry(&self.filter_text);
@@ -277,7 +277,7 @@ impl ScriptListApp {
     }
 
     /// Execute a built-in fallback action without window reference
-    fn execute_builtin_fallback_inline(
+    pub(crate) fn execute_builtin_fallback_inline(
         &mut self,
         fallback_id: &str,
         input: &str,
