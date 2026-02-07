@@ -13,7 +13,7 @@ use super::{
 /// Returns results sorted by relevance score (highest first)
 pub fn fuzzy_search_apps(apps: &[AppInfo], query: &str) -> Vec<AppMatch> {
     if query.is_empty() {
-        // If no query, return all apps with equal score, sorted by name
+        // If no query, return all apps with equal score
         return apps
             .iter()
             .map(|a| AppMatch {
@@ -24,7 +24,7 @@ pub fn fuzzy_search_apps(apps: &[AppInfo], query: &str) -> Vec<AppMatch> {
     }
 
     let query_lower = query.to_lowercase();
-    let mut matches = Vec::new();
+    let mut matches: Vec<(usize, i32)> = Vec::with_capacity(apps.len());
 
     // Create nucleo context once for all apps - reuses buffer across calls
     let mut nucleo = NucleoCtx::new(&query_lower);
@@ -34,7 +34,7 @@ pub fn fuzzy_search_apps(apps: &[AppInfo], query: &str) -> Vec<AppMatch> {
     // Gate nucleo fuzzy matching on minimum query length to reduce noise
     let use_nucleo = query_lower.len() >= MIN_FUZZY_QUERY_LEN;
 
-    for app in apps {
+    for (index, app) in apps.iter().enumerate() {
         let mut score = 0i32;
 
         // Exact name match boost
@@ -85,18 +85,21 @@ pub fn fuzzy_search_apps(apps: &[AppInfo], query: &str) -> Vec<AppMatch> {
         }
 
         if score > 0 {
-            matches.push(AppMatch {
-                app: app.clone(),
-                score,
-            });
+            matches.push((index, score));
         }
     }
 
     // Sort by score (highest first), then by name for ties
-    matches.sort_by(|a, b| match b.score.cmp(&a.score) {
-        Ordering::Equal => a.app.name.cmp(&b.app.name),
+    matches.sort_by(|(a_idx, a_score), (b_idx, b_score)| match b_score.cmp(a_score) {
+        Ordering::Equal => apps[*a_idx].name.cmp(&apps[*b_idx].name),
         other => other,
     });
 
     matches
+        .into_iter()
+        .map(|(index, score)| AppMatch {
+            app: apps[index].clone(),
+            score,
+        })
+        .collect()
 }
