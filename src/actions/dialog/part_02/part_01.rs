@@ -46,7 +46,12 @@ impl ActionsDialog {
         let filtered_actions: Vec<usize> = (0..actions.len()).collect();
         let grouped_items =
             build_grouped_items_static(&actions, &filtered_actions, config.section_style);
-        let list_state = ListState::new(grouped_items.len(), ListAlignment::Top, px(100.));
+        const ACTIONS_DIALOG_LIST_OVERDRAW_PX: f32 = 100.0;
+        let list_state = ListState::new(
+            grouped_items.len(),
+            ListAlignment::Top,
+            px(ACTIONS_DIALOG_LIST_OVERDRAW_PX),
+        );
         let selected_index = initial_selection_index(&grouped_items);
 
         ActionsDialog {
