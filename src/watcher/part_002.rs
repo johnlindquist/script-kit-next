@@ -25,6 +25,7 @@ impl ScriptWatcher {
             .tx
             .take()
             .ok_or_else(|| std::io::Error::other("watcher already started"))?;
+        let settings = load_watcher_settings();
 
         let stop_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let thread_stop_flag = stop_flag.clone();
@@ -34,7 +35,7 @@ impl ScriptWatcher {
         let paths = discover_kit_watch_paths();
 
         let thread_handle = thread::spawn(move || {
-            Self::supervisor_loop(paths, tx, thread_stop_flag);
+            Self::supervisor_loop(paths, tx, thread_stop_flag, settings);
         });
 
         self.watcher_thread = Some(thread_handle);
@@ -46,6 +47,7 @@ impl ScriptWatcher {
         paths: KitWatchPaths,
         out_tx: Sender<ScriptReloadEvent>,
         stop_flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        settings: WatcherSettings,
     ) {
         let mut attempt: u32 = 0;
 
@@ -63,6 +65,7 @@ impl ScriptWatcher {
                 control_rx,
                 control_tx,
                 stop_flag.clone(),
+                settings,
             ) {
                 Ok(()) => {
                     info!(watcher = "scripts", "Script watcher completed normally");
@@ -73,7 +76,7 @@ impl ScriptWatcher {
                         break;
                     }
 
-                    let backoff = compute_backoff(attempt);
+                    let backoff = compute_backoff(attempt, settings);
                     warn!(
                         error = %e,
                         watcher = "scripts",
@@ -103,6 +106,7 @@ impl ScriptWatcher {
         control_rx: Receiver<ControlMsg>,
         callback_tx: Sender<ControlMsg>,
         stop_flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        settings: WatcherSettings,
     ) -> NotifyResult<()> {
         use std::collections::HashSet;
 
@@ -207,7 +211,7 @@ impl ScriptWatcher {
         );
 
         let mut consecutive_errors: u32 = 0;
-        let debounce = Duration::from_millis(DEBOUNCE_MS);
+        let debounce = Duration::from_millis(settings.debounce_ms);
         let mut pending: HashMap<PathBuf, (ScriptReloadEvent, Instant)> = HashMap::new();
         // Global FullReload state: when set, supersedes all per-file events
         // This prevents multiple FullReload emissions during event storms
@@ -222,7 +226,7 @@ impl ScriptWatcher {
             let deadline = next_deadline(&pending, full_reload_at, debounce);
             let timeout = deadline
                 .map(|dl| dl.saturating_duration_since(Instant::now()))
-                .unwrap_or(Duration::from_millis(500));
+                .unwrap_or(Duration::from_millis(settings.health_check_interval_ms));
 
             let msg = match control_rx.recv_timeout(timeout) {
                 Ok(m) => Some(m),
@@ -250,7 +254,7 @@ impl ScriptWatcher {
                         "notify delivered error"
                     );
 
-                    if consecutive_errors >= MAX_NOTIFY_ERRORS {
+                    if consecutive_errors >= settings.max_notify_errors {
                         warn!(
                             watcher = "scripts",
                             consecutive_errors = consecutive_errors,
@@ -438,10 +442,10 @@ impl ScriptWatcher {
                         }
 
                         // Storm coalescing: if too many pending events, collapse to FullReload
-                        if pending.len() >= STORM_THRESHOLD {
+                        if pending.len() >= settings.storm_threshold {
                             warn!(
                                 pending_count = pending.len(),
-                                threshold = STORM_THRESHOLD,
+                                threshold = settings.storm_threshold,
                                 "Event storm detected, collapsing to FullReload"
                             );
                             // Set global FullReload instead of immediate emission
