@@ -48,5 +48,5 @@ pub use defaults::{
 pub use types::{CommandConfig, ContentPadding, ProcessLimits};
 
 #[cfg(test)]
-#[path = "config_tests.rs"]
+#[path = "config_tests/mod.rs"]
 mod tests;

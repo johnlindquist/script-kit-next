@@ -1,7 +1,7 @@
 use super::*;
 
 impl ScriptListApp {
-    fn cycle_design(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn cycle_design(&mut self, cx: &mut Context<Self>) {
         let old_design = self.current_design;
         let new_design = old_design.next();
         let all_designs = DesignVariant::all();
@@ -42,7 +42,7 @@ impl ScriptListApp {
         cx.notify();
     }
 
-    fn update_theme(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn update_theme(&mut self, cx: &mut Context<Self>) {
         let base_theme = theme::load_theme();
 
         // Preserve opacity offset in light mode, reset in dark mode
@@ -71,7 +71,7 @@ impl ScriptListApp {
         cx.notify();
     }
 
-    fn update_config(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn update_config(&mut self, cx: &mut Context<Self>) {
         self.config = config::load_config();
         clipboard_history::set_max_text_content_len(
             self.config.get_clipboard_history_max_text_length(),
@@ -89,7 +89,7 @@ impl ScriptListApp {
     ///
     /// Use Cmd+Shift+[ to decrease and Cmd+Shift+] to increase.
     /// The offset is clamped to the range -0.5 to +0.5.
-    fn adjust_light_opacity(&mut self, delta: f32, cx: &mut Context<Self>) {
+    pub(crate) fn adjust_light_opacity(&mut self, delta: f32, cx: &mut Context<Self>) {
         // Only adjust if we're in light mode
         let base_theme = theme::load_theme();
         if base_theme.is_dark_mode() {
@@ -200,7 +200,7 @@ impl ScriptListApp {
     /// Sync coordinator state to legacy focused_input/pending_focus fields.
     ///
     /// This bridges the new and old systems during migration.
-    fn sync_coordinator_to_legacy(&mut self) {
+    pub(crate) fn sync_coordinator_to_legacy(&mut self) {
         // Sync cursor owner to focused_input
         self.focused_input = match self.focus_coordinator.cursor_owner() {
             focus_coordinator::CursorOwner::MainFilter => FocusedInput::MainFilter,
@@ -236,7 +236,7 @@ impl ScriptListApp {
     /// is focused. This applies focus exactly once, then clears pending_focus.
     ///
     /// Returns true if focus was applied (for logging/debugging).
-    fn apply_pending_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+    pub(crate) fn apply_pending_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let Some(target) = self.pending_focus.take() else {
             return false;
         };

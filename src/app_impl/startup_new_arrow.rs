@@ -364,4 +364,3 @@
             }
         });
         app.gpui_input_subscriptions.push(home_end_interceptor);
-

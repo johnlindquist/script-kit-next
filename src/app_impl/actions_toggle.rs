@@ -1,7 +1,7 @@
 use super::*;
 
 impl ScriptListApp {
-    fn toggle_actions(&mut self, cx: &mut Context<Self>, window: &mut Window) {
+    pub(crate) fn toggle_actions(&mut self, cx: &mut Context<Self>, window: &mut Window) {
         let popup_state = self.show_actions_popup;
         let window_open = is_actions_window_open();
         logging::log(
@@ -127,7 +127,7 @@ impl ScriptListApp {
     }
 
     /// Toggle actions dialog for arg prompts with SDK-defined actions
-    fn toggle_arg_actions(&mut self, cx: &mut Context<Self>, window: &mut Window) {
+    pub(crate) fn toggle_arg_actions(&mut self, cx: &mut Context<Self>, window: &mut Window) {
         logging::log(
             "KEY",
             &format!(
@@ -484,5 +484,4 @@ impl ScriptListApp {
         cx.notify();
     }
 
-    /// Execute an action selected from the chat actions dialog
 }

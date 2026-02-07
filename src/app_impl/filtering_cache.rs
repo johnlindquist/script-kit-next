@@ -1,12 +1,12 @@
 use super::*;
 
 impl ScriptListApp {
-    fn filter_text(&self) -> &str {
+    pub(crate) fn filter_text(&self) -> &str {
         self.filter_text.as_str()
     }
 
     /// P1: Now uses caching - invalidates only when filter_text changes
-    fn filtered_results(&self) -> Vec<scripts::SearchResult> {
+    pub(crate) fn filtered_results(&self) -> Vec<scripts::SearchResult> {
         let filter_text = self.filter_text();
         // P1: Return cached results if filter hasn't changed
         if filter_text == self.filter_cache_key {
@@ -46,7 +46,7 @@ impl ScriptListApp {
 
     /// P1: Get filtered results with cache update (mutable version)
     /// Call this when you need to ensure cache is updated
-    fn get_filtered_results_cached(&mut self) -> &Vec<scripts::SearchResult> {
+    pub(crate) fn get_filtered_results_cached(&mut self) -> &Vec<scripts::SearchResult> {
         if self.filter_text != self.filter_cache_key {
             logging::log(
                 "FILTER_PERF",
@@ -86,7 +86,7 @@ impl ScriptListApp {
 
     /// P1: Invalidate filter cache (call when scripts/scriptlets change)
     #[allow(dead_code)]
-    fn invalidate_filter_cache(&mut self) {
+    pub(crate) fn invalidate_filter_cache(&mut self) {
         logging::log_debug("CACHE", "Filter cache INVALIDATED");
         self.filter_cache_key = String::from("\0_INVALIDATED_\0");
     }
@@ -97,7 +97,7 @@ impl ScriptListApp {
     /// P3: Cache is keyed off computed_filter_text (not filter_text) for two-stage filtering.
     ///
     /// P1-Arc: Returns Arc clones for cheap sharing with render closures.
-    fn get_grouped_results_cached(
+    pub(crate) fn get_grouped_results_cached(
         &mut self,
     ) -> (Arc<[GroupedListItem]>, Arc<[scripts::SearchResult]>) {
         // P3: Key off computed_filter_text for two-stage filtering
@@ -195,7 +195,7 @@ impl ScriptListApp {
     }
 
     /// P1: Invalidate grouped results cache (call when scripts/scriptlets/apps change)
-    fn invalidate_grouped_cache(&mut self) {
+    pub(crate) fn invalidate_grouped_cache(&mut self) {
         logging::log_debug("CACHE", "Grouped cache INVALIDATED");
         // Set grouped_cache_key to a sentinel that won't match computed_filter_text.
         // This ensures the cache check (computed_filter_text == grouped_cache_key) fails,
@@ -214,7 +214,7 @@ impl ScriptListApp {
     /// - The selected index points to a section header (headers aren't selectable)
     /// - The selected index is out of bounds
     /// - No results exist
-    fn get_selected_result(&mut self) -> Option<scripts::SearchResult> {
+    pub(crate) fn get_selected_result(&mut self) -> Option<scripts::SearchResult> {
         let selected_index = self.selected_index;
         let (grouped_items, flat_results) = self.get_grouped_results_cached();
 
@@ -227,7 +227,7 @@ impl ScriptListApp {
     /// Get or update the preview cache for syntax-highlighted code lines.
     /// Only re-reads and re-highlights when the script path actually changes.
     /// Returns cached lines if path matches, otherwise updates cache and returns new lines.
-    fn get_or_update_preview_cache(
+    pub(crate) fn get_or_update_preview_cache(
         &mut self,
         script_path: &str,
         lang: &str,
@@ -295,10 +295,9 @@ impl ScriptListApp {
 
     /// Invalidate the preview cache (call when selection might change to different script)
     #[allow(dead_code)]
-    fn invalidate_preview_cache(&mut self) {
+    pub(crate) fn invalidate_preview_cache(&mut self) {
         self.preview_cache_path = None;
         self.preview_cache_lines.clear();
     }
 
-    #[allow(dead_code)]
 }

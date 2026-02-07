@@ -78,7 +78,7 @@ pub use types::{
 };
 
 #[cfg(test)]
-#[path = "theme_tests.rs"]
+#[path = "theme_tests/mod.rs"]
 mod tests;
 
 #[cfg(test)]

@@ -136,5 +136,4 @@ impl ScriptListApp {
         }
     }
 
-    #[cfg(target_os = "macos")]
 }

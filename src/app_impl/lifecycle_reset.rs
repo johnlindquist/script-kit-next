@@ -1,7 +1,7 @@
 use super::*;
 
 impl ScriptListApp {
-    fn cancel_script_execution(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn cancel_script_execution(&mut self, cx: &mut Context<Self>) {
         logging::log("EXEC", "=== Canceling script execution ===");
 
         // Send cancel message to script (Exit with cancel code)
@@ -59,7 +59,7 @@ impl ScriptListApp {
     /// This should be called at the start of render() where we have window access.
     /// The ToastManager acts as a staging queue for toasts pushed from callbacks
     /// that don't have window access.
-    fn flush_pending_toasts(&mut self, window: &mut gpui::Window, cx: &mut gpui::App) {
+    pub(crate) fn flush_pending_toasts(&mut self, window: &mut gpui::Window, cx: &mut gpui::App) {
         use gpui_component::WindowExt;
 
         let pending = self.toast_manager.drain_pending();
@@ -84,7 +84,7 @@ impl ScriptListApp {
     /// 1. Cancels any running script
     /// 2. Resets state to the default script list
     /// 3. Hides the window
-    fn close_and_reset_window(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn close_and_reset_window(&mut self, cx: &mut Context<Self>) {
         logging::log("VISIBILITY", "=== Close and reset window ===");
 
         // Reset pin state when window is closed
@@ -168,7 +168,7 @@ impl ScriptListApp {
     /// Returns `false` if the filter was already empty (caller should proceed with go_back_or_close).
     ///
     /// This implements the "ESC clears filter first" UX pattern that matches the main menu behavior.
-    fn clear_builtin_view_filter(&mut self, cx: &mut Context<Self>) -> bool {
+    pub(crate) fn clear_builtin_view_filter(&mut self, cx: &mut Context<Self>) -> bool {
         let cleared = match &self.current_view {
             AppView::ClipboardHistoryView { filter, .. } if !filter.is_empty() => {
                 Some("ClipboardHistory filter")
@@ -265,14 +265,14 @@ impl ScriptListApp {
         true
     }
 
-    fn reset_script_list_filter_state(&mut self) {
+    pub(crate) fn reset_script_list_filter_state(&mut self) {
         self.filter_text.clear();
         self.computed_filter_text.clear();
         self.filter_coalescer.reset();
         self.pending_filter_sync = true;
     }
 
-    fn reset_script_list_selection_state(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn reset_script_list_selection_state(&mut self, cx: &mut Context<Self>) {
         self.invalidate_grouped_cache();
         self.sync_list_state();
         self.selected_index = 0;
@@ -285,12 +285,12 @@ impl ScriptListApp {
         self.last_scrolled_index = Some(0);
     }
 
-    fn reset_script_list_filter_and_selection_state(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn reset_script_list_filter_and_selection_state(&mut self, cx: &mut Context<Self>) {
         self.reset_script_list_filter_state();
         self.reset_script_list_selection_state(cx);
     }
 
-    fn request_script_list_main_filter_focus(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn request_script_list_main_filter_focus(&mut self, cx: &mut Context<Self>) {
         self.focused_input = FocusedInput::MainFilter;
         self.request_focus(FocusTarget::MainFilter, cx);
     }
@@ -302,7 +302,7 @@ impl ScriptListApp {
     /// this closes the window entirely.
     ///
     /// This provides consistent UX: pressing ESC always "goes back" one step.
-    fn go_back_or_close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn go_back_or_close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.opened_from_main_menu {
             logging::log(
                 "KEY",
@@ -336,20 +336,4 @@ impl ScriptListApp {
             self.close_and_reset_window(cx);
         }
     }
-
-    /// Handle global keyboard shortcuts with configurable dismissability
-    ///
-    /// Returns `true` if the shortcut was handled (caller should return early)
-    ///
-    /// # Arguments
-    /// * `event` - The key down event to check
-    /// * `is_dismissable` - If true, ESC key will also close the window (for prompts like arg, div, form, etc.)
-    ///   If false, only Cmd+W closes the window (for prompts like term, editor)
-    /// * `cx` - The context
-    ///
-    /// # Handled shortcuts
-    /// - Cmd+W: Always closes window and resets to default state
-    /// - Escape: Only closes window if `is_dismissable` is true AND actions popup is not showing
-    /// - Cmd+Shift+M: Cycle vibrancy material (for debugging)
-    #[tracing::instrument(skip(self, event, cx), fields(key = %event.keystroke.key, modifiers = ?event.keystroke.modifiers, is_dismissable))]
 }

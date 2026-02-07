@@ -1,7 +1,7 @@
 use super::*;
 
 impl ScriptListApp {
-    fn handle_global_shortcut_with_options(
+    pub(crate) fn handle_global_shortcut_with_options(
         &mut self,
         event: &gpui::KeyDownEvent,
         is_dismissable: bool,
@@ -71,7 +71,7 @@ impl ScriptListApp {
     /// - TermPrompt, EditorPrompt (these require explicit Cmd+W to close)
     /// - EnvPrompt (stays open on blur so user can copy API keys from other windows)
     #[allow(dead_code)]
-    fn is_dismissable_view(&self) -> bool {
+    pub(crate) fn is_dismissable_view(&self) -> bool {
         !matches!(
             self.current_view,
             AppView::TermPrompt { .. }
@@ -92,7 +92,7 @@ impl ScriptListApp {
     /// Position: Bottom-center (85% down screen)
     /// Duration: 2000ms default, configurable
     /// Shape: Pill (40px tall, variable width)
-    fn show_hud(&mut self, text: String, duration_ms: Option<u64>, cx: &mut Context<Self>) {
+    pub(crate) fn show_hud(&mut self, text: String, duration_ms: Option<u64>, cx: &mut Context<Self>) {
         // Delegate to the HUD manager which creates a separate floating window
         // This ensures the HUD is visible even when the main app window is hidden
         hud_manager::show_hud(text, duration_ms, cx);
@@ -102,7 +102,7 @@ impl ScriptListApp {
     ///
     /// This method converts protocol::GridOptions to debug_grid::GridConfig
     /// and enables the grid overlay rendering.
-    fn show_grid(&mut self, options: protocol::GridOptions, cx: &mut Context<Self>) {
+    pub(crate) fn show_grid(&mut self, options: protocol::GridOptions, cx: &mut Context<Self>) {
         use debug_grid::{GridColorScheme, GridConfig, GridDepth};
         use protocol::GridDepthOption;
 
@@ -139,13 +139,9 @@ impl ScriptListApp {
     }
 
     /// Hide the debug grid overlay
-    fn hide_grid(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn hide_grid(&mut self, cx: &mut Context<Self>) {
         self.grid_config = None;
         logging::log("DEBUG_GRID", "Grid overlay hidden");
         cx.notify();
     }
-
-    /// Rebuild alias and shortcut registries from current scripts/scriptlets.
-    /// Returns a list of conflict messages (if any) for HUD display.
-    /// Conflict rule: first-registered wins - duplicates are blocked.
 }

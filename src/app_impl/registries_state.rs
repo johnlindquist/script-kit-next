@@ -1,7 +1,7 @@
 use super::*;
 
 impl ScriptListApp {
-    fn rebuild_registries(&mut self) -> Vec<String> {
+    pub(crate) fn rebuild_registries(&mut self) -> Vec<String> {
         let mut conflicts = Vec::new();
         self.alias_registry.clear();
         self.shortcut_registry.clear();
@@ -138,7 +138,7 @@ impl ScriptListApp {
 
     /// Reset all state and return to the script list view.
     /// This clears all prompt state and resizes the window appropriately.
-    fn reset_to_script_list(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn reset_to_script_list(&mut self, cx: &mut Context<Self>) {
         let old_view = match &self.current_view {
             AppView::ScriptList => "ScriptList",
             AppView::ActionsDialog => "ActionsDialog",
@@ -288,5 +288,4 @@ impl ScriptListApp {
         cx.notify();
     }
 
-    /// Check if we're currently in a prompt view (script is running)
 }

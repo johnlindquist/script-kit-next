@@ -1,7 +1,7 @@
 use super::*;
 
 impl ScriptListApp {
-    fn route_key_to_actions_dialog(
+    pub(crate) fn route_key_to_actions_dialog(
         &mut self,
         key: &str,
         key_char: Option<&str>,
@@ -167,7 +167,7 @@ impl ScriptListApp {
     }
 
     /// Convert a display shortcut (⌘⇧E) to normalized form (cmd+shift+e)
-    fn normalize_display_shortcut(display: &str) -> String {
+    pub(crate) fn normalize_display_shortcut(display: &str) -> String {
         let mut parts: Vec<&str> = Vec::new();
         let mut key_char: Option<char> = None;
 
@@ -214,7 +214,7 @@ impl ScriptListApp {
     /// NOTE: The `host` parameter is now deprecated. Focus restoration is handled
     /// automatically by the FocusCoordinator's overlay stack. The host is kept
     /// for logging purposes only.
-    fn close_actions_popup(
+    pub(crate) fn close_actions_popup(
         &mut self,
         host: ActionsDialogHost,
         window: &mut Window,
@@ -257,6 +257,4 @@ impl ScriptListApp {
         );
     }
 
-    /// Edit a script in configured editor (config.editor > $EDITOR > "code")
-    #[allow(dead_code)]
 }

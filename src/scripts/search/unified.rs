@@ -1,0 +1,273 @@
+use std::cmp::Ordering;
+use std::sync::Arc;
+
+use crate::app_launcher::AppInfo;
+use crate::builtins::BuiltInEntry;
+use crate::window_control::WindowInfo;
+
+use super::super::types::{Script, Scriptlet, SearchResult};
+use super::{
+    app_passes_prefix_filter, builtin_passes_prefix_filter, fuzzy_search_apps,
+    fuzzy_search_builtins, fuzzy_search_scriptlets, fuzzy_search_scripts, fuzzy_search_windows,
+    parse_query_prefix, script_passes_prefix_filter, scriptlet_passes_prefix_filter,
+    should_search_scriptlets, should_search_scripts, window_passes_prefix_filter,
+};
+
+/// Perform unified fuzzy search across scripts, scriptlets, and built-ins
+/// Returns combined and ranked results sorted by relevance
+/// Built-ins appear at the TOP of results (before scripts) when scores are equal
+///
+/// H1 Optimization: Accepts Arc<Script> and Arc<Scriptlet> to avoid expensive clones.
+pub fn fuzzy_search_unified(
+    scripts: &[Arc<Script>],
+    scriptlets: &[Arc<Scriptlet>],
+    query: &str,
+) -> Vec<SearchResult> {
+    fuzzy_search_unified_with_builtins(scripts, scriptlets, &[], query)
+}
+
+/// Perform unified fuzzy search across scripts, scriptlets, and built-ins
+/// Returns combined and ranked results sorted by relevance
+/// Built-ins appear at the TOP of results (before scripts) when scores are equal
+///
+/// H1 Optimization: Accepts Arc<Script> and Arc<Scriptlet> to avoid expensive clones.
+pub fn fuzzy_search_unified_with_builtins(
+    scripts: &[Arc<Script>],
+    scriptlets: &[Arc<Scriptlet>],
+    builtins: &[BuiltInEntry],
+    query: &str,
+) -> Vec<SearchResult> {
+    // Use the new function with empty apps list for backwards compatibility
+    fuzzy_search_unified_all(scripts, scriptlets, builtins, &[], query)
+}
+
+/// Perform unified fuzzy search across scripts, scriptlets, built-ins, and apps
+/// Returns combined and ranked results sorted by relevance
+/// Built-ins appear at the TOP of results (before scripts) when scores are equal
+/// Apps appear after built-ins but before scripts when scores are equal
+///
+/// H1 Optimization: Accepts Arc<Script> and Arc<Scriptlet> to avoid expensive clones.
+pub fn fuzzy_search_unified_all(
+    scripts: &[Arc<Script>],
+    scriptlets: &[Arc<Scriptlet>],
+    builtins: &[BuiltInEntry],
+    apps: &[AppInfo],
+    query: &str,
+) -> Vec<SearchResult> {
+    use crate::logging;
+    let total_start = std::time::Instant::now();
+    let mut results = Vec::new();
+
+    // Parse prefix filter from query
+    let parsed = parse_query_prefix(query);
+    let search_query = if parsed.filter_kind.is_some() {
+        parsed.remainder.as_str()
+    } else {
+        query
+    };
+
+    // Search built-ins first (skip if prefix filter excludes them)
+    let builtin_start = std::time::Instant::now();
+    if builtin_passes_prefix_filter(&parsed) {
+        let builtin_matches = fuzzy_search_builtins(builtins, search_query);
+        for bm in builtin_matches {
+            results.push(SearchResult::BuiltIn(bm));
+        }
+    }
+    let builtin_elapsed = builtin_start.elapsed();
+
+    // Search apps (skip if prefix filter excludes them)
+    let apps_start = std::time::Instant::now();
+    if app_passes_prefix_filter(&parsed) {
+        let app_matches = fuzzy_search_apps(apps, search_query);
+        for am in app_matches {
+            results.push(SearchResult::App(am));
+        }
+    }
+    let apps_elapsed = apps_start.elapsed();
+
+    // Search scripts (skip if filter excludes scripts as a category)
+    let scripts_start = std::time::Instant::now();
+    if should_search_scripts(&parsed) {
+        let script_matches = fuzzy_search_scripts(scripts, search_query);
+        for sm in script_matches {
+            // Post-filter by prefix filter (tag, author, kit, is)
+            if script_passes_prefix_filter(&sm.script, &parsed) {
+                results.push(SearchResult::Script(sm));
+            }
+        }
+    }
+    let scripts_elapsed = scripts_start.elapsed();
+
+    // Search scriptlets (skip if filter excludes scriptlets as a category)
+    let scriptlets_start = std::time::Instant::now();
+    if should_search_scriptlets(&parsed) {
+        let scriptlet_matches = fuzzy_search_scriptlets(scriptlets, search_query);
+        for sm in scriptlet_matches {
+            if scriptlet_passes_prefix_filter(&sm.scriptlet, &parsed) {
+                results.push(SearchResult::Scriptlet(sm));
+            }
+        }
+    }
+    let scriptlets_elapsed = scriptlets_start.elapsed();
+
+    // Log search timing breakdown
+    if !query.is_empty() {
+        logging::log(
+            "FILTER_PERF",
+            &format!(
+                "[SEARCH_BREAKDOWN] '{}': builtins={:.2}ms apps={:.2}ms scripts={:.2}ms scriptlets={:.2}ms",
+                query,
+                builtin_elapsed.as_secs_f64() * 1000.0,
+                apps_elapsed.as_secs_f64() * 1000.0,
+                scripts_elapsed.as_secs_f64() * 1000.0,
+                scriptlets_elapsed.as_secs_f64() * 1000.0
+            ),
+        );
+    }
+
+    // Sort by score (highest first), then by type (builtins first, apps, windows, scripts, scriptlets, agents), then by name
+    let sort_start = std::time::Instant::now();
+    results.sort_by(|a, b| {
+        match b.score().cmp(&a.score()) {
+            Ordering::Equal => {
+                // Prefer builtins over apps over windows over scripts over scriptlets over agents when scores are equal
+                // Fallbacks always sort last (they have their own ordering by priority)
+                let type_order = |r: &SearchResult| -> i32 {
+                    match r {
+                        SearchResult::BuiltIn(_) => 0, // Built-ins first
+                        SearchResult::App(_) => 1,     // Apps second
+                        SearchResult::Window(_) => 2,  // Windows third
+                        SearchResult::Script(_) => 3,
+                        SearchResult::Scriptlet(_) => 4,
+                        SearchResult::Agent(_) => 5,
+                        SearchResult::Fallback(_) => 6, // Fallbacks always last
+                    }
+                };
+                let type_order_a = type_order(a);
+                let type_order_b = type_order(b);
+                match type_order_a.cmp(&type_order_b) {
+                    Ordering::Equal => a.name().cmp(b.name()),
+                    other => other,
+                }
+            }
+            other => other,
+        }
+    });
+
+    // Log sort and total timing
+    if !query.is_empty() {
+        let sort_elapsed = sort_start.elapsed();
+        let total_elapsed = total_start.elapsed();
+        logging::log(
+            "FILTER_PERF",
+            &format!(
+                "[SEARCH_TOTAL] '{}': sort={:.2}ms total={:.2}ms ({} results)",
+                query,
+                sort_elapsed.as_secs_f64() * 1000.0,
+                total_elapsed.as_secs_f64() * 1000.0,
+                results.len()
+            ),
+        );
+    }
+
+    results
+}
+
+/// Perform unified fuzzy search across scripts, scriptlets, built-ins, apps, and windows
+/// Returns combined and ranked results sorted by relevance
+/// Order by type when scores are equal: Built-ins > Apps > Windows > Scripts > Scriptlets
+///
+/// H1 Optimization: Accepts Arc<Script> and Arc<Scriptlet> to avoid expensive clones.
+pub fn fuzzy_search_unified_with_windows(
+    scripts: &[Arc<Script>],
+    scriptlets: &[Arc<Scriptlet>],
+    builtins: &[BuiltInEntry],
+    apps: &[AppInfo],
+    windows: &[WindowInfo],
+    query: &str,
+) -> Vec<SearchResult> {
+    let mut results = Vec::new();
+
+    // Parse prefix filter from query
+    let parsed = parse_query_prefix(query);
+    let search_query = if parsed.filter_kind.is_some() {
+        parsed.remainder.as_str()
+    } else {
+        query
+    };
+
+    // Search built-ins first (skip if prefix filter excludes them)
+    if builtin_passes_prefix_filter(&parsed) {
+        let builtin_matches = fuzzy_search_builtins(builtins, search_query);
+        for bm in builtin_matches {
+            results.push(SearchResult::BuiltIn(bm));
+        }
+    }
+
+    // Search apps (skip if prefix filter excludes them)
+    if app_passes_prefix_filter(&parsed) {
+        let app_matches = fuzzy_search_apps(apps, search_query);
+        for am in app_matches {
+            results.push(SearchResult::App(am));
+        }
+    }
+
+    // Search windows (skip if prefix filter excludes them)
+    if window_passes_prefix_filter(&parsed) {
+        let window_matches = fuzzy_search_windows(windows, search_query);
+        for wm in window_matches {
+            results.push(SearchResult::Window(wm));
+        }
+    }
+
+    // Search scripts (skip if filter excludes scripts as a category)
+    if should_search_scripts(&parsed) {
+        let script_matches = fuzzy_search_scripts(scripts, search_query);
+        for sm in script_matches {
+            if script_passes_prefix_filter(&sm.script, &parsed) {
+                results.push(SearchResult::Script(sm));
+            }
+        }
+    }
+
+    // Search scriptlets (skip if filter excludes scriptlets as a category)
+    if should_search_scriptlets(&parsed) {
+        let scriptlet_matches = fuzzy_search_scriptlets(scriptlets, search_query);
+        for sm in scriptlet_matches {
+            if scriptlet_passes_prefix_filter(&sm.scriptlet, &parsed) {
+                results.push(SearchResult::Scriptlet(sm));
+            }
+        }
+    }
+
+    // Sort by score (highest first), then by type (builtins first, apps, windows, scripts, scriptlets, agents), then by name
+    // Fallbacks always sort last (they have their own ordering by priority)
+    results.sort_by(|a, b| {
+        match b.score().cmp(&a.score()) {
+            Ordering::Equal => {
+                // Prefer builtins over apps over windows over scripts over scriptlets over agents when scores are equal
+                let type_order = |r: &SearchResult| -> i32 {
+                    match r {
+                        SearchResult::BuiltIn(_) => 0, // Built-ins first
+                        SearchResult::App(_) => 1,     // Apps second
+                        SearchResult::Window(_) => 2,  // Windows third
+                        SearchResult::Script(_) => 3,
+                        SearchResult::Scriptlet(_) => 4,
+                        SearchResult::Agent(_) => 5,
+                        SearchResult::Fallback(_) => 6, // Fallbacks always last
+                    }
+                };
+                let type_order_a = type_order(a);
+                let type_order_b = type_order(b);
+                match type_order_a.cmp(&type_order_b) {
+                    Ordering::Equal => a.name().cmp(b.name()),
+                    other => other,
+                }
+            }
+            other => other,
+        }
+    });
+
+    results
+}

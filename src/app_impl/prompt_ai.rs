@@ -1,7 +1,7 @@
 use super::*;
 
 impl ScriptListApp {
-    fn is_in_prompt(&self) -> bool {
+    pub(crate) fn is_in_prompt(&self) -> bool {
         matches!(
             self.current_view,
             AppView::ArgPrompt { .. }
@@ -22,7 +22,7 @@ impl ScriptListApp {
     ///
     /// Uses try_send() to avoid blocking the UI thread if the script's input
     /// channel is full. User-initiated actions should never freeze the UI.
-    fn submit_prompt_response(
+    pub(crate) fn submit_prompt_response(
         &mut self,
         id: String,
         value: Option<String>,
@@ -64,7 +64,7 @@ impl ScriptListApp {
     }
 
     /// Get filtered choices for arg prompt
-    fn filtered_arg_choices(&self) -> Vec<(usize, &Choice)> {
+    pub(crate) fn filtered_arg_choices(&self) -> Vec<(usize, &Choice)> {
         if let AppView::ArgPrompt { choices, .. } = &self.current_view {
             if self.arg_input.is_empty() {
                 choices.iter().enumerate().collect()
@@ -82,7 +82,7 @@ impl ScriptListApp {
     }
 
     /// P0: Get filtered choices as owned data for uniform_list closure
-    fn get_filtered_arg_choices_owned(&self) -> Vec<(usize, Choice)> {
+    pub(crate) fn get_filtered_arg_choices_owned(&self) -> Vec<(usize, Choice)> {
         if let AppView::ArgPrompt { choices, .. } = &self.current_view {
             if self.arg_input.is_empty() {
                 choices
@@ -107,7 +107,7 @@ impl ScriptListApp {
     // NOTE: hex_to_rgba_with_opacity moved to crate::ui_foundation (centralized)
 
     /// Create box shadows from theme configuration
-    fn create_box_shadows(&self) -> Vec<BoxShadow> {
+    pub(crate) fn create_box_shadows(&self) -> Vec<BoxShadow> {
         let shadow_config = self.theme.get_drop_shadow();
 
         if !shadow_config.enabled {
@@ -311,5 +311,4 @@ impl ScriptListApp {
         })
         .detach();
     }
-}
 }

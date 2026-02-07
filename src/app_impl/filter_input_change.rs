@@ -1,7 +1,7 @@
 use super::*;
 
 impl ScriptListApp {
-    fn handle_filter_input_change(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn handle_filter_input_change(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let handler_start = std::time::Instant::now();
 
         if self.suppress_filter_events {

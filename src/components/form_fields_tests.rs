@@ -136,23 +136,34 @@ fn test_password_bullet_slicing_safe() {
 
 #[test]
 fn test_form_fields_use_theme_token_font_sizes() {
-    let source = std::fs::read_to_string("src/components/form_fields.rs")
-        .expect("failed to read src/components/form_fields.rs");
+    let colors_source = std::fs::read_to_string("src/components/form_fields/colors.rs")
+        .expect("failed to read src/components/form_fields/colors.rs");
+    let text_field_render_source =
+        std::fs::read_to_string("src/components/form_fields/text_field/render.rs")
+            .expect("failed to read src/components/form_fields/text_field/render.rs");
+    let text_area_render_source =
+        std::fs::read_to_string("src/components/form_fields/text_area/render.rs")
+            .expect("failed to read src/components/form_fields/text_area/render.rs");
+    let checkbox_source = std::fs::read_to_string("src/components/form_fields/checkbox.rs")
+        .expect("failed to read src/components/form_fields/checkbox.rs");
+    let all_sources = format!(
+        "{colors_source}\n{text_field_render_source}\n{text_area_render_source}\n{checkbox_source}"
+    );
 
     assert!(
-        source.contains("input_font_size"),
+        colors_source.contains("input_font_size"),
         "form field colors should define an input font-size token"
     );
     assert!(
-        source.contains("label_font_size"),
+        colors_source.contains("label_font_size"),
         "form field colors should define a label font-size token"
     );
     assert!(
-        source.contains(".text_size(px(colors.input_font_size))"),
+        all_sources.contains(".text_size(px(colors.input_font_size))"),
         "text inputs should use the shared input font-size token"
     );
     assert!(
-        source.contains(".text_size(px(colors.label_font_size))"),
+        all_sources.contains(".text_size(px(colors.label_font_size))"),
         "labels should use the shared label font-size token"
     );
 }

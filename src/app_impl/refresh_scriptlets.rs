@@ -1,7 +1,7 @@
 use super::*;
 
 impl ScriptListApp {
-    fn refresh_scripts(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn refresh_scripts(&mut self, cx: &mut Context<Self>) {
         self.scripts = scripts::read_scripts();
         // Use load_scriptlets() to load from ALL kits (kit/*/extensions/*.md)
         self.scriptlets = scripts::load_scriptlets();
@@ -64,14 +64,14 @@ impl ScriptListApp {
     }
 
     /// Dismiss the bun warning banner
-    fn dismiss_bun_warning(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn dismiss_bun_warning(&mut self, cx: &mut Context<Self>) {
         logging::log("APP", "Bun warning banner dismissed by user");
         self.show_bun_warning = false;
         cx.notify();
     }
 
     /// Open bun.sh in the default browser
-    fn open_bun_website(&self) {
+    pub(crate) fn open_bun_website(&self) {
         logging::log("APP", "Opening https://bun.sh in default browser");
         if let Err(e) = std::process::Command::new("open")
             .arg("https://bun.sh")
@@ -93,7 +93,7 @@ impl ScriptListApp {
     /// * `path` - Path to the changed/deleted scriptlet file
     /// * `is_deleted` - Whether the file was deleted (vs created/modified)
     /// * `cx` - The context for UI updates
-    fn handle_scriptlet_file_change(
+    pub(crate) fn handle_scriptlet_file_change(
         &mut self,
         path: &std::path::Path,
         is_deleted: bool,
@@ -279,6 +279,4 @@ impl ScriptListApp {
         cx.notify();
     }
 
-    /// Get unified filtered results combining scripts and scriptlets
-    /// Helper to get filter text as string (for compatibility with existing code)
 }

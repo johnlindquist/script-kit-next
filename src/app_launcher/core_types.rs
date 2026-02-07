@@ -1,0 +1,110 @@
+use anyhow::{Context, Result};
+use rayon::prelude::*;
+use rusqlite::{params, Connection};
+use std::collections::hash_map::DefaultHasher;
+use std::fs;
+use std::hash::{Hash, Hasher};
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Instant;
+use tracing::{debug, error, info, info_span, trace, warn};
+
+/// Stats for icon extraction during a scan (thread-safe)
+static ICONS_EXTRACTED: AtomicUsize = AtomicUsize::new(0);
+static ICONS_FROM_CACHE: AtomicUsize = AtomicUsize::new(0);
+static EXTRACT_TIME_MS: AtomicUsize = AtomicUsize::new(0);
+
+#[cfg(target_os = "macos")]
+use cocoa::base::{id, nil};
+#[cfg(target_os = "macos")]
+use cocoa::foundation::NSString as CocoaNSString;
+#[cfg(target_os = "macos")]
+use objc::{class, msg_send, sel, sel_impl};
+
+/// Pre-decoded icon image for efficient rendering
+pub type DecodedIcon = Arc<gpui::RenderImage>;
+
+/// Information about an installed application
+#[derive(Clone)]
+pub struct AppInfo {
+    /// Display name of the application (e.g., "Safari")
+    pub name: String,
+    /// Full path to the .app bundle (e.g., "/Applications/Safari.app")
+    pub path: PathBuf,
+    /// Bundle identifier from Info.plist (e.g., "com.apple.Safari")
+    pub bundle_id: Option<String>,
+    /// Pre-decoded icon image (32x32), ready for rendering
+    /// **IMPORTANT**: This is pre-decoded to avoid PNG decoding on every render frame
+    pub icon: Option<DecodedIcon>,
+}
+
+impl std::fmt::Debug for AppInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AppInfo")
+            .field("name", &self.name)
+            .field("path", &self.path)
+            .field("bundle_id", &self.bundle_id)
+            .field("icon", &self.icon.as_ref().map(|_| "<RenderImage>"))
+            .finish()
+    }
+}
+
+/// Loading state for the app cache
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AppLoadingState {
+    /// Initial load from SQLite cache (instant, no disk scan)
+    LoadingFromCache,
+    /// Background directory scan in progress to find new/changed apps
+    ScanningDirectories,
+    /// All apps loaded and cache is up to date
+    Ready,
+}
+
+impl AppLoadingState {
+    /// Get a human-readable message for UI display
+    #[allow(dead_code)]
+    pub fn message(&self) -> &'static str {
+        match self {
+            AppLoadingState::LoadingFromCache => "Loading apps...",
+            AppLoadingState::ScanningDirectories => "Scanning for new apps...",
+            AppLoadingState::Ready => "Apps ready",
+        }
+    }
+}
+
+/// Cached list of applications (in-memory, populated from SQLite + directory scan)
+static APP_CACHE: OnceLock<Arc<Mutex<Vec<AppInfo>>>> = OnceLock::new();
+
+/// Current loading state (thread-safe, updated during scan)
+static APP_LOADING_STATE: OnceLock<Mutex<AppLoadingState>> = OnceLock::new();
+
+/// Database connection for apps cache
+static APPS_DB: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
+
+/// Directories to scan for .app bundles
+const APP_DIRECTORIES: &[&str] = &[
+    // Standard macOS app locations
+    "/Applications",
+    "/System/Applications",
+    "/System/Applications/Utilities",
+    "/Applications/Utilities",
+    // System utilities (Keychain Access, Screen Sharing, etc.)
+    "/System/Library/CoreServices/Applications",
+    // User-specific apps
+    "~/Applications",
+    // Chrome installed web apps (PWAs)
+    "~/Applications/Chrome Apps.localized",
+    // Edge installed web apps (PWAs)
+    "~/Applications/Edge Apps.localized",
+    // Arc browser installed web apps
+    "~/Applications/Arc Apps",
+    // Setapp subscription apps (if installed)
+    "/Applications/Setapp",
+];
+
+// ============================================================================
+// SQLite Database Functions
+// ============================================================================
+

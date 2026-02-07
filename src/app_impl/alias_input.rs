@@ -1,7 +1,7 @@
 use super::*;
 
 impl ScriptListApp {
-    fn show_alias_input(
+    pub(crate) fn show_alias_input(
         &mut self,
         command_id: String,
         command_name: String,
@@ -54,7 +54,7 @@ impl ScriptListApp {
     /// Update the alias text in the input state.
     /// Currently unused - will be connected when real text input is added.
     #[allow(dead_code)]
-    fn update_alias_text(&mut self, text: String, cx: &mut Context<Self>) {
+    pub(crate) fn update_alias_text(&mut self, text: String, cx: &mut Context<Self>) {
         if let Some(ref mut state) = self.alias_input_state {
             state.alias_text = text;
             cx.notify();
@@ -63,7 +63,7 @@ impl ScriptListApp {
 
     /// Save the current alias and close the input.
     /// If alias_from_entity is provided, use that; otherwise fall back to state.alias_text.
-    fn save_alias_with_text(&mut self, alias_from_entity: Option<String>, cx: &mut Context<Self>) {
+    pub(crate) fn save_alias_with_text(&mut self, alias_from_entity: Option<String>, cx: &mut Context<Self>) {
         let Some(ref state) = self.alias_input_state else {
             logging::log("ALIAS", "No alias input state when trying to save");
             return;
@@ -139,7 +139,7 @@ impl ScriptListApp {
     ///
     /// The alias input entity is created once and persisted to maintain keyboard focus.
     /// This follows the same pattern as render_shortcut_recorder_overlay.
-    fn render_alias_input_overlay(
+    pub(crate) fn render_alias_input_overlay(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -234,6 +234,4 @@ impl ScriptListApp {
         Some(input_entity.into_any_element())
     }
 
-    /// Execute a path action from the actions dialog
-    /// Handles actions like copy_path, open_in_finder, open_in_editor, etc.
 }
