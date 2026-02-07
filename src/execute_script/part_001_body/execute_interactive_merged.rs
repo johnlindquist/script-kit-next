@@ -365,11 +365,9 @@
                                                         }
                                                         clipboard_history::ContentType::Text => {
                                                             // Truncate very long text entries
-                                                            if e.content.len() > 1000 {
-                                                                format!("{}...", &e.content[..1000])
-                                                            } else {
-                                                                e.content
-                                                            }
+                                                            truncate_clipboard_history_preview(
+                                                                &e.content,
+                                                            )
                                                         }
                                                     };
                                                     protocol::ClipboardHistoryEntryData {
