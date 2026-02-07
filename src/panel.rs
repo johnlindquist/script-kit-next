@@ -87,6 +87,13 @@ pub fn running_status_message(context: &str) -> String {
     format!("{SCRIPT_RUNNING_STATUS_PREFIX} · {context}")
 }
 
+/// Resolve footer colors for panel-level footer surfaces using PromptFooter tokens.
+pub fn panel_footer_colors(
+    theme: &crate::theme::Theme,
+) -> crate::components::prompt_footer::PromptFooterColors {
+    crate::components::prompt_footer::PromptFooterColors::from_theme(theme)
+}
+
 // ============================================================================
 // Input Placeholder Configuration
 // ============================================================================
@@ -359,6 +366,54 @@ mod tests {
 
     #[test]
     fn window_visible_edge_margin_is_positive() {
-        assert!(WINDOW_VISIBLE_EDGE_MARGIN > 0.0);
+        let margin = std::hint::black_box(WINDOW_VISIBLE_EDGE_MARGIN);
+        assert!(margin > 0.0);
+    }
+
+    #[test]
+    fn test_panel_footer_colors_match_prompt_footer_tokens_in_light_and_dark_modes() {
+        let light_theme = crate::theme::Theme::light_default();
+        let dark_theme = crate::theme::Theme::dark_default();
+
+        let light_colors = panel_footer_colors(&light_theme);
+        assert_eq!(light_colors.accent, light_theme.colors.accent.selected);
+        assert_eq!(light_colors.text_muted, light_theme.colors.text.muted);
+        assert_eq!(light_colors.border, light_theme.colors.ui.border);
+        assert_eq!(
+            light_colors.background,
+            light_theme.colors.accent.selected_subtle
+        );
+        assert!(light_colors.is_light_mode);
+
+        let dark_colors = panel_footer_colors(&dark_theme);
+        assert_eq!(dark_colors.accent, dark_theme.colors.accent.selected);
+        assert_eq!(dark_colors.text_muted, dark_theme.colors.text.muted);
+        assert_eq!(dark_colors.border, dark_theme.colors.ui.border);
+        assert_eq!(
+            dark_colors.background,
+            dark_theme.colors.accent.selected_subtle
+        );
+        assert!(!dark_colors.is_light_mode);
+    }
+
+    #[test]
+    fn test_panel_footer_surface_matches_prompt_footer_surface_opacity_rules() {
+        let light_theme = crate::theme::Theme::light_default();
+        let dark_theme = crate::theme::Theme::dark_default();
+
+        let light_surface = crate::components::prompt_footer::footer_surface_rgba(
+            panel_footer_colors(&light_theme),
+        );
+        let dark_surface =
+            crate::components::prompt_footer::footer_surface_rgba(panel_footer_colors(&dark_theme));
+
+        assert_eq!(
+            light_surface,
+            (light_theme.colors.accent.selected_subtle << 8) | 0xff
+        );
+        assert_eq!(
+            dark_surface,
+            (dark_theme.colors.accent.selected_subtle << 8) | 0x33
+        );
     }
 }
