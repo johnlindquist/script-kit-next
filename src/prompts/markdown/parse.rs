@@ -1,5 +1,14 @@
 use super::*;
 
+fn flush_spans_to_active_list_item(spans: &mut Vec<InlineSpan>, list_item_stack: &mut [ListItem]) {
+    if spans.is_empty() {
+        return;
+    }
+    if let Some(item) = list_item_stack.last_mut() {
+        item.spans.append(spans);
+    }
+}
+
 pub(super) fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
@@ -31,6 +40,7 @@ pub(super) fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
                     spans.clear();
                 }
                 Tag::List(start) => {
+                    flush_spans_to_active_list_item(&mut spans, &mut list_item_stack);
                     list_stack.push(ListState {
                         ordered: start.is_some(),
                         start: start.unwrap_or(1) as usize,
@@ -97,14 +107,13 @@ pub(super) fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
             Event::End(tag) => match tag {
                 TagEnd::Paragraph => {
                     if !spans.is_empty() {
-                        if let Some(item) = list_item_stack.last_mut() {
-                            item.spans.append(&mut spans);
+                        if !list_item_stack.is_empty() {
+                            flush_spans_to_active_list_item(&mut spans, &mut list_item_stack);
                         } else {
                             blocks.push(ParsedBlock::Paragraph {
-                                spans: spans.clone(),
+                                spans: std::mem::take(&mut spans),
                                 quote_depth,
                             });
-                            spans.clear();
                         }
                     }
                 }
@@ -113,18 +122,13 @@ pub(super) fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
                         let level = heading_level.take().unwrap_or(3);
                         blocks.push(ParsedBlock::Heading {
                             level,
-                            spans: spans.clone(),
+                            spans: std::mem::take(&mut spans),
                             quote_depth,
                         });
-                        spans.clear();
                     }
                 }
                 TagEnd::Item => {
-                    if !spans.is_empty() {
-                        if let Some(item) = list_item_stack.last_mut() {
-                            item.spans.append(&mut spans);
-                        }
-                    }
+                    flush_spans_to_active_list_item(&mut spans, &mut list_item_stack);
                     if let Some(item) = list_item_stack.pop() {
                         if let Some(list) = list_stack.last_mut() {
                             list.items.push(item);
@@ -162,7 +166,8 @@ pub(super) fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
                         };
                         let mut style = *style_stack.last().unwrap_or(&InlineStyle::default());
                         style.link = true;
-                        push_text_span(&mut spans, &label, style, Some(image.url.as_str()));
+                        let target_url = current_link_url.as_deref().unwrap_or(image.url.as_str());
+                        push_text_span(&mut spans, &label, style, Some(target_url));
                     }
                 }
                 TagEnd::Emphasis | TagEnd::Strong | TagEnd::Strikethrough => {
@@ -193,24 +198,21 @@ pub(super) fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
                 }
                 TagEnd::TableHead => {
                     if let Some(ts) = table_state.as_mut() {
-                        ts.headers = ts.current_row.clone();
-                        ts.current_row.clear();
+                        ts.headers = std::mem::take(&mut ts.current_row);
                         ts.in_head = false;
                     }
                 }
                 TagEnd::TableRow => {
                     if let Some(ts) = table_state.as_mut() {
                         if !ts.in_head {
-                            ts.rows.push(ts.current_row.clone());
-                            ts.current_row.clear();
+                            ts.rows.push(std::mem::take(&mut ts.current_row));
                         }
                     }
                 }
                 TagEnd::TableCell => {
                     if let Some(ts) = table_state.as_mut() {
-                        ts.current_row.push(spans.clone());
+                        ts.current_row.push(std::mem::take(&mut spans));
                     }
-                    spans.clear();
                     in_table_cell = false;
                 }
                 _ => {}
