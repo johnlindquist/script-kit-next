@@ -6,6 +6,38 @@ fn preview_panel_typography_body_line_height(typography: designs::DesignTypograp
     typography.font_size_sm * typography.line_height_relaxed
 }
 
+fn truncate_preview_line_for_display(line: &str, max_chars: usize) -> String {
+    if max_chars == 0 {
+        return "...".to_string();
+    }
+
+    if let Some((cutoff, _)) = line.char_indices().nth(max_chars) {
+        let mut truncated = String::with_capacity(cutoff + 3);
+        truncated.push_str(&line[..cutoff]);
+        truncated.push_str("...");
+        truncated
+    } else {
+        line.to_string()
+    }
+}
+
+fn preview_scriptlet_cache_key(scriptlet: &scripts::Scriptlet, is_dark: bool) -> String {
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    scriptlet.code.hash(&mut hasher);
+    let code_hash = hasher.finish();
+
+    let source_path = scriptlet.file_path.as_deref().unwrap_or("<inline>");
+    let command = scriptlet.command.as_deref().unwrap_or("<none>");
+    let theme = if is_dark { "dark" } else { "light" };
+
+    format!(
+        "{source_path}|{command}|{}|{}|{theme}|{code_hash:016x}",
+        scriptlet.name, scriptlet.tool
+    )
+}
+
 impl ScriptListApp {
     #[allow(dead_code)]
     fn read_script_preview(path: &std::path::Path, max_lines: usize) -> String {
@@ -210,7 +242,7 @@ impl ScriptListApp {
             .p(px(spacing.padding_lg))
             .flex()
             .flex_col()
-            .overflow_y_hidden()
+            .overflow_y_scrollbar()
             .font_family(font_family);
 
         // P4: Compute match indices lazily for visible preview (only one result at a time)
@@ -704,7 +736,8 @@ impl ScriptListApp {
                         let total_start = std::time::Instant::now();
 
                         // Step 1: Cache key check
-                        let cache_key = scriptlet.name.clone();
+                        let is_dark = self.theme.is_dark_mode();
+                        let cache_key = preview_scriptlet_cache_key(scriptlet, is_dark);
                         let is_cache_hit =
                             self.scriptlet_preview_cache_key.as_ref() == Some(&cache_key);
 
@@ -721,13 +754,7 @@ impl ScriptListApp {
                                 .code
                                 .lines()
                                 .take(15)
-                                .map(|line| {
-                                    if line.len() > MAX_LINE_LENGTH {
-                                        format!("{}...", &line[..MAX_LINE_LENGTH])
-                                    } else {
-                                        line.to_string()
-                                    }
-                                })
+                                .map(|line| truncate_preview_line_for_display(line, MAX_LINE_LENGTH))
                                 .collect::<Vec<_>>()
                                 .join("\n");
 
@@ -736,7 +763,6 @@ impl ScriptListApp {
                                 "node" | "bun" => "js",
                                 _ => &scriptlet.tool,
                             };
-                            let is_dark = self.theme.is_dark_mode();
                             let highlighted = highlight_code_lines(&code_preview, lang, is_dark);
                             self.scriptlet_preview_cache_key = Some(cache_key);
                             self.scriptlet_preview_cache_lines = highlighted.clone();
