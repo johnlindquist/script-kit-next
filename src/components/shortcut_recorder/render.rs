@@ -6,7 +6,10 @@ use gpui::{
 use crate::components::button::{Button, ButtonColors, ButtonVariant};
 use crate::logging;
 
-use super::types::{MODAL_PADDING, MODAL_WIDTH};
+use super::types::{
+    overlay_color_with_alpha, MODAL_PADDING, MODAL_WIDTH, OVERLAY_BACKDROP_ALPHA,
+    OVERLAY_BACKDROP_HOVER_ALPHA,
+};
 use super::ShortcutRecorder;
 
 impl Focusable for ShortcutRecorder {
@@ -20,6 +23,14 @@ impl Render for ShortcutRecorder {
         let colors = self.colors;
         let button_colors = ButtonColors::from_theme(&self.theme);
         let overlay_appear = self.overlay_appear_style();
+        let backdrop_bg = rgba(overlay_color_with_alpha(
+            colors.overlay_bg,
+            OVERLAY_BACKDROP_ALPHA,
+        ));
+        let backdrop_hover_bg = rgba(overlay_color_with_alpha(
+            colors.overlay_bg,
+            OVERLAY_BACKDROP_HOVER_ALPHA,
+        ));
         self.schedule_overlay_animation_tick_if_needed(overlay_appear.complete, cx);
 
         // Determine button states
@@ -213,7 +224,9 @@ impl Render for ShortcutRecorder {
                     .id("shortcut-backdrop")
                     .absolute()
                     .inset_0()
-                    .bg(rgba((colors.overlay_bg << 8) | 0x80)) // 50% opacity
+                    .bg(backdrop_bg)
+                    .cursor_pointer()
+                    .hover(move |style| style.bg(backdrop_hover_bg))
                     .opacity(overlay_appear.backdrop_opacity)
                     .on_click(backdrop_cancel),
             )
