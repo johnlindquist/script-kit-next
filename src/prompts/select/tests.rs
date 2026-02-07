@@ -42,6 +42,12 @@ fn score_choice_matches_description_and_value() {
         score_choice_for_filter(&choice, &indexed_choice, "deploy-api.ts", &mut value_ctx)
             .is_some()
     );
+
+    let mut miss_ctx = scripts::NucleoCtx::new("zzzzzz-no-match");
+    assert!(
+        score_choice_for_filter(&choice, &indexed_choice, "zzzzzz-no-match", &mut miss_ctx)
+            .is_none()
+    );
 }
 
 #[test]
@@ -84,8 +90,11 @@ fn char_indices_to_byte_ranges_handles_utf8_boundaries() {
 }
 
 #[test]
-fn test_select_prompt_accepts_space_in_filter_query() {
+fn test_select_prompt_accepts_space_and_rejects_control_chars_in_filter_query() {
     assert!(should_append_to_filter(' '));
+    assert!(should_append_to_filter('x'));
+    assert!(!should_append_to_filter('\n'));
+    assert!(!should_append_to_filter('\u{0000}'));
 }
 
 #[test]
