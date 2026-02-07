@@ -71,15 +71,12 @@ impl PromptFooterColors {
         }
     }
 
-    /// Create PromptFooterColors from design colors for design system support
-    pub fn from_design(colors: &DesignColors) -> Self {
-        Self {
-            accent: colors.accent,
-            text_muted: colors.text_muted,
-            border: colors.border,
-            background: colors.background_selected,
-            is_light_mode: false, // Default to dark mode for design colors
-        }
+    /// Create PromptFooterColors from design colors.
+    ///
+    /// Prompt footers should stay visually aligned with the app shell, so
+    /// this path intentionally resolves to the cached theme tokens.
+    pub fn from_design(_colors: &DesignColors) -> Self {
+        Self::from_theme(&crate::theme::get_cached_theme())
     }
 }
 
@@ -97,13 +94,10 @@ impl Default for PromptFooterColors {
 
 /// Resolve footer surface color with mode-specific opacity.
 pub fn footer_surface_rgba(colors: PromptFooterColors) -> u32 {
-    if colors.is_light_mode {
-        // Keep legacy light-mode footer surface to avoid dark banding with vibrancy.
-        0xf2f1f1ff
-    } else {
-        // Preserve the selected-subtle color, but only as a subtle dark-mode overlay.
-        (colors.background << 8) | 0x33
-    }
+    // Always use the caller-provided tokenized background color.
+    // Light mode stays opaque to match app-shell footer color; dark mode keeps subtle overlay.
+    let alpha = if colors.is_light_mode { 0xff } else { 0x33 };
+    (colors.background << 8) | alpha
 }
 
 /// Configuration for PromptFooter display
@@ -425,3 +419,52 @@ impl RenderOnce for PromptFooter {
 // - PromptFooterColors: Copy, Clone, Debug, Default
 // - PromptFooterConfig: Clone, Debug, Default + builder pattern
 // - PromptFooter: builder pattern with .on_primary_click(), .on_secondary_click()
+
+#[cfg(test)]
+mod tests {
+    use super::{footer_surface_rgba, PromptFooterColors};
+
+    #[test]
+    fn test_footer_surface_rgba_uses_background_with_full_alpha_in_light_mode() {
+        let colors = PromptFooterColors {
+            accent: 0,
+            text_muted: 0,
+            border: 0,
+            background: 0x2255aa,
+            is_light_mode: true,
+        };
+
+        assert_eq!(footer_surface_rgba(colors), 0x2255aaff);
+    }
+
+    #[test]
+    fn test_footer_surface_rgba_uses_background_with_overlay_alpha_in_dark_mode() {
+        let colors = PromptFooterColors {
+            accent: 0,
+            text_muted: 0,
+            border: 0,
+            background: 0x2255aa,
+            is_light_mode: false,
+        };
+
+        assert_eq!(footer_surface_rgba(colors), 0x2255aa33);
+    }
+
+    #[test]
+    fn test_prompt_footer_colors_from_design_uses_cached_theme_tokens() {
+        let mut design = crate::designs::DesignColors::default();
+        design.accent = 0x010203;
+        design.text_muted = 0x040506;
+        design.border = 0x070809;
+        design.background_selected = 0x0a0b0c;
+
+        let resolved = PromptFooterColors::from_design(&design);
+        let expected = PromptFooterColors::from_theme(&crate::theme::get_cached_theme());
+
+        assert_eq!(resolved.accent, expected.accent);
+        assert_eq!(resolved.text_muted, expected.text_muted);
+        assert_eq!(resolved.border, expected.border);
+        assert_eq!(resolved.background, expected.background);
+        assert_eq!(resolved.is_light_mode, expected.is_light_mode);
+    }
+}

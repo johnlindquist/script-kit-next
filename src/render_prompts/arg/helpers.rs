@@ -14,15 +14,9 @@ fn running_status_text(context: &str) -> String {
 #[inline]
 fn prompt_footer_colors_for_prompt(
     design_colors: &crate::designs::DesignColors,
-    is_light_mode: bool,
+    _is_light_mode: bool,
 ) -> PromptFooterColors {
-    PromptFooterColors {
-        accent: design_colors.accent,
-        text_muted: design_colors.text_muted,
-        border: design_colors.border,
-        background: design_colors.background_selected,
-        is_light_mode,
-    }
+    PromptFooterColors::from_design(design_colors)
 }
 
 #[inline]
