@@ -27,6 +27,7 @@ mod clipboard;
 mod config;
 mod database;
 mod db_worker;
+mod exclusions;
 mod image;
 mod macos_paste;
 mod monitor;
@@ -45,6 +46,10 @@ pub use types::{
     classify_timestamp, group_entries_by_time, ClipboardEntry, ClipboardEntryMeta, ContentType,
     TimeGroup,
 };
+
+// Clipboard source exclusions
+#[allow(unused_imports)]
+pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
 
 // DB Worker (new architecture - message passing instead of global mutex)
 #[allow(unused_imports)]
