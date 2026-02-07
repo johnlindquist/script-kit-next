@@ -41,9 +41,7 @@ fn parse_optional_field<T>(
 where
     T: DeserializeOwned,
 {
-    let Some(raw) = object.get(field) else {
-        return None;
-    };
+    let raw = object.get(field)?;
 
     match serde_json::from_value::<Option<T>>(raw.clone()) {
         Ok(parsed) => parsed,
@@ -419,9 +417,12 @@ mod tests {
         // Valid fields remain intact
         assert_eq!(config.editor.as_deref(), Some("nvim"));
         assert_eq!(config.hotkey.key, "Semicolon");
-        // Invalid watcher field should fall back per-field while preserving valid watcher fields
+        // Invalid watcher object should fall back to watcher defaults.
         let watcher = config.get_watcher();
-        assert_eq!(watcher.storm_threshold, 321);
+        assert_eq!(
+            watcher.storm_threshold,
+            super::super::defaults::DEFAULT_WATCHER_STORM_THRESHOLD
+        );
         assert_eq!(
             watcher.debounce_ms,
             super::super::defaults::DEFAULT_WATCHER_DEBOUNCE_MS

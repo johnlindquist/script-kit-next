@@ -31,6 +31,7 @@
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::path::Path;
 
     /// Helper function to read a source file for pattern checking
     fn read_source_file(path: &str) -> String {
@@ -38,6 +39,32 @@ mod tests {
             // Try with src/ prefix if not found
             fs::read_to_string(format!("src/{}", path)).unwrap_or_default()
         })
+    }
+
+    fn append_rs_sources(dir: &Path, content: &mut String) {
+        let Ok(entries) = fs::read_dir(dir) else {
+            return;
+        };
+
+        let mut paths: Vec<_> = entries.filter_map(|entry| entry.ok().map(|e| e.path())).collect();
+        paths.sort();
+
+        for path in paths {
+            if path.is_dir() {
+                append_rs_sources(&path, content);
+            } else if path.extension().is_some_and(|ext| ext == "rs") {
+                if let Ok(file_content) = fs::read_to_string(&path) {
+                    content.push_str(&file_content);
+                    content.push('\n');
+                }
+            }
+        }
+    }
+
+    fn read_rs_sources_under(path: &str) -> String {
+        let mut content = String::new();
+        append_rs_sources(Path::new(path), &mut content);
+        content
     }
 
     /// Count occurrences of a pattern in text
@@ -141,8 +168,9 @@ mod tests {
 
         // Find the function and check if it contains reset_to_script_list
         if let Some(start) = content.find("fn close_and_reset_window") {
-            // Get a reasonable chunk after the function signature
-            let function_chunk = &content[start..std::cmp::min(start + 2000, content.len())];
+            let after_start = &content[start..];
+            let end = after_start.find("\n    ///").unwrap_or(after_start.len());
+            let function_chunk = &after_start[..end];
             let has_reset = function_chunk.contains("reset_to_script_list");
 
             assert!(
@@ -181,13 +209,13 @@ mod tests {
     /// This helps track adoption of the correct pattern
     #[test]
     fn test_close_and_reset_window_adoption() {
-        let content = read_source_file("app_execute.rs");
-        let correct_count = count_occurrences(&content, "close_and_reset_window");
+        let content = read_rs_sources_under("src/app_impl");
+        let correct_count = count_occurrences(&content, "close_and_reset_window(");
 
         // We expect multiple usages of close_and_reset_window
         assert!(
             correct_count >= 5,
-            "Expected at least 5 uses of close_and_reset_window in app_execute.rs, found {}",
+            "Expected at least 5 close_and_reset_window call sites in src/app_impl, found {}",
             correct_count
         );
     }

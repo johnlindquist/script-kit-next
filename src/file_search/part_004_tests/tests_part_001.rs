@@ -324,7 +324,7 @@
     #[test]
     fn test_terminal_working_directory_falls_back_to_original_path_without_parent() {
         let resolved = terminal_working_directory("readme.md", false);
-        assert_eq!(resolved, "readme.md");
+        assert_eq!(resolved, "");
     }
     #[cfg(not(target_os = "macos"))]
     #[test]

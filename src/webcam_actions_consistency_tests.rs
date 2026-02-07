@@ -67,7 +67,7 @@ mod tests {
             .expect("open_webcam not found");
         let after_start = &content[start..];
         let end = after_start
-            .find("/// Handle builtin confirmation modal result.")
+            .find("#[cfg(not(target_os = \"macos\"))]")
             .unwrap_or(after_start.len());
         &content[start..start + end]
     }
@@ -146,7 +146,8 @@ mod tests {
 
     #[test]
     fn webcam_start_errors_are_surfaceable_in_open_flow() {
-        let content = fs::read_to_string("src/app_execute.rs").expect("Failed to read app_execute");
+        let content = fs::read_to_string("src/app_execute/utility_views.rs")
+            .expect("Failed to read src/app_execute/utility_views.rs");
         let section = webcam_open_section(&content);
 
         assert!(
@@ -161,17 +162,24 @@ mod tests {
 
     #[test]
     fn webcam_camera_module_uses_typed_startup_error_taxonomy() {
-        let content = fs::read_to_string("src/camera.rs").expect("Failed to read camera.rs");
+        let content = format!(
+            "{}\n{}\n{}",
+            fs::read_to_string("src/camera/mod.rs").expect("Failed to read src/camera/mod.rs"),
+            fs::read_to_string("src/camera/part_000.rs")
+                .expect("Failed to read src/camera/part_000.rs"),
+            fs::read_to_string("src/camera/part_001.rs")
+                .expect("Failed to read src/camera/part_001.rs"),
+        );
 
         assert!(
             content.contains("pub enum WebcamStartError"),
-            "camera.rs should define a typed WebcamStartError enum."
+            "camera module should define a typed WebcamStartError enum."
         );
         assert!(
             content.contains("PermissionDenied")
                 && content.contains("DeviceBusy")
                 && content.contains("InputInitFailed"),
-            "camera.rs should classify permission, busy, and generic input startup failures."
+            "camera module should classify permission, busy, and generic input startup failures."
         );
         assert!(
             content.contains("-> std::result::Result<(mpsc::Receiver<CVPixelBuffer>, CaptureHandle), WebcamStartError>"),
