@@ -39,6 +39,38 @@ use crate::window_resize::layout::FOOTER_HEIGHT;
 pub const PROMPT_FOOTER_HELPER_TEXT_MAX_WIDTH_PX: f32 = 420.0;
 /// Info label width cap so long labels do not crowd footer actions.
 pub const PROMPT_FOOTER_INFO_TEXT_MAX_WIDTH_PX: f32 = 220.0;
+/// Shared horizontal spacing between footer sections.
+const PROMPT_FOOTER_SECTION_GAP_PX: f32 = 8.0;
+/// Shared horizontal spacing between footer buttons/divider.
+const PROMPT_FOOTER_BUTTON_GAP_PX: f32 = 4.0;
+/// Footer horizontal padding.
+const PROMPT_FOOTER_PADDING_X_PX: f32 = 12.0;
+/// Optical bottom padding to align footer content vertically.
+const PROMPT_FOOTER_PADDING_BOTTOM_PX: f32 = 2.0;
+/// Footer logo icon size.
+const PROMPT_FOOTER_LOGO_SIZE_PX: f32 = 16.0;
+/// Small optical nudge so the logo appears centered with adjacent text.
+const PROMPT_FOOTER_LOGO_NUDGE_X_PX: f32 = 2.0;
+/// Divider width between footer buttons.
+const PROMPT_FOOTER_DIVIDER_WIDTH_PX: f32 = 1.0;
+/// Divider height between footer buttons.
+const PROMPT_FOOTER_DIVIDER_HEIGHT_PX: f32 = 16.0;
+/// Divider horizontal margin between buttons.
+const PROMPT_FOOTER_DIVIDER_MARGIN_X_PX: f32 = 4.0;
+/// Footer top-border opacity for contrast on light/dark surfaces.
+const PROMPT_FOOTER_BORDER_OPACITY: u8 = 0x50;
+/// Footer shadow Y-offset.
+const PROMPT_FOOTER_SHADOW_OFFSET_Y_PX: f32 = -1.0;
+/// Footer shadow blur radius.
+const PROMPT_FOOTER_SHADOW_BLUR_PX: f32 = 8.0;
+/// Info label font size delta from base UI font size.
+const PROMPT_FOOTER_INFO_FONT_DELTA_PX: f32 = 4.0;
+/// Minimum info label font size.
+const PROMPT_FOOTER_INFO_FONT_MIN_PX: f32 = 9.0;
+/// Helper label font size delta from base UI font size.
+const PROMPT_FOOTER_HELPER_FONT_DELTA_PX: f32 = 2.0;
+/// Minimum helper label font size.
+const PROMPT_FOOTER_HELPER_FONT_MIN_PX: f32 = 10.0;
 
 /// Pre-computed colors for PromptFooter rendering
 ///
@@ -258,8 +290,8 @@ impl PromptFooter {
     fn render_logo(&self) -> impl IntoElement {
         svg()
             .external_path(utils::get_logo_path())
-            .size(px(16.))
-            .ml(px(2.)) // Nudge right
+            .size(px(PROMPT_FOOTER_LOGO_SIZE_PX))
+            .ml(px(PROMPT_FOOTER_LOGO_NUDGE_X_PX))
             .text_color(rgb(self.colors.accent)) // Accent color (yellow/gold)
     }
 
@@ -290,9 +322,9 @@ impl PromptFooter {
     /// Render the vertical divider between buttons
     fn render_divider(&self) -> impl IntoElement {
         div()
-            .w(px(1.))
-            .h(px(16.))
-            .mx(px(4.))
+            .w(px(PROMPT_FOOTER_DIVIDER_WIDTH_PX))
+            .h(px(PROMPT_FOOTER_DIVIDER_HEIGHT_PX))
+            .mx(px(PROMPT_FOOTER_DIVIDER_MARGIN_X_PX))
             .bg(self.colors.border.rgba8(0x40)) // 25% opacity
     }
 }
@@ -302,11 +334,16 @@ impl RenderOnce for PromptFooter {
         let colors = self.colors;
         let theme = crate::theme::get_cached_theme();
         let ui_font_size = theme.get_fonts().ui_size;
-        let info_font_size = (ui_font_size - 4.0).max(9.0);
-        let helper_font_size = (ui_font_size - 2.0).max(10.0);
+        let info_font_size =
+            (ui_font_size - PROMPT_FOOTER_INFO_FONT_DELTA_PX).max(PROMPT_FOOTER_INFO_FONT_MIN_PX);
+        let helper_font_size = (ui_font_size - PROMPT_FOOTER_HELPER_FONT_DELTA_PX)
+            .max(PROMPT_FOOTER_HELPER_FONT_MIN_PX);
 
         // Build the right-side container (info label + buttons)
-        let mut right_side = hstack().gap(px(8.)).items_center().min_w(px(0.));
+        let mut right_side = hstack()
+            .gap(px(PROMPT_FOOTER_SECTION_GAP_PX))
+            .items_center()
+            .min_w(px(0.));
 
         // Info label (e.g., "typescript", "5 items") - shown before buttons
         if let Some(ref info) = self.config.info_label {
@@ -323,7 +360,7 @@ impl RenderOnce for PromptFooter {
         }
 
         // Build the buttons container
-        let mut buttons = hstack().gap(px(4.)).items_center();
+        let mut buttons = hstack().gap(px(PROMPT_FOOTER_BUTTON_GAP_PX)).items_center();
 
         // Primary button
         buttons = buttons.child(self.render_button(
@@ -351,7 +388,6 @@ impl RenderOnce for PromptFooter {
         // Main footer container (uses FOOTER_HEIGHT constant for single source of truth)
         // Resolve from PromptFooterColors.background so color ownership stays within footer tokens.
         let footer_bg = rgba(footer_surface_rgba(colors));
-        let border_opacity: u8 = 0x50; // ~31% — visible border on both light and dark
 
         let mut footer = div()
             .w_full()
@@ -360,22 +396,22 @@ impl RenderOnce for PromptFooter {
             .max_h(px(FOOTER_HEIGHT))
             .flex_shrink_0()
             .overflow_hidden()
-            .px(px(12.))
+            .px(px(PROMPT_FOOTER_PADDING_X_PX))
             .pt(px(0.))
-            .pb(px(2.)) // Extra bottom padding shifts content up
+            .pb(px(PROMPT_FOOTER_PADDING_BOTTOM_PX))
             .flex()
             .flex_row()
             .items_center()
             .justify_between()
             .border_t_1()
-            .border_color(colors.border.rgba8(border_opacity))
+            .border_color(colors.border.rgba8(PROMPT_FOOTER_BORDER_OPACITY))
             .bg(footer_bg)
             // Inner shadow above the footer for visual separation from content
             // Footers are the ONE scenario where blocking vibrancy is OK
             .shadow(vec![BoxShadow {
                 color: colors.border.rgba8(footer_shadow_alpha(colors)),
-                offset: point(px(0.), px(-1.)), // Negative Y = shadow above element
-                blur_radius: px(8.),           // Wider blur for softer edge
+                offset: point(px(0.), px(PROMPT_FOOTER_SHADOW_OFFSET_Y_PX)),
+                blur_radius: px(PROMPT_FOOTER_SHADOW_BLUR_PX),
                 spread_radius: px(0.),
             }]);
 
@@ -384,7 +420,7 @@ impl RenderOnce for PromptFooter {
             .flex_1()
             .min_w(px(0.))
             .overflow_hidden()
-            .gap(px(8.))
+            .gap(px(PROMPT_FOOTER_SECTION_GAP_PX))
             .items_center();
 
         // Logo (if enabled)
@@ -424,7 +460,16 @@ impl RenderOnce for PromptFooter {
 
 #[cfg(test)]
 mod tests {
-    use super::{footer_surface_rgba, PromptFooterColors};
+    use super::{
+        footer_surface_rgba, PromptFooterColors, PROMPT_FOOTER_BORDER_OPACITY,
+        PROMPT_FOOTER_BUTTON_GAP_PX, PROMPT_FOOTER_DIVIDER_HEIGHT_PX,
+        PROMPT_FOOTER_DIVIDER_MARGIN_X_PX, PROMPT_FOOTER_DIVIDER_WIDTH_PX,
+        PROMPT_FOOTER_HELPER_FONT_DELTA_PX, PROMPT_FOOTER_HELPER_FONT_MIN_PX,
+        PROMPT_FOOTER_INFO_FONT_DELTA_PX, PROMPT_FOOTER_INFO_FONT_MIN_PX,
+        PROMPT_FOOTER_LOGO_NUDGE_X_PX, PROMPT_FOOTER_LOGO_SIZE_PX, PROMPT_FOOTER_PADDING_BOTTOM_PX,
+        PROMPT_FOOTER_PADDING_X_PX, PROMPT_FOOTER_SECTION_GAP_PX, PROMPT_FOOTER_SHADOW_BLUR_PX,
+        PROMPT_FOOTER_SHADOW_OFFSET_Y_PX,
+    };
 
     #[test]
     fn test_footer_surface_rgba_uses_background_with_full_alpha_in_light_mode() {
@@ -500,5 +545,25 @@ mod tests {
 
         assert_eq!(super::footer_shadow_alpha(light), 0x28);
         assert_eq!(super::footer_shadow_alpha(dark), 0x50);
+    }
+
+    #[test]
+    fn test_prompt_footer_layout_tokens_stay_consistent_when_spacing_is_adjusted() {
+        assert_eq!(PROMPT_FOOTER_SECTION_GAP_PX, 8.0);
+        assert_eq!(PROMPT_FOOTER_BUTTON_GAP_PX, 4.0);
+        assert_eq!(PROMPT_FOOTER_PADDING_X_PX, 12.0);
+        assert_eq!(PROMPT_FOOTER_PADDING_BOTTOM_PX, 2.0);
+        assert_eq!(PROMPT_FOOTER_LOGO_SIZE_PX, 16.0);
+        assert_eq!(PROMPT_FOOTER_LOGO_NUDGE_X_PX, 2.0);
+        assert_eq!(PROMPT_FOOTER_DIVIDER_WIDTH_PX, 1.0);
+        assert_eq!(PROMPT_FOOTER_DIVIDER_HEIGHT_PX, 16.0);
+        assert_eq!(PROMPT_FOOTER_DIVIDER_MARGIN_X_PX, 4.0);
+        assert_eq!(PROMPT_FOOTER_BORDER_OPACITY, 0x50);
+        assert_eq!(PROMPT_FOOTER_SHADOW_OFFSET_Y_PX, -1.0);
+        assert_eq!(PROMPT_FOOTER_SHADOW_BLUR_PX, 8.0);
+        assert_eq!(PROMPT_FOOTER_INFO_FONT_DELTA_PX, 4.0);
+        assert_eq!(PROMPT_FOOTER_INFO_FONT_MIN_PX, 9.0);
+        assert_eq!(PROMPT_FOOTER_HELPER_FONT_DELTA_PX, 2.0);
+        assert_eq!(PROMPT_FOOTER_HELPER_FONT_MIN_PX, 10.0);
     }
 }
