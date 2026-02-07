@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-02-07T07:56:54.148Z",
+  "updatedAt": "2026-02-07T13:58:12.527Z",
   "agents": {
     "codex-actions-consistency": {
       "id": "codex-actions-consistency",
@@ -1824,33 +1824,12 @@
       "model": "gpt-5.3-codex",
       "task": "Read ./plans/module-structure-improvements.md and implement the recommended module structure improvements. Split large modules, fix circular dependencies, improve re-exports. Run 'cargo check' to verify.",
       "scope": "src/**/*.rs",
-      "status": "in_progress",
-      "claims": [
-        "src/actions/mod.rs",
-        "src/actions/tests.rs",
-        "src/actions/prelude.rs",
-        "src/theme/mod.rs",
-        "src/theme/prelude.rs",
-        "src/windows/mod.rs",
-        "src/windows/types.rs",
-        "src/platform.rs",
-        "src/window_state.rs",
-        "src/window_state_persistence_tests.rs",
-        "src/theme/theme_tests.rs",
-        "src/window_manager.rs",
-        "src/lib.rs",
-        "src/main.rs",
-        "src/windows/registry.rs",
-        "src/windowing/mod.rs",
-        "src/windowing/types.rs",
-        "src/prompts/mod.rs",
-        "src/prompts/prelude.rs",
-        "src/prompts/prelude_tests.rs"
-      ],
+      "status": "abandoned",
+      "claims": [],
       "createdAt": "2026-02-07T06:55:52.803Z",
-      "lastSeenAt": "2026-02-07T07:15:22.887Z",
+      "lastSeenAt": "2026-02-07T13:45:01.528Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "Finalizing module-structure: extracted windowing DisplayBounds, moved actions test harness, adding prompt/theme/action preludes and verification",
+      "notes": "[auto] stale >120m; releasing claims. Finalizing module-structure: extracted windowing DisplayBounds, moved actions test harness, adding prompt/theme/action preludes and verification",
       "pid": 82429
     },
     "codex-footer-color-revert": {
@@ -1875,14 +1854,12 @@
       "model": "gpt-5.3-codex",
       "task": "Investigate and fix performance issues with large markdown rendering in the AI chat prompt that may contribute to scroll getting stuck. When a massive markdown document is rendered in the chat (many headings, code blocks, lists, links), the rendering may be too expensive and block the UI thread, preventing scroll events from being processed. Look at src/prompts/chat.rs and src/prompts/markdown.rs for how markdown content is rendered. Consider if there's excessive re-rendering on each streaming token, if the markdown parser is being called too frequently, or if the rendered element tree is too deep/wide. Ensure incremental rendering doesn't cause full re-layout of all previous content. Run cargo check && cargo clippy --all-targets -- -D warnings && cargo test after changes.",
       "scope": "src/prompts/chat.rs,src/prompts/markdown.rs,src/components/mod.rs",
-      "status": "in_progress",
-      "claims": [
-        "src/prompts/markdown.rs"
-      ],
+      "status": "abandoned",
+      "claims": [],
       "createdAt": "2026-02-07T06:57:37.904Z",
-      "lastSeenAt": "2026-02-07T07:15:22.990Z",
+      "lastSeenAt": "2026-02-07T13:45:01.528Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "Read chat render callsites; markdown scoped-id optimization implemented in markdown.rs; re-attempting chat.rs claim and running verification gate",
+      "notes": "[auto] stale >120m; releasing claims. Read chat render callsites; markdown scoped-id optimization implemented in markdown.rs; re-attempting chat.rs claim and running verification gate",
       "pid": 2341
     },
     "impl-data-structures": {
@@ -1937,18 +1914,12 @@
       "model": "gpt-5.3-codex",
       "task": "Read ./plans/test-coverage-gaps.md and implement the recommended new tests. Add tests for untested modules and missing edge cases. Run 'cargo check' to verify.",
       "scope": "src/**/*.rs,tests/**/*.rs",
-      "status": "in_progress",
-      "claims": [
-        "src/executor/mod.rs",
-        "src/executor/runner_integration_tests.rs",
-        "src/confirm/window.rs",
-        "src/app_navigation.rs",
-        "src/prompt_handler.rs"
-      ],
+      "status": "abandoned",
+      "claims": [],
       "createdAt": "2026-02-07T07:03:57.803Z",
-      "lastSeenAt": "2026-02-07T07:15:27.886Z",
+      "lastSeenAt": "2026-02-07T13:45:01.528Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "Implementing P0 test coverage: executor runner + confirm key mapping + app_navigation helper behavior + prompt_handler routing helpers/tests",
+      "notes": "[auto] stale >120m; releasing claims. Implementing P0 test coverage: executor runner + confirm key mapping + app_navigation helper behavior + prompt_handler routing helpers/tests",
       "pid": 99729
     },
     "codex-gpui-core": {
@@ -2340,6 +2311,66 @@
       "host": "johns.macbook.pro.lan",
       "notes": "done. exit=0. final=.ai/logs/impl-module-structure-v2.final.md. See final message file.",
       "pid": 51742
+    },
+    "codex-agents-md": {
+      "id": "codex-agents-md",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "gpt-5.3-codex",
+      "task": "Create or enhance AGENTS.md at the repo root. This file should be a comprehensive guide for AI agents working on this codebase. Include: (1) A module ownership map listing every top-level module in src/ with a 1-2 sentence description of what it does, its key public types, and which files it touches. (2) File-scope boundaries — which directories/files are safe to modify independently vs which are tightly coupled. (3) A dependency graph showing which modules import from which others (look at use/mod statements). (4) Common patterns: how built-in commands flow (BuiltInFeature enum → get_builtin_entries → execute_builtin → AppView), how prompts render (render_prompts/*.rs wraps prompts/*.rs), the stdin/stdout JSONL protocol. (5) Testing guidance: how to run scoped tests, what test files exist. The goal is that any AI agent can read AGENTS.md and immediately know where to make changes for any given task without exploring the codebase.",
+      "scope": "AGENTS.md,src/**/mod.rs,src/lib.rs,src/main.rs",
+      "status": "done",
+      "claims": [],
+      "createdAt": "2026-02-07T13:45:23.748Z",
+      "lastSeenAt": "2026-02-07T13:54:44.507Z",
+      "host": "johns.macbook.pro.lan",
+      "notes": "done. exit=0. final=.ai/logs/codex-agents-md.final.md. See final message file.",
+      "pid": 44633
+    },
+    "codex-module-docs": {
+      "id": "codex-module-docs",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "gpt-5.3-codex",
+      "task": "Add concise module-level doc comments (//! style) to every mod.rs file and major source files in src/ that are missing them. Each doc comment should be 2-5 lines explaining: (1) what the module does, (2) its key public types/functions, (3) which other modules it depends on or is depended on by. Do NOT change any logic or function signatures. Only add //! comments at the top of files. Files to cover: src/lib.rs, src/main.rs, src/actions/mod.rs, src/ai/mod.rs, src/components/mod.rs, src/config/mod.rs, src/icons/mod.rs, src/notes/mod.rs, src/prompts/mod.rs, src/protocol/mod.rs, src/render_prompts/*.rs, src/scripts/mod.rs, src/shortcuts/mod.rs, src/theme/mod.rs, src/utils/mod.rs, src/windows/mod.rs, src/executor/mod.rs, and any other mod.rs files. Also add to standalone files like src/builtins.rs, src/camera.rs, src/panel.rs, src/scheduler.rs, src/hotkeys.rs, src/mcp_server.rs, src/menu_bar.rs, src/watcher.rs. After adding docs, run: cargo check && cargo clippy --all-targets -- -D warnings",
+      "scope": "src/**/mod.rs,src/*.rs",
+      "status": "done",
+      "claims": [],
+      "createdAt": "2026-02-07T13:47:24.574Z",
+      "lastSeenAt": "2026-02-07T13:52:37.051Z",
+      "host": "johns.macbook.pro.lan",
+      "notes": "done. exit=0. final=.ai/logs/codex-module-docs.final.md. See final message file.",
+      "pid": 64966
+    },
+    "codex-test-harness": {
+      "id": "codex-test-harness",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "gpt-5.3-codex",
+      "task": "Create a script at scripts/agent-check.sh that allows AI agents to run scoped verification on specific modules they changed. The script should: (1) Accept a list of changed files as arguments. (2) Run cargo check, cargo clippy --all-targets -- -D warnings, and cargo test. (3) If specific test files are related to the changed files, run those tests first for fast feedback (e.g., changes to src/actions/dialog.rs should run tests matching 'dialog'). (4) Output clear PASS/FAIL status with timing. (5) Support a --quick flag that only runs cargo check for fast iteration. Also create scripts/agent-scope.sh that takes a module name (like 'actions', 'prompts', 'theme') and prints all files in that module for use as agent scope. Both scripts should be executable (chmod +x). After creating, run: bash scripts/agent-check.sh to verify it works.",
+      "scope": "scripts/**",
+      "status": "done",
+      "claims": [],
+      "createdAt": "2026-02-07T13:49:26.189Z",
+      "lastSeenAt": "2026-02-07T13:54:17.468Z",
+      "host": "johns.macbook.pro.lan",
+      "notes": "done. exit=0. final=.ai/logs/codex-test-harness.final.md. See final message file.",
+      "pid": 85654
+    },
+    "codex-file-index": {
+      "id": "codex-file-index",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "gpt-5.3-codex",
+      "task": "Create a machine-readable file at .ai/file-index.json that maps every .rs source file in src/ to metadata useful for AI agents. For each file, include: (1) 'path' - relative path from repo root, (2) 'module' - which top-level module it belongs to (e.g., 'actions', 'prompts', 'theme'), (3) 'description' - 1 sentence describing what the file does, (4) 'public_types' - list of pub struct/enum/trait names exported, (5) 'test_files' - list of associated test files if any exist, (6) 'coupled_with' - list of other files this one is tightly coupled with (imports from / imported by). Write a Rust script or shell script at scripts/gen-file-index.sh that generates this JSON by parsing the source files, so it can be regenerated as the codebase evolves. The JSON should be pretty-printed. After generating, validate it is valid JSON with: python3 -c 'import json; json.load(open(\".ai/file-index.json\"))'",
+      "scope": ".ai/**,scripts/**",
+      "status": "done",
+      "claims": [],
+      "createdAt": "2026-02-07T13:51:27.164Z",
+      "lastSeenAt": "2026-02-07T13:58:06.897Z",
+      "host": "johns.macbook.pro.lan",
+      "notes": "done. exit=0. final=.ai/logs/codex-file-index.final.md. See final message file.",
+      "pid": 11097
     }
   }
 }

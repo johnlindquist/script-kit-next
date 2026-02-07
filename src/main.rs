@@ -1,5 +1,10 @@
 #![allow(unexpected_cfgs)]
 
+//! Binary entrypoint and GPUI application composition for Script Kit GPUI.
+//! It defines the `ScriptListApp` runtime, wires stdin protocol handling in `main`,
+//! and includes prompt/builtin render implementations for the primary window.
+//! This module depends on app subsystems like `protocol`, `hotkeys`, `watcher`, and `window_manager`.
+
 use gpui::{
     div, hsla, list, point, prelude::*, px, rgb, rgba, size, svg, uniform_list, AnyElement, App,
     Application, BoxShadow, Context, CursorStyle, ElementId, Entity, FocusHandle, Focusable,

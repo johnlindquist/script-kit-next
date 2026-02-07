@@ -1,10 +1,9 @@
-// macOS Panel Configuration Module
-// This module configures GPUI windows as macOS floating panels
-// that appear above other applications with native vibrancy effects
-//
-// Also provides placeholder configuration for input fields
-
 #![allow(dead_code)]
+
+//! Shared panel, vibrancy, header-layout, and input placeholder configuration.
+//! Key public items include `WindowVibrancy`, `PlaceholderConfig`,
+//! `running_status_message`, and canonical header/cursor constants used by prompt UIs.
+//! It is consumed by render modules and window layout code to keep panel behavior consistent.
 
 /// Vibrancy configuration for GPUI window background appearance
 ///
