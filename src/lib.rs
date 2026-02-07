@@ -109,6 +109,9 @@ pub mod builtins;
 // Fallback commands - Raycast-style fallback actions when no scripts match
 pub mod fallbacks;
 
+// Favorite script ID storage (~/.scriptkit/favorites.json)
+pub mod favorites;
+
 // Frecency tracking for script usage
 pub mod frecency;
 
