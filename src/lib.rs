@@ -24,6 +24,7 @@ pub mod config;
 pub mod debug_grid;
 pub mod designs;
 pub mod editor;
+pub mod emoji;
 pub mod error;
 pub mod executor;
 pub mod focus_coordinator;
