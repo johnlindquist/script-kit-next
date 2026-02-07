@@ -29,10 +29,146 @@ fn select_clipboard_entry_meta<'a>(
     filtered_entries.get(clamped_index).copied()
 }
 
+fn clipboard_pin_action_success_hud(action_id: &str) -> Option<&'static str> {
+    match action_id {
+        "clipboard_pin" => Some("Pinned"),
+        "clipboard_unpin" => Some("Unpinned"),
+        _ => None,
+    }
+}
+
+fn file_search_action_success_hud(action_id: &str) -> Option<&'static str> {
+    match action_id {
+        "open_file" | "open_directory" => Some("Opened"),
+        "quick_look" => Some("Quick Look opened"),
+        "open_with" => Some("Open With opened"),
+        "show_info" => Some("Info opened"),
+        _ => None,
+    }
+}
+
+fn file_search_action_error_hud_prefix(action_id: &str) -> Option<&'static str> {
+    match action_id {
+        "open_file" | "open_directory" => Some("Open failed"),
+        "quick_look" => Some("Quick Look failed"),
+        "open_with" => Some("Open With failed"),
+        "show_info" => Some("Show Info failed"),
+        _ => None,
+    }
+}
+
+fn selection_required_message_for_action(action_id: &str) -> &'static str {
+    match action_id {
+        "copy_path" => "Select an item to copy its path.",
+        "copy_deeplink" => "Select an item to copy its deeplink.",
+        "configure_shortcut" | "add_shortcut" | "update_shortcut" => {
+            "Select an item to configure its shortcut."
+        }
+        "remove_shortcut" => "Select an item to remove its shortcut.",
+        "add_alias" | "update_alias" => "Select an item to add or update its alias.",
+        "remove_alias" => "Select an item to remove its alias.",
+        "edit_scriptlet" => "Select a scriptlet to edit.",
+        "reveal_scriptlet_in_finder" => "Select a scriptlet to reveal in Finder.",
+        "copy_scriptlet_path" => "Select a scriptlet to copy its path.",
+        "copy_content" => "Select a script, agent, or scriptlet to copy its content.",
+        "reset_ranking" => "Select an item to reset its ranking.",
+        action if action.starts_with("scriptlet_action:") => {
+            "Select a scriptlet to run this action."
+        }
+        _ => "Select an item to continue.",
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ScriptRemovalTarget {
+    path: std::path::PathBuf,
+    name: String,
+    item_kind: &'static str,
+}
+
+fn extract_scriptlet_source_path(
+    file_path_with_anchor: Option<&String>,
+) -> Option<std::path::PathBuf> {
+    file_path_with_anchor
+        .and_then(|path| path.split('#').next())
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+        .map(std::path::PathBuf::from)
+}
+
+fn script_removal_target_from_result(
+    result: &crate::scripts::SearchResult,
+) -> Option<ScriptRemovalTarget> {
+    match result {
+        crate::scripts::SearchResult::Script(m) => Some(ScriptRemovalTarget {
+            path: m.script.path.clone(),
+            name: m.script.name.clone(),
+            item_kind: "script",
+        }),
+        crate::scripts::SearchResult::Scriptlet(m) => {
+            let path = extract_scriptlet_source_path(m.scriptlet.file_path.as_ref())?;
+            Some(ScriptRemovalTarget {
+                path,
+                name: m.scriptlet.name.clone(),
+                item_kind: "scriptlet",
+            })
+        }
+        crate::scripts::SearchResult::Agent(m) => Some(ScriptRemovalTarget {
+            path: m.agent.path.clone(),
+            name: m.agent.name.clone(),
+            item_kind: "agent",
+        }),
+        _ => None,
+    }
+}
+
+fn move_path_to_trash(path: &std::path::Path) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let escaped_path = crate::utils::escape_applescript_string(&path.to_string_lossy());
+        let script = format!(
+            r#"tell application "Finder"
+    delete POSIX file "{}"
+end tell"#,
+            escaped_path
+        );
+
+        let status = std::process::Command::new("osascript")
+            .args(["-e", &script])
+            .status()
+            .map_err(|err| format!("failed to launch osascript: {err}"))?;
+
+        if status.success() {
+            Ok(())
+        } else {
+            Err(format!("osascript exited with status {}", status))
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        if path.is_dir() {
+            std::fs::remove_dir_all(path)
+                .map_err(|err| format!("failed to remove directory '{}': {err}", path.display()))
+        } else {
+            std::fs::remove_file(path)
+                .map_err(|err| format!("failed to remove file '{}': {err}", path.display()))
+        }
+    }
+}
+
 #[cfg(test)]
 mod app_actions_tests {
-    use super::select_clipboard_entry_meta;
+    use super::{
+        clipboard_pin_action_success_hud, extract_scriptlet_source_path,
+        file_search_action_error_hud_prefix, file_search_action_success_hud,
+        selection_required_message_for_action,
+        script_removal_target_from_result, select_clipboard_entry_meta, ScriptRemovalTarget,
+    };
     use crate::clipboard_history::{ClipboardEntryMeta, ContentType};
+    use crate::scripts;
+    use std::path::PathBuf;
+    use std::sync::Arc;
 
     fn entry(id: &str, preview: &str) -> ClipboardEntryMeta {
         ClipboardEntryMeta {
@@ -58,6 +194,149 @@ mod app_actions_tests {
         let clamped = select_clipboard_entry_meta(&entries, "", 99).unwrap();
         assert_eq!(clamped.id, "3");
     }
+
+    #[test]
+    fn test_clipboard_pin_action_success_hud_messages() {
+        assert_eq!(
+            clipboard_pin_action_success_hud("clipboard_pin"),
+            Some("Pinned")
+        );
+        assert_eq!(
+            clipboard_pin_action_success_hud("clipboard_unpin"),
+            Some("Unpinned")
+        );
+        assert_eq!(clipboard_pin_action_success_hud("clipboard_share"), None);
+    }
+
+    #[test]
+    fn test_file_search_action_success_hud_messages() {
+        assert_eq!(file_search_action_success_hud("open_file"), Some("Opened"));
+        assert_eq!(
+            file_search_action_success_hud("open_directory"),
+            Some("Opened")
+        );
+        assert_eq!(
+            file_search_action_success_hud("quick_look"),
+            Some("Quick Look opened")
+        );
+        assert_eq!(
+            file_search_action_success_hud("open_with"),
+            Some("Open With opened")
+        );
+        assert_eq!(
+            file_search_action_success_hud("show_info"),
+            Some("Info opened")
+        );
+        assert_eq!(file_search_action_success_hud("copy_filename"), None);
+    }
+
+    #[test]
+    fn test_file_search_action_error_hud_prefixes() {
+        assert_eq!(
+            file_search_action_error_hud_prefix("open_file"),
+            Some("Open failed")
+        );
+        assert_eq!(
+            file_search_action_error_hud_prefix("open_directory"),
+            Some("Open failed")
+        );
+        assert_eq!(
+            file_search_action_error_hud_prefix("quick_look"),
+            Some("Quick Look failed")
+        );
+        assert_eq!(
+            file_search_action_error_hud_prefix("open_with"),
+            Some("Open With failed")
+        );
+        assert_eq!(
+            file_search_action_error_hud_prefix("show_info"),
+            Some("Show Info failed")
+        );
+        assert_eq!(file_search_action_error_hud_prefix("copy_filename"), None);
+    }
+
+    #[test]
+    fn test_selection_required_message_for_action_returns_action_specific_guidance() {
+        assert_eq!(
+            selection_required_message_for_action("copy_path"),
+            "Select an item to copy its path."
+        );
+        assert_eq!(
+            selection_required_message_for_action("remove_shortcut"),
+            "Select an item to remove its shortcut."
+        );
+        assert_eq!(
+            selection_required_message_for_action("scriptlet_action:test"),
+            "Select a scriptlet to run this action."
+        );
+    }
+
+    #[test]
+    fn test_selection_required_message_for_action_returns_safe_default() {
+        assert_eq!(
+            selection_required_message_for_action("unknown-action"),
+            "Select an item to continue."
+        );
+    }
+
+    #[test]
+    fn test_extract_scriptlet_source_path_removes_anchor() {
+        let path_with_anchor = Some("/tmp/snippets/tools.md#open-github".to_string());
+        let extracted = extract_scriptlet_source_path(path_with_anchor.as_ref());
+        assert_eq!(extracted, Some(PathBuf::from("/tmp/snippets/tools.md")));
+    }
+
+    #[test]
+    fn test_script_removal_target_from_result_for_script_and_scriptlet() {
+        let script_result = scripts::SearchResult::Script(scripts::ScriptMatch {
+            script: Arc::new(scripts::Script {
+                name: "Deploy".to_string(),
+                path: PathBuf::from("/tmp/deploy.ts"),
+                ..Default::default()
+            }),
+            score: 0,
+            filename: "deploy.ts".to_string(),
+            match_indices: scripts::MatchIndices::default(),
+        });
+
+        let script_target = script_removal_target_from_result(&script_result);
+        assert_eq!(
+            script_target,
+            Some(ScriptRemovalTarget {
+                path: PathBuf::from("/tmp/deploy.ts"),
+                name: "Deploy".to_string(),
+                item_kind: "script",
+            })
+        );
+
+        let scriptlet_result = scripts::SearchResult::Scriptlet(scripts::ScriptletMatch {
+            scriptlet: Arc::new(scripts::Scriptlet {
+                name: "Open GitHub".to_string(),
+                description: Some("Open project page".to_string()),
+                code: "https://github.com".to_string(),
+                tool: "open".to_string(),
+                shortcut: None,
+                keyword: None,
+                group: Some("Tools".to_string()),
+                file_path: Some("/tmp/snippets/tools.md#open-github".to_string()),
+                command: Some("open-github".to_string()),
+                alias: None,
+            }),
+            score: 0,
+            display_file_path: Some("tools.md#open-github".to_string()),
+            match_indices: scripts::MatchIndices::default(),
+        });
+
+        let scriptlet_target = script_removal_target_from_result(&scriptlet_result);
+        assert_eq!(
+            scriptlet_target,
+            Some(ScriptRemovalTarget {
+                path: PathBuf::from("/tmp/snippets/tools.md"),
+                name: "Open GitHub".to_string(),
+                item_kind: "scriptlet",
+            })
+        );
+    }
 }
 
 impl ScriptListApp {
@@ -65,6 +344,12 @@ impl ScriptListApp {
     /// Uses platform::hide_main_window() to hide ONLY the main window,
     /// keeping other windows like HUD notifications visible.
     fn hide_main_and_reset(&self, _cx: &mut Context<Self>) {
+        if let Some((x, y, w, h)) = platform::get_main_window_bounds() {
+            let bounds = crate::window_state::PersistedWindowBounds::new(x, y, w, h);
+            let displays = platform::get_macos_displays();
+            let _ =
+                crate::window_state::save_main_position_with_display_detection(bounds, &displays);
+        }
         set_main_window_visible(false);
         NEEDS_RESET.store(true, Ordering::SeqCst);
         // Use platform-specific hide that only hides the main window,
@@ -76,10 +361,17 @@ impl ScriptListApp {
     fn reveal_in_finder(&self, path: &std::path::Path) {
         let path_str = path.to_string_lossy().to_string();
         std::thread::spawn(move || {
-            use std::process::Command;
-            match Command::new("open").arg("-R").arg(&path_str).spawn() {
-                Ok(_) => logging::log("UI", &format!("Revealed in Finder: {}", path_str)),
-                Err(e) => logging::log("ERROR", &format!("Failed to reveal in Finder: {}", e)),
+            let file_manager = if cfg!(target_os = "macos") {
+                "Finder"
+            } else if cfg!(target_os = "windows") {
+                "Explorer"
+            } else {
+                "File Manager"
+            };
+
+            match crate::file_search::reveal_in_finder(&path_str) {
+                Ok(_) => logging::log("UI", &format!("Revealed in {}: {}", file_manager, path_str)),
+                Err(e) => logging::log("ERROR", &format!("Failed to reveal in {}: {}", file_manager, e)),
             }
         });
     }
@@ -150,6 +442,15 @@ impl ScriptListApp {
                 !actions.is_empty()
             }
         }
+    }
+
+    /// Return to script list after non-inline action handling.
+    ///
+    /// Centralizes state transition so actions don't directly mutate legacy
+    /// focus fields (`pending_focus`) in multiple places.
+    fn transition_to_script_list_after_action(&mut self, cx: &mut Context<Self>) {
+        self.current_view = AppView::ScriptList;
+        self.request_focus(FocusTarget::MainFilter, cx);
     }
 
     /// Simple percent-encoding for URL query strings.
@@ -237,18 +538,14 @@ impl ScriptListApp {
                                 .map(|(_, entry)| entry.id.clone());
                         }
 
+                        if let Some(message) = clipboard_pin_action_success_hud(&action_id) {
+                            self.show_hud(message.to_string(), Some(1500), cx);
+                        }
                         cx.notify();
                     }
                     Err(e) => {
-                        logging::log(
-                            "ERROR",
-                            &format!("Failed to toggle clipboard pin: {}", e),
-                        );
-                        self.show_hud(
-                            format!("Failed to update pin: {}", e),
-                            Some(3000),
-                            cx,
-                        );
+                        logging::log("ERROR", &format!("Failed to toggle clipboard pin: {}", e));
+                        self.show_hud(format!("Failed to update pin: {}", e), Some(3000), cx);
                     }
                 }
                 return;
@@ -276,26 +573,28 @@ impl ScriptListApp {
                     ),
                 );
 
-                match entry.content_type {
+                let share_result = match entry.content_type {
                     clipboard_history::ContentType::Text => {
-                        crate::platform::show_share_sheet(
-                            crate::platform::ShareSheetItem::Text(content),
-                        );
+                        crate::platform::show_share_sheet(crate::platform::ShareSheetItem::Text(
+                            content,
+                        ));
+                        Ok(())
                     }
                     clipboard_history::ContentType::Image => {
-                        if let Some(png_bytes) = clipboard_history::content_to_png_bytes(&content)
-                        {
+                        if let Some(png_bytes) = clipboard_history::content_to_png_bytes(&content) {
                             crate::platform::show_share_sheet(
                                 crate::platform::ShareSheetItem::ImagePng(png_bytes),
                             );
+                            Ok(())
                         } else {
-                            self.show_hud(
-                                "Failed to decode clipboard image".to_string(),
-                                Some(2000),
-                                cx,
-                            );
+                            Err("Failed to decode clipboard image".to_string())
                         }
                     }
+                };
+
+                match share_result {
+                    Ok(()) => self.show_hud("Share sheet opened".to_string(), Some(1500), cx),
+                    Err(message) => self.show_hud(message, Some(2000), cx),
                 }
                 return;
             }
@@ -385,6 +684,7 @@ impl ScriptListApp {
                     }
                 }
 
+                self.show_hud("Attached to AI".to_string(), Some(1500), cx);
                 self.hide_main_and_reset(cx);
                 return;
             }
@@ -395,7 +695,10 @@ impl ScriptListApp {
                     return;
                 };
 
-                logging::log("CLIPBOARD", &format!("Copying entry to clipboard: {}", entry.id));
+                logging::log(
+                    "CLIPBOARD",
+                    &format!("Copying entry to clipboard: {}", entry.id),
+                );
                 match clipboard_history::copy_entry_to_clipboard(&entry.id) {
                     Ok(()) => {
                         logging::log("CLIPBOARD", "Entry copied to clipboard");
@@ -455,9 +758,8 @@ impl ScriptListApp {
             _ => {}
         }
 
-        // Close the dialog and return to script list
-        self.current_view = AppView::ScriptList;
-        self.pending_focus = Some(FocusTarget::MainFilter);
+        // Close the dialog and return to script list.
+        self.transition_to_script_list_after_action(cx);
 
         match action_id.as_str() {
             "create_script" => {
@@ -508,7 +810,7 @@ impl ScriptListApp {
 
                 if let Some(path) = path_opt {
                     self.reveal_in_finder(&path);
-                    self.show_hud("Revealed in Finder".to_string(), Some(1500), cx);
+                    self.show_hud("Opened in Finder".to_string(), Some(1500), cx);
                     self.hide_main_and_reset(cx);
                 } else {
                     self.show_hud(
@@ -550,7 +852,11 @@ impl ScriptListApp {
                     }
                     path_opt
                 } else {
-                    self.show_hud("No item selected".to_string(), Some(2000), cx);
+                    self.show_hud(
+                        selection_required_message_for_action(&action_id).to_string(),
+                        Some(2000),
+                        cx,
+                    );
                     None
                 };
 
@@ -643,7 +949,11 @@ impl ScriptListApp {
                     }
                     self.hide_main_and_reset(cx);
                 } else {
-                    self.show_hud("No item selected".to_string(), Some(2000), cx);
+                    self.show_hud(
+                        selection_required_message_for_action(&action_id).to_string(),
+                        Some(2000),
+                        cx,
+                    );
                 }
             }
             // Handle both legacy "configure_shortcut" and new dynamic actions
@@ -706,7 +1016,11 @@ impl ScriptListApp {
                         }
                     }
                 } else {
-                    self.show_hud("No item selected".to_string(), Some(2000), cx);
+                    self.show_hud(
+                        selection_required_message_for_action(&action_id).to_string(),
+                        Some(2000),
+                        cx,
+                    );
                 }
             }
             // "remove_shortcut" removes the existing shortcut from the registry
@@ -770,7 +1084,11 @@ impl ScriptListApp {
                     }
                     self.hide_main_and_reset(cx);
                 } else {
-                    self.show_hud("No item selected".to_string(), Some(2000), cx);
+                    self.show_hud(
+                        selection_required_message_for_action(&action_id).to_string(),
+                        Some(2000),
+                        cx,
+                    );
                 }
             }
             // Alias actions: add_alias, update_alias open the alias input
@@ -814,7 +1132,11 @@ impl ScriptListApp {
                     };
                     self.show_alias_input(command_id, command_name, cx);
                 } else {
-                    self.show_hud("No item selected".to_string(), Some(2000), cx);
+                    self.show_hud(
+                        selection_required_message_for_action(&action_id).to_string(),
+                        Some(2000),
+                        cx,
+                    );
                 }
             }
             // "remove_alias" removes the existing alias from persistence
@@ -878,7 +1200,11 @@ impl ScriptListApp {
                     }
                     self.hide_main_and_reset(cx);
                 } else {
-                    self.show_hud("No item selected".to_string(), Some(2000), cx);
+                    self.show_hud(
+                        selection_required_message_for_action(&action_id).to_string(),
+                        Some(2000),
+                        cx,
+                    );
                 }
             }
             "edit_script" => {
@@ -904,6 +1230,140 @@ impl ScriptListApp {
                     self.show_hud("No script selected".to_string(), Some(2000), cx);
                 }
             }
+            "remove_script" | "delete_script" => {
+                logging::log("UI", &format!("{} action", action_id));
+
+                let Some(result) = self.get_selected_result() else {
+                    self.show_hud("No script selected".to_string(), Some(2000), cx);
+                    return;
+                };
+
+                let Some(target) = script_removal_target_from_result(&result) else {
+                    self.show_hud("Cannot remove this item type".to_string(), Some(2500), cx);
+                    return;
+                };
+
+                if !target.path.exists() {
+                    self.show_hud(format!("{} no longer exists", target.name), Some(2500), cx);
+                    self.refresh_scripts(cx);
+                    return;
+                }
+
+                let message = format!(
+                    "Move this {} to Trash?\n\n{}",
+                    target.item_kind, target.name
+                );
+
+                cx.spawn(async move |this, cx| {
+                    let (confirm_tx, confirm_rx) = async_channel::bounded::<bool>(1);
+                    let open_result = cx.update(|cx| {
+                        let main_bounds =
+                            if let Some((x, y, w, h)) = platform::get_main_window_bounds() {
+                                gpui::Bounds {
+                                    origin: gpui::Point {
+                                        x: gpui::px(x as f32),
+                                        y: gpui::px(y as f32),
+                                    },
+                                    size: gpui::Size {
+                                        width: gpui::px(w as f32),
+                                        height: gpui::px(h as f32),
+                                    },
+                                }
+                            } else {
+                                gpui::Bounds {
+                                    origin: gpui::Point {
+                                        x: gpui::px(100.0),
+                                        y: gpui::px(100.0),
+                                    },
+                                    size: gpui::Size {
+                                        width: gpui::px(600.0),
+                                        height: gpui::px(400.0),
+                                    },
+                                }
+                            };
+
+                        let sender = confirm_tx.clone();
+                        let on_choice: ConfirmCallback = std::sync::Arc::new(move |confirmed| {
+                            let _ = sender.try_send(confirmed);
+                        });
+
+                        open_confirm_window(
+                            cx,
+                            main_bounds,
+                            None,
+                            message,
+                            Some("Move to Trash".to_string()),
+                            Some("Cancel".to_string()),
+                            on_choice,
+                        )
+                    });
+
+                    match open_result {
+                        Ok(Ok(_)) => {}
+                        Ok(Err(e)) => {
+                            this.update(cx, |this, cx| {
+                                logging::log(
+                                    "ERROR",
+                                    &format!("Failed to open confirmation modal: {}", e),
+                                );
+                                this.show_hud(
+                                    "Failed to open confirmation dialog".to_string(),
+                                    Some(2500),
+                                    cx,
+                                );
+                            })
+                            .ok();
+                            return;
+                        }
+                        Err(_) => return,
+                    }
+
+                    let Ok(confirmed) = confirm_rx.recv().await else {
+                        return;
+                    };
+                    if !confirmed {
+                        return;
+                    }
+
+                    this.update(cx, move |this, cx| match move_path_to_trash(&target.path) {
+                        Ok(()) => {
+                            logging::log(
+                                "UI",
+                                &format!(
+                                    "Moved {} '{}' to trash: {}",
+                                    target.item_kind,
+                                    target.name,
+                                    target.path.display()
+                                ),
+                            );
+                            this.refresh_scripts(cx);
+                            this.show_hud(
+                                format!("Moved '{}' to Trash", target.name),
+                                Some(2200),
+                                cx,
+                            );
+                            this.hide_main_and_reset(cx);
+                            cx.notify();
+                        }
+                        Err(e) => {
+                            logging::log(
+                                "ERROR",
+                                &format!(
+                                    "Failed to move {} '{}' to trash ({}): {}",
+                                    target.item_kind,
+                                    target.name,
+                                    target.path.display(),
+                                    e
+                                ),
+                            );
+                            this.show_hud(format!("Failed to remove: {}", e), Some(3200), cx);
+                        }
+                    })
+                    .ok();
+                })
+                .detach();
+                return;
+            }
             "reload_scripts" => {
                 logging::log("UI", "Reload scripts action");
                 self.refresh_scripts(cx);
@@ -927,42 +1387,37 @@ impl ScriptListApp {
                     // Editor-specific arguments for opening folder with file focused
                     let result = match editor.as_str() {
                         // VS Code and Cursor: -r (reuse window) + folder + file
-                        "code" | "cursor" => {
-                            Command::new(&editor)
-                                .arg("-r")
-                                .arg(&config_dir)
-                                .arg(&config_file)
-                                .spawn()
-                        }
+                        "code" | "cursor" => Command::new(&editor)
+                            .arg("-r")
+                            .arg(&config_dir)
+                            .arg(&config_file)
+                            .spawn(),
                         // Zed: just the file (doesn't support folder context the same way)
-                        "zed" => {
-                            Command::new("zed")
-                                .arg(&config_file)
-                                .spawn()
-                        }
+                        "zed" => Command::new("zed").arg(&config_file).spawn(),
                         // Sublime: -a (add to current window) + folder + file
-                        "subl" => {
-                            Command::new("subl")
-                                .arg("-a")
-                                .arg(&config_dir)
-                                .arg(&config_file)
-                                .spawn()
-                        }
+                        "subl" => Command::new("subl")
+                            .arg("-a")
+                            .arg(&config_dir)
+                            .arg(&config_file)
+                            .spawn(),
                         // Generic fallback: just open the file
-                        _ => {
-                            Command::new(&editor)
-                                .arg(&config_file)
-                                .spawn()
-                        }
+                        _ => Command::new(&editor).arg(&config_file).spawn(),
                     };
 
                     match result {
                         Ok(_) => logging::log("UI", &format!("Opened config.ts in {}", editor)),
-                        Err(e) => logging::log("ERROR", &format!("Failed to open editor '{}': {}", editor, e)),
+                        Err(e) => logging::log(
+                            "ERROR",
+                            &format!("Failed to open editor '{}': {}", editor, e),
+                        ),
                     }
                 });
 
-                self.show_hud(format!("Opening config.ts in {}", editor_for_hud), Some(1500), cx);
+                self.show_hud(
+                    format!("Opening config.ts in {}", editor_for_hud),
+                    Some(1500),
+                    cx,
+                );
                 self.hide_main_and_reset(cx);
             }
             "quit" => {
@@ -978,34 +1433,42 @@ impl ScriptListApp {
                 self.file_search_actions_path = None;
             }
             // File search specific actions
-            "open_file" | "open_directory" => {
-                if let Some(ref path) = self.file_search_actions_path {
-                    logging::log("UI", &format!("Opening file: {}", path));
-                    let _ = crate::file_search::open_file(path);
-                    self.file_search_actions_path = None;
-                    self.close_and_reset_window(cx);
-                }
-            }
-            "quick_look" => {
-                if let Some(ref path) = self.file_search_actions_path {
-                    logging::log("UI", &format!("Quick Look: {}", path));
-                    let _ = crate::file_search::quick_look(path);
-                    self.file_search_actions_path = None;
-                    // Don't close window for Quick Look - user may want to continue
-                }
-            }
-            "open_with" => {
-                if let Some(ref path) = self.file_search_actions_path {
-                    logging::log("UI", &format!("Open With: {}", path));
-                    let _ = crate::file_search::open_with(path);
-                    self.file_search_actions_path = None;
-                }
-            }
-            "show_info" => {
-                if let Some(ref path) = self.file_search_actions_path {
-                    logging::log("UI", &format!("Show Info: {}", path));
-                    let _ = crate::file_search::show_info(path);
-                    self.file_search_actions_path = None;
+            "open_file" | "open_directory" | "quick_look" | "open_with" | "show_info" => {
+                if let Some(path) = self.file_search_actions_path.clone() {
+                    logging::log("UI", &format!("File action '{}': {}", action_id, path));
+
+                    let result = match action_id.as_str() {
+                        "open_file" | "open_directory" => crate::file_search::open_file(&path),
+                        "quick_look" => crate::file_search::quick_look(&path),
+                        "open_with" => crate::file_search::open_with(&path),
+                        "show_info" => crate::file_search::show_info(&path),
+                        _ => Ok(()),
+                    };
+
+                    match result {
+                        Ok(()) => {
+                            if let Some(message) = file_search_action_success_hud(&action_id) {
+                                self.show_hud(message.to_string(), Some(1500), cx);
+                            }
+                            self.file_search_actions_path = None;
+                            if action_id == "open_file" || action_id == "open_directory" {
+                                self.hide_main_and_reset(cx);
+                            }
+                        }
+                        Err(e) => {
+                            logging::log(
+                                "ERROR",
+                                &format!(
+                                    "File search action '{}' failed for '{}': {}",
+                                    action_id, path, e
+                                ),
+                            );
+                            let prefix = file_search_action_error_hud_prefix(&action_id)
+                                .unwrap_or("Action failed");
+                            self.show_hud(format!("{}: {}", prefix, e), Some(3000), cx);
+                            self.file_search_actions_path = None;
+                        }
+                    }
                 }
             }
             "copy_filename" => {
@@ -1036,7 +1499,11 @@ impl ScriptListApp {
                 };
 
                 let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
-                    self.show_hud("Failed to load clipboard content".to_string(), Some(2000), cx);
+                    self.show_hud(
+                        "Failed to load clipboard content".to_string(),
+                        Some(2000),
+                        cx,
+                    );
                     return;
                 };
 
@@ -1103,20 +1570,12 @@ impl ScriptListApp {
                     let url = "cleanshot://open-from-clipboard";
                     match std::process::Command::new("open").arg(url).spawn() {
                         Ok(_) => {
-                            self.show_hud(
-                                "Opening CleanShot X…".to_string(),
-                                Some(1500),
-                                cx,
-                            );
+                            self.show_hud("Opening CleanShot X…".to_string(), Some(1500), cx);
                             self.hide_main_and_reset(cx);
                         }
                         Err(e) => {
                             logging::log("ERROR", &format!("Failed to open CleanShot X: {}", e));
-                            self.show_hud(
-                                "Failed to open CleanShot X".to_string(),
-                                Some(2000),
-                                cx,
-                            );
+                            self.show_hud("Failed to open CleanShot X".to_string(), Some(2000), cx);
                         }
                     }
                 }
@@ -1157,10 +1616,8 @@ impl ScriptListApp {
                         return;
                     };
 
-                    let temp_path = std::env::temp_dir().join(format!(
-                        "script-kit-clipboard-{}.png",
-                        uuid::Uuid::new_v4()
-                    ));
+                    let temp_path = std::env::temp_dir()
+                        .join(format!("script-kit-clipboard-{}.png", uuid::Uuid::new_v4()));
 
                     if let Err(e) = std::fs::write(&temp_path, png_bytes) {
                         logging::log("ERROR", &format!("Failed to write temp image: {}", e));
@@ -1186,11 +1643,7 @@ impl ScriptListApp {
                         }
                         Err(e) => {
                             logging::log("ERROR", &format!("Failed to open CleanShot X: {}", e));
-                            self.show_hud(
-                                "Failed to open CleanShot X".to_string(),
-                                Some(2000),
-                                cx,
-                            );
+                            self.show_hud("Failed to open CleanShot X".to_string(), Some(2000), cx);
                         }
                     }
                 }
@@ -1230,7 +1683,8 @@ impl ScriptListApp {
                         #[cfg(not(target_os = "macos"))]
                         {
                             use arboard::Clipboard;
-                            let _ = Clipboard::new().and_then(|mut c| c.set_text(cached_text.clone()));
+                            let _ =
+                                Clipboard::new().and_then(|mut c| c.set_text(cached_text.clone()));
                         }
                         self.show_hud("Copied text from image".to_string(), Some(1500), cx);
                         self.hide_main_and_reset(cx);
@@ -1247,12 +1701,17 @@ impl ScriptListApp {
                     };
 
                     // Decode to RGBA bytes for OCR
-                    let Some((width, height, rgba_bytes)) = clipboard_history::decode_to_rgba_bytes(&content) else {
+                    let Some((width, height, rgba_bytes)) =
+                        clipboard_history::decode_to_rgba_bytes(&content)
+                    else {
                         self.show_hud("Failed to decode image".to_string(), Some(2000), cx);
                         return;
                     };
 
-                    logging::log("OCR", &format!("Starting OCR on {}x{} image", width, height));
+                    logging::log(
+                        "OCR",
+                        &format!("Starting OCR on {}x{} image", width, height),
+                    );
                     self.show_hud("Extracting text...".to_string(), Some(1500), cx);
 
                     // Perform OCR synchronously (it runs on a background thread internally)
@@ -1264,11 +1723,14 @@ impl ScriptListApp {
                                 logging::log("OCR", "No text found in image");
                                 self.show_hud("No text found in image".to_string(), Some(2000), cx);
                             } else {
-                                logging::log("OCR", &format!("Extracted {} characters", text.len()));
-                                
+                                logging::log(
+                                    "OCR",
+                                    &format!("Extracted {} characters", text.len()),
+                                );
+
                                 // Cache the OCR result
                                 let _ = clipboard_history::update_ocr_text(&entry_id, &text);
-                                
+
                                 // Copy to clipboard
                                 #[cfg(target_os = "macos")]
                                 {
@@ -1277,9 +1739,10 @@ impl ScriptListApp {
                                 #[cfg(not(target_os = "macos"))]
                                 {
                                     use arboard::Clipboard;
-                                    let _ = Clipboard::new().and_then(|mut c| c.set_text(text.clone()));
+                                    let _ =
+                                        Clipboard::new().and_then(|mut c| c.set_text(text.clone()));
                                 }
-                                
+
                                 self.show_hud("Copied text from image".to_string(), Some(1500), cx);
                                 self.hide_main_and_reset(cx);
                             }
@@ -1293,11 +1756,7 @@ impl ScriptListApp {
 
                 #[cfg(not(all(target_os = "macos", feature = "ocr")))]
                 {
-                    self.show_hud(
-                        "OCR is only supported on macOS".to_string(),
-                        Some(2000),
-                        cx,
-                    );
+                    self.show_hud("OCR is only supported on macOS".to_string(), Some(2000), cx);
                 }
             }
             // Clipboard delete actions
@@ -1329,43 +1788,127 @@ impl ScriptListApp {
                     return;
                 }
 
-                let mut deleted = 0usize;
-                let mut failed = 0usize;
-                for id in ids_to_delete {
-                    match clipboard_history::remove_entry(&id) {
-                        Ok(()) => deleted += 1,
-                        Err(e) => {
-                            failed += 1;
-                            logging::log(
-                                "ERROR",
-                                &format!("Failed to delete clipboard entry {}: {}", id, e),
+                let delete_count = ids_to_delete.len();
+                let message = format!(
+                    "Are you sure you want to delete these {} matching clipboard entries?",
+                    delete_count
+                );
+
+                cx.spawn(async move |this, cx| {
+                    let (confirm_tx, confirm_rx) = async_channel::bounded::<bool>(1);
+                    let open_result = cx.update(|cx| {
+                        let main_bounds =
+                            if let Some((x, y, w, h)) = platform::get_main_window_bounds() {
+                                gpui::Bounds {
+                                    origin: gpui::Point {
+                                        x: gpui::px(x as f32),
+                                        y: gpui::px(y as f32),
+                                    },
+                                    size: gpui::Size {
+                                        width: gpui::px(w as f32),
+                                        height: gpui::px(h as f32),
+                                    },
+                                }
+                            } else {
+                                gpui::Bounds {
+                                    origin: gpui::Point {
+                                        x: gpui::px(100.0),
+                                        y: gpui::px(100.0),
+                                    },
+                                    size: gpui::Size {
+                                        width: gpui::px(600.0),
+                                        height: gpui::px(400.0),
+                                    },
+                                }
+                            };
+
+                        let sender = confirm_tx.clone();
+                        let on_choice: ConfirmCallback = std::sync::Arc::new(move |confirmed| {
+                            let _ = sender.try_send(confirmed);
+                        });
+
+                        open_confirm_window(
+                            cx,
+                            main_bounds,
+                            None,
+                            message,
+                            Some("Yes".to_string()),
+                            Some("Cancel".to_string()),
+                            on_choice,
+                        )
+                    });
+
+                    match open_result {
+                        Ok(Ok(_)) => {}
+                        Ok(Err(e)) => {
+                            this.update(cx, |this, cx| {
+                                logging::log(
+                                    "ERROR",
+                                    &format!("Failed to open confirmation modal: {}", e),
+                                );
+                                this.show_hud(
+                                    "Failed to open confirmation dialog".to_string(),
+                                    Some(2500),
+                                    cx,
+                                );
+                            })
+                            .ok();
+                            return;
+                        }
+                        Err(_) => return,
+                    }
+
+                    let Ok(confirmed) = confirm_rx.recv().await else {
+                        return;
+                    };
+                    if !confirmed {
+                        return;
+                    }
+
+                    this.update(cx, move |this, cx| {
+                        let mut deleted = 0usize;
+                        let mut failed = 0usize;
+                        for id in ids_to_delete {
+                            match clipboard_history::remove_entry(&id) {
+                                Ok(()) => deleted += 1,
+                                Err(e) => {
+                                    failed += 1;
+                                    logging::log(
+                                        "ERROR",
+                                        &format!("Failed to delete clipboard entry {}: {}", id, e),
+                                    );
+                                }
+                            }
+                        }
+
+                        this.cached_clipboard_entries = clipboard_history::get_cached_entries(100);
+                        if let AppView::ClipboardHistoryView { selected_index, .. } =
+                            &mut this.current_view
+                        {
+                            *selected_index = 0;
+                            if let Some(first) = this.cached_clipboard_entries.first() {
+                                this.focused_clipboard_entry_id = Some(first.id.clone());
+                                this.clipboard_list_scroll_handle
+                                    .scroll_to_item(0, ScrollStrategy::Top);
+                            } else {
+                                this.focused_clipboard_entry_id = None;
+                            }
+                        }
+                        cx.notify();
+
+                        if failed == 0 {
+                            this.show_hud(format!("Deleted {} entries", deleted), Some(2500), cx);
+                        } else {
+                            this.show_hud(
+                                format!("Deleted {}, failed {}", deleted, failed),
+                                Some(3000),
+                                cx,
                             );
                         }
-                    }
-                }
-
-                self.cached_clipboard_entries = clipboard_history::get_cached_entries(100);
-                if let AppView::ClipboardHistoryView { selected_index, .. } = &mut self.current_view
-                {
-                    *selected_index = 0;
-                    if let Some(first) = self.cached_clipboard_entries.first() {
-                        self.focused_clipboard_entry_id = Some(first.id.clone());
-                        self.clipboard_list_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
-                    } else {
-                        self.focused_clipboard_entry_id = None;
-                    }
-                }
-                cx.notify();
-
-                if failed == 0 {
-                    self.show_hud(format!("Deleted {} entries", deleted), Some(2500), cx);
-                } else {
-                    self.show_hud(
-                        format!("Deleted {}, failed {}", deleted, failed),
-                        Some(3000),
-                        cx,
-                    );
-                }
+                    })
+                    .ok();
+                })
+                .detach();
                 return;
             }
             "clipboard_delete" => {
@@ -1401,7 +1944,8 @@ impl ScriptListApp {
 
                             // Keep selection in bounds after deletion
                             if !filtered_entries.is_empty() {
-                                *selected_index = (*selected_index).min(filtered_entries.len().saturating_sub(1));
+                                *selected_index =
+                                    (*selected_index).min(filtered_entries.len().saturating_sub(1));
                                 self.clipboard_list_scroll_handle
                                     .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
                                 self.focused_clipboard_entry_id = filtered_entries
@@ -1425,40 +1969,140 @@ impl ScriptListApp {
             }
             "clipboard_delete_all" => {
                 // Delete all unpinned entries
-                let unpinned_count = self.cached_clipboard_entries.iter().filter(|e| !e.pinned).count();
-                
+                let unpinned_count = self
+                    .cached_clipboard_entries
+                    .iter()
+                    .filter(|e| !e.pinned)
+                    .count();
+
                 if unpinned_count == 0 {
                     self.show_hud("No unpinned entries to delete".to_string(), Some(2000), cx);
                     return;
                 }
 
-                match clipboard_history::clear_unpinned_history() {
-                    Ok(()) => {
-                        logging::log("UI", &format!("Deleted {} unpinned clipboard entries", unpinned_count));
-                        self.cached_clipboard_entries = clipboard_history::get_cached_entries(100);
+                let message = format!(
+                    "Are you sure you want to delete all {} unpinned clipboard entries?",
+                    unpinned_count
+                );
 
-                        // Reset selection
-                        if let AppView::ClipboardHistoryView {
-                            selected_index,
-                            ..
-                        } = &mut self.current_view
-                        {
-                            *selected_index = 0;
-                            if let Some(first) = self.cached_clipboard_entries.first() {
-                                self.focused_clipboard_entry_id = Some(first.id.clone());
+                cx.spawn(async move |this, cx| {
+                    let (confirm_tx, confirm_rx) = async_channel::bounded::<bool>(1);
+                    let open_result = cx.update(|cx| {
+                        let main_bounds =
+                            if let Some((x, y, w, h)) = platform::get_main_window_bounds() {
+                                gpui::Bounds {
+                                    origin: gpui::Point {
+                                        x: gpui::px(x as f32),
+                                        y: gpui::px(y as f32),
+                                    },
+                                    size: gpui::Size {
+                                        width: gpui::px(w as f32),
+                                        height: gpui::px(h as f32),
+                                    },
+                                }
                             } else {
-                                self.focused_clipboard_entry_id = None;
+                                gpui::Bounds {
+                                    origin: gpui::Point {
+                                        x: gpui::px(100.0),
+                                        y: gpui::px(100.0),
+                                    },
+                                    size: gpui::Size {
+                                        width: gpui::px(600.0),
+                                        height: gpui::px(400.0),
+                                    },
+                                }
+                            };
+
+                        let sender = confirm_tx.clone();
+                        let on_choice: ConfirmCallback = std::sync::Arc::new(move |confirmed| {
+                            let _ = sender.try_send(confirmed);
+                        });
+
+                        open_confirm_window(
+                            cx,
+                            main_bounds,
+                            None,
+                            message,
+                            Some("Yes".to_string()),
+                            Some("Cancel".to_string()),
+                            on_choice,
+                        )
+                    });
+
+                    match open_result {
+                        Ok(Ok(_)) => {}
+                        Ok(Err(e)) => {
+                            this.update(cx, |this, cx| {
+                                logging::log(
+                                    "ERROR",
+                                    &format!("Failed to open confirmation modal: {}", e),
+                                );
+                                this.show_hud(
+                                    "Failed to open confirmation dialog".to_string(),
+                                    Some(2500),
+                                    cx,
+                                );
+                            })
+                            .ok();
+                            return;
+                        }
+                        Err(_) => return,
+                    }
+
+                    let Ok(confirmed) = confirm_rx.recv().await else {
+                        return;
+                    };
+                    if !confirmed {
+                        return;
+                    }
+
+                    this.update(cx, move |this, cx| {
+                        match clipboard_history::clear_unpinned_history() {
+                            Ok(()) => {
+                                logging::log(
+                                    "UI",
+                                    &format!(
+                                        "Deleted {} unpinned clipboard entries",
+                                        unpinned_count
+                                    ),
+                                );
+                                this.cached_clipboard_entries =
+                                    clipboard_history::get_cached_entries(100);
+
+                                // Reset selection
+                                if let AppView::ClipboardHistoryView { selected_index, .. } =
+                                    &mut this.current_view
+                                {
+                                    *selected_index = 0;
+                                    if let Some(first) = this.cached_clipboard_entries.first() {
+                                        this.focused_clipboard_entry_id = Some(first.id.clone());
+                                    } else {
+                                        this.focused_clipboard_entry_id = None;
+                                    }
+                                }
+
+                                this.show_hud(
+                                    format!(
+                                        "Deleted {} entries (pinned preserved)",
+                                        unpinned_count
+                                    ),
+                                    Some(2500),
+                                    cx,
+                                );
+                                cx.notify();
+                            }
+                            Err(e) => {
+                                logging::log(
+                                    "ERROR",
+                                    &format!("Failed to clear unpinned history: {}", e),
+                                );
+                                this.show_hud(format!("Delete failed: {}", e), Some(3000), cx);
                             }
                         }
-
-                        self.show_hud(format!("Deleted {} entries (pinned preserved)", unpinned_count), Some(2500), cx);
-                        cx.notify();
-                    }
-                    Err(e) => {
-                        logging::log("ERROR", &format!("Failed to clear unpinned history: {}", e));
-                        self.show_hud(format!("Delete failed: {}", e), Some(3000), cx);
-                    }
-                }
+                    })
+                    .ok();
+                })
+                .detach();
                 return;
             }
             "clipboard_save_file" => {
@@ -1476,7 +2120,8 @@ impl ScriptListApp {
                 let (file_content, extension) = match entry.content_type {
                     clipboard_history::ContentType::Text => (content.into_bytes(), "txt"),
                     clipboard_history::ContentType::Image => {
-                        let Some(png_bytes) = clipboard_history::content_to_png_bytes(&content) else {
+                        let Some(png_bytes) = clipboard_history::content_to_png_bytes(&content)
+                        else {
                             self.show_hud("Failed to decode image".to_string(), Some(2000), cx);
                             return;
                         };
@@ -1500,7 +2145,9 @@ impl ScriptListApp {
                 match std::fs::write(&save_path, &file_content) {
                     Ok(()) => {
                         logging::log("UI", &format!("Saved clipboard to: {:?}", save_path));
-                        self.show_hud(format!("Saved: {}", filename), Some(2500), cx);
+                        self.show_hud(format!("Saved to: {}", save_path.display()), Some(3000), cx);
+                        self.reveal_in_finder(&save_path);
+                        self.hide_main_and_reset(cx);
                     }
                     Err(e) => {
                         logging::log("ERROR", &format!("Failed to save file: {}", e));
@@ -1516,7 +2163,11 @@ impl ScriptListApp {
                 };
 
                 if entry.content_type != clipboard_history::ContentType::Text {
-                    self.show_hud("Only text can be saved as snippet".to_string(), Some(2000), cx);
+                    self.show_hud(
+                        "Only text can be saved as snippet".to_string(),
+                        Some(2000),
+                        cx,
+                    );
                     return;
                 }
 
@@ -1562,7 +2213,11 @@ impl ScriptListApp {
                 let keyword = format!("{}-{}", default_keyword, timestamp);
 
                 // Create snippet entry with proper fence handling
-                let fence = if content.contains("```") { "~~~~" } else { "```" };
+                let fence = if content.contains("```") {
+                    "~~~~"
+                } else {
+                    "```"
+                };
                 let snippet_entry = format!(
                     "\n## {}\n\n{}\nname: {}\ntool: paste\nkeyword: {}\n{}\n\n{}paste\n{}\n{}\n",
                     keyword, fence, keyword, keyword, fence, fence, content, fence
@@ -1578,14 +2233,19 @@ impl ScriptListApp {
                             f.write_all(snippet_entry.as_bytes())
                         })
                 } else {
-                    let header = "# Clipboard Snippets\n\nSnippets created from clipboard history.\n";
+                    let header =
+                        "# Clipboard Snippets\n\nSnippets created from clipboard history.\n";
                     std::fs::write(&snippets_file, format!("{}{}", header, snippet_entry))
                 };
 
                 match result {
                     Ok(()) => {
                         logging::log("UI", &format!("Created snippet with keyword: {}", keyword));
-                        self.show_hud(format!("Snippet created: type '{}' to paste", keyword), Some(3000), cx);
+                        self.show_hud(
+                            format!("Snippet created: type '{}' to paste", keyword),
+                            Some(3000),
+                            cx,
+                        );
                         // Refresh scripts to pick up new snippet
                         self.refresh_scripts(cx);
                     }
@@ -1623,7 +2283,11 @@ impl ScriptListApp {
                         );
                     }
                 } else {
-                    self.show_hud("No item selected".to_string(), Some(2000), cx);
+                    self.show_hud(
+                        selection_required_message_for_action(&action_id).to_string(),
+                        Some(2000),
+                        cx,
+                    );
                 }
             }
             "reveal_scriptlet_in_finder" => {
@@ -1635,7 +2299,7 @@ impl ScriptListApp {
                             let path_str = file_path.split('#').next().unwrap_or(file_path);
                             let path = std::path::Path::new(path_str);
                             self.reveal_in_finder(path);
-                            self.show_hud("Revealed in Finder".to_string(), Some(1500), cx);
+                            self.show_hud("Opened in Finder".to_string(), Some(1500), cx);
                             self.hide_main_and_reset(cx);
                         } else {
                             self.show_hud(
@@ -1652,7 +2316,11 @@ impl ScriptListApp {
                         );
                     }
                 } else {
-                    self.show_hud("No item selected".to_string(), Some(2000), cx);
+                    self.show_hud(
+                        selection_required_message_for_action(&action_id).to_string(),
+                        Some(2000),
+                        cx,
+                    );
                 }
             }
             "copy_scriptlet_path" => {
@@ -1738,7 +2406,11 @@ impl ScriptListApp {
                         );
                     }
                 } else {
-                    self.show_hud("No item selected".to_string(), Some(2000), cx);
+                    self.show_hud(
+                        selection_required_message_for_action(&action_id).to_string(),
+                        Some(2000),
+                        cx,
+                    );
                 }
             }
             "copy_content" => {
@@ -1847,7 +2519,11 @@ impl ScriptListApp {
                         );
                     }
                 } else {
-                    self.show_hud("No item selected".to_string(), Some(2000), cx);
+                    self.show_hud(
+                        selection_required_message_for_action(&action_id).to_string(),
+                        Some(2000),
+                        cx,
+                    );
                 }
             }
             "reset_ranking" => {
@@ -1889,7 +2565,11 @@ impl ScriptListApp {
                         self.show_hud("Item has no ranking to reset".to_string(), Some(2000), cx);
                     }
                 } else {
-                    self.show_hud("No item selected".to_string(), Some(2000), cx);
+                    self.show_hud(
+                        selection_required_message_for_action(&action_id).to_string(),
+                        Some(2000),
+                        cx,
+                    );
                 }
                 // Don't hide main window - stay in the main menu so user can see the change
                 // The actions dialog is already closed by setting current_view = AppView::ScriptList
@@ -2057,7 +2737,11 @@ impl ScriptListApp {
                         );
                     }
                 } else {
-                    self.show_hud("No item selected".to_string(), Some(2000), cx);
+                    self.show_hud(
+                        selection_required_message_for_action(&action_id).to_string(),
+                        Some(2000),
+                        cx,
+                    );
                 }
             }
             _ => {

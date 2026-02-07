@@ -24,9 +24,13 @@ mod drop;
 pub mod env;
 pub mod markdown;
 mod path;
+pub mod prelude;
 mod select;
 mod template;
+#[cfg(target_os = "macos")]
 pub mod webcam;
+#[cfg(not(target_os = "macos"))]
+mod webcam_stub;
 
 // Re-export prompt types for use when they're integrated into main.rs
 // When integrating:
@@ -42,7 +46,10 @@ pub use chat::{
     ChatSubmitCallback,
 };
 pub use div::{ContainerOptions, ContainerPadding, DivPrompt};
+#[cfg(target_os = "macos")]
 pub use webcam::WebcamPrompt;
+#[cfg(not(target_os = "macos"))]
+pub use webcam_stub::WebcamPrompt;
 
 // These exports are ready for use in main.rs when AppView variants are added
 // The #[allow(unused_imports)] is temporary until main.rs integrations are complete
@@ -69,3 +76,6 @@ use std::sync::Arc;
 /// Callback for prompt submission
 /// Signature: (id: String, value: Option<String>)
 pub type SubmitCallback = Arc<dyn Fn(String, Option<String>) + Send + Sync>;
+
+#[cfg(test)]
+mod prelude_tests;

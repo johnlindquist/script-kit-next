@@ -49,6 +49,7 @@ use super::providers::ProviderRegistry;
 use super::storage;
 use crate::actions::{get_ai_command_bar_actions, CommandBar, CommandBarConfig};
 use crate::prompts::markdown::render_markdown;
+use crate::stdin_commands::KeyModifier;
 use crate::theme;
 
 // ── Design Tokens ────────────────────────────────────────────────────────────
@@ -83,8 +84,8 @@ const SIDEBAR_W: gpui::Pixels = px(240.);
 const TITLEBAR_H: gpui::Pixels = px(36.);
 
 // -- Message bubble tokens --
-const MSG_PX: gpui::Pixels = px(14.);
-const MSG_PY: gpui::Pixels = px(12.);
+const MSG_PX: gpui::Pixels = px(18.);
+const MSG_PY: gpui::Pixels = px(14.);
 const MSG_RADIUS: gpui::Pixels = px(10.);
 const MSG_GAP: gpui::Pixels = px(18.);
 const MSG_GAP_CONTINUATION: gpui::Pixels = px(6.);
@@ -113,6 +114,26 @@ enum StreamingEvent {
     Done,
     /// An error occurred
     Error(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct StreamingSessionKey {
+    chat_id: ChatId,
+    generation: u64,
+}
+
+fn should_retry_existing_user_turn(messages: &[Message]) -> bool {
+    messages
+        .last()
+        .map(|message| message.role == MessageRole::User)
+        .unwrap_or(false)
+}
+
+fn should_persist_stale_completion(
+    suppressed_sessions: &mut std::collections::HashSet<StreamingSessionKey>,
+    session_key: StreamingSessionKey,
+) -> bool {
+    !suppressed_sessions.remove(&session_key)
 }
 
 /// A preset configuration for starting new chats
@@ -208,6 +229,12 @@ enum DateGroup {
     Older,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SidebarRow {
+    Header { group: DateGroup, is_first: bool },
+    Chat { chat_id: ChatId },
+}
+
 impl DateGroup {
     /// Get the display label for this group
     fn label(&self) -> &'static str {
@@ -274,6 +301,25 @@ fn group_chats_by_date(chats: &[Chat]) -> Vec<(DateGroup, Vec<&Chat>)> {
     }
 
     groups
+}
+
+fn build_sidebar_rows_for_chats(chats: &[Chat]) -> Vec<SidebarRow> {
+    let date_groups = group_chats_by_date(chats);
+    let mut rows = Vec::with_capacity(chats.len() + date_groups.len());
+
+    for (group_index, (group, group_chats)) in date_groups.into_iter().enumerate() {
+        rows.push(SidebarRow::Header {
+            group,
+            is_first: group_index == 0,
+        });
+        rows.extend(
+            group_chats
+                .into_iter()
+                .map(|chat| SidebarRow::Chat { chat_id: chat.id }),
+        );
+    }
+
+    rows
 }
 
 /// Generate a contextual mock AI response based on the user's message
@@ -353,7 +399,7 @@ enum AiCommand {
     /// Simulate a key press (for testing)
     SimulateKey {
         key: String,
-        modifiers: Vec<String>,
+        modifiers: Vec<KeyModifier>,
     },
 }
 
@@ -437,11 +483,18 @@ pub struct AiApp {
     /// Incremented each time streaming starts. Old streaming updates become no-ops.
     streaming_generation: u64,
 
+    /// Streaming sessions where stale completion persistence should be skipped.
+    /// Used when a stream is explicitly stopped or the source chat is deleted.
+    suppressed_orphan_sessions: std::collections::HashSet<StreamingSessionKey>,
+
     /// Messages for the currently selected chat (cached for display)
     current_messages: Vec<Message>,
 
     /// Virtualized list state for messages (only renders visible messages during scroll)
     messages_list_state: ListState,
+
+    /// Virtualized list state for sidebar rows (date headers + chats)
+    sidebar_list_state: ListState,
 
     /// Cached box shadows from theme (avoid reloading theme on every render)
     cached_box_shadows: Vec<BoxShadow>,
@@ -753,6 +806,7 @@ impl AiApp {
         let last_used_settings = Self::compute_last_used_settings(&chats, &available_models);
 
         let initial_msg_count = current_messages.len();
+        let initial_sidebar_item_count = build_sidebar_rows_for_chats(&chats).len();
 
         Self {
             chats,
@@ -779,11 +833,17 @@ impl AiApp {
             streaming_content: String::new(),
             streaming_chat_id: None,
             streaming_generation: 0,
+            suppressed_orphan_sessions: std::collections::HashSet::new(),
             current_messages,
             messages_list_state: ListState::new(
                 initial_msg_count,
                 ListAlignment::Bottom,
                 px(1024.),
+            ),
+            sidebar_list_state: ListState::new(
+                initial_sidebar_item_count,
+                ListAlignment::Top,
+                px(512.),
             ),
             cached_box_shadows,
             needs_focus_input: false,
@@ -1003,6 +1063,11 @@ impl AiApp {
         content_len > 800
     }
 
+    /// Build the visible message body when no collapse is applied.
+    fn message_body_content(content: &str) -> String {
+        content.to_string()
+    }
+
     /// Navigate to the previous (-1) or next (+1) chat in the sidebar list.
     fn navigate_chat(&mut self, direction: i32, window: &mut Window, cx: &mut Context<Self>) {
         if self.chats.is_empty() {
@@ -1042,6 +1107,14 @@ impl AiApp {
 
     /// Delete a specific chat by ID (for sidebar delete buttons)
     fn delete_chat_by_id(&mut self, chat_id: ChatId, cx: &mut Context<Self>) {
+        if self.streaming_chat_id == Some(chat_id) {
+            self.suppress_orphan_save_for_current_stream("chat_deleted");
+            self.is_streaming = false;
+            self.streaming_content.clear();
+            self.streaming_chat_id = None;
+            self.streaming_started_at = None;
+        }
+
         if let Err(e) = storage::delete_chat(&chat_id) {
             tracing::error!(error = %e, "Failed to delete chat");
             return;
@@ -1068,20 +1141,37 @@ impl AiApp {
 
     // -- UX enhancement methods --
 
-    /// Retry after a streaming error: clear the error and re-submit the last user message.
+    /// Retry after a streaming error.
+    /// Replays the last user turn directly when possible to avoid duplicate user messages.
     fn retry_after_error(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.streaming_error = None;
-        if let Some(last_user) = self
-            .current_messages
-            .iter()
-            .rev()
-            .find(|m| m.role == MessageRole::User)
-        {
-            let content = last_user.content.clone();
-            self.input_state.update(cx, |state, cx| {
-                state.set_value(content, window, cx);
-            });
-            self.submit_message(window, cx);
+
+        if !self.is_streaming {
+            if let Some(chat_id) = self.selected_chat_id {
+                if should_retry_existing_user_turn(&self.current_messages) {
+                    info!(
+                        chat_id = %chat_id,
+                        message_count = self.current_messages.len(),
+                        "Retrying last failed request without adding a duplicate user message"
+                    );
+                    self.start_streaming_response(chat_id, cx);
+                    cx.notify();
+                    return;
+                }
+            }
+
+            if let Some(last_user) = self
+                .current_messages
+                .iter()
+                .rev()
+                .find(|m| m.role == MessageRole::User)
+            {
+                let content = last_user.content.clone();
+                self.input_state.update(cx, |state, cx| {
+                    state.set_value(content, window, cx);
+                });
+                self.submit_message(window, cx);
+            }
         }
         cx.notify();
     }
@@ -1543,6 +1633,39 @@ impl AiApp {
         }
     }
 
+    fn current_streaming_session_key(&self) -> Option<StreamingSessionKey> {
+        self.streaming_chat_id
+            .map(|active_chat_id| StreamingSessionKey {
+                chat_id: active_chat_id,
+                generation: self.streaming_generation,
+            })
+    }
+
+    fn suppress_orphan_save_for_current_stream(&mut self, reason: &'static str) {
+        if let Some(session_key) = self.current_streaming_session_key() {
+            let correlation_id = format!(
+                "ai-stream-{}-{}",
+                session_key.chat_id, session_key.generation
+            );
+            self.suppressed_orphan_sessions.insert(session_key);
+            info!(
+                correlation_id = %correlation_id,
+                chat_id = %session_key.chat_id,
+                generation = session_key.generation,
+                reason = reason,
+                "Suppressing stale stream completion persistence"
+            );
+        }
+    }
+
+    fn should_persist_orphaned_completion(&mut self, chat_id: ChatId, generation: u64) -> bool {
+        let session_key = StreamingSessionKey {
+            chat_id,
+            generation,
+        };
+        should_persist_stale_completion(&mut self.suppressed_orphan_sessions, session_key)
+    }
+
     /// Handle search query changes - filters chats in real-time as user types
     fn on_search_change(&mut self, cx: &mut Context<Self>) {
         let query = self.search_state.read(cx).value().to_string();
@@ -1552,16 +1675,32 @@ impl AiApp {
 
         // If search is not empty, filter chats
         if !query.trim().is_empty() {
-            // Use simple case-insensitive title matching for responsiveness
-            // FTS search is available but can fail on special characters
-            let query_lower = query.to_lowercase();
-            let all_chats = storage::get_all_chats().unwrap_or_default();
-            self.chats = all_chats
-                .into_iter()
-                .filter(|chat| chat.title.to_lowercase().contains(&query_lower))
-                .collect();
+            let search_query = query.trim();
+            let mut used_fallback = false;
 
-            debug!(results = self.chats.len(), "Search filtered chats");
+            self.chats = match storage::search_chats(search_query) {
+                Ok(chats) => chats,
+                Err(error) => {
+                    used_fallback = true;
+                    tracing::warn!(
+                        error = %error,
+                        query = %search_query,
+                        "Storage-backed chat search failed, falling back to title filter"
+                    );
+                    let query_lower = search_query.to_lowercase();
+                    storage::get_all_chats()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .filter(|chat| chat.title.to_lowercase().contains(&query_lower))
+                        .collect()
+                }
+            };
+
+            debug!(
+                results = self.chats.len(),
+                used_fallback = used_fallback,
+                "Search filtered chats"
+            );
 
             // Always select first result when filtering
             if !self.chats.is_empty() {
@@ -1848,13 +1987,11 @@ impl AiApp {
     fn handle_simulated_key(
         &mut self,
         key: &str,
-        modifiers: &[String],
+        modifiers: &[KeyModifier],
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let has_cmd = modifiers
-            .iter()
-            .any(|m| m == "cmd" || m == "meta" || m == "command");
+        let has_cmd = modifiers.contains(&KeyModifier::Cmd);
         let key_lower = key.to_lowercase();
 
         crate::logging::log(
@@ -1940,7 +2077,7 @@ impl AiApp {
                     key_lower, self.setup_button_focus_index
                 ),
             );
-            let has_shift = modifiers.iter().any(|m| m == "shift");
+            let has_shift = modifiers.contains(&KeyModifier::Shift);
             match key_lower.as_str() {
                 "tab" => {
                     if has_shift {
@@ -2616,12 +2753,13 @@ impl AiApp {
                 .unwrap_or_default();
             self.cache_message_images(&self.current_messages.clone());
 
-            // Clear streaming state - if deleted chat was streaming, orphan the task
-            // It will save to DB but won't corrupt UI since chat is deleted
+            // Clear streaming state - if deleted chat was streaming, suppress stale persistence
+            // so we don't re-save a completion for a deleted chat.
             self.is_streaming = false;
             self.streaming_content.clear();
             // Also clear streaming context if the deleted chat was streaming
             if self.streaming_chat_id == Some(id) {
+                self.suppress_orphan_save_for_current_stream("chat_deleted");
                 self.streaming_chat_id = None;
             }
 
@@ -2879,7 +3017,19 @@ impl AiApp {
                                     actual_chat = ?app.streaming_chat_id,
                                     "Ignoring stale streaming completion (user switched chats)"
                                 );
-                                // Still save to DB below, but don't touch UI state
+                                let should_persist =
+                                    app.should_persist_orphaned_completion(chat_id, generation);
+
+                                if !should_persist {
+                                    tracing::info!(
+                                        chat_id = %chat_id,
+                                        generation = generation,
+                                        "Dropping stale completion after explicit stop/delete"
+                                    );
+                                    return;
+                                }
+
+                                // Persist stale completion for chat-switch continuity.
                                 if let Some(err) = &error {
                                     tracing::error!(error = %err, chat_id = %chat_id, "Stale streaming error");
                                 } else if let Some(content) = &final_content {
@@ -2992,28 +3142,30 @@ impl AiApp {
                 accumulated.push_str(&word);
 
                 let current_content = accumulated.clone();
-                let should_break = cx
+                let (should_break, should_persist_orphan) = cx
                     .update(|cx| {
                         this.update(cx, |app, cx| {
                             // Guard: only update UI if this is the current streaming session
                             if app.streaming_generation != generation
                                 || app.streaming_chat_id != Some(chat_id)
                             {
-                                return true; // Break out of loop - stale session
+                                let should_persist =
+                                    app.should_persist_orphaned_completion(chat_id, generation);
+                                return (true, should_persist); // stale session
                             }
                             app.streaming_content = current_content;
                             // Auto-scroll to bottom as new content arrives
                             app.sync_messages_list_and_scroll_to_bottom();
                             cx.notify();
-                            false
+                            (false, false)
                         })
-                        .unwrap_or(true)
+                        .unwrap_or((true, false))
                     })
-                    .unwrap_or(true);
+                    .unwrap_or((true, false));
 
                 if should_break {
-                    // Session was superseded, save what we have to DB and exit
-                    if !accumulated.is_empty() {
+                    // Session was superseded. Persist only when not explicitly suppressed.
+                    if should_persist_orphan && !accumulated.is_empty() {
                         let assistant_message = Message::assistant(chat_id, &accumulated);
                         if let Err(e) = storage::save_message(&assistant_message) {
                             tracing::error!(error = %e, "Failed to save orphaned mock message");
@@ -3024,6 +3176,12 @@ impl AiApp {
                                 "Orphaned mock streaming saved to DB"
                             );
                         }
+                    } else if !should_persist_orphan {
+                        tracing::info!(
+                            chat_id = %chat_id,
+                            generation = generation,
+                            "Dropping stale mock completion after explicit stop/delete"
+                        );
                     }
                     return;
                 }
@@ -3157,6 +3315,7 @@ impl AiApp {
             self.last_streaming_completed_at = Some(std::time::Instant::now());
         }
 
+        self.suppress_orphan_save_for_current_stream("user_stop");
         self.streaming_generation = self.streaming_generation.wrapping_add(1);
         self.is_streaming = false;
         self.streaming_content.clear();
@@ -3278,13 +3437,6 @@ impl AiApp {
 
     fn move_setup_button_focus(&mut self, delta: isize, cx: &mut Context<Self>) {
         let next_index = Self::next_setup_button_focus_index(self.setup_button_focus_index, delta);
-        crate::logging::log(
-            "AI",
-            &format!(
-                "move_setup_button_focus: delta={} current={} next={}",
-                delta, self.setup_button_focus_index, next_index
-            ),
-        );
         if next_index != self.setup_button_focus_index {
             self.setup_button_focus_index = next_index;
             cx.notify();
@@ -3550,8 +3702,15 @@ impl AiApp {
             )
     }
 
+    fn sync_sidebar_list_item_count(&mut self, item_count: usize) {
+        let old_count = self.sidebar_list_state.item_count();
+        if old_count != item_count {
+            self.sidebar_list_state.splice(0..old_count, item_count);
+        }
+    }
+
     /// Render the chats sidebar with date groupings
-    fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         // If sidebar is collapsed, completely hide it (Raycast-style)
         // The toggle button is absolutely positioned in the main container
         if self.sidebar_collapsed {
@@ -3559,7 +3718,31 @@ impl AiApp {
         }
 
         let selected_id = self.selected_chat_id;
-        let date_groups = group_chats_by_date(&self.chats);
+        let sidebar_rows = build_sidebar_rows_for_chats(&self.chats);
+        self.sync_sidebar_list_item_count(sidebar_rows.len());
+        let sidebar_entity = cx.entity();
+        let sidebar_list = list(self.sidebar_list_state.clone(), move |ix, _window, cx| {
+            let row = sidebar_rows.get(ix).copied();
+            sidebar_entity.update(cx, |this, cx| match row {
+                Some(SidebarRow::Header { group, is_first }) => this
+                    .render_sidebar_group_header(group, is_first, cx)
+                    .into_any_element(),
+                Some(SidebarRow::Chat { chat_id }) => this
+                    .chats
+                    .iter()
+                    .find(|chat| chat.id == chat_id)
+                    .map(|chat| {
+                        this.render_chat_item(chat, selected_id, cx)
+                            .into_any_element()
+                    })
+                    .unwrap_or_else(|| div().into_any_element()),
+                None => div().into_any_element(),
+            })
+        })
+        .with_sizing_behavior(ListSizingBehavior::Infer)
+        .size_full()
+        .px_2()
+        .pb_2();
 
         // Build a custom sidebar with date groupings using divs
         // This gives us more control over the layout than SidebarGroup
@@ -3743,53 +3926,34 @@ impl AiApp {
                             .into_any_element()
                     } else {
                         div()
-                            .flex()
-                            .flex_col()
-                            .px_2()
-                            .pb_2()
-                            .gap_0()
-                            .children(date_groups.into_iter().map(|(group, chats)| {
-                                self.render_date_group(group, chats, selected_id, cx)
-                            }))
-                            .overflow_y_scrollbar()
+                            .relative()
+                            .size_full()
+                            .child(sidebar_list)
+                            .vertical_scrollbar(&self.sidebar_list_state)
                             .into_any_element()
                     }),
             )
             .into_any_element()
     }
 
-    /// Render a date group section (Today, Yesterday, This Week, Older)
-    fn render_date_group(
+    /// Render a date group header row (Today, Yesterday, This Week, Older)
+    fn render_sidebar_group_header(
         &self,
         group: DateGroup,
-        chats: Vec<&Chat>,
-        selected_id: Option<ChatId>,
+        is_first_group: bool,
         cx: &mut Context<Self>,
     ) -> gpui::Div {
-        let is_first_group = group == DateGroup::Today;
         let group_label: SharedString = group.label().to_uppercase().into();
         div()
             .flex()
-            .flex_col()
             .w_full()
-            .gap(px(2.))
-            // Group header
-            .child(
-                div()
-                    .text_xs()
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .text_color(cx.theme().muted_foreground.opacity(0.6))
-                    .px_1()
-                    .pt(px(if is_first_group { 4. } else { 12. }))
-                    .pb(px(6.))
-                    .child(group_label),
-            )
-            // Chat items
-            .children(
-                chats
-                    .into_iter()
-                    .map(|chat| self.render_chat_item(chat, selected_id, cx)),
-            )
+            .text_xs()
+            .font_weight(gpui::FontWeight::SEMIBOLD)
+            .text_color(cx.theme().muted_foreground.opacity(0.6))
+            .px_1()
+            .pt(px(if is_first_group { 4. } else { 12. }))
+            .pb(px(6.))
+            .child(group_label)
     }
 
     /// Render a single chat item with title, relative time, and hover-revealed delete button
@@ -4425,20 +4589,6 @@ impl AiApp {
     /// Render the setup card when no API keys are configured
     /// Shows a Raycast-style prompt with a Configure Vercel AI Gateway button
     fn render_setup_card(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        debug!(
-            "render_setup_card called, showing_api_key_input={}",
-            self.showing_api_key_input
-        );
-
-        // Debug: Log icon paths
-        crate::logging::log(
-            "AI",
-            &format!(
-                "Settings icon path: {}",
-                LocalIconName::Settings.external_path()
-            ),
-        );
-
         // If showing API key input mode, render that instead
         if self.showing_api_key_input {
             return self.render_api_key_input(cx).into_any_element();
@@ -5054,7 +5204,7 @@ impl AiApp {
                             };
                             format!("{}...", truncated)
                         } else {
-                            message.content.clone()
+                            Self::message_body_content(&message.content)
                         };
                         let should_show_toggle = message.content.len() > 800;
                         let toggle_msg_id = msg_id.clone();
@@ -5721,11 +5871,12 @@ impl AiApp {
                         // Use logical_scroll_top to determine position
                         let scroll_top = this.messages_list_state.logical_scroll_top().item_ix;
                         // If we're within 2 items of the bottom, consider it "at bottom"
-                        if total_items > 0 && scroll_top + 3 >= total_items {
-                            if this.user_has_scrolled_up {
-                                this.user_has_scrolled_up = false;
-                                cx.notify();
-                            }
+                        if total_items > 0
+                            && scroll_top + 3 >= total_items
+                            && this.user_has_scrolled_up
+                        {
+                            this.user_has_scrolled_up = false;
+                            cx.notify();
                         }
                     }
                 }),
@@ -5791,14 +5942,6 @@ impl AiApp {
 
     /// Render the main chat panel
     fn render_main_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let has_selection = self.selected_chat_id.is_some();
-
-        // Debug log to verify titlebar is rendering
-        tracing::debug!(
-            "[AI] render_main_panel called, has_selection={}",
-            has_selection
-        );
-
         // Build titlebar - just a spacer with border (title is now globally centered at window level)
         let titlebar = div()
             .id("ai-titlebar")
@@ -6483,36 +6626,12 @@ impl Render for AiApp {
                 let key = event.keystroke.key.as_str();
                 let modifiers = &event.keystroke.modifiers;
 
-                // Debug: Log ALL key events to verify handler is firing
-                crate::logging::log(
-                    "AI",
-                    &format!(
-                        "AI capture_key_down: key='{}' command_bar_open={}",
-                        key,
-                        this.command_bar.is_open()
-                    ),
-                );
-
                 let no_system_modifiers =
                     !modifiers.platform && !modifiers.alt && !modifiers.control;
 
                 // Setup-card keyboard navigation when no providers are configured.
                 // Skip while API key input is visible so Enter/typing route to the input.
                 let in_setup_mode = this.available_models.is_empty() && !this.showing_api_key_input;
-
-                // Log setup mode for debugging
-                if matches!(key, "tab" | "Tab" | "up" | "down" | "arrowup" | "arrowdown") {
-                    crate::logging::log(
-                        "AI",
-                        &format!(
-                            "Setup nav key: '{}' in_setup_mode={} models_empty={} api_input={}",
-                            key,
-                            in_setup_mode,
-                            this.available_models.is_empty(),
-                            this.showing_api_key_input
-                        ),
-                    );
-                }
 
                 if no_system_modifiers && in_setup_mode {
                     match key {
@@ -6556,25 +6675,13 @@ impl Render for AiApp {
                 // This routes all relevant keys to the CommandBar
                 // CRITICAL: Must stop propagation to prevent Input from consuming the keys
                 if this.command_bar.is_open() {
-                    crate::logging::log(
-                        "AI",
-                        &format!("AI capture_key_down (command_bar open): key='{}'", key),
-                    );
                     match key {
                         "up" | "arrowup" => {
-                            crate::logging::log(
-                                "AI",
-                                "AI window: routing UP to command_bar_select_prev",
-                            );
                             this.command_bar_select_prev(cx);
                             cx.stop_propagation(); // Prevent Input from handling
                             return;
                         }
                         "down" | "arrowdown" => {
-                            crate::logging::log(
-                                "AI",
-                                "AI window: routing DOWN to command_bar_select_next",
-                            );
                             this.command_bar_select_next(cx);
                             cx.stop_propagation(); // Prevent Input from handling
                             return;
@@ -8102,7 +8209,7 @@ pub fn show_ai_command_bar(cx: &mut App) {
 ///
 /// This is triggered by the stdin command `{"type":"simulateAiKey","key":"up","modifiers":["cmd"]}`.
 /// Used for testing keyboard navigation in the AI window, especially the command bar.
-pub fn simulate_ai_key(key: &str, modifiers: Vec<String>) {
+pub fn simulate_ai_key(key: &str, modifiers: Vec<KeyModifier>) {
     use crate::logging;
 
     // Check if AI window is open
@@ -8362,6 +8469,65 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_should_retry_existing_user_turn_only_when_last_message_is_user() {
+        let chat_id = ChatId::new();
+
+        let ends_with_user = vec![
+            Message::assistant(chat_id, "previous assistant"),
+            Message::user(chat_id, "latest user"),
+        ];
+        assert!(
+            should_retry_existing_user_turn(&ends_with_user),
+            "Retry should reuse the request when the latest message is a user turn"
+        );
+
+        let ends_with_assistant = vec![
+            Message::user(chat_id, "latest user"),
+            Message::assistant(chat_id, "latest assistant"),
+        ];
+        assert!(
+            !should_retry_existing_user_turn(&ends_with_assistant),
+            "Retry should not assume a reusable user turn when an assistant turn is last"
+        );
+
+        let empty_messages: Vec<Message> = Vec::new();
+        assert!(
+            !should_retry_existing_user_turn(&empty_messages),
+            "Retry should be disabled without user messages"
+        );
+    }
+
+    #[test]
+    fn test_should_persist_stale_completion_respects_suppression_set() {
+        let chat_id = ChatId::new();
+        let session = StreamingSessionKey {
+            chat_id,
+            generation: 42,
+        };
+        let mut suppressed = std::collections::HashSet::new();
+        suppressed.insert(session);
+
+        let should_persist = should_persist_stale_completion(&mut suppressed, session);
+        assert!(
+            !should_persist,
+            "Explicitly suppressed sessions should not persist stale completions"
+        );
+        assert!(
+            !suppressed.contains(&session),
+            "Suppression should be consumed after one stale completion handling pass"
+        );
+
+        let unrelated_session = StreamingSessionKey {
+            chat_id,
+            generation: 99,
+        };
+        assert!(
+            should_persist_stale_completion(&mut suppressed, unrelated_session),
+            "Untracked sessions should persist stale completions for chat-switch continuity"
+        );
+    }
+
     /// Test ChatId comparison behavior
     #[test]
     fn test_chat_id_equality() {
@@ -8490,5 +8656,81 @@ mod tests {
         // Index 1 should map to "Connect to Claude Code"
         // These are documented in the code: setup_button_focus_index: usize,
         // 0 = Configure Vercel AI Gateway, 1 = Connect to Claude Code
+    }
+
+    #[test]
+    fn test_build_sidebar_rows_inserts_headers_and_preserves_chat_order() {
+        let now = Utc::now();
+
+        let mut today_chat = Chat::new("model", "provider");
+        today_chat.title = "Today".to_string();
+        today_chat.updated_at = now;
+
+        let mut yesterday_chat = Chat::new("model", "provider");
+        yesterday_chat.title = "Yesterday".to_string();
+        yesterday_chat.updated_at = now - chrono::Duration::days(1);
+
+        let mut older_chat = Chat::new("model", "provider");
+        older_chat.title = "Older".to_string();
+        older_chat.updated_at = now - chrono::Duration::days(10);
+
+        let chats = vec![
+            today_chat.clone(),
+            yesterday_chat.clone(),
+            older_chat.clone(),
+        ];
+        let rows = build_sidebar_rows_for_chats(&chats);
+
+        assert_eq!(
+            rows.len(),
+            6,
+            "Expected 3 date headers + 3 chat rows for 3 cross-group chats"
+        );
+
+        match rows[0] {
+            SidebarRow::Header {
+                group: DateGroup::Today,
+                is_first: true,
+            } => {}
+            _ => panic!("First row should be Today header"),
+        }
+
+        match rows[1] {
+            SidebarRow::Chat { chat_id } => assert_eq!(chat_id, today_chat.id),
+            _ => panic!("Second row should be the Today chat"),
+        }
+
+        match rows[2] {
+            SidebarRow::Header {
+                group: DateGroup::Yesterday,
+                is_first: false,
+            } => {}
+            _ => panic!("Third row should be Yesterday header"),
+        }
+
+        match rows[3] {
+            SidebarRow::Chat { chat_id } => assert_eq!(chat_id, yesterday_chat.id),
+            _ => panic!("Fourth row should be the Yesterday chat"),
+        }
+
+        match rows[4] {
+            SidebarRow::Header {
+                group: DateGroup::Older,
+                is_first: false,
+            } => {}
+            _ => panic!("Fifth row should be Older header"),
+        }
+
+        match rows[5] {
+            SidebarRow::Chat { chat_id } => assert_eq!(chat_id, older_chat.id),
+            _ => panic!("Sixth row should be the Older chat"),
+        }
+    }
+
+    #[test]
+    fn test_message_body_content_does_not_truncate_long_messages() {
+        let long_message = "lorem ipsum ".repeat(200);
+        let display_content = AiApp::message_body_content(&long_message);
+        assert_eq!(display_content, long_message);
     }
 }

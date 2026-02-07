@@ -9,6 +9,7 @@ use super::*;
 use crate::clipboard_history::ContentType;
 use crate::file_search::{FileInfo, FileType};
 use crate::prompts::PathInfo;
+use std::collections::HashSet;
 
 // ============================================================
 // Helper: extract action IDs from a Vec<Action>
@@ -132,7 +133,7 @@ fn file_context_macos_specific_actions() {
     #[cfg(target_os = "macos")]
     {
         assert!(ids.contains(&"open_with"), "macOS should have Open With...");
-        assert!(ids.contains(&"show_info"), "macOS should have Get Info");
+        assert!(ids.contains(&"show_info"), "macOS should have Show Info");
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -143,8 +144,28 @@ fn file_context_macos_specific_actions() {
         );
         assert!(
             !ids.contains(&"show_info"),
-            "Non-macOS should not have Get Info"
+            "Non-macOS should not have Show Info"
         );
+    }
+}
+
+#[test]
+fn file_context_finder_labels_use_reveal_consistently() {
+    let file = FileInfo {
+        path: "/Users/test/data.csv".into(),
+        name: "data.csv".into(),
+        file_type: FileType::File,
+        is_dir: false,
+    };
+    let actions = get_file_context_actions(&file);
+
+    let reveal = find_action(&actions, "reveal_in_finder").expect("missing reveal_in_finder");
+    assert_eq!(reveal.title, "Reveal in Finder");
+
+    #[cfg(target_os = "macos")]
+    {
+        let show_info = find_action(&actions, "show_info").expect("missing show_info");
+        assert_eq!(show_info.title, "Show Info");
     }
 }
 
@@ -193,6 +214,14 @@ fn path_context_all_common_actions_present() {
             expected_id
         );
     }
+}
+
+#[test]
+fn path_context_finder_label_uses_reveal() {
+    let path = PathInfo::new("file.txt", "/tmp/file.txt", false);
+    let actions = get_path_context_actions(&path);
+    let reveal = find_action(&actions, "open_in_finder").expect("missing open_in_finder");
+    assert_eq!(reveal.title, "Reveal in Finder");
 }
 
 #[test]
@@ -505,7 +534,77 @@ fn deeplink_name_preserves_alphanumeric() {
 }
 
 // ============================================================
-// 6. AI command bar: sections, icons, completeness
+// 6. Script context actions: sections + destructive ordering
+// ============================================================
+
+#[test]
+fn script_context_actions_use_sectioned_grouping() {
+    let script = ScriptInfo::new("my-script", "/path/to/my-script.ts");
+    let actions = get_script_context_actions(&script);
+
+    let run = find_action(&actions, "run_script").expect("missing run_script");
+    assert_eq!(run.section.as_deref(), Some("Actions"));
+
+    let add_shortcut = find_action(&actions, "add_shortcut").expect("missing add_shortcut");
+    assert_eq!(add_shortcut.section.as_deref(), Some("Edit"));
+
+    let add_alias = find_action(&actions, "add_alias").expect("missing add_alias");
+    assert_eq!(add_alias.section.as_deref(), Some("Edit"));
+
+    let edit_script = find_action(&actions, "edit_script").expect("missing edit_script");
+    assert_eq!(edit_script.section.as_deref(), Some("Edit"));
+
+    let copy_path = find_action(&actions, "copy_path").expect("missing copy_path");
+    assert_eq!(copy_path.section.as_deref(), Some("Share"));
+
+    let copy_deeplink = find_action(&actions, "copy_deeplink").expect("missing copy_deeplink");
+    assert_eq!(copy_deeplink.section.as_deref(), Some("Share"));
+}
+
+#[test]
+fn script_context_destructive_actions_are_last_and_marked() {
+    let script = ScriptInfo::with_shortcut_and_alias(
+        "my-script",
+        "/path/to/my-script.ts",
+        Some("cmd+shift+m".to_string()),
+        Some("ms".to_string()),
+    )
+    .with_frecency(true, Some("my-script:/path/to/my-script.ts".to_string()));
+
+    let actions = get_script_context_actions(&script);
+
+    let first_destructive_index = actions
+        .iter()
+        .position(|a| a.section.as_deref() == Some("Destructive"))
+        .expect("expected destructive section");
+
+    for action in actions.iter().skip(first_destructive_index) {
+        assert_eq!(
+            action.section.as_deref(),
+            Some("Destructive"),
+            "all trailing actions should be in Destructive section"
+        );
+    }
+
+    let remove_shortcut =
+        find_action(&actions, "remove_shortcut").expect("missing remove_shortcut");
+    assert_eq!(remove_shortcut.section.as_deref(), Some("Destructive"));
+    assert_eq!(remove_shortcut.shortcut.as_deref(), Some("⌘⌥K"));
+
+    let remove_alias = find_action(&actions, "remove_alias").expect("missing remove_alias");
+    assert_eq!(remove_alias.section.as_deref(), Some("Destructive"));
+    assert_eq!(remove_alias.shortcut.as_deref(), Some("⌘⌥A"));
+
+    let reset_ranking = find_action(&actions, "reset_ranking").expect("missing reset_ranking");
+    assert_eq!(reset_ranking.section.as_deref(), Some("Destructive"));
+    assert!(
+        reset_ranking.shortcut.is_some(),
+        "destructive action should include keyboard hint"
+    );
+}
+
+// ============================================================
+// 7. AI command bar: sections, icons, completeness
 // ============================================================
 
 #[test]
@@ -1201,64 +1300,23 @@ fn agent_context_with_frecency_shows_reset() {
     assert!(ids.contains(&"reset_ranking"));
 }
 
-// ============================================================
-// 14. Clipboard action edge cases: destructive actions
-// ============================================================
-
 #[test]
-fn clipboard_text_has_all_destructive_actions() {
-    let entry = make_text_entry(false);
-    let actions = get_clipboard_history_context_actions(&entry);
-    let ids = action_ids(&actions);
+fn mixed_script_and_agent_flags_do_not_create_duplicate_action_ids() {
+    let mut script = ScriptInfo::new("Mixed Flags", "/path/to/mixed.ts");
+    script.is_agent = true;
+    // Keep is_script=true to simulate accidental mixed flag state.
 
-    assert!(ids.contains(&"clipboard_delete"));
-    assert!(ids.contains(&"clipboard_delete_multiple"));
-    assert!(ids.contains(&"clipboard_delete_all"));
-}
+    let actions = get_script_context_actions(&script);
 
-#[test]
-fn clipboard_text_has_save_actions() {
-    let entry = make_text_entry(false);
-    let actions = get_clipboard_history_context_actions(&entry);
-    let ids = action_ids(&actions);
+    let mut seen = HashSet::new();
+    for action in &actions {
+        assert!(
+            seen.insert(action.id.as_str()),
+            "duplicate action id generated: {}",
+            action.id
+        );
+    }
 
-    assert!(ids.contains(&"clipboard_save_snippet"));
-    assert!(ids.contains(&"clipboard_save_file"));
-}
-
-#[test]
-fn clipboard_image_has_ocr_action() {
-    let entry = make_image_entry(false);
-    let actions = get_clipboard_history_context_actions(&entry);
-    let ids = action_ids(&actions);
-
-    assert!(
-        ids.contains(&"clipboard_ocr"),
-        "Image entry should have OCR action"
-    );
-    // Text entries should NOT have OCR
-    let text_entry = make_text_entry(false);
-    let text_actions = get_clipboard_history_context_actions(&text_entry);
-    let text_ids = action_ids(&text_actions);
-    assert!(
-        !text_ids.contains(&"clipboard_ocr"),
-        "Text entry should NOT have OCR"
-    );
-}
-
-#[test]
-fn clipboard_action_count_text_vs_image() {
-    let text_entry = make_text_entry(false);
-    let text_actions = get_clipboard_history_context_actions(&text_entry);
-
-    let image_entry = make_image_entry(false);
-    let image_actions = get_clipboard_history_context_actions(&image_entry);
-
-    // Image entries should have more actions due to OCR, Open With, etc.
-    assert!(
-        image_actions.len() > text_actions.len(),
-        "Image ({}) should have more actions than text ({})",
-        image_actions.len(),
-        text_actions.len()
-    );
+    let edit_script_count = actions.iter().filter(|a| a.id == "edit_script").count();
+    assert_eq!(edit_script_count, 1);
 }

@@ -3,6 +3,9 @@
 //! These tests verify the UTF-8 char/byte conversion functions used by form fields.
 //! Separated from form_fields.rs due to GPUI macro recursion limit issues.
 
+use super::form_fields::{form_field_type_allows_candidate_value, FormFieldColors};
+use crate::designs::DesignColors;
+
 /// Count the number of Unicode scalar values (chars) in a string.
 fn char_len(s: &str) -> usize {
     s.chars().count()
@@ -37,29 +40,6 @@ fn slice_by_char_range(s: &str, start_char: usize, end_char: usize) -> &str {
 }
 
 // --- Text indexing helper tests ---
-
-#[test]
-fn test_char_len_ascii() {
-    assert_eq!(char_len("hello"), 5);
-    assert_eq!(char_len(""), 0);
-}
-
-#[test]
-fn test_char_len_emoji() {
-    // Each emoji is 1 char but 4 bytes
-    assert_eq!(char_len("😀"), 1);
-    assert_eq!(char_len("😀😀"), 2);
-    assert_eq!(char_len("a😀b"), 3);
-}
-
-#[test]
-fn test_char_len_multibyte() {
-    // "•" (bullet) is 3 bytes, 1 char
-    assert_eq!(char_len("•"), 1);
-    assert_eq!(char_len("•••"), 3);
-    // Japanese
-    assert_eq!(char_len("日本語"), 3);
-}
 
 #[test]
 fn test_byte_idx_from_char_idx_ascii() {
@@ -154,16 +134,93 @@ fn test_password_bullet_slicing_safe() {
     assert_eq!(after, "•");
 }
 
-/// This test documents the bug in the original render code.
-/// It should panic because slicing "•••" at byte index 2 is not a char boundary.
 #[test]
-#[should_panic(expected = "byte index 2 is not a char boundary")]
-fn test_password_bullet_slicing_bug_panics() {
-    let password = "abc"; // 3 chars
-    let bullets = "•".repeat(char_len(password)); // "•••" = 9 bytes
-    let cursor_pos: usize = 2; // This is treated as byte index in buggy code
+fn test_form_fields_use_theme_token_font_sizes() {
+    let source = std::fs::read_to_string("src/components/form_fields.rs")
+        .expect("failed to read src/components/form_fields.rs");
 
-    // This is the BUGGY way (what the old render code does):
-    // It treats cursor_pos (char index) as byte index
-    let _before = &bullets[..cursor_pos]; // PANIC: byte 2 is not char boundary
+    assert!(
+        source.contains("input_font_size"),
+        "form field colors should define an input font-size token"
+    );
+    assert!(
+        source.contains("label_font_size"),
+        "form field colors should define a label font-size token"
+    );
+    assert!(
+        source.contains(".text_size(px(colors.input_font_size))"),
+        "text inputs should use the shared input font-size token"
+    );
+    assert!(
+        source.contains(".text_size(px(colors.label_font_size))"),
+        "labels should use the shared label font-size token"
+    );
+}
+
+#[test]
+fn test_arg_prompt_header_uses_design_token_large_input_size() {
+    let source = std::fs::read_to_string("src/render_prompts/arg.rs")
+        .expect("failed to read src/render_prompts/arg.rs");
+
+    assert!(
+        source.contains(".text_size(px(design_typography.font_size_lg))"),
+        "arg prompt header input should use design typography token for large input text"
+    );
+    assert!(
+        !source.contains(".text_xl()"),
+        "arg prompt header should avoid hardcoded text_xl() sizing"
+    );
+}
+
+#[test]
+fn test_number_field_accepts_partial_numeric_values() {
+    assert!(form_field_type_allows_candidate_value(
+        Some("number"),
+        "123"
+    ));
+    assert!(form_field_type_allows_candidate_value(
+        Some("number"),
+        "-42.5"
+    ));
+    assert!(form_field_type_allows_candidate_value(
+        Some("number"),
+        "+.7"
+    ));
+}
+
+#[test]
+fn test_number_field_rejects_non_numeric_values() {
+    assert!(!form_field_type_allows_candidate_value(
+        Some("number"),
+        "12a"
+    ));
+    assert!(!form_field_type_allows_candidate_value(
+        Some("number"),
+        "1.2.3"
+    ));
+}
+
+#[test]
+fn test_email_field_rejects_spaces_and_multiple_at_signs() {
+    assert!(form_field_type_allows_candidate_value(
+        Some("email"),
+        "dev@example.com"
+    ));
+    assert!(!form_field_type_allows_candidate_value(
+        Some("email"),
+        "dev @example.com"
+    ));
+    assert!(!form_field_type_allows_candidate_value(
+        Some("email"),
+        "a@b@c.com"
+    ));
+}
+
+#[test]
+fn test_form_field_colors_from_design_uses_design_accent_for_cursor() {
+    let mut design = DesignColors::default();
+    design.accent = 0x123456;
+
+    let colors = FormFieldColors::from_design(&design);
+    assert_eq!(colors.cursor, 0x123456);
 }

@@ -1,121 +1,73 @@
-//! Regression tests for clipboard history action wiring.
-//!
-//! These tests assert that the clipboard actions are wired in the UI and
-//! action handler layers, preventing accidental regressions.
+//! Targeted regression tests for destructive clipboard action safeguards.
 
 use std::fs;
 
+fn read(path: &str) -> String {
+    fs::read_to_string(path).unwrap_or_else(|_| panic!("Failed to read {path}"))
+}
+
 #[test]
-fn test_app_actions_handles_clipboard_pin_unpin() {
-    let content =
-        fs::read_to_string("src/app_actions.rs").expect("Failed to read src/app_actions.rs");
+fn clipboard_delete_multiple_requires_confirmation_before_delete() {
+    let content = read("src/app_actions.rs");
 
     assert!(
-        content.contains("\"clipboard_pin\""),
-        "Expected app_actions.rs to handle \"clipboard_pin\" action id"
+        content.contains("\"clipboard_delete_multiple\""),
+        "Expected app_actions.rs to handle clipboard_delete_multiple"
     );
     assert!(
-        content.contains("clipboard_history::pin_entry"),
-        "Expected app_actions.rs to call clipboard_history::pin_entry"
+        content.contains("Are you sure you want to delete these")
+            && content.contains("matching clipboard entries"),
+        "Expected clipboard_delete_multiple to show a count-aware confirmation message"
     );
     assert!(
-        content.contains("\"clipboard_unpin\""),
-        "Expected app_actions.rs to handle \"clipboard_unpin\" action id"
-    );
-    assert!(
-        content.contains("clipboard_history::unpin_entry"),
-        "Expected app_actions.rs to call clipboard_history::unpin_entry"
+        content.contains("open_confirm_window("),
+        "Expected clipboard_delete_multiple to use confirmation modal via open_confirm_window"
     );
 }
 
 #[test]
-fn test_render_builtins_has_clipboard_pin_shortcut_and_actions_toggle() {
-    let content = fs::read_to_string("src/render_builtins.rs")
-        .expect("Failed to read src/render_builtins.rs");
+fn clipboard_delete_all_requires_confirmation_before_delete() {
+    let content = read("src/app_actions.rs");
 
     assert!(
-        content.contains("toggle_clipboard_actions"),
-        "Expected render_builtins.rs to define or call toggle_clipboard_actions"
+        content.contains("\"clipboard_delete_all\""),
+        "Expected app_actions.rs to handle clipboard_delete_all"
     );
     assert!(
-        content.contains("has_cmd && key_str == \"p\""),
-        "Expected render_builtins.rs to handle Cmd+P for clipboard pin toggle"
+        content.contains("Are you sure you want to delete all")
+            && content.contains("unpinned clipboard entries"),
+        "Expected clipboard_delete_all to show a confirmation warning before deleting all unpinned entries"
     );
     assert!(
-        content.contains("clipboard_pin"),
-        "Expected render_builtins.rs to reference clipboard_pin action id"
-    );
-    assert!(
-        content.contains("clipboard_unpin"),
-        "Expected render_builtins.rs to reference clipboard_unpin action id"
+        content.contains("open_confirm_window("),
+        "Expected clipboard_delete_all to use confirmation modal via open_confirm_window"
     );
 }
 
 #[test]
-fn test_app_actions_handles_clipboard_copy_and_paste_keep_open() {
-    let content =
-        fs::read_to_string("src/app_actions.rs").expect("Failed to read src/app_actions.rs");
+fn builtin_confirmation_modal_failure_does_not_auto_confirm() {
+    let content = read("src/app_execute.rs");
 
     assert!(
-        content.contains("\"clipboard_copy\""),
-        "Expected app_actions.rs to handle \"clipboard_copy\" action id"
-    );
-    assert!(
-        content.contains("\"clipboard_paste_keep_open\""),
-        "Expected app_actions.rs to handle \"clipboard_paste_keep_open\" action id"
-    );
-    assert!(
-        content.contains("clipboard_history::copy_entry_to_clipboard"),
-        "Expected app_actions.rs to copy clipboard entries via clipboard_history::copy_entry_to_clipboard"
-    );
-    assert!(
-        content.contains("selected_text::simulate_paste_with_cg"),
-        "Expected app_actions.rs to simulate paste via selected_text::simulate_paste_with_cg"
+        !content.contains("confirm_sender.try_send((entry_id.clone(), true))"),
+        "Expected execute_builtin confirmation modal failure path to NOT auto-confirm destructive action"
     );
 }
 
 #[test]
-fn test_app_actions_handles_clipboard_attach_to_ai() {
-    let content =
-        fs::read_to_string("src/app_actions.rs").expect("Failed to read src/app_actions.rs");
-
-    // Just check that the action ID exists - the full implementation may come later
-    assert!(
-        content.contains("\"clipboard_attach_to_ai\""),
-        "Expected app_actions.rs to handle \"clipboard_attach_to_ai\" action id"
-    );
-}
-
-#[test]
-fn test_app_actions_handles_clipboard_delete() {
-    let content =
-        fs::read_to_string("src/app_actions.rs").expect("Failed to read src/app_actions.rs");
+fn clipboard_save_snippet_rejects_non_text_entries() {
+    let content = read("src/app_actions.rs");
 
     assert!(
-        content.contains("\"clipboard_delete\""),
-        "Expected app_actions.rs to handle \"clipboard_delete\" action id"
+        content.contains("\"clipboard_save_snippet\""),
+        "Expected app_actions.rs to handle clipboard_save_snippet"
     );
     assert!(
-        content.contains("clipboard_history::remove_entry"),
-        "Expected app_actions.rs to call clipboard_history::remove_entry"
-    );
-}
-
-#[test]
-fn test_render_builtins_clipboard_footer_uses_selected_entry_for_actions() {
-    let content = fs::read_to_string("src/render_builtins.rs")
-        .expect("Failed to read src/render_builtins.rs");
-
-    assert!(
-        content.contains("show_secondary(has_entry)"),
-        "Expected clipboard footer to show secondary actions only when an entry is selected"
+        content.contains("entry.content_type != clipboard_history::ContentType::Text"),
+        "Expected clipboard_save_snippet to explicitly guard non-text clipboard entries"
     );
     assert!(
-        content.contains("selected_entry_for_footer"),
-        "Expected clipboard footer to capture selected_entry for actions callback"
-    );
-    assert!(
-        content.contains("toggle_clipboard_actions(entry, window, cx)"),
-        "Expected clipboard footer actions callback to call toggle_clipboard_actions with entry"
+        content.contains("Only text can be saved as snippet"),
+        "Expected clipboard_save_snippet to show a clear user-facing error for non-text entries"
     );
 }

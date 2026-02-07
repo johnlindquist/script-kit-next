@@ -2614,6 +2614,25 @@ fn test_get_actions_file_path() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn test_get_actions_file_path_preserves_non_utf8_stem_bytes() {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::{OsStrExt, OsStringExt};
+    use std::path::PathBuf;
+
+    let source = PathBuf::from(OsString::from_vec(vec![0x66, 0x6f, 0x80, b'.', b'm', b'd']));
+    let actions_path = get_actions_file_path(&source);
+
+    let file_name = actions_path
+        .file_name()
+        .expect("actions path should include file name");
+    assert_eq!(
+        file_name.as_bytes(),
+        &[0x66, 0x6f, 0x80, b'.', b'a', b'c', b't', b'i', b'o', b'n', b's', b'.', b'm', b'd',]
+    );
+}
+
 #[test]
 fn test_merge_shared_actions_basic() {
     let mut scriptlet = Scriptlet::new(

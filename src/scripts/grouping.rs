@@ -366,10 +366,16 @@ pub fn get_grouped_results(
     // populate with default suggested items to help users discover features
     let default_suggested_indices: Vec<usize> =
         if suggested_indices.is_empty() && frecency_store.is_empty() && suggested_config.enabled {
+            let mut first_index_by_name: HashMap<&str, usize> =
+                HashMap::with_capacity(results.len());
+            for (idx, result) in results.iter().enumerate() {
+                first_index_by_name.entry(result.name()).or_insert(idx);
+            }
+
             // Find indices of default suggested items by name (preserve order from DEFAULT_SUGGESTED_ITEMS)
             DEFAULT_SUGGESTED_ITEMS
                 .iter()
-                .filter_map(|&default_name| results.iter().position(|r| r.name() == default_name))
+                .filter_map(|&default_name| first_index_by_name.get(default_name).copied())
                 .collect()
         } else {
             Vec::new()

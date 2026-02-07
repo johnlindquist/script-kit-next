@@ -11,10 +11,11 @@ use crate::components::prompt_footer::{PromptFooter, PromptFooterColors, PromptF
 use crate::components::TextInputState;
 use crate::designs::icon_variations::IconName;
 use gpui::{
-    div, img, prelude::*, px, rgb, rgba, svg, App, Context, ExternalPaths, FocusHandle, Focusable,
-    Hsla, KeyDownEvent, Render, RenderImage, ScrollHandle, Timer, Window,
+    div, img, list, prelude::*, px, rgb, rgba, svg, App, Context, ExternalPaths, FocusHandle,
+    Focusable, Hsla, KeyDownEvent, ListAlignment, ListSizingBehavior, ListState, Render,
+    RenderImage, ScrollWheelEvent, Timer, Window,
 };
-use gpui_component::theme::ActiveTheme;
+use gpui_component::{scroll::ScrollableElement, theme::ActiveTheme};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -177,6 +178,83 @@ pub(crate) fn resolve_setup_card_key(
     (current_index, SetupCardAction::None, false)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ChatInputKeyAction {
+    Escape,
+    StopStreaming,
+    ToggleActions,
+    ContinueInChat,
+    Submit,
+    InsertNewline,
+    CopyLastResponse,
+    ClearConversation,
+    Paste,
+    DelegateToInput,
+    Ignore,
+}
+
+pub(crate) fn resolve_chat_input_key_action(
+    key: &str,
+    cmd_pressed: bool,
+    shift_pressed: bool,
+) -> ChatInputKeyAction {
+    let key_lower = key.to_ascii_lowercase();
+
+    match key_lower.as_str() {
+        "escape" | "esc" => ChatInputKeyAction::Escape,
+        "." if cmd_pressed => ChatInputKeyAction::StopStreaming,
+        "k" if cmd_pressed => ChatInputKeyAction::ToggleActions,
+        "enter" | "return" if cmd_pressed => ChatInputKeyAction::ContinueInChat,
+        "enter" | "return" if shift_pressed => ChatInputKeyAction::InsertNewline,
+        "enter" | "return" => ChatInputKeyAction::Submit,
+        "c" if cmd_pressed => ChatInputKeyAction::CopyLastResponse,
+        "backspace" if cmd_pressed => ChatInputKeyAction::ClearConversation,
+        "v" if cmd_pressed => ChatInputKeyAction::Paste,
+        _ if cmd_pressed => ChatInputKeyAction::Ignore,
+        _ => ChatInputKeyAction::DelegateToInput,
+    }
+}
+
+fn should_ignore_stream_reveal_update(
+    active_stream_message_id: Option<&str>,
+    streaming_message_id: &str,
+) -> bool {
+    active_stream_message_id != Some(streaming_message_id)
+}
+
+const CHAT_SCROLL_BOTTOM_REJOIN_BUFFER_ITEMS: usize = 3;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ChatScrollDirection {
+    Up,
+    Down,
+    None,
+}
+
+pub(crate) fn next_chat_scroll_follow_state(
+    user_has_scrolled_up: bool,
+    direction: ChatScrollDirection,
+    scroll_top_item_ix: usize,
+    total_items: usize,
+) -> bool {
+    match direction {
+        // Upward intent means "stop following streaming output".
+        ChatScrollDirection::Up => true,
+        // For multi-row transcripts, allow scroll-down near the end to rejoin auto-follow.
+        // Single-row transcripts can be a single giant markdown item; item index alone is
+        // not enough to infer bottom there, so keep manual mode until explicit rejoin.
+        ChatScrollDirection::Down
+            if user_has_scrolled_up
+                && total_items > 1
+                && scroll_top_item_ix.saturating_add(CHAT_SCROLL_BOTTOM_REJOIN_BUFFER_ITEMS)
+                    >= total_items =>
+        {
+            false
+        }
+        ChatScrollDirection::Down | ChatScrollDirection::None => user_has_scrolled_up,
+    }
+}
+
 /// A conversation turn: user prompt + optional AI response
 #[derive(Clone, Debug)]
 pub struct ConversationTurn {
@@ -215,6 +293,68 @@ fn default_conversation_starters() -> Vec<ConversationStarter> {
         ConversationStarter::new("tests", "Write tests", "Write tests for: "),
         ConversationStarter::new("improve", "Improve code", "Improve this code: "),
     ]
+}
+
+fn build_conversation_turns(
+    messages: &[ChatPromptMessage],
+    image_render_cache: &HashMap<String, Arc<RenderImage>>,
+) -> Vec<ConversationTurn> {
+    let mut turns = Vec::new();
+    let mut i = 0;
+
+    while i < messages.len() {
+        let msg = &messages[i];
+
+        if msg.is_user() {
+            // Start a new turn with this user message
+            let user_prompt = msg.get_content().to_string();
+            let user_image = msg
+                .id
+                .as_ref()
+                .and_then(|id| image_render_cache.get(id).cloned());
+            let mut turn = ConversationTurn {
+                user_prompt,
+                assistant_response: None,
+                model: None,
+                streaming: false,
+                error: None,
+                message_id: msg.id.clone(),
+                user_image,
+            };
+
+            // Look for the next assistant response
+            if i + 1 < messages.len() {
+                let next_msg = &messages[i + 1];
+                if !next_msg.is_user() {
+                    turn.assistant_response = Some(next_msg.get_content().to_string());
+                    turn.model = next_msg.model.clone();
+                    turn.streaming = next_msg.streaming;
+                    turn.error = next_msg.error.clone();
+                    turn.message_id = next_msg.id.clone().or(turn.message_id);
+                    i += 1;
+                }
+            }
+
+            turns.push(turn);
+        } else {
+            // Standalone assistant message (no user prompt before it)
+            // This happens for system-initiated messages
+            let turn = ConversationTurn {
+                user_prompt: String::new(),
+                assistant_response: Some(msg.get_content().to_string()),
+                model: msg.model.clone(),
+                streaming: msg.streaming,
+                error: msg.error.clone(),
+                message_id: msg.id.clone(),
+                user_image: None,
+            };
+            turns.push(turn);
+        }
+
+        i += 1;
+    }
+
+    turns
 }
 
 /// Find the next reveal boundary after `offset` in `text`.
@@ -356,8 +496,10 @@ pub struct ChatPrompt {
     pub on_continue: Option<ChatContinueCallback>,
     pub on_retry: Option<ChatRetryCallback>,
     pub theme: Arc<theme::Theme>,
-    pub scroll_handle: ScrollHandle,
+    pub turns_list_state: ListState,
     prompt_colors: theme::PromptColors,
+    conversation_turns_cache: Arc<Vec<ConversationTurn>>,
+    conversation_turns_dirty: bool,
     streaming_message_id: Option<String>,
     last_copied_response: Option<String>,
     // Actions menu state
@@ -374,10 +516,15 @@ pub struct ChatPrompt {
     // Word-buffered reveal: full accumulated content from provider and reveal watermark
     builtin_accumulated_content: String,
     builtin_reveal_offset: usize,
+    // When true, streaming updates stop forcing the list to the bottom.
+    // Reset on explicit "jump to latest" and new submissions.
+    user_has_scrolled_up: bool,
     // Auto-submit flag: when true, submit the input on first render (for Tab from main menu)
     pending_submit: bool,
     // Auto-respond flag: when true, respond to initial messages on first render (for scriptlets)
     needs_initial_response: bool,
+    // One-shot focus state so chat input auto-focuses when opened without stealing focus later.
+    pending_auto_focus: bool,
     // Cursor blink state for input field
     cursor_visible: bool,
     cursor_blink_started: bool,
@@ -435,8 +582,10 @@ impl ChatPrompt {
             on_continue: None,
             on_retry: None,
             theme,
-            scroll_handle: ScrollHandle::new(),
+            turns_list_state: ListState::new(0, ListAlignment::Bottom, px(1024.0)),
             prompt_colors,
+            conversation_turns_cache: Arc::new(Vec::new()),
+            conversation_turns_dirty: true,
             streaming_message_id: None,
             last_copied_response: None,
             actions_menu_open: false,
@@ -450,8 +599,10 @@ impl ChatPrompt {
             builtin_is_streaming: false,
             builtin_accumulated_content: String::new(),
             builtin_reveal_offset: 0,
+            user_has_scrolled_up: false,
             pending_submit: false,
             needs_initial_response: false,
+            pending_auto_focus: true,
             cursor_visible: true,
             cursor_blink_started: false,
             loading_providers: false,
@@ -507,6 +658,41 @@ impl ChatPrompt {
     /// Reset cursor to visible (called on user input to keep cursor visible while typing)
     fn reset_cursor_blink(&mut self) {
         self.cursor_visible = true;
+    }
+
+    /// Normalize pasted text to Unix newlines so multi-line chat input is preserved.
+    fn normalize_pasted_text(text: &str) -> String {
+        text.replace("\r\n", "\n").replace('\r', "\n")
+    }
+
+    /// Render helper for input text: show newline intent in a single-line visual field.
+    fn input_display_text(text: &str) -> String {
+        let mut rendered = String::with_capacity(text.len());
+        for ch in text.chars() {
+            if ch == '\n' {
+                rendered.push('↵');
+                rendered.push(' ');
+            } else {
+                rendered.push(ch);
+            }
+        }
+        rendered
+    }
+
+    /// Paste text from clipboard while preserving line breaks.
+    fn paste_text_from_clipboard(&mut self, cx: &mut Context<Self>) -> bool {
+        if let Ok(mut clipboard) = arboard::Clipboard::new() {
+            if let Ok(text) = clipboard.get_text() {
+                let normalized = Self::normalize_pasted_text(&text);
+                if !normalized.is_empty() {
+                    self.input.insert_str(&normalized);
+                    self.reset_cursor_blink();
+                    cx.notify();
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     /// Set custom models for the chat
@@ -740,13 +926,55 @@ impl ChatPrompt {
         self.provider_registry.is_some()
     }
 
+    fn mark_conversation_turns_dirty(&mut self) {
+        self.conversation_turns_dirty = true;
+    }
+
+    fn sync_turns_list_state(&mut self) {
+        let item_count = self.conversation_turns_cache.len();
+        let old_count = self.turns_list_state.item_count();
+        if old_count != item_count {
+            self.turns_list_state.splice(0..old_count, item_count);
+        }
+    }
+
+    fn ensure_conversation_turns_cache(&mut self) {
+        if !self.conversation_turns_dirty {
+            return;
+        }
+        self.conversation_turns_cache = Arc::new(build_conversation_turns(
+            &self.messages,
+            &self.image_render_cache,
+        ));
+        self.conversation_turns_dirty = false;
+        self.sync_turns_list_state();
+    }
+
+    fn scroll_turns_to_bottom(&mut self) {
+        self.ensure_conversation_turns_cache();
+        let item_count = self.conversation_turns_cache.len();
+        if item_count > 0 && !self.user_has_scrolled_up {
+            self.turns_list_state.scroll_to_reveal_item(item_count - 1);
+        }
+    }
+
+    fn force_scroll_turns_to_bottom(&mut self) {
+        self.user_has_scrolled_up = false;
+        self.ensure_conversation_turns_cache();
+        let item_count = self.conversation_turns_cache.len();
+        if item_count > 0 {
+            self.turns_list_state.scroll_to_reveal_item(item_count - 1);
+        }
+    }
+
     pub fn add_message(&mut self, message: ChatPromptMessage, cx: &mut Context<Self>) {
         logging::log(
             "CHAT",
             &format!("Adding message: {:?}", message.get_position()),
         );
         self.messages.push(message);
-        self.scroll_handle.scroll_to_bottom();
+        self.mark_conversation_turns_dirty();
+        self.force_scroll_turns_to_bottom();
         cx.notify();
     }
 
@@ -776,7 +1004,8 @@ impl ChatPrompt {
         };
         self.messages.push(message);
         self.streaming_message_id = Some(message_id);
-        self.scroll_handle.scroll_to_bottom();
+        self.mark_conversation_turns_dirty();
+        self.force_scroll_turns_to_bottom();
         cx.notify();
     }
 
@@ -789,7 +1018,8 @@ impl ChatPrompt {
                 .find(|m| m.id.as_deref() == Some(message_id))
             {
                 msg.append_content(chunk);
-                self.scroll_handle.scroll_to_bottom();
+                self.mark_conversation_turns_dirty();
+                self.scroll_turns_to_bottom();
                 cx.notify();
             }
         }
@@ -807,12 +1037,17 @@ impl ChatPrompt {
         if self.streaming_message_id.as_deref() == Some(message_id) {
             self.streaming_message_id = None;
         }
+        self.mark_conversation_turns_dirty();
+        self.ensure_conversation_turns_cache();
         cx.notify();
     }
 
     pub fn clear_messages(&mut self, cx: &mut Context<Self>) {
         self.messages.clear();
         self.streaming_message_id = None;
+        self.user_has_scrolled_up = false;
+        self.mark_conversation_turns_dirty();
+        self.ensure_conversation_turns_cache();
         cx.notify();
     }
 
@@ -844,6 +1079,8 @@ impl ChatPrompt {
         self.builtin_streaming_content.clear();
         self.builtin_accumulated_content.clear();
         self.builtin_reveal_offset = 0;
+        self.mark_conversation_turns_dirty();
+        self.ensure_conversation_turns_cache();
 
         cx.notify();
     }
@@ -962,6 +1199,8 @@ impl ChatPrompt {
         if self.streaming_message_id.as_deref() == Some(message_id) {
             self.streaming_message_id = None;
         }
+        self.mark_conversation_turns_dirty();
+        self.ensure_conversation_turns_cache();
         cx.notify();
     }
 
@@ -975,6 +1214,8 @@ impl ChatPrompt {
         {
             msg.error = None;
         }
+        self.mark_conversation_turns_dirty();
+        self.ensure_conversation_turns_cache();
         cx.notify();
     }
 
@@ -1192,7 +1433,8 @@ impl ChatPrompt {
                 .insert(user_message_id.clone(), render);
         }
 
-        self.scroll_handle.scroll_to_bottom();
+        self.mark_conversation_turns_dirty();
+        self.force_scroll_turns_to_bottom();
         cx.notify();
 
         // Get the selected model and provider
@@ -1204,6 +1446,8 @@ impl ChatPrompt {
                     "No AI model configured. Please set up an API key.",
                 );
                 self.messages.push(error_msg);
+                self.mark_conversation_turns_dirty();
+                self.ensure_conversation_turns_cache();
                 cx.notify();
                 return;
             }
@@ -1226,6 +1470,8 @@ impl ChatPrompt {
                     model_id
                 ));
                 self.messages.push(error_msg);
+                self.mark_conversation_turns_dirty();
+                self.ensure_conversation_turns_cache();
                 cx.notify();
                 return;
             }
@@ -1272,6 +1518,8 @@ impl ChatPrompt {
         let assistant_msg_id = assistant_message.id.clone().unwrap_or_default();
         self.messages.push(assistant_message);
         self.streaming_message_id = Some(assistant_msg_id.clone());
+        self.mark_conversation_turns_dirty();
+        self.force_scroll_turns_to_bottom();
         cx.notify();
 
         logging::log(
@@ -1323,6 +1571,8 @@ impl ChatPrompt {
                     "No AI model configured. Please set up an API key.",
                 );
                 self.messages.push(error_msg);
+                self.mark_conversation_turns_dirty();
+                self.ensure_conversation_turns_cache();
                 cx.notify();
                 return;
             }
@@ -1345,6 +1595,8 @@ impl ChatPrompt {
                     model_id
                 ));
                 self.messages.push(error_msg);
+                self.mark_conversation_turns_dirty();
+                self.ensure_conversation_turns_cache();
                 cx.notify();
                 return;
             }
@@ -1374,6 +1626,8 @@ impl ChatPrompt {
         let assistant_msg_id = assistant_message.id.clone().unwrap_or_default();
         self.messages.push(assistant_message);
         self.streaming_message_id = Some(assistant_msg_id.clone());
+        self.mark_conversation_turns_dirty();
+        self.force_scroll_turns_to_bottom();
         cx.notify();
 
         logging::log(
@@ -1479,6 +1733,17 @@ impl ChatPrompt {
                 let should_break = cx
                     .update(|cx| {
                         this.update(cx, |chat, cx| {
+                            if should_ignore_stream_reveal_update(
+                                chat.streaming_message_id.as_deref(),
+                                &msg_id,
+                            ) {
+                                logging::log(
+                                    "CHAT",
+                                    "Stopping stale stream reveal loop after stream handoff/stop",
+                                );
+                                return true;
+                            }
+
                             // Error path
                             if let Some(err) = &error {
                                 logging::log("CHAT", &format!("Built-in AI error: {}", err));
@@ -1492,6 +1757,8 @@ impl ChatPrompt {
                                     msg.error = Some(err.clone());
                                     msg.streaming = false;
                                 }
+                                chat.mark_conversation_turns_dirty();
+                                chat.ensure_conversation_turns_cache();
                                 cx.notify();
                                 return true; // break
                             }
@@ -1513,7 +1780,8 @@ impl ChatPrompt {
                                 }
                                 chat.builtin_streaming_content = full_text.clone();
                                 chat.builtin_accumulated_content = full_text.clone();
-                                chat.scroll_handle.scroll_to_bottom();
+                                chat.mark_conversation_turns_dirty();
+                                chat.scroll_turns_to_bottom();
                                 cx.notify();
                             } else if let Some(new_offset) =
                                 next_reveal_boundary(&full_text, current_offset)
@@ -1531,7 +1799,8 @@ impl ChatPrompt {
                                     }
                                     chat.builtin_streaming_content = revealed.to_string();
                                     chat.builtin_accumulated_content = full_text.clone();
-                                    chat.scroll_handle.scroll_to_bottom();
+                                    chat.mark_conversation_turns_dirty();
+                                    chat.scroll_turns_to_bottom();
                                     cx.notify();
                                 }
                             }
@@ -1551,6 +1820,8 @@ impl ChatPrompt {
                                 {
                                     msg.streaming = false;
                                 }
+                                chat.mark_conversation_turns_dirty();
+                                chat.ensure_conversation_turns_cache();
                                 cx.notify();
                                 return true; // break
                             }
@@ -1998,66 +2269,6 @@ impl ChatPrompt {
         menu
     }
 
-    /// Group messages into conversation turns (user + assistant pairs)
-    fn get_conversation_turns(&self) -> Vec<ConversationTurn> {
-        let mut turns = Vec::new();
-        let mut i = 0;
-
-        while i < self.messages.len() {
-            let msg = &self.messages[i];
-
-            if msg.is_user() {
-                // Start a new turn with this user message
-                let user_prompt = msg.get_content().to_string();
-                let user_image = msg
-                    .id
-                    .as_ref()
-                    .and_then(|id| self.image_render_cache.get(id).cloned());
-                let mut turn = ConversationTurn {
-                    user_prompt,
-                    assistant_response: None,
-                    model: None,
-                    streaming: false,
-                    error: None,
-                    message_id: msg.id.clone(),
-                    user_image,
-                };
-
-                // Look for the next assistant response
-                if i + 1 < self.messages.len() {
-                    let next_msg = &self.messages[i + 1];
-                    if !next_msg.is_user() {
-                        turn.assistant_response = Some(next_msg.get_content().to_string());
-                        turn.model = next_msg.model.clone();
-                        turn.streaming = next_msg.streaming;
-                        turn.error = next_msg.error.clone();
-                        turn.message_id = next_msg.id.clone().or(turn.message_id);
-                        i += 1;
-                    }
-                }
-
-                turns.push(turn);
-            } else {
-                // Standalone assistant message (no user prompt before it)
-                // This happens for system-initiated messages
-                let turn = ConversationTurn {
-                    user_prompt: String::new(),
-                    assistant_response: Some(msg.get_content().to_string()),
-                    model: msg.model.clone(),
-                    streaming: msg.streaming,
-                    error: msg.error.clone(),
-                    message_id: msg.id.clone(),
-                    user_image: None,
-                };
-                turns.push(turn);
-            }
-
-            i += 1;
-        }
-
-        turns
-    }
-
     /// Render a conversation turn (user prompt + AI response bundled)
     fn render_turn(
         &self,
@@ -2247,8 +2458,8 @@ impl ChatPrompt {
 
     /// Copy the assistant response from a specific turn
     fn copy_turn_response(&mut self, turn_index: usize, cx: &mut Context<Self>) {
-        let turns = self.get_conversation_turns();
-        if let Some(turn) = turns.get(turn_index) {
+        self.ensure_conversation_turns_cache();
+        if let Some(turn) = self.conversation_turns_cache.get(turn_index) {
             if let Some(ref response) = turn.assistant_response {
                 let content = response.clone();
                 logging::log(
@@ -2286,6 +2497,7 @@ impl ChatPrompt {
         let muted_bg_hover = rgba((colors.code_bg << 8) | 0x90);
         let ring_color = rgba((colors.accent_color << 8) | 0x80);
         let kbd_bg = rgba((colors.code_bg << 8) | 0x50);
+        let accent_text = rgb(self.theme.colors.text.on_accent);
 
         let on_configure = self.on_configure.clone();
         let on_claude_code = self.on_claude_code.clone();
@@ -2384,13 +2596,13 @@ impl ChatPrompt {
                                 svg()
                                     .external_path(IconName::Settings.external_path())
                                     .size(px(16.))
-                                    .text_color(cx.theme().accent_foreground),
+                                    .text_color(accent_text),
                             )
                             .child(
                                 div()
                                     .text_sm()
                                     .font_weight(gpui::FontWeight::MEDIUM)
-                                    .text_color(cx.theme().accent_foreground)
+                                    .text_color(accent_text)
                                     .child("Configure Vercel AI Gateway"),
                             ),
                     )
@@ -2503,19 +2715,26 @@ impl ChatPrompt {
             )
     }
 
-    /// Render the input field at the top
-    fn render_input(&self, _cx: &Context<Self>) -> impl IntoElement {
+    /// Render the input field at the top.
+    fn render_input(&self, is_focused: bool) -> impl IntoElement {
         let colors = &self.prompt_colors;
+        let theme_colors = &self.theme.colors;
         let text = self.input.text();
         let cursor_pos = self.input.cursor();
         let chars: Vec<char> = text.chars().collect();
-        let cursor_visible = self.cursor_visible;
+        let cursor_visible = self.cursor_visible && is_focused;
 
-        let mut input_content = div().flex().flex_row().items_center();
+        let mut input_content = div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .w_full()
+            .text_size(px(14.0));
 
         // Text before cursor
         if cursor_pos > 0 {
-            let before: String = chars[..cursor_pos].iter().collect();
+            let before_raw: String = chars[..cursor_pos].iter().collect();
+            let before = Self::input_display_text(&before_raw);
             input_content =
                 input_content.child(div().text_color(rgb(colors.text_primary)).child(before));
         }
@@ -2529,7 +2748,8 @@ impl ChatPrompt {
 
         // Text after cursor
         if cursor_pos < chars.len() {
-            let after: String = chars[cursor_pos..].iter().collect();
+            let after_raw: String = chars[cursor_pos..].iter().collect();
+            let after = Self::input_display_text(&after_raw);
             input_content =
                 input_content.child(div().text_color(rgb(colors.text_primary)).child(after));
         }
@@ -2551,7 +2771,29 @@ impl ChatPrompt {
             );
         }
 
-        input_content
+        let input_bg_alpha = if is_focused { 0xD8 } else { 0xA8 };
+        let input_border = if is_focused {
+            theme_colors.accent.selected
+        } else {
+            theme_colors.ui.border
+        };
+        let input_border_alpha = if is_focused { 0xA0 } else { 0x60 };
+
+        div()
+            .id("chat-input-field")
+            .w_full()
+            .min_h(px(28.0))
+            .px(px(10.0))
+            .py(px(7.0))
+            .flex()
+            .items_center()
+            .rounded(px(8.0))
+            .bg(rgba(
+                (theme_colors.background.search_box << 8) | input_bg_alpha as u32,
+            ))
+            .border_1()
+            .border_color(rgba((input_border << 8) | input_border_alpha as u32))
+            .child(input_content)
     }
 
     /// Render the header with back button and title
@@ -2603,7 +2845,8 @@ impl ChatPrompt {
             .secondary_shortcut("⌘K")
             .show_logo(true)
             .show_secondary(true)
-            .helper_text(model_text); // Show model name next to logo
+            .helper_text(model_text) // Show model name next to logo
+            .info_label("Shift+Enter newline");
 
         // Note: Click handlers are not wired up here because PromptFooter uses
         // RenderOnce with static callbacks. The keyboard shortcuts (⌘↵ and ⌘K)
@@ -2620,6 +2863,11 @@ impl Focusable for ChatPrompt {
 
 impl Render for ChatPrompt {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.pending_auto_focus {
+            self.pending_auto_focus = false;
+            self.focus_handle.focus(window, cx);
+        }
+
         // In setup mode, ensure focus handle is focused so keyboard events route here
         if self.needs_setup {
             self.focus_handle.focus(window, cx);
@@ -2661,6 +2909,7 @@ impl Render for ChatPrompt {
             self.handle_initial_response(cx);
         }
 
+        self.ensure_conversation_turns_cache();
         let colors = &self.prompt_colors;
 
         let needs_setup = self.needs_setup;
@@ -2671,7 +2920,7 @@ impl Render for ChatPrompt {
             let key = event.keystroke.key.as_str();
             let key_lower = event.keystroke.key.to_ascii_lowercase();
             let key_char = event.keystroke.key_char.as_deref();
-            let has_cmd = event.keystroke.modifiers.platform; // ⌘ on macOS
+            let modifiers = &event.keystroke.modifiers;
 
             // Setup mode: keyboard navigation for Configure / Claude Code buttons
             if needs_setup {
@@ -2713,71 +2962,56 @@ impl Render for ChatPrompt {
             // Note: Actions menu keyboard navigation is handled by ActionsDialog window
             // We just need to handle ⌘K to open it via callback
 
-            match key_lower.as_str() {
-                // Escape - stop streaming if active, otherwise close chat
-                "escape" | "esc" => {
+            match resolve_chat_input_key_action(key, modifiers.platform, modifiers.shift) {
+                ChatInputKeyAction::Escape => {
+                    // Escape - stop streaming if active, otherwise close chat
                     if this.is_streaming() {
                         this.stop_streaming(cx);
                     } else {
                         this.handle_escape(cx);
                     }
                 }
-                // ⌘+. - Stop streaming (universal stop shortcut)
-                "." if has_cmd => {
+                ChatInputKeyAction::StopStreaming => {
                     if this.is_streaming() {
                         this.stop_streaming(cx);
                     }
                 }
-                // ⌘+K - Toggle actions menu
-                "k" if has_cmd => this.toggle_actions_menu(cx),
-                // ⌘+Enter - Continue in Chat
-                "enter" | "return" if has_cmd => this.handle_continue_in_chat(cx),
-                // Enter - Submit message
-                "enter" | "return" if !event.keystroke.modifiers.shift => this.handle_submit(cx),
-                // ⌘+C - Copy last response
-                "c" if has_cmd => this.handle_copy_last_response(cx),
-                // ⌘+Backspace - Clear conversation
-                "backspace" if has_cmd => this.handle_clear(cx),
-                // ⌘+V - Paste (image or text)
-                "v" if has_cmd => {
-                    if !this.handle_paste_for_image(cx) {
-                        // Fall back to text paste
-                        if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                            if let Ok(text) = clipboard.get_text() {
-                                let single_line: String =
-                                    text.chars().filter(|c| *c != '\n' && *c != '\r').collect();
-                                this.input.insert_str(&single_line);
-                                this.reset_cursor_blink();
-                                cx.notify();
-                            }
-                        }
-                    }
-                }
-                // Regular backspace
-                "backspace" => {
-                    this.input.backspace();
+                ChatInputKeyAction::ToggleActions => this.toggle_actions_menu(cx),
+                ChatInputKeyAction::ContinueInChat => this.handle_continue_in_chat(cx),
+                ChatInputKeyAction::Submit => this.handle_submit(cx),
+                ChatInputKeyAction::InsertNewline => {
+                    this.input.insert_char('\n');
                     this.reset_cursor_blink();
                     cx.notify();
                 }
-                _ => {
-                    // Ignore command shortcuts (don't insert characters)
-                    if has_cmd {
-                        return;
+                ChatInputKeyAction::CopyLastResponse => this.handle_copy_last_response(cx),
+                ChatInputKeyAction::ClearConversation => this.handle_clear(cx),
+                ChatInputKeyAction::Paste => {
+                    if !this.handle_paste_for_image(cx) {
+                        this.paste_text_from_clipboard(cx);
                     }
-                    if let Some(ch_str) = key_char {
-                        for ch in ch_str.chars() {
-                            if ch.is_ascii_graphic() || ch == ' ' {
-                                this.input.insert_char(ch);
-                            }
-                        }
+                }
+                ChatInputKeyAction::DelegateToInput => {
+                    let handled = this.input.handle_key(
+                        key_lower.as_str(),
+                        key_char,
+                        modifiers.platform, // Cmd key on macOS
+                        modifiers.alt,
+                        modifiers.shift,
+                        cx,
+                    );
+
+                    if handled {
                         this.reset_cursor_blink();
                         cx.notify();
                     }
                 }
+                ChatInputKeyAction::Ignore => {}
             }
         });
 
         let container_bg: Option<Hsla> = get_vibrancy_background(&self.theme).map(Hsla::from);
+        let input_is_focused = self.focus_handle.is_focused(window);
 
         // If needs_setup, render setup card instead of normal chat
         if self.needs_setup {
@@ -2815,9 +3049,22 @@ impl Render for ChatPrompt {
                 .child(
                     div().flex().flex_1().items_center().justify_center().child(
                         div()
-                            .text_sm()
-                            .text_color(rgb(colors.text_secondary))
-                            .child("Connecting to AI..."),
+                            .flex()
+                            .flex_col()
+                            .items_center()
+                            .gap(px(4.0))
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(rgb(colors.text_secondary))
+                                    .child("Connecting to AI..."),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(rgb(colors.text_tertiary))
+                                    .child("Loading providers and models"),
+                            ),
                     ),
                 )
                 .into_any_element();
@@ -2828,7 +3075,10 @@ impl Render for ChatPrompt {
         let input_area = div()
             .w_full()
             .px(px(12.0))
-            .py(px(10.0))
+            .py(px(8.0))
+            .flex()
+            .flex_col()
+            .gap(px(8.0))
             .border_b_1()
             .border_color(rgba((colors.quote_border << 8) | 0x40))
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _window, cx| {
@@ -2837,26 +3087,112 @@ impl Render for ChatPrompt {
             .when(has_pending_image, |d| {
                 d.child(self.render_pending_image_preview(cx))
             })
-            .child(self.render_input(cx));
+            .child(self.render_input(input_is_focused));
 
-        // Message list (conversation turns)
-        let turns = self.get_conversation_turns();
-        let mut message_list = div()
-            .flex()
-            .flex_col()
-            .gap(px(8.0))
-            .w_full()
+        // Message list (conversation turns) - virtualized for large chats
+        let has_turns = !self.conversation_turns_cache.is_empty();
+        let messages_content = if has_turns {
+            let entity = cx.entity();
+            let turns_snapshot = self.conversation_turns_cache.clone();
+            let total_turns = turns_snapshot.len();
+            let show_scroll_to_latest = self.user_has_scrolled_up;
+            let turns_list = list(self.turns_list_state.clone(), move |ix, _window, cx| {
+                entity.update(cx, |this, cx| {
+                    if let Some(turn) = turns_snapshot.get(ix) {
+                        div()
+                            .w_full()
+                            .pb(px(8.0))
+                            .child(this.render_turn(turn, ix, cx))
+                            .into_any_element()
+                    } else {
+                        div().w_full().into_any_element()
+                    }
+                })
+            })
+            .with_sizing_behavior(ListSizingBehavior::Infer)
+            .size_full()
             .px(px(12.0))
             .py(px(12.0));
 
-        for (i, turn) in turns.iter().enumerate() {
-            message_list = message_list.child(self.render_turn(turn, i, cx));
-        }
+            div()
+                .id("chat-messages")
+                .relative()
+                .flex_1()
+                .min_h(px(0.))
+                .on_scroll_wheel(
+                    cx.listener(move |this, event: &ScrollWheelEvent, _window, cx| {
+                        let delta_y = event.delta.pixel_delta(px(1.0)).y;
+                        let direction = if delta_y > px(0.) {
+                            ChatScrollDirection::Up
+                        } else if delta_y < px(0.) {
+                            ChatScrollDirection::Down
+                        } else {
+                            ChatScrollDirection::None
+                        };
 
-        // Empty state - show conversation starters
-        if turns.is_empty() {
-            message_list = message_list.child(self.render_conversation_starters(cx));
-        }
+                        let scroll_top_item_ix = this.turns_list_state.logical_scroll_top().item_ix;
+                        let next_state = next_chat_scroll_follow_state(
+                            this.user_has_scrolled_up,
+                            direction,
+                            scroll_top_item_ix,
+                            total_turns,
+                        );
+
+                        if next_state != this.user_has_scrolled_up {
+                            this.user_has_scrolled_up = next_state;
+                            cx.notify();
+                        }
+                    }),
+                )
+                .child(turns_list)
+                .vertical_scrollbar(&self.turns_list_state)
+                .when(show_scroll_to_latest, |el| {
+                    el.child(
+                        div()
+                            .id("chat-scroll-to-latest-pill")
+                            .absolute()
+                            .bottom(px(12.0))
+                            .left_0()
+                            .right_0()
+                            .flex()
+                            .justify_center()
+                            .child(
+                                div()
+                                    .id("chat-scroll-to-latest-button")
+                                    .px(px(10.0))
+                                    .py(px(5.0))
+                                    .rounded_full()
+                                    .bg(rgba((colors.quote_border << 8) | 0xCC))
+                                    .text_color(rgb(colors.text_primary))
+                                    .text_xs()
+                                    .cursor_pointer()
+                                    .hover(|d| d.bg(rgba((colors.quote_border << 8) | 0xFF)))
+                                    .on_click(cx.listener(|this, _event, _window, cx| {
+                                        this.force_scroll_turns_to_bottom();
+                                        cx.notify();
+                                    }))
+                                    .child("Jump to latest"),
+                            ),
+                    )
+                })
+                .into_any_element()
+        } else {
+            div()
+                .id("chat-messages")
+                .flex_1()
+                .min_h(px(0.))
+                .overflow_y_scroll()
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .w_full()
+                        .px(px(12.0))
+                        .py(px(12.0))
+                        .child(self.render_conversation_starters(cx)),
+                )
+                .into_any_element()
+        };
 
         div()
             .id("chat-prompt")
@@ -2874,15 +3210,7 @@ impl Render for ChatPrompt {
             // Input area
             .child(input_area)
             // Scrollable message area
-            .child(
-                div()
-                    .id("chat-messages")
-                    .flex_1()
-                    .min_h(px(0.))
-                    .overflow_y_scroll()
-                    .track_scroll(&self.scroll_handle)
-                    .child(message_list),
-            )
+            .child(messages_content)
             // Footer with model selector, Continue in Chat, and Actions
             .child(self.render_footer(cx))
             // Note: Actions menu is now handled by parent via on_show_actions callback
@@ -2893,7 +3221,15 @@ impl Render for ChatPrompt {
 
 #[cfg(test)]
 mod tests {
-    use super::{next_reveal_boundary, resolve_setup_card_key, SetupCardAction};
+    use std::collections::HashMap;
+
+    use crate::protocol::ChatPromptMessage;
+
+    use super::{
+        next_chat_scroll_follow_state, next_reveal_boundary, resolve_chat_input_key_action,
+        resolve_setup_card_key, should_ignore_stream_reveal_update, ChatInputKeyAction,
+        ChatScrollDirection, SetupCardAction,
+    };
 
     #[test]
     fn resolve_setup_card_key_cycles_focus_for_tab_and_arrows() {
@@ -2957,6 +3293,82 @@ mod tests {
         assert_eq!(
             resolve_setup_card_key("x", false, 1),
             (1, SetupCardAction::None, false)
+        );
+    }
+
+    #[test]
+    fn resolve_chat_input_key_action_routes_enter_variants() {
+        assert_eq!(
+            resolve_chat_input_key_action("enter", false, false),
+            ChatInputKeyAction::Submit
+        );
+        assert_eq!(
+            resolve_chat_input_key_action("return", false, true),
+            ChatInputKeyAction::InsertNewline
+        );
+        assert_eq!(
+            resolve_chat_input_key_action("enter", true, false),
+            ChatInputKeyAction::ContinueInChat
+        );
+        assert_eq!(
+            resolve_chat_input_key_action("enter", true, true),
+            ChatInputKeyAction::ContinueInChat
+        );
+    }
+
+    #[test]
+    fn resolve_chat_input_key_action_routes_shortcuts_and_fallback() {
+        assert_eq!(
+            resolve_chat_input_key_action("escape", false, false),
+            ChatInputKeyAction::Escape
+        );
+        assert_eq!(
+            resolve_chat_input_key_action(".", true, false),
+            ChatInputKeyAction::StopStreaming
+        );
+        assert_eq!(
+            resolve_chat_input_key_action("k", true, false),
+            ChatInputKeyAction::ToggleActions
+        );
+        assert_eq!(
+            resolve_chat_input_key_action("c", true, false),
+            ChatInputKeyAction::CopyLastResponse
+        );
+        assert_eq!(
+            resolve_chat_input_key_action("backspace", true, false),
+            ChatInputKeyAction::ClearConversation
+        );
+        assert_eq!(
+            resolve_chat_input_key_action("v", true, false),
+            ChatInputKeyAction::Paste
+        );
+        assert_eq!(
+            resolve_chat_input_key_action("backspace", false, false),
+            ChatInputKeyAction::DelegateToInput
+        );
+        assert_eq!(
+            resolve_chat_input_key_action("x", true, false),
+            ChatInputKeyAction::Ignore
+        );
+        assert_eq!(
+            resolve_chat_input_key_action("a", false, false),
+            ChatInputKeyAction::DelegateToInput
+        );
+    }
+
+    #[test]
+    fn should_ignore_stream_reveal_update_when_stream_stopped_or_replaced() {
+        assert!(
+            should_ignore_stream_reveal_update(None, "stream-a"),
+            "Stopped streams should ignore further reveal updates"
+        );
+        assert!(
+            should_ignore_stream_reveal_update(Some("stream-b"), "stream-a"),
+            "Replaced streams should ignore stale reveal updates"
+        );
+        assert!(
+            !should_ignore_stream_reveal_update(Some("stream-a"), "stream-a"),
+            "Active stream should continue receiving reveal updates"
         );
     }
 
@@ -3073,6 +3485,77 @@ mod tests {
             "Final offset {} exceeds content length {}",
             offset,
             content.len()
+        );
+    }
+
+    #[test]
+    fn build_conversation_turns_pairs_user_assistant_messages() {
+        let messages = vec![
+            ChatPromptMessage::user("First user").with_id("u1"),
+            ChatPromptMessage::assistant("First assistant").with_id("a1"),
+            ChatPromptMessage::assistant("Standalone assistant").with_id("a2"),
+            ChatPromptMessage::user("Second user").with_id("u2"),
+        ];
+
+        let turns = super::build_conversation_turns(&messages, &HashMap::new());
+        assert_eq!(turns.len(), 3);
+
+        assert_eq!(turns[0].user_prompt, "First user");
+        assert_eq!(
+            turns[0].assistant_response.as_deref(),
+            Some("First assistant")
+        );
+
+        assert!(turns[1].user_prompt.is_empty());
+        assert_eq!(
+            turns[1].assistant_response.as_deref(),
+            Some("Standalone assistant")
+        );
+
+        assert_eq!(turns[2].user_prompt, "Second user");
+        assert!(turns[2].assistant_response.is_none());
+    }
+
+    #[test]
+    fn chat_scroll_follow_state_disables_follow_on_upward_scroll() {
+        assert!(
+            next_chat_scroll_follow_state(false, ChatScrollDirection::Up, 0, 10),
+            "Scrolling upward should mark the user as manually scrolled up"
+        );
+    }
+
+    #[test]
+    fn chat_scroll_follow_state_keeps_manual_mode_for_single_turn_when_scrolling_down() {
+        assert!(
+            next_chat_scroll_follow_state(true, ChatScrollDirection::Down, 0, 1),
+            "Single large turns should stay in manual mode to avoid false bottom detection"
+        );
+    }
+
+    #[test]
+    fn chat_scroll_follow_state_reenables_follow_near_bottom_for_multi_turn_lists() {
+        assert!(
+            !next_chat_scroll_follow_state(true, ChatScrollDirection::Down, 8, 10),
+            "Scrolling down near the bottom should re-enable auto-follow"
+        );
+    }
+
+    #[test]
+    fn chat_scroll_follow_state_keeps_manual_mode_when_not_near_bottom() {
+        assert!(
+            next_chat_scroll_follow_state(true, ChatScrollDirection::Down, 6, 10),
+            "Scrolling down far from the bottom should keep manual mode enabled"
+        );
+    }
+
+    #[test]
+    fn chat_scroll_follow_state_handles_large_scroll_indices_without_panicking() {
+        let result = std::panic::catch_unwind(|| {
+            next_chat_scroll_follow_state(true, ChatScrollDirection::Down, usize::MAX, 10)
+        });
+        assert!(
+            result.is_ok(),
+            "Large indices should not panic while computing follow state"
         );
     }
 }

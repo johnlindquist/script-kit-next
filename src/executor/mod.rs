@@ -61,3 +61,6 @@ pub use scriptlet::tool_extension;
 #[cfg(test)]
 #[path = "../executor_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod runner_integration_tests;

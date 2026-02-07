@@ -5,6 +5,10 @@ on:
     tags:
       - 'v*'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -21,11 +25,19 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       
       - uses: Swatinem/rust-cache@v2
+
+      - name: Cache cargo-bundle
+        id: cache-cargo-bundle
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-bundle
+          key: cargo-bundle-zed-deploy-${{ runner.os }}
       
       - name: Build release
         run: cargo build --release
       
       - name: Install cargo-bundle
+        if: steps.cache-cargo-bundle.outputs.cache-hit != 'true'
         run: cargo install cargo-bundle --git https://github.com/zed-industries/cargo-bundle.git --branch zed-deploy
       
       - name: Create bundle

@@ -12,15 +12,11 @@ use crate::actions::builders::{
 };
 use crate::actions::command_bar::CommandBarConfig;
 use crate::actions::constants::{
-    ACCENT_BAR_WIDTH, ACTION_ITEM_HEIGHT, ACTION_ROW_INSET, HEADER_HEIGHT, KEYCAP_HEIGHT,
-    KEYCAP_MIN_WIDTH, POPUP_MAX_HEIGHT, POPUP_WIDTH, SEARCH_INPUT_HEIGHT, SECTION_HEADER_HEIGHT,
-    SELECTION_RADIUS,
+    ACCENT_BAR_WIDTH, ACTION_ROW_INSET, HEADER_HEIGHT, KEYCAP_HEIGHT, KEYCAP_MIN_WIDTH,
+    SEARCH_INPUT_HEIGHT, SECTION_HEADER_HEIGHT, SELECTION_RADIUS,
 };
 use crate::actions::dialog::{build_grouped_items_static, coerce_action_selection, ActionsDialog};
-use crate::actions::types::{
-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
-    SectionStyle,
-};
+use crate::actions::types::{Action, ActionCategory, ScriptInfo, SectionStyle};
 use crate::clipboard_history::ContentType;
 use crate::designs::icon_variations::IconName;
 use crate::file_search::FileInfo;

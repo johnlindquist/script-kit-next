@@ -78,6 +78,27 @@ static TRACKING_STARTED: AtomicBool = AtomicBool::new(false);
 /// Our own bundle ID to filter out
 const SCRIPT_KIT_BUNDLE_ID: &str = "dev.scriptkit.scriptkit";
 
+#[cfg(target_os = "macos")]
+fn require_objc_class(class_name: &str) -> Option<&'static objc::runtime::Class> {
+    match objc::runtime::Class::get(class_name) {
+        Some(class) => Some(class),
+        None => {
+            logging::log(
+                "APP",
+                &format!(
+                    "frontmost_tracker_class_missing: class='{}' operation=require_objc_class",
+                    class_name
+                ),
+            );
+            None
+        }
+    }
+}
+
+fn make_objc_cstring(input: &str) -> Result<std::ffi::CString, std::ffi::NulError> {
+    std::ffi::CString::new(input)
+}
+
 /// Start the background frontmost app tracker.
 ///
 /// This should be called once at application startup. It sets up an
@@ -208,7 +229,9 @@ fn setup_workspace_observer() {
 
     unsafe {
         // Create a custom class to receive notifications
-        let superclass = Class::get("NSObject").unwrap();
+        let Some(superclass) = require_objc_class("NSObject") else {
+            return;
+        };
 
         // Try to get or create the observer class
         // Fix: If the class already exists (e.g., from a previous call), fetch it
@@ -270,6 +293,13 @@ fn setup_workspace_observer() {
 
                 // Get the NSRunningApplication from userInfo
                 let key = objc_nsstring("NSWorkspaceApplicationKey");
+                if key.is_null() {
+                    logging::log(
+                        "APP",
+                        "frontmost_tracker_workspace_key_failed: operation=handle_app_activation_inner",
+                    );
+                    return;
+                }
                 let app: *mut Object = msg_send![user_info, objectForKey: key];
 
                 if app.is_null() {
@@ -362,12 +392,21 @@ fn setup_workspace_observer() {
         let observer: *mut Object = msg_send![observer, init];
 
         // Get the notification center
-        let workspace_class = Class::get("NSWorkspace").unwrap();
+        let Some(workspace_class) = require_objc_class("NSWorkspace") else {
+            return;
+        };
         let workspace: *mut Object = msg_send![workspace_class, sharedWorkspace];
         let notification_center: *mut Object = msg_send![workspace, notificationCenter];
 
         // Register for NSWorkspaceDidActivateApplicationNotification
         let notification_name = objc_nsstring("NSWorkspaceDidActivateApplicationNotification");
+        if notification_name.is_null() {
+            logging::log(
+                "APP",
+                "frontmost_tracker_notification_name_failed: operation=setup_workspace_observer",
+            );
+            return;
+        }
 
         let _: () = msg_send![
             notification_center,
@@ -381,7 +420,10 @@ fn setup_workspace_observer() {
 
         // Run the run loop to receive notifications
         // This thread will run forever, receiving notifications
-        let run_loop: *mut Object = msg_send![Class::get("NSRunLoop").unwrap(), currentRunLoop];
+        let Some(run_loop_class) = require_objc_class("NSRunLoop") else {
+            return;
+        };
+        let run_loop: *mut Object = msg_send![run_loop_class, currentRunLoop];
         let _: () = msg_send![run_loop, run];
     }
 }
@@ -465,11 +507,24 @@ unsafe fn get_nsstring(nsstring: *mut objc::runtime::Object) -> Option<String> {
 /// Helper to create an NSString from a Rust string
 #[cfg(target_os = "macos")]
 unsafe fn objc_nsstring(s: &str) -> *mut objc::runtime::Object {
-    use objc::runtime::Class;
     use objc::{msg_send, sel, sel_impl};
 
-    let nsstring_class = Class::get("NSString").unwrap();
-    let cstr = std::ffi::CString::new(s).unwrap();
+    let Some(nsstring_class) = require_objc_class("NSString") else {
+        return std::ptr::null_mut();
+    };
+    let cstr = match make_objc_cstring(s) {
+        Ok(value) => value,
+        Err(error) => {
+            logging::log(
+                "APP",
+                &format!(
+                    "frontmost_tracker_invalid_nsstring_input: error={} operation=objc_nsstring",
+                    error
+                ),
+            );
+            return std::ptr::null_mut();
+        }
+    };
     msg_send![nsstring_class, stringWithUTF8String: cstr.as_ptr()]
 }
 
@@ -595,5 +650,17 @@ mod tests {
             should_update(&new_app, &current_relaunched),
             "MUST update when same bundle_id but different PID (app relaunched)"
         );
+    }
+
+    #[test]
+    fn test_make_objc_cstring_rejects_interior_nul() {
+        let result = make_objc_cstring("bad\0value");
+        assert!(result.is_err(), "interior NUL should be rejected");
+    }
+
+    #[test]
+    fn test_make_objc_cstring_accepts_valid_string() {
+        let result = make_objc_cstring("NSWorkspaceDidActivateApplicationNotification");
+        assert!(result.is_ok(), "valid strings should convert to CString");
     }
 }

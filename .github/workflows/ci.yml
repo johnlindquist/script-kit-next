@@ -16,6 +16,10 @@ on:
       - 'LICENSE'
       - '.gitignore'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -101,6 +105,8 @@ jobs:
     env:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
+      # Keep CI stable for known teardown races while allowing local parallel tests by default.
+      RUST_TEST_THREADS: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -132,7 +138,7 @@ jobs:
           save-if: false
       - uses: oven-sh/setup-bun@v1
         with:
-          bun-version: latest
+          bun-version: 1.2.x
       - name: Install dependencies
         run: bun install
       - name: Build binary
@@ -149,7 +155,7 @@ jobs:
     name: Build macOS Artifact
     runs-on: macos-14
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [fmt, clippy, test]
+    needs: [fmt, clippy, test, typescript-tests]
     env:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"

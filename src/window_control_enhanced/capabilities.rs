@@ -133,12 +133,13 @@ mod ax_ffi {
     pub const kCFStringEncodingUTF8: u32 = 0x08000100;
     pub const kAXErrorSuccess: i32 = 0;
 
-    /// Create a CFString from a Rust string
-    pub fn create_cf_string(s: &str) -> CFStringRef {
-        unsafe {
-            let c_str = std::ffi::CString::new(s).unwrap();
+    /// Create a CFString from a Rust string.
+    pub fn try_create_cf_string(s: &str) -> Option<CFStringRef> {
+        let c_str = std::ffi::CString::new(s).ok()?;
+        let cf_string = unsafe {
             CFStringCreateWithCString(std::ptr::null(), c_str.as_ptr(), kCFStringEncodingUTF8)
-        }
+        };
+        (!cf_string.is_null()).then_some(cf_string)
     }
 
     /// Release a CoreFoundation object
@@ -156,7 +157,9 @@ mod ax_ffi {
             return false;
         }
 
-        let attr_str = create_cf_string(attribute);
+        let Some(attr_str) = try_create_cf_string(attribute) else {
+            return false;
+        };
         let mut settable = false;
 
         let result = unsafe {
@@ -174,7 +177,9 @@ mod ax_ffi {
             return false;
         }
 
-        let attr_str = create_cf_string(attribute);
+        let Some(attr_str) = try_create_cf_string(attribute) else {
+            return false;
+        };
         let mut value: CFTypeRef = std::ptr::null();
 
         let result = unsafe {
@@ -317,5 +322,14 @@ mod tests {
         // Can't resize if capability says no
         info.capabilities.can_resize = false;
         assert!(!info.can_resize_to(500.0, 400.0));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_try_create_cf_string_rejects_interior_nul() {
+        assert!(
+            ax_ffi::try_create_cf_string("AX\0Title").is_none(),
+            "interior NUL should not produce CFString"
+        );
     }
 }

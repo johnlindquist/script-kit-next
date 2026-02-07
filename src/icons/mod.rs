@@ -47,8 +47,11 @@
 mod render;
 mod types;
 
-pub use render::*;
-pub use types::*;
+pub use render::{render_icon, render_image, IconView, ThemeColorProvider};
+pub use types::{
+    lucide_from_str, ColorToken, EmbeddedIcon, IconColor, IconNamed, IconRef, IconSize, IconStyle,
+    LucideIcon,
+};
 
 #[cfg(test)]
 mod tests;

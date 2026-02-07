@@ -2,7 +2,7 @@
 //!
 //! Uses GPUI's Global trait pattern for thread-safe, UI-thread-owned state.
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 
 use gpui::{App, BorrowAppContext, Global, Timer};
@@ -22,10 +22,14 @@ const RATE_LIMIT_WINDOW_MS: u64 = 250;
 pub struct NotificationService {
     /// Active notifications (not yet dismissed)
     active: Vec<ActiveNotification>,
+    /// Side index for O(1) lookup by notification id
+    active_id_index: HashMap<NotificationId, usize>,
+    /// Side index for O(1) dedupe key lookup
+    active_dedupe_index: HashMap<String, NotificationId>,
     /// Notification history (dismissed notifications)
     history: VecDeque<NotificationHistoryEntry>,
     /// Last notification time per source (for rate limiting)
-    last_notification_time: std::collections::HashMap<String, Instant>,
+    last_notification_time: HashMap<String, Instant>,
     /// Whether timers should be paused (window hidden)
     timers_paused: bool,
     /// Do Not Disturb mode
@@ -45,8 +49,10 @@ impl NotificationService {
     pub fn new() -> Self {
         Self {
             active: Vec::new(),
+            active_id_index: HashMap::new(),
+            active_dedupe_index: HashMap::new(),
             history: VecDeque::with_capacity(MAX_HISTORY_SIZE),
-            last_notification_time: std::collections::HashMap::new(),
+            last_notification_time: HashMap::new(),
             timers_paused: false,
             dnd_enabled: false,
         }
@@ -85,18 +91,20 @@ impl NotificationService {
 
         // Deduplication check
         if let Some(dedupe_key) = &notification.dedupe_key {
-            if let Some(existing) = self
-                .active
-                .iter_mut()
-                .find(|n| n.notification.dedupe_key.as_ref() == Some(dedupe_key))
-            {
-                existing.increment_dedupe();
-                tracing::debug!(
-                    dedupe_key = %dedupe_key,
-                    count = existing.dedupe_count,
-                    "Notification deduplicated"
-                );
-                return;
+            if let Some(existing_id) = self.active_dedupe_index.get(dedupe_key).copied() {
+                if let Some(existing) = self
+                    .active_id_index
+                    .get(&existing_id)
+                    .and_then(|&idx| self.active.get_mut(idx))
+                {
+                    existing.increment_dedupe();
+                    tracing::debug!(
+                        dedupe_key = %dedupe_key,
+                        count = existing.dedupe_count,
+                        "Notification deduplicated"
+                    );
+                    return;
+                }
             }
         }
 
@@ -121,6 +129,11 @@ impl NotificationService {
 
         // Store in active list
         self.active.push(active);
+        let active_index = self.active.len().saturating_sub(1);
+        self.active_id_index.insert(id, active_index);
+        if let Some(dedupe_key) = self.active[active_index].notification.dedupe_key.clone() {
+            self.active_dedupe_index.insert(dedupe_key, id);
+        }
 
         // Route to renderers
         for channel in &channels {
@@ -233,7 +246,11 @@ impl NotificationService {
 
     /// Update a progress notification
     pub fn update_progress(&mut self, id: NotificationId, progress: f32, message: Option<String>) {
-        if let Some(active) = self.active.iter_mut().find(|n| n.notification.id == id) {
+        if let Some(active) = self
+            .active_id_index
+            .get(&id)
+            .and_then(|&idx| self.active.get_mut(idx))
+        {
             if let NotificationContent::Progress {
                 progress: p,
                 message: m,
@@ -254,9 +271,10 @@ impl NotificationService {
 
     /// Dismiss a notification by ID
     pub fn dismiss(&mut self, id: NotificationId, reason: DismissReason, _cx: &mut App) {
-        if let Some(pos) = self.active.iter().position(|n| n.notification.id == id) {
+        if let Some(pos) = self.active_id_index.get(&id).copied() {
             let active = self.active.remove(pos);
             self.add_to_history(active.notification, reason);
+            self.rebuild_active_indexes();
 
             tracing::debug!(
                 notification_id = id,
@@ -281,6 +299,7 @@ impl NotificationService {
             let active = self.active.remove(idx);
             self.add_to_history(active.notification, reason);
         }
+        self.rebuild_active_indexes();
     }
 
     /// Dismiss all notifications
@@ -289,6 +308,8 @@ impl NotificationService {
         for active in notifications {
             self.add_to_history(active.notification, DismissReason::Cleared);
         }
+        self.active_id_index.clear();
+        self.active_dedupe_index.clear();
         tracing::debug!("All notifications dismissed");
     }
 
@@ -388,7 +409,9 @@ impl NotificationService {
 
     /// Get a notification by ID
     pub fn get(&self, id: NotificationId) -> Option<&ActiveNotification> {
-        self.active.iter().find(|n| n.notification.id == id)
+        self.active_id_index
+            .get(&id)
+            .and_then(|&idx| self.active.get(idx))
     }
 
     /// Check if any notifications are active
@@ -460,7 +483,14 @@ impl NotificationService {
 
     #[cfg(test)]
     pub(crate) fn add_notification_for_test(&mut self, notification: Notification) {
+        let id = notification.id;
+        let dedupe_key = notification.dedupe_key.clone();
         self.active.push(ActiveNotification::new(notification));
+        let idx = self.active.len().saturating_sub(1);
+        self.active_id_index.insert(id, idx);
+        if let Some(key) = dedupe_key {
+            self.active_dedupe_index.insert(key, id);
+        }
     }
 
     #[cfg(test)]
@@ -498,12 +528,28 @@ impl NotificationService {
         for active in notifications {
             self.add_to_history(active.notification, DismissReason::Cleared);
         }
+        self.active_id_index.clear();
+        self.active_dedupe_index.clear();
     }
 
     #[cfg(test)]
     pub(crate) fn increment_dedupe_for_test(&mut self, index: usize) {
         if let Some(active) = self.active.get_mut(index) {
             active.increment_dedupe();
+        }
+    }
+
+    fn rebuild_active_indexes(&mut self) {
+        self.active_id_index.clear();
+        self.active_dedupe_index.clear();
+
+        for (idx, active) in self.active.iter().enumerate() {
+            let notification_id = active.notification.id;
+            self.active_id_index.insert(notification_id, idx);
+
+            if let Some(dedupe_key) = active.notification.dedupe_key.clone() {
+                self.active_dedupe_index.insert(dedupe_key, notification_id);
+            }
         }
     }
 }

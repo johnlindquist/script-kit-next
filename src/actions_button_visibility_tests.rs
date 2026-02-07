@@ -53,4 +53,26 @@ mod tests {
             after_cmdk
         );
     }
+
+    #[test]
+    fn test_ask_ai_hint_is_non_clickable_visual_hint() {
+        let content = fs::read_to_string("src/render_script_list.rs")
+            .expect("Failed to read src/render_script_list.rs");
+
+        let ask_ai_pos = content
+            .find(".id(\"ask-ai-button\")")
+            .expect("Ask AI hint container not found in render_script_list.rs");
+        let ask_ai_section = &content[ask_ai_pos..content.len().min(ask_ai_pos + 360)];
+
+        assert!(
+            ask_ai_section.contains(".cursor_default()"),
+            "Ask AI hint should be non-clickable (cursor_default). Section:\n{}",
+            ask_ai_section
+        );
+        assert!(
+            !ask_ai_section.contains(".cursor_pointer()"),
+            "Ask AI hint should not imply clickability with cursor_pointer. Section:\n{}",
+            ask_ai_section
+        );
+    }
 }

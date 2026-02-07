@@ -1,6 +1,49 @@
 use super::*;
 use serde::{Deserialize, Serialize};
 
+fn blend_rgb(background: u32, overlay: u32, alpha: f32) -> u32 {
+    let alpha = alpha.clamp(0.0, 1.0);
+    let bg_r = ((background >> 16) & 0xFF) as f32;
+    let bg_g = ((background >> 8) & 0xFF) as f32;
+    let bg_b = (background & 0xFF) as f32;
+    let fg_r = ((overlay >> 16) & 0xFF) as f32;
+    let fg_g = ((overlay >> 8) & 0xFF) as f32;
+    let fg_b = (overlay & 0xFF) as f32;
+
+    let out_r = ((1.0 - alpha) * bg_r + alpha * fg_r).round() as u32;
+    let out_g = ((1.0 - alpha) * bg_g + alpha * fg_g).round() as u32;
+    let out_b = ((1.0 - alpha) * bg_b + alpha * fg_b).round() as u32;
+
+    (out_r << 16) | (out_g << 8) | out_b
+}
+
+fn relative_luminance(rgb: u32) -> f64 {
+    let channel = |offset: u32| {
+        let value = ((rgb >> offset) & 0xFF) as f64 / 255.0;
+        if value <= 0.04045 {
+            value / 12.92
+        } else {
+            ((value + 0.055) / 1.055).powf(2.4)
+        }
+    };
+
+    let r = channel(16);
+    let g = channel(8);
+    let b = channel(0);
+    (0.2126 * r) + (0.7152 * g) + (0.0722 * b)
+}
+
+fn contrast_ratio(color_a: u32, color_b: u32) -> f64 {
+    let lum_a = relative_luminance(color_a);
+    let lum_b = relative_luminance(color_b);
+    let (lighter, darker) = if lum_a >= lum_b {
+        (lum_a, lum_b)
+    } else {
+        (lum_b, lum_a)
+    };
+    (lighter + 0.05) / (darker + 0.05)
+}
+
 #[test]
 fn test_default_theme() {
     let theme = Theme::default();
@@ -81,8 +124,8 @@ fn test_opacity_defaults() {
     assert_eq!(opacity.title_bar, 0.30);
     assert_eq!(opacity.search_box, 0.40);
     assert_eq!(opacity.log_panel, 0.40);
-    assert_eq!(opacity.selected, 0.15); // Bumped for clearer active-item indication
-    assert_eq!(opacity.hover, 0.09); // Bumped for more visible mouse-tracking cue
+    assert_eq!(opacity.selected, 0.33); // Higher selection contrast for vibrancy surfaces
+    assert_eq!(opacity.hover, 0.22); // Higher hover contrast for state visibility
     assert_eq!(opacity.preview, 0.0);
     assert_eq!(opacity.dialog, 0.15);
     assert_eq!(opacity.input, 0.30);
@@ -91,6 +134,63 @@ fn test_opacity_defaults() {
     assert_eq!(opacity.input_active, 0.50);
     assert_eq!(opacity.border_inactive, 0.125);
     assert_eq!(opacity.border_active, 0.25);
+}
+
+#[test]
+fn test_get_opacity_for_focus_keeps_selection_and_hover_strength_when_unfocused() {
+    let theme = Theme::dark_default();
+    let focused = theme.get_opacity_for_focus(true);
+    let unfocused = theme.get_opacity_for_focus(false);
+
+    assert_eq!(unfocused.selected, focused.selected);
+    assert_eq!(unfocused.hover, focused.hover);
+    assert!(unfocused.main < focused.main);
+}
+
+#[test]
+fn test_dark_default_selected_and_hover_contrast_meets_visibility_thresholds() {
+    let theme = Theme::dark_default();
+    let opacity = theme.get_opacity();
+    let background = theme.colors.background.main;
+    let overlay = theme.colors.accent.selected_subtle;
+
+    let selected = blend_rgb(background, overlay, opacity.selected);
+    let hovered = blend_rgb(background, overlay, opacity.hover);
+
+    let selected_contrast = contrast_ratio(background, selected);
+    let hover_contrast = contrast_ratio(background, hovered);
+
+    assert!(
+        selected_contrast >= 2.4,
+        "dark selected contrast too low: {selected_contrast:.2}"
+    );
+    assert!(
+        hover_contrast >= 1.8,
+        "dark hover contrast too low: {hover_contrast:.2}"
+    );
+}
+
+#[test]
+fn test_light_default_selected_and_hover_contrast_meets_visibility_thresholds() {
+    let theme = Theme::light_default();
+    let opacity = theme.get_opacity();
+    let background = theme.colors.background.main;
+    let overlay = theme.colors.accent.selected_subtle;
+
+    let selected = blend_rgb(background, overlay, opacity.selected);
+    let hovered = blend_rgb(background, overlay, opacity.hover);
+
+    let selected_contrast = contrast_ratio(background, selected);
+    let hover_contrast = contrast_ratio(background, hovered);
+
+    assert!(
+        selected_contrast >= 2.4,
+        "light selected contrast too low: {selected_contrast:.2}"
+    );
+    assert!(
+        hover_contrast >= 1.8,
+        "light hover contrast too low: {hover_contrast:.2}"
+    );
 }
 
 #[test]
@@ -701,4 +801,16 @@ fn test_theme_deserialize_mixed_formats() {
     assert_eq!(theme.colors.background.title_bar, 2960688);
     assert_eq!(theme.colors.background.search_box, 0x3C3C3C);
     assert_eq!(theme.colors.accent.selected, 0xFBBF24);
+}
+
+#[test]
+fn test_theme_prelude_exports_core_theme_types() {
+    let theme = crate::theme::prelude::Theme::default();
+    let colors = crate::theme::prelude::ColorScheme::default();
+
+    assert_eq!(
+        theme.colors.background.main,
+        Theme::default().colors.background.main
+    );
+    assert_eq!(colors.ui.border, ColorScheme::default().ui.border);
 }

@@ -73,6 +73,21 @@ pub const HEADER_DIVIDER_HEIGHT: f32 = 1.0;
 pub const HEADER_TOTAL_HEIGHT: f32 =
     HEADER_PADDING_Y * 2.0 + HEADER_BUTTON_HEIGHT + HEADER_DIVIDER_HEIGHT;
 
+/// Canonical single-line prompt input/container height used by prompt UIs.
+pub const PROMPT_INPUT_FIELD_HEIGHT: f32 = 44.0;
+
+/// Minimum inset from visible display edges when clamping window geometry.
+/// Keeps the window fully visible after dynamic height changes.
+pub const WINDOW_VISIBLE_EDGE_MARGIN: f64 = 4.0;
+
+/// Shared status prefix for prompts shown while a script is actively running.
+pub const SCRIPT_RUNNING_STATUS_PREFIX: &str = "Script running";
+
+/// Build a concise running status message used in prompt headers/footers.
+pub fn running_status_message(context: &str) -> String {
+    format!("{SCRIPT_RUNNING_STATUS_PREFIX} · {context}")
+}
+
 // ============================================================================
 // Input Placeholder Configuration
 // ============================================================================
@@ -333,5 +348,18 @@ mod tests {
     fn test_cursor_margin_constant() {
         // Margin should be 2px for proper vertical centering
         assert_eq!(CURSOR_MARGIN_Y, 2.0);
+    }
+
+    #[test]
+    fn running_status_message_uses_shared_prefix() {
+        assert_eq!(
+            running_status_message("awaiting input"),
+            "Script running · awaiting input"
+        );
+    }
+
+    #[test]
+    fn window_visible_edge_margin_is_positive() {
+        assert!(WINDOW_VISIBLE_EDGE_MARGIN > 0.0);
     }
 }

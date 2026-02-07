@@ -6,7 +6,7 @@
 //! text expansion.
 //!
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use tracing::debug;
 
@@ -43,10 +43,44 @@ pub struct MatchResult {
 pub struct KeywordMatcher {
     /// Map of trigger keywords to their scriptlet paths
     triggers: HashMap<String, PathBuf>,
+    /// Fast suffix-matching index keyed by trigger last character
+    triggers_by_last_char: HashMap<char, Vec<TriggerPattern>>,
     /// Rolling buffer of recent keystrokes
-    buffer: String,
+    buffer: VecDeque<char>,
     /// Maximum size of the buffer
     max_buffer_size: usize,
+}
+
+#[derive(Debug, Clone)]
+struct TriggerPattern {
+    keyword: String,
+    scriptlet_path: PathBuf,
+    char_count: usize,
+    reversed_chars: Vec<char>,
+}
+
+impl TriggerPattern {
+    fn new(keyword: String, scriptlet_path: PathBuf) -> Self {
+        let reversed_chars: Vec<char> = keyword.chars().rev().collect();
+        let char_count = reversed_chars.len();
+        Self {
+            keyword,
+            scriptlet_path,
+            char_count,
+            reversed_chars,
+        }
+    }
+
+    fn matches_buffer_suffix(&self, buffer: &VecDeque<char>) -> bool {
+        if self.char_count > buffer.len() {
+            return false;
+        }
+
+        self.reversed_chars
+            .iter()
+            .zip(buffer.iter().rev())
+            .all(|(pattern_char, buffered_char)| pattern_char == buffered_char)
+    }
 }
 
 impl Default for KeywordMatcher {
@@ -60,7 +94,8 @@ impl KeywordMatcher {
     pub fn new() -> Self {
         Self {
             triggers: HashMap::new(),
-            buffer: String::with_capacity(DEFAULT_MAX_BUFFER_SIZE),
+            triggers_by_last_char: HashMap::new(),
+            buffer: VecDeque::with_capacity(DEFAULT_MAX_BUFFER_SIZE),
             max_buffer_size: DEFAULT_MAX_BUFFER_SIZE,
         }
     }
@@ -70,7 +105,8 @@ impl KeywordMatcher {
     pub fn with_buffer_size(max_size: usize) -> Self {
         Self {
             triggers: HashMap::new(),
-            buffer: String::with_capacity(max_size),
+            triggers_by_last_char: HashMap::new(),
+            buffer: VecDeque::with_capacity(max_size),
             max_buffer_size: max_size,
         }
     }
@@ -95,6 +131,7 @@ impl KeywordMatcher {
         );
 
         self.triggers.insert(keyword.to_string(), scriptlet_path);
+        self.rebuild_trigger_index();
     }
 
     /// Unregister a trigger keyword
@@ -110,6 +147,7 @@ impl KeywordMatcher {
 
         if removed {
             debug!(trigger = %keyword, "Unregistered keyword trigger");
+            self.rebuild_trigger_index();
         }
 
         removed
@@ -131,30 +169,30 @@ impl KeywordMatcher {
         }
 
         // Add character to buffer
-        self.buffer.push(c);
+        self.buffer.push_back(c);
 
         // Trim buffer if it exceeds max size (remove from front)
-        if self.buffer.len() > self.max_buffer_size {
-            let excess = self.buffer.len() - self.max_buffer_size;
-            self.buffer = self.buffer.chars().skip(excess).collect();
+        while self.buffer.len() > self.max_buffer_size {
+            self.buffer.pop_front();
         }
 
         // Update buffer state for debounced logging
         keystroke_logger().update_buffer_state(self.buffer.len(), self.triggers.len());
 
         // Check for matches - look for triggers at the end of the buffer
-        self.check_for_match()
+        self.check_for_match(c)
     }
 
     /// Check if the buffer ends with any registered trigger
-    fn check_for_match(&self) -> Option<MatchResult> {
-        // Check each trigger to see if the buffer ends with it
-        for (trigger, path) in &self.triggers {
-            if self.buffer.ends_with(trigger) {
+    fn check_for_match(&self, last_char: char) -> Option<MatchResult> {
+        let candidates = self.triggers_by_last_char.get(&last_char)?;
+
+        for candidate in candidates {
+            if candidate.matches_buffer_suffix(&self.buffer) {
                 return Some(MatchResult {
-                    trigger: trigger.clone(),
-                    scriptlet_path: path.clone(),
-                    chars_to_delete: trigger.chars().count(),
+                    trigger: candidate.keyword.clone(),
+                    scriptlet_path: candidate.scriptlet_path.clone(),
+                    chars_to_delete: candidate.char_count,
                 });
             }
         }
@@ -170,8 +208,8 @@ impl KeywordMatcher {
 
     /// Get the current buffer contents (for debugging)
     #[allow(dead_code)]
-    pub fn buffer(&self) -> &str {
-        &self.buffer
+    pub fn buffer(&self) -> String {
+        self.buffer.iter().collect()
     }
 
     /// Get the number of registered triggers
@@ -195,6 +233,7 @@ impl KeywordMatcher {
     #[allow(dead_code)]
     pub fn clear_triggers(&mut self) {
         self.triggers.clear();
+        self.triggers_by_last_char.clear();
         debug!("All triggers cleared");
     }
 
@@ -204,8 +243,44 @@ impl KeywordMatcher {
     where
         I: IntoIterator<Item = (String, PathBuf)>,
     {
+        let mut has_updates = false;
         for (keyword, path) in triggers {
-            self.register_trigger(&keyword, path);
+            if keyword.is_empty() {
+                continue;
+            }
+            self.triggers.insert(keyword, path);
+            has_updates = true;
+        }
+
+        if has_updates {
+            self.rebuild_trigger_index();
+        }
+    }
+
+    fn rebuild_trigger_index(&mut self) {
+        self.triggers_by_last_char.clear();
+
+        let mut patterns: Vec<TriggerPattern> = self
+            .triggers
+            .iter()
+            .map(|(keyword, path)| TriggerPattern::new(keyword.clone(), path.clone()))
+            .collect();
+
+        // Prefer longer suffix matches first when multiple triggers can match
+        // the same tail (e.g. ":sig" vs "ig").
+        patterns.sort_by(|a, b| {
+            b.char_count
+                .cmp(&a.char_count)
+                .then_with(|| a.keyword.cmp(&b.keyword))
+        });
+
+        for pattern in patterns {
+            if let Some(&last_char) = pattern.reversed_chars.first() {
+                self.triggers_by_last_char
+                    .entry(last_char)
+                    .or_default()
+                    .push(pattern);
+            }
         }
     }
 }
@@ -494,6 +569,17 @@ mod tests {
         // Should only keep the last 10 characters
         assert_eq!(matcher.buffer().len(), 10);
         assert_eq!(matcher.buffer(), "1234567890");
+    }
+
+    #[test]
+    fn test_buffer_trims_multibyte_chars_without_dropping_extra() {
+        let mut matcher = KeywordMatcher::with_buffer_size(2);
+
+        for c in "ééé".chars() {
+            matcher.process_keystroke(c);
+        }
+
+        assert_eq!(matcher.buffer(), "éé");
     }
 
     #[test]

@@ -4,12 +4,14 @@
 //! flooding logs with per-keystroke messages. Instead of logging every
 //! keystroke, it accumulates events and flushes summaries periodically.
 
+use std::collections::VecDeque;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tracing::{debug, info};
 
 /// How often to flush keystroke summaries (in seconds)
 const FLUSH_INTERVAL_SECS: u64 = 5;
+const RECENT_CHARS_LIMIT: usize = 10;
 
 /// Accumulated keystroke statistics
 #[derive(Debug, Default)]
@@ -21,7 +23,7 @@ struct KeystrokeStats {
     /// Buffer-clearing characters (enter, escape, tab)
     clear_count: usize,
     /// Last few characters typed (for context, not full buffer)
-    recent_chars: String,
+    recent_chars: VecDeque<char>,
     /// Current buffer length
     buffer_len: usize,
     /// Number of trigger checks performed
@@ -71,13 +73,12 @@ impl KeystrokeLogger {
         let mut stats = self.stats.lock().unwrap_or_else(|e| e.into_inner());
         stats.keystroke_count += 1;
 
-        // Keep only last 10 chars for context
-        if stats.recent_chars.len() >= 10 {
-            stats.recent_chars.remove(0);
-        }
-        // Only add printable chars to recent_chars
-        if c.is_ascii_graphic() || c == ' ' {
-            stats.recent_chars.push(c);
+        // Keep ASCII symbols and Unicode letters/numbers for keyword-debug context.
+        if c.is_ascii_graphic() || c.is_alphanumeric() || c == ' ' {
+            while stats.recent_chars.len() >= RECENT_CHARS_LIMIT {
+                stats.recent_chars.pop_front();
+            }
+            stats.recent_chars.push_back(c);
         }
 
         drop(stats);
@@ -141,6 +142,8 @@ impl KeystrokeLogger {
             return;
         }
 
+        let recent: String = stats.recent_chars.iter().collect();
+
         // Log consolidated summary
         debug!(
             category = "KEYWORD",
@@ -149,7 +152,7 @@ impl KeystrokeLogger {
             buffer_clears = stats.clear_count,
             buffer_len = stats.buffer_len,
             trigger_count = stats.trigger_count,
-            recent = %stats.recent_chars,
+            recent = %recent,
             "Keystroke summary ({}s window)",
             FLUSH_INTERVAL_SECS
         );
@@ -192,7 +195,7 @@ mod tests {
 
         let stats = logger.stats.lock().unwrap_or_else(|e| e.into_inner());
         assert_eq!(stats.keystroke_count, 3);
-        assert_eq!(stats.recent_chars, "abc");
+        assert_eq!(stats.recent_chars.iter().collect::<String>(), "abc");
     }
 
     #[test]
@@ -224,7 +227,18 @@ mod tests {
         let stats = logger.stats.lock().unwrap_or_else(|e| e.into_inner());
         assert_eq!(stats.recent_chars.len(), 10);
         // Should keep last 10
-        assert_eq!(stats.recent_chars, "ghijklmnop");
+        assert_eq!(stats.recent_chars.iter().collect::<String>(), "ghijklmnop");
+    }
+
+    #[test]
+    fn test_recent_chars_limit_counts_characters_for_multibyte_input() {
+        let logger = KeystrokeLogger::new();
+        for c in "éééééééééééé".chars() {
+            logger.record_keystroke(c);
+        }
+
+        let stats = logger.stats.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(stats.recent_chars.iter().count(), 10);
     }
 
     #[test]

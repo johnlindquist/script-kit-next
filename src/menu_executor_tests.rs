@@ -4,6 +4,16 @@
 
 use super::*;
 
+#[cfg(target_os = "macos")]
+fn cf_get_retain_count(cf: CFTypeRef) -> isize {
+    #[link(name = "CoreFoundation", kind = "framework")]
+    extern "C" {
+        fn CFGetRetainCount(cf: CFTypeRef) -> isize;
+    }
+
+    unsafe { CFGetRetainCount(cf) }
+}
+
 // ============================================================================
 // Unit Tests - Pure Logic (no system calls)
 // ============================================================================
@@ -66,6 +76,42 @@ fn test_validate_menu_path_single_item() {
     let path = vec!["File".to_string()];
     let result = validate_menu_path(&path);
     assert!(result.is_ok());
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn test_owned_ax_element_retain_release_when_created_from_borrowed() {
+    let owned_cf =
+        try_create_cf_string("menu-executor-owned-ax-element").expect("valid CFString literal");
+    let before = cf_get_retain_count(owned_cf);
+
+    {
+        let owned = OwnedAxElement::from_borrowed(owned_cf as AXUIElementRef);
+        assert_eq!(owned.as_ptr(), owned_cf as AXUIElementRef);
+        let during = cf_get_retain_count(owned_cf);
+        assert_eq!(
+            during,
+            before + 1,
+            "owned wrapper should retain borrowed AX element"
+        );
+    }
+
+    let after = cf_get_retain_count(owned_cf);
+    assert_eq!(
+        after, before,
+        "dropping owned wrapper should release retained AX element"
+    );
+
+    cf_release(owned_cf);
+}
+
+#[test]
+fn test_try_create_cf_string_rejects_interior_nul() {
+    let error = try_create_cf_string("AX\0Title").expect_err("interior NUL should fail");
+    assert!(
+        error.to_string().contains("interior NUL"),
+        "error should describe invalid CFString input: {error}"
+    );
 }
 
 // ============================================================================

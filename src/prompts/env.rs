@@ -21,9 +21,10 @@ use crate::components::TextInputState;
 use crate::designs::icon_variations::IconName;
 use crate::designs::{get_tokens, DesignVariant};
 use crate::logging;
-use crate::panel::{CURSOR_HEIGHT_LG, CURSOR_WIDTH};
+use crate::panel::{CURSOR_HEIGHT_LG, CURSOR_WIDTH, PROMPT_INPUT_FIELD_HEIGHT};
 use crate::secrets;
 use crate::theme;
+use crate::ui_foundation::{is_key_enter, is_key_escape};
 
 use super::SubmitCallback;
 
@@ -68,10 +69,79 @@ fn format_relative_time(dt: DateTime<Utc>) -> String {
     }
 }
 
+fn env_input_placeholder(key: &str, exists_in_keyring: bool) -> String {
+    if exists_in_keyring {
+        format!("Paste a replacement value for {key}")
+    } else {
+        format!("Paste value for {key}")
+    }
+}
+
+fn env_default_description(key: &str, exists_in_keyring: bool) -> String {
+    if exists_in_keyring {
+        format!("Update the saved value for {key}")
+    } else {
+        format!("Enter the value for {key}")
+    }
+}
+
+fn env_running_status(key: &str) -> String {
+    format!("Script is running and waiting for {key}")
+}
+
+fn env_input_label(secret: bool) -> &'static str {
+    if secret {
+        "Secret value"
+    } else {
+        "Value"
+    }
+}
+
+fn masked_secret_value_for_display(value: &str) -> String {
+    "•".repeat(value.chars().count())
+}
+
+fn env_storage_hint_text(secret: bool) -> &'static str {
+    if secret {
+        "Stored securely in ~/.scriptkit/secrets.age"
+    } else {
+        "Value is provided to the script for this run only"
+    }
+}
+
+fn env_submit_validation_error(value: &str) -> Option<&'static str> {
+    if value.trim().is_empty() {
+        Some("Value cannot be empty")
+    } else {
+        None
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EnvKeyAction {
+    Submit,
+    Cancel,
+}
+
+#[inline]
+fn env_key_action(key: &str) -> Option<EnvKeyAction> {
+    if is_key_enter(key) {
+        return Some(EnvKeyAction::Submit);
+    }
+    if is_key_escape(key) {
+        return Some(EnvKeyAction::Cancel);
+    }
+    None
+}
+
+fn env_prompt_correlation_id(id: &str, key: &str) -> String {
+    format!("env_prompt:{id}:{key}")
+}
+
 /// EnvPrompt - Environment variable prompt with secure storage
 ///
 /// Prompts for environment variable values and stores them securely
-/// using the system keyring. Useful for API keys, tokens, and secrets.
+/// in the local age-encrypted secrets file. Useful for API keys, tokens, and secrets.
 pub struct EnvPrompt {
     /// Unique ID for this prompt instance
     pub id: String,
@@ -99,6 +169,8 @@ pub struct EnvPrompt {
     pub exists_in_keyring: bool,
     /// When the secret was last modified (if exists)
     pub modified_at: Option<DateTime<Utc>>,
+    /// Inline validation/persistence error shown to the user
+    validation_error: Option<String>,
 }
 
 impl EnvPrompt {
@@ -115,11 +187,11 @@ impl EnvPrompt {
         exists_in_keyring: bool,
         modified_at: Option<DateTime<Utc>>,
     ) -> Self {
+        let correlation_id = env_prompt_correlation_id(&id, &key);
         logging::log(
             "PROMPTS",
             &format!(
-                "EnvPrompt::new for key: {} (secret: {}, exists: {}, title: {:?}, modified: {:?})",
-                key, secret, exists_in_keyring, title, modified_at
+                "correlation_id={correlation_id} EnvPrompt::new key={key} secret={secret} exists={exists_in_keyring} title={title:?} modified={modified_at:?}",
             ),
         );
 
@@ -137,7 +209,12 @@ impl EnvPrompt {
             checked_keyring: false,
             exists_in_keyring,
             modified_at,
+            validation_error: None,
         }
+    }
+
+    fn correlation_id(&self) -> String {
+        env_prompt_correlation_id(&self.id, &self.key)
     }
 
     /// Check keyring and auto-submit if value exists
@@ -149,9 +226,13 @@ impl EnvPrompt {
         self.checked_keyring = true;
 
         if let Some(value) = secrets::get_secret(&self.key) {
+            let correlation_id = self.correlation_id();
             logging::log(
                 "PROMPTS",
-                &format!("Found existing value in keyring for key: {}", self.key),
+                &format!(
+                    "correlation_id={correlation_id} EnvPrompt auto-submit existing secret key={}",
+                    self.key
+                ),
             );
             // Auto-submit the stored value
             (self.on_submit)(self.id.clone(), Some(value));
@@ -163,15 +244,40 @@ impl EnvPrompt {
     /// Submit the entered value
     fn submit(&mut self) {
         let text = self.input.text();
-        if !text.is_empty() {
-            // Store in keyring if this is a secret
-            if self.secret {
-                if let Err(e) = secrets::set_secret(&self.key, text) {
-                    logging::log("ERROR", &format!("Failed to store secret: {}", e));
-                }
-            }
-            (self.on_submit)(self.id.clone(), Some(text.to_string()));
+        if let Some(validation_error) = env_submit_validation_error(text) {
+            self.validation_error = Some(validation_error.to_string());
+            logging::log(
+                "PROMPTS",
+                &format!(
+                    "correlation_id={} EnvPrompt submit blocked key={} reason={}",
+                    self.correlation_id(),
+                    self.key,
+                    validation_error
+                ),
+            );
+            return;
         }
+
+        // Persist in encrypted storage only when this prompt is secret-mode.
+        if self.secret {
+            if let Err(e) = secrets::set_secret(&self.key, text) {
+                self.validation_error =
+                    Some("Failed to store secret. Check logs and try again.".to_string());
+                logging::log(
+                    "ERROR",
+                    &format!(
+                        "correlation_id={} EnvPrompt failed to store secret key={} error={}",
+                        self.correlation_id(),
+                        self.key,
+                        e
+                    ),
+                );
+                return;
+            }
+        }
+
+        self.validation_error = None;
+        (self.on_submit)(self.id.clone(), Some(text.to_string()));
     }
 
     /// Set the input text programmatically
@@ -181,26 +287,42 @@ impl EnvPrompt {
         }
 
         self.input.set_text(text);
+        self.validation_error = None;
         cx.notify();
     }
 
     /// Cancel - submit None
     fn submit_cancel(&mut self) {
+        self.validation_error = None;
         (self.on_submit)(self.id.clone(), None);
     }
 
     /// Delete the secret and close the prompt
     fn submit_delete(&mut self) {
+        let correlation_id = self.correlation_id();
         logging::log(
             "PROMPTS",
-            &format!("EnvPrompt: deleting secret for key: {}", self.key),
+            &format!(
+                "correlation_id={correlation_id} EnvPrompt deleting secret key={}",
+                self.key
+            ),
         );
 
         // Delete from keyring
         if let Err(e) = secrets::delete_secret(&self.key) {
-            logging::log("ERROR", &format!("Failed to delete secret: {}", e));
+            self.validation_error =
+                Some("Failed to delete stored value. Check logs and try again.".to_string());
+            logging::log(
+                "ERROR",
+                &format!(
+                    "correlation_id={correlation_id} EnvPrompt failed to delete secret key={} error={}",
+                    self.key, e
+                ),
+            );
+            return;
         }
 
+        self.validation_error = None;
         // Call callback with None (same as cancel, but secret is now deleted)
         (self.on_submit)(self.id.clone(), None);
     }
@@ -210,15 +332,18 @@ impl EnvPrompt {
         self.input.display_text(self.secret)
     }
 
-    /// Render the text input with cursor and selection
-    fn render_input_text(&self, text_primary: u32, accent_color: u32) -> Div {
-        let text = self.display_text();
+    fn render_text_with_cursor_and_selection(
+        &self,
+        text: &str,
+        text_primary: u32,
+        accent_color: u32,
+    ) -> Div {
         let chars: Vec<char> = text.chars().collect();
-        let cursor_pos = self.input.cursor();
+        let text_len = chars.len();
+        let cursor_pos = self.input.cursor().min(text_len);
         let has_selection = self.input.has_selection();
 
         if text.is_empty() {
-            // Empty - just show cursor
             return div().flex().flex_row().items_center().child(
                 div()
                     .w(px(CURSOR_WIDTH))
@@ -228,15 +353,21 @@ impl EnvPrompt {
         }
 
         if has_selection {
-            // With selection: before | selected | after
             let selection = self.input.selection();
             let (start, end) = selection.range();
+            let start = start.min(text_len);
+            let end = end.min(text_len);
+            let (start, end) = if start <= end {
+                (start, end)
+            } else {
+                (end, start)
+            };
 
             let before: String = chars[..start].iter().collect();
             let selected: String = chars[start..end].iter().collect();
             let after: String = chars[end..].iter().collect();
 
-            div()
+            return div()
                 .flex()
                 .flex_row()
                 .items_center()
@@ -245,29 +376,38 @@ impl EnvPrompt {
                 .child(
                     div()
                         .bg(rgba((accent_color << 8) | 0x60))
-                        // Use primary text color for selection - already set from theme
                         .text_color(rgb(text_primary))
                         .child(selected),
                 )
-                .when(!after.is_empty(), |d: Div| d.child(div().child(after)))
-        } else {
-            // No selection: before cursor | cursor | after cursor
-            let before: String = chars[..cursor_pos].iter().collect();
-            let after: String = chars[cursor_pos..].iter().collect();
+                .when(!after.is_empty(), |d: Div| d.child(div().child(after)));
+        }
 
-            div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .overflow_x_hidden()
-                .when(!before.is_empty(), |d: Div| d.child(div().child(before)))
-                .child(
-                    div()
-                        .w(px(CURSOR_WIDTH))
-                        .h(px(CURSOR_HEIGHT_LG))
-                        .bg(rgb(text_primary)),
-                )
-                .when(!after.is_empty(), |d: Div| d.child(div().child(after)))
+        let before: String = chars[..cursor_pos].iter().collect();
+        let after: String = chars[cursor_pos..].iter().collect();
+
+        div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .overflow_x_hidden()
+            .when(!before.is_empty(), |d: Div| d.child(div().child(before)))
+            .child(
+                div()
+                    .w(px(CURSOR_WIDTH))
+                    .h(px(CURSOR_HEIGHT_LG))
+                    .bg(rgb(text_primary)),
+            )
+            .when(!after.is_empty(), |d: Div| d.child(div().child(after)))
+    }
+
+    /// Render the text input with cursor and selection
+    fn render_input_text(&self, text_primary: u32, accent_color: u32) -> Div {
+        if self.secret {
+            let masked = masked_secret_value_for_display(self.input.text());
+            self.render_text_with_cursor_and_selection(&masked, text_primary, accent_color)
+        } else {
+            let text = self.display_text();
+            self.render_text_with_cursor_and_selection(&text, text_primary, accent_color)
         }
     }
 }
@@ -289,26 +429,27 @@ impl Render for EnvPrompt {
              event: &gpui::KeyDownEvent,
              _window: &mut Window,
              cx: &mut Context<Self>| {
-                let key_str = event.keystroke.key.to_lowercase();
+                let key = event.keystroke.key.as_str();
                 let modifiers = &event.keystroke.modifiers;
 
                 // Handle submit/cancel first
-                match key_str.as_str() {
-                    "enter" => {
+                match env_key_action(key) {
+                    Some(EnvKeyAction::Submit) => {
                         this.submit();
                         return;
                     }
-                    "escape" => {
+                    Some(EnvKeyAction::Cancel) => {
                         this.submit_cancel();
                         return;
                     }
-                    _ => {}
+                    None => {}
                 }
 
                 // Delegate all other keys to TextInputState
                 let key_char = event.keystroke.key_char.as_deref();
+                let previous_text = this.input.text().to_string();
                 let handled = this.input.handle_key(
-                    &key_str,
+                    key,
                     key_char,
                     modifiers.platform, // On macOS, platform = Cmd key
                     modifiers.alt,
@@ -317,6 +458,9 @@ impl Render for EnvPrompt {
                 );
 
                 if handled {
+                    if this.validation_error.is_some() && previous_text != this.input.text() {
+                        this.validation_error = None;
+                    }
                     cx.notify();
                 }
             },
@@ -331,26 +475,18 @@ impl Render for EnvPrompt {
         let error_color = design_colors.error;
 
         // Build placeholder text for input
-        let input_placeholder: SharedString = if self.exists_in_keyring {
-            "Enter new value to update".into()
-        } else {
-            "Paste or type your API key".into()
-        };
+        let input_placeholder: SharedString =
+            env_input_placeholder(&self.key, self.exists_in_keyring).into();
 
         // Build description text
         let description: SharedString = self
             .prompt
             .clone()
-            .unwrap_or_else(|| {
-                if self.exists_in_keyring {
-                    format!("Update the value for {}", self.key)
-                } else {
-                    format!("Enter the value for {}", self.key)
-                }
-            })
+            .unwrap_or_else(|| env_default_description(&self.key, self.exists_in_keyring))
             .into();
 
         let input_is_empty = self.input.is_empty();
+        let running_status = env_running_status(&self.key);
 
         // Full-window centered layout for API key input
         div()
@@ -417,92 +553,122 @@ impl Render for EnvPrompt {
                                     .child(description),
                             ),
                     )
-                    // Input field with rounded border
+                    // Input field with clearer label and focus treatment
                     .child(
                         div()
                             .w_full()
                             .max_w(px(400.))
-                            .px(px(16.))
-                            .py(px(14.))
-                            .rounded(px(12.))
-                            .bg(rgb(bg_surface))
-                            .border_1()
-                            .border_color(rgba(text_muted << 8 | 0x40))
+                            .flex()
+                            .flex_col()
+                            .gap(px(8.))
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .text_color(rgb(text_muted))
+                                    .child(env_input_label(self.secret)),
+                            )
+                            .child(
+                                div()
+                                    .min_h(px(PROMPT_INPUT_FIELD_HEIGHT))
+                                    .px(px(16.))
+                                    .py(px(12.))
+                                    .rounded(px(12.))
+                                    .bg(rgb(bg_surface))
+                                    .border_1()
+                                    .border_color(rgba(accent_color << 8 | 0x80))
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap(px(12.))
+                                    // Lock icon inside input
+                                    .child(
+                                        svg()
+                                            .external_path(if self.secret {
+                                                IconName::EyeOff.external_path()
+                                            } else {
+                                                IconName::Settings.external_path()
+                                            })
+                                            .size(px(18.))
+                                            .text_color(rgb(text_muted))
+                                            .flex_shrink_0(),
+                                    )
+                                    // Input text area
+                                    .child({
+                                        div()
+                                            .flex_1()
+                                            .overflow_hidden()
+                                            .text_lg()
+                                            .text_color(if input_is_empty {
+                                                rgb(text_muted)
+                                            } else {
+                                                rgb(text_primary)
+                                            })
+                                            // When empty: show cursor + placeholder
+                                            .when(input_is_empty, |d: Div| {
+                                                d.child(
+                                                    div()
+                                                        .flex()
+                                                        .flex_row()
+                                                        .items_center()
+                                                        .child(
+                                                            div()
+                                                                .w(px(CURSOR_WIDTH))
+                                                                .h(px(CURSOR_HEIGHT_LG))
+                                                                .bg(rgb(accent_color)),
+                                                        )
+                                                        .child(
+                                                            div()
+                                                                .ml(px(4.))
+                                                                .text_color(rgb(text_muted))
+                                                                .child(input_placeholder.clone()),
+                                                        ),
+                                                )
+                                            })
+                                            // When has text: show masked dots or text with cursor
+                                            .when(!input_is_empty, |d: Div| {
+                                                d.child(
+                                                    self.render_input_text(
+                                                        text_primary,
+                                                        accent_color,
+                                                    ),
+                                                )
+                                            })
+                                    }),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(rgb(text_muted))
+                                    .child(env_storage_hint_text(self.secret)),
+                            ),
+                    )
+                    .when_some(self.validation_error.clone(), |d: Div, error| {
+                        d.child(
+                            div()
+                                .max_w(px(400.))
+                                .w_full()
+                                .text_xs()
+                                .text_color(rgb(error_color))
+                                .child(error),
+                        )
+                    })
+                    // Running state indicator to clarify why this prompt is visible
+                    .child(
+                        div()
+                            .max_w(px(400.))
+                            .w_full()
                             .flex()
                             .flex_row()
                             .items_center()
-                            .gap(px(12.))
-                            // Lock icon inside input
+                            .gap(px(8.))
+                            .child(div().size(px(8.)).rounded_full().bg(rgb(accent_color)))
                             .child(
-                                svg()
-                                    .external_path(if self.secret {
-                                        IconName::EyeOff.external_path()
-                                    } else {
-                                        IconName::Settings.external_path()
-                                    })
-                                    .size(px(18.))
-                                    .text_color(rgb(text_muted))
-                                    .flex_shrink_0(),
-                            )
-                            // Input text area
-                            .child({
                                 div()
-                                    .flex_1()
-                                    .overflow_hidden()
-                                    .text_lg()
-                                    .text_color(if input_is_empty {
-                                        rgb(text_muted)
-                                    } else {
-                                        rgb(text_primary)
-                                    })
-                                    // When empty: show cursor + placeholder
-                                    .when(input_is_empty, |d: Div| {
-                                        d.child(
-                                            div()
-                                                .flex()
-                                                .flex_row()
-                                                .items_center()
-                                                .child(
-                                                    div()
-                                                        .w(px(CURSOR_WIDTH))
-                                                        .h(px(CURSOR_HEIGHT_LG))
-                                                        .bg(rgb(accent_color)),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .ml(px(4.))
-                                                        .text_color(rgb(text_muted))
-                                                        .child(input_placeholder.clone()),
-                                                ),
-                                        )
-                                    })
-                                    // When has text: show masked dots or text with cursor
-                                    .when(!input_is_empty, |d: Div| {
-                                        if self.secret {
-                                            // Show dots for secret input
-                                            let dot_count = self.input.text().len();
-                                            let dots = "•".repeat(dot_count);
-                                            d.child(
-                                                div()
-                                                    .flex()
-                                                    .flex_row()
-                                                    .items_center()
-                                                    .child(dots)
-                                                    .child(
-                                                        div()
-                                                            .w(px(CURSOR_WIDTH))
-                                                            .h(px(CURSOR_HEIGHT_LG))
-                                                            .bg(rgb(accent_color))
-                                                            .ml(px(1.)),
-                                                    ),
-                                            )
-                                        } else {
-                                            d.child(
-                                                self.render_input_text(text_primary, accent_color),
-                                            )
-                                        }
-                                    })
-                            }),
+                                    .text_sm()
+                                    .text_color(rgb(text_muted))
+                                    .child(running_status),
+                            ),
                     )
                     // Status hint - show when key exists with modification date and delete option
                     .when(self.exists_in_keyring, |d: Div| {
@@ -568,16 +734,17 @@ impl Render for EnvPrompt {
             .child({
                 let footer_colors = PromptFooterColors::from_theme(&self.theme);
                 let primary_label = if self.exists_in_keyring {
-                    "Update"
+                    "Update & Continue"
                 } else {
-                    "Save"
+                    "Save & Continue"
                 };
                 let footer_config = PromptFooterConfig::new()
                     .primary_label(primary_label)
                     .primary_shortcut("↵")
+                    .helper_text("Script running")
                     .show_secondary(true)
                     .secondary_label("Cancel")
-                    .secondary_shortcut("esc");
+                    .secondary_shortcut("Esc");
 
                 // Add click handlers
                 let handle = cx.entity().downgrade();
@@ -598,5 +765,84 @@ impl Render for EnvPrompt {
                         }
                     }))
             })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn env_placeholder_copy_is_contextual() {
+        assert_eq!(
+            env_input_placeholder("OPENAI_API_KEY", false),
+            "Paste value for OPENAI_API_KEY"
+        );
+        assert_eq!(
+            env_input_placeholder("OPENAI_API_KEY", true),
+            "Paste a replacement value for OPENAI_API_KEY"
+        );
+    }
+
+    #[test]
+    fn env_run_status_message_mentions_waiting_state() {
+        assert_eq!(
+            env_running_status("OPENAI_API_KEY"),
+            "Script is running and waiting for OPENAI_API_KEY"
+        );
+    }
+
+    #[test]
+    fn env_description_mentions_existing_secret_when_present() {
+        assert_eq!(
+            env_default_description("OPENAI_API_KEY", true),
+            "Update the saved value for OPENAI_API_KEY"
+        );
+        assert_eq!(
+            env_default_description("OPENAI_API_KEY", false),
+            "Enter the value for OPENAI_API_KEY"
+        );
+    }
+
+    #[test]
+    fn test_env_secret_mask_uses_char_count_when_input_contains_unicode() {
+        assert_eq!(masked_secret_value_for_display("abc"), "•••");
+        assert_eq!(masked_secret_value_for_display("🔐é"), "••");
+    }
+
+    #[test]
+    fn test_env_storage_hint_describes_encrypted_store_when_secret() {
+        assert_eq!(
+            env_storage_hint_text(true),
+            "Stored securely in ~/.scriptkit/secrets.age"
+        );
+    }
+
+    #[test]
+    fn test_env_storage_hint_describes_ephemeral_mode_when_not_secret() {
+        assert_eq!(
+            env_storage_hint_text(false),
+            "Value is provided to the script for this run only"
+        );
+    }
+
+    #[test]
+    fn test_env_validation_returns_error_when_submit_value_is_empty() {
+        assert_eq!(
+            env_submit_validation_error(""),
+            Some("Value cannot be empty"),
+        );
+        assert_eq!(
+            env_submit_validation_error("   "),
+            Some("Value cannot be empty"),
+        );
+        assert_eq!(env_submit_validation_error("abc"), None);
+    }
+
+    #[test]
+    fn test_env_key_action_handles_return_and_esc_aliases() {
+        assert_eq!(env_key_action("return"), Some(EnvKeyAction::Submit));
+        assert_eq!(env_key_action("esc"), Some(EnvKeyAction::Cancel));
+        assert_eq!(env_key_action("tab"), None);
     }
 }

@@ -1504,6 +1504,6 @@ pub fn render_section_header(
 }
 
 // Note: GPUI rendering tests omitted due to GPUI macro recursion limit issues.
-// The LIST_ITEM_HEIGHT constant is 48.0 and the component is integration-tested
+// The LIST_ITEM_HEIGHT constant is 40.0 and the component is integration-tested
 // via the main application's script list and arg prompt rendering.
 // Unit tests for format_shortcut_display are in src/list_item_tests.rs.

@@ -35,6 +35,11 @@ use crate::ui_foundation::{hstack, HexColorExt};
 use crate::utils;
 use crate::window_resize::layout::FOOTER_HEIGHT;
 
+/// Helper text width cap to preserve room for footer actions.
+pub const PROMPT_FOOTER_HELPER_TEXT_MAX_WIDTH_PX: f32 = 420.0;
+/// Info label width cap so long labels do not crowd footer actions.
+pub const PROMPT_FOOTER_INFO_TEXT_MAX_WIDTH_PX: f32 = 220.0;
+
 /// Pre-computed colors for PromptFooter rendering
 ///
 /// This struct holds the primitive color values needed for footer rendering,
@@ -47,7 +52,7 @@ pub struct PromptFooterColors {
     pub text_muted: u32,
     /// Border color for top border and divider
     pub border: u32,
-    /// Background color for footer (matches selected item background)
+    /// Background color for footer surface
     pub background: u32,
     /// Whether we're in light mode (affects opacity)
     pub is_light_mode: bool,
@@ -60,7 +65,8 @@ impl PromptFooterColors {
             accent: theme.colors.accent.selected,
             text_muted: theme.colors.text.muted,
             border: theme.colors.ui.border,
-            background: theme.colors.accent.selected_subtle, // Match selected item bg
+            // Match selected item surface token for footer consistency.
+            background: theme.colors.accent.selected_subtle,
             is_light_mode: !theme.is_dark_mode(),
         }
     }
@@ -71,8 +77,8 @@ impl PromptFooterColors {
             accent: colors.accent,
             text_muted: colors.text_muted,
             border: colors.border,
-            background: colors.background_selected, // Match selected item bg
-            is_light_mode: false,                   // Default to dark mode for design colors
+            background: colors.background_selected,
+            is_light_mode: false, // Default to dark mode for design colors
         }
     }
 }
@@ -86,6 +92,17 @@ impl Default for PromptFooterColors {
             background: 0xffffff, // White - subtle brightening like Raycast
             is_light_mode: false,
         }
+    }
+}
+
+/// Resolve footer surface color with mode-specific opacity.
+pub fn footer_surface_rgba(colors: PromptFooterColors) -> u32 {
+    if colors.is_light_mode {
+        // Keep legacy light-mode footer surface to avoid dark banding with vibrancy.
+        0xf2f1f1ff
+    } else {
+        // Preserve the selected-subtle color, but only as a subtle dark-mode overlay.
+        (colors.background << 8) | 0x33
     }
 }
 
@@ -104,6 +121,10 @@ pub struct PromptFooterConfig {
     pub show_logo: bool,
     /// Whether to show the secondary button
     pub show_secondary: bool,
+    /// Disable interactions on the primary button
+    pub primary_disabled: bool,
+    /// Disable interactions on the secondary button
+    pub secondary_disabled: bool,
     /// Optional helper text shown next to logo (e.g., "Tab 1 of 2 · Tab to continue")
     pub helper_text: Option<String>,
     /// Optional info label shown before buttons (e.g., "typescript", "5 items")
@@ -119,6 +140,8 @@ impl Default for PromptFooterConfig {
             secondary_shortcut: "⌘K".to_string(),
             show_logo: true,
             show_secondary: true,
+            primary_disabled: false,
+            secondary_disabled: false,
             helper_text: None,
             info_label: None,
         }
@@ -164,6 +187,18 @@ impl PromptFooterConfig {
     /// Set whether to show the secondary button
     pub fn show_secondary(mut self, show: bool) -> Self {
         self.show_secondary = show;
+        self
+    }
+
+    /// Set whether the primary button is disabled
+    pub fn primary_disabled(mut self, disabled: bool) -> Self {
+        self.primary_disabled = disabled;
+        self
+    }
+
+    /// Set whether the secondary button is disabled
+    pub fn secondary_disabled(mut self, disabled: bool) -> Self {
+        self.secondary_disabled = disabled;
         self
     }
 
@@ -238,9 +273,13 @@ impl PromptFooter {
         id: &'static str,
         label: String,
         shortcut: String,
+        disabled: bool,
         on_click: Option<Rc<FooterClickCallback>>,
     ) -> impl IntoElement {
-        let mut button = FooterButton::new(label).shortcut(shortcut).id(id);
+        let mut button = FooterButton::new(label)
+            .shortcut(shortcut)
+            .id(id)
+            .disabled(disabled);
 
         if let Some(callback) = on_click {
             let handler = callback.clone();
@@ -265,15 +304,23 @@ impl PromptFooter {
 impl RenderOnce for PromptFooter {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let colors = self.colors;
+        let theme = crate::theme::get_cached_theme();
+        let ui_font_size = theme.get_fonts().ui_size;
+        let info_font_size = (ui_font_size - 4.0).max(9.0);
+        let helper_font_size = (ui_font_size - 2.0).max(10.0);
 
         // Build the right-side container (info label + buttons)
-        let mut right_side = hstack().gap(px(8.)).items_center();
+        let mut right_side = hstack().gap(px(8.)).items_center().min_w(px(0.));
 
         // Info label (e.g., "typescript", "5 items") - shown before buttons
         if let Some(ref info) = self.config.info_label {
             right_side = right_side.child(
                 div()
-                    .text_xs()
+                    .max_w(px(PROMPT_FOOTER_INFO_TEXT_MAX_WIDTH_PX))
+                    .overflow_hidden()
+                    .text_ellipsis()
+                    .whitespace_nowrap()
+                    .text_size(px(info_font_size))
                     .text_color(colors.text_muted.to_rgb())
                     .child(info.clone()),
             );
@@ -287,6 +334,7 @@ impl RenderOnce for PromptFooter {
             "footer-primary-button",
             self.config.primary_label.clone(),
             self.config.primary_shortcut.clone(),
+            self.config.primary_disabled,
             self.on_primary_click.clone(),
         ));
 
@@ -297,6 +345,7 @@ impl RenderOnce for PromptFooter {
                 "footer-secondary-button",
                 self.config.secondary_label.clone(),
                 self.config.secondary_shortcut.clone(),
+                self.config.secondary_disabled,
                 self.on_secondary_click.clone(),
             ));
         }
@@ -304,13 +353,8 @@ impl RenderOnce for PromptFooter {
         right_side = right_side.child(buttons);
 
         // Main footer container (uses FOOTER_HEIGHT constant for single source of truth)
-        // Light mode: neutral warm gray for clean separation from content
-        // Dark mode: semi-transparent for vibrancy support
-        let footer_bg = if colors.is_light_mode {
-            0xf2f1f1u32.to_rgb() // Light neutral gray — clean separation from content
-        } else {
-            colors.background.rgba8(0x33) // ~20% opacity in dark mode (boosted from 12%)
-        };
+        // Resolve from PromptFooterColors.background so color ownership stays within footer tokens.
+        let footer_bg = rgba(footer_surface_rgba(colors));
         let border_opacity: u8 = 0x50; // ~31% — visible border on both light and dark
 
         let mut footer = div()
@@ -340,7 +384,12 @@ impl RenderOnce for PromptFooter {
             }]);
 
         // Left side: Logo + helper text
-        let mut left_side = hstack().gap(px(8.)).items_center();
+        let mut left_side = hstack()
+            .flex_1()
+            .min_w(px(0.))
+            .overflow_hidden()
+            .gap(px(8.))
+            .items_center();
 
         // Logo (if enabled)
         if self.config.show_logo {
@@ -351,7 +400,11 @@ impl RenderOnce for PromptFooter {
         if let Some(ref helper) = self.config.helper_text {
             left_side = left_side.child(
                 div()
-                    .text_sm()
+                    .max_w(px(PROMPT_FOOTER_HELPER_TEXT_MAX_WIDTH_PX))
+                    .overflow_hidden()
+                    .text_ellipsis()
+                    .whitespace_nowrap()
+                    .text_size(px(helper_font_size))
                     .text_color(colors.accent.to_rgb())
                     .child(helper.clone()),
             );

@@ -16,6 +16,7 @@
 //! to call them without conditional compilation at the call site.
 
 use crate::logging;
+use crate::windows::DisplayBounds;
 
 #[cfg(target_os = "macos")]
 use cocoa::appkit::NSApp;
@@ -2149,15 +2150,6 @@ pub fn get_global_mouse_position() -> Option<(f64, f64)> {
 // ============================================================================
 // Display Information
 // ============================================================================
-
-/// Represents a display's bounds in macOS global coordinate space
-#[derive(Debug, Clone)]
-pub struct DisplayBounds {
-    pub origin_x: f64,
-    pub origin_y: f64,
-    pub width: f64,
-    pub height: f64,
-}
 
 #[cfg(target_os = "macos")]
 use cocoa::foundation::NSRect;

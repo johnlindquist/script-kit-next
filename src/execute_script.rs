@@ -104,6 +104,25 @@ fn get_displays() -> anyhow::Result<Vec<protocol::DisplayInfo>> {
     }
 }
 
+fn format_missing_interactive_session_error(script_name: &str, script_path: &std::path::Path) -> String {
+    format!(
+        "interactive_session_missing: script='{}' path='{}' state=script_session:none operation=split_interactive_session",
+        script_name,
+        script_path.display()
+    )
+}
+
+fn take_active_script_session(
+    script_session: &SharedSession,
+    script_name: &str,
+    script_path: &std::path::Path,
+) -> Result<executor::ScriptSession, String> {
+    script_session
+        .lock()
+        .take()
+        .ok_or_else(|| format_missing_interactive_session_error(script_name, script_path))
+}
+
 impl ScriptListApp {
     fn execute_interactive(&mut self, script: &scripts::Script, cx: &mut Context<Self>) {
         logging::log(
@@ -154,7 +173,19 @@ impl ScriptListApp {
                 // The read thread blocks on receive_message(), so we can't check for responses in the same loop
 
                 // Take ownership of the session and split it
-                let session = self.script_session.lock().take().unwrap();
+                let session = match take_active_script_session(
+                    &self.script_session,
+                    &script.name,
+                    &script.path,
+                ) {
+                    Ok(session) => session,
+                    Err(error) => {
+                        logging::log("EXEC", &error);
+                        self.last_output = Some(SharedString::from(format!("✗ Error: {}", error)));
+                        cx.notify();
+                        return;
+                    }
+                };
                 let split = session.split();
 
                 let mut stdin = split.stdin;
@@ -379,12 +410,36 @@ impl ScriptListApp {
                             }
                         }) {
                             Ok(Some(msg)) => {
-                                logging::log("EXEC", &format!("Received message: {:?}", msg));
+                                let message_id = msg
+                                    .id()
+                                    .map(str::to_string)
+                                    .unwrap_or_else(|| format!("msg:{}", uuid::Uuid::new_v4()));
+                                let _message_guard =
+                                    logging::set_correlation_id(format!("protocol:{}", message_id));
+                                let payload_summary = serde_json::to_string(&msg)
+                                    .map(|json| logging::summarize_payload(&json))
+                                    .unwrap_or_else(|_| "{serialize_error}".to_string());
+                                tracing::debug!(
+                                    category = "EXEC",
+                                    event_type = "protocol_message_received",
+                                    message_id = %message_id,
+                                    payload_summary = %payload_summary,
+                                    "Received protocol message"
+                                );
 
                                 // First, try to handle selected text messages directly (no UI needed)
                                 match executor::handle_selected_text_message(&msg) {
                                     executor::SelectedTextHandleResult::Handled(response) => {
-                                        logging::log("EXEC", &format!("Handled selected text message, sending response: {:?}", response));
+                                        let response_summary = serde_json::to_string(&response)
+                                            .map(|json| logging::summarize_payload(&json))
+                                            .unwrap_or_else(|_| "{serialize_error}".to_string());
+                                        tracing::debug!(
+                                            category = "EXEC",
+                                            event_type = "protocol_selected_text_response",
+                                            message_id = %message_id,
+                                            payload_summary = %response_summary,
+                                            "Handled selected text message, sending response"
+                                        );
                                         if let Err(e) = reader_response_tx.send(response) {
                                             logging::log(
                                                 "EXEC",
@@ -1595,5 +1650,29 @@ impl ScriptListApp {
                 cx.notify();
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+    use std::sync::Arc;
+
+    #[test]
+    fn test_take_active_script_session_returns_error_when_session_missing() {
+        let shared_session: SharedSession = Arc::new(ParkingMutex::new(None));
+
+        let error = take_active_script_session(
+            &shared_session,
+            "example-script",
+            Path::new("/tmp/example-script.ts"),
+        )
+        .expect_err("missing interactive session should be reported as an error");
+
+        assert!(error.contains("interactive_session_missing"));
+        assert!(error.contains("script='example-script'"));
+        assert!(error.contains("state=script_session:none"));
+        assert!(error.contains("operation=split_interactive_session"));
     }
 }

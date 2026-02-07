@@ -14,16 +14,29 @@ pub const DEFAULT_TERMINAL_FONT_SIZE: f32 = 14.0;
 /// Default UI scale
 pub const DEFAULT_UI_SCALE: f32 = 1.0;
 
+/// Default launcher/layout heights (pixels)
+pub const DEFAULT_LAYOUT_STANDARD_HEIGHT: f32 = 500.0;
+pub const DEFAULT_LAYOUT_MAX_HEIGHT: f32 = 700.0;
+
 /// Default built-in feature flags
 pub const DEFAULT_CLIPBOARD_HISTORY: bool = true;
 pub const DEFAULT_APP_LAUNCHER: bool = true;
 pub const DEFAULT_WINDOW_SWITCHER: bool = true;
+pub const DEFAULT_AI_HOTKEY_ENABLED: bool = true;
+pub const DEFAULT_LOGS_HOTKEY_ENABLED: bool = true;
 
 /// Default max text length for clipboard history entries (bytes)
 pub const DEFAULT_CLIPBOARD_HISTORY_MAX_TEXT_LENGTH: usize = 100_000;
 
 /// Default process limits
 pub const DEFAULT_HEALTH_CHECK_INTERVAL_MS: u64 = 5000;
+
+/// Default watcher tuning values
+pub const DEFAULT_WATCHER_DEBOUNCE_MS: u64 = 500;
+pub const DEFAULT_WATCHER_STORM_THRESHOLD: usize = 200;
+pub const DEFAULT_WATCHER_INITIAL_BACKOFF_MS: u64 = 100;
+pub const DEFAULT_WATCHER_MAX_BACKOFF_MS: u64 = 30_000;
+pub const DEFAULT_WATCHER_MAX_NOTIFY_ERRORS: u32 = 10;
 
 /// Default suggested section settings
 pub const DEFAULT_SUGGESTED_ENABLED: bool = true;

@@ -13,14 +13,24 @@
 //!
 //! Requires Accessibility permission in System Preferences > Privacy & Security > Accessibility
 
-use anyhow::{bail, Context, Result};
+#[cfg(target_os = "macos")]
+use anyhow::Context;
+use anyhow::{bail, Result};
+#[cfg(target_os = "macos")]
 use arboard::Clipboard;
+#[cfg(target_os = "macos")]
 use get_selected_text::get_selected_text as get_selected_text_impl;
+#[cfg(target_os = "macos")]
 use macos_accessibility_client::accessibility;
+#[cfg(target_os = "macos")]
 use std::process::Command;
+#[cfg(target_os = "macos")]
 use std::thread;
+#[cfg(target_os = "macos")]
 use std::time::Duration;
-use tracing::{debug, info, instrument, warn};
+#[cfg(target_os = "macos")]
+use tracing::{debug, info};
+use tracing::{instrument, warn};
 
 // ============================================================================
 // Permission Functions
@@ -34,6 +44,7 @@ use tracing::{debug, info, instrument, warn};
 /// # Returns
 /// `true` if permission is granted, `false` otherwise.
 #[instrument]
+#[cfg(target_os = "macos")]
 pub fn has_accessibility_permission() -> bool {
     let result = accessibility::application_is_trusted();
     debug!(granted = result, "Checked accessibility permission");
@@ -49,6 +60,7 @@ pub fn has_accessibility_permission() -> bool {
 /// # Returns
 /// `true` if permission is granted after the request, `false` otherwise.
 #[instrument]
+#[cfg(target_os = "macos")]
 pub fn request_accessibility_permission() -> bool {
     info!("Requesting accessibility permission");
     let result = accessibility::application_is_trusted_with_prompt();
@@ -69,6 +81,7 @@ pub fn request_accessibility_permission() -> bool {
 /// Returns error if unable to spawn the open command.
 #[allow(dead_code)] // Will be used for permission UI prompts
 #[instrument]
+#[cfg(target_os = "macos")]
 pub fn open_accessibility_settings() -> Result<()> {
     info!("Opening accessibility settings");
     Command::new("open")
@@ -87,6 +100,7 @@ pub fn open_accessibility_settings() -> Result<()> {
 /// `true` if permission is granted (either already or after request).
 #[allow(dead_code)] // Will be used for permission UI prompts
 #[instrument]
+#[cfg(target_os = "macos")]
 pub fn show_permission_dialog() -> Result<bool> {
     // First, check if already granted
     if has_accessibility_permission() {
@@ -123,6 +137,7 @@ pub fn show_permission_dialog() -> Result<bool> {
 /// - Returns error if the operation fails
 ///
 #[instrument(skip_all)]
+#[cfg(target_os = "macos")]
 pub fn get_selected_text() -> Result<String> {
     // Check permissions first
     if !has_accessibility_permission() {
@@ -172,6 +187,7 @@ pub fn get_selected_text() -> Result<String> {
 /// - Returns error if clipboard or paste operation fails
 ///
 #[instrument(skip(text), fields(text_len = text.len()))]
+#[cfg(target_os = "macos")]
 pub fn set_selected_text(text: &str) -> Result<()> {
     if !has_accessibility_permission() {
         bail!("Accessibility permission required");
@@ -190,6 +206,7 @@ pub fn set_selected_text(text: &str) -> Result<()> {
 /// 2. Sets the clipboard to the new text
 /// 3. Simulates Cmd+V to paste using Core Graphics (more reliable than enigo)
 /// 4. Restores the original clipboard (best effort)
+#[cfg(target_os = "macos")]
 fn set_via_clipboard_fallback(text: &str) -> Result<()> {
     let mut clipboard = Clipboard::new().context("Failed to access clipboard")?;
 
@@ -235,6 +252,7 @@ fn set_via_clipboard_fallback(text: &str) -> Result<()> {
 /// # Usage
 /// Call this after copying content to the clipboard and hiding the window.
 /// The function will simulate Cmd+V to paste into the currently focused app.
+#[cfg(target_os = "macos")]
 pub fn simulate_paste_with_cg() -> Result<()> {
     use core_graphics::event::{CGEvent, CGEventFlags, CGEventTapLocation, CGKeyCode};
     use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
@@ -267,6 +285,52 @@ pub fn simulate_paste_with_cg() -> Result<()> {
     Ok(())
 }
 
+#[cfg(not(target_os = "macos"))]
+#[instrument]
+pub fn has_accessibility_permission() -> bool {
+    false
+}
+
+#[cfg(not(target_os = "macos"))]
+#[instrument]
+pub fn request_accessibility_permission() -> bool {
+    false
+}
+
+#[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
+#[instrument]
+pub fn open_accessibility_settings() -> Result<()> {
+    bail!("Accessibility settings are only available on macOS")
+}
+
+#[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
+#[instrument]
+pub fn show_permission_dialog() -> Result<bool> {
+    Ok(false)
+}
+
+#[cfg(not(target_os = "macos"))]
+#[instrument(skip_all)]
+pub fn get_selected_text() -> Result<String> {
+    warn!("get_selected_text requested on unsupported platform");
+    bail!("Selected text APIs are only supported on macOS")
+}
+
+#[cfg(not(target_os = "macos"))]
+#[instrument(skip(text), fields(text_len = text.len()))]
+pub fn set_selected_text(text: &str) -> Result<()> {
+    let _ = text;
+    warn!("set_selected_text requested on unsupported platform");
+    bail!("Selected text APIs are only supported on macOS")
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn simulate_paste_with_cg() -> Result<()> {
+    bail!("Paste simulation is only supported on macOS")
+}
+
 // ============================================================================
 // Tests
 // ============================================================================
@@ -282,7 +346,7 @@ pub fn simulate_paste_with_cg() -> Result<()> {
 // These tests interact with macOS accessibility APIs, clipboard, and keyboard
 // simulation. They may have side effects on the system state.
 
-#[cfg(all(test, feature = "system-tests"))]
+#[cfg(all(target_os = "macos", test, feature = "system-tests"))]
 mod system_tests {
     use super::*;
 

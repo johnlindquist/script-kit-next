@@ -9,7 +9,7 @@
 //! ```text
 //! ┌─────────────────────────────────────────────────────────────────┐
 //! │  ClaudeSessionManager (global singleton)                        │
-//! │  ├── sessions: HashMap<session_id, ClaudeSession>              │
+//! │  ├── sessions: HashMap<session_id, Arc<Mutex<ClaudeSession>>>  │
 //! │  └── cleanup_interval: periodically removes stale sessions      │
 //! ├─────────────────────────────────────────────────────────────────┤
 //! │  ClaudeSession (per chat)                                       │
@@ -186,7 +186,7 @@ impl Default for SessionConfig {
 
 /// Manager for persistent Claude CLI sessions
 pub struct ClaudeSessionManager {
-    sessions: Mutex<HashMap<String, ClaudeSession>>,
+    sessions: Mutex<HashMap<String, Arc<Mutex<ClaudeSession>>>>,
     /// Track session IDs that have been created (for --resume vs --session-id)
     created_sessions: Mutex<std::collections::HashSet<String>>,
     config: SessionConfig,
@@ -211,6 +211,15 @@ impl ClaudeSessionManager {
         })
     }
 
+    #[cfg(test)]
+    fn new_for_tests(config: SessionConfig) -> Self {
+        Self {
+            sessions: Mutex::new(HashMap::new()),
+            created_sessions: Mutex::new(std::collections::HashSet::new()),
+            config,
+        }
+    }
+
     /// Send a message to a session (creating it if needed)
     pub fn send_message(
         &self,
@@ -227,26 +236,44 @@ impl ClaudeSessionManager {
             "ClaudeSessionManager.send_message called"
         );
 
-        // Try to get existing session
-        let mut sessions = self
-            .sessions
-            .lock()
-            .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+        // Lock the session map only long enough to clone a session handle.
+        // Never hold this lock while sending to Claude, because send_message can block.
+        let mut session_handle = {
+            let sessions = self.sessions.lock().map_err(|e| {
+                anyhow!(
+                    "ClaudeSessionManager sessions lock poisoned while loading session handle \
+                     (attempted=load_session_handle, session_id={}, active_sessions=unknown, error={})",
+                    session_id,
+                    e
+                )
+            })?;
 
-        tracing::debug!(
-            session_id = %session_id,
-            active_sessions = sessions.len(),
-            "Acquired session lock"
-        );
+            tracing::debug!(
+                session_id = %session_id,
+                active_sessions = sessions.len(),
+                "Loaded session handle snapshot"
+            );
+            sessions.get(session_id).cloned()
+        };
 
-        // Check if we have a valid session
-        let needs_new_session = match sessions.get_mut(session_id) {
-            Some(session) => {
-                let alive = session.is_alive();
+        // Validate the existing session outside the map lock.
+        let needs_new_session = match session_handle.as_ref() {
+            Some(handle) => {
+                let alive = {
+                    let mut session = handle.lock().map_err(|e| {
+                        anyhow!(
+                            "ClaudeSession lock poisoned while checking liveness \
+                             (attempted=check_liveness, session_id={}, error={})",
+                            session_id,
+                            e
+                        )
+                    })?;
+                    session.is_alive()
+                };
                 tracing::debug!(
                     session_id = %session_id,
                     is_alive = alive,
-                    "Found existing session"
+                    "Checked existing session liveness"
                 );
                 !alive
             }
@@ -257,25 +284,47 @@ impl ClaudeSessionManager {
         };
 
         if needs_new_session {
-            // Remove dead session if present
-            sessions.remove(session_id);
-
-            // Create new session
             tracing::info!(
                 session_id = %session_id,
                 model_id = %model_id,
                 "Creating new persistent Claude session"
             );
-
-            let session = self.spawn_session(session_id, model_id, system_prompt)?;
-            sessions.insert(session_id.to_string(), session);
-            tracing::debug!(session_id = %session_id, "Session created and inserted");
+            let new_handle = Arc::new(Mutex::new(self.spawn_session(
+                session_id,
+                model_id,
+                system_prompt,
+            )?));
+            {
+                let mut sessions = self.sessions.lock().map_err(|e| {
+                    anyhow!(
+                        "ClaudeSessionManager sessions lock poisoned while storing session handle \
+                         (attempted=store_session_handle, session_id={}, active_sessions=unknown, error={})",
+                        session_id,
+                        e
+                    )
+                })?;
+                sessions.insert(session_id.to_string(), Arc::clone(&new_handle));
+                tracing::debug!(
+                    session_id = %session_id,
+                    active_sessions = sessions.len(),
+                    "Session handle stored"
+                );
+            }
+            session_handle = Some(new_handle);
         }
 
-        // Get the session and send message
-        let session = sessions
-            .get_mut(session_id)
-            .ok_or_else(|| anyhow!("Session not found after creation"))?;
+        // Acquire only the per-session lock for the potentially blocking send.
+        let session_handle =
+            session_handle.ok_or_else(|| anyhow!("Session not found after creation"))?;
+        let mut session = session_handle.lock().map_err(|e| {
+            anyhow!(
+                "ClaudeSession lock poisoned while sending message \
+                 (attempted=send_message, session_id={}, model_id={}, error={})",
+                session_id,
+                model_id,
+                e
+            )
+        })?;
 
         tracing::debug!(session_id = %session_id, "Sending message to session");
         let result = session.send_message(content, on_chunk);
@@ -444,20 +493,51 @@ impl ClaudeSessionManager {
 
     /// Close a specific session
     pub fn close_session(&self, session_id: &str) {
-        if let Ok(mut sessions) = self.sessions.lock() {
-            if let Some(mut session) = sessions.remove(session_id) {
-                tracing::info!(session_id = %session_id, "Closing Claude session");
-                session.kill();
+        let session_handle = self
+            .sessions
+            .lock()
+            .ok()
+            .and_then(|mut sessions| sessions.remove(session_id));
+        if let Some(session_handle) = session_handle {
+            tracing::info!(session_id = %session_id, "Closing Claude session");
+            match session_handle.lock() {
+                Ok(mut session) => session.kill(),
+                Err(poisoned) => {
+                    tracing::warn!(
+                        session_id = %session_id,
+                        attempted = "close_session",
+                        state = "poisoned_lock",
+                        "Claude session lock poisoned during close; forcing cleanup"
+                    );
+                    let mut session = poisoned.into_inner();
+                    session.kill();
+                }
             }
         }
     }
 
     /// Close all sessions
     pub fn close_all_sessions(&self) {
-        if let Ok(mut sessions) = self.sessions.lock() {
-            for (id, mut session) in sessions.drain() {
-                tracing::info!(session_id = %id, "Closing Claude session (cleanup)");
-                session.kill();
+        let handles: Vec<(String, Arc<Mutex<ClaudeSession>>)> = self
+            .sessions
+            .lock()
+            .map(|mut sessions| sessions.drain().collect())
+            .unwrap_or_default();
+
+        for (id, session_handle) in handles {
+            tracing::info!(session_id = %id, "Closing Claude session (cleanup)");
+            match session_handle.lock() {
+                Ok(mut session) => session.kill(),
+                Err(poisoned) => {
+                    tracing::warn!(
+                        session_id = %id,
+                        attempted = "close_all_sessions",
+                        state = "poisoned_lock",
+                        "Claude session lock poisoned during bulk cleanup; forcing cleanup"
+                    );
+                    let mut session = poisoned.into_inner();
+                    session.kill();
+                }
             }
         }
     }
@@ -469,20 +549,73 @@ impl ClaudeSessionManager {
 
     /// Cleanup stale sessions (not used recently)
     pub fn cleanup_stale_sessions(&self, max_idle: Duration) {
-        if let Ok(mut sessions) = self.sessions.lock() {
-            let stale_ids: Vec<String> = sessions
-                .iter()
-                .filter(|(_, s)| s.last_activity.elapsed() > max_idle)
-                .map(|(id, _)| id.clone())
-                .collect();
+        let candidates: Vec<(String, Arc<Mutex<ClaudeSession>>)> = self
+            .sessions
+            .lock()
+            .map(|sessions| {
+                sessions
+                    .iter()
+                    .map(|(id, session)| (id.clone(), Arc::clone(session)))
+                    .collect()
+            })
+            .unwrap_or_default();
 
-            for id in stale_ids {
-                if let Some(mut session) = sessions.remove(&id) {
+        let stale_ids: Vec<String> = candidates
+            .iter()
+            .filter_map(|(id, session_handle)| {
+                let session = match session_handle.lock() {
+                    Ok(session) => session,
+                    Err(poisoned) => {
+                        tracing::warn!(
+                            session_id = %id,
+                            attempted = "cleanup_stale_sessions",
+                            state = "poisoned_lock",
+                            "Claude session lock poisoned while checking staleness; forcing cleanup"
+                        );
+                        poisoned.into_inner()
+                    }
+                };
+                if session.last_activity.elapsed() > max_idle {
+                    Some(id.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if stale_ids.is_empty() {
+            return;
+        }
+
+        let stale_handles: Vec<(String, Arc<Mutex<ClaudeSession>>)> = self
+            .sessions
+            .lock()
+            .map(|mut sessions| {
+                stale_ids
+                    .iter()
+                    .filter_map(|id| sessions.remove(id).map(|session| (id.clone(), session)))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        for (id, session_handle) in stale_handles {
+            match session_handle.lock() {
+                Ok(mut session) => {
                     tracing::info!(
                         session_id = %id,
                         idle_secs = session.last_activity.elapsed().as_secs(),
                         "Cleaning up stale Claude session"
                     );
+                    session.kill();
+                }
+                Err(poisoned) => {
+                    tracing::warn!(
+                        session_id = %id,
+                        attempted = "cleanup_stale_sessions_remove",
+                        state = "poisoned_lock",
+                        "Claude session lock poisoned while removing stale session; forcing cleanup"
+                    );
+                    let mut session = poisoned.into_inner();
                     session.kill();
                 }
             }
@@ -535,6 +668,13 @@ fn parse_claude_event(line: &str) -> Option<SessionEvent> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
+    #[cfg(unix)]
+    use std::sync::{Arc, Barrier};
+    #[cfg(unix)]
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn test_parse_claude_event_result() {
@@ -579,5 +719,78 @@ mod tests {
         assert_eq!(config.claude_path, "claude");
         assert_eq!(config.model_id, "sonnet");
         assert!(config.system_prompt.is_some());
+    }
+
+    #[cfg(unix)]
+    fn write_mock_claude_cli(delay_ms: u64) -> std::path::PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time before unix epoch")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("mock-claude-{}.sh", nanos));
+        let delay_seconds = format!("{:.3}", delay_ms as f64 / 1000.0);
+        let script = format!(
+            "#!/usr/bin/env bash\nwhile IFS= read -r _line; do\n  sleep {delay}\n  printf '{{\"type\":\"result\",\"result\":\"ok\"}}\\n'\ndone\n",
+            delay = delay_seconds
+        );
+        fs::write(&path, script).expect("write mock claude script");
+        let mut perms = fs::metadata(&path)
+            .expect("mock claude metadata")
+            .permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&path, perms).expect("set mock claude executable bit");
+        path
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_ai_sessions_do_not_serialize_when_multiple_sessions_active() {
+        let mock_path = write_mock_claude_cli(800);
+        let manager = Arc::new(ClaudeSessionManager::new_for_tests(SessionConfig {
+            claude_path: mock_path.to_string_lossy().to_string(),
+            model_id: "sonnet".to_string(),
+            system_prompt: Some("test".to_string()),
+        }));
+
+        // Warm up both sessions so this test isolates send-time lock contention.
+        manager
+            .send_message("session-a", "warmup-a", "sonnet", Some("test"), |_| {})
+            .expect("warmup session-a");
+        manager
+            .send_message("session-b", "warmup-b", "sonnet", Some("test"), |_| {})
+            .expect("warmup session-b");
+
+        let barrier = Arc::new(Barrier::new(3));
+        let manager_a = Arc::clone(&manager);
+        let barrier_a = Arc::clone(&barrier);
+        let t1 = std::thread::spawn(move || {
+            barrier_a.wait();
+            manager_a
+                .send_message("session-a", "msg-a", "sonnet", Some("test"), |_| {})
+                .expect("send session-a")
+        });
+
+        let manager_b = Arc::clone(&manager);
+        let barrier_b = Arc::clone(&barrier);
+        let t2 = std::thread::spawn(move || {
+            barrier_b.wait();
+            manager_b
+                .send_message("session-b", "msg-b", "sonnet", Some("test"), |_| {})
+                .expect("send session-b")
+        });
+
+        let start = Instant::now();
+        barrier.wait();
+        let _ = t1.join().expect("join sender 1");
+        let _ = t2.join().expect("join sender 2");
+        let elapsed = start.elapsed();
+
+        assert!(
+            elapsed < Duration::from_millis(1300),
+            "session sends appear serialized, elapsed={elapsed:?}"
+        );
+
+        manager.close_all_sessions();
+        let _ = fs::remove_file(mock_path);
     }
 }

@@ -1,6 +1,48 @@
 // Editor prompt render method - extracted from render_prompts.rs
 // This file is included via include!() macro in main.rs
 
+const EDITOR_PROMPT_KEY_CONTEXT: &str = "editor_prompt";
+const EDITOR_PROMPT_SHORTCUT_HINT_SUFFIX: &str = "⌘↵/⌘S submit · ⌘K actions";
+
+#[inline]
+fn editor_footer_helper_text(snippet_helper_text: Option<&str>) -> String {
+    match snippet_helper_text {
+        Some(snippet_text) => format!("{snippet_text} · {EDITOR_PROMPT_SHORTCUT_HINT_SUFFIX}"),
+        None => running_status_text("review input, then press ⌘↵ or ⌘S (⌘K for actions)"),
+    }
+}
+
+#[inline]
+fn editor_footer_config(
+    has_actions: bool,
+    helper_text: Option<String>,
+    info_label: Option<String>,
+) -> PromptFooterConfig {
+    prompt_footer_config_with_status("Continue", has_actions, helper_text, info_label)
+        .primary_shortcut("⌘↵")
+        .secondary_shortcut("⌘K")
+}
+
+#[inline]
+fn editor_reserved_shortcut_reason(key: &str, modifiers: &gpui::Modifiers) -> Option<&'static str> {
+    // Keep native editor bindings in control of text editing, navigation, and submit.
+    if !modifiers.platform || modifiers.control || modifiers.alt {
+        return None;
+    }
+
+    match key {
+        "enter" | "return" => Some("submit"),
+        "s" => Some("save_submit"),
+        "z" | "y" => Some("undo_redo"),
+        "f" | "g" => Some("find"),
+        "a" | "c" | "v" | "x" => Some("clipboard_selection"),
+        "left" | "right" | "up" | "down" | "arrowleft" | "arrowright" | "arrowup" | "arrowdown" => {
+            Some("cursor_navigation")
+        }
+        _ => None,
+    }
+}
+
 impl ScriptListApp {
     fn render_editor_prompt(
         &mut self,
@@ -19,8 +61,10 @@ impl ScriptListApp {
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
         let design_colors = tokens.colors();
-        let _design_spacing = tokens.spacing();
+        let design_spacing = tokens.spacing();
         let design_visual = tokens.visual();
+        let (actions_dialog_top, actions_dialog_right) =
+            prompt_actions_dialog_offsets(design_spacing.padding_sm, design_visual.border_thin);
 
         // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
         // Shadows are handled by app_shell
@@ -82,7 +126,13 @@ impl ScriptListApp {
 
                 // Check for Cmd+K to toggle actions popup (if actions are available)
                 if has_cmd && ui_foundation::is_key_k(key) && has_actions_for_handler {
-                    logging::log("KEY", "Cmd+K in EditorPrompt - calling toggle_arg_actions");
+                    let correlation_id = logging::current_correlation_id();
+                    logging::log(
+                        "KEY",
+                        &format!(
+                            "{EDITOR_PROMPT_KEY_CONTEXT}: Cmd+K toggles actions (correlation_id={correlation_id})"
+                        ),
+                    );
                     this.toggle_arg_actions(cx, window);
                     return;
                 }
@@ -115,10 +165,25 @@ impl ScriptListApp {
                 let key_lower = key.to_lowercase();
                 let shortcut_key =
                     shortcuts::keystroke_to_shortcut(&key_lower, &event.keystroke.modifiers);
+                if let Some(reason) =
+                    editor_reserved_shortcut_reason(&key_lower, &event.keystroke.modifiers)
+                {
+                    let correlation_id = logging::current_correlation_id();
+                    logging::log_debug(
+                        "KEY",
+                        &format!(
+                            "{EDITOR_PROMPT_KEY_CONTEXT}: reserved shortcut preserved (reason={reason}, shortcut={shortcut_key}, correlation_id={correlation_id})"
+                        ),
+                    );
+                    return;
+                }
                 if let Some(action_name) = this.action_shortcuts.get(&shortcut_key).cloned() {
+                    let correlation_id = logging::current_correlation_id();
                     logging::log(
                         "KEY",
-                        &format!("SDK action shortcut matched: {}", action_name),
+                        &format!(
+                            "{EDITOR_PROMPT_KEY_CONTEXT}: SDK action shortcut matched (action={action_name}, shortcut={shortcut_key}, correlation_id={correlation_id})"
+                        ),
                     );
                     this.trigger_action_by_name(&action_name, cx);
                 }
@@ -181,6 +246,7 @@ impl ScriptListApp {
             .h(content_height) // Explicit 700px height (window height for editor view)
             .overflow_hidden() // Clip content to rounded corners
             .rounded(px(design_visual.radius_lg))
+            .key_context(EDITOR_PROMPT_KEY_CONTEXT)
             .on_key_down(handle_key)
             // Editor entity fills remaining space (flex_1)
             .child(
@@ -198,27 +264,13 @@ impl ScriptListApp {
                 let entity_weak = entity_for_footer.downgrade();
                 let prompt_id_for_submit = prompt_id.clone();
 
-                let footer_colors = PromptFooterColors {
-                    accent: design_colors.accent,
-                    text_muted: design_colors.text_muted,
-                    border: design_colors.border,
-                    background: design_colors.background_selected, // Match selected item bg
-                    is_light_mode: !self.theme.is_dark_mode(),
-                };
+                let footer_colors =
+                    prompt_footer_colors_for_prompt(&design_colors, !self.theme.is_dark_mode());
 
-                // Build footer config with optional helper text and language
-                let mut footer_config = PromptFooterConfig::new()
-                    .primary_label("Submit")
-                    .primary_shortcut("↵")
-                    .secondary_label("Actions")
-                    .secondary_shortcut("⌘K")
-                    .show_secondary(has_actions)
-                    .info_label(language_label.clone());
-
-                // Add snippet helper text if in snippet mode
-                if let Some(ref helper) = snippet_helper_text {
-                    footer_config = footer_config.helper_text(helper.clone());
-                }
+                // Snippet guidance stays first, with editor submit/actions hints appended.
+                let helper_text = Some(editor_footer_helper_text(snippet_helper_text.as_deref()));
+                let footer_config =
+                    editor_footer_config(has_actions, helper_text, Some(language_label.clone()));
 
                 let mut footer = PromptFooter::new(footer_config, footer_colors).on_primary_click(
                     Box::new(move |_, _window, cx| {
@@ -285,10 +337,77 @@ impl ScriptListApp {
                                     .inset_0()
                                     .on_click(backdrop_click),
                             )
-                            .child(div().absolute().top(px(52.)).right(px(8.)).child(dialog)),
+                            .child(
+                                div()
+                                    .absolute()
+                                    .top(px(actions_dialog_top))
+                                    .right(px(actions_dialog_right))
+                                    .child(dialog),
+                            ),
                     )
                 },
             )
             .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod editor_prompt_tests {
+    use super::*;
+
+    fn cmd_modifiers() -> gpui::Modifiers {
+        gpui::Modifiers {
+            platform: true,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_editor_footer_displays_cmd_enter_and_cmd_s_submit_hints() {
+        let helper = editor_footer_helper_text(None);
+        assert!(helper.contains("⌘↵"));
+        assert!(helper.contains("⌘S"));
+        assert!(helper.contains("⌘K"));
+
+        let config = editor_footer_config(true, Some(helper), Some("typescript".to_string()));
+        assert_eq!(config.primary_label, "Continue");
+        assert_eq!(config.primary_shortcut, "⌘↵");
+        assert_eq!(config.secondary_shortcut, "⌘K");
+        assert!(config.show_secondary);
+    }
+
+    #[test]
+    fn test_editor_action_shortcuts_do_not_override_reserved_editing_bindings() {
+        let cmd = cmd_modifiers();
+
+        for key in ["f", "z", "return", "s", "arrowleft", "c"] {
+            assert!(
+                editor_reserved_shortcut_reason(key, &cmd).is_some(),
+                "{key} should stay editor-owned",
+            );
+        }
+
+        assert!(
+            editor_reserved_shortcut_reason("k", &cmd).is_none(),
+            "Cmd+K remains available for actions",
+        );
+
+        let cmd_and_ctrl = gpui::Modifiers {
+            platform: true,
+            control: true,
+            ..Default::default()
+        };
+        assert!(
+            editor_reserved_shortcut_reason("f", &cmd_and_ctrl).is_none(),
+            "Cmd+Ctrl+F is not treated as an editor-reserved shortcut",
+        );
+    }
+
+    #[test]
+    fn test_editor_footer_appends_shortcut_hints_when_snippet_guidance_is_present() {
+        let helper =
+            editor_footer_helper_text(Some("Tab 1 of 2 · \"$1\" · Tab to continue, Esc to exit"));
+        assert!(helper.starts_with("Tab 1 of 2"));
+        assert!(helper.contains(EDITOR_PROMPT_SHORTCUT_HINT_SUFFIX));
     }
 }

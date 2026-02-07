@@ -4,12 +4,8 @@
 //! in various built-in action window dialogs.
 
 use crate::actions::builders::*;
-use crate::actions::dialog::{
-    build_grouped_items_static, coerce_action_selection, ActionsDialog, GroupedActionItem,
-};
-use crate::actions::types::{
-    Action, ActionCategory, ActionsDialogConfig, ScriptInfo, SectionStyle,
-};
+use crate::actions::dialog::ActionsDialog;
+use crate::actions::types::{Action, ActionCategory, ScriptInfo};
 use crate::clipboard_history::ContentType;
 use crate::designs::icon_variations::IconName;
 use crate::file_search::{FileInfo, FileType};

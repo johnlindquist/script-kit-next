@@ -193,7 +193,7 @@ impl ScriptListApp {
             }
         } else {
             // Use GPUI's list() component for variable-height items
-            // Section headers render at 24px, regular items at 48px
+            // Section headers render at 32px, regular items at 40px
             // This gives true visual compression for headers without the uniform_list hack
 
             // Clone grouped_items and flat_results for the closure
@@ -252,7 +252,7 @@ impl ScriptListApp {
             let variable_height_list =
                 list(self.main_list_state.clone(), move |ix, _window, cx| {
                     let _item_render_start = std::time::Instant::now();
-                    
+
                     // Access entity state inside the closure
                     entity.update(cx, |this, cx| {
                         let current_selected = this.selected_index;
@@ -273,7 +273,7 @@ impl ScriptListApp {
                                         .into_any_element()
                                 }
                                 GroupedListItem::Item(result_idx) => {
-                                    // Regular item at 48px height (LIST_ITEM_HEIGHT)
+                                    // Regular item at 40px height (LIST_ITEM_HEIGHT)
                                     if let Some(result) = flat_results_clone.get(*result_idx) {
                                         let is_selected = ix == current_selected;
                                         // Only show hover effect when in Mouse mode to prevent dual-highlight
@@ -358,7 +358,7 @@ impl ScriptListApp {
                                             &filter_for_highlight,
                                         );
                                         let design_elapsed = design_render_start.elapsed();
-                                        
+
                                         // Log slow items (>1ms)
                                         if design_elapsed.as_micros() > 1000 {
                                             logging::log(
@@ -408,7 +408,7 @@ impl ScriptListApp {
             // which works correctly like keyboard navigation does.
             //
             // Average item height for delta-to-index conversion:
-            // Most items are LIST_ITEM_HEIGHT (48px), headers are SECTION_HEADER_HEIGHT (24px)
+            // Most items are LIST_ITEM_HEIGHT (40px), headers are SECTION_HEADER_HEIGHT (32px)
             // Use 44px as a reasonable average that feels natural for scrolling
             let avg_item_height = AVERAGE_ITEM_HEIGHT_FOR_SCROLL;
 
@@ -853,14 +853,14 @@ impl ScriptListApp {
         // NOTE: Shadow disabled for vibrancy - shadows on transparent elements cause gray fill
 
         // Use unified color resolver for text and fonts
-        let text_primary = color_resolver.text_primary;
-        let font_family = typography_resolver.font_family;
+        let text_primary = color_resolver.primary_text_color();
+        let font_family = typography_resolver.primary_font();
 
         // Extract footer colors BEFORE render_preview_panel (borrow checker)
-        let footer_accent = color_resolver.accent;
-        let footer_text_muted = color_resolver.text_muted;
-        let footer_border = color_resolver.border;
-        let footer_background = color_resolver.background_selected;
+        let footer_accent = color_resolver.primary_accent();
+        let footer_text_muted = color_resolver.empty_text_color();
+        let footer_border = color_resolver.border_color();
+        let footer_background = color_resolver.selection_background();
 
         // NOTE: No .bg() here - Root provides vibrancy background for ALL content
         // This ensures main menu, AI chat, and all prompts have consistent styling
@@ -895,10 +895,10 @@ impl ScriptListApp {
                 } else {
                     design_spacing.gap_md
                 };
-                let text_muted = color_resolver.text_muted;
-                let _text_dimmed = color_resolver.text_dimmed;
-                let accent_color = color_resolver.accent;
-                let search_box_bg = color_resolver.background_secondary;
+                let text_muted = color_resolver.empty_text_color();
+                let _text_dimmed = color_resolver.dimmed_text_color();
+                let accent_color = color_resolver.primary_accent();
+                let search_box_bg = color_resolver.secondary_background_color();
                 let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
 
                 div()
@@ -917,7 +917,7 @@ impl ScriptListApp {
                                 .h(px(input_height))
                                 .px(px(0.))
                                 .py(px(0.))
-                                .with_size(Size::Size(px(typography_resolver.font_size_xl)))
+                                .with_size(Size::Size(px(typography_resolver.font_size_xl())))
                                 .appearance(false)
                                 .bordered(false)
                                 .focus_bordered(false),
@@ -1088,10 +1088,9 @@ impl ScriptListApp {
                             )
                         },
                     )
-                    // "Ask AI [Tab]" button - yellow text, grey badge, hover state
+                    // "Ask AI [Tab]" keyboard hint - styled as non-clickable to match behavior
                     .child({
-                        // Hover background: accent color at ALPHA_HOVER_ACCENT opacity
-                        let hover_bg = (accent_color << 8) | ALPHA_HOVER_ACCENT;
+                        let hint_bg = (accent_color << 8) | ALPHA_HOVER_ACCENT;
                         let tab_bg = (search_box_bg << 8) | ALPHA_TAB_BADGE_BG;
                         div()
                             .id("ask-ai-button")
@@ -1102,8 +1101,8 @@ impl ScriptListApp {
                             .px(px(ASK_AI_BUTTON_PADDING_X))
                             .py(px(ASK_AI_BUTTON_PADDING_Y))
                             .rounded(px(ASK_AI_BUTTON_RADIUS))
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(rgba(hover_bg)))
+                            .bg(rgba(hint_bg))
+                            .cursor_default()
                             // "Ask AI" text - YELLOW (accent)
                             .child(
                                 div()
@@ -1130,9 +1129,9 @@ impl ScriptListApp {
                 let divider_margin = if is_default_design {
                     DIVIDER_MARGIN_DEFAULT
                 } else {
-                    spacing_resolver.margin_lg
+                    spacing_resolver.margin_lg()
                 };
-                let border_color = color_resolver.border;
+                let border_color = color_resolver.border_color();
                 let border_width = if is_default_design {
                     DIVIDER_BORDER_WIDTH_DEFAULT
                 } else {

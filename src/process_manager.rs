@@ -182,6 +182,41 @@ impl ProcessManager {
         }
     }
 
+    /// Get all active processes sorted by start time (newest first).
+    pub fn get_active_processes_sorted(&self) -> Vec<ProcessInfo> {
+        let mut processes = self.get_active_processes();
+        processes.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+        processes
+    }
+
+    /// Build a human-readable process report that can be shown in the UI/clipboard.
+    pub fn format_active_process_report(&self, max_entries: usize) -> String {
+        let processes = self.get_active_processes_sorted();
+        if processes.is_empty() {
+            return "No active Script Kit processes.".to_string();
+        }
+
+        let total = processes.len();
+        let limit = max_entries.max(1);
+        let mut lines = Vec::with_capacity(limit + 2);
+        lines.push(format!("Active Script Kit processes: {}", total));
+
+        for process in processes.iter().take(limit) {
+            lines.push(format!(
+                "PID {} • {} • started {}",
+                process.pid,
+                process.script_path,
+                process.started_at.format("%Y-%m-%d %H:%M:%S UTC")
+            ));
+        }
+
+        if total > limit {
+            lines.push(format!("... and {} more", total - limit));
+        }
+
+        lines.join("\n")
+    }
+
     /// Get count of active processes
     pub fn active_count(&self) -> usize {
         if let Ok(processes) = self.active_processes.read() {
@@ -485,6 +520,38 @@ mod tests {
         assert!(pids.contains(&1001));
         assert!(!pids.contains(&1002));
         assert!(pids.contains(&1003));
+    }
+
+    #[test]
+    fn test_get_active_processes_sorted_newest_first() {
+        let (manager, _temp_dir) = create_test_manager();
+        manager.register_process(3001, "/path/to/first.ts");
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        manager.register_process(3002, "/path/to/second.ts");
+
+        let sorted = manager.get_active_processes_sorted();
+        assert_eq!(sorted.len(), 2);
+        assert_eq!(sorted[0].pid, 3002);
+        assert_eq!(sorted[1].pid, 3001);
+    }
+
+    #[test]
+    fn test_format_active_process_report_includes_summary_and_limit() {
+        let (manager, _temp_dir) = create_test_manager();
+        manager.register_process(4001, "/path/to/alpha.ts");
+        manager.register_process(4002, "/path/to/beta.ts");
+
+        let report = manager.format_active_process_report(1);
+        assert!(report.contains("Active Script Kit processes: 2"));
+        assert!(report.contains("PID "));
+        assert!(report.contains("... and 1 more"));
+    }
+
+    #[test]
+    fn test_format_active_process_report_empty_state() {
+        let (manager, _temp_dir) = create_test_manager();
+        let report = manager.format_active_process_report(5);
+        assert_eq!(report, "No active Script Kit processes.");
     }
 
     #[test]

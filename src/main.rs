@@ -239,7 +239,10 @@ use syntax::highlight_code_lines;
 type PromptChannel = (mpsc::Sender<PromptMessage>, mpsc::Receiver<PromptMessage>);
 
 // Import utilities from modules
-use stdin_commands::{start_stdin_listener, ExternalCommand};
+use stdin_commands::{
+    start_stdin_listener, validate_capture_window_output_path, ExternalCommand,
+    ExternalCommandEnvelope, KeyModifier,
+};
 use utils::render_path_with_highlights;
 
 // Global state for hotkey signaling between threads
@@ -2256,19 +2259,6 @@ fn main() {
         // stay in sync with theme.json changes
         theme::service::ensure_theme_service(cx);
 
-        // Initialize tray icon and menu
-        // MUST be done after Application::new() creates the NSApplication
-        let tray_manager = match TrayManager::new() {
-            Ok(tm) => {
-                logging::log("TRAY", "Tray icon initialized successfully");
-                Some(tm)
-            }
-            Err(e) => {
-                logging::log("TRAY", &format!("Failed to initialize tray icon: {}", e));
-                None
-            }
-        };
-
         // Calculate window bounds: try saved position first, then eye-line
         let window_size = size(px(750.), initial_window_height());
         let default_bounds = calculate_eye_line_bounds_on_mouse_display(window_size);
@@ -2301,6 +2291,7 @@ fn main() {
 
         // Capture bun_available for use in window creation
         let bun_available = setup_result.bun_available;
+        let config_for_tray_actions = config_for_app.clone();
 
         // Root is required for gpui_component's InputState focus tracking
         let window: WindowHandle<Root> = cx.open_window(
@@ -2415,9 +2406,181 @@ fn main() {
         // WINDOW_VISIBLE is already false by default (static initializer)
         logging::log("HOTKEY", "Window created but not shown (use hotkey to show)");
 
+        // Defer tray initialization until after window creation so startup-to-first-render
+        // is not blocked by tray icon rendering/menu construction.
+        let tray_ready = Arc::new(AtomicBool::new(false));
+        let tray_ready_for_fallback = Arc::clone(&tray_ready);
+        let window_for_tray = window;
+        let app_entity_for_tray = app_entity.clone();
+        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+            // Yield once so window creation and initial render can proceed first.
+            Timer::after(std::time::Duration::from_millis(1)).await;
+
+            let tray_manager = match cx.update(|_cx| match TrayManager::new() {
+                Ok(tm) => {
+                    logging::log("TRAY", "Tray icon initialized successfully (deferred)");
+                    Some(tm)
+                }
+                Err(e) => {
+                    logging::log(
+                        "TRAY",
+                        &format!("Failed to initialize tray icon (deferred): {}", e),
+                    );
+                    None
+                }
+            }) {
+                Ok(manager) => manager,
+                Err(_) => {
+                    logging::log(
+                        "TRAY",
+                        "Deferred tray initialization aborted: app context update failed",
+                    );
+                    None
+                }
+            };
+
+            let Some(tray_mgr) = tray_manager else {
+                return;
+            };
+
+            tray_ready.store(true, Ordering::SeqCst);
+            logging::log("TRAY", "Tray menu event handler started (event-driven)");
+            let _menu_event_receiver = tray_mgr.menu_event_receiver();
+
+            let (tray_event_tx, tray_event_rx) = async_channel::bounded(32);
+            std::thread::spawn(move || {
+                logging::log("TRAY", "Tray menu receiver bridge started (blocking recv)");
+                let menu_rx = tray_icon::menu::MenuEvent::receiver();
+
+                while let Ok(event) = menu_rx.recv() {
+                    if tray_event_tx.send_blocking(event).is_err() {
+                        logging::log(
+                            "TRAY",
+                            "Tray menu receiver bridge exiting: event channel closed",
+                        );
+                        break;
+                    }
+                }
+
+                logging::log("TRAY", "Tray menu receiver bridge exiting");
+            });
+
+            while let Ok(event) = tray_event_rx.recv().await {
+                // Convert event to action using type-safe IDs (pure function)
+                let action = TrayManager::action_from_event(&event);
+
+                // Handle side effects for LaunchAtLogin before the match
+                if let Some(TrayMenuAction::LaunchAtLogin) = action {
+                    if let Err(e) = tray_mgr.handle_action(TrayMenuAction::LaunchAtLogin) {
+                        logging::log("TRAY", &format!("Failed to toggle login item: {}", e));
+                    }
+                }
+
+                match action {
+                    Some(TrayMenuAction::OpenScriptKit) => {
+                        logging::log("TRAY", "Open Script Kit menu item clicked");
+                        let window_inner = window_for_tray;
+                        let app_entity_inner = app_entity_for_tray.clone();
+                        let _ = cx.update(|cx| {
+                            show_main_window_helper(window_inner, app_entity_inner, cx);
+                        });
+                    }
+                    Some(TrayMenuAction::OpenNotes) => {
+                        logging::log("TRAY", "Notes menu item clicked");
+                        let _ = cx.update(|cx| {
+                            if let Err(e) = notes::open_notes_window(cx) {
+                                logging::log("TRAY", &format!("Failed to open notes window: {}", e));
+                            }
+                        });
+                    }
+                    Some(TrayMenuAction::OpenAiChat) => {
+                        logging::log("TRAY", "AI Chat menu item clicked");
+                        let _ = cx.update(|cx| {
+                            if let Err(e) = ai::open_ai_window(cx) {
+                                logging::log("TRAY", &format!("Failed to open AI window: {}", e));
+                            }
+                        });
+                    }
+                    Some(TrayMenuAction::LaunchAtLogin) => {
+                        // Side effects (toggle + checkbox update) handled above
+                        logging::log("TRAY", "Launch at Login toggled");
+                    }
+                    Some(TrayMenuAction::Settings) => {
+                        logging::log("TRAY", "Settings menu item clicked");
+                        // Open config file in editor
+                        let editor = config_for_tray_actions.get_editor();
+                        let config_path =
+                            shellexpand::tilde("~/.scriptkit/kit/config.ts").to_string();
+
+                        logging::log(
+                            "TRAY",
+                            &format!("Opening {} in editor '{}'", config_path, editor),
+                        );
+                        match std::process::Command::new(&editor)
+                            .arg(&config_path)
+                            .spawn()
+                        {
+                            Ok(_) => logging::log("TRAY", &format!("Spawned editor: {}", editor)),
+                            Err(e) => logging::log(
+                                "TRAY",
+                                &format!("Failed to spawn editor '{}': {}", editor, e),
+                            ),
+                        }
+                    }
+                    Some(TrayMenuAction::OpenOnGitHub) => {
+                        logging::log("TRAY", "Open on GitHub menu item clicked");
+                        let url = "https://github.com/script-kit/app";
+                        if let Err(e) = open::that(url) {
+                            logging::log("TRAY", &format!("Failed to open GitHub URL: {}", e));
+                        }
+                    }
+                    Some(TrayMenuAction::OpenManual) => {
+                        logging::log("TRAY", "Manual menu item clicked");
+                        let url = "https://scriptkit.com";
+                        if let Err(e) = open::that(url) {
+                            logging::log("TRAY", &format!("Failed to open manual URL: {}", e));
+                        }
+                    }
+                    Some(TrayMenuAction::JoinCommunity) => {
+                        logging::log("TRAY", "Join Community menu item clicked");
+                        let url = "https://discord.gg/qnUX4XqJQd";
+                        if let Err(e) = open::that(url) {
+                            logging::log("TRAY", &format!("Failed to open Discord URL: {}", e));
+                        }
+                    }
+                    Some(TrayMenuAction::FollowUs) => {
+                        logging::log("TRAY", "Follow Us menu item clicked");
+                        let url = "https://twitter.com/scriptkitapp";
+                        if let Err(e) = open::that(url) {
+                            logging::log("TRAY", &format!("Failed to open Twitter URL: {}", e));
+                        }
+                    }
+                    Some(TrayMenuAction::Quit) => {
+                        logging::log("TRAY", "Quit menu item clicked");
+                        // Set shutdown flag FIRST - prevents new script spawns
+                        // and triggers the shutdown monitor task for unified cleanup
+                        SHUTDOWN_REQUESTED.store(true, Ordering::SeqCst);
+
+                        // Clean up processes and PID file before quitting
+                        PROCESS_MANAGER.kill_all_processes();
+                        PROCESS_MANAGER.remove_main_pid();
+                        let _ = cx.update(|cx| {
+                            cx.quit();
+                        });
+                        break;
+                    }
+                    None => {
+                        logging::log("TRAY", "Unknown menu event received");
+                    }
+                }
+            }
+
+            logging::log("TRAY", "Tray menu event handler exiting");
+        })
+        .detach();
+
         // Fallback: If both hotkey AND tray fail, the user has no way to access the app!
         // Wait a short time for hotkey registration, then check if we need to show the window.
-        let tray_ok = tray_manager.is_some();
         let window_for_fallback = window;
         let app_entity_for_fallback = app_entity.clone();
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
@@ -2425,6 +2588,7 @@ fn main() {
             Timer::after(std::time::Duration::from_millis(500)).await;
 
             let hotkey_ok = hotkeys::is_main_hotkey_registered();
+            let tray_ok = tray_ready_for_fallback.load(Ordering::SeqCst);
 
             if !hotkey_ok && !tray_ok {
                 logging::log("APP", "");
@@ -2449,7 +2613,8 @@ fn main() {
         let window_for_hotkey = window;
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             logging::log("HOTKEY", "Main hotkey listener started");
-            while let Ok(()) = hotkeys::hotkey_channel().1.recv().await {
+            while let Ok(hotkey_event) = hotkeys::hotkey_channel().1.recv().await {
+                let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
                 logging::log("VISIBILITY", "");
                 logging::log("VISIBILITY", "╔════════════════════════════════════════════════════════════╗");
                 logging::log("VISIBILITY", "║  HOTKEY TRIGGERED - TOGGLE WINDOW                          ║");
@@ -2483,7 +2648,8 @@ fn main() {
             logging::log("HOTKEY", "Notes hotkey listener started (event-driven)");
             // Event-driven: .recv().await blocks until a message arrives
             // This is more efficient than polling and responds immediately
-            while let Ok(()) = hotkeys::notes_hotkey_channel().1.recv().await {
+            while let Ok(hotkey_event) = hotkeys::notes_hotkey_channel().1.recv().await {
+                let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
                 logging::log("HOTKEY", "Notes hotkey triggered - opening notes window");
                 let _ = cx.update(|cx: &mut gpui::App| {
                     if let Err(e) = notes::open_notes_window(cx) {
@@ -2499,7 +2665,8 @@ fn main() {
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             logging::log("HOTKEY", "AI hotkey listener started (event-driven)");
             // Event-driven: .recv().await blocks until a message arrives
-            while let Ok(()) = hotkeys::ai_hotkey_channel().1.recv().await {
+            while let Ok(hotkey_event) = hotkeys::ai_hotkey_channel().1.recv().await {
+                let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
                 logging::log("HOTKEY", "AI hotkey triggered - opening AI window");
                 let _ = cx.update(|cx: &mut gpui::App| {
                     if let Err(e) = ai::open_ai_window(cx) {
@@ -2516,7 +2683,9 @@ fn main() {
         let window_for_scripts = window;
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             logging::log("HOTKEY", "Script shortcut listener started (event-driven)");
-            while let Ok(command_id) = hotkeys::script_hotkey_channel().1.recv().await {
+            while let Ok(hotkey_event) = hotkeys::script_hotkey_channel().1.recv().await {
+                let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
+                let command_id = hotkey_event.command_id;
                 logging::log(
                     "HOTKEY",
                     &format!("Script shortcut received in main.rs: {}", command_id),
@@ -3021,10 +3190,18 @@ fn main() {
             logging::log("STDIN", "Async stdin command handler started");
 
             // Event-driven: recv().await yields until a command arrives
-            while let Ok(cmd) = stdin_rx.recv().await {
+            while let Ok(ExternalCommandEnvelope {
+                command: cmd,
+                correlation_id,
+            }) = stdin_rx.recv().await
+            {
+                let _guard = logging::set_correlation_id(correlation_id);
                 // Mark that we've received stdin (clears the timeout warning)
                 STDIN_RECEIVED.store(true, std::sync::atomic::Ordering::SeqCst);
-                logging::log("STDIN", &format!("Processing external command: {:?}", cmd));
+                logging::log(
+                    "STDIN",
+                    &format!("Processing external command type={}", cmd.command_type()),
+                );
 
                 let app_entity_inner = app_entity_for_stdin.clone();
                 let _ = cx.update(|cx| {
@@ -3236,10 +3413,10 @@ fn main() {
                                 logging::log("STDIN", &format!("Simulating key: '{}' with modifiers: {:?}", key, modifiers));
 
                                 // Parse modifiers
-                                let has_cmd = modifiers.iter().any(|m| m == "cmd" || m == "meta" || m == "command");
-                                let has_shift = modifiers.iter().any(|m| m == "shift");
-                                let _has_alt = modifiers.iter().any(|m| m == "alt" || m == "option");
-                                let _has_ctrl = modifiers.iter().any(|m| m == "ctrl" || m == "control");
+                                let has_cmd = modifiers.contains(&KeyModifier::Cmd);
+                                let has_shift = modifiers.contains(&KeyModifier::Shift);
+                                let _has_alt = modifiers.contains(&KeyModifier::Alt);
+                                let _has_ctrl = modifiers.contains(&KeyModifier::Ctrl);
 
                                 // Handle key based on current view
                                 let key_lower = key.to_lowercase();
@@ -3618,17 +3795,72 @@ fn main() {
                             }
                             ExternalCommand::CaptureWindow { title, path } => {
                                 logging::log("STDIN", &format!("Capturing window with title '{}' to '{}'", title, path));
-                                match capture_window_by_title(&title, false) {
-                                    Ok((png_data, width, height)) => {
-                                        // Save to file
-                                        if let Err(e) = std::fs::write(&path, &png_data) {
-                                            logging::log("STDIN", &format!("Failed to write screenshot: {}", e));
-                                        } else {
-                                            logging::log("STDIN", &format!("Screenshot saved: {} ({}x{})", path, width, height));
+                                match validate_capture_window_output_path(&path) {
+                                    Ok(validated_path) => {
+                                        match capture_window_by_title(&title, false) {
+                                            Ok((png_data, width, height)) => {
+                                                let mut can_write = true;
+                                                if let Some(parent) = validated_path.parent() {
+                                                    if let Err(e) = std::fs::create_dir_all(parent) {
+                                                        can_write = false;
+                                                        logging::log(
+                                                            "STDIN",
+                                                            &format!(
+                                                                "Failed to create screenshot directory '{}': {}",
+                                                                parent.display(),
+                                                                e
+                                                            ),
+                                                        );
+                                                    }
+                                                }
+
+                                                if can_write {
+                                                    if let Err(e) = std::fs::write(&validated_path, &png_data) {
+                                                        logging::log(
+                                                            "STDIN",
+                                                            &format!("Failed to write screenshot: {}", e),
+                                                        );
+                                                    } else {
+                                                        logging::log(
+                                                            "STDIN",
+                                                            &format!(
+                                                                "Screenshot saved: {} ({}x{})",
+                                                                validated_path.display(),
+                                                                width,
+                                                                height
+                                                            ),
+                                                        );
+                                                    }
+                                                } else {
+                                                    tracing::warn!(
+                                                        category = "STDIN",
+                                                        event_type = "stdin_capture_window_dir_create_failed",
+                                                        requested_path = %path,
+                                                        resolved_path = %validated_path.display(),
+                                                        correlation_id = %logging::current_correlation_id(),
+                                                        "Skipping screenshot write due to directory creation failure"
+                                                    );
+                                                }
+                                            }
+                                            Err(e) => {
+                                                logging::log("STDIN", &format!("Failed to capture window: {}", e));
+                                            }
                                         }
                                     }
                                     Err(e) => {
-                                        logging::log("STDIN", &format!("Failed to capture window: {}", e));
+                                        let correlation_id = logging::current_correlation_id();
+                                        tracing::warn!(
+                                            category = "STDIN",
+                                            event_type = "stdin_capture_window_path_rejected",
+                                            requested_path = %path,
+                                            reason = %e,
+                                            correlation_id = %correlation_id,
+                                            "Rejected captureWindow output path"
+                                        );
+                                        logging::log(
+                                            "STDIN",
+                                            &format!("Rejected captureWindow path '{}': {}", path, e),
+                                        );
                                     }
                                 }
                             }
@@ -3677,135 +3909,6 @@ fn main() {
 
             logging::log("STDIN", "Async stdin command handler exiting");
         }).detach();
-
-        // Tray menu event handler - polls for menu events
-        // Clone config for use in tray handler
-        let config_for_tray = config::load_config();
-        if let Some(tray_mgr) = tray_manager {
-            let window_for_tray = window;
-            let app_entity_for_tray = app_entity.clone();
-            cx.spawn(async move |cx: &mut gpui::AsyncApp| {
-                logging::log("TRAY", "Tray menu event handler started");
-
-                loop {
-                    // Poll for tray menu events every 250ms
-                    // 250ms is responsive enough for menu clicks while reducing CPU wakeups
-                    Timer::after(std::time::Duration::from_millis(250)).await;
-
-                    // Check for menu events
-                    if let Ok(event) = tray_mgr.menu_event_receiver().try_recv() {
-                        // Convert event to action using type-safe IDs (pure function)
-                        let action = TrayManager::action_from_event(&event);
-
-                        // Handle side effects for LaunchAtLogin before the match
-                        if let Some(TrayMenuAction::LaunchAtLogin) = action {
-                            if let Err(e) = tray_mgr.handle_action(TrayMenuAction::LaunchAtLogin) {
-                                logging::log("TRAY", &format!("Failed to toggle login item: {}", e));
-                            }
-                        }
-
-                        match action {
-                            Some(TrayMenuAction::OpenScriptKit) => {
-                                logging::log("TRAY", "Open Script Kit menu item clicked");
-                                let window_inner = window_for_tray;
-                                let app_entity_inner = app_entity_for_tray.clone();
-                                let _ = cx.update(|cx| {
-                                    show_main_window_helper(window_inner, app_entity_inner, cx);
-                                });
-                            }
-                            Some(TrayMenuAction::OpenNotes) => {
-                                logging::log("TRAY", "Notes menu item clicked");
-                                let _ = cx.update(|cx| {
-                                    if let Err(e) = notes::open_notes_window(cx) {
-                                        logging::log(
-                                            "TRAY",
-                                            &format!("Failed to open notes window: {}", e),
-                                        );
-                                    }
-                                });
-                            }
-                            Some(TrayMenuAction::OpenAiChat) => {
-                                logging::log("TRAY", "AI Chat menu item clicked");
-                                let _ = cx.update(|cx| {
-                                    if let Err(e) = ai::open_ai_window(cx) {
-                                        logging::log(
-                                            "TRAY",
-                                            &format!("Failed to open AI window: {}", e),
-                                        );
-                                    }
-                                });
-                            }
-                            Some(TrayMenuAction::LaunchAtLogin) => {
-                                // Side effects (toggle + checkbox update) handled above
-                                logging::log("TRAY", "Launch at Login toggled");
-                            }
-                            Some(TrayMenuAction::Settings) => {
-                                logging::log("TRAY", "Settings menu item clicked");
-                                // Open config file in editor
-                                let editor = config_for_tray.get_editor();
-                                let config_path = shellexpand::tilde("~/.scriptkit/kit/config.ts").to_string();
-
-                                logging::log("TRAY", &format!("Opening {} in editor '{}'", config_path, editor));
-                                match std::process::Command::new(&editor)
-                                    .arg(&config_path)
-                                    .spawn()
-                                {
-                                    Ok(_) => logging::log("TRAY", &format!("Spawned editor: {}", editor)),
-                                    Err(e) => logging::log("TRAY", &format!("Failed to spawn editor '{}': {}", editor, e)),
-                                }
-                            }
-                            Some(TrayMenuAction::OpenOnGitHub) => {
-                                logging::log("TRAY", "Open on GitHub menu item clicked");
-                                let url = "https://github.com/script-kit/app";
-                                if let Err(e) = open::that(url) {
-                                    logging::log("TRAY", &format!("Failed to open GitHub URL: {}", e));
-                                }
-                            }
-                            Some(TrayMenuAction::OpenManual) => {
-                                logging::log("TRAY", "Manual menu item clicked");
-                                let url = "https://scriptkit.com";
-                                if let Err(e) = open::that(url) {
-                                    logging::log("TRAY", &format!("Failed to open manual URL: {}", e));
-                                }
-                            }
-                            Some(TrayMenuAction::JoinCommunity) => {
-                                logging::log("TRAY", "Join Community menu item clicked");
-                                let url = "https://discord.gg/qnUX4XqJQd";
-                                if let Err(e) = open::that(url) {
-                                    logging::log("TRAY", &format!("Failed to open Discord URL: {}", e));
-                                }
-                            }
-                            Some(TrayMenuAction::FollowUs) => {
-                                logging::log("TRAY", "Follow Us menu item clicked");
-                                let url = "https://twitter.com/scriptkitapp";
-                                if let Err(e) = open::that(url) {
-                                    logging::log("TRAY", &format!("Failed to open Twitter URL: {}", e));
-                                }
-                            }
-                            Some(TrayMenuAction::Quit) => {
-                                logging::log("TRAY", "Quit menu item clicked");
-                                // Set shutdown flag FIRST - prevents new script spawns
-                                // and triggers the shutdown monitor task for unified cleanup
-                                SHUTDOWN_REQUESTED.store(true, Ordering::SeqCst);
-
-                                // Clean up processes and PID file before quitting
-                                PROCESS_MANAGER.kill_all_processes();
-                                PROCESS_MANAGER.remove_main_pid();
-                                let _ = cx.update(|cx| {
-                                    cx.quit();
-                                });
-                                break; // Exit the polling loop
-                            }
-                            None => {
-                                logging::log("TRAY", "Unknown menu event received");
-                            }
-                        }
-                    }
-                }
-
-                logging::log("TRAY", "Tray menu event handler exiting");
-            }).detach();
-        }
 
         // Shutdown monitor task - checks SHUTDOWN_REQUESTED flag set by signal handler
         // Performs all cleanup on the main thread where it's safe to call logging,

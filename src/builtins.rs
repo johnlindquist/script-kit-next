@@ -71,6 +71,31 @@ pub enum SystemActionType {
     OpenNotificationsSettings,
 }
 
+/// Returns user-facing HUD feedback text for system actions when available.
+///
+/// `dark_mode_enabled` should be populated only for `ToggleDarkMode` after
+/// querying current system state.
+pub fn system_action_hud_message(
+    action_type: SystemActionType,
+    dark_mode_enabled: Option<bool>,
+) -> Option<String> {
+    match action_type {
+        SystemActionType::ToggleDarkMode => Some(match dark_mode_enabled {
+            Some(true) => "Dark Mode On".to_string(),
+            Some(false) => "Dark Mode Off".to_string(),
+            None => "Dark Mode Toggled".to_string(),
+        }),
+        SystemActionType::Volume0 => Some("Volume 0%".to_string()),
+        SystemActionType::Volume25 => Some("Volume 25%".to_string()),
+        SystemActionType::Volume50 => Some("Volume 50%".to_string()),
+        SystemActionType::Volume75 => Some("Volume 75%".to_string()),
+        SystemActionType::Volume100 => Some("Volume 100%".to_string()),
+        SystemActionType::VolumeMute => Some("Volume Muted".to_string()),
+        SystemActionType::ToggleDoNotDisturb => Some("Do Not Disturb toggled".to_string()),
+        _ => None,
+    }
+}
+
 // NOTE: WindowActionType has been removed from built-ins.
 // Window management is now handled by the window-management extension.
 // SDK tileWindow() function still works via protocol messages in execute_script.rs.
@@ -153,6 +178,10 @@ pub enum UtilityCommandType {
     ScratchPad,
     /// Open quick terminal for running commands
     QuickTerminal,
+    /// Inspect actively running Script Kit child processes
+    ProcessManager,
+    /// Terminate all actively running Script Kit child processes
+    StopAllProcesses,
 }
 
 /// Menu bar action details for executing menu commands
@@ -346,7 +375,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin-clipboard-history",
             "Clipboard History",
-            "View and manage your clipboard history",
+            "Open clipboard history to view, search, and reuse copied items",
             vec!["clipboard", "history", "paste", "copy"],
             BuiltInFeature::ClipboardHistory,
             "📋",
@@ -364,7 +393,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin-window-switcher",
             "Window Switcher",
-            "Switch, tile, and manage open windows",
+            "Open window switcher to focus, tile, and manage open windows",
             vec!["window", "switch", "tile", "focus", "manage", "switcher"],
             BuiltInFeature::WindowSwitcher,
             "🪟",
@@ -376,7 +405,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-ai-chat",
         "AI Chat",
-        "Chat with AI assistants (Claude, GPT)",
+        "Open AI Chat with Claude, GPT, and other configured assistants",
         vec![
             "ai",
             "chat",
@@ -396,7 +425,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-notes",
         "Notes",
-        "Quick notes and scratchpad",
+        "Open quick notes and a scratchpad editor",
         vec![
             "notes",
             "note",
@@ -418,7 +447,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin-design-gallery",
             "Design Gallery",
-            "Browse separator styles and icon variations",
+            "Open the design gallery to browse separator styles and icon variations",
             vec![
                 "design",
                 "gallery",
@@ -437,7 +466,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin-test-confirmation",
             "Test Confirmation",
-            "Test the confirmation dialog (dev only)",
+            "Open the confirmation dialog test tool (dev only)",
             vec!["test", "confirmation", "dev", "debug"],
             BuiltInFeature::SystemAction(SystemActionType::TestConfirmation),
             "🧪",
@@ -607,7 +636,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-volume-mute",
         "Toggle Mute",
-        "Toggle audio mute",
+        "Toggle system audio mute on or off",
         vec!["mute", "unmute", "volume", "sound", "audio", "toggle"],
         BuiltInFeature::SystemAction(SystemActionType::VolumeMute),
         "🔇",
@@ -627,7 +656,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-toggle-dnd",
         "Toggle Do Not Disturb",
-        "Toggle Focus/Do Not Disturb mode",
+        "Toggle Focus / Do Not Disturb mode on or off",
         vec![
             "do",
             "not",
@@ -731,6 +760,15 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
     // =========================================================================
 
     entries.push(BuiltInEntry::new_with_icon(
+        "builtin-open-notes",
+        "Open Notes",
+        "Open the Notes window",
+        vec!["open", "notes", "window", "note"],
+        BuiltInFeature::NotesCommand(NotesCommandType::OpenNotes),
+        "📝",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
         "builtin-new-note",
         "New Note",
         "Create a new note",
@@ -751,7 +789,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-quick-capture",
         "Quick Capture",
-        "Quickly capture a note",
+        "Capture a new note without opening the full Notes window",
         vec!["quick", "capture", "note", "fast"],
         BuiltInFeature::NotesCommand(NotesCommandType::QuickCapture),
         "⚡",
@@ -760,6 +798,15 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
     // =========================================================================
     // AI Commands
     // =========================================================================
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-open-ai",
+        "Open AI Chat",
+        "Open the AI Chat window",
+        vec!["open", "ai", "chat", "assistant", "window"],
+        BuiltInFeature::AiCommand(AiCommandType::OpenAi),
+        "🤖",
+    ));
 
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-new-conversation",
@@ -773,7 +820,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-send-screen-to-ai",
         "Send Screen to AI Chat",
-        "Capture the screen and send to AI Chat",
+        "Capture the full screen and send it to AI Chat",
         vec![
             "send",
             "screen",
@@ -790,7 +837,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-send-window-to-ai",
         "Send Focused Window to AI Chat",
-        "Capture the focused window and send to AI Chat",
+        "Capture the focused window and send it to AI Chat",
         vec![
             "send",
             "window",
@@ -832,77 +879,42 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         "🌐",
     ));
 
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-send-screen-area-to-ai",
-        "Send Screen Area to AI Chat",
-        "Select a screen area and send to AI Chat",
-        vec![
-            "send",
-            "screen",
-            "area",
-            "region",
-            "selection",
-            "ai",
-            "chat",
-            "capture",
-        ],
-        BuiltInFeature::AiCommand(AiCommandType::SendScreenAreaToAi),
-        "⬚",
-    ));
-
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-create-ai-preset",
-        "Create AI Chat Preset",
-        "Create a new AI chat preset with custom settings",
-        vec!["create", "ai", "preset", "template", "chat", "new", "save"],
-        BuiltInFeature::AiCommand(AiCommandType::CreateAiPreset),
-        "➕",
-    ));
-
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-import-ai-presets",
-        "Import AI Chat Presets",
-        "Import AI chat presets from a file",
-        vec!["import", "ai", "preset", "presets", "chat", "load", "file"],
-        BuiltInFeature::AiCommand(AiCommandType::ImportAiPresets),
-        "📥",
-    ));
-
-    entries.push(BuiltInEntry::new_with_icon(
-        "builtin-search-ai-presets",
-        "Search AI Chat Presets",
-        "Search through saved AI chat presets",
-        vec![
-            "search",
-            "ai",
-            "preset",
-            "presets",
-            "chat",
-            "find",
-            "templates",
-        ],
-        BuiltInFeature::AiCommand(AiCommandType::SearchAiPresets),
-        "🔍",
-    ));
-
     // =========================================================================
     // Script Commands
     // =========================================================================
 
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-new-script",
-        "New Script",
-        "Create a new Script Kit script",
-        vec!["new", "script", "create", "code"],
+        "New Script (Template)",
+        "Create a new Script Kit script from a guided starter template",
+        vec![
+            "new",
+            "script",
+            "create",
+            "template",
+            "starter",
+            "boilerplate",
+            "scaffold",
+            "code",
+        ],
         BuiltInFeature::ScriptCommand(ScriptCommandType::NewScript),
-        "📜",
+        "➕",
     ));
 
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-new-extension",
-        "New Extension",
-        "Create a new Script Kit extension",
-        vec!["new", "extension", "create", "snippet"],
+        "New Scriptlet Bundle",
+        "Create a new extension bundle with YAML frontmatter and scriptlet examples",
+        vec![
+            "new",
+            "scriptlet",
+            "bundle",
+            "extension",
+            "frontmatter",
+            "yaml",
+            "snippet",
+            "create",
+        ],
         BuiltInFeature::ScriptCommand(ScriptCommandType::NewExtension),
         "✨",
     ));
@@ -914,7 +926,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-check-permissions",
         "Check Permissions",
-        "Check all required macOS permissions",
+        "Run a check for all required macOS permissions",
         vec!["check", "permissions", "accessibility", "privacy"],
         BuiltInFeature::PermissionCommand(PermissionCommandType::CheckPermissions),
         "✅",
@@ -923,7 +935,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-request-accessibility",
         "Request Accessibility Permission",
-        "Request accessibility permission for Script Kit",
+        "Request accessibility permission for Script Kit in System Settings",
         vec!["request", "accessibility", "permission"],
         BuiltInFeature::PermissionCommand(PermissionCommandType::RequestAccessibility),
         "🔑",
@@ -945,7 +957,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-clear-suggested",
         "Clear Suggested",
-        "Clear all suggested/recently used items",
+        "Clear all items from Suggested / Recently Used",
         vec![
             "clear",
             "suggested",
@@ -980,7 +992,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-configure-vercel-api",
         "Configure Vercel AI Gateway",
-        "Set up your Vercel AI Gateway API key for AI Chat",
+        "Open setup for the Vercel AI Gateway API key used by AI Chat",
         vec![
             "vercel",
             "api",
@@ -999,7 +1011,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-configure-openai-api",
         "Configure OpenAI API Key",
-        "Set up your OpenAI API key for AI Chat",
+        "Open setup for the OpenAI API key used by AI Chat",
         vec![
             "openai",
             "api",
@@ -1018,7 +1030,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-configure-anthropic-api",
         "Configure Anthropic API Key",
-        "Set up your Anthropic API key for AI Chat",
+        "Open setup for the Anthropic API key used by AI Chat",
         vec![
             "anthropic",
             "api",
@@ -1037,7 +1049,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-choose-theme",
         "Choose Theme",
-        "Browse and apply color themes with live preview",
+        "Open the theme picker and apply a color theme with live preview",
         vec!["theme", "appearance", "color", "dark", "light", "scheme"],
         BuiltInFeature::SettingsCommand(SettingsCommandType::ChooseTheme),
         "🎨",
@@ -1050,7 +1062,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-scratch-pad",
         "Scratch Pad",
-        "Quick editor for notes and code - auto-saves to disk",
+        "Open a scratch pad editor for notes and code (auto-saves to disk)",
         vec![
             "scratch",
             "pad",
@@ -1069,12 +1081,40 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-quick-terminal",
         "Quick Terminal",
-        "Open a terminal for running quick commands",
+        "Open a quick terminal for running shell commands",
         vec![
             "terminal", "term", "shell", "bash", "zsh", "command", "quick", "console", "cli",
         ],
         BuiltInFeature::UtilityCommand(UtilityCommandType::QuickTerminal),
         "💻",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-process-manager",
+        "Process Manager",
+        "Inspect running scripts and copy their process details",
+        vec![
+            "process", "running", "scripts", "jobs", "pid", "inspect", "manage", "kill",
+        ],
+        BuiltInFeature::UtilityCommand(UtilityCommandType::ProcessManager),
+        "activity",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-stop-all-processes",
+        "Stop All Running Scripts",
+        "Terminate every active Script Kit child process",
+        vec![
+            "process",
+            "running",
+            "scripts",
+            "stop",
+            "kill",
+            "terminate",
+            "jobs",
+        ],
+        BuiltInFeature::UtilityCommand(UtilityCommandType::StopAllProcesses),
+        "square-stop",
     ));
 
     // =========================================================================
@@ -1084,7 +1124,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-file-search",
         "Search Files",
-        "Browse directories and search for files",
+        "Browse directories, search files, and open results",
         vec![
             "file",
             "search",
@@ -1104,7 +1144,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-webcam",
         "Webcam",
-        "Capture from your webcam",
+        "Open the webcam prompt and capture a photo",
         vec!["webcam", "camera", "capture", "photo", "image"],
         BuiltInFeature::Webcam,
         "📸",
@@ -1523,9 +1563,55 @@ mod tests {
         let entries = get_builtin_entries(&config);
 
         // Check that notes command entries exist
+        assert!(entries.iter().any(|e| e.id == "builtin-open-notes"));
         assert!(entries.iter().any(|e| e.id == "builtin-new-note"));
         assert!(entries.iter().any(|e| e.id == "builtin-search-notes"));
         assert!(entries.iter().any(|e| e.id == "builtin-quick-capture"));
+    }
+
+    #[test]
+    fn test_get_builtin_entries_includes_open_notes_and_open_ai_commands() {
+        let config = BuiltInConfig::default();
+        let entries = get_builtin_entries(&config);
+
+        let open_notes = entries.iter().find(|e| e.id == "builtin-open-notes");
+        assert!(open_notes.is_some(), "builtin-open-notes should exist");
+        assert_eq!(
+            open_notes.unwrap().feature,
+            BuiltInFeature::NotesCommand(NotesCommandType::OpenNotes)
+        );
+
+        let open_ai = entries.iter().find(|e| e.id == "builtin-open-ai");
+        assert!(open_ai.is_some(), "builtin-open-ai should exist");
+        assert_eq!(
+            open_ai.unwrap().feature,
+            BuiltInFeature::AiCommand(AiCommandType::OpenAi)
+        );
+    }
+
+    #[test]
+    fn test_get_builtin_entries_hides_preview_ai_commands() {
+        let config = BuiltInConfig::default();
+        let entries = get_builtin_entries(&config);
+
+        assert!(
+            !entries
+                .iter()
+                .any(|e| e.id == "builtin-send-screen-area-to-ai"),
+            "Preview command should be hidden from built-in entries"
+        );
+        assert!(
+            !entries.iter().any(|e| e.id == "builtin-create-ai-preset"),
+            "Preview command should be hidden from built-in entries"
+        );
+        assert!(
+            !entries.iter().any(|e| e.id == "builtin-import-ai-presets"),
+            "Preview command should be hidden from built-in entries"
+        );
+        assert!(
+            !entries.iter().any(|e| e.id == "builtin-search-ai-presets"),
+            "Preview command should be hidden from built-in entries"
+        );
     }
 
     #[test]
@@ -1536,6 +1622,54 @@ mod tests {
         // Check that script command entries exist
         assert!(entries.iter().any(|e| e.id == "builtin-new-script"));
         assert!(entries.iter().any(|e| e.id == "builtin-new-extension"));
+    }
+
+    #[test]
+    fn test_new_creation_commands_are_discoverable() {
+        let config = BuiltInConfig::default();
+        let entries = get_builtin_entries(&config);
+
+        let new_script = entries
+            .iter()
+            .find(|e| e.id == "builtin-new-script")
+            .expect("builtin-new-script should exist");
+        assert!(
+            new_script.name.to_lowercase().contains("new"),
+            "New Script entry name should prominently include 'new'"
+        );
+        assert!(
+            new_script
+                .keywords
+                .iter()
+                .any(|k| k.eq_ignore_ascii_case("template")),
+            "New Script entry should be discoverable via 'template'"
+        );
+        assert!(
+            new_script
+                .keywords
+                .iter()
+                .any(|k| k.eq_ignore_ascii_case("starter")),
+            "New Script entry should be discoverable via 'starter'"
+        );
+
+        let new_extension = entries
+            .iter()
+            .find(|e| e.id == "builtin-new-extension")
+            .expect("builtin-new-extension should exist");
+        assert!(
+            new_extension
+                .keywords
+                .iter()
+                .any(|k| k.eq_ignore_ascii_case("scriptlet")),
+            "New Extension entry should be discoverable via 'scriptlet'"
+        );
+        assert!(
+            new_extension
+                .keywords
+                .iter()
+                .any(|k| k.eq_ignore_ascii_case("frontmatter")),
+            "New Extension entry should be discoverable via 'frontmatter'"
+        );
     }
 
     #[test]
@@ -1599,9 +1733,125 @@ mod tests {
     }
 
     #[test]
+    fn test_get_builtin_entries_includes_process_manager_command() {
+        let config = BuiltInConfig::default();
+        let entries = get_builtin_entries(&config);
+
+        let process_manager = entries.iter().find(|e| e.id == "builtin-process-manager");
+        assert!(
+            process_manager.is_some(),
+            "Process Manager builtin should exist in the main menu"
+        );
+
+        let process_manager = process_manager.unwrap();
+        assert_eq!(
+            process_manager.feature,
+            BuiltInFeature::UtilityCommand(UtilityCommandType::ProcessManager)
+        );
+        assert!(process_manager.keywords.iter().any(|k| k == "process"));
+        assert!(process_manager.keywords.iter().any(|k| k == "running"));
+        assert!(process_manager.keywords.iter().any(|k| k == "kill"));
+    }
+
+    #[test]
+    fn test_get_builtin_entries_includes_stop_all_processes_command() {
+        let config = BuiltInConfig::default();
+        let entries = get_builtin_entries(&config);
+
+        let stop_all = entries
+            .iter()
+            .find(|e| e.id == "builtin-stop-all-processes");
+        assert!(
+            stop_all.is_some(),
+            "Stop all running scripts builtin should exist in the main menu"
+        );
+
+        let stop_all = stop_all.unwrap();
+        assert_eq!(
+            stop_all.feature,
+            BuiltInFeature::UtilityCommand(UtilityCommandType::StopAllProcesses)
+        );
+        assert!(stop_all.keywords.iter().any(|k| k == "stop"));
+        assert!(stop_all.keywords.iter().any(|k| k == "kill"));
+        assert!(stop_all.keywords.iter().any(|k| k == "terminate"));
+    }
+
+    #[test]
+    fn test_builtin_descriptions_use_clear_action_phrasing() {
+        let config = BuiltInConfig::default();
+        let entries = get_builtin_entries(&config);
+
+        let notes = entries.iter().find(|e| e.id == "builtin-notes").unwrap();
+        assert_eq!(
+            notes.description,
+            "Open quick notes and a scratchpad editor"
+        );
+
+        let quick_capture = entries
+            .iter()
+            .find(|e| e.id == "builtin-quick-capture")
+            .unwrap();
+        assert_eq!(
+            quick_capture.description,
+            "Capture a new note without opening the full Notes window"
+        );
+
+        let file_search = entries
+            .iter()
+            .find(|e| e.id == "builtin-file-search")
+            .unwrap();
+        assert_eq!(
+            file_search.description,
+            "Browse directories, search files, and open results"
+        );
+
+        let webcam = entries.iter().find(|e| e.id == "builtin-webcam").unwrap();
+        assert_eq!(
+            webcam.description,
+            "Open the webcam prompt and capture a photo"
+        );
+    }
+
+    #[test]
     fn test_file_search_feature_equality() {
         assert_eq!(BuiltInFeature::FileSearch, BuiltInFeature::FileSearch);
         assert_ne!(BuiltInFeature::FileSearch, BuiltInFeature::ClipboardHistory);
         assert_ne!(BuiltInFeature::FileSearch, BuiltInFeature::Notes);
+    }
+
+    #[test]
+    fn test_system_action_hud_message_volume_presets() {
+        assert_eq!(
+            system_action_hud_message(SystemActionType::Volume0, None),
+            Some("Volume 0%".to_string())
+        );
+        assert_eq!(
+            system_action_hud_message(SystemActionType::Volume50, None),
+            Some("Volume 50%".to_string())
+        );
+        assert_eq!(
+            system_action_hud_message(SystemActionType::Volume100, None),
+            Some("Volume 100%".to_string())
+        );
+        assert_eq!(
+            system_action_hud_message(SystemActionType::VolumeMute, None),
+            Some("Volume Muted".to_string())
+        );
+    }
+
+    #[test]
+    fn test_system_action_hud_message_dark_mode() {
+        assert_eq!(
+            system_action_hud_message(SystemActionType::ToggleDarkMode, Some(true)),
+            Some("Dark Mode On".to_string())
+        );
+        assert_eq!(
+            system_action_hud_message(SystemActionType::ToggleDarkMode, Some(false)),
+            Some("Dark Mode Off".to_string())
+        );
+        assert_eq!(
+            system_action_hud_message(SystemActionType::ToggleDarkMode, None),
+            Some("Dark Mode Toggled".to_string())
+        );
     }
 }

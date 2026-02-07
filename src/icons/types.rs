@@ -5,10 +5,10 @@ mod icon_ref;
 mod icon_style;
 mod lucide_mapping;
 
-pub use embedded::*;
-pub use icon_ref::*;
-pub use icon_style::*;
-pub use lucide_mapping::*;
+pub use embedded::EmbeddedIcon;
+pub use icon_ref::IconRef;
+pub use icon_style::{ColorToken, IconColor, IconSize, IconStyle};
+pub use lucide_mapping::lucide_from_str;
 
 // Re-export gpui_component types we use
 pub use gpui_component::IconName as LucideIcon;

@@ -535,6 +535,29 @@ mod tests {
     }
 
     #[test]
+    fn test_execute_search_url_percent_encodes_reserved_chars_when_query_has_symbols() {
+        let fallback = BuiltinFallback::new(
+            "search-test",
+            "Search Test",
+            "Search with encoded query",
+            "search",
+            FallbackAction::SearchUrl {
+                template: "https://example.com?q={query}".to_string(),
+            },
+            FallbackCondition::Always,
+            1,
+        );
+
+        let result = fallback.execute("c++ tips & tricks").unwrap();
+        match result {
+            FallbackResult::OpenUrl { url } => {
+                assert_eq!(url, "https://example.com?q=c%2B%2B%20tips%20%26%20tricks");
+            }
+            _ => panic!("Expected OpenUrl result"),
+        }
+    }
+
+    #[test]
     fn test_search_google_ai_in_applicable_fallbacks() {
         let fallbacks = get_applicable_fallbacks("test query");
 

@@ -82,6 +82,7 @@ pub enum MenuExecutorError {
 #[link(name = "CoreFoundation", kind = "framework")]
 extern "C" {
     fn CFRelease(cf: *const c_void);
+    fn CFRetain(cf: *const c_void) -> *const c_void;
 }
 
 // ============================================================================
@@ -159,12 +160,17 @@ const _AX_ROLE_MENU: &str = "AXMenu";
 // Helper Functions
 // ============================================================================
 
-/// Create a CFString from a Rust string
-fn create_cf_string(s: &str) -> CFStringRef {
-    unsafe {
-        let c_str = std::ffi::CString::new(s).unwrap();
+/// Create a CFString from a Rust string.
+fn try_create_cf_string(s: &str) -> Result<CFStringRef> {
+    let c_str = std::ffi::CString::new(s)
+        .with_context(|| format!("CFString input contains interior NUL: {:?}", s))?;
+    let cf_string = unsafe {
         CFStringCreateWithCString(std::ptr::null(), c_str.as_ptr(), kCFStringEncodingUTF8)
+    };
+    if cf_string.is_null() {
+        bail!("CFStringCreateWithCString returned null for input: {:?}", s);
     }
+    Ok(cf_string)
 }
 
 /// Convert a CFString to a Rust String
@@ -206,9 +212,42 @@ fn cf_release(cf: CFTypeRef) {
     }
 }
 
+/// Retain a CoreFoundation object (increment reference count).
+fn cf_retain(cf: CFTypeRef) -> CFTypeRef {
+    if !cf.is_null() {
+        unsafe { CFRetain(cf) }
+    } else {
+        cf
+    }
+}
+
+/// Owned AXUIElement wrapper that releases the retained reference on drop.
+struct OwnedAxElement {
+    ptr: AXUIElementRef,
+}
+
+impl OwnedAxElement {
+    /// Create an owned AX element by retaining a borrowed reference.
+    fn from_borrowed(ptr: AXUIElementRef) -> Self {
+        Self {
+            ptr: cf_retain(ptr as CFTypeRef) as AXUIElementRef,
+        }
+    }
+
+    fn as_ptr(&self) -> AXUIElementRef {
+        self.ptr
+    }
+}
+
+impl Drop for OwnedAxElement {
+    fn drop(&mut self) {
+        cf_release(self.ptr as CFTypeRef);
+    }
+}
+
 /// Get an attribute value from an AXUIElement
 fn get_ax_attribute(element: AXUIElementRef, attribute: &str) -> Result<CFTypeRef> {
-    let attr_str = create_cf_string(attribute);
+    let attr_str = try_create_cf_string(attribute)?;
     let mut value: CFTypeRef = std::ptr::null();
 
     let result =
@@ -266,7 +305,7 @@ fn get_ax_bool_attribute(element: AXUIElementRef, attribute: &str) -> Option<boo
 
 /// Perform an action on an AXUIElement
 fn perform_ax_action(element: AXUIElementRef, action: &str) -> Result<()> {
-    let action_str = create_cf_string(action);
+    let action_str = try_create_cf_string(action)?;
 
     let result = unsafe { AXUIElementPerformAction(element, action_str) };
 
@@ -336,7 +375,7 @@ fn find_menu_item_by_title(
     children: CFArrayRef,
     count: i64,
     title: &str,
-) -> Option<AXUIElementRef> {
+) -> Option<OwnedAxElement> {
     for i in 0..count {
         let child = unsafe { CFArrayGetValueAtIndex(children, i) };
         if child.is_null() {
@@ -346,7 +385,7 @@ fn find_menu_item_by_title(
         let child_title = get_ax_string_attribute(child as AXUIElementRef, AX_TITLE);
         if let Some(ref t) = child_title {
             if t == title {
-                return Some(child as AXUIElementRef);
+                return Some(OwnedAxElement::from_borrowed(child as AXUIElementRef));
             }
         }
     }
@@ -354,7 +393,7 @@ fn find_menu_item_by_title(
 }
 
 /// Navigate through AX hierarchy to find and open a submenu
-fn open_menu_at_element(element: AXUIElementRef) -> Result<AXUIElementRef> {
+fn open_menu_at_element(element: AXUIElementRef) -> Result<OwnedAxElement> {
     // First, press the element to open it (works for MenuBarItem and MenuItem with submenu)
     perform_ax_action(element, AX_PRESS)?;
 
@@ -373,8 +412,9 @@ fn open_menu_at_element(element: AXUIElementRef) -> Result<AXUIElementRef> {
         let role = get_ax_string_attribute(child as AXUIElementRef, AX_ROLE);
         if let Some(ref r) = role {
             if r == "AXMenu" {
+                let owned_child = OwnedAxElement::from_borrowed(child as AXUIElementRef);
                 cf_release(children as CFTypeRef);
-                return Ok(child as AXUIElementRef);
+                return Ok(owned_child);
             }
         }
     }
@@ -497,6 +537,7 @@ pub fn execute_menu_action(bundle_id: &str, menu_path: &[String]) -> Result<()> 
 fn navigate_and_execute_menu_path(menu_bar: AXUIElementRef, menu_path: &[String]) -> Result<()> {
     let mut current_menu_container = menu_bar;
     let mut path_so_far: Vec<String> = Vec::new();
+    let mut retained_submenus: Vec<OwnedAxElement> = Vec::new();
 
     for (i, menu_title) in menu_path.iter().enumerate() {
         let is_last = i == menu_path.len() - 1;
@@ -511,22 +552,18 @@ fn navigate_and_execute_menu_path(menu_bar: AXUIElementRef, menu_path: &[String]
         })?;
 
         // Find the menu item by title
-        let menu_item = find_menu_item_by_title(children, count, menu_title);
-
-        if menu_item.is_none() {
+        let Some(menu_item) = find_menu_item_by_title(children, count, menu_title) else {
             cf_release(children as CFTypeRef);
             return Err(MenuExecutorError::MenuItemNotFound {
                 path: path_so_far,
                 searched_in: format!("menu level {}", i),
             }
             .into());
-        }
-
-        let menu_item = menu_item.unwrap();
+        };
 
         // Check if enabled (only matters for the final item)
         if is_last {
-            let enabled = get_ax_bool_attribute(menu_item, AX_ENABLED).unwrap_or(true);
+            let enabled = get_ax_bool_attribute(menu_item.as_ptr(), AX_ENABLED).unwrap_or(true);
             if !enabled {
                 cf_release(children as CFTypeRef);
                 return Err(MenuExecutorError::MenuItemDisabled { path: path_so_far }.into());
@@ -534,7 +571,7 @@ fn navigate_and_execute_menu_path(menu_bar: AXUIElementRef, menu_path: &[String]
 
             // Execute the action
             debug!(menu_title, "Pressing final menu item");
-            perform_ax_action(menu_item, AX_PRESS).map_err(|e| {
+            perform_ax_action(menu_item.as_ptr(), AX_PRESS).map_err(|e| {
                 MenuExecutorError::ActionFailed(format!(
                     "Failed to press menu item '{}': {}",
                     menu_title, e
@@ -552,14 +589,15 @@ fn navigate_and_execute_menu_path(menu_bar: AXUIElementRef, menu_path: &[String]
         cf_release(children as CFTypeRef);
 
         // Open the menu to get to its children
-        let submenu = open_menu_at_element(menu_item).map_err(|e| {
+        let submenu = open_menu_at_element(menu_item.as_ptr()).map_err(|e| {
             MenuExecutorError::MenuStructureChanged {
                 expected_path: path_so_far.clone(),
                 reason: format!("Failed to open submenu at '{}': {}", menu_title, e),
             }
         })?;
 
-        current_menu_container = submenu;
+        current_menu_container = submenu.as_ptr();
+        retained_submenus.push(submenu);
     }
 
     Ok(())

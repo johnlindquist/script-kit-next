@@ -5,7 +5,7 @@
 //! - `serialize_message` for serializing messages to JSON
 //! - `JsonlReader` for streaming JSONL reads
 
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufRead, BufReader, ErrorKind, Read};
 use tracing::{debug, warn};
 use uuid::Uuid;
 
@@ -13,13 +13,23 @@ use super::message::Message;
 
 /// Maximum length for raw JSON in logs (prevents huge base64 data in logs)
 const MAX_RAW_LOG_PREVIEW: usize = 200;
+/// Maximum JSONL message size accepted from script stdout.
+///
+/// Large lines are treated as malformed input to prevent memory amplification.
+const MAX_PROTOCOL_LINE_BYTES: usize = 64 * 1024;
+
+enum LineRead {
+    Eof,
+    Line(String),
+    TooLong { raw: String, raw_len: usize },
+}
 
 /// Get a truncated preview of raw JSON for logging
 ///
 /// # Safety
 /// This function handles UTF-8 correctly by finding a valid char boundary
 /// when truncating. It will never panic on multi-byte UTF-8 characters.
-pub fn log_preview(raw: &str) -> (&str, usize) {
+fn log_preview(raw: &str) -> (&str, usize) {
     let len = raw.len();
     if len > MAX_RAW_LOG_PREVIEW {
         // Find a valid UTF-8 char boundary at or before MAX_RAW_LOG_PREVIEW
@@ -46,7 +56,7 @@ pub fn log_preview(raw: &str) -> (&str, usize) {
 /// Raw JSON is truncated to 200 chars in error logs to prevent leaking sensitive data
 /// (base64 screenshots, clipboard content, etc.)
 #[tracing::instrument(skip_all, fields(line_len = line.len()))]
-pub fn parse_message(line: &str) -> Result<Message, serde_json::Error> {
+fn parse_message(line: &str) -> Result<Message, serde_json::Error> {
     serde_json::from_str(line).map_err(|e| {
         // SECURITY: Use truncated preview to avoid logging sensitive data
         // (base64 screenshots, clipboard content, user text, etc.)
@@ -61,10 +71,25 @@ pub fn parse_message(line: &str) -> Result<Message, serde_json::Error> {
     })
 }
 
+fn is_unknown_message_type_error(error: &str, message_type: &str) -> bool {
+    if !error.contains("unknown variant") {
+        return false;
+    }
+
+    let quoted_markers = [
+        format!("`{message_type}`"),
+        format!("'{message_type}'"),
+        format!("\"{message_type}\""),
+    ];
+
+    quoted_markers.iter().any(|marker| error.contains(marker))
+        || error.contains(&format!("unknown variant {message_type}"))
+}
+
 /// Result type for graceful message parsing
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
-pub enum ParseResult {
+enum ParseResult {
     /// Successfully parsed a known message type
     Ok(Message),
     /// Message has no "type" field
@@ -99,16 +124,17 @@ pub enum ParseIssueKind {
     UnknownType,
     InvalidPayload,
     ParseError,
+    LineTooLong,
 }
 
 #[derive(Debug, Clone)]
-pub struct ParseIssue {
-    pub correlation_id: String,
-    pub kind: ParseIssueKind,
-    pub message_type: Option<String>,
-    pub error: Option<String>,
-    pub raw_preview: String,
-    pub raw_len: usize,
+pub(crate) struct ParseIssue {
+    pub(crate) correlation_id: String,
+    pub(crate) kind: ParseIssueKind,
+    pub(crate) message_type: Option<String>,
+    pub(crate) error: Option<String>,
+    pub(crate) raw_preview: String,
+    pub(crate) raw_len: usize,
 }
 
 impl ParseIssue {
@@ -155,7 +181,7 @@ impl ParseIssue {
 /// Raw JSON is truncated to 200 chars in logs to prevent leaking sensitive data
 /// (base64 screenshots, clipboard content, etc.)
 #[tracing::instrument(skip_all, fields(line_len = line.len()))]
-pub fn parse_message_graceful(line: &str) -> ParseResult {
+fn parse_message_graceful(line: &str) -> ParseResult {
     let (preview, _raw_len) = log_preview(line);
 
     // P1-11 FIX: Single parse - parse to Value first, then convert
@@ -184,9 +210,9 @@ pub fn parse_message_graceful(line: &str) -> ParseResult {
         Ok(msg) => ParseResult::Ok(msg),
         Err(e) => {
             let error_str = e.to_string();
-            // Check if this is an "unknown variant" error (unknown type)
-            // vs a field/payload error (known type, bad data)
-            if error_str.contains("unknown variant") {
+            // Classify as UnknownType only when the unknown variant token matches
+            // the top-level message type field; other unknown variants are payload errors.
+            if is_unknown_message_type_error(&error_str, &msg_type) {
                 ParseResult::UnknownType {
                     message_type: msg_type,
                     raw: preview.to_string(),
@@ -225,6 +251,8 @@ pub struct JsonlReader<R: Read> {
     reader: BufReader<R>,
     /// Reusable line buffer - cleared and reused per read to avoid allocations
     line_buffer: String,
+    /// Reusable byte buffer for bounded line reads
+    byte_buffer: Vec<u8>,
 }
 
 impl<R: Read> JsonlReader<R> {
@@ -234,6 +262,74 @@ impl<R: Read> JsonlReader<R> {
             reader: BufReader::new(reader),
             // Pre-allocate reasonable capacity for typical JSON messages
             line_buffer: String::with_capacity(1024),
+            byte_buffer: Vec::with_capacity(1024),
+        }
+    }
+
+    fn read_next_line(&mut self, max_line_bytes: usize) -> Result<LineRead, std::io::Error> {
+        self.byte_buffer.clear();
+        let mut total_bytes = 0usize;
+        let mut saw_any_data = false;
+
+        loop {
+            let available = self.reader.fill_buf()?;
+            if available.is_empty() {
+                if !saw_any_data {
+                    return Ok(LineRead::Eof);
+                }
+
+                let line = String::from_utf8_lossy(&self.byte_buffer).into_owned();
+                return Ok(LineRead::Line(line));
+            }
+
+            saw_any_data = true;
+            let newline_pos = available.iter().position(|&byte| byte == b'\n');
+            let consumed_len = newline_pos.map_or(available.len(), |idx| idx + 1);
+
+            if self.byte_buffer.len() < max_line_bytes {
+                let remaining = max_line_bytes - self.byte_buffer.len();
+                let copy_len = remaining.min(consumed_len);
+                self.byte_buffer.extend_from_slice(&available[..copy_len]);
+            }
+
+            self.reader.consume(consumed_len);
+            total_bytes = total_bytes.saturating_add(consumed_len);
+
+            if total_bytes > max_line_bytes {
+                // Drain the remainder of the oversized line so parsing can continue
+                // on the next JSONL message.
+                if newline_pos.is_none() {
+                    loop {
+                        let remaining = self.reader.fill_buf()?;
+                        if remaining.is_empty() {
+                            break;
+                        }
+
+                        if let Some(next_newline_pos) =
+                            remaining.iter().position(|&byte| byte == b'\n')
+                        {
+                            self.reader.consume(next_newline_pos + 1);
+                            total_bytes = total_bytes.saturating_add(next_newline_pos + 1);
+                            break;
+                        }
+
+                        let chunk_len = remaining.len();
+                        self.reader.consume(chunk_len);
+                        total_bytes = total_bytes.saturating_add(chunk_len);
+                    }
+                }
+
+                let raw = String::from_utf8_lossy(&self.byte_buffer).into_owned();
+                return Ok(LineRead::TooLong {
+                    raw,
+                    raw_len: total_bytes,
+                });
+            }
+
+            if newline_pos.is_some() {
+                let line = String::from_utf8_lossy(&self.byte_buffer).into_owned();
+                return Ok(LineRead::Line(line));
+            }
         }
     }
 
@@ -246,22 +342,35 @@ impl<R: Read> JsonlReader<R> {
     pub fn next_message(&mut self) -> Result<Option<Message>, Box<dyn std::error::Error>> {
         // Use loop instead of recursion to prevent stack overflow on many empty lines
         loop {
-            // P1-12 FIX: Reuse buffer instead of allocating new String each call
-            self.line_buffer.clear();
-            match self.reader.read_line(&mut self.line_buffer)? {
-                0 => {
+            match self.read_next_line(MAX_PROTOCOL_LINE_BYTES)? {
+                LineRead::Eof => {
                     debug!("Reached end of JSONL stream");
                     return Ok(None);
                 }
-                bytes_read => {
-                    debug!(bytes_read, "Read line from JSONL stream");
-                    let trimmed = self.line_buffer.trim();
-                    if trimmed.is_empty() {
+                LineRead::Line(line) => {
+                    self.line_buffer.clear();
+                    self.line_buffer.push_str(&line);
+
+                    let trimmed = self.line_buffer.trim_end_matches(['\r', '\n']);
+                    debug!(
+                        bytes_read = self.line_buffer.len(),
+                        "Read line from JSONL stream"
+                    );
+                    if trimmed.trim().is_empty() {
                         debug!("Skipping empty line in JSONL stream");
                         continue; // Skip empty lines (loop instead of recursion)
                     }
                     let msg = parse_message(trimmed)?;
                     return Ok(Some(msg));
+                }
+                LineRead::TooLong { raw_len, .. } => {
+                    return Err(Box::new(std::io::Error::new(
+                        ErrorKind::InvalidData,
+                        format!(
+                            "JSONL line exceeds {} bytes (received {raw_len} bytes)",
+                            MAX_PROTOCOL_LINE_BYTES
+                        ),
+                    )));
                 }
             }
         }
@@ -286,7 +395,7 @@ impl<R: Read> JsonlReader<R> {
     }
 
     /// Read the next message with graceful unknown type handling, reporting parse issues.
-    pub fn next_message_graceful_with_handler<F>(
+    pub(crate) fn next_message_graceful_with_handler<F>(
         &mut self,
         mut on_issue: F,
     ) -> Result<Option<Message>, std::io::Error>
@@ -294,16 +403,17 @@ impl<R: Read> JsonlReader<R> {
         F: FnMut(ParseIssue),
     {
         loop {
-            // P1-12 FIX: Reuse buffer instead of allocating new String each iteration
-            self.line_buffer.clear();
-            match self.reader.read_line(&mut self.line_buffer)? {
-                0 => {
+            match self.read_next_line(MAX_PROTOCOL_LINE_BYTES)? {
+                LineRead::Eof => {
                     debug!("Reached end of JSONL stream");
                     return Ok(None);
                 }
-                _ => {
-                    let trimmed = self.line_buffer.trim();
-                    if trimmed.is_empty() {
+                LineRead::Line(line) => {
+                    self.line_buffer.clear();
+                    self.line_buffer.push_str(&line);
+
+                    let trimmed = self.line_buffer.trim_end_matches(['\r', '\n']);
+                    if trimmed.trim().is_empty() {
                         debug!("Skipping empty line in JSONL stream");
                         continue;
                     }
@@ -419,6 +529,30 @@ impl<R: Read> JsonlReader<R> {
                             continue;
                         }
                     }
+                }
+                LineRead::TooLong { raw, raw_len } => {
+                    let (preview, _) = log_preview(&raw);
+                    let issue = ParseIssue::new(
+                        ParseIssueKind::LineTooLong,
+                        None,
+                        Some(format!(
+                            "JSONL line exceeds {} bytes (received {raw_len} bytes)",
+                            MAX_PROTOCOL_LINE_BYTES
+                        )),
+                        preview.to_string(),
+                        raw_len,
+                    );
+                    let _guard = crate::logging::set_correlation_id(issue.correlation_id.clone());
+
+                    warn!(
+                        correlation_id = %issue.correlation_id,
+                        raw_preview = %issue.raw_preview,
+                        raw_len = issue.raw_len,
+                        max_line_bytes = MAX_PROTOCOL_LINE_BYTES,
+                        "Skipping oversized JSONL message"
+                    );
+                    on_issue(issue);
+                    continue;
                 }
             }
         }
@@ -542,6 +676,27 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_message_graceful_classifies_invalid_enum_payload_as_invalid_payload_when_type_known(
+    ) {
+        // Known type "windowAction" with invalid enum value for "action"
+        let json = r#"{"type":"windowAction","requestId":"req-1","action":"not-an-action"}"#;
+        match parse_message_graceful(json) {
+            ParseResult::InvalidPayload {
+                message_type,
+                error,
+                ..
+            } => {
+                assert_eq!(message_type, "windowAction");
+                assert!(
+                    error.contains("action"),
+                    "error should mention invalid action field, got: {error}"
+                );
+            }
+            other => panic!("Expected ParseResult::InvalidPayload, got {:?}", other),
+        }
+    }
+
+    #[test]
     fn test_jsonl_reader_skips_empty_lines() {
         use std::io::Cursor;
 
@@ -611,6 +766,55 @@ mod tests {
             .as_deref()
             .unwrap_or("")
             .contains("placeholder"));
+    }
+
+    #[test]
+    fn test_next_message_returns_error_when_line_exceeds_limit() {
+        use std::io::Cursor;
+
+        let huge_html = "x".repeat(70_000);
+        let jsonl = format!(
+            r#"{{"type":"div","id":"1","html":"{}"}}
+"#,
+            huge_html
+        );
+        let cursor = Cursor::new(jsonl);
+        let mut reader = JsonlReader::new(cursor);
+
+        let result = reader.next_message();
+        assert!(result.is_err(), "Expected oversized JSONL line to fail");
+    }
+
+    #[test]
+    fn test_next_message_graceful_skips_oversized_line_and_recovers() {
+        use std::io::Cursor;
+
+        let huge_html = "x".repeat(70_000);
+        let jsonl = format!(
+            r#"{{"type":"div","id":"1","html":"{}"}}
+{{"type":"beep"}}
+"#,
+            huge_html
+        );
+        let cursor = Cursor::new(jsonl);
+        let mut reader = JsonlReader::new(cursor);
+        let mut issues = Vec::new();
+
+        let msg = reader
+            .next_message_graceful_with_handler(|issue| issues.push(issue))
+            .expect("Reader should recover after oversized line");
+
+        assert!(
+            matches!(msg, Some(Message::Beep {})),
+            "Expected oversized line to be skipped"
+        );
+        assert_eq!(
+            issues.len(),
+            1,
+            "Expected one parse issue for oversized line"
+        );
+        assert_eq!(issues[0].kind, ParseIssueKind::LineTooLong);
+        assert!(issues[0].raw_len > MAX_PROTOCOL_LINE_BYTES);
     }
 
     // ============================================================

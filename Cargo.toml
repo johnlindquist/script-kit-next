@@ -37,7 +37,7 @@ core-video = { version = "0.4.3", features = ["metal"] }
 objc = "0.2"
 dirs = "5.0"
 smallvec = "1.15"
-syntect = { version = "5.2", default-features = false, features = ["default-syntaxes", "default-themes", "regex-onig"] }
+syntect = { version = "5.2", default-features = false, features = ["default-syntaxes", "default-themes", "default-fancy"] }
 anyhow = "1.0"
 thiserror = "2.0"
 regex = "1.12"
@@ -45,12 +45,8 @@ nucleo-matcher = "0.3"         # High-performance fuzzy matching (10-100x faster
 pulldown-cmark = { version = "0.12", default-features = false }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter", "time", "tracing-log"] }
-time = { version = "0.3", features = ["formatting", "macros"] }
 tracing-appender = "0.2"
 chrono = { version = "0.4", features = ["serde"] }
-
-# Text buffer for editor (efficient rope data structure)
-ropey = "1.6"
 
 # Terminal integration dependencies (Tier 2 - Alacritty)
 # Versions chosen to match Zed's current known-working configuration (Dec 2025)
@@ -73,7 +69,7 @@ usvg = "0.46"                         # SVG parsing (used by resvg)
 tiny-skia = "0.11"                    # 2D graphics library for SVG rendering
 
 # Clipboard history storage
-rusqlite = { version = "0.38", features = ["bundled"] }
+rusqlite = { version = "0.38", default-features = false, features = ["bundled"] }
 uuid = { version = "1.0", features = ["v4"] }
 base64 = "0.22"
 lru = "0.12"  # LRU cache for clipboard image eviction
@@ -110,10 +106,6 @@ open = "5"
 # Math expression evaluation for calculate fallback
 meval = "0.2"
 
-# Storybook infrastructure (compile-time story registration + CLI)
-inventory = "0.3"  # Compile-time story registration (same pattern as Zed)
-clap = { version = "4", features = ["derive"] }  # CLI argument parsing
-
 # gpui-component - Community UI component library for GPUI (FORKED)
 # Fork adds set_selection() method for programmatic text selection (snippet/template support)
 # Original: https://github.com/longbridge/gpui-component
@@ -122,9 +114,6 @@ gpui-component = { git = "https://github.com/johnlindquist/gpui-component", pack
 
 # Tree-sitter markdown grammar for Notes editor highlighting
 tree-sitter-md = "0.5.2"
-
-# i18n support required by gpui-component
-rust-i18n = "3"
 
 # Core Foundation for CFRunLoop (keyboard monitoring)
 core-foundation = "0.10"
@@ -135,7 +124,7 @@ croner = "3.0"                 # Parse and validate cron expressions
 english-to-cron = "0.1"        # Convert natural language schedules to cron
 
 # HTTP client for AI provider API calls
-ureq = { version = "3", features = ["json"] }
+ureq = { version = "3", default-features = false, features = ["json", "rustls"] }
 
 # macOS launch-at-login via SMAppService
 smappservice-rs = "0.1"
@@ -165,11 +154,22 @@ ocr = []
 perf = []
 
 [dev-dependencies]
-tempfile = "3"
 tree-sitter-highlight = "0.25.4"
 
-[build-dependencies]
-dirs = "5.0"  # For build.rs to copy SDK to ~/.kit/lib/
+[profile.dev]
+debug = 1
+incremental = true
+codegen-units = 256
+
+[profile.test]
+debug = 1
+incremental = true
+codegen-units = 256
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
 
 # macOS bundle metadata for cargo-bundle
 # Run: cargo bundle --release

@@ -37,20 +37,20 @@
 //! AppShell::render(spec, &self.shell_runtime, window, cx)
 //! ```
 
-pub mod chrome;
-pub mod focus;
-pub mod keymap;
-pub mod shell;
-pub mod spec;
-pub mod style;
+pub(crate) mod chrome;
+pub(crate) mod focus;
+pub(crate) mod keymap;
+pub(crate) mod shell;
+pub(crate) mod spec;
+pub(crate) mod style;
 
 // Re-export primary types
-pub use chrome::{ChromeMode, ChromeSpec, DividerSpec};
-pub use focus::{FocusPolicy, ShellFocus};
-pub use keymap::{KeymapSpec, ShellAction};
-pub use shell::AppShell;
-pub use spec::{ButtonSpec, FooterSpec, HeaderSpec, InputSpec, ShellSpec};
-pub use style::ShellStyleCache;
+pub use self::chrome::{ChromeMode, ChromeSpec, DividerSpec};
+pub use self::focus::{FocusPolicy, ShellFocus};
+pub use self::keymap::{KeymapSpec, ShellAction};
+pub use self::shell::AppShell;
+pub use self::spec::{ButtonSpec, FooterSpec, HeaderSpec, InputSpec, ShellSpec};
+pub use self::style::ShellStyleCache;
 
 #[cfg(test)]
 mod tests;

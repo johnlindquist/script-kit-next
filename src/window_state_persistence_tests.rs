@@ -2,8 +2,8 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::platform::DisplayBounds;
     use crate::window_state::*;
+    use crate::windows::DisplayBounds;
     use gpui::{point, px, size, Bounds, WindowBounds};
     use std::env;
     use tempfile::TempDir;
@@ -78,6 +78,18 @@ mod tests {
         }];
         let bounds = PersistedWindowBounds::new(100.0, 100.0, 800.0, 600.0);
         assert!(is_bounds_visible(&bounds, &displays));
+    }
+
+    #[test]
+    fn test_display_key_uses_shared_windowing_display_bounds() {
+        let display = DisplayBounds {
+            origin_x: 10.0,
+            origin_y: 20.0,
+            width: 3000.0,
+            height: 2000.0,
+        };
+
+        assert_eq!(display_key(&display), "3000x2000@10,20");
     }
 
     #[test]
@@ -279,5 +291,74 @@ mod tests {
         // Point not on any display
         let found = find_display_containing_point(-100.0, -100.0, &displays);
         assert!(found.is_none());
+    }
+
+    #[test]
+    fn test_save_main_position_with_display_detection_saves_per_display_when_match_found() {
+        with_temp_state_dir(|| {
+            let displays = vec![DisplayBounds {
+                origin_x: 0.0,
+                origin_y: 0.0,
+                width: 1920.0,
+                height: 1080.0,
+            }];
+            let bounds = PersistedWindowBounds::new(100.0, 100.0, 750.0, 475.0);
+
+            let outcome = save_main_position_with_display_detection(bounds, &displays);
+
+            assert_eq!(outcome, MainPositionSaveOutcome::SavedPerDisplay);
+            let loaded = load_state_file().expect("state file should exist");
+            let saved_main = loaded.main.expect("main bounds should be saved");
+            assert!((saved_main.x - bounds.x).abs() < 0.1);
+            assert!((saved_main.y - bounds.y).abs() < 0.1);
+            assert!((saved_main.width - bounds.width).abs() < 0.1);
+            assert!((saved_main.height - bounds.height).abs() < 0.1);
+            assert_eq!(loaded.main_per_display.len(), 1);
+        });
+    }
+
+    #[test]
+    fn test_save_main_position_with_display_detection_falls_back_when_no_display_match() {
+        with_temp_state_dir(|| {
+            let displays = vec![DisplayBounds {
+                origin_x: 2000.0,
+                origin_y: 2000.0,
+                width: 1920.0,
+                height: 1080.0,
+            }];
+            let bounds = PersistedWindowBounds::new(100.0, 100.0, 750.0, 475.0);
+
+            let outcome = save_main_position_with_display_detection(bounds, &displays);
+
+            assert_eq!(outcome, MainPositionSaveOutcome::SavedLegacyOnly);
+            let loaded = load_state_file().expect("state file should exist");
+            let saved_main = loaded.main.expect("main bounds should be saved");
+            assert!((saved_main.x - bounds.x).abs() < 0.1);
+            assert!((saved_main.y - bounds.y).abs() < 0.1);
+            assert!((saved_main.width - bounds.width).abs() < 0.1);
+            assert!((saved_main.height - bounds.height).abs() < 0.1);
+            assert!(loaded.main_per_display.is_empty());
+        });
+    }
+
+    #[test]
+    fn test_save_main_position_with_display_detection_returns_suppressed_when_saving_disabled() {
+        with_temp_state_dir(|| {
+            suppress_save();
+
+            let displays = vec![DisplayBounds {
+                origin_x: 0.0,
+                origin_y: 0.0,
+                width: 1920.0,
+                height: 1080.0,
+            }];
+            let bounds = PersistedWindowBounds::new(100.0, 100.0, 750.0, 475.0);
+
+            let outcome = save_main_position_with_display_detection(bounds, &displays);
+            assert_eq!(outcome, MainPositionSaveOutcome::Suppressed);
+            assert!(load_state_file().is_none());
+
+            allow_save();
+        });
     }
 }

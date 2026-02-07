@@ -500,7 +500,7 @@ impl ScriptListApp {
         // TODO: Get actual window size once we have access to window in this context
         // For now, use default values
         let window_width = 750.0_f32;
-        let window_height = 500.0_f32;
+        let window_height = f32::from(crate::window_resize::initial_window_height());
 
         // Determine current prompt type
         let prompt_type = match &self.current_view {

@@ -14,6 +14,7 @@ pub mod actions;
 // Provides ShellSpec, HeaderSpec, FooterSpec, ChromeSpec for consistent prompt layout
 pub mod app_shell;
 
+#[cfg(target_os = "macos")]
 pub mod camera;
 pub mod components;
 pub mod config;
@@ -65,8 +66,8 @@ pub mod file_search;
 pub mod window_control;
 
 // Enhanced window control - backends + capabilities architecture
-// Provides WindowBounds (AX coords), capability detection, DisplayInfo, SpaceManager
-pub mod window_control_enhanced;
+// Internal-only subsystem; external callers should use `window_control` APIs.
+pub(crate) mod window_control_enhanced;
 
 // System actions - macOS AppleScript-based system commands
 #[cfg(target_os = "macos")]
@@ -268,12 +269,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// Global state tracking whether the main window is visible
 /// - Used by hotkey toggle to show/hide main window
 /// - Used by Notes/AI to prevent main window from appearing when they close
-pub static MAIN_WINDOW_VISIBLE: AtomicBool = AtomicBool::new(false);
+static MAIN_WINDOW_VISIBLE: AtomicBool = AtomicBool::new(false);
 
 /// Tracks whether a script requested hiding the window (via Hide message)
 /// When ScriptExit is received, if this is true, we show the window again
 /// This ensures main menu comes back after scripts that temporarily hide (e.g., getSelectedText)
-pub static SCRIPT_REQUESTED_HIDE: AtomicBool = AtomicBool::new(false);
+static SCRIPT_REQUESTED_HIDE: AtomicBool = AtomicBool::new(false);
 
 /// Check if the main window is currently visible
 pub fn is_main_window_visible() -> bool {

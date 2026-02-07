@@ -166,6 +166,69 @@ mod tests {
         );
     }
 
+    /// Verify confirm key dispatch uses shared enter/escape alias helpers.
+    ///
+    /// This ensures `return` and `esc` aliases are routed consistently with
+    /// other keyboard paths.
+    #[test]
+    fn test_dispatch_confirm_key_uses_shared_alias_helpers() {
+        let content =
+            fs::read_to_string("src/confirm/window.rs").expect("Failed to read confirm/window.rs");
+
+        assert!(
+            content.contains("is_key_enter"),
+            "dispatch_confirm_key should use is_key_enter for enter/return parity"
+        );
+        assert!(
+            content.contains("is_key_escape"),
+            "dispatch_confirm_key should use is_key_escape for escape/esc parity"
+        );
+    }
+
+    /// Verify main input focus closes actions popup through shared close path.
+    ///
+    /// This prevents focus overlay state from desynchronizing.
+    #[test]
+    fn test_main_input_focus_uses_shared_actions_close_path() {
+        let content = fs::read_to_string("src/app_impl.rs").expect("Failed to read app_impl.rs");
+
+        assert!(
+            content.contains(
+                "Main input focused while actions open - closing actions via shared close path"
+            ),
+            "Main input focus should log shared close path usage"
+        );
+        assert!(
+            content.contains("this.close_actions_popup(ActionsDialogHost::MainList, window, cx);"),
+            "Main input focus should call close_actions_popup to keep focus overlays in sync"
+        );
+    }
+
+    /// Verify actions dialog routing handles jump keys.
+    ///
+    /// Home/End/PageUp/PageDown parity is required for power-user keyboard navigation.
+    #[test]
+    fn test_actions_dialog_route_handles_jump_keys() {
+        let content = fs::read_to_string("src/app_impl.rs").expect("Failed to read app_impl.rs");
+
+        assert!(
+            content.contains("let is_home = key.eq_ignore_ascii_case(\"home\")"),
+            "route_key_to_actions_dialog should recognize Home key"
+        );
+        assert!(
+            content.contains("let is_end = key.eq_ignore_ascii_case(\"end\")"),
+            "route_key_to_actions_dialog should recognize End key"
+        );
+        assert!(
+            content.contains("let is_page_up = key.eq_ignore_ascii_case(\"pageup\")"),
+            "route_key_to_actions_dialog should recognize PageUp key"
+        );
+        assert!(
+            content.contains("let is_page_down = key.eq_ignore_ascii_case(\"pagedown\")"),
+            "route_key_to_actions_dialog should recognize PageDown key"
+        );
+    }
+
     /// Verify all views with actions support have consistent keyboard routing.
     ///
     /// This is a comprehensive check that all views handle the actions popup

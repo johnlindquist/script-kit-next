@@ -14,21 +14,19 @@
 //!
 //! AppKit's `NSScreen.visibleFrame` uses bottom-left origin, so we convert it
 //! to AX coordinates when building `DisplayInfo`.
+//!
+//! ## API Visibility Contract
+//!
+//! These internals are crate-only and should not leak as part of the public API.
+//! ```compile_fail
+//! use script_kit_gpui::window_control_enhanced::WindowBounds;
+//! use script_kit_gpui::window_control_enhanced::detect_window_capabilities;
+//! ```
+
+#![allow(dead_code)]
 
 mod bounds;
 mod capabilities;
 mod coords;
 mod display;
 mod spaces;
-
-pub use bounds::{SizeConstraints, WindowBounds};
-pub use capabilities::{
-    can_close_window, can_fullscreen_window, can_minimize_window, can_move_window,
-    can_resize_window, detect_window_capabilities, EnhancedWindowInfo, WindowCapabilities,
-};
-pub use coords::{appkit_to_ax, ax_to_appkit, bounds_to_nsrect, nsrect_to_bounds};
-pub use display::{get_all_displays, get_display_for_window, DisplayInfo};
-pub use spaces::{
-    get_space_manager, set_space_manager, SpaceError, SpaceInfo, SpaceManager, SpaceType,
-    UnsupportedSpaceBackend,
-};

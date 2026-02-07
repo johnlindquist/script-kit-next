@@ -8,6 +8,13 @@
 use gpui::*;
 use std::rc::Rc;
 
+/// Canonical height for prompt action buttons (Run/Actions/Save/Cancel/etc.).
+pub const BUTTON_GHOST_HEIGHT: f32 = 28.0;
+/// Canonical horizontal padding for ghost buttons.
+pub const BUTTON_GHOST_PADDING_X: f32 = 8.0;
+/// Canonical vertical padding for ghost buttons.
+pub const BUTTON_GHOST_PADDING_Y: f32 = 4.0;
+
 /// Button variant determines the visual style
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ButtonVariant {
@@ -49,16 +56,14 @@ pub struct ButtonColors {
 }
 
 impl ButtonColors {
+    fn overlay_with_alpha(base_color: u32, alpha: u8) -> u32 {
+        ((base_color & 0x00ff_ffff) << 8) | (alpha as u32)
+    }
+
     /// Create ButtonColors from theme reference
     /// Uses accent.selected (yellow/gold) to match logo and selected item highlights
     pub fn from_theme(theme: &crate::theme::Theme) -> Self {
-        // Theme-aware hover overlay: white for dark mode, black for light mode
-        // ~15% alpha (0x26 = 38/255)
-        let hover_overlay = if theme.has_dark_colors() {
-            0xffffff26 // white at ~15% alpha for dark backgrounds
-        } else {
-            0x00000026 // black at ~15% alpha for light backgrounds
-        };
+        let hover_overlay = Self::overlay_with_alpha(theme.colors.accent.selected_subtle, 0x26);
 
         Self {
             text_color: theme.colors.accent.selected, // Yellow/gold - matches logo & highlights
@@ -90,15 +95,9 @@ impl ButtonColors {
     /// * `is_dark` - True for dark mode (white hover), false for light mode (black hover)
     pub fn from_design_with_dark_mode(
         colors: &crate::designs::DesignColors,
-        is_dark: bool,
+        _is_dark: bool,
     ) -> Self {
-        // Theme-aware hover overlay: white for dark mode, black for light mode
-        // ~15% alpha (0x26 = 38/255)
-        let hover_overlay = if is_dark {
-            0xffffff26 // white at ~15% alpha for dark backgrounds
-        } else {
-            0x00000026 // black at ~15% alpha for light backgrounds
-        };
+        let hover_overlay = Self::overlay_with_alpha(colors.background_selected, 0x26);
 
         Self {
             text_color: colors.accent, // Primary accent (yellow/gold for default)
@@ -116,17 +115,7 @@ impl ButtonColors {
 
 impl Default for ButtonColors {
     fn default() -> Self {
-        Self {
-            text_color: 0xfbbf24,       // Yellow/gold (Script Kit brand color)
-            text_hover: 0xffffff,       // White
-            background: 0x2a2a2a,       // Dark gray
-            background_hover: 0x323232, // Slightly lighter
-            accent: 0xfbbf24,           // Yellow/gold (Script Kit brand color)
-            border: 0x464647,           // Border color
-            focus_ring: 0xfbbf24,       // Yellow/gold for focus ring
-            focus_tint: 0x2a2a2a,       // Subtle tint when focused
-            hover_overlay: 0xffffff26,  // White at ~15% alpha (dark mode default)
-        }
+        Self::from_theme(&crate::theme::Theme::default())
     }
 }
 
@@ -149,7 +138,10 @@ pub struct Button {
     colors: ButtonColors,
     variant: ButtonVariant,
     shortcut: Option<String>,
+    id: Option<SharedString>,
     disabled: bool,
+    loading: bool,
+    loading_label: Option<SharedString>,
     focused: bool,
     on_click: Option<Rc<OnClickCallback>>,
     focus_handle: Option<FocusHandle>,
@@ -163,7 +155,10 @@ impl Button {
             colors,
             variant: ButtonVariant::default(),
             shortcut: None,
+            id: None,
             disabled: false,
+            loading: false,
+            loading_label: None,
             focused: false,
             on_click: None,
             focus_handle: None,
@@ -188,9 +183,27 @@ impl Button {
         self
     }
 
+    /// Set an optional id on the button root element
+    pub fn id(mut self, id: impl Into<SharedString>) -> Self {
+        self.id = Some(id.into());
+        self
+    }
+
     /// Set whether the button is disabled
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
+        self
+    }
+
+    /// Set whether the button is in loading state
+    pub fn loading(mut self, loading: bool) -> Self {
+        self.loading = loading;
+        self
+    }
+
+    /// Set optional loading label text
+    pub fn loading_label(mut self, loading_label: impl Into<SharedString>) -> Self {
+        self.loading_label = Some(loading_label.into());
         self
     }
 
@@ -217,21 +230,72 @@ impl Button {
         self.focus_handle = Some(handle);
         self
     }
+
+    fn resolve_element_id(id: Option<&SharedString>, label: &SharedString) -> SharedString {
+        id.cloned().unwrap_or_else(|| label.clone())
+    }
+
+    fn should_show_pointer(has_click_handler: bool, disabled: bool, loading: bool) -> bool {
+        has_click_handler && !disabled && !loading
+    }
+
+    fn is_activation_key(key: &str) -> bool {
+        matches!(
+            key,
+            "enter" | "return" | "Enter" | "Return" | " " | "space" | "Space"
+        )
+    }
+
+    fn can_activate_from_key(
+        key: &str,
+        has_click_handler: bool,
+        disabled: bool,
+        loading: bool,
+    ) -> bool {
+        Self::should_show_pointer(has_click_handler, disabled, loading)
+            && Self::is_activation_key(key)
+    }
+
+    fn resolve_focus_state(explicit_focus: bool, runtime_focus: Option<bool>) -> bool {
+        runtime_focus.unwrap_or(explicit_focus)
+    }
 }
 
 /// Focus ring border width
 const FOCUS_BORDER_WIDTH: f32 = 2.0;
 
 impl RenderOnce for Button {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
-        let colors = self.colors;
-        let variant = self.variant;
-        let disabled = self.disabled;
-        let focused = self.focused;
-        let on_click_callback = self.on_click.clone();
-        let on_click_for_key = self.on_click;
-        let label_for_log = self.label.clone();
-        let focus_handle = self.focus_handle;
+    fn render(self, window: &mut Window, _cx: &mut App) -> impl IntoElement {
+        let Button {
+            label,
+            colors,
+            variant,
+            shortcut,
+            id,
+            disabled,
+            loading,
+            loading_label,
+            focused,
+            on_click,
+            focus_handle,
+        } = self;
+        let on_click_callback = on_click.clone();
+        let on_click_for_key = on_click;
+        let has_click_handler = on_click_callback.is_some();
+        let show_pointer = Self::should_show_pointer(has_click_handler, disabled, loading);
+        let element_id = Self::resolve_element_id(id.as_ref(), &label);
+        let label_for_log = label.clone();
+        let focused = Self::resolve_focus_state(
+            focused,
+            focus_handle
+                .as_ref()
+                .map(|handle| handle.is_focused(window)),
+        );
+        let label_text = if loading {
+            loading_label.unwrap_or_else(|| label.clone())
+        } else {
+            label.clone()
+        };
 
         // Calculate colors based on variant
         // Hover uses theme-aware overlay color (white for dark, black for light)
@@ -285,7 +349,7 @@ impl RenderOnce for Button {
 
         // Build shortcut element if present - smaller than label, same accent color
         // Use flex + items_center to ensure vertical alignment with the label
-        let shortcut_element = if let Some(sc) = self.shortcut {
+        let shortcut_element = if let Some(sc) = shortcut {
             div()
                 .flex()
                 .items_center()
@@ -299,13 +363,16 @@ impl RenderOnce for Button {
         // Determine padding based on variant (rem-relative for consistent scaling)
         let (px_val, py_val) = match variant {
             ButtonVariant::Primary => (rems(0.75), rems(0.375)), // 12px, 6px at 16px base
-            ButtonVariant::Ghost => (rems(0.5), rems(0.25)),     // 8px, 4px at 16px base
-            ButtonVariant::Icon => (rems(0.375), rems(0.375)),   // 6px, 6px at 16px base
+            ButtonVariant::Ghost => (
+                rems(BUTTON_GHOST_PADDING_X / 16.0),
+                rems(BUTTON_GHOST_PADDING_Y / 16.0),
+            ),
+            ButtonVariant::Icon => (rems(0.375), rems(0.375)), // 6px, 6px at 16px base
         };
 
         // Build the button element
         let mut button = div()
-            .id(ElementId::Name(self.label.clone()))
+            .id(ElementId::Name(element_id))
             .flex()
             .flex_row()
             .items_center()
@@ -313,15 +380,20 @@ impl RenderOnce for Button {
             .gap(rems(0.125))
             .px(px_val)
             .py(py_val)
+            .min_h(px(BUTTON_GHOST_HEIGHT))
             .rounded(px(6.))
             .bg(bg_color)
             .text_color(text_color)
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .font_family(crate::list_item::FONT_SYSTEM_UI)
-            .cursor_pointer()
-            .child(self.label)
+            .cursor_default()
+            .child(label_text)
             .child(shortcut_element);
+
+        if loading {
+            button = button.child(div().text_xs().opacity(0.7).child("…"));
+        }
 
         // Apply focus ring styling
         if focused {
@@ -334,15 +406,19 @@ impl RenderOnce for Button {
 
         // Apply hover styles unless disabled
         // Keep text color the same, just add subtle background lift
-        if !disabled {
-            button = button.hover(move |s| s.bg(hover_bg));
-        } else {
+        if show_pointer {
+            button = button.cursor_pointer().hover(move |s| s.bg(hover_bg));
+        } else if disabled {
             button = button.opacity(0.5).cursor_default();
+        } else if loading {
+            button = button.opacity(0.7).cursor_default();
+        } else {
+            button = button.cursor_default();
         }
 
         // Add click handler if provided
         if let Some(callback) = on_click_callback {
-            if !disabled {
+            if show_pointer {
                 button = button.on_click(move |event, window, cx| {
                     tracing::debug!(button = %label_for_log, "Button clicked");
                     callback(event, window, cx);
@@ -354,18 +430,15 @@ impl RenderOnce for Button {
         if let Some(handle) = focus_handle {
             button = button.track_focus(&handle);
 
-            if !disabled {
+            if show_pointer {
                 if let Some(callback) = on_click_for_key {
                     button = button.on_key_down(move |event: &KeyDownEvent, window, cx| {
                         let key = event.keystroke.key.as_str();
-                        match key {
-                            "enter" | "return" | "Enter" | "Return" | " " | "space" | "Space" => {
-                                tracing::debug!("Button activated via keyboard");
-                                // Create a default click event for keyboard activation
-                                let click_event = ClickEvent::default();
-                                callback(&click_event, window, cx);
-                            }
-                            _ => {}
+                        if Button::can_activate_from_key(key, true, disabled, loading) {
+                            tracing::debug!("Button activated via keyboard");
+                            // Create a default click event for keyboard activation
+                            let click_event = ClickEvent::default();
+                            callback(&click_event, window, cx);
                         }
                     });
                 }
@@ -376,11 +449,66 @@ impl RenderOnce for Button {
     }
 }
 
-// Note: Tests omitted for this module due to GPUI macro recursion limit issues.
-// The Button component is integration-tested via the main application's
-// actions dialog and prompt button rendering.
-//
-// Verified traits:
-// - ButtonColors: Copy, Clone, Debug, Default
-// - ButtonVariant: Copy, Clone, Debug, PartialEq, Eq, Default
-// - Button: builder pattern with .variant(), .shortcut(), .on_click(), .disabled(), .label()
+#[cfg(test)]
+mod tests {
+    use super::{Button, ButtonColors};
+    use crate::designs::DesignColors;
+    use crate::theme::Theme;
+    use gpui::SharedString;
+
+    #[test]
+    fn test_should_show_pointer_only_when_button_is_interactive() {
+        assert!(Button::should_show_pointer(true, false, false));
+        assert!(!Button::should_show_pointer(false, false, false));
+        assert!(!Button::should_show_pointer(true, true, false));
+        assert!(!Button::should_show_pointer(true, false, true));
+    }
+
+    #[test]
+    fn test_can_activate_from_key_requires_interactive_activation_key() {
+        assert!(Button::can_activate_from_key("enter", true, false, false));
+        assert!(Button::can_activate_from_key(" ", true, false, false));
+        assert!(!Button::can_activate_from_key("x", true, false, false));
+        assert!(!Button::can_activate_from_key("enter", false, false, false));
+        assert!(!Button::can_activate_from_key("enter", true, true, false));
+        assert!(!Button::can_activate_from_key("enter", true, false, true));
+    }
+
+    #[test]
+    fn test_resolve_element_id_prefers_explicit_id_when_present() {
+        let label: SharedString = "Run".into();
+        let explicit_id: SharedString = "footer-run".into();
+
+        assert_eq!(
+            Button::resolve_element_id(Some(&explicit_id), &label),
+            explicit_id
+        );
+        assert_eq!(Button::resolve_element_id(None, &label), label);
+    }
+
+    #[test]
+    fn test_button_colors_from_theme_uses_selected_subtle_for_hover_overlay() {
+        let mut theme = Theme::default();
+        theme.colors.accent.selected_subtle = 0x112233;
+
+        let colors = ButtonColors::from_theme(&theme);
+        assert_eq!(colors.hover_overlay, 0x11223326);
+    }
+
+    #[test]
+    fn test_button_colors_from_design_uses_design_background_for_hover_overlay() {
+        let mut design = DesignColors::default();
+        design.background_selected = 0x445566;
+
+        let colors = ButtonColors::from_design_with_dark_mode(&design, true);
+        assert_eq!(colors.hover_overlay, 0x44556626);
+    }
+
+    #[test]
+    fn test_resolve_focus_state_prefers_runtime_focus_handle_state() {
+        assert!(Button::resolve_focus_state(false, Some(true)));
+        assert!(!Button::resolve_focus_state(true, Some(false)));
+        assert!(Button::resolve_focus_state(true, None));
+        assert!(!Button::resolve_focus_state(false, None));
+    }
+}

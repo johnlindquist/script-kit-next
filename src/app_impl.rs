@@ -1,3 +1,10 @@
+fn calculate_fallback_error_message(expression: &str) -> String {
+    format!(
+        "Could not evaluate expression \"{}\". Check the syntax and try again.",
+        expression
+    )
+}
+
 impl ScriptListApp {
     fn new(
         config: config::Config,
@@ -5,16 +12,51 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        // PERF: Measure script loading time
+        // PERF: Parallelize script + scriptlet loading to reduce startup wall time.
         let load_start = std::time::Instant::now();
-        let scripts = scripts::read_scripts();
-        let scripts_elapsed = load_start.elapsed();
+        let (scripts, scriptlets, scripts_elapsed, scriptlets_elapsed) = std::thread::scope(
+            |scope| {
+                let scripts_handle = scope.spawn(|| {
+                    let start = std::time::Instant::now();
+                    let loaded = scripts::read_scripts();
+                    (loaded, start.elapsed())
+                });
 
-        let scriptlets_start = std::time::Instant::now();
-        // Use load_scriptlets() to load from ALL kits (kit/*/extensions/*.md)
-        // This includes built-in extensions like CleanShot and user extensions
-        let scriptlets = scripts::load_scriptlets();
-        let scriptlets_elapsed = scriptlets_start.elapsed();
+                let scriptlets_handle = scope.spawn(|| {
+                    let start = std::time::Instant::now();
+                    // Use load_scriptlets() to load from ALL kits (kit/*/extensions/*.md)
+                    // This includes built-in extensions like CleanShot and user extensions
+                    let loaded = scripts::load_scriptlets();
+                    (loaded, start.elapsed())
+                });
+
+                let (scripts, scripts_elapsed) = match scripts_handle.join() {
+                    Ok(result) => result,
+                    Err(_) => {
+                        logging::log(
+                            "PERF",
+                            "Script loading thread panicked; retrying read_scripts synchronously",
+                        );
+                        let retry_start = std::time::Instant::now();
+                        (scripts::read_scripts(), retry_start.elapsed())
+                    }
+                };
+
+                let (scriptlets, scriptlets_elapsed) = match scriptlets_handle.join() {
+                    Ok(result) => result,
+                    Err(_) => {
+                        logging::log(
+                            "PERF",
+                            "Scriptlet loading thread panicked; retrying load_scriptlets synchronously",
+                        );
+                        let retry_start = std::time::Instant::now();
+                        (scripts::load_scriptlets(), retry_start.elapsed())
+                    }
+                };
+
+                (scripts, scriptlets, scripts_elapsed, scriptlets_elapsed)
+            },
+        );
 
         let theme = std::sync::Arc::new(theme::load_theme());
         // Config is now passed in from main() to avoid duplicate load (~100-300ms savings)
@@ -71,65 +113,67 @@ impl ScriptListApp {
         // Load apps in background thread to avoid blocking startup
         let app_launcher_enabled = config.get_builtins().app_launcher;
         if app_launcher_enabled {
-            // Use a channel to send loaded apps back to main thread
+            // Use an async channel so the UI task can await completion without polling.
             let (tx, rx) =
-                std::sync::mpsc::channel::<(Vec<app_launcher::AppInfo>, std::time::Duration)>();
+                async_channel::bounded::<(Vec<app_launcher::AppInfo>, std::time::Duration)>(1);
 
             // Spawn background thread for app scanning
             std::thread::spawn(move || {
                 let start = std::time::Instant::now();
                 let apps = app_launcher::scan_applications().clone();
                 let elapsed = start.elapsed();
-                let _ = tx.send((apps, elapsed));
+                if tx.send_blocking((apps, elapsed)).is_err() {
+                    logging::log(
+                        "APP",
+                        "Background app loading result dropped: receiver unavailable",
+                    );
+                }
             });
 
-            // Poll for results using a spawned task
+            // Event-driven receive: no timer wakeups while waiting for app scan completion.
             cx.spawn(async move |this, cx| {
-                // Poll the channel periodically
-                loop {
-                    Timer::after(std::time::Duration::from_millis(50)).await;
-                    match rx.try_recv() {
-                        Ok((apps, elapsed)) => {
-                            let app_count = apps.len();
-                            let _ = cx.update(|cx| {
-                                this.update(cx, |app, cx| {
-                                    app.apps = apps;
-                                    // Invalidate caches since apps changed
-                                    app.filter_cache_key = String::from("\0_APPS_LOADED_\0");
-                                    app.grouped_cache_key = String::from("\0_APPS_LOADED_\0");
-                                    logging::log(
-                                        "APP",
-                                        &format!(
-                                            "Background app loading complete: {} apps in {:.2}ms",
-                                            app_count,
-                                            elapsed.as_secs_f64() * 1000.0
-                                        ),
-                                    );
-                                    // CRITICAL: Sync list state after cache invalidation
-                                    // Without this, the GPUI list component doesn't know
-                                    // about the new apps and may render stale item counts
-                                    let old_count = app.main_list_state.item_count();
-                                    app.sync_list_state();
-                                    let new_count = app.main_list_state.item_count();
-                                    app.validate_selection_bounds(cx);
-                                    logging::log(
-                                        "APP",
-                                        &format!(
-                                            "List state synced after app load: {} -> {} items (filter='{}')",
-                                            old_count,
-                                            new_count,
-                                            app.computed_filter_text
-                                        ),
-                                    );
-                                    cx.notify();
-                                })
-                            });
-                            break;
-                        }
-                        Err(std::sync::mpsc::TryRecvError::Empty) => continue,
-                        Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
-                    }
-                }
+                let Ok((apps, elapsed)) = rx.recv().await else {
+                    logging::log(
+                        "APP",
+                        "Background app loading failed to deliver result: channel closed",
+                    );
+                    return;
+                };
+
+                let app_count = apps.len();
+                let _ = cx.update(|cx| {
+                    this.update(cx, |app, cx| {
+                        app.apps = apps;
+                        // Invalidate caches since apps changed
+                        app.filter_cache_key = String::from("\0_APPS_LOADED_\0");
+                        app.grouped_cache_key = String::from("\0_APPS_LOADED_\0");
+                        logging::log(
+                            "APP",
+                            &format!(
+                                "Background app loading complete: {} apps in {:.2}ms",
+                                app_count,
+                                elapsed.as_secs_f64() * 1000.0
+                            ),
+                        );
+                        // CRITICAL: Sync list state after cache invalidation
+                        // Without this, the GPUI list component doesn't know
+                        // about the new apps and may render stale item counts
+                        let old_count = app.main_list_state.item_count();
+                        app.sync_list_state();
+                        let new_count = app.main_list_state.item_count();
+                        app.validate_selection_bounds(cx);
+                        logging::log(
+                            "APP",
+                            &format!(
+                                "List state synced after app load: {} -> {} items (filter='{}')",
+                                old_count,
+                                new_count,
+                                app.computed_filter_text
+                            ),
+                        );
+                        cx.notify();
+                    })
+                });
             })
             .detach();
         }
@@ -194,18 +238,9 @@ impl ScriptListApp {
                     if this.show_actions_popup || is_actions_window_open() {
                         logging::log(
                             "FOCUS",
-                            "Main input focused while actions open - closing actions (same as Cmd+K)",
+                            "Main input focused while actions open - closing actions via shared close path",
                         );
-                        this.show_actions_popup = false;
-                        this.actions_dialog = None;
-                        // Close the actions window
-                        cx.spawn(async move |_this, cx| {
-                            cx.update(|cx| {
-                                close_actions_window(cx);
-                            })
-                            .ok();
-                        })
-                        .detach();
+                        this.close_actions_popup(ActionsDialogHost::MainList, window, cx);
                     }
 
                     cx.notify();
@@ -277,7 +312,7 @@ impl ScriptListApp {
             gpui_input_state,
             gpui_input_focused: false,
             gpui_input_subscriptions: vec![gpui_input_subscription],
-            bounds_subscription: None, // Set later after window setup
+            bounds_subscription: None,     // Set later after window setup
             appearance_subscription: None, // Set later after window setup
             suppress_filter_events: false,
             pending_filter_sync: false,
@@ -472,38 +507,41 @@ impl ScriptListApp {
         // Build provider registry in background to avoid blocking UI when opening AI chat
         {
             let config_clone = app.config.clone();
-            let (tx, rx) = std::sync::mpsc::channel::<crate::ai::ProviderRegistry>();
+            let (tx, rx) = async_channel::bounded::<crate::ai::ProviderRegistry>(1);
 
             std::thread::spawn(move || {
                 let registry =
                     crate::ai::ProviderRegistry::from_environment_with_config(Some(&config_clone));
-                let _ = tx.send(registry);
+                if tx.send_blocking(registry).is_err() {
+                    logging::log(
+                        "APP",
+                        "Provider registry build result dropped: receiver unavailable",
+                    );
+                }
             });
 
             cx.spawn(async move |this, cx| {
-                loop {
-                    Timer::after(std::time::Duration::from_millis(50)).await;
-                    match rx.try_recv() {
-                        Ok(registry) => {
-                            let provider_count = registry.provider_ids().len();
-                            let _ = cx.update(|cx| {
-                                this.update(cx, |app, _cx| {
-                                    app.cached_provider_registry = Some(registry);
-                                    logging::log(
-                                        "APP",
-                                        &format!(
-                                            "Background provider registry ready: {} providers",
-                                            provider_count
-                                        ),
-                                    );
-                                })
-                            });
-                            break;
-                        }
-                        Err(std::sync::mpsc::TryRecvError::Empty) => continue,
-                        Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
-                    }
-                }
+                let Ok(registry) = rx.recv().await else {
+                    logging::log(
+                        "APP",
+                        "Background provider registry build failed: channel closed",
+                    );
+                    return;
+                };
+
+                let provider_count = registry.provider_ids().len();
+                let _ = cx.update(|cx| {
+                    this.update(cx, |app, _cx| {
+                        app.cached_provider_registry = Some(registry);
+                        logging::log(
+                            "APP",
+                            &format!(
+                                "Background provider registry ready: {} providers",
+                                provider_count
+                            ),
+                        );
+                    })
+                });
             })
             .detach();
         }
@@ -1462,7 +1500,8 @@ impl ScriptListApp {
             self.theme = std::sync::Arc::new(base_theme);
         } else if self.light_opacity_offset != 0.0 {
             // Apply the opacity offset if set
-            self.theme = std::sync::Arc::new(base_theme.with_opacity_offset(self.light_opacity_offset));
+            self.theme =
+                std::sync::Arc::new(base_theme.with_opacity_offset(self.light_opacity_offset));
         } else {
             self.theme = std::sync::Arc::new(base_theme);
         }
@@ -2681,7 +2720,8 @@ impl ScriptListApp {
                         }
                         Err(e) => {
                             logging::log("FALLBACK", &format!("Calculate error: {}", e));
-                            crate::hud_manager::show_hud(format!("Error: {}", e), Some(3000), cx);
+                            let message = calculate_fallback_error_message(&expression);
+                            crate::hud_manager::show_hud(message, Some(3000), cx);
                         }
                     }
                 }
@@ -2709,6 +2749,37 @@ impl ScriptListApp {
         }
     }
 
+    fn current_view_uses_shared_filter_input(&self) -> bool {
+        matches!(
+            self.current_view,
+            AppView::ClipboardHistoryView { .. }
+                | AppView::AppLauncherView { .. }
+                | AppView::WindowSwitcherView { .. }
+                | AppView::DesignGalleryView { .. }
+                | AppView::ThemeChooserView { .. }
+                | AppView::FileSearchView { .. }
+        )
+    }
+
+    fn sync_builtin_query_state(
+        query: &mut String,
+        selected_index: &mut usize,
+        new_text: &str,
+    ) -> bool {
+        if query == new_text {
+            return false;
+        }
+
+        *query = new_text.to_string();
+        *selected_index = 0;
+        true
+    }
+
+    fn clear_builtin_query_state(query: &mut String, selected_index: &mut usize) {
+        query.clear();
+        *selected_index = 0;
+    }
+
     fn handle_filter_input_change(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let handler_start = std::time::Instant::now();
 
@@ -2724,15 +2795,19 @@ impl ScriptListApp {
 
         let new_text = self.gpui_input_state.read(cx).value().to_string();
 
+        if self.current_view_uses_shared_filter_input() {
+            // Keep shared input state synchronized with view-scoped query/filter fields.
+            self.filter_text = new_text.clone();
+            self.pending_filter_sync = false;
+        }
+
         // Sync filter to builtin views that use the shared input
         match &mut self.current_view {
             AppView::ClipboardHistoryView {
                 filter,
                 selected_index,
             } => {
-                if *filter != new_text {
-                    *filter = new_text.clone();
-                    *selected_index = 0;
+                if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
                     self.clipboard_list_scroll_handle
                         .scroll_to_item(0, ScrollStrategy::Top);
                 }
@@ -2756,9 +2831,7 @@ impl ScriptListApp {
                 filter,
                 selected_index,
             } => {
-                if *filter != new_text {
-                    *filter = new_text.clone();
-                    *selected_index = 0;
+                if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
                     self.list_scroll_handle
                         .scroll_to_item(0, ScrollStrategy::Top);
                     cx.notify();
@@ -2769,9 +2842,7 @@ impl ScriptListApp {
                 filter,
                 selected_index,
             } => {
-                if *filter != new_text {
-                    *filter = new_text.clone();
-                    *selected_index = 0;
+                if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
                     self.window_list_scroll_handle
                         .scroll_to_item(0, ScrollStrategy::Top);
                     cx.notify();
@@ -2782,9 +2853,7 @@ impl ScriptListApp {
                 filter,
                 selected_index,
             } => {
-                if *filter != new_text {
-                    *filter = new_text.clone();
-                    *selected_index = 0;
+                if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
                     self.design_gallery_scroll_handle
                         .scroll_to_item(0, ScrollStrategy::Top);
                     cx.notify();
@@ -2795,9 +2864,7 @@ impl ScriptListApp {
                 filter,
                 selected_index,
             } => {
-                if *filter != new_text {
-                    *filter = new_text.clone();
-                    *selected_index = 0;
+                if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
                     self.theme_chooser_scroll_handle
                         .scroll_to_item(0, ScrollStrategy::Top);
                     cx.notify();
@@ -3596,28 +3663,7 @@ impl ScriptListApp {
             ),
         );
         if self.show_actions_popup || is_actions_window_open() {
-            // Close - use coordinator to restore previous focus
-            self.show_actions_popup = false;
-            self.actions_dialog = None;
-
-            // Close the separate actions window via spawn
-            cx.spawn(async move |_this, cx| {
-                cx.update(|cx| {
-                    close_actions_window(cx);
-                })
-                .ok();
-            })
-            .detach();
-
-            // Use coordinator to restore focus (will pop the overlay and set pending_focus)
-            self.pop_focus_overlay(cx);
-
-            // Also directly focus main filter for immediate feedback
-            self.focus_main_filter(window, cx);
-            logging::log(
-                "FOCUS",
-                "Actions closed via toggle, focus restored via coordinator",
-            );
+            self.close_actions_popup(ActionsDialogHost::MainList, window, cx);
         } else {
             if !self.has_actions() {
                 return;
@@ -3742,16 +3788,8 @@ impl ScriptListApp {
                 self.sdk_actions.is_some()
             ),
         );
-        if self.show_actions_popup {
-            // Close - use coordinator to restore to arg prompt
-            self.show_actions_popup = false;
-            self.actions_dialog = None;
-            self.pop_focus_overlay(cx);
-            window.focus(&self.focus_handle, cx);
-            logging::log(
-                "FOCUS",
-                "Arg actions closed, focus restored via coordinator",
-            );
+        if self.show_actions_popup || is_actions_window_open() {
+            self.close_actions_popup(ActionsDialogHost::ArgPrompt, window, cx);
         } else {
             // Clone SDK actions early to avoid borrow conflicts
             let sdk_actions_opt = self.sdk_actions.clone();
@@ -3900,7 +3938,10 @@ impl ScriptListApp {
     /// Shows common terminal actions (Clear, Copy, Paste, Scroll, etc.)
     #[allow(dead_code)]
     pub fn toggle_terminal_commands(&mut self, cx: &mut Context<Self>, window: &mut Window) {
-        use crate::actions::{Action, ActionCategory, ActionsDialog, ActionsDialogConfig, SearchPosition, SectionStyle, AnchorPosition};
+        use crate::actions::{
+            Action, ActionCategory, ActionsDialog, ActionsDialogConfig, AnchorPosition,
+            SearchPosition, SectionStyle,
+        };
         use crate::terminal::get_terminal_commands;
 
         logging::log(
@@ -3912,13 +3953,8 @@ impl ScriptListApp {
             ),
         );
 
-        if self.show_actions_popup {
-            // Close - use coordinator to restore focus
-            self.show_actions_popup = false;
-            self.actions_dialog = None;
-            self.pop_focus_overlay(cx);
-            window.focus(&self.focus_handle, cx);
-            logging::log("FOCUS", "Terminal commands closed, focus restored");
+        if self.show_actions_popup || is_actions_window_open() {
+            self.close_actions_popup(ActionsDialogHost::TermPrompt, window, cx);
         } else {
             // Open - create actions from terminal commands
             self.show_actions_popup = true;
@@ -3968,7 +4004,6 @@ impl ScriptListApp {
         }
     }
 
-
     /// Toggle actions dialog for chat prompts
     /// Opens ActionsDialog with model selection and chat-specific actions
     pub fn toggle_chat_actions(&mut self, cx: &mut Context<Self>, window: &mut Window) {
@@ -3984,29 +4019,7 @@ impl ScriptListApp {
         );
 
         if self.show_actions_popup || is_actions_window_open() {
-            // Close - use coordinator to restore to chat prompt
-            self.show_actions_popup = false;
-            self.actions_dialog = None;
-
-            // Close the separate actions window via spawn
-            cx.spawn(async move |_this, cx| {
-                cx.update(|cx| {
-                    close_actions_window(cx);
-                })
-                .ok();
-            })
-            .detach();
-
-            // Use coordinator to pop overlay and restore previous focus
-            self.pop_focus_overlay(cx);
-            // Apply restored focus immediately rather than deferring to next render
-            if !self.apply_pending_focus(window, cx) {
-                window.focus(&self.focus_handle, cx);
-            }
-            logging::log(
-                "FOCUS",
-                "Chat actions closed, focus restored via coordinator",
-            );
+            self.close_actions_popup(ActionsDialogHost::ChatPrompt, window, cx);
         } else {
             // Get chat info from current ChatPrompt entity
             let chat_info = if let AppView::ChatPrompt { entity, .. } = &self.current_view {
@@ -4128,16 +4141,21 @@ impl ScriptListApp {
 
         // Handle model selection (action_id starts with "select_model_")
         if let Some(model_id) = action_id.strip_prefix("select_model_") {
+            let mut selected_model_name: Option<String> = None;
             if let AppView::ChatPrompt { entity, .. } = &self.current_view {
                 let model_id_owned = model_id.to_string();
                 entity.update(cx, |chat, cx| {
                     // Find model by ID and set it
                     if let Some(model) = chat.models.iter().find(|m| m.id == model_id_owned) {
                         chat.model = Some(model.name.clone());
+                        selected_model_name = Some(model.name.clone());
                         logging::log("CHAT", &format!("Model changed to: {}", model.name));
                         cx.notify();
                     }
                 });
+            }
+            if let Some(model_name) = selected_model_name {
+                self.show_hud(format!("Model: {}", model_name), Some(1500), cx);
             }
             return;
         }
@@ -4156,19 +4174,296 @@ impl ScriptListApp {
                     entity.update(cx, |chat, cx| {
                         chat.handle_copy_last_response(cx);
                     });
+                    self.show_hud("Copied response".to_string(), Some(1500), cx);
                 }
             }
             "clear_conversation" => {
-                if let AppView::ChatPrompt { entity, .. } = &self.current_view {
-                    entity.update(cx, |chat, cx| {
-                        chat.clear_messages(cx);
+                let chat_entity = if let AppView::ChatPrompt { entity, .. } = &self.current_view {
+                    entity.clone()
+                } else {
+                    return;
+                };
+
+                let message = "Are you sure you want to clear this conversation?".to_string();
+                cx.spawn(async move |this, cx| {
+                    let (confirm_tx, confirm_rx) = async_channel::bounded::<bool>(1);
+                    let open_result = cx.update(|cx| {
+                        let main_bounds =
+                            if let Some((x, y, w, h)) = platform::get_main_window_bounds() {
+                                gpui::Bounds {
+                                    origin: gpui::Point {
+                                        x: gpui::px(x as f32),
+                                        y: gpui::px(y as f32),
+                                    },
+                                    size: gpui::Size {
+                                        width: gpui::px(w as f32),
+                                        height: gpui::px(h as f32),
+                                    },
+                                }
+                            } else {
+                                gpui::Bounds {
+                                    origin: gpui::Point {
+                                        x: gpui::px(100.0),
+                                        y: gpui::px(100.0),
+                                    },
+                                    size: gpui::Size {
+                                        width: gpui::px(600.0),
+                                        height: gpui::px(400.0),
+                                    },
+                                }
+                            };
+
+                        let sender = confirm_tx.clone();
+                        let on_choice: ConfirmCallback = std::sync::Arc::new(move |confirmed| {
+                            let _ = sender.try_send(confirmed);
+                        });
+
+                        open_confirm_window(
+                            cx,
+                            main_bounds,
+                            None,
+                            message,
+                            Some("Yes".to_string()),
+                            Some("Cancel".to_string()),
+                            on_choice,
+                        )
                     });
-                }
+
+                    match open_result {
+                        Ok(Ok(_)) => {}
+                        Ok(Err(e)) => {
+                            this.update(cx, |this, cx| {
+                                logging::log(
+                                    "ERROR",
+                                    &format!("Failed to open confirmation modal: {}", e),
+                                );
+                                this.show_hud(
+                                    "Failed to open confirmation dialog".to_string(),
+                                    Some(2500),
+                                    cx,
+                                );
+                            })
+                            .ok();
+                            return;
+                        }
+                        Err(_) => return,
+                    }
+
+                    let Ok(confirmed) = confirm_rx.recv().await else {
+                        return;
+                    };
+                    if !confirmed {
+                        return;
+                    }
+
+                    this.update(cx, |_, cx| {
+                        chat_entity.update(cx, |chat, cx| {
+                            chat.clear_messages(cx);
+                        });
+                    })
+                    .ok();
+                })
+                .detach();
             }
             _ => {
                 logging::log("ACTIONS", &format!("Unknown chat action: {}", action_id));
             }
         }
+    }
+
+    #[cfg(target_os = "macos")]
+    fn webcam_photo_directory() -> std::path::PathBuf {
+        if let Some(home) = dirs::home_dir() {
+            let desktop = home.join("Desktop");
+            if desktop.exists() {
+                return desktop;
+            }
+        }
+
+        let temp = std::env::temp_dir();
+        if temp.exists() {
+            temp
+        } else {
+            std::path::PathBuf::from("/tmp")
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    fn encode_webcam_frame_to_png(
+        pixel_buffer: &core_video::pixel_buffer::CVPixelBuffer,
+    ) -> Result<Vec<u8>, String> {
+        use image::ImageEncoder;
+
+        let lock_flags = core_video::pixel_buffer::kCVPixelBufferLock_ReadOnly;
+        let lock_status = pixel_buffer.lock_base_address(lock_flags);
+        if lock_status != core_video::r#return::kCVReturnSuccess {
+            return Err(format!(
+                "Failed to lock webcam frame (status={})",
+                lock_status
+            ));
+        }
+
+        let result = (|| -> Result<Vec<u8>, String> {
+            if !pixel_buffer.is_planar() || pixel_buffer.get_plane_count() < 2 {
+                return Err("Webcam frame format is not NV12".to_string());
+            }
+
+            let width = pixel_buffer.get_width_of_plane(0);
+            let height = pixel_buffer.get_height_of_plane(0);
+            if width == 0 || height == 0 {
+                return Err("Webcam frame is empty".to_string());
+            }
+
+            let y_stride = pixel_buffer.get_bytes_per_row_of_plane(0);
+            let uv_stride = pixel_buffer.get_bytes_per_row_of_plane(1);
+            let uv_height = pixel_buffer.get_height_of_plane(1);
+
+            let y_plane_ptr = unsafe { pixel_buffer.get_base_address_of_plane(0) as *const u8 };
+            let uv_plane_ptr = unsafe { pixel_buffer.get_base_address_of_plane(1) as *const u8 };
+            if y_plane_ptr.is_null() || uv_plane_ptr.is_null() {
+                return Err("Webcam frame memory is unavailable".to_string());
+            }
+
+            let y_plane = unsafe { std::slice::from_raw_parts(y_plane_ptr, y_stride * height) };
+            let uv_plane =
+                unsafe { std::slice::from_raw_parts(uv_plane_ptr, uv_stride * uv_height) };
+
+            let mut rgb = vec![0u8; width * height * 3];
+
+            for y in 0..height {
+                let y_row = y * y_stride;
+                let uv_row = (y / 2) * uv_stride;
+
+                for x in 0..width {
+                    let y_val = y_plane[y_row + x] as f32;
+                    let uv_idx = uv_row + (x / 2) * 2;
+                    if uv_idx + 1 >= uv_plane.len() {
+                        continue;
+                    }
+
+                    let u = uv_plane[uv_idx] as f32 - 128.0;
+                    let v = uv_plane[uv_idx + 1] as f32 - 128.0;
+
+                    let r = (y_val + 1.402 * v).clamp(0.0, 255.0) as u8;
+                    let g = (y_val - 0.344_136 * u - 0.714_136 * v).clamp(0.0, 255.0) as u8;
+                    let b = (y_val + 1.772 * u).clamp(0.0, 255.0) as u8;
+
+                    let idx = (y * width + x) * 3;
+                    rgb[idx] = r;
+                    rgb[idx + 1] = g;
+                    rgb[idx + 2] = b;
+                }
+            }
+
+            let mut png_data = Vec::new();
+            let encoder = image::codecs::png::PngEncoder::new(&mut png_data);
+            encoder
+                .write_image(
+                    &rgb,
+                    width as u32,
+                    height as u32,
+                    image::ColorType::Rgb8.into(),
+                )
+                .map_err(|e| format!("Failed to encode webcam frame: {}", e))?;
+
+            Ok(png_data)
+        })();
+
+        let unlock_status = pixel_buffer.unlock_base_address(lock_flags);
+        if unlock_status != core_video::r#return::kCVReturnSuccess {
+            logging::log(
+                "ERROR",
+                &format!(
+                    "Failed to unlock webcam frame (status={}) after capture",
+                    unlock_status
+                ),
+            );
+        }
+
+        result
+    }
+
+    #[cfg(target_os = "macos")]
+    fn capture_webcam_photo(&mut self, cx: &mut Context<Self>) -> bool {
+        let pixel_buffer = match &self.current_view {
+            AppView::WebcamView { entity } => entity.read(cx).pixel_buffer.clone(),
+            _ => None,
+        };
+
+        let Some(pixel_buffer) = pixel_buffer else {
+            cx.notify();
+            self.show_hud("No camera frame available yet".to_string(), Some(2000), cx);
+            return false;
+        };
+
+        let png_data = match Self::encode_webcam_frame_to_png(&pixel_buffer) {
+            Ok(data) => data,
+            Err(e) => {
+                logging::log("ERROR", &format!("Failed to capture webcam photo: {}", e));
+                cx.notify();
+                self.show_hud(format!("Failed to capture photo: {}", e), Some(3000), cx);
+                return false;
+            }
+        };
+
+        let save_dir = Self::webcam_photo_directory();
+        if let Err(e) = std::fs::create_dir_all(&save_dir) {
+            logging::log(
+                "ERROR",
+                &format!("Failed to create webcam photo directory: {}", e),
+            );
+            cx.notify();
+            self.show_hud(
+                format!("Failed to create photo directory: {}", e),
+                Some(3000),
+                cx,
+            );
+            return false;
+        }
+
+        let filename = format!(
+            "webcam-photo-{}.png",
+            chrono::Local::now().format("%Y%m%d-%H%M%S")
+        );
+        let save_path = save_dir.join(filename);
+
+        match std::fs::write(&save_path, png_data) {
+            Ok(()) => {
+                logging::log(
+                    "ACTIONS",
+                    &format!("Webcam photo saved: {}", save_path.display()),
+                );
+                cx.notify();
+                self.show_hud(
+                    format!("Photo saved to {}", save_path.display()),
+                    Some(3500),
+                    cx,
+                );
+                self.reveal_in_finder(&save_path);
+                true
+            }
+            Err(e) => {
+                logging::log("ERROR", &format!("Failed to save webcam photo: {}", e));
+                cx.notify();
+                self.show_hud(format!("Failed to save photo: {}", e), Some(3000), cx);
+                false
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn capture_webcam_photo(&mut self, cx: &mut Context<Self>) -> bool {
+        logging::log(
+            "ACTIONS",
+            "capture_webcam_photo requested on unsupported platform",
+        );
+        cx.notify();
+        self.show_hud(
+            "Webcam capture is only supported on macOS".to_string(),
+            Some(2500),
+            cx,
+        );
+        false
     }
 
     fn webcam_actions_for_dialog() -> Vec<crate::actions::Action> {
@@ -4177,7 +4472,7 @@ impl ScriptListApp {
         vec![
             Action::new(
                 "capture",
-                "Capture",
+                "Capture Photo",
                 Some("Take a photo".to_string()),
                 ActionCategory::ScriptContext,
             )
@@ -4196,11 +4491,15 @@ impl ScriptListApp {
         match action_id {
             "capture" => {
                 logging::log("ACTIONS", "execute_webcam_action: capture");
-                self.close_and_reset_window(cx);
+                if self.capture_webcam_photo(cx) {
+                    self.hide_main_and_reset(cx);
+                }
             }
             "close" => {
                 logging::log("ACTIONS", "execute_webcam_action: close");
-                self.close_and_reset_window(cx);
+                cx.notify();
+                self.show_hud("Webcam closed".to_string(), Some(1500), cx);
+                self.hide_main_and_reset(cx);
             }
             _ => {
                 logging::log(
@@ -4266,6 +4565,51 @@ impl ScriptListApp {
 
         if is_key_down(key) {
             dialog.update(cx, |d, cx| d.move_down(cx));
+            return ActionsRoute::Handled;
+        }
+
+        let is_home = key.eq_ignore_ascii_case("home");
+        let is_end = key.eq_ignore_ascii_case("end");
+        let is_page_up = key.eq_ignore_ascii_case("pageup");
+        let is_page_down = key.eq_ignore_ascii_case("pagedown");
+        const ACTIONS_PAGE_JUMP: usize = 8;
+
+        if is_home || is_end || is_page_up || is_page_down {
+            dialog.update(cx, |d, cx| {
+                if d.grouped_items.is_empty() {
+                    return;
+                }
+
+                if is_home || is_page_up {
+                    let steps = if is_home {
+                        d.grouped_items.len()
+                    } else {
+                        ACTIONS_PAGE_JUMP
+                    };
+                    for _ in 0..steps {
+                        let previous = d.selected_index;
+                        d.move_up(cx);
+                        if d.selected_index == previous {
+                            break;
+                        }
+                    }
+                    return;
+                }
+
+                let steps = if is_end {
+                    d.grouped_items.len()
+                } else {
+                    ACTIONS_PAGE_JUMP
+                };
+                for _ in 0..steps {
+                    let previous = d.selected_index;
+                    d.move_down(cx);
+                    if d.selected_index == previous {
+                        break;
+                    }
+                }
+            });
+            crate::actions::notify_actions_window(cx);
             return ActionsRoute::Handled;
         }
 
@@ -5182,16 +5526,27 @@ export default {
                                         "Copied: {}",
                                         path_info.path
                                     )));
+                                    self.show_hud(
+                                        format!("Copied path: {}", path_info.path),
+                                        Some(2000),
+                                        cx,
+                                    );
                                 } else {
                                     logging::log("ERROR", "Failed to write to pbcopy stdin");
                                     self.last_output =
                                         Some(SharedString::from("Failed to copy path"));
+                                    self.show_hud(
+                                        "Failed to copy path".to_string(),
+                                        Some(2500),
+                                        cx,
+                                    );
                                 }
                             }
                         }
                         Err(e) => {
                             logging::log("ERROR", &format!("Failed to spawn pbcopy: {}", e));
                             self.last_output = Some(SharedString::from("Failed to copy path"));
+                            self.show_hud(format!("Failed to copy path: {}", e), Some(2500), cx);
                         }
                     }
                 }
@@ -5208,16 +5563,31 @@ export default {
                                 );
                                 self.last_output =
                                     Some(SharedString::from(format!("Copied: {}", path_info.path)));
+                                self.show_hud(
+                                    format!("Copied path: {}", path_info.path),
+                                    Some(2000),
+                                    cx,
+                                );
                             }
                             Err(e) => {
                                 logging::log("ERROR", &format!("Failed to copy path: {}", e));
                                 self.last_output = Some(SharedString::from("Failed to copy path"));
+                                self.show_hud(
+                                    format!("Failed to copy path: {}", e),
+                                    Some(2500),
+                                    cx,
+                                );
                             }
                         },
                         Err(e) => {
                             logging::log("ERROR", &format!("Failed to access clipboard: {}", e));
                             self.last_output =
                                 Some(SharedString::from("Failed to access clipboard"));
+                            self.show_hud(
+                                format!("Failed to access clipboard: {}", e),
+                                Some(2500),
+                                cx,
+                            );
                         }
                     }
                 }
@@ -5245,40 +5615,71 @@ export default {
                                         "Copied: {}",
                                         path_info.name
                                     )));
+                                    self.show_hud(
+                                        format!("Copied filename: {}", path_info.name),
+                                        Some(2000),
+                                        cx,
+                                    );
                                 }
                             }
                         }
                         Err(e) => {
                             logging::log("ERROR", &format!("Failed to spawn pbcopy: {}", e));
+                            self.show_hud(
+                                format!("Failed to copy filename: {}", e),
+                                Some(2500),
+                                cx,
+                            );
+                        }
+                    }
+                }
+
+                #[cfg(not(target_os = "macos"))]
+                {
+                    use arboard::Clipboard;
+                    match Clipboard::new().and_then(|mut c| c.set_text(&path_info.name)) {
+                        Ok(_) => {
+                            self.show_hud(
+                                format!("Copied filename: {}", path_info.name),
+                                Some(2000),
+                                cx,
+                            );
+                        }
+                        Err(e) => {
+                            self.show_hud(
+                                format!("Failed to copy filename: {}", e),
+                                Some(2500),
+                                cx,
+                            );
                         }
                     }
                 }
             }
             "open_in_finder" => {
-                // Reveal in Finder (macOS)
-                #[cfg(target_os = "macos")]
-                {
-                    use std::process::Command;
-                    let path_to_reveal = if path_info.is_dir {
-                        path_info.path.clone()
-                    } else {
-                        // For files, reveal the containing folder with the file selected
-                        path_info.path.clone()
-                    };
+                let file_manager = if cfg!(target_os = "macos") {
+                    "Finder"
+                } else if cfg!(target_os = "windows") {
+                    "Explorer"
+                } else {
+                    "File Manager"
+                };
 
-                    match Command::new("open").args(["-R", &path_to_reveal]).spawn() {
-                        Ok(_) => {
-                            logging::log("UI", &format!("Revealed in Finder: {}", path_info.path));
-                            // Hide main window only (not entire app) to keep HUD visible
-                            script_kit_gpui::set_main_window_visible(false);
-                            NEEDS_RESET.store(true, Ordering::SeqCst);
-                            platform::hide_main_window();
-                        }
-                        Err(e) => {
-                            logging::log("ERROR", &format!("Failed to reveal in Finder: {}", e));
-                            self.last_output =
-                                Some(SharedString::from("Failed to reveal in Finder"));
-                        }
+                match crate::file_search::reveal_in_finder(&path_info.path) {
+                    Ok(_) => {
+                        logging::log("UI", &format!("Revealed in {}: {}", file_manager, path_info.path));
+                        self.show_hud(format!("Opened in {}", file_manager), Some(1500), cx);
+                        // Hide main window only (not entire app) to keep HUD visible
+                        script_kit_gpui::set_main_window_visible(false);
+                        NEEDS_RESET.store(true, Ordering::SeqCst);
+                        platform::hide_main_window();
+                    }
+                    Err(e) => {
+                        logging::log("ERROR", &format!("Failed to reveal in {}: {}", file_manager, e));
+                        self.show_hud(
+                            format!("Failed to open in {}: {}", file_manager, e),
+                            Some(2500),
+                            cx,
+                        );
                     }
                 }
             }
@@ -5294,6 +5695,7 @@ export default {
                 match std::process::Command::new(&editor).arg(&path_str).spawn() {
                     Ok(_) => {
                         logging::log("UI", &format!("Opened in editor: {}", path_str));
+                        self.show_hud(format!("Opened in {}", editor), Some(1500), cx);
                         // Hide main window only (not entire app) to keep HUD visible
                         script_kit_gpui::set_main_window_visible(false);
                         NEEDS_RESET.store(true, Ordering::SeqCst);
@@ -5301,97 +5703,146 @@ export default {
                     }
                     Err(e) => {
                         logging::log("ERROR", &format!("Failed to open in editor: {}", e));
-                        self.last_output = Some(SharedString::from("Failed to open in editor"));
+                        self.show_hud(
+                            format!("Failed to open in {}: {}", editor, e),
+                            Some(2500),
+                            cx,
+                        );
                     }
                 }
             }
             "open_in_terminal" => {
-                // Open terminal at this location
-                #[cfg(target_os = "macos")]
-                {
-                    use std::process::Command;
-                    // Get the directory (if file, use parent directory)
-                    let dir_path = if path_info.is_dir {
-                        path_info.path.clone()
-                    } else {
-                        std::path::Path::new(&path_info.path)
-                            .parent()
-                            .map(|p| p.to_string_lossy().to_string())
-                            .unwrap_or_else(|| path_info.path.clone())
-                    };
-
-                    // Try iTerm first, fall back to Terminal.app
-                    let script = format!(
-                        r#"tell application "Terminal"
-                            do script "cd '{}'"
-                            activate
-                        end tell"#,
-                        dir_path
-                    );
-
-                    match Command::new("osascript").args(["-e", &script]).spawn() {
-                        Ok(_) => {
-                            logging::log("UI", &format!("Opened terminal at: {}", dir_path));
-                            // Hide main window only (not entire app) to keep HUD visible
-                            script_kit_gpui::set_main_window_visible(false);
-                            NEEDS_RESET.store(true, Ordering::SeqCst);
-                            platform::hide_main_window();
-                        }
-                        Err(e) => {
-                            logging::log("ERROR", &format!("Failed to open terminal: {}", e));
-                            self.last_output = Some(SharedString::from("Failed to open terminal"));
-                        }
+                match crate::file_search::open_in_terminal(&path_info.path, path_info.is_dir) {
+                    Ok(terminal_path) => {
+                        logging::log("UI", &format!("Opened terminal at: {}", terminal_path));
+                        self.show_hud(
+                            format!("Opened Terminal at {}", terminal_path),
+                            Some(1500),
+                            cx,
+                        );
+                        // Hide main window only (not entire app) to keep HUD visible
+                        script_kit_gpui::set_main_window_visible(false);
+                        NEEDS_RESET.store(true, Ordering::SeqCst);
+                        platform::hide_main_window();
+                    }
+                    Err(e) => {
+                        logging::log("ERROR", &format!("Failed to open terminal: {}", e));
+                        self.show_hud(
+                            format!("Failed to open terminal: {}", e),
+                            Some(2500),
+                            cx,
+                        );
                     }
                 }
             }
             "move_to_trash" => {
-                // Move to trash (macOS)
-                #[cfg(target_os = "macos")]
-                {
-                    use std::process::Command;
-                    let path_str = path_info.path.clone();
-                    let name = path_info.name.clone();
+                let path_info = path_info.clone();
+                let path_prompt_entity = path_prompt_entity.clone();
+                let message = format!(
+                    "Are you sure you want to move '{}' to Trash?",
+                    path_info.name
+                );
 
-                    // Use AppleScript to move to trash (preserves undo capability)
-                    let script = format!(
-                        r#"tell application "Finder"
-                            delete POSIX file "{}"
-                        end tell"#,
-                        path_str
-                    );
+                cx.spawn(async move |this, cx| {
+                    let (confirm_tx, confirm_rx) = async_channel::bounded::<bool>(1);
+                    let open_result = cx.update(|cx| {
+                        let main_bounds =
+                            if let Some((x, y, w, h)) = platform::get_main_window_bounds() {
+                                gpui::Bounds {
+                                    origin: gpui::Point {
+                                        x: gpui::px(x as f32),
+                                        y: gpui::px(y as f32),
+                                    },
+                                    size: gpui::Size {
+                                        width: gpui::px(w as f32),
+                                        height: gpui::px(h as f32),
+                                    },
+                                }
+                            } else {
+                                gpui::Bounds {
+                                    origin: gpui::Point {
+                                        x: gpui::px(100.0),
+                                        y: gpui::px(100.0),
+                                    },
+                                    size: gpui::Size {
+                                        width: gpui::px(600.0),
+                                        height: gpui::px(400.0),
+                                    },
+                                }
+                            };
 
-                    match Command::new("osascript").args(["-e", &script]).spawn() {
-                        Ok(mut child) => {
-                            // Wait for completion and check result
-                            match child.wait() {
-                                Ok(status) if status.success() => {
-                                    logging::log("UI", &format!("Moved to trash: {}", path_str));
-                                    self.last_output = Some(SharedString::from(format!(
-                                        "Moved to Trash: {}",
-                                        name
-                                    )));
-                                    // Refresh the path prompt to show the file is gone
-                                    path_prompt_entity.update(cx, |prompt, cx| {
-                                        let current = prompt.current_path.clone();
-                                        prompt.navigate_to(&current, cx);
-                                    });
-                                }
-                                _ => {
-                                    logging::log(
-                                        "ERROR",
-                                        &format!("Failed to move to trash: {}", path_str),
-                                    );
-                                    self.last_output =
-                                        Some(SharedString::from("Failed to move to Trash"));
-                                }
+                        let sender = confirm_tx.clone();
+                        let on_choice: ConfirmCallback = std::sync::Arc::new(move |confirmed| {
+                            let _ = sender.try_send(confirmed);
+                        });
+
+                        open_confirm_window(
+                            cx,
+                            main_bounds,
+                            None,
+                            message,
+                            Some("Yes".to_string()),
+                            Some("Cancel".to_string()),
+                            on_choice,
+                        )
+                    });
+
+                    match open_result {
+                        Ok(Ok(_)) => {}
+                        Ok(Err(e)) => {
+                            this.update(cx, |this, cx| {
+                                logging::log(
+                                    "ERROR",
+                                    &format!("Failed to open confirmation modal: {}", e),
+                                );
+                                this.show_hud(
+                                    "Failed to open confirmation dialog".to_string(),
+                                    Some(2500),
+                                    cx,
+                                );
+                            })
+                            .ok();
+                            return;
+                        }
+                        Err(_) => return,
+                    }
+
+                    let Ok(confirmed) = confirm_rx.recv().await else {
+                        return;
+                    };
+                    if !confirmed {
+                        return;
+                    }
+
+                    this.update(cx, move |this, cx| {
+                        let path_str = path_info.path.clone();
+                        let name = path_info.name.clone();
+
+                        match crate::file_search::move_to_trash(&path_str) {
+                            Ok(()) => {
+                                logging::log("UI", &format!("Moved to trash: {}", path_str));
+                                this.last_output =
+                                    Some(SharedString::from(format!("Moved to Trash: {}", name)));
+                                this.show_hud(format!("Moved to Trash: {}", name), Some(2000), cx);
+                                // Refresh the path prompt to show the file is gone
+                                path_prompt_entity.update(cx, |prompt, cx| {
+                                    let current = prompt.current_path.clone();
+                                    prompt.navigate_to(&current, cx);
+                                });
+                            }
+                            Err(e) => {
+                                logging::log("ERROR", &format!("Failed to move to trash: {}", e));
+                                this.last_output =
+                                    Some(SharedString::from("Failed to move to Trash"));
+                                this.show_hud(format!("Failed to move to Trash: {}", e), Some(2500), cx);
                             }
                         }
-                        Err(e) => {
-                            logging::log("ERROR", &format!("Failed to spawn trash command: {}", e));
-                            self.last_output = Some(SharedString::from("Failed to move to Trash"));
-                        }
-                    }
-                }
+                        cx.notify();
+                    })
+                    .ok();
+                })
+                .detach();
+                return;
             }
             _ => {
                 logging::log("UI", &format!("Unknown path action: {}", action_id));
@@ -5933,10 +6384,10 @@ export default {
 
         // Save window position BEFORE hiding (main window is hidden, not closed)
         if let Some((x, y, w, h)) = crate::platform::get_main_window_bounds() {
-            crate::window_state::save_window_bounds(
-                crate::window_state::WindowRole::Main,
-                crate::window_state::PersistedWindowBounds::new(x, y, w, h),
-            );
+            let bounds = crate::window_state::PersistedWindowBounds::new(x, y, w, h);
+            let displays = crate::platform::get_macos_displays();
+            let _ =
+                crate::window_state::save_main_position_with_display_detection(bounds, &displays);
         }
 
         // Update visibility state FIRST to prevent race conditions
@@ -5989,30 +6440,32 @@ export default {
     ///
     /// This implements the "ESC clears filter first" UX pattern that matches the main menu behavior.
     fn clear_builtin_view_filter(&mut self, cx: &mut Context<Self>) -> bool {
-        match &self.current_view {
+        let cleared = match &self.current_view {
             AppView::ClipboardHistoryView { filter, .. } if !filter.is_empty() => {
-                logging::log("KEY", "ESC - clearing ClipboardHistory filter");
+                Some("ClipboardHistory filter")
             }
             AppView::AppLauncherView { filter, .. } if !filter.is_empty() => {
-                logging::log("KEY", "ESC - clearing AppLauncher filter");
+                Some("AppLauncher filter")
             }
             AppView::WindowSwitcherView { filter, .. } if !filter.is_empty() => {
-                logging::log("KEY", "ESC - clearing WindowSwitcher filter");
+                Some("WindowSwitcher filter")
             }
             AppView::DesignGalleryView { filter, .. } if !filter.is_empty() => {
-                logging::log("KEY", "ESC - clearing DesignGallery filter");
+                Some("DesignGallery filter")
             }
             AppView::ThemeChooserView { filter, .. } if !filter.is_empty() => {
-                logging::log("KEY", "ESC - clearing ThemeChooser filter");
+                Some("ThemeChooser filter")
             }
-            AppView::FileSearchView { query, .. } if !query.is_empty() => {
-                logging::log("KEY", "ESC - clearing FileSearch query");
-            }
-            _ => return false,
-        }
+            AppView::FileSearchView { query, .. } if !query.is_empty() => Some("FileSearch query"),
+            _ => None,
+        };
+        let Some(cleared) = cleared else {
+            return false;
+        };
+        logging::log("KEY", &format!("ESC - clearing {}", cleared));
 
         // Clear shared filter state (for views using the shared input component)
-        self.filter_text = String::new();
+        self.filter_text.clear();
         self.pending_filter_sync = true;
 
         // Clear view-specific filter and reset selection
@@ -6021,22 +6474,18 @@ export default {
                 filter,
                 selected_index,
             } => {
-                filter.clear();
-                *selected_index = 0;
+                Self::clear_builtin_query_state(filter, selected_index);
                 self.clipboard_list_scroll_handle
                     .scroll_to_item(0, ScrollStrategy::Top);
                 // Update focused entry to first entry (filter cleared = show all)
-                self.focused_clipboard_entry_id = self
-                    .cached_clipboard_entries
-                    .first()
-                    .map(|e| e.id.clone());
+                self.focused_clipboard_entry_id =
+                    self.cached_clipboard_entries.first().map(|e| e.id.clone());
             }
             AppView::AppLauncherView {
                 filter,
                 selected_index,
             } => {
-                filter.clear();
-                *selected_index = 0;
+                Self::clear_builtin_query_state(filter, selected_index);
                 self.list_scroll_handle
                     .scroll_to_item(0, ScrollStrategy::Top);
             }
@@ -6044,8 +6493,7 @@ export default {
                 filter,
                 selected_index,
             } => {
-                filter.clear();
-                *selected_index = 0;
+                Self::clear_builtin_query_state(filter, selected_index);
                 self.window_list_scroll_handle
                     .scroll_to_item(0, ScrollStrategy::Top);
             }
@@ -6053,8 +6501,7 @@ export default {
                 filter,
                 selected_index,
             } => {
-                filter.clear();
-                *selected_index = 0;
+                Self::clear_builtin_query_state(filter, selected_index);
                 self.design_gallery_scroll_handle
                     .scroll_to_item(0, ScrollStrategy::Top);
             }
@@ -6062,8 +6509,7 @@ export default {
                 filter,
                 selected_index,
             } => {
-                filter.clear();
-                *selected_index = 0;
+                Self::clear_builtin_query_state(filter, selected_index);
                 self.theme_chooser_scroll_handle
                     .scroll_to_item(0, ScrollStrategy::Top);
             }
@@ -6071,8 +6517,7 @@ export default {
                 query,
                 selected_index,
             } => {
-                query.clear();
-                *selected_index = 0;
+                Self::clear_builtin_query_state(query, selected_index);
                 // Cancel any pending search
                 self.file_search_debounce_task = None;
                 self.file_search_loading = false;
@@ -6089,6 +6534,36 @@ export default {
 
         cx.notify();
         true
+    }
+
+    fn reset_script_list_filter_state(&mut self) {
+        self.filter_text.clear();
+        self.computed_filter_text.clear();
+        self.filter_coalescer.reset();
+        self.pending_filter_sync = true;
+    }
+
+    fn reset_script_list_selection_state(&mut self, cx: &mut Context<Self>) {
+        self.invalidate_grouped_cache();
+        self.sync_list_state();
+        self.selected_index = 0;
+        self.hovered_index = None;
+        self.validate_selection_bounds(cx);
+        self.main_list_state.scroll_to(ListOffset {
+            item_ix: 0,
+            offset_in_item: px(0.),
+        });
+        self.last_scrolled_index = Some(0);
+    }
+
+    fn reset_script_list_filter_and_selection_state(&mut self, cx: &mut Context<Self>) {
+        self.reset_script_list_filter_state();
+        self.reset_script_list_selection_state(cx);
+    }
+
+    fn request_script_list_main_filter_focus(&mut self, cx: &mut Context<Self>) {
+        self.focused_input = FocusedInput::MainFilter;
+        self.request_focus(FocusTarget::MainFilter, cx);
     }
 
     /// Go back to main menu or close window depending on how the view was opened.
@@ -6109,11 +6584,7 @@ export default {
             // Reset the flag since we're now in main menu
             self.opened_from_main_menu = false;
 
-            // Clear filter state fully (mirror reset_to_script_list)
-            self.filter_text.clear();
-            self.computed_filter_text.clear();
-            self.filter_coalescer.reset();
-            self.pending_filter_sync = true;
+            self.reset_script_list_filter_and_selection_state(cx);
 
             // Sync input and reset placeholder to default
             self.gpui_input_state.update(cx, |state, cx| {
@@ -6126,24 +6597,8 @@ export default {
             self.show_actions_popup = false;
             self.actions_dialog = None;
 
-            // Invalidate caches and sync list component
-            self.invalidate_grouped_cache();
-            self.sync_list_state();
-            self.selected_index = 0;
-            self.hovered_index = None;
-            self.validate_selection_bounds(cx);
-
-            // Scroll to top so the list starts at the first item
-            self.main_list_state.scroll_to(ListOffset {
-                item_ix: 0,
-                offset_in_item: px(0.),
-            });
-            self.last_scrolled_index = Some(0);
-
             self.update_window_size_deferred(window, cx);
-            self.pending_focus = Some(FocusTarget::MainFilter);
-            self.focused_input = FocusedInput::MainFilter;
-            cx.notify();
+            self.request_script_list_main_filter_focus(cx);
         } else {
             logging::log(
                 "KEY",
@@ -6215,7 +6670,10 @@ export default {
         }
 
         // ESC closes dismissable prompts (when actions popup is not showing)
-        if is_dismissable && key_str == "escape" && !self.show_actions_popup {
+        if is_dismissable
+            && crate::ui_foundation::is_key_escape(key_str.as_str())
+            && !self.show_actions_popup
+        {
             logging::log("KEY", "ESC in dismissable prompt - closing window");
             self.close_and_reset_window(cx);
             return true;
@@ -6505,9 +6963,8 @@ export default {
         // CRITICAL: Reset focused_input to MainFilter so the cursor appears
         // This was a bug where focused_input could remain as ArgPrompt/None after
         // script exit, causing the cursor to not show in the main filter.
-        self.focused_input = FocusedInput::MainFilter;
         self.gpui_input_focused = false;
-        self.pending_focus = Some(FocusTarget::MainFilter);
+        self.request_script_list_main_filter_focus(cx);
         // Reset placeholder back to default for main menu
         self.pending_placeholder = Some(DEFAULT_PLACEHOLDER.to_string());
         logging::log(
@@ -6523,25 +6980,7 @@ export default {
             .scroll_to_item(0, ScrollStrategy::Top);
 
         // Clear filter and selection state for fresh menu
-        self.filter_text.clear();
-        self.computed_filter_text.clear();
-        self.filter_coalescer.reset();
-        self.pending_filter_sync = true;
-
-        // Sync list component state and validate selection
-        // This moves state mutation OUT of render() (anti-pattern fix)
-        self.invalidate_grouped_cache(); // Ensure cache is fresh
-        self.sync_list_state();
-        self.selected_index = 0;
-        self.hovered_index = None; // Reset hover state to prevent stale highlight on reopen
-        self.validate_selection_bounds(cx);
-        // Scroll to the very top of the list (not just reveal the item)
-        // This ensures the first item is at the top, not just visible somewhere in the viewport
-        self.main_list_state.scroll_to(ListOffset {
-            item_ix: 0,
-            offset_in_item: px(0.),
-        });
-        self.last_scrolled_index = Some(self.selected_index);
+        self.reset_script_list_filter_and_selection_state(cx);
 
         // NOTE: Window resize is NOT done here to avoid RefCell borrow conflicts.
         // Callers that need resize should use deferred resize via window_ops::queue_resize
@@ -6807,10 +7246,7 @@ export default {
             let claude_code_sender = self.inline_chat_claude_code_sender.clone();
             let claude_code_callback: crate::prompts::ChatClaudeCodeCallback =
                 std::sync::Arc::new(move || {
-                    crate::logging::log(
-                        "CHAT",
-                        "Claude Code callback triggered - sending signal",
-                    );
+                    crate::logging::log("CHAT", "Claude Code callback triggered - sending signal");
                     let _ = claude_code_sender.try_send(());
                 });
 
@@ -6900,40 +7336,87 @@ export default {
     pub fn rebuild_provider_registry_async(&mut self, cx: &mut Context<Self>) {
         self.cached_provider_registry = None;
         let config_clone = self.config.clone();
-        let (tx, rx) = std::sync::mpsc::channel::<crate::ai::ProviderRegistry>();
+        let (tx, rx) = async_channel::bounded::<crate::ai::ProviderRegistry>(1);
 
         std::thread::spawn(move || {
             let registry =
                 crate::ai::ProviderRegistry::from_environment_with_config(Some(&config_clone));
-            let _ = tx.send(registry);
+            if tx.send_blocking(registry).is_err() {
+                logging::log(
+                    "APP",
+                    "Provider registry rebuild result dropped: receiver unavailable",
+                );
+            }
         });
 
         cx.spawn(async move |this, cx| {
-            loop {
-                Timer::after(std::time::Duration::from_millis(50)).await;
-                match rx.try_recv() {
-                    Ok(registry) => {
-                        let provider_count = registry.provider_ids().len();
-                        let _ = cx.update(|cx| {
-                            this.update(cx, |app, _cx| {
-                                app.cached_provider_registry = Some(registry);
-                                logging::log(
-                                    "APP",
-                                    &format!(
-                                        "Provider registry rebuilt: {} providers",
-                                        provider_count
-                                    ),
-                                );
-                            })
-                        });
-                        break;
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Empty) => continue,
-                    Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
-                }
-            }
+            let Ok(registry) = rx.recv().await else {
+                logging::log("APP", "Provider registry rebuild failed: channel closed");
+                return;
+            };
+
+            let provider_count = registry.provider_ids().len();
+            let _ = cx.update(|cx| {
+                this.update(cx, |app, _cx| {
+                    app.cached_provider_registry = Some(registry);
+                    logging::log(
+                        "APP",
+                        &format!("Provider registry rebuilt: {} providers", provider_count),
+                    );
+                })
+            });
         })
         .detach();
+    }
+}
+
+#[cfg(test)]
+mod app_impl_state_sync_tests {
+    use super::{calculate_fallback_error_message, ScriptListApp};
+
+    #[test]
+    fn test_sync_builtin_query_state_updates_query_and_selection_when_changed() {
+        let mut query = String::from("old");
+        let mut selected_index = 3;
+
+        let changed =
+            ScriptListApp::sync_builtin_query_state(&mut query, &mut selected_index, "new");
+
+        assert!(changed);
+        assert_eq!(query, "new");
+        assert_eq!(selected_index, 0);
+    }
+
+    #[test]
+    fn test_sync_builtin_query_state_noop_when_query_is_unchanged() {
+        let mut query = String::from("same");
+        let mut selected_index = 4;
+
+        let changed =
+            ScriptListApp::sync_builtin_query_state(&mut query, &mut selected_index, "same");
+
+        assert!(!changed);
+        assert_eq!(query, "same");
+        assert_eq!(selected_index, 4);
+    }
+
+    #[test]
+    fn test_clear_builtin_query_state_clears_text_and_resets_selection() {
+        let mut query = String::from("abc");
+        let mut selected_index = 2;
+
+        ScriptListApp::clear_builtin_query_state(&mut query, &mut selected_index);
+
+        assert!(query.is_empty());
+        assert_eq!(selected_index, 0);
+    }
+
+    #[test]
+    fn test_calculate_fallback_error_message_includes_expression_and_recovery() {
+        let message = calculate_fallback_error_message("2 + )");
+        assert!(message.contains("2 + )"));
+        assert!(message.contains("Could not evaluate expression"));
+        assert!(message.contains("Check the syntax and try again"));
     }
 }
 

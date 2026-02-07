@@ -6,6 +6,7 @@
 //! - `paths`: Path highlighting for search results
 //! - `tailwind`: Tailwind CSS class mapping
 
+mod applescript;
 mod assets;
 mod html;
 mod paths;
@@ -13,6 +14,7 @@ mod tailwind;
 
 // Re-export all public items for backwards compatibility
 // Allow unused imports - these are public API exports for external use
+pub use applescript::escape_applescript_string;
 #[allow(unused_imports)]
 pub use assets::{get_asset_path, get_logo_path};
 #[allow(unused_imports)]
