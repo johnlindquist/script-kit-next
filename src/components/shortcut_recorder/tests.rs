@@ -2,7 +2,10 @@ use std::time::Duration;
 
 use crate::theme::Theme;
 
-use super::types::{compute_overlay_appear_style, OVERLAY_ANIMATION_DURATION_MS};
+use super::types::{
+    compute_overlay_appear_style, overlay_color_with_alpha, OVERLAY_ANIMATION_DURATION_MS,
+    OVERLAY_BACKDROP_ALPHA, OVERLAY_BACKDROP_HOVER_ALPHA,
+};
 use super::{RecordedShortcut, ShortcutRecorderColors};
 
 #[test]
@@ -101,4 +104,15 @@ fn test_compute_overlay_appear_style_reaches_full_visibility_after_duration() {
     assert!((style.modal_offset_y - 0.0).abs() < 0.001);
     assert!((style.modal_opacity - 1.0).abs() < 0.001);
     assert!(style.complete);
+}
+
+#[test]
+fn test_overlay_color_with_alpha_applies_requested_backdrop_alphas() {
+    let base = 0x123456;
+    let backdrop = overlay_color_with_alpha(base, OVERLAY_BACKDROP_ALPHA);
+    let backdrop_hover = overlay_color_with_alpha(base, OVERLAY_BACKDROP_HOVER_ALPHA);
+
+    assert_eq!(backdrop, 0x12345680);
+    assert_eq!(backdrop_hover, 0x12345690);
+    assert!(backdrop_hover > backdrop);
 }

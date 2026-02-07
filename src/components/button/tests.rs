@@ -3,7 +3,7 @@ use super::types::{
     BUTTON_ICON_PADDING_Y, BUTTON_PRIMARY_PADDING_X, BUTTON_PRIMARY_PADDING_Y, BUTTON_RADIUS_PX,
     BUTTON_SHORTCUT_MARGIN_LEFT_PX,
 };
-use super::{Button, ButtonColors};
+use super::{Button, ButtonColors, ButtonVariant};
 use crate::designs::DesignColors;
 use crate::theme::Theme;
 use gpui::SharedString;
@@ -56,6 +56,38 @@ fn test_button_colors_from_design_uses_design_background_for_hover_overlay() {
 
     let colors = ButtonColors::from_design_with_dark_mode(&design, true);
     assert_eq!(colors.hover_overlay, 0x44556626);
+}
+
+#[test]
+fn test_hover_background_token_uses_background_hover_for_primary_variant() {
+    let colors = ButtonColors {
+        background_hover: 0x123456,
+        hover_overlay: 0xabcdef26,
+        ..ButtonColors::default()
+    };
+
+    assert_eq!(
+        Button::hover_background_token(ButtonVariant::Primary, colors),
+        0x123456b0
+    );
+}
+
+#[test]
+fn test_hover_background_token_uses_overlay_for_ghost_and_icon_variants() {
+    let colors = ButtonColors {
+        background_hover: 0x123456,
+        hover_overlay: 0xabcdef26,
+        ..ButtonColors::default()
+    };
+
+    assert_eq!(
+        Button::hover_background_token(ButtonVariant::Ghost, colors),
+        0xabcdef26
+    );
+    assert_eq!(
+        Button::hover_background_token(ButtonVariant::Icon, colors),
+        0xabcdef26
+    );
 }
 
 #[test]

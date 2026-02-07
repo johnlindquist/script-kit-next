@@ -158,6 +158,13 @@ impl Button {
     pub(crate) fn resolve_focus_state(explicit_focus: bool, runtime_focus: Option<bool>) -> bool {
         runtime_focus.unwrap_or(explicit_focus)
     }
+
+    pub(crate) fn hover_background_token(variant: ButtonVariant, colors: ButtonColors) -> u32 {
+        match variant {
+            ButtonVariant::Primary => (colors.background_hover << 8) | 0xB0,
+            ButtonVariant::Ghost | ButtonVariant::Icon => colors.hover_overlay,
+        }
+    }
 }
 
 /// Focus ring border width
@@ -197,8 +204,7 @@ impl RenderOnce for Button {
         };
 
         // Calculate colors based on variant
-        // Hover uses theme-aware overlay color (white for dark, black for light)
-        let hover_overlay = rgba(colors.hover_overlay);
+        let hover_bg = rgba(Self::hover_background_token(variant, colors));
 
         // Focus styling colors
         // 0xA0 = 62.5% opacity for visible focus ring
@@ -208,7 +214,7 @@ impl RenderOnce for Button {
         // 0x40 = 25% opacity for unfocused border
         let unfocused_border = rgba((colors.border << 8) | 0x40);
 
-        let (text_color, bg_color, hover_bg) = match variant {
+        let (text_color, bg_color) = match variant {
             ButtonVariant::Primary => {
                 // Primary: filled background with accent color
                 // When focused, add subtle tint on top
@@ -219,11 +225,7 @@ impl RenderOnce for Button {
                 } else {
                     base_bg
                 };
-                (
-                    rgb(colors.accent),
-                    bg,
-                    rgba((colors.background_hover << 8) | 0xB0),
-                )
+                (rgb(colors.accent), bg)
             }
             ButtonVariant::Ghost => {
                 // Ghost: text only (accent color), white overlay on hover
@@ -233,7 +235,7 @@ impl RenderOnce for Button {
                 } else {
                     rgba(0x00000000)
                 };
-                (rgb(colors.accent), bg, hover_overlay)
+                (rgb(colors.accent), bg)
             }
             ButtonVariant::Icon => {
                 // Icon: compact, accent color, white overlay on hover
@@ -242,7 +244,7 @@ impl RenderOnce for Button {
                 } else {
                     rgba(0x00000000)
                 };
-                (rgb(colors.accent), bg, hover_overlay)
+                (rgb(colors.accent), bg)
             }
         };
 

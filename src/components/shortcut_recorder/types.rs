@@ -14,6 +14,8 @@ pub(super) const BUTTON_GAP: f32 = 12.0;
 pub(super) const OVERLAY_ANIMATION_DURATION_MS: u64 = 140;
 pub(super) const OVERLAY_MODAL_ENTRY_OFFSET_PX: f32 = 12.0;
 pub(super) const OVERLAY_MODAL_START_OPACITY: f32 = 0.82;
+pub(super) const OVERLAY_BACKDROP_ALPHA: u8 = 0x80;
+pub(super) const OVERLAY_BACKDROP_HOVER_ALPHA: u8 = 0x90;
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct OverlayAppearStyle {
@@ -35,6 +37,10 @@ pub(super) fn compute_overlay_appear_style(elapsed: Duration) -> OverlayAppearSt
         modal_offset_y: OVERLAY_MODAL_ENTRY_OFFSET_PX * (1.0 - eased),
         complete: progress >= 1.0,
     }
+}
+
+pub(super) fn overlay_color_with_alpha(color: u32, alpha: u8) -> u32 {
+    ((color & 0x00ff_ffff) << 8) | (alpha as u32)
 }
 
 /// Pre-computed colors for ShortcutRecorder rendering
