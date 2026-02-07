@@ -56,14 +56,9 @@
         info.is_agent = true;
         // is_script=true AND is_agent=true
         let actions = get_script_context_actions(&info);
-        let _ids = action_ids(&actions);
-        // Both script edit and agent edit should appear (agent uses same "edit_script" ID)
+        // Duplicate IDs from script+agent are deduplicated in the action builder.
         let edit_count = actions.iter().filter(|a| a.id == "edit_script").count();
-        assert!(
-            edit_count >= 2,
-            "Both script and agent blocks add edit_script: count={}",
-            edit_count
-        );
+        assert_eq!(edit_count, 1, "edit_script is deduplicated by ID");
     }
 
     #[test]
@@ -437,4 +432,3 @@
         assert!(ids.contains(&"copy_response"));
         assert!(!ids.contains(&"clear_conversation"));
     }
-

@@ -169,7 +169,7 @@
             .with_frecency(true, Some("/t.md".into()));
         let actions = get_scriptlet_context_actions_with_custom(&script, None);
         let reset = actions.iter().find(|a| a.id == "reset_ranking").unwrap();
-        assert!(reset.shortcut.is_none());
+        assert_eq!(reset.shortcut.as_deref(), Some("⌃⌘R"));
     }
 
     // =========================================================================
@@ -436,4 +436,3 @@
     // =========================================================================
     // 28. Chat context: multiple models ordering
     // =========================================================================
-
