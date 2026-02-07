@@ -28,6 +28,8 @@
 
 pub mod alias_input;
 pub mod button;
+#[cfg(test)]
+mod error_handling_audit_tests;
 pub mod footer_button;
 pub mod form_fields;
 #[cfg(test)]
