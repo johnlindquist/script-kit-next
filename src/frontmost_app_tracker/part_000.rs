@@ -91,6 +91,17 @@ pub fn start_tracking() {
 pub fn get_last_real_app() -> Option<TrackedApp> {
     TRACKER_STATE.read().last_real_app.clone()
 }
+
+/// Get the bundle identifier for the last real app.
+///
+/// Returns `None` if no app has been tracked yet.
+pub fn get_last_real_app_bundle_id() -> Option<String> {
+    TRACKER_STATE
+        .read()
+        .last_real_app
+        .as_ref()
+        .map(|app| app.bundle_id.clone())
+}
 /// Get the cached menu bar items for the last real app.
 ///
 /// These are pre-fetched in the background when the app becomes active,

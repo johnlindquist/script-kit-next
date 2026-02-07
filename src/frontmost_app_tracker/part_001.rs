@@ -1,6 +1,9 @@
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    static TRACKER_STATE_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_tracker_state_default() {
@@ -60,6 +63,41 @@ mod tests {
         assert_eq!(cloned.pid, 123);
         assert_eq!(cloned.bundle_id, "com.test.app");
         assert_eq!(cloned.name, "Test App");
+    }
+
+    #[test]
+    fn test_get_last_real_app_bundle_id_returns_none_when_not_set() {
+        let _lock = TRACKER_STATE_TEST_LOCK.lock().unwrap();
+        let previous = TRACKER_STATE.read().last_real_app.clone();
+
+        let mut state = TRACKER_STATE.write();
+        state.last_real_app = None;
+        drop(state);
+
+        assert_eq!(get_last_real_app_bundle_id(), None);
+
+        TRACKER_STATE.write().last_real_app = previous;
+    }
+
+    #[test]
+    fn test_get_last_real_app_bundle_id_returns_bundle_id_when_set() {
+        let _lock = TRACKER_STATE_TEST_LOCK.lock().unwrap();
+        let previous = TRACKER_STATE.read().last_real_app.clone();
+
+        let mut state = TRACKER_STATE.write();
+        state.last_real_app = Some(TrackedApp {
+            pid: 42,
+            bundle_id: "com.example.bundle".to_string(),
+            name: "Example".to_string(),
+        });
+        drop(state);
+
+        assert_eq!(
+            get_last_real_app_bundle_id().as_deref(),
+            Some("com.example.bundle")
+        );
+
+        TRACKER_STATE.write().last_real_app = previous;
     }
 
     #[test]
