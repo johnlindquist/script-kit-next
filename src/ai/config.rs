@@ -410,6 +410,44 @@ pub mod default_models {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Mutex, OnceLock};
+
+    static SHOW_MOCK_PROVIDERS_TEST_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+    struct ShowMockProvidersEnvRestore {
+        previous_value: Option<String>,
+    }
+
+    impl Drop for ShowMockProvidersEnvRestore {
+        fn drop(&mut self) {
+            match &self.previous_value {
+                Some(value) => std::env::set_var("SHOW_MOCK_PROVIDERS", value),
+                None => std::env::remove_var("SHOW_MOCK_PROVIDERS"),
+            }
+        }
+    }
+
+    fn with_show_mock_providers_env_for_test<T>(
+        value: Option<&str>,
+        test_fn: impl FnOnce() -> T,
+    ) -> T {
+        let lock = SHOW_MOCK_PROVIDERS_TEST_LOCK.get_or_init(|| Mutex::new(()));
+        let _guard = lock
+            .lock()
+            .expect("SHOW_MOCK_PROVIDERS_TEST_LOCK should not be poisoned");
+        let restore = ShowMockProvidersEnvRestore {
+            previous_value: std::env::var("SHOW_MOCK_PROVIDERS").ok(),
+        };
+
+        match value {
+            Some(v) => std::env::set_var("SHOW_MOCK_PROVIDERS", v),
+            None => std::env::remove_var("SHOW_MOCK_PROVIDERS"),
+        }
+
+        let result = test_fn();
+        drop(restore);
+        result
+    }
 
     #[test]
     fn test_provider_config_creation() {
@@ -599,52 +637,52 @@ mod tests {
 
     #[test]
     fn test_mock_providers_hidden_by_default() {
-        // Without SHOW_MOCK_PROVIDERS, google() and groq() should return empty
-        std::env::remove_var("SHOW_MOCK_PROVIDERS");
-        let google_models = default_models::google();
-        let groq_models = default_models::groq();
-        assert!(
-            google_models.is_empty(),
-            "Google models should be hidden by default"
-        );
-        assert!(
-            groq_models.is_empty(),
-            "Groq models should be hidden by default"
-        );
+        // Without SHOW_MOCK_PROVIDERS enabled, google() and groq() should return empty.
+        with_show_mock_providers_env_for_test(None, || {
+            let google_models = default_models::google();
+            let groq_models = default_models::groq();
+            assert!(
+                google_models.is_empty(),
+                "Google models should be hidden by default"
+            );
+            assert!(
+                groq_models.is_empty(),
+                "Groq models should be hidden by default"
+            );
+        });
     }
 
     #[test]
     fn test_mock_providers_shown_when_enabled() {
-        // With SHOW_MOCK_PROVIDERS=1, google() and groq() should return models
-        std::env::set_var("SHOW_MOCK_PROVIDERS", "1");
-        let google_models = default_models::google();
-        let groq_models = default_models::groq();
+        // With SHOW_MOCK_PROVIDERS=1, google() and groq() should return models.
+        with_show_mock_providers_env_for_test(Some("1"), || {
+            let google_models = default_models::google();
+            let groq_models = default_models::groq();
 
-        assert!(
-            !google_models.is_empty(),
-            "Google models should be shown when SHOW_MOCK_PROVIDERS=1"
-        );
-        assert!(
-            !groq_models.is_empty(),
-            "Groq models should be shown when SHOW_MOCK_PROVIDERS=1"
-        );
-
-        // Verify display names have (Mock) suffix
-        for model in &google_models {
             assert!(
-                model.display_name.contains("(Mock)"),
-                "Google model '{}' should have (Mock) suffix",
-                model.display_name
+                !google_models.is_empty(),
+                "Google models should be shown when SHOW_MOCK_PROVIDERS=1"
             );
-        }
-        for model in &groq_models {
             assert!(
-                model.display_name.contains("(Mock)"),
-                "Groq model '{}' should have (Mock) suffix",
-                model.display_name
+                !groq_models.is_empty(),
+                "Groq models should be shown when SHOW_MOCK_PROVIDERS=1"
             );
-        }
 
-        std::env::remove_var("SHOW_MOCK_PROVIDERS");
+            // Verify display names have (Mock) suffix
+            for model in &google_models {
+                assert!(
+                    model.display_name.contains("(Mock)"),
+                    "Google model '{}' should have (Mock) suffix",
+                    model.display_name
+                );
+            }
+            for model in &groq_models {
+                assert!(
+                    model.display_name.contains("(Mock)"),
+                    "Groq model '{}' should have (Mock) suffix",
+                    model.display_name
+                );
+            }
+        });
     }
 }
