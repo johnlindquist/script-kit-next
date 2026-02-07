@@ -7,11 +7,11 @@
 //! - `base`: PromptBase - Shared base infrastructure (fields, DesignContext, macros)
 //! - `chat`: ChatPrompt - Raycast-style chat interface with streaming support
 //! - `div`: DivPrompt - HTML content display
-//! - `path`: PathPrompt - File/folder picker (skeleton)
-//! - `env`: EnvPrompt - Environment variable/secrets (skeleton)
-//! - `drop`: DropPrompt - Drag and drop (skeleton)
-//! - `template`: TemplatePrompt - String templates with placeholders (skeleton)
-//! - `select`: SelectPrompt - Multi-select with checkboxes (skeleton)
+//! - `path`: PathPrompt - File/folder picker with navigation, filtering, and action events
+//! - `env`: EnvPrompt - Environment variable/secrets prompt with encrypted storage support
+//! - `drop`: DropPrompt - Drag-and-drop file input with dropped file metadata submission
+//! - `template`: TemplatePrompt - String template editor with placeholder navigation and preview
+//! - `select`: SelectPrompt - Filterable multi-select list with keyboard-driven item toggling
 
 #![allow(dead_code)]
 
