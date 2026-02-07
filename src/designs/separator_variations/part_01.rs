@@ -147,11 +147,58 @@ pub enum SeparatorStyle {
 // Separator Configuration
 // ============================================================================
 
+/// Semantic color roles used by separator styles.
+///
+/// These roles intentionally avoid concrete RGB values so separator presets
+/// stay aligned with theme tokens and can be remapped per design system.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[allow(dead_code)]
+pub enum SeparatorColorRole {
+    UiBorder,
+    UiBorderSubtle,
+    UiBorderMuted,
+    UiSurface,
+    UiSurfaceElevated,
+    UiSurfaceOverlay,
+    TextMuted,
+    TextSecondary,
+    TextPrimary,
+    TextHighContrast,
+    AccentWarning,
+    AccentTerminal,
+    AccentTerminalMuted,
+    AccentNeon,
+}
+
+impl SeparatorColorRole {
+    /// Fallback RGB values used when a renderer does not provide token mapping.
+    #[allow(dead_code)]
+    pub const fn fallback_hex(self) -> u32 {
+        match self {
+            SeparatorColorRole::UiBorder => 0x464647,
+            SeparatorColorRole::UiBorderSubtle => 0x3a3a3a,
+            SeparatorColorRole::UiBorderMuted => 0x555555,
+            SeparatorColorRole::UiSurface => 0x2a2a2a,
+            SeparatorColorRole::UiSurfaceElevated => 0x3a3a3a,
+            SeparatorColorRole::UiSurfaceOverlay => 0x1e1e1e,
+            SeparatorColorRole::TextMuted => 0x808080,
+            SeparatorColorRole::TextSecondary => 0xa0a0a0,
+            SeparatorColorRole::TextPrimary => 0xaaaaaa,
+            SeparatorColorRole::TextHighContrast => 0xcccccc,
+            SeparatorColorRole::AccentWarning => 0xfbbf24,
+            SeparatorColorRole::AccentTerminal => 0x00ff00,
+            SeparatorColorRole::AccentTerminalMuted => 0x00aa00,
+            SeparatorColorRole::AccentNeon => 0x00ffff,
+        }
+    }
+}
+
 /// Configuration parameters for rendering a separator.
 ///
 /// Each separator style uses these parameters differently based on its
 /// visual approach. Some fields may be ignored by simpler styles.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[allow(dead_code)]
 pub struct SeparatorConfig {
     // ── Dimensions ─────────────────────────────────────────────────────────
     /// Total height of the separator (including padding)
@@ -172,18 +219,18 @@ pub struct SeparatorConfig {
     /// Indent from left edge (for indented styles)
     pub indent: f32,
 
-    // ── Colors (as 0xRRGGBB hex values) ────────────────────────────────────
-    /// Primary color for lines and decorations
-    pub color_primary: u32,
+    // ── Color roles (resolved via theme tokens at render time) ─────────────
+    /// Primary color role for lines and decorations
+    pub color_primary: SeparatorColorRole,
 
-    /// Secondary/muted color for subtle elements
-    pub color_secondary: u32,
+    /// Secondary/muted color role for subtle elements
+    pub color_secondary: SeparatorColorRole,
 
-    /// Background color (for filled styles)
-    pub color_background: u32,
+    /// Background color role for filled styles
+    pub color_background: SeparatorColorRole,
 
-    /// Text color for labels
-    pub color_text: u32,
+    /// Text color role for labels
+    pub color_text: SeparatorColorRole,
 
     // ── Typography ─────────────────────────────────────────────────────────
     /// Font size for label text
@@ -232,11 +279,11 @@ impl Default for SeparatorConfig {
             padding_bottom: 4.0,
             indent: 0.0,
 
-            // Colors (default dark theme)
-            color_primary: 0x464647,    // Border color
-            color_secondary: 0x3a3a3a,  // Subtle border
-            color_background: 0x2a2a2a, // Selected bg
-            color_text: 0x808080,       // Muted text
+            // Color roles
+            color_primary: SeparatorColorRole::UiBorder,
+            color_secondary: SeparatorColorRole::UiBorderSubtle,
+            color_background: SeparatorColorRole::UiSurface,
+            color_text: SeparatorColorRole::TextMuted,
 
             // Typography
             font_size: 11.0,
@@ -259,4 +306,3 @@ impl Default for SeparatorConfig {
 // ============================================================================
 // SeparatorStyle Implementation
 // ============================================================================
-

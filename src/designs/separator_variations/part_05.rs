@@ -4,6 +4,7 @@
 
 /// Categories for grouping separator styles.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[allow(dead_code)]
 pub enum SeparatorCategory {
     /// Line-based separators using horizontal rules
     LineBased,
@@ -25,6 +26,7 @@ pub enum SeparatorCategory {
 
 impl SeparatorCategory {
     /// Get the display name for this category.
+    #[allow(dead_code)]
     pub fn name(&self) -> &'static str {
         match self {
             SeparatorCategory::LineBased => "Line-Based",
@@ -39,6 +41,7 @@ impl SeparatorCategory {
     }
 
     /// Get all separator styles in this category.
+    #[allow(dead_code)]
     pub fn styles(&self) -> Vec<SeparatorStyle> {
         SeparatorStyle::all()
             .iter()
@@ -147,6 +150,10 @@ mod tests {
         assert!(config.line_thickness >= 0.5 && config.line_thickness <= 4.0);
         assert!(config.padding_x > 0.0);
         assert!(config.opacity >= 0.0 && config.opacity <= 1.0);
+        assert_eq!(config.color_primary, SeparatorColorRole::UiBorder);
+        assert_eq!(config.color_secondary, SeparatorColorRole::UiBorderSubtle);
+        assert_eq!(config.color_background, SeparatorColorRole::UiSurface);
+        assert_eq!(config.color_text, SeparatorColorRole::TextMuted);
     }
 
     #[test]
@@ -190,5 +197,39 @@ mod tests {
         for category in categories {
             assert!(!category.name().is_empty());
         }
+    }
+
+    #[test]
+    fn test_unreferenced_in_recommendations_reports_catalog_only_styles() {
+        let unreferenced = SeparatorStyle::unreferenced_in_recommendations();
+
+        assert!(
+            !unreferenced.is_empty(),
+            "Expected at least one catalog-only style so design audits can track coverage"
+        );
+        assert!(unreferenced.contains(&SeparatorStyle::DashedLine));
+        assert!(unreferenced.contains(&SeparatorStyle::AnimatedFade));
+    }
+
+    #[test]
+    fn test_shared_default_config_pairs_reports_known_pairs() {
+        let pairs = SeparatorStyle::shared_default_config_pairs();
+
+        assert!(
+            pairs.contains(&(SeparatorStyle::DottedLine, SeparatorStyle::DashedLine)),
+            "Expected dotted and dashed styles to share baseline config"
+        );
+        assert!(
+            pairs.contains(&(SeparatorStyle::ColonPrefix, SeparatorStyle::SlashPrefix)),
+            "Expected colon and slash prefix styles to share baseline config"
+        );
+    }
+
+    #[test]
+    fn test_color_role_fallbacks_remain_stable_for_audit_visibility() {
+        assert_eq!(SeparatorColorRole::UiBorder.fallback_hex(), 0x464647);
+        assert_eq!(SeparatorColorRole::AccentWarning.fallback_hex(), 0xfbbf24);
+        assert_eq!(SeparatorColorRole::AccentTerminal.fallback_hex(), 0x00ff00);
+        assert_eq!(SeparatorColorRole::AccentNeon.fallback_hex(), 0x00ffff);
     }
 }
