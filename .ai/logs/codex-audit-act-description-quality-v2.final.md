@@ -1,4 +1,5 @@
 # Action Label/Description Audit
+Generated: 2026-02-07 (agent `codex-audit-act-description-quality-v2`)
 
 ## Scope
 - `src/actions/builders/script_context.rs`
