@@ -210,6 +210,10 @@ pub enum TilePosition {
 
     /// Fullscreen (covers entire display)
     Fullscreen,
+    /// Move to the next display (multi-display routing handled elsewhere)
+    NextDisplay,
+    /// Move to the previous display (multi-display routing handled elsewhere)
+    PreviousDisplay,
 }
 // ============================================================================
 // Helper Functions

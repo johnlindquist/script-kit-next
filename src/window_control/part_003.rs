@@ -192,7 +192,9 @@ fn calculate_tile_bounds(display: &Bounds, position: TilePosition) -> Bounds {
             }
         }
 
-        TilePosition::Fullscreen => *display,
+        TilePosition::Fullscreen | TilePosition::NextDisplay | TilePosition::PreviousDisplay => {
+            *display
+        }
     }
 }
 // ============================================================================
@@ -283,6 +285,16 @@ mod tests {
         let bounds = calculate_tile_bounds(&display, TilePosition::Fullscreen);
 
         assert_eq!(bounds, display);
+    }
+
+    #[test]
+    fn test_calculate_tile_bounds_display_navigation_stubs_return_display() {
+        let display = Bounds::new(0, 25, 1920, 1055);
+        let next_display = calculate_tile_bounds(&display, TilePosition::NextDisplay);
+        let previous_display = calculate_tile_bounds(&display, TilePosition::PreviousDisplay);
+
+        assert_eq!(next_display, display);
+        assert_eq!(previous_display, display);
     }
 
     #[test]
