@@ -21,9 +21,6 @@ pub struct ChatPrompt {
     pub(super) conversation_turns_dirty: bool,
     pub(super) streaming_message_id: Option<String>,
     pub(super) last_copied_response: Option<String>,
-    // Actions menu state
-    pub(super) actions_menu_open: bool,
-    pub(super) actions_menu_selected: usize,
     // Database persistence
     pub(super) save_history: bool,
     // Built-in AI provider support (for inline chat without SDK)
@@ -68,6 +65,7 @@ pub struct ChatPrompt {
 }
 
 impl ChatPrompt {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: String,
         placeholder: Option<String>,
@@ -106,8 +104,6 @@ impl ChatPrompt {
             conversation_turns_dirty: true,
             streaming_message_id: None,
             last_copied_response: None,
-            actions_menu_open: false,
-            actions_menu_selected: 0,
             save_history: true, // Default to saving
             // Built-in AI fields (disabled by default)
             provider_registry: None,

@@ -43,6 +43,9 @@ mod streaming;
 mod tests;
 mod types;
 
+#[cfg(test)]
+pub(crate) use tests::chat_tests;
+
 use self::types::{
     build_conversation_turns, default_conversation_starters, next_chat_scroll_follow_state,
     next_reveal_boundary, resolve_chat_input_key_action, resolve_setup_card_key,
@@ -51,7 +54,7 @@ use self::types::{
 
 pub use prompt::ChatPrompt;
 pub use types::{
-    default_models, ChatAction, ChatClaudeCodeCallback, ChatConfigureCallback,
-    ChatContinueCallback, ChatErrorType, ChatEscapeCallback, ChatModel, ChatRetryCallback,
-    ChatShowActionsCallback, ChatSubmitCallback, ConversationStarter, ConversationTurn,
+    default_models, ChatClaudeCodeCallback, ChatConfigureCallback, ChatContinueCallback,
+    ChatErrorType, ChatEscapeCallback, ChatModel, ChatRetryCallback, ChatShowActionsCallback,
+    ChatSubmitCallback, ConversationStarter, ConversationTurn,
 };
