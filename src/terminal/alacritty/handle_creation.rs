@@ -85,7 +85,7 @@ impl TerminalHandle {
         let reader_stop_flag = Arc::new(AtomicBool::new(false));
         let stop_flag_clone = reader_stop_flag.clone();
 
-        if let Some(mut reader) = pty.take_reader() {
+        let reader_thread = pty.take_reader().map(|mut reader| {
             std::thread::spawn(move || {
                 let mut buffer = vec![0u8; PTY_READ_BUFFER_SIZE];
                 loop {
@@ -114,8 +114,8 @@ impl TerminalHandle {
                     }
                 }
                 trace!("PTY reader thread exiting");
-            });
-        }
+            })
+        });
 
         let mut handle = Self {
             state,
@@ -126,6 +126,7 @@ impl TerminalHandle {
             rows,
             pty_output_rx,
             reader_stop_flag,
+            reader_thread,
         };
 
         if let Some(cmd) = cmd {

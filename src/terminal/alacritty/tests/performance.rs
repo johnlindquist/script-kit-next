@@ -69,6 +69,10 @@ fn test_perf_constants_unchanged() {
         "DEFAULT_SCROLLBACK_LINES changed!"
     );
     assert_eq!(PTY_READ_BUFFER_SIZE, 4096, "PTY_READ_BUFFER_SIZE changed!");
+    assert_eq!(
+        MAX_PROCESS_BYTES_PER_TICK, 1_048_576,
+        "MAX_PROCESS_BYTES_PER_TICK changed!"
+    );
 }
 
 #[test]
@@ -108,5 +112,26 @@ fn test_perf_selection_range_is_lazy() {
             "content() without selection should be fast, took {}ms for 100 calls",
             elapsed.as_millis()
         );
+    }
+}
+
+#[test]
+fn test_resize_clamps_zero_dimensions_to_minimum() {
+    let result = TerminalHandle::new(80, 24);
+    if let Ok(mut terminal) = result {
+        terminal
+            .resize(0, 0)
+            .expect("resize should clamp zero dimensions to 1x1");
+        assert_eq!(terminal.size(), (1, 1));
+    }
+}
+
+#[test]
+fn test_input_ignores_empty_payload() {
+    let result = TerminalHandle::new(80, 24);
+    if let Ok(mut terminal) = result {
+        terminal
+            .input(b"")
+            .expect("empty input should be a no-op success");
     }
 }

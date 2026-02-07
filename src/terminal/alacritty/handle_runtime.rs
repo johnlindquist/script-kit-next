@@ -24,12 +24,35 @@ impl TerminalHandle {
     #[instrument(level = "trace", skip(self))]
     pub fn process(&mut self) -> (bool, Vec<TerminalEvent>) {
         let mut had_output = false;
+        let mut processed_bytes = 0usize;
+        let mut pending_chunks = Vec::new();
 
-        while let Ok(data) = self.pty_output_rx.try_recv() {
-            trace!(bytes = data.len(), "Processing PTY data from channel");
+        while processed_bytes < MAX_PROCESS_BYTES_PER_TICK {
+            match self.pty_output_rx.try_recv() {
+                Ok(data) => {
+                    processed_bytes += data.len();
+                    pending_chunks.push(data);
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
+            }
+        }
+
+        if !pending_chunks.is_empty() {
             let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-            state.process_bytes(&data);
-            had_output = true;
+            for data in pending_chunks {
+                trace!(bytes = data.len(), "Processing PTY data from channel");
+                state.process_bytes(&data);
+                had_output = true;
+            }
+        }
+
+        if processed_bytes >= MAX_PROCESS_BYTES_PER_TICK {
+            trace!(
+                processed_bytes,
+                max_bytes_per_tick = MAX_PROCESS_BYTES_PER_TICK,
+                "Reached PTY processing budget for this tick"
+            );
         }
 
         let events = self.event_proxy.take_events();
@@ -47,6 +70,10 @@ impl TerminalHandle {
     /// Returns an error if writing to the PTY fails.
     #[instrument(level = "debug", skip(self, bytes), fields(bytes_len = bytes.len()))]
     pub fn input(&mut self, bytes: &[u8]) -> Result<()> {
+        if bytes.is_empty() {
+            return Ok(());
+        }
+
         self.pty
             .write_all(bytes)
             .context("Failed to write to PTY")?;
@@ -72,6 +99,14 @@ impl TerminalHandle {
     /// Returns an error if the PTY resize fails.
     #[instrument(level = "debug", skip(self), fields(cols, rows))]
     pub fn resize(&mut self, cols: u16, rows: u16) -> Result<()> {
+        let cols = cols.max(1);
+        let rows = rows.max(1);
+
+        if self.cols == cols && self.rows == rows {
+            trace!(cols, rows, "Skipping resize; dimensions unchanged");
+            return Ok(());
+        }
+
         self.pty
             .resize(cols, rows)
             .context("Failed to resize PTY")?;

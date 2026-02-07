@@ -163,8 +163,7 @@ impl Render for TerminalCommandBar {
         };
 
         let item_count = self.filtered_indices.len();
-        let content_height = (item_count as f32 * COMMAND_ITEM_HEIGHT)
-            .min(COMMAND_BAR_MAX_HEIGHT - SEARCH_INPUT_HEIGHT);
+        let content_height = Self::command_list_height(item_count);
 
         let items: Vec<_> = self
             .filtered_indices
@@ -198,7 +197,20 @@ impl Render for TerminalCommandBar {
                     .h(px(content_height))
                     .overflow_y_scroll()
                     .py(px(8.))
-                    .children(items),
+                    .when(self.filtered_indices.is_empty(), |d| {
+                        d.child(
+                            div()
+                                .h(px(COMMAND_ITEM_HEIGHT))
+                                .w_full()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .text_sm()
+                                .text_color(hint_text_color)
+                                .child("No commands match"),
+                        )
+                    })
+                    .when(!self.filtered_indices.is_empty(), |d| d.children(items)),
             )
             .child(
                 div()
@@ -245,18 +257,5 @@ impl Render for TerminalCommandBar {
                             }),
                     ),
             )
-            .when(self.filtered_indices.is_empty(), |d| {
-                d.child(
-                    div()
-                        .h(px(COMMAND_ITEM_HEIGHT))
-                        .w_full()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .text_sm()
-                        .text_color(hint_text_color)
-                        .child("No commands match"),
-                )
-            })
     }
 }

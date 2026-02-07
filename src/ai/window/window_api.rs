@@ -301,23 +301,33 @@ pub fn is_ai_window(window: &gpui::Window) -> bool {
 pub fn set_ai_search(cx: &mut App, query: &str) {
     use crate::logging;
 
-    // Queue the command and notify the window to process it in render()
-    // This avoids the need for a global Entity<AiApp> reference which caused memory leaks.
-    push_ai_command(AiCommand::SetSearch(query.to_string()));
-
-    // Notify the window to process the command
     let handle = {
         let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
         slot.lock().ok().and_then(|g| *g)
     };
+    let window_is_open = handle.is_some();
+    let command_queued = get_pending_commands()
+        .lock()
+        .ok()
+        .map(|mut commands| {
+            ai_window_queue_command_if_open(
+                &mut commands,
+                window_is_open,
+                AiCommand::SetSearch(query.to_string()),
+            )
+        })
+        .unwrap_or(false);
+
+    if !command_queued {
+        logging::log("AI", "Cannot set search - AI window not found");
+        return;
+    }
 
     if let Some(handle) = handle {
         let _ = handle.update(cx, |_root, _window, cx| {
             cx.notify();
         });
         logging::log("AI", &format!("Set AI search filter: {}", query));
-    } else {
-        logging::log("AI", "Cannot set search - AI window not found");
     }
 }
 
@@ -326,25 +336,35 @@ pub fn set_ai_search(cx: &mut App, query: &str) {
 pub fn set_ai_input(cx: &mut App, text: &str, submit: bool) {
     use crate::logging;
 
-    // Queue the command and notify the window to process it in render()
-    // This avoids the need for a global Entity<AiApp> reference which caused memory leaks.
-    push_ai_command(AiCommand::SetInput {
-        text: text.to_string(),
-        submit,
-    });
-
-    // Notify the window to process the command
     let handle = {
         let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
         slot.lock().ok().and_then(|g| *g)
     };
+    let window_is_open = handle.is_some();
+    let command_queued = get_pending_commands()
+        .lock()
+        .ok()
+        .map(|mut commands| {
+            ai_window_queue_command_if_open(
+                &mut commands,
+                window_is_open,
+                AiCommand::SetInput {
+                    text: text.to_string(),
+                    submit,
+                },
+            )
+        })
+        .unwrap_or(false);
+
+    if !command_queued {
+        logging::log("AI", "Cannot set input - AI window not open");
+        return;
+    }
 
     if let Some(handle) = handle {
         let _ = handle.update(cx, |_root, _window, cx| {
             cx.notify();
         });
-    } else {
-        logging::log("AI", "Cannot set input - AI window not open");
     }
 }
 
@@ -354,25 +374,36 @@ pub fn set_ai_input(cx: &mut App, text: &str, submit: bool) {
 pub fn set_ai_input_with_image(cx: &mut App, text: &str, image_base64: &str, submit: bool) {
     use crate::logging;
 
-    // Queue the command and notify the window to process it in render()
-    push_ai_command(AiCommand::SetInputWithImage {
-        text: text.to_string(),
-        image_base64: image_base64.to_string(),
-        submit,
-    });
-
-    // Notify the window to process the command
     let handle = {
         let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
         slot.lock().ok().and_then(|g| *g)
     };
+    let window_is_open = handle.is_some();
+    let command_queued = get_pending_commands()
+        .lock()
+        .ok()
+        .map(|mut commands| {
+            ai_window_queue_command_if_open(
+                &mut commands,
+                window_is_open,
+                AiCommand::SetInputWithImage {
+                    text: text.to_string(),
+                    image_base64: image_base64.to_string(),
+                    submit,
+                },
+            )
+        })
+        .unwrap_or(false);
+
+    if !command_queued {
+        logging::log("AI", "Cannot set input with image - AI window not open");
+        return;
+    }
 
     if let Some(handle) = handle {
         let _ = handle.update(cx, |_root, _window, cx| {
             cx.notify();
         });
-    } else {
-        logging::log("AI", "Cannot set input with image - AI window not open");
     }
 }
 

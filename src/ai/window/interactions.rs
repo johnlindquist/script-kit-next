@@ -199,6 +199,19 @@ impl AiApp {
 
     /// Delete a specific chat by ID (for sidebar delete buttons)
     pub(super) fn delete_chat_by_id(&mut self, chat_id: ChatId, cx: &mut Context<Self>) {
+        let deleted_messages = storage::get_chat_messages(&chat_id).unwrap_or_default();
+        let deleted_message_ids: Vec<String> = deleted_messages
+            .iter()
+            .map(|message| message.id.clone())
+            .collect();
+        let deleted_message_id_set: std::collections::HashSet<String> =
+            deleted_message_ids.iter().cloned().collect();
+        let deleted_image_cache_keys: std::collections::HashSet<String> = deleted_messages
+            .iter()
+            .flat_map(|message| message.images.iter())
+            .map(|image| Self::image_cache_key(&image.data))
+            .collect();
+
         if self.streaming_chat_id == Some(chat_id) {
             self.suppress_orphan_save_for_current_stream("chat_deleted");
             self.is_streaming = false;
@@ -216,6 +229,31 @@ impl AiApp {
         self.chats.retain(|c| c.id != chat_id);
         self.message_previews.remove(&chat_id);
         self.message_counts.remove(&chat_id);
+        self.chat_drafts.remove(&chat_id);
+
+        if self.pending_delete_chat_id == Some(chat_id) {
+            self.pending_delete_chat_id = None;
+        }
+        if self.renaming_chat_id == Some(chat_id) {
+            self.renaming_chat_id = None;
+        }
+        if self
+            .editing_message_id
+            .as_ref()
+            .is_some_and(|message_id| deleted_message_id_set.contains(message_id))
+        {
+            self.editing_message_id = None;
+        }
+
+        ai_window_prune_deleted_message_ui_state(
+            &mut self.collapsed_messages,
+            &mut self.expanded_messages,
+            &deleted_message_ids,
+        );
+
+        for cache_key in deleted_image_cache_keys {
+            self.image_cache.remove(&cache_key);
+        }
 
         // If we deleted the selected chat, select next
         if self.selected_chat_id == Some(chat_id) {
@@ -226,6 +264,7 @@ impl AiApp {
                 .unwrap_or_default();
             self.cache_message_images(&self.current_messages.clone());
             self.force_scroll_to_bottom();
+            self.streaming_error = None;
         }
 
         cx.notify();

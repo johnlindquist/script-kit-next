@@ -27,6 +27,8 @@ use tracing::warn;
 pub enum AgentParseError {
     #[error("frontmatter started with '---' but missing closing '---' delimiter")]
     MissingFrontmatterClosingDelimiter,
+    #[error("frontmatter YAML root must be a mapping/object")]
+    FrontmatterMustBeMapping,
     #[error("invalid frontmatter YAML: {0}")]
     InvalidFrontmatterYaml(#[from] serde_yaml::Error),
 }
@@ -37,6 +39,7 @@ pub enum AgentParseError {
 /// - `Ok(None)` when content has no frontmatter
 /// - `Ok(Some(...))` when frontmatter is present and valid
 /// - `Err(...)` when frontmatter delimiters/YAML are malformed
+///
 /// Frontmatter must:
 /// - Start with `---` on the first line (after optional whitespace)
 /// - End with `---` on its own line
@@ -50,28 +53,90 @@ pub enum AgentParseError {
 /// ---
 /// ```
 pub fn parse_frontmatter(content: &str) -> Result<Option<AgentFrontmatter>, AgentParseError> {
-    let trimmed = content.trim_start();
+    let trimmed = content.trim_start_matches(|c: char| c.is_whitespace() || c == '\u{feff}');
+    let (opening_line, remaining_after_opening, opening_consumed) = split_first_line(trimmed);
 
-    // Must start with ---
-    if !trimmed.starts_with("---") {
+    // Must start with a standalone --- delimiter line
+    if opening_line.trim_end() != "---" {
         return Ok(None);
     }
 
-    // Find closing ---
-    let after_first = &trimmed[3..];
-    let end_pos = after_first
-        .find("\n---")
-        .ok_or(AgentParseError::MissingFrontmatterClosingDelimiter)?;
-    let yaml_content = after_first[..end_pos].trim();
+    // Frontmatter must span multiple lines to include a closing delimiter
+    if opening_consumed == trimmed.len() {
+        return Err(AgentParseError::MissingFrontmatterClosingDelimiter);
+    }
+
+    // Find closing delimiter on its own line.
+    let mut cursor = remaining_after_opening;
+    let mut yaml_end_offset = 0usize;
+    let mut found_closing = false;
+
+    while !cursor.is_empty() {
+        let (line, rest, consumed) = split_first_line(cursor);
+        if line.trim_end() == "---" {
+            found_closing = true;
+            break;
+        }
+        yaml_end_offset += consumed;
+        cursor = rest;
+    }
+
+    if !found_closing {
+        return Err(AgentParseError::MissingFrontmatterClosingDelimiter);
+    }
+
+    let yaml_content = remaining_after_opening[..yaml_end_offset].trim();
 
     if yaml_content.is_empty() {
         return Ok(Some(AgentFrontmatter::default()));
     }
 
-    // Parse as generic YAML
-    let raw: HashMap<String, serde_yaml::Value> = serde_yaml::from_str(yaml_content)?;
+    // Parse as generic YAML and retain only string keys for frontmatter extraction.
+    let parsed: serde_yaml::Value = serde_yaml::from_str(yaml_content)?;
+    let mapping = parsed
+        .as_mapping()
+        .ok_or(AgentParseError::FrontmatterMustBeMapping)?;
+    let mut raw = HashMap::new();
+    for (key, value) in mapping {
+        if let Some(key_str) = key.as_str() {
+            raw.insert(key_str.to_string(), value.clone());
+        } else {
+            warn!(
+                key = ?key,
+                "Skipping non-string frontmatter key while parsing agent"
+            );
+        }
+    }
 
     Ok(Some(extract_frontmatter_fields(raw)))
+}
+
+/// Split the first line from a string, supporting `\n`, `\r\n`, and `\r`.
+///
+/// Returns: `(line_without_newline, rest_after_newline, consumed_bytes)`.
+fn split_first_line(content: &str) -> (&str, &str, usize) {
+    let bytes = content.as_bytes();
+    for (idx, byte) in bytes.iter().enumerate() {
+        match byte {
+            b'\n' => {
+                let line_end = if idx > 0 && bytes[idx - 1] == b'\r' {
+                    idx - 1
+                } else {
+                    idx
+                };
+                return (&content[..line_end], &content[idx + 1..], idx + 1);
+            }
+            b'\r' => {
+                if idx + 1 < bytes.len() && bytes[idx + 1] == b'\n' {
+                    return (&content[..idx], &content[idx + 2..], idx + 2);
+                }
+                return (&content[..idx], &content[idx + 1..], idx + 1);
+            }
+            _ => {}
+        }
+    }
+
+    (content, "", content.len())
 }
 
 /// Extract frontmatter fields from raw YAML
@@ -418,6 +483,66 @@ Prompt"#;
             parse_frontmatter(content),
             Err(AgentParseError::InvalidFrontmatterYaml(_))
         ));
+    }
+
+    #[test]
+    fn test_parse_frontmatter_with_utf8_bom() {
+        let content = "\u{feff}---\n_sk_name: \"Unicode Agent\"\n---\nPrompt";
+        let fm = parse_frontmatter_ok(content);
+        assert_eq!(fm.sk_name, Some("Unicode Agent".to_string()));
+    }
+
+    #[test]
+    fn test_parse_frontmatter_requires_standalone_opening_delimiter() {
+        let content = r#"---not-frontmatter
+model: sonnet
+---
+Prompt"#;
+        assert!(matches!(parse_frontmatter(content), Ok(None)));
+    }
+
+    #[test]
+    fn test_parse_frontmatter_requires_standalone_closing_delimiter() {
+        let content = r#"---
+_sk_name: "Broken"
+---not-a-delimiter
+Prompt"#;
+        assert!(matches!(
+            parse_frontmatter(content),
+            Err(AgentParseError::MissingFrontmatterClosingDelimiter)
+        ));
+    }
+
+    #[test]
+    fn test_parse_frontmatter_non_mapping_yaml_returns_error() {
+        let content = r#"---
+- one
+- two
+---
+Prompt"#;
+        assert!(matches!(
+            parse_frontmatter(content),
+            Err(AgentParseError::FrontmatterMustBeMapping)
+        ));
+    }
+
+    #[test]
+    fn test_parse_frontmatter_ignores_non_string_keys() {
+        let content = r#"---
+123: ignored
+model: sonnet
+---
+Prompt"#;
+        let fm = parse_frontmatter_ok(content);
+        assert_eq!(fm.raw.get("model").and_then(|v| v.as_str()), Some("sonnet"));
+        assert!(!fm.raw.contains_key("123"));
+    }
+
+    #[test]
+    fn test_parse_frontmatter_crlf_with_trailing_delimiter_spaces() {
+        let content = "---\r\n_sk_name: \"CRLF Agent\"\r\n---   \r\nPrompt";
+        let fm = parse_frontmatter_ok(content);
+        assert_eq!(fm.sk_name, Some("CRLF Agent".to_string()));
     }
 
     #[test]
