@@ -96,6 +96,20 @@ fn test_select_prompt_submit_uses_focused_item_in_single_mode_when_none_toggled(
 }
 
 #[test]
+fn test_select_prompt_submit_prefers_focused_item_in_single_mode_when_selection_exists() {
+    let selected_indices = vec![2];
+    let resolved = resolve_submission_indices(false, &selected_indices, Some(4));
+    assert_eq!(resolved, vec![4]);
+}
+
+#[test]
+fn test_select_prompt_submit_uses_explicit_selection_in_multiple_mode() {
+    let selected_indices = vec![2, 7];
+    let resolved = resolve_submission_indices(true, &selected_indices, Some(4));
+    assert_eq!(resolved, vec![2, 7]);
+}
+
+#[test]
 fn test_select_prompt_cmd_a_toggles_only_when_all_filtered_items_are_selected() {
     let mut selected_indices = std::collections::HashSet::from([1, 7]);
     let filtered_indices = vec![1, 2, 3];
@@ -147,8 +161,10 @@ fn test_select_prompt_resolves_search_box_bg_by_design_variant() {
     let mut theme = theme::Theme::default();
     theme.colors.background.search_box = 0x112233;
 
-    let mut design_colors = DesignColors::default();
-    design_colors.background_secondary = 0x445566;
+    let design_colors = DesignColors {
+        background_secondary: 0x445566,
+        ..Default::default()
+    };
 
     assert_eq!(
         resolve_search_box_bg_hex(&theme, DesignVariant::Default, &design_colors),
