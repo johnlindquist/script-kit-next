@@ -1,7 +1,10 @@
 use gpui::*;
 use std::rc::Rc;
 
-use crate::components::{Button, ButtonColors, ButtonVariant};
+use crate::components::{
+    button::{BUTTON_GHOST_HEIGHT, BUTTON_GHOST_PADDING_X, BUTTON_GHOST_PADDING_Y},
+    Button, ButtonColors, ButtonVariant,
+};
 use crate::panel::{CURSOR_GAP_X, CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y, CURSOR_WIDTH};
 use crate::ui_foundation::{hstack, HexColorExt};
 
@@ -312,28 +315,44 @@ impl PromptHeader {
             // "Ask AI" text button - ghost/transparent style
             .child(
                 div()
-                    .px(rems(0.375))
-                    .py(rems(0.125))
-                    .rounded(px(4.))
+                    .min_h(px(BUTTON_GHOST_HEIGHT))
+                    .px(px(BUTTON_GHOST_PADDING_X))
+                    .py(px(BUTTON_GHOST_PADDING_Y))
+                    .rounded(px(6.))
                     .bg(rgba(transparent_bg))
                     .cursor_pointer()
-                    .text_size(px(colors.supporting_font_size))
+                    .text_sm()
+                    .font_weight(FontWeight::MEDIUM)
+                    .font_family(crate::list_item::FONT_SYSTEM_UI)
                     .text_color(colors.text_muted.to_rgb())
+                    .hover(move |style| {
+                        style
+                            .bg(rgba(colors.hover_overlay))
+                            .text_color(colors.text_primary.to_rgb())
+                    })
                     .child("Ask AI"),
             )
             // "Tab" badge button - ghost/transparent style with border
             .child(
                 div()
                     .flex_shrink_0()
-                    .px(rems(0.375))
-                    .py(rems(0.125))
-                    .rounded(px(4.))
+                    .min_h(px(BUTTON_GHOST_HEIGHT))
+                    .px(px(BUTTON_GHOST_PADDING_X))
+                    .py(px(BUTTON_GHOST_PADDING_Y))
+                    .rounded(px(6.))
                     .bg(rgba(transparent_bg))
                     .cursor_pointer()
                     .border_1()
                     .border_color(colors.border.to_rgb())
-                    .text_size(px(colors.caption_font_size))
+                    .text_sm()
+                    .font_weight(FontWeight::MEDIUM)
+                    .font_family(crate::list_item::FONT_SYSTEM_UI)
                     .text_color(colors.text_muted.to_rgb())
+                    .hover(move |style| {
+                        style
+                            .bg(rgba(colors.hover_overlay))
+                            .text_color(colors.text_primary.to_rgb())
+                    })
                     .child("Tab"),
             )
     }
