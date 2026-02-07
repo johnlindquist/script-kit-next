@@ -268,7 +268,7 @@
         let info = ScriptInfo::new("test", "/test.ts").with_frecency(true, Some("/test.ts".into()));
         let actions = get_script_context_actions(&info);
         let rr = actions.iter().find(|a| a.id == "reset_ranking").unwrap();
-        assert!(rr.shortcut.is_none());
+        assert_eq!(rr.shortcut.as_deref(), Some("⌃⌘R"));
     }
 
     // =========================================================================
@@ -443,4 +443,3 @@
         let pi = actions.iter().find(|a| a.id == "paste_image").unwrap();
         assert_eq!(pi.icon, Some(IconName::File));
     }
-
