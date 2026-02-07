@@ -2,6 +2,11 @@ use gpui::*;
 use std::rc::Rc;
 
 use super::{
+    types::{
+        BUTTON_CONTENT_GAP_PX, BUTTON_ICON_PADDING_X, BUTTON_ICON_PADDING_Y,
+        BUTTON_PRIMARY_PADDING_X, BUTTON_PRIMARY_PADDING_Y, BUTTON_RADIUS_PX,
+        BUTTON_SHORTCUT_MARGIN_LEFT_PX,
+    },
     ButtonColors, ButtonVariant, BUTTON_GHOST_HEIGHT, BUTTON_GHOST_PADDING_X,
     BUTTON_GHOST_PADDING_Y,
 };
@@ -118,11 +123,18 @@ impl Button {
         self
     }
 
-    fn resolve_element_id(id: Option<&SharedString>, label: &SharedString) -> SharedString {
+    pub(crate) fn resolve_element_id(
+        id: Option<&SharedString>,
+        label: &SharedString,
+    ) -> SharedString {
         id.cloned().unwrap_or_else(|| label.clone())
     }
 
-    fn should_show_pointer(has_click_handler: bool, disabled: bool, loading: bool) -> bool {
+    pub(crate) fn should_show_pointer(
+        has_click_handler: bool,
+        disabled: bool,
+        loading: bool,
+    ) -> bool {
         has_click_handler && !disabled && !loading
     }
 
@@ -133,7 +145,7 @@ impl Button {
         )
     }
 
-    fn can_activate_from_key(
+    pub(crate) fn can_activate_from_key(
         key: &str,
         has_click_handler: bool,
         disabled: bool,
@@ -143,7 +155,7 @@ impl Button {
             && Self::is_activation_key(key)
     }
 
-    fn resolve_focus_state(explicit_focus: bool, runtime_focus: Option<bool>) -> bool {
+    pub(crate) fn resolve_focus_state(explicit_focus: bool, runtime_focus: Option<bool>) -> bool {
         runtime_focus.unwrap_or(explicit_focus)
     }
 }
@@ -241,20 +253,17 @@ impl RenderOnce for Button {
                 .flex()
                 .items_center()
                 .text_xs()
-                .ml(rems(0.25))
+                .ml(px(BUTTON_SHORTCUT_MARGIN_LEFT_PX))
                 .child(sc)
         } else {
             div()
         };
 
-        // Determine padding based on variant (rem-relative for consistent scaling)
-        let (px_val, py_val) = match variant {
-            ButtonVariant::Primary => (rems(0.75), rems(0.375)), // 12px, 6px at 16px base
-            ButtonVariant::Ghost => (
-                rems(BUTTON_GHOST_PADDING_X / 16.0),
-                rems(BUTTON_GHOST_PADDING_Y / 16.0),
-            ),
-            ButtonVariant::Icon => (rems(0.375), rems(0.375)), // 6px, 6px at 16px base
+        // Determine padding based on variant using canonical button spacing tokens.
+        let (padding_x, padding_y) = match variant {
+            ButtonVariant::Primary => (BUTTON_PRIMARY_PADDING_X, BUTTON_PRIMARY_PADDING_Y),
+            ButtonVariant::Ghost => (BUTTON_GHOST_PADDING_X, BUTTON_GHOST_PADDING_Y),
+            ButtonVariant::Icon => (BUTTON_ICON_PADDING_X, BUTTON_ICON_PADDING_Y),
         };
 
         // Build the button element
@@ -264,11 +273,11 @@ impl RenderOnce for Button {
             .flex_row()
             .items_center()
             .justify_center()
-            .gap(rems(0.125))
-            .px(px_val)
-            .py(py_val)
+            .gap(px(BUTTON_CONTENT_GAP_PX))
+            .px(px(padding_x))
+            .py(px(padding_y))
             .min_h(px(BUTTON_GHOST_HEIGHT))
-            .rounded(px(6.))
+            .rounded(px(BUTTON_RADIUS_PX))
             .bg(bg_color)
             .text_color(text_color)
             .text_sm()
