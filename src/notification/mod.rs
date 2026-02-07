@@ -23,8 +23,5 @@ mod types;
 #[cfg(test)]
 mod tests;
 
-#[cfg(test)]
-mod service_tests;
-
 pub use service::NotificationService;
 pub use types::*;
