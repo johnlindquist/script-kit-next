@@ -1,3 +1,7 @@
+fn app_shell_footer_colors(theme: &crate::theme::Theme) -> PromptFooterColors {
+    PromptFooterColors::from_theme(theme)
+}
+
 impl ScriptListApp {
     fn render_script_list(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let render_list_start = std::time::Instant::now();
@@ -853,11 +857,10 @@ impl ScriptListApp {
         let text_primary = color_resolver.primary_text_color();
         let font_family = typography_resolver.primary_font();
 
-        // Extract footer colors BEFORE render_preview_panel (borrow checker)
-        let footer_accent = color_resolver.primary_accent();
-        let footer_text_muted = color_resolver.empty_text_color();
-        let footer_border = color_resolver.border_color();
-        let footer_background = color_resolver.selection_background();
+        // Extract footer colors BEFORE render_preview_panel (borrow checker).
+        // Footer uses theme tokens directly so app-shell chrome stays consistent
+        // across design variants (avoids design-token backgrounds like pure white).
+        let footer_colors = app_shell_footer_colors(&self.theme);
 
         // NOTE: No .bg() here - Root provides vibrancy background for ALL content
         // This ensures main menu, AI chat, and all prompts have consistent styling
@@ -1198,14 +1201,6 @@ impl ScriptListApp {
             let handle_run = cx.entity().downgrade();
             let handle_actions = cx.entity().downgrade();
 
-            let footer_colors = PromptFooterColors {
-                accent: footer_accent,
-                text_muted: footer_text_muted,
-                border: footer_border,
-                background: footer_background,
-                is_light_mode: !self.theme.is_dark_mode(),
-            };
-
             // Get the selected result for primary label and type indicator
             let footer_selected =
                 grouped_items
@@ -1285,5 +1280,21 @@ impl ScriptListApp {
 
         main_div.into_any_element()
 
+    }
+}
+
+#[cfg(test)]
+mod render_script_list_footer_tests {
+    use super::app_shell_footer_colors;
+
+    #[test]
+    fn test_app_shell_footer_colors_use_theme_accent_tokens() {
+        let theme = crate::theme::Theme::default();
+        let colors = app_shell_footer_colors(&theme);
+
+        assert_eq!(colors.accent, theme.colors.accent.selected);
+        assert_eq!(colors.background, theme.colors.accent.selected_subtle);
+        assert_eq!(colors.border, theme.colors.ui.border);
+        assert_eq!(colors.text_muted, theme.colors.text.muted);
     }
 }
