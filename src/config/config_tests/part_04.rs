@@ -51,6 +51,27 @@ fn test_config_get_process_limits_default() {
 }
 
 #[test]
+fn test_config_get_process_limits_uses_default_interval_when_zero() {
+    let config = Config {
+        process_limits: Some(ProcessLimits {
+            max_memory_mb: Some(1024),
+            max_runtime_seconds: Some(60),
+            health_check_interval_ms: 0,
+        }),
+        ..Config::default()
+    };
+
+    let limits = config.get_process_limits();
+
+    assert_eq!(limits.max_memory_mb, Some(1024));
+    assert_eq!(limits.max_runtime_seconds, Some(60));
+    assert_eq!(
+        limits.health_check_interval_ms,
+        DEFAULT_HEALTH_CHECK_INTERVAL_MS
+    );
+}
+
+#[test]
 fn test_config_deserialization_with_process_limits() {
     let json = r#"{
         "hotkey": {
