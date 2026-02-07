@@ -1,6 +1,7 @@
 use super::*;
 
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod tests {
     use super::*;
 
@@ -72,9 +73,12 @@ mod tests {
     }
 
     #[test]
-    fn test_env_key_action_handles_return_and_esc_aliases() {
+    fn test_env_key_action_handles_enter_and_escape_aliases_case_insensitively() {
         assert_eq!(env_key_action("return"), Some(EnvKeyAction::Submit));
+        assert_eq!(env_key_action("Enter"), Some(EnvKeyAction::Submit));
+        assert_eq!(env_key_action("escape"), Some(EnvKeyAction::Cancel));
         assert_eq!(env_key_action("esc"), Some(EnvKeyAction::Cancel));
+        assert_eq!(env_key_action("ESC"), Some(EnvKeyAction::Cancel));
         assert_eq!(env_key_action("tab"), None);
     }
 }

@@ -1,6 +1,7 @@
 use super::*;
 
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod tests {
     use super::*;
 
@@ -140,5 +141,51 @@ mod tests {
         assert!(err.contains("letters, numbers, and hyphens"));
 
         assert!(TemplatePrompt::validate_input_value(&input, "my-cool-script").is_ok());
+    }
+
+    #[test]
+    fn test_validate_required_inputs_reject_empty_trimmed_values() {
+        let input = TemplateInput {
+            name: "script_name".to_string(),
+            label: "Script Name".to_string(),
+            placeholder: "my-script-name".to_string(),
+            group: "Naming".to_string(),
+            required: true,
+        };
+
+        let err = TemplatePrompt::validate_input_value(&input, "   ")
+            .expect_err("required inputs should reject empty trimmed values");
+        assert_eq!(err, "Script Name is required");
+    }
+
+    #[test]
+    fn test_validate_optional_non_name_inputs_allow_empty_values() {
+        let input = TemplateInput {
+            name: "description".to_string(),
+            label: "Description".to_string(),
+            placeholder: "What this template creates".to_string(),
+            group: "Metadata".to_string(),
+            required: false,
+        };
+
+        assert!(TemplatePrompt::validate_input_value(&input, "").is_ok());
+        assert!(TemplatePrompt::validate_input_value(&input, "   ").is_ok());
+    }
+
+    #[test]
+    fn test_validate_slug_like_values_reject_invalid_hyphen_patterns() {
+        let input = TemplateInput {
+            name: "extension_name".to_string(),
+            label: "Scriptlet Bundle Name".to_string(),
+            placeholder: "my-scriptlet-bundle".to_string(),
+            group: "Naming".to_string(),
+            required: true,
+        };
+
+        for invalid in ["-starts", "ends-", "double--hyphen"] {
+            let err = TemplatePrompt::validate_input_value(&input, invalid)
+                .expect_err("invalid slug-like values should fail validation");
+            assert!(err.contains("letters, numbers, and hyphens"));
+        }
     }
 }
