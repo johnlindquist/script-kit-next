@@ -1,5 +1,6 @@
 impl SeparatorStyle {
     /// Get the category this separator belongs to.
+    #[allow(dead_code)]
     pub fn category(&self) -> SeparatorCategory {
         match self {
             SeparatorStyle::SolidLine
@@ -54,6 +55,7 @@ impl SeparatorStyle {
     }
 
     /// Get the default configuration for this separator style.
+    #[allow(dead_code)]
     pub fn default_config(&self) -> SeparatorConfig {
         let base = SeparatorConfig::default();
 
@@ -119,7 +121,7 @@ impl SeparatorStyle {
                 bold: true,
                 uppercase: true,
                 letter_spacing: 2.0,
-                color_text: 0xa0a0a0,
+                color_text: SeparatorColorRole::TextSecondary,
                 ..base
             },
 
@@ -157,14 +159,14 @@ impl SeparatorStyle {
             SeparatorStyle::ArrowPointer => SeparatorConfig {
                 show_decorations: true,
                 decoration_gap: 8.0,
-                color_primary: 0xfbbf24, // Accent color
+                color_primary: SeparatorColorRole::AccentWarning,
                 ..base
             },
 
             SeparatorStyle::StarDivider => SeparatorConfig {
                 show_decorations: true,
                 decoration_gap: 12.0,
-                color_primary: 0xfbbf24, // Accent color
+                color_primary: SeparatorColorRole::AccentWarning,
                 ..base
             },
 
@@ -197,20 +199,20 @@ impl SeparatorStyle {
 
             // Background configurations
             SeparatorStyle::SubtleFill => SeparatorConfig {
-                color_background: 0x2a2a2a,
+                color_background: SeparatorColorRole::UiSurface,
                 padding_x: 12.0,
                 border_radius: 0.0,
                 ..base
             },
 
             SeparatorStyle::GradientFade => SeparatorConfig {
-                color_background: 0x2a2a2a,
+                color_background: SeparatorColorRole::UiSurface,
                 opacity: 0.6,
                 ..base
             },
 
             SeparatorStyle::FrostedPanel => SeparatorConfig {
-                color_background: 0x3a3a3a,
+                color_background: SeparatorColorRole::UiSurfaceElevated,
                 border_radius: 6.0,
                 padding_x: 12.0,
                 shadow_blur: 4.0,
@@ -219,7 +221,7 @@ impl SeparatorStyle {
             },
 
             SeparatorStyle::PillBadge => SeparatorConfig {
-                color_background: 0x3a3a3a,
+                color_background: SeparatorColorRole::UiSurfaceElevated,
                 border_radius: 12.0,
                 padding_x: 16.0,
                 font_size: 10.0,
@@ -265,32 +267,32 @@ impl SeparatorStyle {
             SeparatorStyle::AsciiBox => SeparatorConfig {
                 height: 28.0,
                 font_size: 12.0,
-                color_text: 0x00ff00, // Terminal green
-                color_primary: 0x00ff00,
+                color_text: SeparatorColorRole::AccentTerminal,
+                color_primary: SeparatorColorRole::AccentTerminal,
                 ..base
             },
 
             SeparatorStyle::BoxDrawing => SeparatorConfig {
                 height: 24.0,
                 font_size: 12.0,
-                color_text: 0xcccccc,
-                color_primary: 0x808080,
+                color_text: SeparatorColorRole::TextHighContrast,
+                color_primary: SeparatorColorRole::TextMuted,
                 ..base
             },
 
             SeparatorStyle::TerminalPrompt => SeparatorConfig {
                 uppercase: false,
                 font_size: 12.0,
-                color_text: 0x00ff00,
-                color_primary: 0x00aa00,
+                color_text: SeparatorColorRole::AccentTerminal,
+                color_primary: SeparatorColorRole::AccentTerminalMuted,
                 ..base
             },
 
             SeparatorStyle::DosStyle => SeparatorConfig {
                 height: 28.0,
                 font_size: 12.0,
-                color_text: 0xaaaaaa,
-                color_primary: 0x555555,
+                color_text: SeparatorColorRole::TextPrimary,
+                color_primary: SeparatorColorRole::UiBorderMuted,
                 ..base
             },
 
@@ -307,21 +309,21 @@ impl SeparatorStyle {
             },
 
             SeparatorStyle::BlurOverlay => SeparatorConfig {
-                color_background: 0x1e1e1e,
+                color_background: SeparatorColorRole::UiSurfaceOverlay,
                 opacity: 0.7,
                 border_radius: 4.0,
                 ..base
             },
 
             SeparatorStyle::NeonGlow => SeparatorConfig {
-                color_primary: 0x00ffff, // Cyan glow
-                color_text: 0x00ffff,
+                color_primary: SeparatorColorRole::AccentNeon,
+                color_text: SeparatorColorRole::AccentNeon,
                 shadow_blur: 8.0,
                 ..base
             },
 
             SeparatorStyle::GlassCard => SeparatorConfig {
-                color_background: 0x3a3a3a,
+                color_background: SeparatorColorRole::UiSurfaceElevated,
                 border_radius: 8.0,
                 shadow_blur: 12.0,
                 shadow_offset_y: 4.0,
@@ -332,7 +334,7 @@ impl SeparatorStyle {
             SeparatorStyle::FloatingLabel => SeparatorConfig {
                 shadow_blur: 6.0,
                 shadow_offset_y: 2.0,
-                color_background: 0x2a2a2a,
+                color_background: SeparatorColorRole::UiSurface,
                 border_radius: 4.0,
                 ..base
             },
