@@ -160,6 +160,20 @@ pub enum TilePosition {
     /// Bottom-right quadrant
     BottomRight,
 
+    // Sixth positions (top/bottom row split into thirds)
+    /// Top-left sixth (left third of top half)
+    TopLeftSixth,
+    /// Top-center sixth (center third of top half)
+    TopCenterSixth,
+    /// Top-right sixth (right third of top half)
+    TopRightSixth,
+    /// Bottom-left sixth (left third of bottom half)
+    BottomLeftSixth,
+    /// Bottom-center sixth (center third of bottom half)
+    BottomCenterSixth,
+    /// Bottom-right sixth (right third of bottom half)
+    BottomRightSixth,
+
     // Horizontal thirds positions
     /// Left third of the screen
     LeftThird,

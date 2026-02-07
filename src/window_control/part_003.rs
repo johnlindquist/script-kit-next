@@ -60,6 +60,44 @@ fn calculate_tile_bounds(display: &Bounds, position: TilePosition) -> Bounds {
             height: half_height,
         },
 
+        // Sixth positions (top/bottom row split into thirds)
+        TilePosition::TopLeftSixth => Bounds {
+            x: display.x,
+            y: display.y,
+            width: third_width,
+            height: half_height,
+        },
+        TilePosition::TopCenterSixth => Bounds {
+            x: display.x + third_width as i32,
+            y: display.y,
+            width: third_width,
+            height: half_height,
+        },
+        TilePosition::TopRightSixth => Bounds {
+            x: display.x + two_thirds_width as i32,
+            y: display.y,
+            width: third_width,
+            height: half_height,
+        },
+        TilePosition::BottomLeftSixth => Bounds {
+            x: display.x,
+            y: display.y + half_height as i32,
+            width: third_width,
+            height: half_height,
+        },
+        TilePosition::BottomCenterSixth => Bounds {
+            x: display.x + third_width as i32,
+            y: display.y + half_height as i32,
+            width: third_width,
+            height: half_height,
+        },
+        TilePosition::BottomRightSixth => Bounds {
+            x: display.x + two_thirds_width as i32,
+            y: display.y + half_height as i32,
+            width: third_width,
+            height: half_height,
+        },
+
         // Horizontal thirds positions
         TilePosition::LeftThird => Bounds {
             x: display.x,
@@ -214,6 +252,28 @@ mod tests {
         assert_eq!(bounds.x, 0);
         assert_eq!(bounds.y, 25);
         assert_eq!(bounds.width, 960);
+        assert_eq!(bounds.height, 540);
+    }
+
+    #[test]
+    fn test_calculate_tile_bounds_top_center_sixth() {
+        let display = Bounds::new(0, 25, 1920, 1080);
+        let bounds = calculate_tile_bounds(&display, TilePosition::TopCenterSixth);
+
+        assert_eq!(bounds.x, 640);
+        assert_eq!(bounds.y, 25);
+        assert_eq!(bounds.width, 640);
+        assert_eq!(bounds.height, 540);
+    }
+
+    #[test]
+    fn test_calculate_tile_bounds_bottom_right_sixth() {
+        let display = Bounds::new(0, 25, 1920, 1080);
+        let bounds = calculate_tile_bounds(&display, TilePosition::BottomRightSixth);
+
+        assert_eq!(bounds.x, 1280);
+        assert_eq!(bounds.y, 565);
+        assert_eq!(bounds.width, 640);
         assert_eq!(bounds.height, 540);
     }
 
