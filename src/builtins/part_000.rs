@@ -96,6 +96,8 @@ pub enum AiCommandType {
     OpenAi,
     NewConversation,
     ClearConversation,
+    /// Generate a new Script Kit script from the main prompt text
+    GenerateScript,
     /// Send a screenshot of the entire screen to AI Chat
     SendScreenToAi,
     /// Send a screenshot of the focused window to AI Chat
@@ -157,6 +159,13 @@ pub enum UtilityCommandType {
     /// Terminate all actively running Script Kit child processes
     StopAllProcesses,
 }
+/// Kit Store command types for browsing and managing kits
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KitStoreCommandType {
+    BrowseKits,
+    InstalledKits,
+    UpdateAllKits,
+}
 /// Menu bar action details for executing menu commands
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MenuBarActionInfo {
@@ -185,6 +194,8 @@ pub enum BuiltInGroup {
 pub enum BuiltInFeature {
     /// Clipboard history viewer/manager
     ClipboardHistory,
+    /// Favorites list and quick access
+    Favorites,
     /// Application launcher for opening installed apps (legacy, apps now in main search)
     AppLauncher,
     /// Individual application entry (for future use when apps appear in search)
@@ -197,6 +208,8 @@ pub enum BuiltInFeature {
     AiChat,
     /// Notes window for quick notes and scratchpad
     Notes,
+    /// Quick links manager and URL launcher
+    Quicklinks,
     /// Menu bar action from the frontmost application
     MenuBarAction(MenuBarActionInfo),
 
@@ -218,6 +231,8 @@ pub enum BuiltInFeature {
     SettingsCommand(SettingsCommandType),
     /// Utility commands (scratch pad, quick terminal)
     UtilityCommand(UtilityCommandType),
+    /// Kit Store commands (browse, installed kits, update all)
+    KitStoreCommand(KitStoreCommandType),
     /// File search for navigating directories and finding files
     FileSearch,
     /// Webcam capture

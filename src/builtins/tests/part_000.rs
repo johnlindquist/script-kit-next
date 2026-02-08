@@ -159,6 +159,7 @@
         );
         assert_eq!(BuiltInFeature::DesignGallery, BuiltInFeature::DesignGallery);
         assert_eq!(BuiltInFeature::AiChat, BuiltInFeature::AiChat);
+        assert_eq!(BuiltInFeature::Favorites, BuiltInFeature::Favorites);
         assert_ne!(
             BuiltInFeature::ClipboardHistory,
             BuiltInFeature::AppLauncher
@@ -174,6 +175,7 @@
         );
         assert_ne!(BuiltInFeature::AiChat, BuiltInFeature::ClipboardHistory);
         assert_ne!(BuiltInFeature::AiChat, BuiltInFeature::DesignGallery);
+        assert_ne!(BuiltInFeature::Favorites, BuiltInFeature::ClipboardHistory);
 
         // Test App variant
         assert_eq!(
@@ -302,6 +304,26 @@
             open_ai.unwrap().feature,
             BuiltInFeature::AiCommand(AiCommandType::OpenAi)
         );
+
+        let generate_script = entries
+            .iter()
+            .find(|e| e.id == "builtin-generate-script-with-ai");
+        assert!(
+            generate_script.is_some(),
+            "builtin-generate-script-with-ai should exist"
+        );
+        let generate_script = generate_script.unwrap();
+        assert_eq!(
+            generate_script.feature,
+            BuiltInFeature::AiCommand(AiCommandType::GenerateScript)
+        );
+        assert!(
+            generate_script
+                .keywords
+                .iter()
+                .any(|keyword| keyword.eq_ignore_ascii_case("shift")),
+            "Generate Script command should be discoverable via Shift+Tab wording"
+        );
     }
     #[test]
     fn test_get_builtin_entries_hides_preview_ai_commands() {
@@ -325,6 +347,26 @@
         assert!(
             !entries.iter().any(|e| e.id == "builtin-search-ai-presets"),
             "Preview command should be hidden from built-in entries"
+        );
+    }
+
+    #[test]
+    fn test_get_builtin_entries_includes_favorites_command() {
+        let config = BuiltInConfig::default();
+        let entries = get_builtin_entries(&config);
+
+        let favorites = entries.iter().find(|e| e.id == "builtin-favorites");
+        assert!(favorites.is_some(), "builtin-favorites should exist");
+
+        let favorites = favorites.unwrap();
+        assert_eq!(favorites.name, "Favorites");
+        assert_eq!(favorites.feature, BuiltInFeature::Favorites);
+        assert!(
+            favorites
+                .keywords
+                .iter()
+                .any(|keyword| keyword.eq_ignore_ascii_case("star")),
+            "Favorites command should be discoverable with 'star'"
         );
     }
     #[test]
