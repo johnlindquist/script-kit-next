@@ -12,6 +12,16 @@ fn render_ask_ai_hint_section() -> String {
     content[start..content.len().min(start + 2600)].to_string()
 }
 
+fn render_input_area_section() -> String {
+    let content = fs::read_to_string("src/components/prompt_header/component.rs")
+        .expect("Failed to read src/components/prompt_header/component.rs");
+
+    let start = content
+        .find("fn render_input_area")
+        .expect("render_input_area not found in prompt_header/component.rs");
+    content[start..content.len().min(start + 2600)].to_string()
+}
+
 #[test]
 fn test_prompt_header_colors_from_theme_uses_on_accent_text_token_for_logo() {
     let mut theme = Theme::default();
@@ -118,6 +128,38 @@ fn test_render_ask_ai_hint_uses_ghost_button_spacing_tokens_for_hint_buttons() {
     assert_eq!(
         ghost_radius_count, 2,
         "Expected ghost button radius token on both hint buttons. Section:\n{}",
+        section
+    );
+}
+
+#[test]
+fn test_render_input_area_uses_theme_tokens_for_input_and_placeholder_text() {
+    let section = render_input_area_section();
+
+    assert!(
+        section.contains("colors.text_muted.to_rgb()"),
+        "PromptHeader placeholder text should use text_muted theme token. Section:\n{}",
+        section
+    );
+    assert!(
+        section.contains("colors.text_primary.to_rgb()"),
+        "PromptHeader typed text should use text_primary theme token. Section:\n{}",
+        section
+    );
+}
+
+#[test]
+fn test_render_input_area_does_not_hardcode_hex_input_text_colors() {
+    let section = render_input_area_section();
+
+    assert!(
+        !section.contains("text_color(rgb(0x"),
+        "PromptHeader input should not hardcode rgb hex text colors. Section:\n{}",
+        section
+    );
+    assert!(
+        !section.contains("text_color(rgba(0x"),
+        "PromptHeader input should not hardcode rgba hex text colors. Section:\n{}",
         section
     );
 }

@@ -494,6 +494,10 @@ impl RenderOnce for PromptInput {
 mod tests {
     use super::PromptInputColors;
 
+    fn prompt_input_source() -> &'static str {
+        include_str!("prompt_input.rs")
+    }
+
     #[test]
     fn test_prompt_input_colors_default_uses_cached_theme_tokens() {
         let resolved = PromptInputColors::default();
@@ -505,5 +509,33 @@ mod tests {
         assert_eq!(resolved.accent, expected.accent);
         assert_eq!(resolved.background, expected.background);
         assert_eq!(resolved.border, expected.border);
+    }
+
+    #[test]
+    fn test_prompt_input_render_uses_theme_text_tokens_for_input_states() {
+        let source = prompt_input_source();
+
+        assert!(
+            source.contains("colors.text_muted.to_rgb()"),
+            "PromptInput placeholder text should use text_muted theme token"
+        );
+        assert!(
+            source.contains("colors.text_primary.to_rgb()"),
+            "PromptInput typed text should use text_primary theme token"
+        );
+    }
+
+    #[test]
+    fn test_prompt_input_render_does_not_hardcode_input_text_colors() {
+        let source = prompt_input_source();
+
+        assert!(
+            !source.contains("text_color(rgb(0x"),
+            "PromptInput should not hardcode hex rgb text colors"
+        );
+        assert!(
+            !source.contains("text_color(rgba(0x"),
+            "PromptInput should not hardcode hex rgba text colors"
+        );
     }
 }
