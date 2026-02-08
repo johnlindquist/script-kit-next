@@ -252,9 +252,9 @@ impl ScriptListApp {
 
         // P4: Pre-compute theme values for arg prompt - use theme for consistent styling
         let arg_list_colors = ListItemColors::from_theme(&self.theme);
-        let text_primary = design_colors.text_primary;
-        let text_muted = design_colors.text_muted;
-        let accent_color = design_colors.accent;
+        let text_primary = self.theme.colors.text.primary;
+        let text_muted = self.theme.colors.text.muted;
+        let accent_color = self.theme.colors.accent.selected;
 
         // P0: Clone data needed for uniform_list closure
         let arg_selected_index = self.arg_selected_index;
@@ -268,7 +268,7 @@ impl ScriptListApp {
                 .w_full()
                 .py(px(design_spacing.padding_xl))
                 .text_center()
-                .text_color(rgb(design_colors.text_muted))
+                .text_color(rgb(text_muted))
                 .font_family(design_typography.font_family)
                 .child("No choices match your filter · press Enter to use typed value")
                 .into_any_element()

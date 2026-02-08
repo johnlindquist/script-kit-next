@@ -130,4 +130,26 @@ mod tests {
             Some("Alpha".to_string())
         );
     }
+
+    #[test]
+    fn test_arg_prompt_input_text_uses_theme_tokens_when_rendering() {
+        let render_source = include_str!("render.rs");
+
+        assert!(
+            render_source.contains("let text_primary = self.theme.colors.text.primary;"),
+            "arg prompt text should use theme.colors.text.primary"
+        );
+        assert!(
+            render_source.contains("let text_muted = self.theme.colors.text.muted;"),
+            "arg prompt placeholder text should use theme.colors.text.muted"
+        );
+        assert!(
+            !render_source.contains("let text_primary = design_colors.text_primary;"),
+            "arg prompt text should not use design_colors.text_primary"
+        );
+        assert!(
+            !render_source.contains("let text_muted = design_colors.text_muted;"),
+            "arg prompt placeholder text should not use design_colors.text_muted"
+        );
+    }
 }
