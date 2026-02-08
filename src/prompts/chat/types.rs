@@ -161,8 +161,6 @@ pub(super) fn should_ignore_stream_reveal_update(
     active_stream_message_id != Some(streaming_message_id)
 }
 
-const CHAT_SCROLL_BOTTOM_REJOIN_BUFFER_ITEMS: usize = 3;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ChatScrollDirection {
     Up,
@@ -173,23 +171,13 @@ pub(crate) enum ChatScrollDirection {
 pub(crate) fn next_chat_scroll_follow_state(
     user_has_scrolled_up: bool,
     direction: ChatScrollDirection,
-    scroll_top_item_ix: usize,
-    total_items: usize,
+    is_at_bottom: bool,
 ) -> bool {
     match direction {
         // Upward intent means "stop following streaming output".
         ChatScrollDirection::Up => true,
-        // For multi-row transcripts, allow scroll-down near the end to rejoin auto-follow.
-        // Single-row transcripts can be a single giant markdown item; item index alone is
-        // not enough to infer bottom there, so keep manual mode until explicit rejoin.
-        ChatScrollDirection::Down
-            if user_has_scrolled_up
-                && total_items > 1
-                && scroll_top_item_ix.saturating_add(CHAT_SCROLL_BOTTOM_REJOIN_BUFFER_ITEMS)
-                    >= total_items =>
-        {
-            false
-        }
+        // Resume follow mode only once the user reaches the true bottom.
+        ChatScrollDirection::Down if user_has_scrolled_up && is_at_bottom => false,
         ChatScrollDirection::Down | ChatScrollDirection::None => user_has_scrolled_up,
     }
 }
