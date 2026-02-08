@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod app_impl_state_sync_tests {
     use super::{calculate_fallback_error_message, ScriptListApp};
+    use std::fs;
 
     #[test]
     fn test_sync_builtin_query_state_updates_query_and_selection_when_changed() {
@@ -45,5 +46,40 @@ mod app_impl_state_sync_tests {
         assert!(message.contains("2 + )"));
         assert!(message.contains("Could not evaluate expression"));
         assert!(message.contains("Check the syntax and try again"));
+    }
+
+    #[test]
+    fn test_shift_tab_routes_to_ai_script_generation_in_script_list_tab_interceptor() {
+        let startup_tab = fs::read_to_string("src/app_impl/startup_new_tab.rs")
+            .expect("Failed to read src/app_impl/startup_new_tab.rs");
+
+        assert!(
+            startup_tab.contains("if has_shift")
+                && startup_tab.contains("this.generate_script_from_ai_prompt(query, cx);"),
+            "Shift+Tab in ScriptList should route to generate_script_from_ai_prompt. \
+             Missing expected branch in startup_new_tab.rs"
+        );
+    }
+
+    #[test]
+    fn test_tab_still_routes_to_inline_ai_chat_in_script_list_tab_interceptor() {
+        let startup_tab = fs::read_to_string("src/app_impl/startup_new_tab.rs")
+            .expect("Failed to read src/app_impl/startup_new_tab.rs");
+
+        assert!(
+            startup_tab.contains("this.show_inline_ai_chat(Some(query), cx);"),
+            "Tab in ScriptList should continue routing to show_inline_ai_chat"
+        );
+    }
+
+    #[test]
+    fn test_tab_interceptor_matches_both_tab_key_variants() {
+        let startup_tab = fs::read_to_string("src/app_impl/startup_new_tab.rs")
+            .expect("Failed to read src/app_impl/startup_new_tab.rs");
+
+        assert!(
+            startup_tab.contains("matches!(event.keystroke.key.as_str(), \"tab\" | \"Tab\")"),
+            "Tab interceptor should match both tab key variants: \"tab\" and \"Tab\""
+        );
     }
 }

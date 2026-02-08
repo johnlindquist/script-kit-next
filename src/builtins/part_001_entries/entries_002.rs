@@ -61,6 +61,17 @@
     ));
 
     entries.push(BuiltInEntry::new_with_icon(
+        "builtin-generate-script-with-ai",
+        "Generate Script with AI",
+        "Generate a Script Kit script from your current prompt text",
+        vec![
+            "generate", "script", "ai", "create", "code", "typescript", "shift", "tab",
+        ],
+        BuiltInFeature::AiCommand(AiCommandType::GenerateScript),
+        "🧠",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
         "builtin-send-screen-to-ai",
         "Send Screen to AI Chat",
         "Capture the full screen and send it to AI Chat",

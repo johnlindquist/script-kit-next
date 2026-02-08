@@ -35,6 +35,7 @@
 pub(crate) mod config;
 pub(crate) mod model;
 pub(crate) mod providers;
+pub(crate) mod script_generation;
 pub(crate) mod sdk_handlers;
 pub(crate) mod session;
 pub(crate) mod storage;
@@ -44,6 +45,7 @@ pub(crate) mod window;
 pub use self::config::{DetectedKeys, ModelInfo, ProviderConfig};
 pub use self::model::{Chat, ChatId, ChatSource, Message, MessageRole};
 pub use self::providers::{AiProvider, ProviderMessage, ProviderRegistry};
+pub use self::script_generation::{generate_script_from_prompt, GeneratedScriptOutput};
 pub use self::sdk_handlers::try_handle_ai_message;
 pub use self::storage::{
     clear_all_chats, create_chat, delete_chat, get_all_chats, get_chat, get_chat_messages,

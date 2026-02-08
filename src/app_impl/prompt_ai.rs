@@ -1,4 +1,194 @@
 use super::*;
+use anyhow::{anyhow, Context as AnyhowContext, Result};
+
+#[derive(Debug, Clone, Copy)]
+enum AiScriptGenerationStage {
+    SelectModel,
+    ResolveProvider,
+    RequestCompletion,
+    ExtractScript,
+    CreateScriptFile,
+    WriteScriptFile,
+    OpenEditor,
+}
+
+impl AiScriptGenerationStage {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::SelectModel => "select_model",
+            Self::ResolveProvider => "resolve_provider",
+            Self::RequestCompletion => "request_completion",
+            Self::ExtractScript => "extract_script",
+            Self::CreateScriptFile => "create_script_file",
+            Self::WriteScriptFile => "write_script_file",
+            Self::OpenEditor => "open_editor",
+        }
+    }
+}
+
+const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You are ScriptKitScriptGenerator.
+Generate a complete Script Kit TypeScript script and return code only.
+Requirements:
+- Include metadata comments at the top:
+  // Name: <script name>
+  // Description: <short summary>
+- Include: import "@scriptkit/sdk";
+- Use idiomatic Script Kit APIs (for example await arg(), await div(), await editor()) when useful.
+- Prefer clear async/await flow and practical defaults.
+- Return a full runnable script with no extra explanation."#;
+
+fn build_ai_script_generation_user_prompt(description: &str) -> String {
+    format!(
+        "Generate a complete Script Kit script for this request:\n\n{}\n\nReturn only the TypeScript script source.",
+        description.trim()
+    )
+}
+
+fn select_default_ai_script_model(
+    registry: &crate::ai::ProviderRegistry,
+) -> Option<crate::ai::ModelInfo> {
+    let all_models = registry.get_all_models();
+    all_models
+        .iter()
+        .find(|model| model.provider.eq_ignore_ascii_case("vercel"))
+        .cloned()
+        .or_else(|| all_models.first().cloned())
+}
+
+fn extract_generated_script_source(raw_response: &str) -> Option<String> {
+    let trimmed = raw_response.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    // Prefer typed code fences first, then generic fences.
+    for fence in ["```typescript", "```ts", "```javascript", "```js", "```"] {
+        if let Some(content) = extract_first_fenced_block(trimmed, fence) {
+            return normalize_generated_script(content);
+        }
+    }
+
+    normalize_generated_script(trimmed.to_string())
+}
+
+fn extract_first_fenced_block(response: &str, fence_start: &str) -> Option<String> {
+    let start_index = response.find(fence_start)?;
+    let after_fence = &response[start_index + fence_start.len()..];
+    let after_newline = after_fence
+        .strip_prefix("\r\n")
+        .or_else(|| after_fence.strip_prefix('\n'))
+        .unwrap_or(after_fence);
+    let end_index = after_newline.find("```")?;
+    Some(after_newline[..end_index].trim().to_string())
+}
+
+fn normalize_generated_script(content: String) -> Option<String> {
+    let trimmed = content.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(format!("{trimmed}\n"))
+    }
+}
+
+fn derive_script_name_from_description(description: &str) -> String {
+    let mut slug = String::new();
+    let mut last_was_dash = false;
+
+    for ch in description.chars() {
+        let lower = ch.to_ascii_lowercase();
+        if lower.is_ascii_alphanumeric() {
+            slug.push(lower);
+            last_was_dash = false;
+        } else if !last_was_dash && !slug.is_empty() {
+            slug.push('-');
+            last_was_dash = true;
+        }
+
+        if slug.len() >= 48 {
+            break;
+        }
+    }
+
+    while slug.ends_with('-') {
+        slug.pop();
+    }
+
+    if slug.is_empty() {
+        "ai-generated-script".to_string()
+    } else {
+        slug
+    }
+}
+
+fn generate_script_via_ai_backend(
+    registry: &crate::ai::ProviderRegistry,
+    model_id: &str,
+    prompt_description: &str,
+    config: &crate::config::Config,
+) -> Result<std::path::PathBuf> {
+    let provider = registry
+        .find_provider_for_model(model_id)
+        .cloned()
+        .ok_or_else(|| {
+            anyhow!(
+                "state={} attempted=find_provider_for_model model_id={} failure=provider_not_found",
+                AiScriptGenerationStage::ResolveProvider.as_str(),
+                model_id
+            )
+        })?;
+
+    let request_messages = vec![
+        crate::ai::ProviderMessage::system(AI_SCRIPT_GENERATION_SYSTEM_PROMPT),
+        crate::ai::ProviderMessage::user(build_ai_script_generation_user_prompt(prompt_description)),
+    ];
+
+    let ai_response = provider
+        .send_message(&request_messages, model_id)
+        .with_context(|| {
+            format!(
+                "state={} attempted=send_message model_id={} provider={} failure=provider_call_failed",
+                AiScriptGenerationStage::RequestCompletion.as_str(),
+                model_id,
+                provider.provider_id()
+            )
+        })?;
+
+    let generated_script = extract_generated_script_source(&ai_response).ok_or_else(|| {
+        anyhow!(
+            "state={} attempted=extract_generated_script model_id={} failure=empty_script_response",
+            AiScriptGenerationStage::ExtractScript.as_str(),
+            model_id
+        )
+    })?;
+
+    let script_name = derive_script_name_from_description(prompt_description);
+    let script_path = crate::script_creation::create_new_script(&script_name).with_context(|| {
+        format!(
+            "state={} attempted=create_new_script name={} failure=create_script_failed",
+            AiScriptGenerationStage::CreateScriptFile.as_str(),
+            script_name
+        )
+    })?;
+
+    std::fs::write(&script_path, generated_script).with_context(|| {
+        format!(
+            "state={} attempted=write_script path={} failure=write_failed",
+            AiScriptGenerationStage::WriteScriptFile.as_str(),
+            script_path.display()
+        )
+    })?;
+
+    crate::script_creation::open_in_editor(&script_path, config).with_context(|| {
+        format!(
+            "state={} attempted=open_in_editor path={} failure=open_editor_failed",
+            AiScriptGenerationStage::OpenEditor.as_str(),
+            script_path.display()
+        )
+    })?;
+
+    Ok(script_path)
+}
 
 impl ScriptListApp {
     pub(crate) fn is_in_prompt(&self) -> bool {
@@ -274,6 +464,145 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    /// Generate a Script Kit script from a natural-language prompt using the built-in AI backend.
+    /// The generated script is saved to disk and opened in the configured editor.
+    pub fn generate_script_from_ai_prompt(
+        &mut self,
+        prompt_description: String,
+        cx: &mut Context<Self>,
+    ) {
+        let prompt_description = prompt_description.trim().to_string();
+        if prompt_description.is_empty() {
+            return;
+        }
+
+        let registry = self.cached_provider_registry.clone().unwrap_or_else(|| {
+            crate::ai::ProviderRegistry::from_environment_with_config(Some(&self.config))
+        });
+
+        if !registry.has_any_provider() {
+            self.toast_manager.push(
+                components::toast::Toast::error("No AI providers configured for script generation", &self.theme)
+                    .duration_ms(Some(5000)),
+            );
+            cx.notify();
+            return;
+        }
+
+        let selected_model = match select_default_ai_script_model(&registry) {
+            Some(model) => model,
+            None => {
+                let stage = AiScriptGenerationStage::SelectModel.as_str();
+                logging::log(
+                    "AI_SCRIPT_GEN",
+                    &format!(
+                        "state={} attempted=select_default_model failure=no_available_models",
+                        stage
+                    ),
+                );
+                self.toast_manager.push(
+                    components::toast::Toast::error(
+                        "No AI models available for script generation",
+                        &self.theme,
+                    )
+                    .duration_ms(Some(5000)),
+                );
+                cx.notify();
+                return;
+            }
+        };
+
+        let model_id = selected_model.id.clone();
+        let provider = selected_model.provider.clone();
+        let config = self.config.clone();
+        let (tx, rx) = async_channel::bounded::<std::result::Result<std::path::PathBuf, String>>(1);
+
+        logging::log(
+            "AI_SCRIPT_GEN",
+            &format!(
+                "state=queued attempted=shift_tab_script_generation model_id={} provider={} prompt_len={}",
+                model_id,
+                provider,
+                prompt_description.len()
+            ),
+        );
+        self.show_hud("Generating script with AI...".to_string(), Some(1500), cx);
+
+        std::thread::spawn(move || {
+            logging::log(
+                "AI_SCRIPT_GEN",
+                &format!(
+                    "state=running attempted=generate_script model_id={} provider={}",
+                    model_id, provider
+                ),
+            );
+
+            let generation_result =
+                generate_script_via_ai_backend(&registry, &model_id, &prompt_description, &config)
+                    .map_err(|error| error.to_string());
+
+            if tx.send_blocking(generation_result).is_err() {
+                logging::log(
+                    "AI_SCRIPT_GEN",
+                    "state=aborted attempted=send_result failure=result_channel_closed",
+                );
+            }
+        });
+
+        cx.spawn(async move |this, cx| {
+            let Ok(result) = rx.recv().await else {
+                logging::log(
+                    "AI_SCRIPT_GEN",
+                    "state=aborted attempted=recv_result failure=result_channel_closed",
+                );
+                return;
+            };
+
+            let _ = cx.update(|cx| {
+                this.update(cx, |app, cx| {
+                    match result {
+                        Ok(script_path) => {
+                            let script_name = script_path
+                                .file_name()
+                                .and_then(|name| name.to_str())
+                                .unwrap_or("generated script");
+                            logging::log(
+                                "AI_SCRIPT_GEN",
+                                &format!(
+                                    "state=completed attempted=generate_script path={}",
+                                    script_path.display()
+                                ),
+                            );
+                            app.toast_manager.push(
+                                components::toast::Toast::success(
+                                    format!("Generated and opened {}", script_name),
+                                    &app.theme,
+                                )
+                                .duration_ms(Some(3500)),
+                            );
+                            app.close_and_reset_window(cx);
+                        }
+                        Err(error) => {
+                            logging::log(
+                                "AI_SCRIPT_GEN",
+                                &format!("state=failed attempted=generate_script error={}", error),
+                            );
+                            app.toast_manager.push(
+                                components::toast::Toast::error(
+                                    format!("Failed to generate script: {}", error),
+                                    &app.theme,
+                                )
+                                .duration_ms(Some(7000)),
+                            );
+                            cx.notify();
+                        }
+                    }
+                })
+            });
+        })
+        .detach();
+    }
+
     /// Rebuild the cached provider registry in a background thread.
     /// Called after config changes (API key saved, Claude Code enabled, etc.)
     pub fn rebuild_provider_registry_async(&mut self, cx: &mut Context<Self>) {
@@ -310,5 +639,46 @@ impl ScriptListApp {
             });
         })
         .detach();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_ai_script_generation_user_prompt_includes_description() {
+        let prompt = build_ai_script_generation_user_prompt("create a weather script");
+        assert!(prompt.contains("create a weather script"));
+        assert!(prompt.contains("Script Kit script"));
+    }
+
+    #[test]
+    fn test_extract_generated_script_source_prefers_typescript_fence() {
+        let response = r#"
+Here's your script:
+```typescript
+// Name: Weather
+import "@scriptkit/sdk";
+```
+"#;
+        let extracted =
+            extract_generated_script_source(response).expect("script should be extracted");
+        assert!(extracted.contains("// Name: Weather"));
+        assert!(!extracted.contains("```"));
+    }
+
+    #[test]
+    fn test_extract_generated_script_source_falls_back_to_plain_text() {
+        let response = "// Name: Plain\nimport \"@scriptkit/sdk\";";
+        let extracted =
+            extract_generated_script_source(response).expect("script should be extracted");
+        assert_eq!(extracted, "// Name: Plain\nimport \"@scriptkit/sdk\";\n");
+    }
+
+    #[test]
+    fn test_derive_script_name_from_description_uses_fallback_for_symbols() {
+        let name = derive_script_name_from_description("@@@ !!!");
+        assert_eq!(name, "ai-generated-script");
     }
 }

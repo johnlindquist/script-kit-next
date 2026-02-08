@@ -6,9 +6,11 @@
             let app_entity = app_entity_for_tab;
             move |event, window, cx| {
                 let key = event.keystroke.key.to_lowercase();
+                let is_tab_key = matches!(event.keystroke.key.as_str(), "tab" | "Tab")
+                    || matches!(key.as_str(), "tab");
                 let has_shift = event.keystroke.modifiers.shift;
                 // Check for Tab key (no cmd/alt/ctrl modifiers, but shift is allowed)
-                if key == "tab"
+                if is_tab_key
                     && !event.keystroke.modifiers.platform
                     && !event.keystroke.modifiers.alt
                     && !event.keystroke.modifiers.control
@@ -171,20 +173,23 @@
                                 }
                             }
 
-                            // Handle Tab in ScriptList view for Ask AI feature
-                            // Shows inline ChatPrompt with built-in AI (prefers Vercel AI Gateway)
+                            // Handle Tab/Shift+Tab in ScriptList view for AI actions.
+                            // Tab opens Ask AI chat, Shift+Tab generates a script from the input text.
                             if matches!(this.current_view, AppView::ScriptList)
                                 && !this.filter_text.is_empty()
                                 && !this.show_actions_popup
-                                && !has_shift
                             {
                                 let query = this.filter_text.clone();
 
                                 // Clear filter text before switching view
                                 this.filter_text.clear();
 
-                                // Show inline AI chat with the query as initial input
-                                this.show_inline_ai_chat(Some(query), cx);
+                                if has_shift {
+                                    this.generate_script_from_ai_prompt(query, cx);
+                                } else {
+                                    // Show inline AI chat with the query as initial input
+                                    this.show_inline_ai_chat(Some(query), cx);
+                                }
 
                                 // Stop propagation so Input doesn't handle it
                                 cx.stop_propagation();

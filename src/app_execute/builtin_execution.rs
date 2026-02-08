@@ -1,3 +1,15 @@
+fn ai_open_failure_message(error: impl std::fmt::Display) -> String {
+    format!("Failed to open AI: {}", error)
+}
+
+fn favorites_loaded_message(count: usize) -> String {
+    if count == 1 {
+        "Loaded 1 favorite".to_string()
+    } else {
+        format!("Loaded {} favorites", count)
+    }
+}
+
 impl ScriptListApp {
     fn system_action_feedback_message(
         &self,
@@ -155,6 +167,42 @@ impl ScriptListApp {
                 self.focused_input = FocusedInput::MainFilter;
                 cx.notify();
             }
+            builtins::BuiltInFeature::Favorites => {
+                logging::log("EXEC", "Opening Favorites");
+
+                match crate::favorites::load_favorites() {
+                    Ok(favorites) => {
+                        if favorites.script_ids.is_empty() {
+                            self.toast_manager.push(
+                                components::toast::Toast::info(
+                                    "No favorites yet. Use Add to Favorites from an item action menu.",
+                                    &self.theme,
+                                )
+                                .duration_ms(Some(3500)),
+                            );
+                        } else {
+                            self.toast_manager.push(
+                                components::toast::Toast::info(
+                                    favorites_loaded_message(favorites.script_ids.len()),
+                                    &self.theme,
+                                )
+                                .duration_ms(Some(2500)),
+                            );
+                        }
+                    }
+                    Err(error) => {
+                        logging::log("ERROR", &format!("Failed to load favorites: {}", error));
+                        self.toast_manager.push(
+                            components::toast::Toast::error(
+                                format!("Failed to load favorites: {}", error),
+                                &self.theme,
+                            )
+                            .duration_ms(Some(5000)),
+                        );
+                    }
+                }
+                cx.notify();
+            }
             builtins::BuiltInFeature::AppLauncher => {
                 logging::log("EXEC", "Opening App Launcher");
                 // P0 FIX: Use self.apps which is already cached
@@ -286,7 +334,7 @@ impl ScriptListApp {
                             let _ = this.update(cx, |this, cx| {
                                 this.toast_manager.push(
                                     components::toast::Toast::error(
-                                        format!("Failed to open AI: {}", e),
+                                        ai_open_failure_message(&e),
                                         &this.theme,
                                     )
                                     .duration_ms(Some(5000)),
@@ -316,6 +364,17 @@ impl ScriptListApp {
                     );
                     cx.notify();
                 }
+            }
+            builtins::BuiltInFeature::Quicklinks => {
+                logging::log("EXEC", "Opening Quicklinks");
+                self.toast_manager.push(
+                    components::toast::Toast::info(
+                        "Quicklinks management is coming soon.",
+                        &self.theme,
+                    )
+                    .duration_ms(Some(3000)),
+                );
+                cx.notify();
             }
             builtins::BuiltInFeature::MenuBarAction(action) => {
                 logging::log(
@@ -540,6 +599,30 @@ impl ScriptListApp {
 
                 use builtins::AiCommandType;
 
+                // Capture prompt text before reset for Shift+Tab/script-generation flows.
+                let script_generation_prompt = if matches!(cmd_type, AiCommandType::GenerateScript)
+                {
+                    Some(self.filter_text.trim().to_string())
+                } else {
+                    None
+                };
+
+                if matches!(cmd_type, AiCommandType::GenerateScript)
+                    && script_generation_prompt
+                        .as_ref()
+                        .is_some_and(|prompt| prompt.is_empty())
+                {
+                    self.toast_manager.push(
+                        components::toast::Toast::warning(
+                            "Type a prompt first, then run Generate Script with AI.",
+                            &self.theme,
+                        )
+                        .duration_ms(Some(3500)),
+                    );
+                    cx.notify();
+                    return;
+                }
+
                 // All AI commands: reset state, hide main window
                 script_kit_gpui::set_main_window_visible(false);
                 self.reset_to_script_list(cx);
@@ -552,7 +635,7 @@ impl ScriptListApp {
                             logging::log("ERROR", &format!("AI command failed: {}", e));
                             self.toast_manager.push(
                                 components::toast::Toast::error(
-                                    format!("Failed to open AI: {}", e),
+                                    ai_open_failure_message(&e),
                                     &self.theme,
                                 )
                                 .duration_ms(Some(5000)),
@@ -610,6 +693,132 @@ impl ScriptListApp {
                         }
                     }
 
+                    AiCommandType::GenerateScript => {
+                        let Some(prompt_description) = script_generation_prompt.clone() else {
+                            logging::log(
+                                "AI_SCRIPT_GEN",
+                                "state=failed attempted=capture_prompt failure=missing_prompt",
+                            );
+                            self.toast_manager.push(
+                                components::toast::Toast::error(
+                                    "No prompt available for AI script generation",
+                                    &self.theme,
+                                )
+                                .duration_ms(Some(5000)),
+                            );
+                            cx.notify();
+                            return;
+                        };
+
+                        let config = self.config.clone();
+                        let (tx, rx) = async_channel::bounded::<
+                            std::result::Result<ai::GeneratedScriptOutput, String>,
+                        >(1);
+
+                        logging::log(
+                            "AI_SCRIPT_GEN",
+                            &format!(
+                                "state=queued attempted=builtin_generate_script prompt_len={}",
+                                prompt_description.len()
+                            ),
+                        );
+
+                        std::thread::spawn(move || {
+                            let generation_result =
+                                ai::generate_script_from_prompt(&prompt_description, Some(&config))
+                                    .map_err(|error| error.to_string());
+
+                            if tx.send_blocking(generation_result).is_err() {
+                                logging::log(
+                                    "AI_SCRIPT_GEN",
+                                    "state=aborted attempted=send_result failure=result_channel_closed",
+                                );
+                            }
+                        });
+
+                        cx.spawn(async move |this, cx| {
+                            let Ok(result) = rx.recv().await else {
+                                logging::log(
+                                    "AI_SCRIPT_GEN",
+                                    "state=aborted attempted=recv_result failure=result_channel_closed",
+                                );
+                                return;
+                            };
+
+                            let _ = cx.update(|cx| {
+                                this.update(cx, |app, cx| match result {
+                                    Ok(generated) => {
+                                        let script_name = generated
+                                            .path
+                                            .file_name()
+                                            .and_then(|name| name.to_str())
+                                            .unwrap_or("generated script");
+
+                                        if let Err(error) =
+                                            script_creation::open_in_editor(&generated.path, &app.config)
+                                        {
+                                            logging::log(
+                                                "AI_SCRIPT_GEN",
+                                                &format!(
+                                                    "state=failed attempted=open_editor path={} error={}",
+                                                    generated.path.display(),
+                                                    error
+                                                ),
+                                            );
+                                            app.toast_manager.push(
+                                                components::toast::Toast::error(
+                                                    format!(
+                                                        "Generated {}, but failed to open editor: {}",
+                                                        script_name, error
+                                                    ),
+                                                    &app.theme,
+                                                )
+                                                .duration_ms(Some(7000)),
+                                            );
+                                            cx.notify();
+                                        } else {
+                                            logging::log(
+                                                "AI_SCRIPT_GEN",
+                                                &format!(
+                                                    "state=completed attempted=builtin_generate_script path={} model_id={} provider_id={}",
+                                                    generated.path.display(),
+                                                    generated.model_id,
+                                                    generated.provider_id
+                                                ),
+                                            );
+                                            app.toast_manager.push(
+                                                components::toast::Toast::success(
+                                                    format!("Generated and opened {}", script_name),
+                                                    &app.theme,
+                                                )
+                                                .duration_ms(Some(3500)),
+                                            );
+                                            app.close_and_reset_window(cx);
+                                        }
+                                    }
+                                    Err(error) => {
+                                        logging::log(
+                                            "AI_SCRIPT_GEN",
+                                            &format!(
+                                                "state=failed attempted=builtin_generate_script error={}",
+                                                error
+                                            ),
+                                        );
+                                        app.toast_manager.push(
+                                            components::toast::Toast::error(
+                                                format!("Failed to generate script: {}", error),
+                                                &app.theme,
+                                            )
+                                            .duration_ms(Some(7000)),
+                                        );
+                                        cx.notify();
+                                    }
+                                })
+                            });
+                        })
+                        .detach();
+                    }
+
                     AiCommandType::SendScreenToAi => {
                         // Capture entire screen and send to AI
                         match platform::capture_screen_screenshot() {
@@ -632,7 +841,15 @@ impl ScriptListApp {
                                     ),
                                 );
                                 if let Err(e) = ai::open_ai_window(cx) {
-                                    logging::log("ERROR", &format!("Failed to open AI: {}", e));
+                                    logging::log("ERROR", &ai_open_failure_message(&e));
+                                    self.toast_manager.push(
+                                        components::toast::Toast::error(
+                                            ai_open_failure_message(&e),
+                                            &self.theme,
+                                        )
+                                        .duration_ms(Some(5000)),
+                                    );
+                                    cx.notify();
                                 } else {
                                     // Set input with the screenshot context
                                     ai::set_ai_input_with_image(cx, &message, &base64_data, false);
@@ -675,7 +892,15 @@ impl ScriptListApp {
                                     ),
                                 );
                                 if let Err(e) = ai::open_ai_window(cx) {
-                                    logging::log("ERROR", &format!("Failed to open AI: {}", e));
+                                    logging::log("ERROR", &ai_open_failure_message(&e));
+                                    self.toast_manager.push(
+                                        components::toast::Toast::error(
+                                            ai_open_failure_message(&e),
+                                            &self.theme,
+                                        )
+                                        .duration_ms(Some(5000)),
+                                    );
+                                    cx.notify();
                                 } else {
                                     ai::set_ai_input_with_image(cx, &message, &base64_data, false);
                                 }
@@ -707,7 +932,15 @@ impl ScriptListApp {
                                     &format!("Selected text captured: {} chars", text.len()),
                                 );
                                 if let Err(e) = ai::open_ai_window(cx) {
-                                    logging::log("ERROR", &format!("Failed to open AI: {}", e));
+                                    logging::log("ERROR", &ai_open_failure_message(&e));
+                                    self.toast_manager.push(
+                                        components::toast::Toast::error(
+                                            ai_open_failure_message(&e),
+                                            &self.theme,
+                                        )
+                                        .duration_ms(Some(5000)),
+                                    );
+                                    cx.notify();
                                 } else {
                                     ai::set_ai_input(cx, &message, false);
                                 }
@@ -750,7 +983,15 @@ impl ScriptListApp {
                                 );
                                 logging::log("EXEC", &format!("Browser URL captured: {}", url));
                                 if let Err(e) = ai::open_ai_window(cx) {
-                                    logging::log("ERROR", &format!("Failed to open AI: {}", e));
+                                    logging::log("ERROR", &ai_open_failure_message(&e));
+                                    self.toast_manager.push(
+                                        components::toast::Toast::error(
+                                            ai_open_failure_message(&e),
+                                            &self.theme,
+                                        )
+                                        .duration_ms(Some(5000)),
+                                    );
+                                    cx.notify();
                                 } else {
                                     ai::set_ai_input(cx, &message, false);
                                 }
@@ -794,7 +1035,14 @@ impl ScriptListApp {
                             .duration_ms(Some(3000)),
                         );
                         if let Err(e) = ai::open_ai_window(cx) {
-                            logging::log("ERROR", &format!("Failed to open AI: {}", e));
+                            logging::log("ERROR", &ai_open_failure_message(&e));
+                            self.toast_manager.push(
+                                components::toast::Toast::error(
+                                    ai_open_failure_message(&e),
+                                    &self.theme,
+                                )
+                                .duration_ms(Some(5000)),
+                            );
                         }
                         cx.notify();
                     }
@@ -1153,6 +1401,31 @@ impl ScriptListApp {
             }
 
             // =========================================================================
+            // Kit Store Commands
+            // =========================================================================
+            builtins::BuiltInFeature::KitStoreCommand(cmd_type) => {
+                logging::log(
+                    "EXEC",
+                    &format!("Executing kit store command: {:?}", cmd_type),
+                );
+
+                use builtins::KitStoreCommandType;
+
+                let message = match cmd_type {
+                    KitStoreCommandType::BrowseKits => "Kit Store browsing is coming soon.",
+                    KitStoreCommandType::InstalledKits => {
+                        "Installed kit management is coming soon."
+                    }
+                    KitStoreCommandType::UpdateAllKits => "Kit update flow is coming soon.",
+                };
+
+                self.toast_manager.push(
+                    components::toast::Toast::info(message, &self.theme).duration_ms(Some(3000)),
+                );
+                cx.notify();
+            }
+
+            // =========================================================================
             // File Search (Directory Navigation)
             // =========================================================================
             builtins::BuiltInFeature::Webcam => {
@@ -1168,5 +1441,28 @@ impl ScriptListApp {
             }
 
         }
+    }
+}
+
+#[cfg(test)]
+mod builtin_execution_ai_feedback_tests {
+    use super::{ai_open_failure_message, favorites_loaded_message};
+
+    #[test]
+    fn test_ai_open_failure_message_includes_error_details() {
+        assert_eq!(
+            ai_open_failure_message("window init failed"),
+            "Failed to open AI: window init failed"
+        );
+    }
+
+    #[test]
+    fn test_favorites_loaded_message_uses_singular_for_one() {
+        assert_eq!(favorites_loaded_message(1), "Loaded 1 favorite");
+    }
+
+    #[test]
+    fn test_favorites_loaded_message_uses_plural_for_many() {
+        assert_eq!(favorites_loaded_message(3), "Loaded 3 favorites");
     }
 }
