@@ -107,7 +107,7 @@ impl Render for ActionsDialog {
             );
 
         // Render action list using list() for variable-height items
-        // Section headers are 24px, action items are 44px
+        // Section headers are 22px, action items are 36px
         let actions_container = if self.grouped_items.is_empty() {
             // Empty state: fixed height matching one action item row
             div()
@@ -118,20 +118,12 @@ impl Render for ActionsDialog {
                 .px(px(spacing.item_padding_x))
                 .text_color(dimmed_text)
                 .text_sm()
-                .child("No actions match your search")
+                .child(actions_dialog_empty_state_message(&self.search_text))
                 .into_any_element()
         } else {
             // Clone data needed for the list closure
             let grouped_items_clone = self.grouped_items.clone();
             let design_variant = self.design_variant;
-
-            // Calculate scrollbar parameters
-            // Container height for actions (excluding search box)
-            let search_box_height = if self.hide_search {
-                0.0
-            } else {
-                SEARCH_INPUT_HEIGHT
-            };
 
             // Count section headers and items for accurate height calculation
             let mut header_count = 0_usize;
@@ -144,7 +136,17 @@ impl Render for ActionsDialog {
             }
             let total_content_height = (header_count as f32 * SECTION_HEADER_HEIGHT)
                 + (item_count as f32 * ACTION_ITEM_HEIGHT);
-            let container_height = total_content_height.min(POPUP_MAX_HEIGHT - search_box_height);
+
+            // Keep scrollbar viewport aligned with actual list viewport by
+            // excluding non-list chrome (search/header/footer) from max height.
+            let show_search =
+                !matches!(self.config.search_position, SearchPosition::Hidden) && !self.hide_search;
+            let container_height = actions_dialog_scrollbar_viewport_height(
+                total_content_height,
+                show_search,
+                self.context_title.is_some(),
+                self.config.show_footer,
+            );
 
             // Estimate visible items based on average item height
             let avg_item_height = if self.grouped_items.is_empty() {
@@ -152,7 +154,10 @@ impl Render for ActionsDialog {
             } else {
                 total_content_height / self.grouped_items.len() as f32
             };
-            let visible_items = (container_height / avg_item_height).ceil() as usize;
+            let visible_items = (container_height / avg_item_height)
+                .ceil()
+                .max(1.0)
+                .min(self.grouped_items.len() as f32) as usize;
 
             // Get scroll offset from list state
             let scroll_offset = self.list_state.logical_scroll_top().item_ix;
@@ -180,7 +185,7 @@ impl Render for ActionsDialog {
                     if let Some(grouped_item) = grouped_items_clone.get(ix) {
                         match grouped_item {
                             GroupedActionItem::SectionHeader(label) => {
-                                // Section header at 24px height
+                                // Section header at 22px height
                                 let header_text = if this.design_variant == DesignVariant::Default {
                                     rgb(this.theme.colors.text.dimmed)
                                 } else {
@@ -199,7 +204,7 @@ impl Render for ActionsDialog {
                                     .id(ElementId::NamedInteger("section-header".into(), ix as u64))
                                     .h(px(SECTION_HEADER_HEIGHT))
                                     .w_full()
-                                    .px(px(16.0))
+                                    .px(px(crate::actions::constants::ACTION_PADDING_X))
                                     .flex()
                                     .items_center()
                                     .when(ix > 0, |d| d.border_t_1().border_color(border_color))
@@ -213,7 +218,7 @@ impl Render for ActionsDialog {
                                     .into_any_element()
                             }
                             GroupedActionItem::Item(filter_idx) => {
-                                // Action item at 44px height
+                                // Action item at 36px height
                                 if let Some(&action_idx) = this.filtered_actions.get(*filter_idx) {
                                     if let Some(action) = this.actions.get(action_idx) {
                                         let is_selected = ix == current_selected;
@@ -569,20 +574,21 @@ impl Render for ActionsDialog {
         // Use helper method for container colors
         let (main_bg, container_border, container_text) = self.get_container_colors(&colors);
 
-        // Calculate dynamic height based on number of items AND section headers
-        // Items are ACTION_ITEM_HEIGHT (44px), section headers are SECTION_HEADER_HEIGHT (24px)
-        // Plus search box height (SEARCH_INPUT_HEIGHT), header height, and border
-        // NOTE: Must count from grouped_items which includes section headers, not just filtered_actions
-        let search_box_height = if self.hide_search {
-            0.0
-        } else {
+        // Get search position from config before height calculations
+        let search_at_top = matches!(self.config.search_position, SearchPosition::Top);
+        let show_search =
+            !matches!(self.config.search_position, SearchPosition::Hidden) && !self.hide_search;
+        let search_box_height = if show_search {
             SEARCH_INPUT_HEIGHT
+        } else {
+            0.0
         };
         let header_height = if self.context_title.is_some() {
             HEADER_HEIGHT
         } else {
             0.0
         };
+        let footer_height = if self.config.show_footer { 32.0 } else { 0.0 };
         let border_height = visual.border_thin * 2.0; // top + bottom border
 
         // Count items and section headers separately for accurate height calculation
@@ -607,8 +613,9 @@ impl Render for ActionsDialog {
             + (section_header_count as f32 * SECTION_HEADER_HEIGHT);
         let items_height = content_height
             .max(min_items_height)
-            .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
-        let total_height = items_height + search_box_height + header_height + border_height;
+            .min(POPUP_MAX_HEIGHT - search_box_height - header_height - footer_height);
+        let total_height =
+            items_height + search_box_height + header_height + border_height + footer_height;
 
         // Build header row (section header style - non-interactive label)
         // Styled to match render_section_header() from list_item.rs:
@@ -630,8 +637,8 @@ impl Render for ActionsDialog {
             div()
                 .w_full()
                 .h(px(HEADER_HEIGHT))
-                .px(px(16.0)) // Match section header padding from list_item.rs
-                .pt(px(8.0)) // Top padding for visual separation
+                .px(px(crate::actions::constants::ACTION_PADDING_X)) // Match section header padding from list_item.rs
+                .pt(px(crate::actions::constants::ACTION_PADDING_TOP)) // Top padding for visual separation
                 .pb(px(4.0)) // Bottom padding
                 .flex()
                 .flex_col()
@@ -655,7 +662,6 @@ impl Render for ActionsDialog {
         // (~50% when vibrancy enabled, ~95% when disabled)
 
         // Build footer with keyboard hints (if enabled)
-        let footer_height = if self.config.show_footer { 32.0 } else { 0.0 };
         let footer_container = if self.config.show_footer {
             let footer_text = if self.design_variant == DesignVariant::Default {
                 rgb(self.theme.colors.text.dimmed)
@@ -708,14 +714,6 @@ impl Render for ActionsDialog {
         } else {
             None
         };
-
-        // Recalculate total height including footer
-        let total_height = total_height + footer_height;
-
-        // Get search position from config
-        let search_at_top = matches!(self.config.search_position, SearchPosition::Top);
-        let show_search =
-            !matches!(self.config.search_position, SearchPosition::Hidden) && !self.hide_search;
 
         // Top-positioned search input - clean Raycast-style matching the bottom search
         // No boxed input field, no ⌘K prefix - just text on a clean background with bottom separator

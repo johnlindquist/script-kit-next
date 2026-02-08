@@ -5,7 +5,7 @@
 // Re-export action types into the builders module namespace so
 // existing submodules can import them as `super::types::*`.
 pub(super) mod types {
-    pub use super::super::types::{Action, ActionCategory, ScriptInfo};
+    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
 }
 
 #[path = "builders/chat.rs"]
