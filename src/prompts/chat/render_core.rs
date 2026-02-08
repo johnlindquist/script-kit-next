@@ -265,8 +265,8 @@ impl Render for ChatPrompt {
         let messages_content = if has_turns {
             let entity = cx.entity();
             let turns_snapshot = self.conversation_turns_cache.clone();
-            let total_turns = turns_snapshot.len();
-            let show_scroll_to_latest = self.user_has_scrolled_up;
+            let show_scroll_to_latest =
+                self.user_has_scrolled_up && !self.turns_list_is_at_bottom();
             let turns_list = list(self.turns_list_state.clone(), move |ix, _window, cx| {
                 entity.update(cx, |this, cx| {
                     if let Some(turn) = turns_snapshot.get(ix) {
@@ -301,15 +301,21 @@ impl Render for ChatPrompt {
                             ChatScrollDirection::None
                         };
 
-                        let scroll_top_item_ix = this.turns_list_state.logical_scroll_top().item_ix;
+                        let is_at_bottom = this.turns_list_is_at_bottom();
                         let next_state = next_chat_scroll_follow_state(
                             this.user_has_scrolled_up,
                             direction,
-                            scroll_top_item_ix,
-                            total_turns,
+                            is_at_bottom,
                         );
 
                         if next_state != this.user_has_scrolled_up {
+                            logging::log(
+                                "CHAT",
+                                &format!(
+                                    "Scroll follow changed: manual_mode={} direction={:?} at_bottom={}",
+                                    next_state, direction, is_at_bottom
+                                ),
+                            );
                             this.user_has_scrolled_up = next_state;
                             cx.notify();
                         }

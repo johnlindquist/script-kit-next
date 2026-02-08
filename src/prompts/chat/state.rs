@@ -25,10 +25,36 @@ impl ChatPrompt {
         self.sync_turns_list_state();
     }
 
+    pub(super) fn turns_list_is_at_bottom(&self) -> bool {
+        let item_count = self.conversation_turns_cache.len();
+        if item_count == 0 {
+            return true;
+        }
+
+        // For bottom-aligned lists, GPUI reports `item_ix == item_count` when the
+        // viewport is at the real bottom (logical_scroll_top == None internally).
+        let scroll_top = self.turns_list_state.logical_scroll_top();
+        scroll_top.item_ix >= item_count
+    }
+
     pub(super) fn scroll_turns_to_bottom(&mut self) {
         self.ensure_conversation_turns_cache();
         let item_count = self.conversation_turns_cache.len();
-        if item_count > 0 && !self.user_has_scrolled_up {
+        if item_count == 0 {
+            return;
+        }
+
+        // If manual mode is active but the user has returned to the bottom,
+        // resume auto-follow for subsequent stream chunks.
+        if self.user_has_scrolled_up && self.turns_list_is_at_bottom() {
+            logging::log(
+                "CHAT",
+                "Resuming chat auto-follow after returning to bottom",
+            );
+            self.user_has_scrolled_up = false;
+        }
+
+        if !self.user_has_scrolled_up {
             self.turns_list_state.scroll_to_reveal_item(item_count - 1);
         }
     }

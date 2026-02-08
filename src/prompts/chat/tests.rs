@@ -317,44 +317,36 @@ mod tests {
     #[test]
     fn chat_scroll_follow_state_disables_follow_on_upward_scroll() {
         assert!(
-            next_chat_scroll_follow_state(false, ChatScrollDirection::Up, 0, 10),
+            next_chat_scroll_follow_state(false, ChatScrollDirection::Up, false),
             "Scrolling upward should mark the user as manually scrolled up"
         );
     }
 
     #[test]
-    fn chat_scroll_follow_state_keeps_manual_mode_for_single_turn_when_scrolling_down() {
+    fn chat_scroll_follow_state_keeps_manual_mode_when_scrolling_down_above_bottom() {
         assert!(
-            next_chat_scroll_follow_state(true, ChatScrollDirection::Down, 0, 1),
-            "Single large turns should stay in manual mode to avoid false bottom detection"
+            next_chat_scroll_follow_state(true, ChatScrollDirection::Down, false),
+            "Scrolling down away from bottom should keep manual mode enabled"
         );
     }
 
     #[test]
-    fn chat_scroll_follow_state_reenables_follow_near_bottom_for_multi_turn_lists() {
+    fn chat_scroll_follow_state_reenables_follow_when_scrolling_down_at_bottom() {
         assert!(
-            !next_chat_scroll_follow_state(true, ChatScrollDirection::Down, 8, 10),
-            "Scrolling down near the bottom should re-enable auto-follow"
+            !next_chat_scroll_follow_state(true, ChatScrollDirection::Down, true),
+            "Reaching the bottom while scrolling down should re-enable auto-follow"
         );
     }
 
     #[test]
-    fn chat_scroll_follow_state_keeps_manual_mode_when_not_near_bottom() {
+    fn chat_scroll_follow_state_preserves_follow_state_for_non_scrolling_events() {
         assert!(
-            next_chat_scroll_follow_state(true, ChatScrollDirection::Down, 6, 10),
-            "Scrolling down far from the bottom should keep manual mode enabled"
+            next_chat_scroll_follow_state(true, ChatScrollDirection::None, false),
+            "No directional input should preserve manual mode"
         );
-    }
-
-    #[test]
-    fn chat_scroll_follow_state_handles_large_scroll_indices_without_panicking() {
-        let result = std::panic::catch_unwind(|| {
-            next_chat_scroll_follow_state(true, ChatScrollDirection::Down, usize::MAX, 10)
-        });
-        let follow_manual = result.expect("Large indices should not panic while computing state");
         assert!(
-            !follow_manual,
-            "Large indices should saturate near-bottom detection and re-enable auto-follow"
+            !next_chat_scroll_follow_state(false, ChatScrollDirection::None, false),
+            "No directional input should preserve follow mode"
         );
     }
 }
