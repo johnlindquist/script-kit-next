@@ -52,7 +52,7 @@
       "kind": "codex",
       "mode": "exec",
       "model": "gpt-5.3-codex",
-      "task": "Audit ALL UI components for inconsistent element sizes — buttons, icons, inputs, list items, headers, footers, and containers. Check src/prompts/*.rs, src/components/*.rs, src/render_prompts/*.rs, and src/app_impl.rs. All buttons across different prompts should have matching height/padding. All input fields should have the same height. All list item rows should have consistent heights. All icon sizes should be standardized (e.g., IconSize::Small vs explicit px values). Find and fix size inconsistencies so every prompt type looks like it belongs to the same design system.",
+      "task": "Audit ALL UI components for inconsistent element sizes \u2014 buttons, icons, inputs, list items, headers, footers, and containers. Check src/prompts/*.rs, src/components/*.rs, src/render_prompts/*.rs, and src/app_impl.rs. All buttons across different prompts should have matching height/padding. All input fields should have the same height. All list item rows should have consistent heights. All icon sizes should be standardized (e.g., IconSize::Small vs explicit px values). Find and fix size inconsistencies so every prompt type looks like it belongs to the same design system.",
       "scope": "src/prompts/*.rs,src/components/*.rs,src/render_prompts/*.rs,src/app_impl.rs",
       "status": "done",
       "claims": [],
@@ -67,7 +67,7 @@
       "kind": "codex",
       "mode": "exec",
       "model": "gpt-5.3-codex",
-      "task": "Audit ALL prompt and view components for inconsistent layout structure and flex patterns. Check src/prompts/*.rs, src/render_prompts/*.rs, and src/components/*.rs. Every prompt should follow the same structural pattern: consistent header area, content area, and footer area with the same flex properties, alignment, and overflow behavior. Find places where some prompts use different flex directions, alignment (items_center vs items_start), justify patterns, or overflow handling compared to others. Normalize the layout skeleton so all prompt types share the same structural bones — same max widths, same content area flex behavior, same scroll container setup.",
+      "task": "Audit ALL prompt and view components for inconsistent layout structure and flex patterns. Check src/prompts/*.rs, src/render_prompts/*.rs, and src/components/*.rs. Every prompt should follow the same structural pattern: consistent header area, content area, and footer area with the same flex properties, alignment, and overflow behavior. Find places where some prompts use different flex directions, alignment (items_center vs items_start), justify patterns, or overflow handling compared to others. Normalize the layout skeleton so all prompt types share the same structural bones \u2014 same max widths, same content area flex behavior, same scroll container setup.",
       "scope": "src/prompts/*.rs,src/render_prompts/*.rs,src/components/*.rs",
       "status": "done",
       "claims": [],
@@ -97,7 +97,7 @@
       "kind": "codex",
       "mode": "exec",
       "model": "gpt-5.3-codex",
-      "task": "Implement consistent UX feedback for all actions that currently lack it. Based on patterns already in the codebase: (1) Find how HUD notifications work (look for 'hud', 'toast', 'notification' patterns in src/). (2) For actions that save/capture files: add HUD notification showing what was saved and where, then reveal in Finder if appropriate. (3) For actions that toggle state: add HUD confirmation of new state. (4) For the Webcam 'Capture' action specifically: after capture, show a HUD saying 'Photo saved to <path>' or similar. (5) Ensure every action in execute_builtin() and action handlers provides clear feedback. Use existing HUD/notification infrastructure - do NOT create new UI components. Follow the pattern: action completes → cx.notify() → show feedback. Run cargo check && cargo clippy --all-targets -- -D warnings && cargo test after changes.",
+      "task": "Implement consistent UX feedback for all actions that currently lack it. Based on patterns already in the codebase: (1) Find how HUD notifications work (look for 'hud', 'toast', 'notification' patterns in src/). (2) For actions that save/capture files: add HUD notification showing what was saved and where, then reveal in Finder if appropriate. (3) For actions that toggle state: add HUD confirmation of new state. (4) For the Webcam 'Capture' action specifically: after capture, show a HUD saying 'Photo saved to <path>' or similar. (5) Ensure every action in execute_builtin() and action handlers provides clear feedback. Use existing HUD/notification infrastructure - do NOT create new UI components. Follow the pattern: action completes \u2192 cx.notify() \u2192 show feedback. Run cargo check && cargo clippy --all-targets -- -D warnings && cargo test after changes.",
       "scope": "src/app_impl.rs,src/builtins/*.rs,src/builtins.rs,src/prompts/webcam.rs,src/prompts/actions.rs,src/components/hud*.rs,src/hud.rs",
       "status": "failed",
       "claims": [],
@@ -202,7 +202,7 @@
       "kind": "codex",
       "mode": "exec",
       "model": "gpt-5.3-codex",
-      "task": "Remove ALL description/subtitle text from action menu items in the actions dialog/popup. Looking at the screenshot, each action (like 'Paste to Active App', 'Copy to Clipboard', etc.) has a smaller gray description line below it (like 'Copy to clipboard and paste to focused app', 'Copy entry to clipboard without pasting'). These descriptions make the menu too visually busy. Find where action items are rendered in the actions popup/dialog components (likely in src/prompts/actions.rs or src/components/actions*.rs) and remove the description rendering. Also check where actions are constructed (src/app_impl.rs, src/builtins.rs, or similar) — you can leave the description data in the structs, but do NOT render it in the UI. The action items should only show: the action name/label, the keyboard shortcut badges, and optionally an icon. No description text.",
+      "task": "Remove ALL description/subtitle text from action menu items in the actions dialog/popup. Looking at the screenshot, each action (like 'Paste to Active App', 'Copy to Clipboard', etc.) has a smaller gray description line below it (like 'Copy to clipboard and paste to focused app', 'Copy entry to clipboard without pasting'). These descriptions make the menu too visually busy. Find where action items are rendered in the actions popup/dialog components (likely in src/prompts/actions.rs or src/components/actions*.rs) and remove the description rendering. Also check where actions are constructed (src/app_impl.rs, src/builtins.rs, or similar) \u2014 you can leave the description data in the structs, but do NOT render it in the UI. The action items should only show: the action name/label, the keyboard shortcut badges, and optionally an icon. No description text.",
       "scope": "src/prompts/actions.rs,src/components/actions*.rs,src/app_impl.rs,src/builtins.rs,src/render_prompts/*.rs,src/scripts/types.rs",
       "status": "done",
       "claims": [],
@@ -352,7 +352,7 @@
       "kind": "codex",
       "mode": "exec",
       "model": "gpt-5.3-codex",
-      "task": "Review and purge dead/worthless tests in src/actions/builders_tests.rs. Delete any tests that: (1) test trivially obvious behavior (e.g., assert a string equals itself), (2) are duplicates of other tests, (3) test removed/nonexistent functionality, (4) have no meaningful assertions, (5) are commented out or always-pass stubs. Note: another worker (codex-actions-ux) has claimed this file — check if it has pending uncommitted changes first with git diff src/actions/builders_tests.rs. If it has changes, work around them carefully. After purging, run: cargo check && cargo clippy --all-targets -- -D warnings && cargo test",
+      "task": "Review and purge dead/worthless tests in src/actions/builders_tests.rs. Delete any tests that: (1) test trivially obvious behavior (e.g., assert a string equals itself), (2) are duplicates of other tests, (3) test removed/nonexistent functionality, (4) have no meaningful assertions, (5) are commented out or always-pass stubs. Note: another worker (codex-actions-ux) has claimed this file \u2014 check if it has pending uncommitted changes first with git diff src/actions/builders_tests.rs. If it has changes, work around them carefully. After purging, run: cargo check && cargo clippy --all-targets -- -D warnings && cargo test",
       "scope": "src/actions/builders_tests.rs",
       "status": "done",
       "claims": [],
@@ -382,7 +382,7 @@
       "kind": "codex",
       "mode": "exec",
       "model": "gpt-5.3-codex",
-      "task": "The footer (prompt_footer.rs) has two issues visible in the attached screenshot: (1) The footer background color was recently changed and now has POOR CONTRAST with helper text like 'Built-in'. The background appears too light/washed out — it should be darker to match the rest of the prompt window and provide good contrast with the text. Check git log for recent changes to footer background color and revert or fix it. The footer bg should use theme.colors that are dark enough for text readability. (2) The footer HEIGHT was changed recently — restore it to the height from about a week ago. Check 'git log --since=2026-01-27 --until=2026-02-06 -p -- src/components/prompt_footer.rs' to find what the height used to be and restore it. Use theme.colors for all colors, never hardcode rgb values.",
+      "task": "The footer (prompt_footer.rs) has two issues visible in the attached screenshot: (1) The footer background color was recently changed and now has POOR CONTRAST with helper text like 'Built-in'. The background appears too light/washed out \u2014 it should be darker to match the rest of the prompt window and provide good contrast with the text. Check git log for recent changes to footer background color and revert or fix it. The footer bg should use theme.colors that are dark enough for text readability. (2) The footer HEIGHT was changed recently \u2014 restore it to the height from about a week ago. Check 'git log --since=2026-01-27 --until=2026-02-06 -p -- src/components/prompt_footer.rs' to find what the height used to be and restore it. Use theme.colors for all colors, never hardcode rgb values.",
       "scope": "src/components/prompt_footer.rs,src/components/footer_button.rs,src/components/prompt_container.rs",
       "status": "done",
       "claims": [],
@@ -2317,7 +2317,7 @@
       "kind": "codex",
       "mode": "exec",
       "model": "gpt-5.3-codex",
-      "task": "Create or enhance AGENTS.md at the repo root. This file should be a comprehensive guide for AI agents working on this codebase. Include: (1) A module ownership map listing every top-level module in src/ with a 1-2 sentence description of what it does, its key public types, and which files it touches. (2) File-scope boundaries — which directories/files are safe to modify independently vs which are tightly coupled. (3) A dependency graph showing which modules import from which others (look at use/mod statements). (4) Common patterns: how built-in commands flow (BuiltInFeature enum → get_builtin_entries → execute_builtin → AppView), how prompts render (render_prompts/*.rs wraps prompts/*.rs), the stdin/stdout JSONL protocol. (5) Testing guidance: how to run scoped tests, what test files exist. The goal is that any AI agent can read AGENTS.md and immediately know where to make changes for any given task without exploring the codebase.",
+      "task": "Create or enhance AGENTS.md at the repo root. This file should be a comprehensive guide for AI agents working on this codebase. Include: (1) A module ownership map listing every top-level module in src/ with a 1-2 sentence description of what it does, its key public types, and which files it touches. (2) File-scope boundaries \u2014 which directories/files are safe to modify independently vs which are tightly coupled. (3) A dependency graph showing which modules import from which others (look at use/mod statements). (4) Common patterns: how built-in commands flow (BuiltInFeature enum \u2192 get_builtin_entries \u2192 execute_builtin \u2192 AppView), how prompts render (render_prompts/*.rs wraps prompts/*.rs), the stdin/stdout JSONL protocol. (5) Testing guidance: how to run scoped tests, what test files exist. The goal is that any AI agent can read AGENTS.md and immediately know where to make changes for any given task without exploring the codebase.",
       "scope": "AGENTS.md,src/**/mod.rs,src/lib.rs,src/main.rs",
       "status": "done",
       "claims": [],
@@ -2379,7 +2379,7 @@
       "task": "Add source application tracking to clipboard history entries",
       "scope": "src/clipboard_history/database.rs,src/clipboard_history/monitor.rs,src/clipboard_history/types.rs,src/frontmost_app_tracker/**",
       "status": "needs_split",
-      "notes": "[auto] timed out after 600s — task too broad",
+      "notes": "[auto] timed out after 600s \u2014 task too broad",
       "claims": [],
       "createdAt": "2026-02-07T22:27:47.453Z",
       "lastSeenAt": "2026-02-07T22:30:45.852Z",
@@ -2393,10 +2393,8 @@
       "task": "Add password exclusion to clipboard history. Auto-ignore clipboard entries copied from password managers.",
       "scope": "src/clipboard_history/monitor.rs,src/clipboard_history/types.rs,src/frontmost_app_tracker/**",
       "status": "needs_split",
-      "notes": "[auto] timed out after 600s — task too broad",
-      "claims": [
-        "src/clipboard_history/monitor.rs"
-      ],
+      "notes": "[auto] timed out after 600s \u2014 task too broad",
+      "claims": [],
       "createdAt": "2026-02-07T22:28:02.483Z",
       "lastSeenAt": "2026-02-08T17:35:35.811Z",
       "host": "johns.macbook.pro.lan"
@@ -2427,7 +2425,7 @@
       "createdAt": "2026-02-07T22:28:51.954Z",
       "lastSeenAt": "2026-02-07T22:38:51.982Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-audit-act-execution-scripts": {
       "id": "codex-audit-act-execution-scripts",
@@ -2478,7 +2476,7 @@
       "task": "Implement emoji picker built-in feature",
       "scope": "src/builtins/part_000.rs,src/builtins/part_001_entries/**,src/render_builtins/emoji_picker.rs,src/main_sections/app_view_state.rs",
       "status": "needs_split",
-      "notes": "[auto] timed out after 600s — task too broad",
+      "notes": "[auto] timed out after 600s \u2014 task too broad",
       "claims": [],
       "createdAt": "2026-02-07T22:30:49.904Z",
       "lastSeenAt": "2026-02-07T22:36:50.148Z",
@@ -2496,7 +2494,7 @@
       "createdAt": "2026-02-07T22:30:54.179Z",
       "lastSeenAt": "2026-02-07T22:40:54.226Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-calculator": {
       "id": "codex-calculator",
@@ -2531,7 +2529,7 @@
       "kind": "codex",
       "mode": "exec",
       "model": "gpt-5.3-codex",
-      "task": "The codebase has ~295 test compilation errors after a large test reorganization. The main issues are: 1) 'file for module tests found at both tests.rs and tests/mod.rs' in src/designs/core/ and src/protocol/message/ — remove the duplicate (keep tests/mod.rs, delete tests.rs or vice versa). 2) Many unused imports in test files under src/actions/tests/ — the tests were moved but imports were not updated. 3) Missing types/functions in scope for test files. 4) E0507 cannot move out of action.category behind shared reference. Run 'cargo clippy --all-targets -- -D warnings' to see all errors and fix them one by one. Focus on making the build pass cleanly. IMPORTANT: the project uses CARGO_BUILD_JOBS=4 to avoid OOM.",
+      "task": "The codebase has ~295 test compilation errors after a large test reorganization. The main issues are: 1) 'file for module tests found at both tests.rs and tests/mod.rs' in src/designs/core/ and src/protocol/message/ \u2014 remove the duplicate (keep tests/mod.rs, delete tests.rs or vice versa). 2) Many unused imports in test files under src/actions/tests/ \u2014 the tests were moved but imports were not updated. 3) Missing types/functions in scope for test files. 4) E0507 cannot move out of action.category behind shared reference. Run 'cargo clippy --all-targets -- -D warnings' to see all errors and fix them one by one. Focus on making the build pass cleanly. IMPORTANT: the project uses CARGO_BUILD_JOBS=4 to avoid OOM.",
       "scope": "src/actions/tests/*,src/actions/dialog/part_01.rs,src/designs/core/tests*,src/protocol/message/tests*,src/actions/builders_tests/*,src/actions/command_bar/part_03.rs",
       "status": "done",
       "claims": [],
@@ -2552,7 +2550,7 @@
       "createdAt": "2026-02-07T22:32:55.411Z",
       "lastSeenAt": "2026-02-07T22:42:55.439Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-audit-act-theme-styling": {
       "id": "codex-audit-act-theme-styling",
@@ -2566,7 +2564,7 @@
       "createdAt": "2026-02-07T22:33:16.053Z",
       "lastSeenAt": "2026-02-07T22:43:16.073Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-kit-store-types": {
       "id": "codex-kit-store-types",
@@ -2608,7 +2606,7 @@
       "createdAt": "2026-02-07T22:37:06.037Z",
       "lastSeenAt": "2026-02-07T22:47:06.067Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-audit-act-section-grouping": {
       "id": "codex-audit-act-section-grouping",
@@ -2664,14 +2662,14 @@
       "createdAt": "2026-02-07T22:41:09.304Z",
       "lastSeenAt": "2026-02-07T22:51:09.324Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-audit-act-window-lifecycle": {
       "id": "codex-audit-act-window-lifecycle",
       "kind": "codex",
       "mode": "exec",
       "model": "gpt-5.3-codex",
-      "task": "Audit the actions window lifecycle management. Check src/actions/window/*.rs for the complete open→interact→close cycle. Verify: (1) Window opens at correct position relative to main window (2) Window closes cleanly on escape/focus-loss/action-selection (3) ACTIONS_WINDOW global singleton doesn't leak (4) Multiple rapid open/close doesn't cause issues (5) Window state resets properly between opens (6) Memory cleanup on close. Write findings to .ai/logs/codex-audit-act-window-lifecycle.final.md",
+      "task": "Audit the actions window lifecycle management. Check src/actions/window/*.rs for the complete open\u2192interact\u2192close cycle. Verify: (1) Window opens at correct position relative to main window (2) Window closes cleanly on escape/focus-loss/action-selection (3) ACTIONS_WINDOW global singleton doesn't leak (4) Multiple rapid open/close doesn't cause issues (5) Window state resets properly between opens (6) Memory cleanup on close. Write findings to .ai/logs/codex-audit-act-window-lifecycle.final.md",
       "scope": "src/actions/window/part_01.rs,src/actions/window/part_02.rs,src/actions/window/part_03.rs",
       "status": "failed",
       "claims": [],
@@ -2692,7 +2690,7 @@
       "createdAt": "2026-02-07T22:43:10.990Z",
       "lastSeenAt": "2026-02-07T22:53:11.119Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-audit-act-tests-coverage": {
       "id": "codex-audit-act-tests-coverage",
@@ -2741,14 +2739,14 @@
       "kind": "codex",
       "mode": "exec",
       "model": "gpt-5.3-codex",
-      "task": "Fix ALL compilation errors in the actions test files. There are ~224 test errors. The core issues:\n\n1. 'Script' type not found — add 'use crate::scripts::Script;' where needed\n2. 'Scriptlet' type not found — add 'use crate::scripts::Scriptlet;' (or 'use crate::scriptlets::Scriptlet;')\n3. 'SearchResult' not found — add 'use crate::scripts::SearchResult;'\n4. Missing clipboard entry fields 'source_app_bundle_id' and 'source_app_name' — add these fields with empty string defaults to test constructors\n5. 'NoteSwitcherNoteInfo' not found — check where it's defined and import it\n6. 'get_ai_command_bar_actions', 'get_note_switcher_actions', 'get_scriptlet_context_actions_with_custom' not found — import from crate::actions::builders\n7. 'QuicklinkCommand' variant not found on BuiltInFeature — check if renamed or removed\n8. Many unused imports — remove them\n9. 'glob import doesnt reexport anything' — fix pub visibility\n10. E0507 cannot move — use clone() or borrow\n\nThe test files are mostly in src/actions/tests/ and its subdirectories. Many use include!() macros pointing to part_NN.rs files. Fix the common import file (usually part_01.rs in each test directory) to resolve most errors.\n\nIMPORTANT: Use CARGO_BUILD_JOBS=4 to avoid OOM. Run clippy after each batch of fixes.",
+      "task": "Fix ALL compilation errors in the actions test files. There are ~224 test errors. The core issues:\n\n1. 'Script' type not found \u2014 add 'use crate::scripts::Script;' where needed\n2. 'Scriptlet' type not found \u2014 add 'use crate::scripts::Scriptlet;' (or 'use crate::scriptlets::Scriptlet;')\n3. 'SearchResult' not found \u2014 add 'use crate::scripts::SearchResult;'\n4. Missing clipboard entry fields 'source_app_bundle_id' and 'source_app_name' \u2014 add these fields with empty string defaults to test constructors\n5. 'NoteSwitcherNoteInfo' not found \u2014 check where it's defined and import it\n6. 'get_ai_command_bar_actions', 'get_note_switcher_actions', 'get_scriptlet_context_actions_with_custom' not found \u2014 import from crate::actions::builders\n7. 'QuicklinkCommand' variant not found on BuiltInFeature \u2014 check if renamed or removed\n8. Many unused imports \u2014 remove them\n9. 'glob import doesnt reexport anything' \u2014 fix pub visibility\n10. E0507 cannot move \u2014 use clone() or borrow\n\nThe test files are mostly in src/actions/tests/ and its subdirectories. Many use include!() macros pointing to part_NN.rs files. Fix the common import file (usually part_01.rs in each test directory) to resolve most errors.\n\nIMPORTANT: Use CARGO_BUILD_JOBS=4 to avoid OOM. Run clippy after each batch of fixes.",
       "scope": "src/actions/tests/*,src/actions/builders_tests/*,src/actions/dialog_*,src/actions/mod.rs,src/prompts/mod.rs,src/clipboard_history/types.rs",
       "status": "needs_split",
       "claims": [],
       "createdAt": "2026-02-07T22:48:31.351Z",
       "lastSeenAt": "2026-02-07T22:58:31.367Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-favorites-v2": {
       "id": "codex-favorites-v2",
@@ -3392,7 +3390,7 @@
       "createdAt": "2026-02-08T00:15:57.048Z",
       "lastSeenAt": "2026-02-08T00:25:57.063Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-fix-icon-consistency": {
       "id": "codex-fix-icon-consistency",
@@ -3402,13 +3400,11 @@
       "task": "CONSISTENCY FIX: Ensure all actions have appropriate icons from IconName. Review all Action::new calls in src/actions/builders/*.rs. Currently some actions have icons and some don't. Ensure: (1) Every action that represents a primary operation has an icon (2) Icons are from the IconName enum, not hardcoded strings (3) Similar actions across different builders use the same icon (e.g. all 'copy' actions use the same copy icon, all 'open' actions use the same open icon). After fix, run cargo check && cargo clippy --all-targets -- -D warnings",
       "scope": "src/actions/builders/chat.rs,src/actions/builders/clipboard.rs,src/actions/builders/file_path.rs,src/actions/builders/notes.rs,src/actions/builders/script_context.rs,src/actions/builders/scriptlet.rs",
       "status": "needs_split",
-      "claims": [
-        "src/actions/builders/script_context.rs"
-      ],
+      "claims": [],
       "createdAt": "2026-02-08T00:17:58.942Z",
       "lastSeenAt": "2026-02-08T00:30:01.317Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-fix-description-style": {
       "id": "codex-fix-description-style",
@@ -3422,7 +3418,7 @@
       "createdAt": "2026-02-08T00:20:00.969Z",
       "lastSeenAt": "2026-02-08T00:30:00.985Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-fix-label-style": {
       "id": "codex-fix-label-style",
@@ -3520,7 +3516,7 @@
       "createdAt": "2026-02-08T00:34:19.300Z",
       "lastSeenAt": "2026-02-08T00:44:19.314Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-fix-rewire-alignment": {
       "id": "codex-fix-rewire-alignment",
@@ -3730,7 +3726,7 @@
       "createdAt": "2026-02-08T02:47:23.145Z",
       "lastSeenAt": "2026-02-08T02:57:23.160Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-wire-favorites": {
       "id": "codex-wire-favorites",
@@ -3744,7 +3740,7 @@
       "createdAt": "2026-02-08T02:55:23.298Z",
       "lastSeenAt": "2026-02-08T03:05:23.315Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-wire-quicklinks": {
       "id": "codex-wire-quicklinks",
@@ -3758,7 +3754,7 @@
       "createdAt": "2026-02-08T02:57:24.001Z",
       "lastSeenAt": "2026-02-08T03:07:24.017Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-wire-clipboard-exclusions": {
       "id": "codex-wire-clipboard-exclusions",
@@ -3786,7 +3782,7 @@
       "createdAt": "2026-02-08T03:01:26.392Z",
       "lastSeenAt": "2026-02-08T03:11:26.409Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-wire-favorites-v2": {
       "id": "codex-wire-favorites-v2",
@@ -3800,23 +3796,21 @@
       "createdAt": "2026-02-08T03:11:49.792Z",
       "lastSeenAt": "2026-02-08T03:21:49.805Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-wire-quicklinks-v2": {
       "id": "codex-wire-quicklinks-v2",
       "kind": "codex",
       "mode": "exec",
       "model": "gpt-5.3-codex",
-      "task": "Previous worker made partial progress on quicklinks (src/quicklinks/mod.rs has 76 new lines). Continue from where it left off. The quicklinks module has create/load/save/delete/expand_url APIs. Focus ONLY on registering the builtin: (1) Add BuiltInFeature::Quicklinks in src/builtins/part_000.rs, (2) Add entry in get_builtin_entries() in the entries files, (3) Add execute_builtin handling in src/app_execute/builtin_execution.rs that loads quicklinks and shows them as selectable items. Keep it simple — just list quicklinks and open the expanded URL when selected. Run: cargo check && cargo clippy --all-targets -- -D warnings && cargo test. Fix any errors.",
+      "task": "Previous worker made partial progress on quicklinks (src/quicklinks/mod.rs has 76 new lines). Continue from where it left off. The quicklinks module has create/load/save/delete/expand_url APIs. Focus ONLY on registering the builtin: (1) Add BuiltInFeature::Quicklinks in src/builtins/part_000.rs, (2) Add entry in get_builtin_entries() in the entries files, (3) Add execute_builtin handling in src/app_execute/builtin_execution.rs that loads quicklinks and shows them as selectable items. Keep it simple \u2014 just list quicklinks and open the expanded URL when selected. Run: cargo check && cargo clippy --all-targets -- -D warnings && cargo test. Fix any errors.",
       "scope": "src/quicklinks/**,src/builtins/part_000.rs,src/builtins/part_001_entries/**,src/app_execute/builtin_execution.rs",
       "status": "needs_split",
-      "claims": [
-        "src/app_execute/builtin_execution.rs"
-      ],
+      "claims": [],
       "createdAt": "2026-02-08T03:13:50.871Z",
       "lastSeenAt": "2026-02-08T03:25:51.628Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-wire-emoji-v2": {
       "id": "codex-wire-emoji-v2",
@@ -3830,21 +3824,21 @@
       "createdAt": "2026-02-08T03:15:51.553Z",
       "lastSeenAt": "2026-02-08T03:25:51.569Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-wire-remaining-v3": {
       "id": "codex-wire-remaining-v3",
       "kind": "codex",
       "mode": "exec",
       "model": "gpt-5.3-codex",
-      "task": "Previous workers wired Favorites and Clipboard Exclusions into the app. They also partially wired EmojiPicker and Quicklinks into builtins (BuiltInFeature enum variants, entries, and execute_builtin stubs may already exist). Your job: (1) Make sure BuiltInFeature::EmojiPicker and BuiltInFeature::Quicklinks exist in src/builtins/part_000.rs, (2) Make sure both have entries in get_builtin_entries() in the entries files, (3) Make sure src/app_execute/builtin_execution.rs handles both — EmojiPicker should list emojis from src/emoji/mod.rs EMOJIS array and copy selected emoji to clipboard; Quicklinks should list quicklinks from src/quicklinks/mod.rs and open the expanded URL. (4) Run cargo check && cargo clippy --all-targets -- -D warnings && cargo test and fix ALL errors — including errors from other workers' changes. The tree may have compilation issues from concurrent edits.",
+      "task": "Previous workers wired Favorites and Clipboard Exclusions into the app. They also partially wired EmojiPicker and Quicklinks into builtins (BuiltInFeature enum variants, entries, and execute_builtin stubs may already exist). Your job: (1) Make sure BuiltInFeature::EmojiPicker and BuiltInFeature::Quicklinks exist in src/builtins/part_000.rs, (2) Make sure both have entries in get_builtin_entries() in the entries files, (3) Make sure src/app_execute/builtin_execution.rs handles both \u2014 EmojiPicker should list emojis from src/emoji/mod.rs EMOJIS array and copy selected emoji to clipboard; Quicklinks should list quicklinks from src/quicklinks/mod.rs and open the expanded URL. (4) Run cargo check && cargo clippy --all-targets -- -D warnings && cargo test and fix ALL errors \u2014 including errors from other workers' changes. The tree may have compilation issues from concurrent edits.",
       "scope": "src/emoji/**,src/quicklinks/**,src/builtins/part_000.rs,src/builtins/part_001_entries/**,src/builtins/tests/**,src/app_execute/builtin_execution.rs,src/main.rs,src/lib.rs",
       "status": "needs_split",
       "claims": [],
       "createdAt": "2026-02-08T03:26:21.820Z",
       "lastSeenAt": "2026-02-08T03:36:21.836Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-chat-prompt-script-gen": {
       "id": "codex-chat-prompt-script-gen",
@@ -3858,7 +3852,7 @@
       "createdAt": "2026-02-08T03:26:51.432Z",
       "lastSeenAt": "2026-02-08T03:36:51.457Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-fallback-generate-script": {
       "id": "codex-fallback-generate-script",
@@ -3872,7 +3866,7 @@
       "createdAt": "2026-02-08T03:27:22.390Z",
       "lastSeenAt": "2026-02-08T03:37:22.407Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-script-gen-render": {
       "id": "codex-script-gen-render",
@@ -3907,7 +3901,7 @@
       "kind": "codex",
       "mode": "exec",
       "model": "gpt-5.3-codex",
-      "task": "The AI script generation system prompt is outdated — it references '@johnlindquist/kit' but the new SDK uses 'import \"@scriptkit/sdk\"'. Study the REAL scripts in ~/.scriptkit/kit/*/scripts/*.ts to understand the CURRENT Script Kit patterns: what imports they use, what APIs they call (arg, div, editor, etc.), what metadata comments they have. Then update the system prompt in src/ai/script_generation.rs (the AI_SCRIPT_GENERATION_SYSTEM_PROMPT constant) to reflect the ACTUAL modern patterns. Also update the enforce_script_kit_conventions() function and has_kit_import() to use '@scriptkit/sdk' instead of '@johnlindquist/kit'. Update the prompt in src/app_impl/prompt_ai.rs too if there's a duplicate system prompt there (AI_SCRIPT_GENERATION_SYSTEM_PROMPT or similar). Fix all tests that reference the old import. Run cargo check to verify.",
+      "task": "The AI script generation system prompt is outdated \u2014 it references '@johnlindquist/kit' but the new SDK uses 'import \"@scriptkit/sdk\"'. Study the REAL scripts in ~/.scriptkit/kit/*/scripts/*.ts to understand the CURRENT Script Kit patterns: what imports they use, what APIs they call (arg, div, editor, etc.), what metadata comments they have. Then update the system prompt in src/ai/script_generation.rs (the AI_SCRIPT_GENERATION_SYSTEM_PROMPT constant) to reflect the ACTUAL modern patterns. Also update the enforce_script_kit_conventions() function and has_kit_import() to use '@scriptkit/sdk' instead of '@johnlindquist/kit'. Update the prompt in src/app_impl/prompt_ai.rs too if there's a duplicate system prompt there (AI_SCRIPT_GENERATION_SYSTEM_PROMPT or similar). Fix all tests that reference the old import. Run cargo check to verify.",
       "scope": "src/ai/script_generation.rs,src/app_impl/prompt_ai.rs,~/.scriptkit/kit/*/scripts/*.ts",
       "status": "done",
       "claims": [],
@@ -3935,7 +3929,7 @@
       "kind": "codex",
       "mode": "exec",
       "model": "gpt-5.3-codex",
-      "task": "In the script generation ChatPrompt footer (src/prompts/chat/render_core.rs), the Save/Run/Save and Run buttons don't match the footer style. Looking at the screenshot: the footer has styled buttons like 'Continue in Chat ⌘↵' and 'Actions ⌘K' with accent-colored text. The Save/Run/Save and Run buttons currently use a different bg/hover style. FIX: 1) Make Save/Run/Save and Run use the SAME style as the existing footer buttons (accent-colored text, no background, just text with optional keyboard shortcut hint). Use the render_footer_button helper or match its style. 2) Move 'Save and Run' to REPLACE 'Continue in Chat' in its position (right side of footer). 'Save and Run' should be the primary action button where 'Continue in Chat' normally sits. Keep Save and Run as separate smaller buttons on the left side near the model name. 3) When script_generation_mode is true, HIDE the 'Continue in Chat' button and show 'Save and Run' in its place. Run cargo check.",
+      "task": "In the script generation ChatPrompt footer (src/prompts/chat/render_core.rs), the Save/Run/Save and Run buttons don't match the footer style. Looking at the screenshot: the footer has styled buttons like 'Continue in Chat \u2318\u21b5' and 'Actions \u2318K' with accent-colored text. The Save/Run/Save and Run buttons currently use a different bg/hover style. FIX: 1) Make Save/Run/Save and Run use the SAME style as the existing footer buttons (accent-colored text, no background, just text with optional keyboard shortcut hint). Use the render_footer_button helper or match its style. 2) Move 'Save and Run' to REPLACE 'Continue in Chat' in its position (right side of footer). 'Save and Run' should be the primary action button where 'Continue in Chat' normally sits. Keep Save and Run as separate smaller buttons on the left side near the model name. 3) When script_generation_mode is true, HIDE the 'Continue in Chat' button and show 'Save and Run' in its place. Run cargo check.",
       "scope": "src/prompts/chat/render_core.rs,src/prompts/chat/prompt.rs",
       "status": "done",
       "claims": [],
@@ -3963,7 +3957,7 @@
       "kind": "codex",
       "mode": "exec",
       "model": "gpt-5.3-codex",
-      "task": "Three fixes for the script generation ChatPrompt:\n\n1) SAVE AND RUN must show the script in the main window. Currently run_saved_script() in src/ai/script_generation.rs spawns bun/kit as a detached process, which doesn't show anything in the app. Instead, after saving the script, the 'Run' and 'Save and Run' actions should execute the script through the app's normal script execution pipeline. Look at how scripts are normally executed in the app - check src/app_impl/execution_scripts.rs and src/execute_script/ for the pattern. The ChatPrompt's handle_script_generation_action in src/prompts/chat/actions.rs needs to signal back to the parent app (ScriptListApp) to execute the saved script. One approach: after saving, use a callback or channel to tell the app to run the script at the saved path. Check how the ChatPrompt communicates with the parent app (escape_callback pattern, or the on_submit callback). You may need to add an on_run_script callback to ChatPrompt that the parent app provides when creating the script generation chat (in show_script_generation_chat in src/app_impl/prompt_ai.rs).\n\n2) Add Cmd+Return (⌘↵) keyboard shortcut for 'Save and Run'. In the ChatPrompt key handler, when script_generation_mode is true and Cmd+Return is pressed, trigger handle_script_generation_action(ScriptGenerationAction::SaveAndRun). Look at how other keyboard shortcuts are handled in the chat prompt key events.\n\n3) Button styles must match the standard PromptFooter button style used throughout the app. Look at src/components/prompt_footer.rs for the PromptFooter component and its button styling. The script generation footer buttons (Save, Run, Save and Run) should use the exact same visual treatment - same font size, colors, padding, and hover states. Run cargo check.",
+      "task": "Three fixes for the script generation ChatPrompt:\n\n1) SAVE AND RUN must show the script in the main window. Currently run_saved_script() in src/ai/script_generation.rs spawns bun/kit as a detached process, which doesn't show anything in the app. Instead, after saving the script, the 'Run' and 'Save and Run' actions should execute the script through the app's normal script execution pipeline. Look at how scripts are normally executed in the app - check src/app_impl/execution_scripts.rs and src/execute_script/ for the pattern. The ChatPrompt's handle_script_generation_action in src/prompts/chat/actions.rs needs to signal back to the parent app (ScriptListApp) to execute the saved script. One approach: after saving, use a callback or channel to tell the app to run the script at the saved path. Check how the ChatPrompt communicates with the parent app (escape_callback pattern, or the on_submit callback). You may need to add an on_run_script callback to ChatPrompt that the parent app provides when creating the script generation chat (in show_script_generation_chat in src/app_impl/prompt_ai.rs).\n\n2) Add Cmd+Return (\u2318\u21b5) keyboard shortcut for 'Save and Run'. In the ChatPrompt key handler, when script_generation_mode is true and Cmd+Return is pressed, trigger handle_script_generation_action(ScriptGenerationAction::SaveAndRun). Look at how other keyboard shortcuts are handled in the chat prompt key events.\n\n3) Button styles must match the standard PromptFooter button style used throughout the app. Look at src/components/prompt_footer.rs for the PromptFooter component and its button styling. The script generation footer buttons (Save, Run, Save and Run) should use the exact same visual treatment - same font size, colors, padding, and hover states. Run cargo check.",
       "scope": "src/prompts/chat/render_core.rs,src/prompts/chat/actions.rs,src/prompts/chat/prompt.rs,src/prompts/chat/mod.rs,src/app_impl/prompt_ai.rs,src/ai/script_generation.rs,src/components/prompt_footer.rs",
       "status": "done",
       "claims": [],
@@ -4026,7 +4020,7 @@
       "createdAt": "2026-02-08T17:34:02.893Z",
       "lastSeenAt": "2026-02-08T17:44:02.910Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "impl-p0-orientation-analyst-a2": {
       "id": "impl-p0-orientation-analyst-a2",
@@ -4040,7 +4034,7 @@
       "createdAt": "2026-02-08T17:44:02.962Z",
       "lastSeenAt": "2026-02-08T17:54:02.978Z",
       "host": "johns.macbook.pro.lan",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-list-polish": {
       "id": "codex-list-polish",
@@ -4056,14 +4050,14 @@
       "lastSeenAt": "2026-02-10T05:29:46.260Z",
       "host": "johns.macbook.pro.lan",
       "startSha": "7a6c0cb31c1cfca916e9e1fdda23a3d9c1b7e0aa",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-search-bar": {
       "id": "codex-search-bar",
       "kind": "codex",
       "mode": "exec",
       "model": "gpt-5.3-codex",
-      "task": "Polish the search bar in the select prompt for a Raycast-quality feel. Make these 2 changes:\n\n1. FLOATING SEARCH INPUT: In select/render.rs, find the input_container (id 'input:select-filter'). Currently it's a full-width strip with border_b_1. Transform it into a floating input: add outer spacing (.pt(px(8)).px(px(8)).pb(px(6))), make the input itself .rounded(px(10)) with a subtle border (use theme border color at low alpha like 0x33-0x4D), and replace any emoji search icon with a properly sized (14-16px) icon tinted with the muted text color from theme.colors.\n\n2. VISIBLE CARET: In select/render.rs where input_display is rendered in the search bar, add a visible caret. When filter_text is non-empty, render format!('{}▍', self.filter_text). When empty, show placeholder text without caret. Optionally: store a caret_on: bool on SelectPrompt, flip it on a timer interval, and call cx.notify() on each flip to get a blinking effect.\n\nIMPORTANT: Run cargo check && cargo clippy --all-targets -- -D warnings && cargo test after changes. Use theme.colors tokens, never hardcode rgb values.",
+      "task": "Polish the search bar in the select prompt for a Raycast-quality feel. Make these 2 changes:\n\n1. FLOATING SEARCH INPUT: In select/render.rs, find the input_container (id 'input:select-filter'). Currently it's a full-width strip with border_b_1. Transform it into a floating input: add outer spacing (.pt(px(8)).px(px(8)).pb(px(6))), make the input itself .rounded(px(10)) with a subtle border (use theme border color at low alpha like 0x33-0x4D), and replace any emoji search icon with a properly sized (14-16px) icon tinted with the muted text color from theme.colors.\n\n2. VISIBLE CARET: In select/render.rs where input_display is rendered in the search bar, add a visible caret. When filter_text is non-empty, render format!('{}\u258d', self.filter_text). When empty, show placeholder text without caret. Optionally: store a caret_on: bool on SelectPrompt, flip it on a timer interval, and call cx.notify() on each flip to get a blinking effect.\n\nIMPORTANT: Run cargo check && cargo clippy --all-targets -- -D warnings && cargo test after changes. Use theme.colors tokens, never hardcode rgb values.",
       "scope": "src/prompts/select/render.rs,src/prompts/select/mod.rs,src/components/prompt_header.rs",
       "readonly": false,
       "status": "needs_split",
@@ -4072,7 +4066,7 @@
       "lastSeenAt": "2026-02-10T05:30:18.061Z",
       "host": "johns.macbook.pro.lan",
       "startSha": "7a6c0cb31c1cfca916e9e1fdda23a3d9c1b7e0aa",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-empty-headers": {
       "id": "codex-empty-headers",
@@ -4083,14 +4077,12 @@
       "scope": "src/prompts/select/render.rs,src/app_render/group_header_item.rs,src/list_item/part_000.rs",
       "readonly": false,
       "status": "needs_split",
-      "claims": [
-        "src/prompts/select/render.rs"
-      ],
+      "claims": [],
       "createdAt": "2026-02-10T05:20:48.674Z",
       "lastSeenAt": "2026-02-10T05:31:19.244Z",
       "host": "johns.macbook.pro.lan",
       "startSha": "7a6c0cb31c1cfca916e9e1fdda23a3d9c1b7e0aa",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-window-footer": {
       "id": "codex-window-footer",
@@ -4106,7 +4098,7 @@
       "lastSeenAt": "2026-02-10T05:31:19.237Z",
       "host": "johns.macbook.pro.lan",
       "startSha": "7a6c0cb31c1cfca916e9e1fdda23a3d9c1b7e0aa",
-      "notes": "[auto] timed out after 600s — task too broad"
+      "notes": "[auto] timed out after 600s \u2014 task too broad"
     },
     "codex-list-polish-split-1": {
       "id": "codex-list-polish-split-1",
@@ -4177,7 +4169,7 @@
       "kind": "codex",
       "mode": "exec",
       "model": "gpt-5.3-codex",
-      "task": "In src/components/prompt_footer.rs, improve keyboard shortcut rendering to look like keycaps/pills. Find render_button() or wherever shortcut text is rendered as a plain text div. Wrap each shortcut label in a keycap pill container with these styles: .px(px(6.0)).py(px(1.0)).rounded(px(4.0)) with a subtle background using the theme border color at alpha 0x20, and .border_1().border_color() using border color at alpha 0x40. Use a monospace font if available (look for FONT_MONO constant or similar). Also change PROMPT_FOOTER_PADDING_X_PX from 12.0 to 14.0 to align with ITEM_PADDING_X. Use accent color only for hover/active states, not as the default label color — prefer text_muted or similar neutral token for default state. Use theme.colors tokens only, never hardcode rgb values. Run cargo check after changes to verify compilation.",
+      "task": "In src/components/prompt_footer.rs, improve keyboard shortcut rendering to look like keycaps/pills. Find render_button() or wherever shortcut text is rendered as a plain text div. Wrap each shortcut label in a keycap pill container with these styles: .px(px(6.0)).py(px(1.0)).rounded(px(4.0)) with a subtle background using the theme border color at alpha 0x20, and .border_1().border_color() using border color at alpha 0x40. Use a monospace font if available (look for FONT_MONO constant or similar). Also change PROMPT_FOOTER_PADDING_X_PX from 12.0 to 14.0 to align with ITEM_PADDING_X. Use accent color only for hover/active states, not as the default label color \u2014 prefer text_muted or similar neutral token for default state. Use theme.colors tokens only, never hardcode rgb values. Run cargo check after changes to verify compilation.",
       "scope": "src/components/prompt_footer.rs",
       "readonly": false,
       "status": "needs_split",
