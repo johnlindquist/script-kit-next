@@ -163,3 +163,50 @@ fn test_render_input_area_does_not_hardcode_hex_input_text_colors() {
         section
     );
 }
+
+#[test]
+fn test_render_input_area_wraps_floating_input_with_requested_outer_spacing() {
+    let section = render_input_area_section();
+
+    assert!(
+        section.contains(".pt(px(8.0))"),
+        "PromptHeader floating input should apply top spacing token. Section:\n{}",
+        section
+    );
+    assert!(
+        section.contains(".px(px(8.0))"),
+        "PromptHeader floating input should apply horizontal spacing token. Section:\n{}",
+        section
+    );
+    assert!(
+        section.contains(".pb(px(6.0))"),
+        "PromptHeader floating input should apply bottom spacing token. Section:\n{}",
+        section
+    );
+}
+
+#[test]
+fn test_render_input_area_uses_rounded_low_alpha_theme_border_for_floating_field() {
+    let section = render_input_area_section();
+
+    assert!(
+        section.contains(".rounded(px(10.0))"),
+        "PromptHeader floating input field should use 10px rounding. Section:\n{}",
+        section
+    );
+    assert!(
+        section.contains(".border_1()"),
+        "PromptHeader floating input field should include a subtle border. Section:\n{}",
+        section
+    );
+    assert!(
+        section.contains(".border_color(colors.border.rgba8(0x33))"),
+        "PromptHeader floating input border should use theme border token with low alpha. Section:\n{}",
+        section
+    );
+    assert!(
+        !section.contains(".border_b_1()"),
+        "PromptHeader floating input should not use legacy bottom border strip styling. Section:\n{}",
+        section
+    );
+}

@@ -405,7 +405,7 @@ pub fn resize_first_window_to_height(target_height: Pixels) {
             return;
         }
 
-        let animate = true;
+        let animate = false;
         let correlation_id = format!("anim_resize:{}", uuid::Uuid::new_v4());
 
         // Log actual resizes at debug level (these are rare events, not hot-path)

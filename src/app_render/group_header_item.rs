@@ -21,12 +21,15 @@ fn preview_keyword_tags(keywords: &[String]) -> Vec<String> {
 fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
     match feature {
         builtins::BuiltInFeature::ClipboardHistory => "Clipboard History Manager".to_string(),
+        builtins::BuiltInFeature::Favorites => "Favorites".to_string(),
         builtins::BuiltInFeature::AppLauncher => "Application Launcher".to_string(),
         builtins::BuiltInFeature::App(name) => name.clone(),
         builtins::BuiltInFeature::WindowSwitcher => "Window Manager".to_string(),
         builtins::BuiltInFeature::DesignGallery => "Design Gallery".to_string(),
         builtins::BuiltInFeature::AiChat => "AI Assistant".to_string(),
         builtins::BuiltInFeature::Notes => "Notes & Scratchpad".to_string(),
+        builtins::BuiltInFeature::Quicklinks => "Quick Links".to_string(),
+        builtins::BuiltInFeature::EmojiPicker => "Emoji Picker".to_string(),
         builtins::BuiltInFeature::MenuBarAction(_) => "Menu Bar Action".to_string(),
         builtins::BuiltInFeature::SystemAction(_) => "System Action".to_string(),
         builtins::BuiltInFeature::NotesCommand(_) => "Notes Command".to_string(),
@@ -36,9 +39,18 @@ fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
         builtins::BuiltInFeature::FrecencyCommand(_) => "Suggested Items".to_string(),
         builtins::BuiltInFeature::UtilityCommand(_) => "Quick Utility".to_string(),
         builtins::BuiltInFeature::SettingsCommand(_) => "Settings".to_string(),
+        builtins::BuiltInFeature::KitStoreCommand(_) => "Kit Store".to_string(),
         builtins::BuiltInFeature::FileSearch => "File Browser".to_string(),
         builtins::BuiltInFeature::Webcam => "Webcam Capture".to_string(),
     }
+}
+
+fn group_header_section_name(name: &str) -> String {
+    name.to_uppercase()
+}
+
+fn should_render_group_header_divider(ix: usize) -> bool {
+    ix > 0
 }
 
 /// Helper function to render a group header style item with actual visual styling
@@ -47,55 +59,59 @@ fn render_group_header_item(
     is_selected: bool,
     style: &designs::group_header_variations::GroupHeaderStyle,
     spacing: &designs::DesignSpacing,
-    typography: &designs::DesignTypography,
-    visual: &designs::DesignVisual,
+    _typography: &designs::DesignTypography,
+    _visual: &designs::DesignVisual,
     colors: &designs::DesignColors,
 ) -> AnyElement {
+    #[allow(unused_imports)]
     use designs::group_header_variations::GroupHeaderStyle;
+    use crate::list_item::{ALPHA_SEPARATOR, SECTION_HEADER_HEIGHT, SECTION_PADDING_TOP};
 
-    let name_owned = style.name().to_string();
-    let desc_owned = style.description().to_string();
+    let name_owned = group_header_section_name(style.name());
+    let divider_color = rgba((colors.text_secondary << 8) | ALPHA_SEPARATOR);
 
     let mut item_div = div()
         .id(ElementId::NamedInteger("gallery-header".into(), ix as u64))
         .w_full()
-        .h(px(LIST_ITEM_HEIGHT))
+        .h(px(SECTION_HEADER_HEIGHT))
         .px(px(spacing.padding_lg))
+        .pt(px(SECTION_PADDING_TOP))
         .flex()
-        .flex_row()
-        .items_center()
-        .gap(px(spacing.gap_md));
+        .flex_col()
+        .justify_end();
 
-    if is_selected {
-        // Use low-opacity white for vibrancy support (see VIBRANCY.md)
-        item_div = item_div.bg(rgba((colors.background_selected << 8) | 0x0f)); // ~6% opacity
+    if should_render_group_header_divider(ix) {
+        item_div = item_div.border_t_1().border_color(divider_color);
     }
 
-    let preview = render_group_header_preview(style, typography, visual, colors);
+    if is_selected {
+        // Keep selected tint subtle so headers stay non-row-like.
+        item_div = item_div.bg(rgba((colors.background_selected << 8) | ALPHA_SEPARATOR));
+    }
 
     item_div
-        // Preview element
-        .child(preview)
-        // Name and description
         .child(
             div()
-                .flex_1()
-                .flex()
-                .flex_col()
-                .gap(px(2.0))
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(gpui::FontWeight::MEDIUM)
-                        .text_color(rgb(colors.text_primary))
-                        .child(name_owned),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(colors.text_muted))
-                        .child(desc_owned),
-                ),
+                .text_xs()
+                .font_weight(gpui::FontWeight::MEDIUM)
+                .text_color(rgb(colors.text_secondary))
+                .child(name_owned),
         )
         .into_any_element()
+}
+
+#[cfg(test)]
+mod group_header_item_tests {
+    use super::*;
+
+    #[test]
+    fn test_group_header_section_name_uppercases_labels() {
+        assert_eq!(group_header_section_name("Main"), "MAIN");
+    }
+
+    #[test]
+    fn test_should_render_group_header_divider_only_after_first_item() {
+        assert!(!should_render_group_header_divider(0));
+        assert!(should_render_group_header_divider(1));
+    }
 }

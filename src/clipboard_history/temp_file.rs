@@ -14,7 +14,7 @@ use super::types::{ClipboardEntry, ContentType};
 #[allow(dead_code)]
 pub fn save_entry_to_temp_file(entry: &ClipboardEntry) -> Result<PathBuf> {
     match entry.content_type {
-        ContentType::Text => {
+        ContentType::Text | ContentType::Link | ContentType::File | ContentType::Color => {
             let mut temp_file = Builder::new()
                 .prefix("script-kit-clipboard-")
                 .suffix(".txt")
@@ -72,6 +72,8 @@ mod tests {
             content_type: ContentType::Text,
             timestamp: 0,
             pinned: false,
+            source_app_name: None,
+            source_app_bundle_id: None,
             ocr_text: None,
         };
 
@@ -99,6 +101,8 @@ mod tests {
             content_type: ContentType::Image,
             timestamp: 0,
             pinned: false,
+            source_app_name: None,
+            source_app_bundle_id: None,
             ocr_text: None,
         };
 

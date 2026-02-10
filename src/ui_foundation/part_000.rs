@@ -49,8 +49,8 @@ pub fn hex_to_hsla_with_alpha(hex: u32, alpha: f32) -> Hsla {
     }
 }
 /// Opacity for vibrancy window backgrounds in dark mode.
-/// Lower value (37%) allows more blur to show through while maintaining readability.
-pub const VIBRANCY_DARK_OPACITY: f32 = 0.37;
+/// 75% opacity balances vibrancy blur visibility with readability.
+pub const VIBRANCY_DARK_OPACITY: f32 = 0.75;
 /// Opacity for vibrancy window backgrounds in light mode.
 /// Higher value (85%) needed for visibility - matches POC's rgba(0xFAFAFAD9).
 pub const VIBRANCY_LIGHT_OPACITY: f32 = 0.85;
@@ -66,7 +66,7 @@ pub const VIBRANCY_LIGHT_OPACITY: f32 = 0.85;
 /// # Returns
 /// An Rgba color with appropriate opacity for the current theme mode:
 /// - Light mode: 85% opacity (matches POC's proven appearance)
-/// - Dark mode: 37% opacity (more blur visibility)
+/// - Dark mode: 75% opacity (balances blur visibility with readability)
 ///
 /// # Example
 /// ```ignore

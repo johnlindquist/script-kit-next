@@ -281,6 +281,17 @@ impl NotesApp {
                 self.select_note(note_id, window, cx);
                 return;
             }
+
+            tracing::warn!(
+                action_id,
+                note_id_str,
+                selected_note_id = ?self.selected_note_id,
+                notes_len = self.notes.len(),
+                "notes_note_switcher_selected_note_not_found",
+            );
+            self.show_selected_note_missing_feedback("execute_note_switcher_action");
+            self.close_browse_panel(window, cx);
+            return;
         }
 
         // Handle "no_notes" placeholder action

@@ -71,6 +71,8 @@ pub fn get_entry_impl(conn: &Connection, id: &str) -> Option<ClipboardEntry> {
                 timestamp: row.get(3)?,
                 pinned: row.get::<_, i64>(4)? != 0,
                 ocr_text: row.get(5)?,
+                source_app_name: None,
+                source_app_bundle_id: None,
             })
         },
     )
@@ -126,6 +128,8 @@ pub fn get_page_impl(conn: &Connection, limit: usize, offset: usize) -> Vec<Clip
             timestamp: row.get(3)?,
             pinned: row.get::<_, i64>(4)? != 0,
             ocr_text: row.get(5)?,
+            source_app_name: None,
+            source_app_bundle_id: None,
         })
     })
     .map(|rows| rows.filter_map(|r| r.ok()).collect())

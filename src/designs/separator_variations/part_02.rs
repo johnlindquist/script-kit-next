@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 impl SeparatorStyle {
     /// Get all available separator styles.
     pub fn all() -> &'static [SeparatorStyle] {

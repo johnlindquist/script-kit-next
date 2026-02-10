@@ -15,7 +15,9 @@ pub fn quick_look_entry(entry: &ClipboardEntryMeta) -> Result<(), String> {
         .ok_or_else(|| "Failed to load clipboard entry content".to_string())?;
 
     let preview_path = match entry.content_type {
-        ContentType::Text => write_text_preview(&entry.id, &content)?,
+        ContentType::Text | ContentType::Link | ContentType::File | ContentType::Color => {
+            write_text_preview(&entry.id, &content)?
+        }
         ContentType::Image => resolve_image_preview_path(&entry.id, &content)?,
     };
 

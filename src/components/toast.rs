@@ -20,6 +20,4 @@ mod tests;
 mod types;
 
 pub use model::Toast;
-pub use types::{
-    ToastAction, ToastActionCallback, ToastColors, ToastDismissCallback, ToastVariant,
-};
+pub use types::{ToastAction, ToastColors, ToastDismissCallback, ToastVariant};

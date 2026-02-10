@@ -9,6 +9,9 @@ use chrono::{Datelike, Local, NaiveDate, TimeZone};
 pub enum ContentType {
     Text,
     Image,
+    Link,
+    File,
+    Color,
 }
 
 impl ContentType {
@@ -16,6 +19,9 @@ impl ContentType {
         match self {
             ContentType::Text => "text",
             ContentType::Image => "image",
+            ContentType::Link => "link",
+            ContentType::File => "file",
+            ContentType::Color => "color",
         }
     }
 
@@ -23,9 +29,29 @@ impl ContentType {
     pub fn from_str(s: &str) -> Self {
         match s {
             "image" => ContentType::Image,
+            "link" => ContentType::Link,
+            "file" => ContentType::File,
+            "color" => ContentType::Color,
             _ => ContentType::Text,
         }
     }
+}
+
+#[allow(dead_code)]
+pub fn classify_content(text: &str, has_image: bool) -> ContentType {
+    if has_image {
+        return ContentType::Image;
+    }
+
+    if text.starts_with("http://") || text.starts_with("https://") || text.contains("://") {
+        return ContentType::Link;
+    }
+
+    if text.starts_with('/') || text.starts_with('~') {
+        return ContentType::File;
+    }
+
+    ContentType::Text
 }
 
 /// Time grouping for clipboard entries (like Raycast)
@@ -79,6 +105,12 @@ pub struct ClipboardEntry {
     /// OCR text extracted from images (None for text entries or pending OCR)
     #[allow(dead_code)] // Used by downstream subtasks (OCR, UI)
     pub ocr_text: Option<String>,
+    /// Human-readable source application name (for example, "Safari")
+    #[allow(dead_code)]
+    pub source_app_name: Option<String>,
+    /// Source application bundle identifier (for example, "com.apple.Safari")
+    #[allow(dead_code)]
+    pub source_app_bundle_id: Option<String>,
 }
 
 /// Lightweight clipboard entry metadata for list views (no payload)
@@ -117,7 +149,7 @@ impl ClipboardEntryMeta {
                     "[Image]".to_string()
                 }
             }
-            ContentType::Text => {
+            ContentType::Text | ContentType::Link | ContentType::File | ContentType::Color => {
                 // Replace newlines with spaces for single-line display
                 let sanitized = self.text_preview.replace(['\n', '\r'], " ");
                 if sanitized.len() > 50 {
@@ -221,9 +253,57 @@ mod tests {
     fn test_content_type_conversion() {
         assert_eq!(ContentType::Text.as_str(), "text");
         assert_eq!(ContentType::Image.as_str(), "image");
+        assert_eq!(ContentType::Link.as_str(), "link");
+        assert_eq!(ContentType::File.as_str(), "file");
+        assert_eq!(ContentType::Color.as_str(), "color");
         assert_eq!(ContentType::from_str("text"), ContentType::Text);
         assert_eq!(ContentType::from_str("image"), ContentType::Image);
+        assert_eq!(ContentType::from_str("link"), ContentType::Link);
+        assert_eq!(ContentType::from_str("file"), ContentType::File);
+        assert_eq!(ContentType::from_str("color"), ContentType::Color);
         assert_eq!(ContentType::from_str("unknown"), ContentType::Text);
+    }
+
+    #[test]
+    fn test_classify_content_returns_image_when_has_image_true() {
+        assert_eq!(
+            classify_content("https://example.com", true),
+            ContentType::Image
+        );
+    }
+
+    #[test]
+    fn test_classify_content_returns_link_when_text_starts_with_http() {
+        assert_eq!(
+            classify_content("http://example.com", false),
+            ContentType::Link
+        );
+        assert_eq!(
+            classify_content("https://example.com", false),
+            ContentType::Link
+        );
+    }
+
+    #[test]
+    fn test_classify_content_returns_link_when_text_contains_scheme_separator() {
+        assert_eq!(
+            classify_content("custom-scheme://resource", false),
+            ContentType::Link
+        );
+    }
+
+    #[test]
+    fn test_classify_content_returns_file_when_text_starts_with_path_prefix() {
+        assert_eq!(classify_content("/tmp/file.txt", false), ContentType::File);
+        assert_eq!(classify_content("~/notes.md", false), ContentType::File);
+    }
+
+    #[test]
+    fn test_classify_content_returns_text_when_no_special_pattern_matches() {
+        assert_eq!(
+            classify_content("just some plain text", false),
+            ContentType::Text
+        );
     }
 
     #[test]
@@ -352,6 +432,8 @@ mod tests {
                 timestamp: today_ts_ms,
                 pinned: false,
                 ocr_text: None,
+                source_app_name: None,
+                source_app_bundle_id: None,
             },
             ClipboardEntry {
                 id: "2".to_string(),
@@ -360,6 +442,8 @@ mod tests {
                 timestamp: yesterday_ts_ms,
                 pinned: false,
                 ocr_text: None,
+                source_app_name: None,
+                source_app_bundle_id: None,
             },
             ClipboardEntry {
                 id: "3".to_string(),
@@ -368,6 +452,8 @@ mod tests {
                 timestamp: old_ts_ms,
                 pinned: false,
                 ocr_text: None,
+                source_app_name: None,
+                source_app_bundle_id: None,
             },
         ];
 
