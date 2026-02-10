@@ -361,7 +361,7 @@ impl PromptFooter {
             .child(
                 div()
                     .text_size(px(button_font_size))
-                    .text_color(self.colors.text_muted.to_rgb())
+                    .text_color(self.colors.accent.to_rgb())
                     .child(label),
             )
             .child(
