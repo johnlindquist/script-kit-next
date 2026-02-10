@@ -79,7 +79,7 @@ pub(crate) fn is_destructive_action(action: &Action) -> bool {
 }
 
 /// Grouped action item for variable-height list rendering
-/// Section headers are 24px, action items are 44px
+/// Section headers are 22px, action items are 36px
 #[derive(Clone, Debug)]
 pub enum GroupedActionItem {
     /// A section header (e.g., "Actions", "Navigation")
@@ -167,7 +167,6 @@ pub(super) fn build_grouped_items_static(
 
     let mut prev_section: Option<String> = None;
     let mut prev_category: Option<ActionCategory> = None;
-
     for (filter_idx, &action_idx) in filtered_actions.iter().enumerate() {
         if let Some(action) = actions.get(action_idx) {
             match section_style {
@@ -222,6 +221,40 @@ pub(super) fn should_render_section_separator(
     }
 }
 
+const ACTIONS_DIALOG_FOOTER_HEIGHT: f32 = 32.0;
+
+/// Calculate the list viewport height used for scrollbar geometry.
+///
+/// This must mirror popup layout constraints so the scrollbar thumb represents
+/// the visible list region (excluding search/header/footer chrome).
+pub(super) fn actions_dialog_scrollbar_viewport_height(
+    total_content_height: f32,
+    show_search: bool,
+    has_header: bool,
+    show_footer: bool,
+) -> f32 {
+    let search_height = if show_search { SEARCH_INPUT_HEIGHT } else { 0.0 };
+    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+    let footer_height = if show_footer {
+        ACTIONS_DIALOG_FOOTER_HEIGHT
+    } else {
+        0.0
+    };
+    let available_viewport_height =
+        (POPUP_MAX_HEIGHT - search_height - header_height - footer_height).max(0.0);
+
+    total_content_height.min(available_viewport_height)
+}
+
+/// Resolve empty-state copy based on whether a search query is active.
+pub(super) fn actions_dialog_empty_state_message(search_text: &str) -> &'static str {
+    if search_text.trim().is_empty() {
+        "No actions available"
+    } else {
+        "No actions match your search"
+    }
+}
+
 /// ActionsDialog - Compact overlay popup for quick actions
 /// Implements Raycast-style design with individual keycap shortcuts
 ///
@@ -243,7 +276,7 @@ pub struct ActionsDialog {
     pub focused_script: Option<ScriptInfo>,
     /// Currently focused scriptlet (for H3-defined custom actions)
     pub focused_scriptlet: Option<Scriptlet>,
-    /// List state for variable-height list (section headers 24px, items 44px)
+    /// List state for variable-height list (section headers 22px, items 36px)
     pub list_state: ListState,
     /// Grouped items for list rendering (includes section headers)
     pub grouped_items: Vec<GroupedActionItem>,
@@ -269,4 +302,29 @@ pub struct ActionsDialog {
     /// Callback for when the dialog is closed (escape pressed, window dismissed)
     /// Used to notify the main app to restore focus
     pub on_close: Option<CloseCallback>,
+}
+
+#[cfg(test)]
+mod empty_state_message_tests {
+    use super::actions_dialog_empty_state_message;
+
+    #[test]
+    fn test_actions_dialog_empty_state_message_returns_available_when_search_is_empty() {
+        assert_eq!(
+            actions_dialog_empty_state_message(""),
+            "No actions available"
+        );
+        assert_eq!(
+            actions_dialog_empty_state_message("   "),
+            "No actions available"
+        );
+    }
+
+    #[test]
+    fn test_actions_dialog_empty_state_message_returns_no_match_when_search_has_text() {
+        assert_eq!(
+            actions_dialog_empty_state_message("open"),
+            "No actions match your search"
+        );
+    }
 }

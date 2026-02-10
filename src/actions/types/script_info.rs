@@ -92,7 +92,7 @@ impl Default for ScriptInfo {
             path: String::new(),
             is_script: false,
             is_scriptlet: false,
-            action_verb: "Run".to_string(),
+            action_verb: ScriptInfo::DEFAULT_ACTION_VERB.to_string(),
             shortcut: None,
             alias: None,
             is_suggested: false,
@@ -239,7 +239,7 @@ impl ScriptInfo {
         )
     }
 
-    /// Create a ScriptInfo with explicit is_script flag and custom action verb
+    /// Create a ScriptInfo with explicit is_script flag and default action verb
     #[allow(dead_code)]
     pub fn with_is_script(
         name: impl Into<String>,
@@ -255,6 +255,27 @@ impl ScriptInfo {
             Self::DEFAULT_ACTION_VERB,
             None,
             None,
+        )
+    }
+
+    /// Create a ScriptInfo for an agent file.
+    /// Agents are not scripts/scriptlets but expose agent-specific actions.
+    #[allow(dead_code)]
+    pub fn agent(
+        name: impl Into<String>,
+        path: impl Into<String>,
+        shortcut: Option<String>,
+        alias: Option<String>,
+    ) -> Self {
+        Self::build(
+            name,
+            path,
+            false,
+            false,
+            true,
+            Self::DEFAULT_ACTION_VERB,
+            shortcut,
+            alias,
         )
     }
 
@@ -320,14 +341,53 @@ impl ScriptInfo {
     }
 }
 
-impl From<(&str, &str)> for ScriptInfo {
-    fn from(value: (&str, &str)) -> Self {
+impl<Name, Path> From<(Name, Path)> for ScriptInfo
+where
+    Name: Into<String>,
+    Path: Into<String>,
+{
+    fn from(value: (Name, Path)) -> Self {
         Self::new(value.0, value.1)
     }
 }
 
-impl From<(String, String)> for ScriptInfo {
-    fn from(value: (String, String)) -> Self {
-        Self::new(value.0, value.1)
+#[cfg(test)]
+mod script_info_completeness_tests {
+    use super::ScriptInfo;
+
+    #[test]
+    fn test_script_info_agent_sets_expected_flags_when_constructed() {
+        let info = ScriptInfo::agent(
+            "my-agent",
+            "/agents/my-agent.md",
+            Some("cmd+shift+a".to_string()),
+            Some("agent".to_string()),
+        );
+
+        assert_eq!(info.name, "my-agent");
+        assert_eq!(info.path, "/agents/my-agent.md");
+        assert!(!info.is_script);
+        assert!(!info.is_scriptlet);
+        assert!(info.is_agent);
+        assert_eq!(info.shortcut.as_deref(), Some("cmd+shift+a"));
+        assert_eq!(info.alias.as_deref(), Some("agent"));
+    }
+
+    #[test]
+    fn test_script_info_from_converts_mixed_tuple_when_name_owned_path_borrowed() {
+        let info = ScriptInfo::from(("script".to_string(), "/path/script.ts"));
+
+        assert_eq!(info.name, "script");
+        assert_eq!(info.path, "/path/script.ts");
+        assert!(info.is_script);
+    }
+
+    #[test]
+    fn test_script_info_from_converts_mixed_tuple_when_name_borrowed_path_owned() {
+        let info = ScriptInfo::from(("script", "/path/script.ts".to_string()));
+
+        assert_eq!(info.name, "script");
+        assert_eq!(info.path, "/path/script.ts");
+        assert!(info.is_script);
     }
 }

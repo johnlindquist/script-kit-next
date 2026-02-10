@@ -1,5 +1,38 @@
-impl ActionsDialog {
+const ACTIONS_DIALOG_COLOR_ALPHA_MAX: f32 = 255.0;
+const ACTIONS_DIALOG_SEARCH_BORDER_ALPHA_SCALE: f32 = 2.0;
+const ACTIONS_DIALOG_CONTAINER_BORDER_MIN_ALPHA: u8 = 0x80;
+const ACTIONS_DIALOG_VIBRANT_DIALOG_MIN_OPACITY: f32 = 0.50;
+const ACTIONS_DIALOG_OPAQUE_DIALOG_MIN_OPACITY: f32 = 0.95;
 
+fn actions_dialog_alpha_u8(opacity: f32) -> u8 {
+    (opacity.clamp(0.0, 1.0) * ACTIONS_DIALOG_COLOR_ALPHA_MAX) as u8
+}
+
+fn actions_dialog_search_border_alpha(border_inactive_opacity: f32) -> u8 {
+    let scaled_border_opacity =
+        (border_inactive_opacity * ACTIONS_DIALOG_SEARCH_BORDER_ALPHA_SCALE).min(1.0);
+    actions_dialog_alpha_u8(scaled_border_opacity)
+}
+
+fn actions_dialog_container_border_alpha(border_inactive_opacity: f32) -> u8 {
+    actions_dialog_search_border_alpha(border_inactive_opacity)
+        .max(ACTIONS_DIALOG_CONTAINER_BORDER_MIN_ALPHA)
+}
+
+fn actions_dialog_container_background_alpha(dialog_opacity: f32, use_vibrancy: bool) -> u8 {
+    let minimum_dialog_opacity = if use_vibrancy {
+        ACTIONS_DIALOG_VIBRANT_DIALOG_MIN_OPACITY
+    } else {
+        ACTIONS_DIALOG_OPAQUE_DIALOG_MIN_OPACITY
+    };
+    actions_dialog_alpha_u8(dialog_opacity.max(minimum_dialog_opacity))
+}
+
+fn actions_dialog_rgba_with_alpha(hex: u32, alpha: u8) -> gpui::Rgba {
+    rgba(hex_with_alpha(hex, alpha))
+}
+
+impl ActionsDialog {
     /// Move selection up, skipping section headers
     ///
     /// When moving up and landing on a section header, we must search UPWARD
@@ -90,18 +123,6 @@ impl ActionsDialog {
         (self.on_select)("__cancel__".to_string());
     }
 
-    /// Dismiss the dialog when user clicks outside its bounds.
-    /// This is a public method called from the parent container's click-outside handler.
-    /// Logs the event and triggers the cancel callback.
-    pub fn dismiss_on_click_outside(&mut self) {
-        tracing::info!(
-            target: "script_kit::actions",
-            "ActionsDialog dismiss-on-click-outside triggered"
-        );
-        logging::log("ACTIONS", "Actions dialog dismissed (click outside)");
-        self.submit_cancel();
-    }
-
     /// Create box shadow for the overlay popup
     /// When rendered in a separate vibrancy window, no shadow is needed
     /// (the window vibrancy provides visual separation)
@@ -118,31 +139,35 @@ impl ActionsDialog {
     ) -> (gpui::Rgba, gpui::Rgba, gpui::Rgba, gpui::Rgba, gpui::Rgba) {
         // Use theme opacity for input background to support vibrancy
         let opacity = self.theme.get_opacity();
-        let input_alpha = (opacity.input * 255.0) as u8;
-        // Use theme-aware border opacity for proper light/dark mode support
-        // Light mode: ~30% opacity, Dark mode: ~50% opacity (via border_inactive)
-        let border_alpha = ((opacity.border_inactive * 2.0).min(1.0) * 255.0) as u8;
-
-        if self.design_variant == DesignVariant::Default {
-            (
-                rgba(hex_with_alpha(
+        let input_alpha = actions_dialog_alpha_u8(opacity.input);
+        // Keep search and container borders on the same opacity scaling path.
+        let border_alpha = actions_dialog_search_border_alpha(opacity.border_inactive);
+        let (search_box_background, search_box_border, muted_text, dimmed_text, secondary_text) =
+            if self.design_variant == DesignVariant::Default {
+                (
                     self.theme.colors.background.search_box,
-                    input_alpha,
-                )),
-                rgba(hex_with_alpha(self.theme.colors.ui.border, border_alpha)),
-                rgb(self.theme.colors.text.muted),
-                rgb(self.theme.colors.text.dimmed),
-                rgb(self.theme.colors.text.secondary),
-            )
-        } else {
-            (
-                rgba(hex_with_alpha(colors.background_secondary, input_alpha)),
-                rgba(hex_with_alpha(colors.border, border_alpha)),
-                rgb(colors.text_muted),
-                rgb(colors.text_dimmed),
-                rgb(colors.text_secondary),
-            )
-        }
+                    self.theme.colors.ui.border,
+                    self.theme.colors.text.muted,
+                    self.theme.colors.text.dimmed,
+                    self.theme.colors.text.secondary,
+                )
+            } else {
+                (
+                    colors.background_secondary,
+                    colors.border,
+                    colors.text_muted,
+                    colors.text_dimmed,
+                    colors.text_secondary,
+                )
+            };
+
+        (
+            actions_dialog_rgba_with_alpha(search_box_background, input_alpha),
+            actions_dialog_rgba_with_alpha(search_box_border, border_alpha),
+            rgb(muted_text),
+            rgb(dimmed_text),
+            rgb(secondary_text),
+        )
     }
 
     /// Get colors for the main container based on design variant
@@ -151,33 +176,73 @@ impl ActionsDialog {
         &self,
         colors: &crate::designs::DesignColors,
     ) -> (gpui::Rgba, gpui::Rgba, gpui::Rgba) {
-        // Vibrancy-aware dialog background:
-        // - When vibrancy enabled: ~50% opacity to show blur but remain visible
-        // - When vibrancy disabled: ~95% opacity for near-solid appearance
+        let opacity = self.theme.get_opacity();
         let use_vibrancy = self.theme.is_vibrancy_enabled();
-        let dialog_alpha = if use_vibrancy {
-            // Dialogs need higher opacity than main window (0.37) to stand out
-            (0.50 * 255.0) as u8
-        } else {
-            // Near-opaque when vibrancy disabled
-            (0.95 * 255.0) as u8
-        };
-
-        if self.design_variant == DesignVariant::Default {
-            (
-                rgba(hex_with_alpha(
+        // Keep the current readability floors while allowing stronger user-configured dialog
+        // opacity values to take effect.
+        let dialog_alpha = actions_dialog_container_background_alpha(opacity.dialog, use_vibrancy);
+        let border_alpha = actions_dialog_container_border_alpha(opacity.border_inactive);
+        let (main_background, container_border, container_text) =
+            if self.design_variant == DesignVariant::Default {
+                (
                     self.theme.colors.background.main,
-                    dialog_alpha,
-                )),
-                rgba(hex_with_alpha(self.theme.colors.ui.border, 0x80)),
-                rgb(self.theme.colors.text.secondary),
-            )
-        } else {
-            (
-                rgba(hex_with_alpha(colors.background, dialog_alpha)),
-                rgba(hex_with_alpha(colors.border, 0x80)),
-                rgb(colors.text_secondary),
-            )
-        }
+                    self.theme.colors.ui.border,
+                    self.theme.colors.text.secondary,
+                )
+            } else {
+                (colors.background, colors.border, colors.text_secondary)
+            };
+
+        (
+            actions_dialog_rgba_with_alpha(main_background, dialog_alpha),
+            actions_dialog_rgba_with_alpha(container_border, border_alpha),
+            rgb(container_text),
+        )
+    }
+}
+
+#[cfg(test)]
+mod actions_dialog_opacity_consistency_tests {
+    use super::{
+        actions_dialog_container_background_alpha, actions_dialog_container_border_alpha,
+        actions_dialog_rgba_with_alpha, actions_dialog_search_border_alpha,
+        ACTIONS_DIALOG_CONTAINER_BORDER_MIN_ALPHA,
+    };
+    use gpui::rgba;
+
+    #[test]
+    fn test_actions_dialog_search_border_alpha_scales_border_inactive_opacity() {
+        assert_eq!(actions_dialog_search_border_alpha(0.20), 102);
+    }
+
+    #[test]
+    fn test_actions_dialog_container_border_alpha_enforces_minimum_contrast() {
+        assert_eq!(
+            actions_dialog_container_border_alpha(0.10),
+            ACTIONS_DIALOG_CONTAINER_BORDER_MIN_ALPHA
+        );
+    }
+
+    #[test]
+    fn test_actions_dialog_container_background_alpha_keeps_vibrancy_floor() {
+        assert_eq!(actions_dialog_container_background_alpha(0.15, true), 127);
+    }
+
+    #[test]
+    fn test_actions_dialog_container_background_alpha_keeps_non_vibrancy_floor() {
+        assert_eq!(actions_dialog_container_background_alpha(0.15, false), 242);
+    }
+
+    #[test]
+    fn test_actions_dialog_container_background_alpha_uses_higher_theme_value() {
+        assert_eq!(actions_dialog_container_background_alpha(0.80, true), 204);
+    }
+
+    #[test]
+    fn test_actions_dialog_rgba_with_alpha_combines_hex_and_alpha_channels() {
+        assert_eq!(
+            actions_dialog_rgba_with_alpha(0x112233, 0x44),
+            rgba(0x11223344)
+        );
     }
 }

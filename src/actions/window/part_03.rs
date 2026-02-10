@@ -20,32 +20,7 @@ pub fn resize_actions_window_direct(
         ),
     );
 
-    // Count section headers when using Headers style
-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
-    } else {
-        0
-    };
-
-    // Calculate new height
-    let search_box_height = if hide_search {
-        0.0
-    } else {
-        SEARCH_INPUT_HEIGHT
-    };
-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
-    // When no actions, still need space for "No actions match" message (use 1 row height)
-    let min_items_height = if num_actions == 0 {
-        ACTION_ITEM_HEIGHT
-    } else {
-        0.0
-    };
-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
-        .max(min_items_height)
-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
-    let border_height = 2.0;
-    let new_height_f32 = items_height + search_box_height + header_height + border_height;
+    let new_height_f32 = compute_popup_height(dialog);
 
     let current_bounds = window.bounds();
     let current_height_f32: f32 = current_bounds.size.height.into();
@@ -166,32 +141,7 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
             ),
         );
 
-        // Count section headers when using Headers style
-        let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
-            count_section_headers(&dialog.actions, &dialog.filtered_actions)
-        } else {
-            0
-        };
-
-        // Calculate new height (same logic as open_actions_window)
-        let search_box_height = if hide_search {
-            0.0
-        } else {
-            SEARCH_INPUT_HEIGHT
-        };
-        let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
-        let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
-        // When no actions, still need space for "No actions match" message
-        let min_items_height = if num_actions == 0 {
-            ACTION_ITEM_HEIGHT
-        } else {
-            0.0
-        };
-        let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
-            .max(min_items_height)
-            .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
-        let border_height = 2.0; // top + bottom border
-        let new_height_f32 = items_height + search_box_height + header_height + border_height;
+        let new_height_f32 = compute_popup_height(dialog);
 
         let update_result = handle.update(cx, |_root, window, cx| {
             let current_bounds = window.bounds();
@@ -306,8 +256,20 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
             cx.notify();
         });
 
-        if let Err(e) = update_result {
-            crate::logging::log("ACTIONS", &format!("handle.update FAILED: {:?}", e));
+        if let Err(error) = update_result {
+            crate::logging::log(
+                "WARN",
+                &format!(
+                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window update failed: operation=resize error={error:?}"
+                ),
+            );
+            crate::logging::log_debug(
+                "ACTIONS",
+                &format!(
+                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window context: num_actions={}, hide_search={}, has_header={}, target_height={:.0}",
+                    num_actions, hide_search, has_header, new_height_f32
+                ),
+            );
         }
 
         crate::logging::log(

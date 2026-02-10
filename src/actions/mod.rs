@@ -14,7 +14,6 @@
 //! - `dialog`: ActionsDialog struct and implementation
 //! - `window`: Separate vibrancy window for actions panel
 
-#[path = "builders_rewire.rs"]
 mod builders;
 mod command_bar;
 mod constants;
@@ -27,32 +26,23 @@ mod window;
 // - ActionsDialog: the main dialog component
 // - Window functions for separate vibrancy window
 
-pub use builders::to_deeplink_name;
-#[allow(unused_imports)]
-pub use builders::ClipboardEntryInfo;
+pub use builders::{
+    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
+    get_notes_command_bar_actions,
+};
 #[allow(unused_imports)]
 pub(crate) use builders::{
     get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
 };
-// Chat prompt info types for ActionsDialog::with_chat
-pub use builders::{ChatModelInfo, ChatPromptInfo};
+pub use builders::{
+    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
+    NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
+};
+pub use command_bar::{CommandBar, CommandBarConfig};
 pub use dialog::ActionsDialog;
-pub use types::ScriptInfo;
-
-// Public API for AI window integration (re-exported but may appear unused until integration)
-#[allow(unused_imports)]
-pub use builders::get_ai_command_bar_actions;
-#[allow(unused_imports)]
-pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
-// Public API for Notes window integration
-#[allow(unused_imports)]
-pub use builders::{get_notes_command_bar_actions, NotesInfo};
-// Public API for Notes note switcher (Cmd+P) dialog
-#[allow(unused_imports)]
-pub use builders::{get_note_switcher_actions, NoteSwitcherNoteInfo};
-#[allow(unused_imports)]
 pub use types::{
-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
+    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
+    SectionStyle,
 };
 
 // Window functions for separate vibrancy window
@@ -61,10 +51,6 @@ pub use window::{
     resize_actions_window, WindowPosition,
 };
 // get_actions_window_handle available but not re-exported (use window:: directly if needed)
-
-// CommandBar - high-level reusable component for command palette functionality
-#[allow(unused_imports)]
-pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, CommandBarHost};
 
 pub mod prelude;
 

@@ -13,13 +13,15 @@ use crate::ui_foundation::{is_key_backspace, is_key_down, is_key_enter, is_key_e
 use crate::window_resize::layout::FOOTER_HEIGHT;
 use gpui::{
     div, prelude::*, px, App, Bounds, Context, DisplayId, Entity, FocusHandle, Focusable, Pixels,
-    Point, Render, Size, Window, WindowBounds, WindowHandle, WindowKind, WindowOptions,
+    Point, Render, Size, Subscription, Window, WindowBounds, WindowHandle, WindowKind,
+    WindowOptions,
 };
 use gpui_component::Root;
 use std::sync::{Mutex, OnceLock};
 
 use super::constants::{
-    ACTION_ITEM_HEIGHT, HEADER_HEIGHT, POPUP_MAX_HEIGHT, SEARCH_INPUT_HEIGHT, SECTION_HEADER_HEIGHT,
+    ACTION_ITEM_HEIGHT, HEADER_HEIGHT, POPUP_MAX_HEIGHT, POPUP_WIDTH, SEARCH_INPUT_HEIGHT,
+    SECTION_HEADER_HEIGHT,
 };
 use super::dialog::{ActionsDialog, GroupedActionItem};
 use super::types::{Action, SectionStyle};
@@ -32,20 +34,18 @@ pub(super) fn count_section_headers(actions: &[Action], filtered_indices: &[usiz
     }
 
     let mut count = 0;
-    let mut prev_section: Option<&Option<String>> = None;
+    let mut prev_section: Option<&str> = None;
 
     for &idx in filtered_indices {
         if let Some(action) = actions.get(idx) {
-            let current_section = &action.section;
-            // Count as header if: first item with a section, or section changed
-            if current_section.is_some() {
-                match prev_section {
-                    None => count += 1,                                  // First item with a section
-                    Some(prev) if prev != current_section => count += 1, // Section changed
-                    _ => {}
+            // Match header insertion behavior from grouped list rendering:
+            // only track non-empty sections so unsectioned rows do not break a section run.
+            if let Some(current_section) = action.section.as_deref() {
+                if prev_section != Some(current_section) {
+                    count += 1;
+                    prev_section = Some(current_section);
                 }
             }
-            prev_section = Some(current_section);
         }
     }
 
@@ -142,8 +142,58 @@ fn actions_window_key_intent(
     None
 }
 
+#[inline]
+fn should_auto_close_actions_window(
+    main_window_focused: bool,
+    actions_window_active: bool,
+) -> bool {
+    !main_window_focused && !actions_window_active
+}
+
+#[inline]
+fn clear_window_slot<T>(slot: &mut Option<T>) -> bool {
+    let had_value = slot.is_some();
+    *slot = None;
+    had_value
+}
+
+fn clear_actions_window_handle(reason: &str) {
+    let Some(window_storage) = ACTIONS_WINDOW.get() else {
+        crate::logging::log(
+            "ACTIONS",
+            &format!(
+                "ACTIONS_WINDOW_LIFECYCLE clear_actions_window_handle skipped: reason={}, state=uninitialized",
+                reason
+            ),
+        );
+        return;
+    };
+
+    match window_storage.lock() {
+        Ok(mut guard) => {
+            let had_handle = clear_window_slot(&mut guard);
+            crate::logging::log(
+                "ACTIONS",
+                &format!(
+                    "ACTIONS_WINDOW_LIFECYCLE clear_actions_window_handle: reason={}, had_handle={}",
+                    reason, had_handle
+                ),
+            );
+        }
+        Err(error) => {
+            crate::logging::log(
+                "ACTIONS",
+                &format!(
+                    "ACTIONS_WINDOW_LIFECYCLE clear_actions_window_handle failed: reason={}, error={}",
+                    reason, error
+                ),
+            );
+        }
+    }
+}
+
 /// Actions window width (height is calculated dynamically based on content)
-const ACTIONS_WINDOW_WIDTH: f32 = 320.0;
+const ACTIONS_WINDOW_WIDTH: f32 = POPUP_WIDTH;
 /// Horizontal margin from main window right edge
 const ACTIONS_MARGIN_X: f32 = 8.0;
 /// Vertical margin from header/footer
@@ -171,6 +221,8 @@ pub struct ActionsWindow {
     pub dialog: Entity<ActionsDialog>,
     /// Focus handle for this window (not actively used - main window keeps focus)
     pub focus_handle: FocusHandle,
+    /// Keep activation observer alive so blur-driven auto-close is reliable.
+    activation_subscription: Option<Subscription>,
 }
 
 impl ActionsWindow {
@@ -179,7 +231,80 @@ impl ActionsWindow {
         Self {
             dialog,
             focus_handle,
+            activation_subscription: None,
         }
+    }
+
+    fn defer_close(window: &mut Window, cx: &mut Context<Self>, reason: &'static str) {
+        crate::logging::log(
+            "ACTIONS",
+            &format!("ACTIONS_WINDOW_LIFECYCLE defer_close_scheduled: reason={reason}"),
+        );
+        window.defer(cx, move |window, _cx| {
+            crate::logging::log(
+                "ACTIONS",
+                &format!("ACTIONS_WINDOW_LIFECYCLE defer_close_executing: reason={reason}"),
+            );
+            clear_actions_window_handle(reason);
+            window.remove_window();
+        });
+    }
+
+    fn request_close(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        reason: &'static str,
+        activate_main_window: bool,
+    ) {
+        crate::logging::log(
+            "ACTIONS",
+            &format!(
+                "ACTIONS_WINDOW_LIFECYCLE request_close: reason={reason}, activate_main_window={activate_main_window}"
+            ),
+        );
+
+        if let Some(on_close) = self.dialog.read(cx).on_close.clone() {
+            on_close(cx);
+        }
+
+        if activate_main_window {
+            platform::activate_main_window();
+        }
+
+        Self::defer_close(window, cx, reason);
+    }
+
+    fn ensure_activation_subscription(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.activation_subscription.is_some() {
+            return;
+        }
+
+        crate::logging::log(
+            "ACTIONS",
+            "ACTIONS_WINDOW_LIFECYCLE activation_subscription_initialized",
+        );
+
+        self.activation_subscription = Some(cx.observe_window_activation(window, |this, window, cx| {
+            let main_window_focused = platform::is_main_window_focused();
+            let actions_window_active = window.is_window_active();
+            let should_close =
+                should_auto_close_actions_window(main_window_focused, actions_window_active);
+
+            crate::logging::log(
+                "ACTIONS",
+                &format!(
+                    "ACTIONS_WINDOW_LIFECYCLE activation_changed: main_window_focused={}, actions_window_active={}, should_close={}",
+                    main_window_focused, actions_window_active, should_close
+                ),
+            );
+
+            if !should_close {
+                return;
+            }
+
+            this.request_close(window, cx, "focus_lost", false);
+        }));
     }
 }
 
@@ -191,6 +316,8 @@ impl Focusable for ActionsWindow {
 
 impl Render for ActionsWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.ensure_activation_subscription(window, cx);
+
         // Log focus state AND window focus state
         let is_focused = self.focus_handle.is_focused(window);
         let window_is_active = window.is_window_active();
@@ -298,33 +425,11 @@ impl Render for ActionsWindow {
                         // Execute the action's callback
                         let callback = this.dialog.read(cx).on_select.clone();
                         callback(action_id.clone());
-                        // Notify main app to restore focus before closing
-                        let on_close = this.dialog.read(cx).on_close.clone();
-                        if let Some(callback) = on_close {
-                            callback(cx);
-                        }
-                        // Activate the main window so it can receive focus
-                        platform::activate_main_window();
-                        // Defer window removal to give the main window time to become key
-                        window.defer(cx, |window, _cx| {
-                            window.remove_window();
-                        });
+                        this.request_close(window, cx, "execute_selected", true);
                     }
                 }
                 Some(ActionsWindowKeyIntent::Close) => {
-                    // Notify main app to restore focus before closing
-                    let on_close = this.dialog.read(cx).on_close.clone();
-                    if let Some(callback) = on_close {
-                        callback(cx);
-                    }
-                    // Activate the main window so it can receive focus
-                    platform::activate_main_window();
-                    // Defer window removal to give the main window time to become key
-                    // and process the pending focus. This matches how close_actions_popup
-                    // uses cx.spawn() to close the window asynchronously.
-                    window.defer(cx, |window, _cx| {
-                        window.remove_window();
-                    });
+                    this.request_close(window, cx, "escape", true);
                 }
                 Some(ActionsWindowKeyIntent::Backspace) => {
                     crate::logging::log("ACTIONS", "ActionsWindow: backspace pressed");
@@ -365,3 +470,119 @@ impl Render for ActionsWindow {
     }
 }
 
+#[cfg(test)]
+mod window_lifecycle_tests {
+    use super::*;
+
+    #[test]
+    fn test_should_auto_close_actions_window_returns_true_when_neither_window_is_focused() {
+        assert!(should_auto_close_actions_window(false, false));
+    }
+
+    #[test]
+    fn test_should_auto_close_actions_window_returns_false_when_main_window_is_focused() {
+        assert!(!should_auto_close_actions_window(true, false));
+    }
+
+    #[test]
+    fn test_should_auto_close_actions_window_returns_false_when_actions_window_is_active() {
+        assert!(!should_auto_close_actions_window(false, true));
+    }
+
+    #[test]
+    fn test_clear_window_slot_does_clear_when_value_is_present() {
+        let mut slot = Some(42usize);
+        let had_value = clear_window_slot(&mut slot);
+        assert!(had_value);
+        assert_eq!(slot, None);
+    }
+
+    #[test]
+    fn test_clear_window_slot_is_idempotent_when_called_multiple_times() {
+        let mut slot = Some(42usize);
+        assert!(clear_window_slot(&mut slot));
+        assert!(!clear_window_slot(&mut slot));
+        assert_eq!(slot, None);
+    }
+
+    fn make_action_for_header_count(id: &str, section: Option<&str>) -> Action {
+        let mut action = Action::new(
+            id,
+            id,
+            None,
+            crate::actions::types::ActionCategory::ScriptContext,
+        );
+        if let Some(section) = section {
+            action = action.with_section(section);
+        }
+        action
+    }
+
+    #[test]
+    fn test_count_section_headers_does_not_reset_on_unsectioned_rows() {
+        let actions = vec![
+            make_action_for_header_count("a", Some("S1")),
+            make_action_for_header_count("b", None),
+            make_action_for_header_count("c", Some("S1")),
+        ];
+
+        assert_eq!(count_section_headers(&actions, &[0, 1, 2]), 1);
+    }
+
+    #[test]
+    fn test_count_section_headers_counts_new_section_after_unsectioned_row() {
+        let actions = vec![
+            make_action_for_header_count("a", Some("S1")),
+            make_action_for_header_count("b", None),
+            make_action_for_header_count("c", Some("S2")),
+        ];
+
+        assert_eq!(count_section_headers(&actions, &[0, 1, 2]), 2);
+    }
+
+    #[test]
+    fn test_actions_window_key_intent_maps_required_navigation_key_variants() {
+        let no_mods = gpui::Modifiers::default();
+
+        assert_eq!(
+            actions_window_key_intent("up", &no_mods),
+            Some(ActionsWindowKeyIntent::MoveUp)
+        );
+        assert_eq!(
+            actions_window_key_intent("arrowup", &no_mods),
+            Some(ActionsWindowKeyIntent::MoveUp)
+        );
+
+        assert_eq!(
+            actions_window_key_intent("down", &no_mods),
+            Some(ActionsWindowKeyIntent::MoveDown)
+        );
+        assert_eq!(
+            actions_window_key_intent("arrowdown", &no_mods),
+            Some(ActionsWindowKeyIntent::MoveDown)
+        );
+    }
+
+    #[test]
+    fn test_actions_window_key_intent_maps_required_confirm_and_cancel_key_variants() {
+        let no_mods = gpui::Modifiers::default();
+
+        assert_eq!(
+            actions_window_key_intent("enter", &no_mods),
+            Some(ActionsWindowKeyIntent::ExecuteSelected)
+        );
+        assert_eq!(
+            actions_window_key_intent("Enter", &no_mods),
+            Some(ActionsWindowKeyIntent::ExecuteSelected)
+        );
+
+        assert_eq!(
+            actions_window_key_intent("escape", &no_mods),
+            Some(ActionsWindowKeyIntent::Close)
+        );
+        assert_eq!(
+            actions_window_key_intent("Escape", &no_mods),
+            Some(ActionsWindowKeyIntent::Close)
+        );
+    }
+}
