@@ -21,6 +21,12 @@ pub const ACCENT_BAR_WIDTH: f32 = 3.0;
 /// Height for the header row showing context title (matches section header style)
 pub const HEADER_HEIGHT: f32 = 24.0;
 
+/// Horizontal padding for section/header rows in the actions dialog
+pub const ACTION_PADDING_X: f32 = 16.0;
+
+/// Top padding for section/header rows in the actions dialog
+pub const ACTION_PADDING_TOP: f32 = 8.0;
+
 /// Height for section headers within the action list (used when SectionStyle::Headers is enabled)
 /// This includes the text (~12px) + top padding (4-8px) + bottom padding (2px)
 pub const SECTION_HEADER_HEIGHT: f32 = 22.0;
@@ -65,5 +71,11 @@ mod tests {
         // With 400px max height and 36px items, ~11 items fit
         assert!(max_visible >= 8, "Should fit at least 8 items");
         assert!(max_visible <= 15, "Sanity check on max visible");
+    }
+
+    #[test]
+    fn test_action_padding_constants() {
+        assert_eq!(ACTION_PADDING_X, 16.0);
+        assert_eq!(ACTION_PADDING_TOP, 8.0);
     }
 }

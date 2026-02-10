@@ -1,4 +1,3 @@
-
 /// Represents a single action item in the actions menu.
 ///
 /// Actions are created by builder functions in `builders.rs` or converted from
@@ -41,7 +40,7 @@
 /// action.has_action = true;
 /// action.value = Some("copy-to-clipboard".to_string());
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Action {
     /// Unique identifier for action routing.
     /// Built-in IDs use snake_case (e.g., `edit_script`, `copy_path`).
@@ -148,25 +147,23 @@ pub struct ActionsDialogConfig {
 ///
 /// Actions are organized by category to help users find relevant options:
 /// - `ScriptContext`: Actions specific to the currently focused script/item
-/// - `ScriptOps`: Script management operations (reserved for future use)
-/// - `GlobalOps`: Application-wide actions like Settings, Quit (reserved)
+/// - `ScriptOps`: Script management operations (test-only legacy category)
+/// - `GlobalOps`: Application-wide actions (test-only legacy category)
 ///
 /// Currently, most actions are `ScriptContext` since they operate on the
-/// focused list item. The other categories are reserved for future expansion.
+/// focused list item. Test-only categories remain for compatibility coverage.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActionCategory {
     /// Actions specific to the currently focused script/item.
     /// Examples: Run, Edit, Copy Path, Configure Shortcut, Reset Ranking
     ScriptContext,
 
-    /// Script management operations (reserved for future use).
-    /// Intended for: Create Script, Delete Script, Duplicate Script
-    #[allow(dead_code)]
+    /// Script management operations (test-only reserved category).
+    #[cfg(test)]
     ScriptOps,
 
-    /// Application-wide actions (reserved for future use).
-    /// Intended for: Open Settings, Quit App, Check for Updates
-    #[allow(dead_code)]
+    /// Application-wide actions (test-only reserved category).
+    #[cfg(test)]
     GlobalOps,
 
     /// Terminal actions (Clear, Copy, Paste, Scroll, etc.)
@@ -229,4 +226,3 @@ impl Action {
         self
     }
 }
-

@@ -1,7 +1,10 @@
 
 #[cfg(test)]
 mod tests {
-    use super::{is_destructive_action, should_render_section_separator};
+    use super::{
+        actions_dialog_scrollbar_viewport_height, is_destructive_action,
+        should_render_section_separator,
+    };
     use crate::actions::types::{Action, ActionCategory};
 
     #[test]
@@ -96,5 +99,32 @@ mod tests {
             &filtered_actions,
             3
         ));
+    }
+
+    #[test]
+    fn test_scrollbar_viewport_subtracts_header_footer_and_search_height() {
+        let total_content_height = 500.0;
+        let viewport_height = actions_dialog_scrollbar_viewport_height(
+            total_content_height,
+            true,
+            true,
+            true,
+        );
+
+        // POPUP_MAX_HEIGHT (400) - SEARCH_INPUT_HEIGHT (44) - HEADER_HEIGHT (24) - footer (32)
+        assert_eq!(viewport_height, 300.0);
+    }
+
+    #[test]
+    fn test_scrollbar_viewport_clamps_to_content_when_content_shorter_than_viewport() {
+        let total_content_height = 120.0;
+        let viewport_height = actions_dialog_scrollbar_viewport_height(
+            total_content_height,
+            true,
+            true,
+            true,
+        );
+
+        assert_eq!(viewport_height, 120.0);
     }
 }

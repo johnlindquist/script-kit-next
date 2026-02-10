@@ -1,3 +1,5 @@
+const ACTIONS_DIALOG_LIST_OVERDRAW_PX: f32 = 100.0;
+
 impl ActionsDialog {
     pub fn new(
         focus_handle: FocusHandle,
@@ -46,7 +48,6 @@ impl ActionsDialog {
         let filtered_actions: Vec<usize> = (0..actions.len()).collect();
         let grouped_items =
             build_grouped_items_static(&actions, &filtered_actions, config.section_style);
-        const ACTIONS_DIALOG_LIST_OVERDRAW_PX: f32 = 100.0;
         let list_state = ListState::new(
             grouped_items.len(),
             ListAlignment::Top,
@@ -156,11 +157,7 @@ impl ActionsDialog {
         let actions = get_clipboard_history_context_actions(entry_info);
         let config = ActionsDialogConfig::default();
 
-        let context_title = if entry_info.preview.len() > 30 {
-            format!("{}...", &entry_info.preview[..27])
-        } else {
-            entry_info.preview.clone()
-        };
+        let context_title = Self::clipboard_context_title(&entry_info.preview);
 
         logging::log(
             "ACTIONS",
@@ -184,6 +181,18 @@ impl ActionsDialog {
             Some(context_title),
             config,
         )
+    }
+
+    fn clipboard_context_title(preview: &str) -> String {
+        const CONTEXT_TITLE_MAX_CHARS: usize = 30;
+        const CONTEXT_TITLE_TRUNCATE_CHARS: usize = 27;
+
+        if preview.chars().count() > CONTEXT_TITLE_MAX_CHARS {
+            let truncated: String = preview.chars().take(CONTEXT_TITLE_TRUNCATE_CHARS).collect();
+            format!("{truncated}...")
+        } else {
+            preview.to_string()
+        }
     }
 
     /// Create ActionsDialog for a chat prompt with chat-specific actions
@@ -388,5 +397,27 @@ impl ActionsDialog {
         }
 
         keycaps
+    }
+}
+
+#[cfg(test)]
+mod unicode_keycap_safety_tests {
+    use super::ActionsDialog;
+
+    #[test]
+    fn test_clipboard_context_title_does_not_panic_when_preview_contains_multibyte_unicode() {
+        let preview = "😀".repeat(31);
+        let title = ActionsDialog::clipboard_context_title(&preview);
+
+        assert_eq!(title.chars().count(), 30);
+        assert_eq!(title, format!("{}...", "😀".repeat(27)));
+    }
+
+    #[test]
+    fn test_parse_shortcut_keycaps_does_not_panic_when_shortcut_contains_multibyte_unicode() {
+        let keycaps = ActionsDialog::parse_shortcut_keycaps("⌘😀");
+        let expected = vec!["⌘".to_string(), "😀".to_string()];
+
+        assert_eq!(keycaps, expected);
     }
 }

@@ -3,6 +3,10 @@
 mod dialog_tests;
 
 #[cfg(test)]
+#[path = "dialog_runtime_path_tests.rs"]
+mod dialog_runtime_path_tests;
+
+#[cfg(test)]
 #[path = "../dialog_behavior_tests/part_01.rs"]
 mod dialog_behavior_tests;
 
@@ -209,4 +213,3 @@ mod dialog_builtin_action_validation_tests_45;
 #[cfg(test)]
 #[path = "../dialog_builtin_action_validation_tests_46/part_01.rs"]
 mod dialog_builtin_action_validation_tests_46;
-

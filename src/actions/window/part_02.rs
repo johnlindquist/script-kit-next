@@ -46,6 +46,59 @@ mod tests {
         assert_eq!(selectable_index_at_or_before(&rows, 2), Some(1));
         assert_eq!(selectable_index_at_or_after(&rows, 2), Some(3));
     }
+
+    #[test]
+    fn test_actions_window_dynamic_height_matches_single_row_when_empty() {
+        let empty_height = actions_window_dynamic_height(0, 0, false, false);
+        let single_row_height = actions_window_dynamic_height(1, 0, false, false);
+
+        assert!(
+            (empty_height - single_row_height).abs() < 0.001,
+            "empty_height={empty_height}, single_row_height={single_row_height}"
+        );
+    }
+}
+
+#[inline]
+fn actions_window_dynamic_height(
+    num_actions: usize,
+    section_header_count: usize,
+    hide_search: bool,
+    has_header: bool,
+) -> f32 {
+    const POPUP_BORDER_HEIGHT: f32 = 2.0;
+    let search_box_height = if hide_search {
+        0.0
+    } else {
+        SEARCH_INPUT_HEIGHT
+    };
+    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+    let min_items_height = if num_actions == 0 {
+        ACTION_ITEM_HEIGHT
+    } else {
+        0.0
+    };
+    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+        .max(min_items_height)
+        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+    let border_height = POPUP_BORDER_HEIGHT;
+    items_height + search_box_height + header_height + border_height
+}
+
+#[inline]
+fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
+    let num_actions = dialog.filtered_actions.len();
+    let hide_search = dialog.hide_search;
+    let has_header = dialog.context_title.is_some();
+
+    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+    } else {
+        0
+    };
+
+    actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header)
 }
 
 /// Open the actions window as a separate floating window with vibrancy
@@ -82,31 +135,10 @@ pub fn open_actions_window(
         gpui::WindowBackgroundAppearance::Opaque
     };
 
-    // Calculate dynamic window height based on number of actions
-    // This ensures the window fits the content without empty dark space
+    // Calculate dynamic window height based on number of actions.
+    // Open and resize paths intentionally share compute_popup_height().
     let dialog = dialog_entity.read(cx);
-    let num_actions = dialog.filtered_actions.len();
-    let hide_search = dialog.hide_search;
-    let has_header = dialog.context_title.is_some();
-
-    // Count section headers when using Headers style
-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
-    } else {
-        0
-    };
-
-    let search_box_height = if hide_search {
-        0.0
-    } else {
-        SEARCH_INPUT_HEIGHT
-    };
-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
-    let border_height = 2.0; // top + bottom border
-    let dynamic_height = items_height + search_box_height + header_height + border_height;
+    let dynamic_height = compute_popup_height(dialog);
 
     // Calculate window position:
     // - X: Right edge of main window, minus actions width, minus margin
@@ -201,7 +233,7 @@ pub fn open_actions_window(
     // internal state borrowed immediately after open_window returns.
     #[cfg(target_os = "macos")]
     {
-        let _ = handle.update(cx, |_root, window, cx| {
+        let configure_result = handle.update(cx, |_root, window, cx| {
             window.defer(cx, |_window, _cx| {
                 use cocoa::appkit::NSApp;
                 use cocoa::base::nil;
@@ -225,6 +257,21 @@ pub fn open_actions_window(
                 }
             });
         });
+
+        if let Err(error) = configure_result {
+            crate::logging::log(
+                "WARN",
+                &format!(
+                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window update failed: operation=position_focus error={error:?}"
+                ),
+            );
+            crate::logging::log_debug(
+                "ACTIONS",
+                &format!(
+                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window context: display_id={display_id:?}, position={position:?}"
+                ),
+            );
+        }
     }
 
     // Store the handle globally
@@ -245,9 +292,21 @@ pub fn close_actions_window(cx: &mut App) {
             if let Some(handle) = guard.take() {
                 crate::logging::log("ACTIONS", "Closing actions popup window");
                 // Close the window
-                let _ = handle.update(cx, |_root, window, _cx| {
+                let close_result = handle.update(cx, |_root, window, _cx| {
                     window.remove_window();
                 });
+                if let Err(error) = close_result {
+                    crate::logging::log(
+                        "WARN",
+                        &format!(
+                            "ACTIONS_WINDOW_OP_FAIL close_actions_window update failed: operation=focus_cleanup error={error:?}"
+                        ),
+                    );
+                    crate::logging::log_debug(
+                        "ACTIONS",
+                        "ACTIONS_WINDOW_OP_FAIL close_actions_window context: remove_window requested",
+                    );
+                }
             }
         }
     }
@@ -276,8 +335,20 @@ pub fn get_actions_window_handle() -> Option<WindowHandle<Root>> {
 /// Notify the actions window to re-render (call after updating dialog entity)
 pub fn notify_actions_window(cx: &mut App) {
     if let Some(handle) = get_actions_window_handle() {
-        let _ = handle.update(cx, |_root, _window, cx| {
+        let notify_result = handle.update(cx, |_root, _window, cx| {
             cx.notify();
         });
+        if let Err(error) = notify_result {
+            crate::logging::log(
+                "WARN",
+                &format!(
+                    "ACTIONS_WINDOW_OP_FAIL notify_actions_window update failed: operation=focus_refresh error={error:?}"
+                ),
+            );
+            crate::logging::log_debug(
+                "ACTIONS",
+                "ACTIONS_WINDOW_OP_FAIL notify_actions_window context: cx.notify() skipped",
+            );
+        }
     }
 }

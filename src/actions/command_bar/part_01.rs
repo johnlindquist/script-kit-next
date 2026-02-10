@@ -56,6 +56,24 @@ enum CommandBarKeyIntent {
 }
 
 #[inline]
+fn is_non_text_named_key(key: &str) -> bool {
+    key.eq_ignore_ascii_case("tab")
+        || key.eq_ignore_ascii_case("left")
+        || key.eq_ignore_ascii_case("arrowleft")
+        || key.eq_ignore_ascii_case("right")
+        || key.eq_ignore_ascii_case("arrowright")
+        || key.eq_ignore_ascii_case("shift")
+        || key.eq_ignore_ascii_case("control")
+        || key.eq_ignore_ascii_case("alt")
+        || key.eq_ignore_ascii_case("meta")
+        || key.eq_ignore_ascii_case("cmd")
+        || key.eq_ignore_ascii_case("command")
+        || key.eq_ignore_ascii_case("capslock")
+        || key.eq_ignore_ascii_case("numlock")
+        || key.eq_ignore_ascii_case("scrolllock")
+}
+
+#[inline]
 fn command_bar_key_intent(key: &str, modifiers: &gpui::Modifiers) -> Option<CommandBarKeyIntent> {
     if is_key_up(key) {
         return Some(CommandBarKeyIntent::MoveUp);
@@ -83,6 +101,12 @@ fn command_bar_key_intent(key: &str, modifiers: &gpui::Modifiers) -> Option<Comm
     }
     if is_key_backspace(key) || key.eq_ignore_ascii_case("delete") {
         return Some(CommandBarKeyIntent::Backspace);
+    }
+    if key.eq_ignore_ascii_case("space") {
+        return Some(CommandBarKeyIntent::TypeChar(' '));
+    }
+    if is_non_text_named_key(key) {
+        return None;
     }
 
     if !modifiers.platform && !modifiers.control && !modifiers.alt {
@@ -232,4 +256,66 @@ pub struct CommandBar {
     is_open: bool,
     /// Callback when an action is selected
     on_action: Option<CommandBarActionCallback>,
+}
+
+#[cfg(test)]
+mod command_bar_key_intent_tests {
+    use super::*;
+
+    #[test]
+    fn test_command_bar_key_intent_does_not_treat_named_keys_as_typed_chars() {
+        let no_mods = gpui::Modifiers::default();
+
+        assert_eq!(
+            command_bar_key_intent("space", &no_mods),
+            Some(CommandBarKeyIntent::TypeChar(' '))
+        );
+        assert_eq!(command_bar_key_intent("tab", &no_mods), None);
+        assert_eq!(command_bar_key_intent("arrowleft", &no_mods), None);
+        assert_eq!(
+            command_bar_key_intent("backspace", &no_mods),
+            Some(CommandBarKeyIntent::Backspace)
+        );
+    }
+
+    #[test]
+    fn test_command_bar_key_intent_maps_required_key_variants_to_same_intents() {
+        let no_mods = gpui::Modifiers::default();
+
+        assert_eq!(
+            command_bar_key_intent("up", &no_mods),
+            Some(CommandBarKeyIntent::MoveUp)
+        );
+        assert_eq!(
+            command_bar_key_intent("arrowup", &no_mods),
+            Some(CommandBarKeyIntent::MoveUp)
+        );
+
+        assert_eq!(
+            command_bar_key_intent("down", &no_mods),
+            Some(CommandBarKeyIntent::MoveDown)
+        );
+        assert_eq!(
+            command_bar_key_intent("arrowdown", &no_mods),
+            Some(CommandBarKeyIntent::MoveDown)
+        );
+
+        assert_eq!(
+            command_bar_key_intent("enter", &no_mods),
+            Some(CommandBarKeyIntent::ExecuteSelected)
+        );
+        assert_eq!(
+            command_bar_key_intent("Enter", &no_mods),
+            Some(CommandBarKeyIntent::ExecuteSelected)
+        );
+
+        assert_eq!(
+            command_bar_key_intent("escape", &no_mods),
+            Some(CommandBarKeyIntent::Close)
+        );
+        assert_eq!(
+            command_bar_key_intent("Escape", &no_mods),
+            Some(CommandBarKeyIntent::Close)
+        );
+    }
 }

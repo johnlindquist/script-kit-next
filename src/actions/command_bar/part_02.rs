@@ -1,5 +1,11 @@
 #[allow(dead_code)] // Public API - many methods for future integrations
 impl CommandBar {
+    #[inline]
+    fn reset_open_state(&mut self) {
+        self.is_open = false;
+        self.dialog = None;
+    }
+
     /// Create a new CommandBar with actions and configuration
     pub fn new(actions: Vec<Action>, config: CommandBarConfig, theme: Arc<theme::Theme>) -> Self {
         Self {
@@ -31,8 +37,19 @@ impl CommandBar {
             dialog.update(cx, |d, cx| {
                 d.actions = actions;
                 d.filtered_actions = (0..d.actions.len()).collect();
-                d.selected_index = 0;
                 d.search_text.clear();
+                d.grouped_items = rebuild_grouped_items_for_command_bar(
+                    &d.actions,
+                    &d.filtered_actions,
+                    d.config.section_style,
+                );
+
+                let old_count = d.list_state.item_count();
+                d.list_state.splice(0..old_count, d.grouped_items.len());
+                d.selected_index = first_selectable_index(&d.grouped_items).unwrap_or(0);
+                if !d.grouped_items.is_empty() {
+                    d.list_state.scroll_to_reveal_item(d.selected_index);
+                }
                 cx.notify();
             });
 
@@ -140,8 +157,7 @@ impl CommandBar {
             }
             Err(e) => {
                 logging::log("COMMAND_BAR", &format!("Failed to open command bar: {}", e));
-                self.is_open = false;
-                self.dialog = None;
+                self.reset_open_state();
             }
         }
 
@@ -155,8 +171,7 @@ impl CommandBar {
         }
 
         close_actions_window(cx);
-        self.is_open = false;
-        self.dialog = None;
+        self.reset_open_state();
         logging::log("COMMAND_BAR", "Command bar closed");
         cx.notify();
     }
@@ -168,8 +183,7 @@ impl CommandBar {
         }
 
         close_actions_window(cx);
-        self.is_open = false;
-        self.dialog = None;
+        self.reset_open_state();
         logging::log("COMMAND_BAR", "Command bar closed");
     }
 
@@ -196,7 +210,18 @@ impl CommandBar {
     ///
     /// Returns the action ID if an action was executed, None otherwise.
     pub fn execute_selected_action<V: 'static>(&mut self, cx: &mut Context<V>) -> Option<String> {
-        let action_id = self.get_selected_action_id(cx)?;
+        let action_id = match self.get_selected_action_id(cx) {
+            Some(action_id) => action_id,
+            None => {
+                logging::log(
+                    "COMMAND_BAR",
+                    "No selected action available during execute_selected_action",
+                );
+                return None;
+            }
+        };
+
+        logging::log("COMMAND_BAR", &format!("Executing selected action '{}'", action_id));
 
         // Call the callback if set
         if let Some(callback) = &self.on_action {
@@ -229,42 +254,16 @@ impl CommandBar {
 
     /// Move selection up
     pub fn select_prev(&mut self, cx: &mut App) {
-        logging::log(
-            "COMMAND_BAR",
-            &format!(
-                "select_prev called, dialog exists: {}",
-                self.dialog.is_some()
-            ),
-        );
         if let Some(dialog) = &self.dialog {
-            let old_idx = dialog.read(cx).selected_index;
             dialog.update(cx, |d, cx| d.move_up(cx));
-            let new_idx = dialog.read(cx).selected_index;
-            logging::log(
-                "COMMAND_BAR",
-                &format!("select_prev: index {} -> {}", old_idx, new_idx),
-            );
             notify_actions_window(cx);
         }
     }
 
     /// Move selection down
     pub fn select_next(&mut self, cx: &mut App) {
-        logging::log(
-            "COMMAND_BAR",
-            &format!(
-                "select_next called, dialog exists: {}",
-                self.dialog.is_some()
-            ),
-        );
         if let Some(dialog) = &self.dialog {
-            let old_idx = dialog.read(cx).selected_index;
             dialog.update(cx, |d, cx| d.move_down(cx));
-            let new_idx = dialog.read(cx).selected_index;
-            logging::log(
-                "COMMAND_BAR",
-                &format!("select_next: index {} -> {}", old_idx, new_idx),
-            );
             notify_actions_window(cx);
         }
     }
@@ -360,5 +359,99 @@ impl CommandBar {
         self.dialog
             .as_ref()
             .map(|d| d.read(cx).focus_handle.clone())
+    }
+}
+
+fn rebuild_grouped_items_for_command_bar(
+    actions: &[Action],
+    filtered_actions: &[usize],
+    section_style: SectionStyle,
+) -> Vec<GroupedActionItem> {
+    let mut grouped = Vec::new();
+    if filtered_actions.is_empty() {
+        return grouped;
+    }
+
+    let mut previous_section: Option<String> = None;
+    for (filter_idx, &action_idx) in filtered_actions.iter().enumerate() {
+        if let Some(action) = actions.get(action_idx) {
+            if section_style == SectionStyle::Headers {
+                if let Some(section) = &action.section {
+                    if previous_section.as_ref() != Some(section) {
+                        grouped.push(GroupedActionItem::SectionHeader(section.clone()));
+                        previous_section = Some(section.clone());
+                    }
+                }
+            }
+
+            grouped.push(GroupedActionItem::Item(filter_idx));
+        }
+    }
+
+    grouped
+}
+
+#[cfg(test)]
+mod command_bar_set_actions_tests {
+    use super::*;
+    use crate::actions::types::ActionCategory;
+
+    fn test_action(id: &str, section: Option<&str>) -> Action {
+        Action {
+            id: id.to_string(),
+            title: id.to_string(),
+            description: None,
+            category: ActionCategory::ScriptContext,
+            shortcut: None,
+            has_action: true,
+            value: None,
+            icon: None,
+            section: section.map(str::to_string),
+            title_lower: id.to_lowercase(),
+            description_lower: None,
+            shortcut_lower: None,
+        }
+    }
+
+    #[test]
+    fn test_rebuild_grouped_items_for_command_bar_adds_headers_for_new_sections() {
+        let actions = vec![
+            test_action("a", Some("Alpha")),
+            test_action("b", Some("Alpha")),
+            test_action("c", Some("Beta")),
+        ];
+        let filtered = vec![0, 1, 2];
+
+        let grouped =
+            rebuild_grouped_items_for_command_bar(&actions, &filtered, SectionStyle::Headers);
+
+        assert_eq!(grouped.len(), 5);
+        assert!(matches!(
+            grouped.first(),
+            Some(GroupedActionItem::SectionHeader(section)) if section == "Alpha"
+        ));
+        assert!(matches!(grouped.get(1), Some(GroupedActionItem::Item(0))));
+        assert!(matches!(grouped.get(2), Some(GroupedActionItem::Item(1))));
+        assert!(matches!(
+            grouped.get(3),
+            Some(GroupedActionItem::SectionHeader(section)) if section == "Beta"
+        ));
+        assert!(matches!(grouped.get(4), Some(GroupedActionItem::Item(2))));
+    }
+
+    #[test]
+    fn test_rebuild_grouped_items_for_command_bar_keeps_compact_rows_for_separators() {
+        let actions = vec![
+            test_action("a", Some("Alpha")),
+            test_action("b", Some("Beta")),
+        ];
+        let filtered = vec![0, 1];
+
+        let grouped =
+            rebuild_grouped_items_for_command_bar(&actions, &filtered, SectionStyle::Separators);
+
+        assert_eq!(grouped.len(), 2);
+        assert!(matches!(grouped.first(), Some(GroupedActionItem::Item(0))));
+        assert!(matches!(grouped.get(1), Some(GroupedActionItem::Item(1))));
     }
 }
