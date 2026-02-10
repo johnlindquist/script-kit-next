@@ -220,7 +220,7 @@ fn populate_existing_metadata(conn: &Connection) -> Result<()> {
         let byte_size = content.len();
 
         let (text_preview, image_width, image_height) = match content_type {
-            ContentType::Text => {
+            ContentType::Text | ContentType::Link | ContentType::File | ContentType::Color => {
                 let preview: String = content.chars().take(100).collect();
                 (Some(preview), None, None)
             }
@@ -248,7 +248,7 @@ fn extract_metadata(
     let byte_size = content.len();
 
     match content_type {
-        ContentType::Text => {
+        ContentType::Text | ContentType::Link | ContentType::File | ContentType::Color => {
             let preview: String = content.chars().take(100).collect();
             (Some(preview), None, None, byte_size)
         }
@@ -458,6 +458,8 @@ pub fn get_clipboard_history_page(limit: usize, offset: usize) -> Vec<ClipboardE
                 timestamp: row.get(3)?,
                 pinned: row.get::<_, i64>(4)? != 0,
                 ocr_text: row.get(5)?,
+                source_app_name: None,
+                source_app_bundle_id: None,
             })
         })
         .map(|rows| rows.filter_map(|r| r.ok()).collect())
@@ -814,6 +816,8 @@ pub fn get_entry_by_id(id: &str) -> Option<ClipboardEntry> {
                 timestamp: row.get(3)?,
                 pinned: row.get::<_, i64>(4)? != 0,
                 ocr_text: row.get(5)?,
+                source_app_name: None,
+                source_app_bundle_id: None,
             })
         },
     )

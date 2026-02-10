@@ -1,6 +1,46 @@
 use super::*;
 
 impl NotesApp {
+    const SELECTED_NOTE_NOT_FOUND_FEEDBACK: &'static str = "Selected note could not be found";
+
+    pub(super) fn resolve_selected_note(
+        selected_note_id: Option<NoteId>,
+        notes: &[Note],
+    ) -> Option<(NoteId, &Note)> {
+        let selected_note_id = selected_note_id?;
+        notes
+            .iter()
+            .find(|note| note.id == selected_note_id)
+            .map(|note| (selected_note_id, note))
+    }
+
+    pub(super) fn show_selected_note_missing_feedback(&mut self, action: &'static str) {
+        tracing::warn!(
+            action,
+            selected_note_id = ?self.selected_note_id,
+            notes_len = self.notes.len(),
+            "notes_action_selected_note_not_found",
+        );
+        self.show_action_feedback(Self::SELECTED_NOTE_NOT_FOUND_FEEDBACK, true);
+    }
+
+    pub(super) fn selected_note_for_action(
+        &mut self,
+        action: &'static str,
+    ) -> Option<(NoteId, &Note)> {
+        let Some(selected_note_id) = self.selected_note_id else {
+            self.show_selected_note_missing_feedback(action);
+            return None;
+        };
+
+        if !self.notes.iter().any(|note| note.id == selected_note_id) {
+            self.show_selected_note_missing_feedback(action);
+            return None;
+        }
+
+        Self::resolve_selected_note(Some(selected_note_id), &self.notes)
+    }
+
     /// Cycle sort mode: Updated → Created → Alphabetical → Updated
     pub(super) fn cycle_sort_mode(&mut self, cx: &mut Context<Self>) {
         self.sort_mode = match self.sort_mode {
@@ -86,42 +126,34 @@ impl NotesApp {
         format!("scriptkit://notes/{}", id.as_str())
     }
 
-    pub(super) fn copy_note_as_markdown(&self) {
+    pub(super) fn copy_note_as_markdown(&mut self) {
         self.export_note(ExportFormat::Markdown);
     }
 
-    pub(super) fn copy_note_deeplink(&self) {
-        if let Some(id) = self.selected_note_id {
-            let deeplink = self.note_deeplink(id);
-            self.copy_text_to_clipboard(&deeplink);
-        }
+    pub(super) fn copy_note_deeplink(&mut self) {
+        let Some((id, _)) = self.selected_note_for_action("copy_note_deeplink") else {
+            return;
+        };
+        let deeplink = self.note_deeplink(id);
+        self.copy_text_to_clipboard(&deeplink);
     }
 
-    pub(super) fn create_note_quicklink(&self) {
-        if let Some(id) = self.selected_note_id {
-            let title = self
-                .notes
-                .iter()
-                .find(|note| note.id == id)
-                .map(|note| {
-                    if note.title.is_empty() {
-                        "Untitled Note".to_string()
-                    } else {
-                        note.title.clone()
-                    }
-                })
-                .unwrap_or_else(|| "Untitled Note".to_string());
-            let deeplink = self.note_deeplink(id);
-            let quicklink = format!("[{}]({})", title, deeplink);
-            self.copy_text_to_clipboard(&quicklink);
-        }
+    pub(super) fn create_note_quicklink(&mut self) {
+        let Some((id, note)) = self.selected_note_for_action("create_note_quicklink") else {
+            return;
+        };
+        let title = if note.title.is_empty() {
+            "Untitled Note".to_string()
+        } else {
+            note.title.clone()
+        };
+        let deeplink = self.note_deeplink(id);
+        let quicklink = format!("[{}]({})", title, deeplink);
+        self.copy_text_to_clipboard(&quicklink);
     }
 
     pub(super) fn duplicate_selected_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(id) = self.selected_note_id else {
-            return;
-        };
-        let Some(note) = self.notes.iter().find(|note| note.id == id) else {
+        let Some((_id, note)) = self.selected_note_for_action("duplicate_selected_note") else {
             return;
         };
 

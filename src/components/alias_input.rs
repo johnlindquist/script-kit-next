@@ -29,4 +29,5 @@ mod tests;
 mod types;
 
 pub use component::AliasInput;
+#[allow(unused_imports)]
 pub use types::{AliasInputAction, AliasInputColors, AliasValidationError};

@@ -14,7 +14,9 @@ mod tests;
 #[path = "prompt_header/types.rs"]
 mod types;
 
+#[allow(unused_imports)]
 pub use component::{HeaderClickCallback, PromptHeader};
+#[allow(unused_imports)]
 pub use types::{
     HeaderActionsDensity, PromptHeaderColors, PromptHeaderConfig,
     HEADER_ACTIONS_MIN_WIDTH_COMPACT_PX, HEADER_ACTIONS_MIN_WIDTH_EXPANDED_PX,

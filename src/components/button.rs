@@ -13,7 +13,7 @@ mod tests;
 #[path = "button/types.rs"]
 mod types;
 
-pub use component::{Button, OnClickCallback};
+pub use component::Button;
 pub use types::{
     ButtonColors, ButtonVariant, BUTTON_GHOST_HEIGHT, BUTTON_GHOST_PADDING_X,
     BUTTON_GHOST_PADDING_Y,

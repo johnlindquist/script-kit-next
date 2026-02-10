@@ -51,7 +51,7 @@ pub fn copy_entry_to_clipboard(id: &str) -> Result<()> {
     drop(conn); // Release lock before clipboard operation
 
     match ContentType::from_str(&content_type) {
-        ContentType::Text => {
+        ContentType::Text | ContentType::Link | ContentType::File | ContentType::Color => {
             let mut clipboard = Clipboard::new().context("Failed to access clipboard")?;
             clipboard
                 .set_text(&content)

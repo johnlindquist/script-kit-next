@@ -15,6 +15,37 @@ pub enum IconKind {
     /// Maps to IconName from designs::icon_variations
     Svg(String),
 }
+
+impl IconKind {
+    /// Resolve icon metadata into an IconKind for list rendering.
+    ///
+    /// Supports:
+    /// - Known SVG names/aliases via `icon_name_from_str` (e.g., "Terminal", "file-code")
+    /// - Emoji/symbol glyphs (e.g., "📄", "⚡")
+    pub fn from_icon_hint(icon_hint: &str) -> Option<Self> {
+        let trimmed = icon_hint.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+
+        if icon_name_from_str(trimmed).is_some() {
+            return Some(Self::Svg(trimmed.to_string()));
+        }
+
+        if looks_like_symbol_icon_hint(trimmed) {
+            return Some(Self::Emoji(trimmed.to_string()));
+        }
+
+        None
+    }
+}
+
+fn looks_like_symbol_icon_hint(icon_hint: &str) -> bool {
+    let has_ascii_alnum = icon_hint.chars().any(|ch| ch.is_ascii_alphanumeric());
+    let char_count = icon_hint.chars().count();
+
+    !has_ascii_alnum && char_count <= 4
+}
 /// Fixed height for list items used in uniform-height virtualized lists.
 ///
 /// IMPORTANT: When using GPUI `uniform_list`, the item closure must render
@@ -109,7 +140,7 @@ const TYPE_TAG_RADIUS: f32 = 4.0;
 /// Section header horizontal padding (matches item padding for alignment)
 const SECTION_PADDING_X: f32 = 14.0;
 /// Section header top padding (visual separation from above item)
-const SECTION_PADDING_TOP: f32 = 12.0;
+pub(crate) const SECTION_PADDING_TOP: f32 = 12.0;
 /// Section header bottom padding
 const SECTION_PADDING_BOTTOM: f32 = 4.0;
 /// Gap between header elements (icon, label, count)
@@ -158,7 +189,7 @@ const ALPHA_TAG_BG: u32 = 0x33;
 const ALPHA_TAG_BORDER: u32 = 0x59;
 /// 8% opacity — used for section separator
 /// Barely-there divider; the section label itself provides enough grouping signal
-const ALPHA_SEPARATOR: u32 = 0x14;
+pub(crate) const ALPHA_SEPARATOR: u32 = 0x14;
 /// 7% opacity — used for tool badge background
 /// (Bumped from 6% for slightly more visible badge pills)
 const ALPHA_TINT_MEDIUM: u32 = 0x12;
@@ -436,4 +467,30 @@ pub struct ListItemColors {
     pub warning_bg: u32,
     /// Text color for content displayed on accent/warning backgrounds
     pub text_on_accent: u32,
+}
+
+#[cfg(test)]
+mod icon_kind_tests {
+    use super::IconKind;
+
+    #[test]
+    fn test_icon_kind_from_icon_hint_returns_svg_when_known_icon_name() {
+        match IconKind::from_icon_hint("terminal") {
+            Some(IconKind::Svg(name)) => assert_eq!(name, "terminal"),
+            _ => panic!("expected SVG icon from known icon hint"),
+        }
+    }
+
+    #[test]
+    fn test_icon_kind_from_icon_hint_returns_emoji_when_symbol_glyph() {
+        match IconKind::from_icon_hint("📄") {
+            Some(IconKind::Emoji(emoji)) => assert_eq!(emoji, "📄"),
+            _ => panic!("expected emoji icon for symbol glyph"),
+        }
+    }
+
+    #[test]
+    fn test_icon_kind_from_icon_hint_returns_none_for_unknown_ascii_word() {
+        assert!(IconKind::from_icon_hint("unknown-icon-name").is_none());
+    }
 }

@@ -46,7 +46,9 @@ mod tests {
             return;
         };
 
-        let mut paths: Vec<_> = entries.filter_map(|entry| entry.ok().map(|e| e.path())).collect();
+        let mut paths: Vec<_> = entries
+            .filter_map(|entry| entry.ok().map(|e| e.path()))
+            .collect();
         paths.sort();
 
         for path in paths {

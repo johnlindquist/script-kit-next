@@ -231,42 +231,42 @@ impl NotesApp {
     }
 
     /// Export the current note
-    pub(super) fn export_note(&self, format: ExportFormat) {
-        if let Some(id) = self.selected_note_id {
-            if let Some(note) = self.notes.iter().find(|n| n.id == id) {
-                let content = match format {
-                    ExportFormat::PlainText => note.content.clone(),
-                    // For Markdown, just export the content as-is.
-                    // The title is derived from the first line of content,
-                    // so prepending it would cause duplication.
-                    ExportFormat::Markdown => note.content.clone(),
-                    ExportFormat::Html => {
-                        // For HTML, we include proper structure with the title
-                        // and render the content as preformatted text
-                        format!(
-                            "<!DOCTYPE html>\n<html>\n<head><title>{}</title></head>\n<body>\n<h1>{}</h1>\n<pre>{}</pre>\n</body>\n</html>",
-                            note.title, note.title, note.content
-                        )
-                    }
-                };
+    pub(super) fn export_note(&mut self, format: ExportFormat) {
+        let Some((_id, note)) = self.selected_note_for_action("export_note") else {
+            return;
+        };
 
-                // Copy to clipboard
-                #[cfg(target_os = "macos")]
-                {
-                    use std::process::Command;
-                    let _ = Command::new("pbcopy")
-                        .stdin(std::process::Stdio::piped())
-                        .spawn()
-                        .and_then(|mut child| {
-                            use std::io::Write;
-                            if let Some(stdin) = child.stdin.as_mut() {
-                                stdin.write_all(content.as_bytes())?;
-                            }
-                            child.wait()
-                        });
-                    info!(format = ?format, "Note exported to clipboard");
-                }
+        let content = match format {
+            ExportFormat::PlainText => note.content.clone(),
+            // For Markdown, just export the content as-is.
+            // The title is derived from the first line of content,
+            // so prepending it would cause duplication.
+            ExportFormat::Markdown => note.content.clone(),
+            ExportFormat::Html => {
+                // For HTML, we include proper structure with the title
+                // and render the content as preformatted text
+                format!(
+                    "<!DOCTYPE html>\n<html>\n<head><title>{}</title></head>\n<body>\n<h1>{}</h1>\n<pre>{}</pre>\n</body>\n</html>",
+                    note.title, note.title, note.content
+                )
             }
+        };
+
+        // Copy to clipboard
+        #[cfg(target_os = "macos")]
+        {
+            use std::process::Command;
+            let _ = Command::new("pbcopy")
+                .stdin(std::process::Stdio::piped())
+                .spawn()
+                .and_then(|mut child| {
+                    use std::io::Write;
+                    if let Some(stdin) = child.stdin.as_mut() {
+                        stdin.write_all(content.as_bytes())?;
+                    }
+                    child.wait()
+                });
+            info!(format = ?format, "Note exported to clipboard");
         }
     }
 }

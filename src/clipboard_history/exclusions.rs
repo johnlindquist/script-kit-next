@@ -20,13 +20,18 @@ mod tests {
     #[test]
     fn test_should_exclude_clipboard_does_match_when_bundle_id_is_exact() {
         for excluded in EXCLUDED_BUNDLE_IDS {
-            assert!(should_exclude_clipboard(excluded), "{excluded} should match");
+            assert!(
+                should_exclude_clipboard(excluded),
+                "{excluded} should match"
+            );
         }
     }
 
     #[test]
     fn test_should_exclude_clipboard_does_match_when_bundle_id_has_excluded_prefix() {
-        assert!(should_exclude_clipboard("com.1password.1password.browser-helper"));
+        assert!(should_exclude_clipboard(
+            "com.1password.1password.browser-helper"
+        ));
         assert!(should_exclude_clipboard("com.bitwarden.desktop.autofill"));
     }
 

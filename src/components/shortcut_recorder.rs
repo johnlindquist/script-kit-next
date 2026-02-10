@@ -33,7 +33,4 @@ mod tests;
 mod types;
 
 pub use component::ShortcutRecorder;
-pub use types::{
-    ConflictChecker, OnCancelCallback, OnSaveCallback, RecordedShortcut, RecorderAction,
-    ShortcutConflict, ShortcutRecorderColors,
-};
+pub use types::{RecordedShortcut, RecorderAction, ShortcutConflict, ShortcutRecorderColors};

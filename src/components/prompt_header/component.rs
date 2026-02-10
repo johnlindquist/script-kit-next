@@ -73,9 +73,9 @@ impl PromptHeader {
             colors.text_primary.to_rgb()
         };
 
-        // Build input container using hstack() helper
+        // Build floating input field content using hstack() helper
         let mut input = hstack()
-            .flex_1()
+            .w_full()
             .text_size(px(colors.input_font_size))
             .text_color(text_color);
 
@@ -148,7 +148,14 @@ impl PromptHeader {
             );
         }
 
-        input
+        div().flex_1().pt(px(8.0)).px(px(8.0)).pb(px(6.0)).child(
+            input
+                .px(px(10.0))
+                .py(px(6.0))
+                .rounded(px(10.0))
+                .border_1()
+                .border_color(colors.border.rgba8(0x33)),
+        )
     }
 
     /// Render the action buttons area (Run + Actions) - no separators style

@@ -21,6 +21,7 @@ use super::database::{
     run_wal_checkpoint, trim_oversize_text_entries,
 };
 use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
+use super::should_exclude_clipboard;
 use super::types::ContentType;
 
 /// Interval between background pruning checks (1 hour)
@@ -200,6 +201,15 @@ fn capture_clipboard_content(
     last_text_hash: &mut Option<u64>,
     last_image_hash: &mut Option<u64>,
 ) {
+    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
+    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
+        debug!(
+            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
+            "clipboard_capture_skipped_excluded_source"
+        );
+        return;
+    }
+
     // Check for text changes
     if let Ok(text) = clipboard.get_text() {
         if !text.is_empty() {
@@ -310,6 +320,10 @@ fn capture_clipboard_content(
             }
         }
     }
+}
+
+fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
+    source_bundle_id.is_some_and(should_exclude_clipboard)
 }
 
 /// Compute a simple hash of text content for change detection.
@@ -474,5 +488,22 @@ mod tests {
             !is_new_after_success,
             "After success, same text should not be 'new'"
         );
+    }
+
+    #[test]
+    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
+        assert!(should_skip_clipboard_capture(Some(
+            "com.1password.1password"
+        )));
+        assert!(should_skip_clipboard_capture(Some(
+            "com.bitwarden.desktop.autofill"
+        )));
+    }
+
+    #[test]
+    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
+    ) {
+        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
+        assert!(!should_skip_clipboard_capture(None));
     }
 }
