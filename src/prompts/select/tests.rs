@@ -184,3 +184,36 @@ fn test_select_prompt_resolves_search_box_bg_by_design_variant() {
         0x445566
     );
 }
+
+#[test]
+fn test_select_prompt_extracts_icon_hint_from_choice_metadata() {
+    let description = Some("Shortcut: cmd+k • icon: terminal • script");
+    assert_eq!(
+        render::extract_choice_icon_hint(description),
+        Some("terminal")
+    );
+}
+
+#[test]
+fn test_select_prompt_icon_kind_falls_back_to_code_icon_without_hint() {
+    let choice = choice("Deploy API", "/Users/me/.scriptkit/scripts/deploy.ts", None);
+
+    match render::icon_kind_from_choice(&choice) {
+        IconKind::Svg(name) => assert_eq!(name, "Code"),
+        _ => panic!("expected fallback Code SVG icon"),
+    }
+}
+
+#[test]
+fn test_select_prompt_compute_row_state_keeps_focus_and_selection_independent() {
+    let selected = std::collections::HashSet::from([5]);
+    let focused_but_unselected = render::compute_row_state(2, 2, 1, &selected, Some(1));
+    assert!(focused_but_unselected.is_focused);
+    assert!(!focused_but_unselected.is_selected);
+    assert!(!focused_but_unselected.is_hovered);
+
+    let selected_but_unfocused = render::compute_row_state(1, 2, 5, &selected, Some(1));
+    assert!(!selected_but_unfocused.is_focused);
+    assert!(selected_but_unfocused.is_selected);
+    assert!(selected_but_unfocused.is_hovered);
+}

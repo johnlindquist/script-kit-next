@@ -8,8 +8,9 @@ mod tests {
 
     use super::{
         next_chat_scroll_follow_state, next_reveal_boundary, resolve_chat_input_key_action,
-        resolve_setup_card_key, should_ignore_stream_reveal_update, ChatInputKeyAction,
-        ChatScrollDirection, SetupCardAction,
+        resolve_setup_card_key, should_ignore_stream_reveal_update,
+        should_show_script_generation_actions, ChatInputKeyAction, ChatScrollDirection,
+        ScriptGenerationAction, SetupCardAction,
     };
 
     #[test]
@@ -151,6 +152,83 @@ mod tests {
             !should_ignore_stream_reveal_update(Some("stream-a"), "stream-a"),
             "Active stream should continue receiving reveal updates"
         );
+    }
+
+    #[test]
+    fn should_show_script_generation_actions_only_when_draft_is_ready() {
+        assert!(
+            should_show_script_generation_actions(true, false, true),
+            "Script actions should show only when generation mode is on, not streaming, and a draft exists"
+        );
+        assert!(
+            !should_show_script_generation_actions(false, false, true),
+            "Script actions should stay hidden when script generation mode is disabled"
+        );
+        assert!(
+            !should_show_script_generation_actions(true, true, true),
+            "Script actions should stay hidden while streaming is in progress"
+        );
+        assert!(
+            !should_show_script_generation_actions(true, false, false),
+            "Script actions should stay hidden when there is no draft response yet"
+        );
+    }
+
+    #[test]
+    fn script_generation_action_should_run_after_save_only_for_run_variants() {
+        assert!(
+            !ScriptGenerationAction::Save.should_run_after_save(),
+            "Save should not run the script"
+        );
+        assert!(
+            ScriptGenerationAction::Run.should_run_after_save(),
+            "Run should run after saving"
+        );
+        assert!(
+            ScriptGenerationAction::SaveAndRun.should_run_after_save(),
+            "SaveAndRun should run after saving"
+        );
+    }
+
+    #[test]
+    fn assistant_response_markdown_source_wraps_plain_script_in_script_generation_mode() {
+        let response = r#"// Name: Example
+// Description: Example script
+import "@scriptkit/sdk";
+
+await div("Hello");
+"#;
+
+        let normalized = super::types::assistant_response_markdown_source(true, response);
+        assert_eq!(
+            normalized.as_ref(),
+            r#"```typescript
+// Name: Example
+// Description: Example script
+import "@scriptkit/sdk";
+
+await div("Hello");
+```"#
+        );
+    }
+
+    #[test]
+    fn assistant_response_markdown_source_keeps_existing_fence_unchanged() {
+        let response = r#"```typescript
+await div("Hello");
+```"#;
+
+        let normalized = super::types::assistant_response_markdown_source(true, response);
+        assert_eq!(normalized.as_ref(), response);
+    }
+
+    #[test]
+    fn assistant_response_markdown_source_keeps_plain_text_when_not_script_generation() {
+        let response = r#"// Name: Example
+await div("Hello");"#;
+
+        let normalized = super::types::assistant_response_markdown_source(false, response);
+        assert_eq!(normalized.as_ref(), response);
     }
 
     // --- next_reveal_boundary tests ---

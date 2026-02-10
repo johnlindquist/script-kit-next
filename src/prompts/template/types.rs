@@ -1,5 +1,3 @@
-use super::*;
-
 /// Input definition for a template placeholder
 #[derive(Clone, Debug)]
 pub struct TemplateInput {

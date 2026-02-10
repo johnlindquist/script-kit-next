@@ -35,13 +35,13 @@ mod test_support;
 mod tests;
 mod types;
 
-pub use api::{render_markdown, render_markdown_with_scope};
+pub use api::render_markdown;
 use code_table::{build_code_block_element, build_table_element};
-pub(super) use helpers::*;
+use helpers::*;
 use inline_render::{render_hr, render_inline_spans};
 use parse::parse_markdown;
 use render_blocks::build_markdown_elements;
-pub(super) use scope::*;
+use scope::*;
 #[cfg(test)]
 pub(super) use test_support::*;
-pub(super) use types::*;
+use types::*;

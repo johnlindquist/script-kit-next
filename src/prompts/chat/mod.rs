@@ -7,13 +7,13 @@
 //! - Footer with model selector and "Continue in Chat"
 //! - Actions menu (⌘+K) with model picker
 
-use crate::components::prompt_footer::{PromptFooter, PromptFooterColors, PromptFooterConfig};
+use crate::components::prompt_footer::PromptFooterColors;
 use crate::components::TextInputState;
 use crate::designs::icon_variations::IconName;
 use gpui::{
-    div, img, list, prelude::*, px, rgb, rgba, svg, App, Context, ExternalPaths, FocusHandle,
-    Focusable, Hsla, KeyDownEvent, ListAlignment, ListSizingBehavior, ListState, Render,
-    RenderImage, ScrollWheelEvent, Timer, Window,
+    div, img, list, prelude::*, px, rgb, rgba, svg, AnyElement, App, Context, ExternalPaths,
+    FocusHandle, Focusable, Hsla, KeyDownEvent, ListAlignment, ListSizingBehavior, ListState,
+    Render, RenderImage, ScrollWheelEvent, Timer, Window,
 };
 use gpui_component::{scroll::ScrollableElement, theme::ActiveTheme};
 use std::collections::HashMap;
@@ -49,7 +49,8 @@ pub(crate) use tests::chat_tests;
 use self::types::{
     build_conversation_turns, default_conversation_starters, next_chat_scroll_follow_state,
     next_reveal_boundary, resolve_chat_input_key_action, resolve_setup_card_key,
-    should_ignore_stream_reveal_update, ChatInputKeyAction, ChatScrollDirection, SetupCardAction,
+    should_ignore_stream_reveal_update, should_show_script_generation_actions, ChatInputKeyAction,
+    ChatScrollDirection, RunScriptCallback, ScriptGenerationAction, SetupCardAction,
 };
 
 pub use prompt::ChatPrompt;

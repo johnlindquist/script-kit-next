@@ -1,5 +1,92 @@
 use super::*;
 
+const ROW_FOCUSED_BG_ALPHA: u32 = 0x3A;
+const ROW_HOVER_BG_ALPHA: u32 = 0x26;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct SelectRowState {
+    pub is_focused: bool,
+    pub is_selected: bool,
+    pub is_hovered: bool,
+}
+
+pub(super) fn compute_row_state(
+    display_idx: usize,
+    focused_index: usize,
+    choice_idx: usize,
+    selected: &HashSet<usize>,
+    hovered_index: Option<usize>,
+) -> SelectRowState {
+    SelectRowState {
+        is_focused: display_idx == focused_index,
+        is_selected: selected.contains(&choice_idx),
+        is_hovered: hovered_index == Some(display_idx),
+    }
+}
+
+pub(super) fn resolve_row_bg_hex(
+    row_state: SelectRowState,
+    focused_bg_hex: u32,
+    hovered_bg_hex: u32,
+) -> u32 {
+    if row_state.is_focused || row_state.is_selected {
+        focused_bg_hex
+    } else if row_state.is_hovered {
+        hovered_bg_hex
+    } else {
+        0x00000000
+    }
+}
+
+pub(super) fn extract_choice_icon_hint(description: Option<&str>) -> Option<&str> {
+    description.and_then(|raw| {
+        raw.split(['•', '|', '\n'])
+            .map(str::trim)
+            .find_map(|token| {
+                let token_lower = token.to_ascii_lowercase();
+                if token_lower == "icon"
+                    || token_lower.starts_with("icon:")
+                    || token_lower.starts_with("icon=")
+                    || token_lower.starts_with("icon ")
+                {
+                    token
+                        .split_once(':')
+                        .or_else(|| token.split_once('='))
+                        .map(|(_, value)| value.trim())
+                        .or_else(|| token.split_whitespace().nth(1))
+                } else {
+                    None
+                }
+            })
+            .filter(|value| !value.is_empty())
+    })
+}
+
+pub(super) fn icon_kind_from_choice(choice: &Choice) -> IconKind {
+    let metadata_icon =
+        extract_choice_icon_hint(choice.description.as_deref()).and_then(IconKind::from_icon_hint);
+    let name_prefix_icon = choice
+        .name
+        .split_whitespace()
+        .next()
+        .and_then(IconKind::from_icon_hint);
+
+    metadata_icon
+        .or(name_prefix_icon)
+        .unwrap_or_else(|| IconKind::Svg("Code".to_string()))
+}
+
+fn leading_content_from_icon_kind(icon_kind: IconKind) -> LeadingContent {
+    match icon_kind {
+        IconKind::Emoji(emoji) => LeadingContent::Emoji(emoji.into()),
+        IconKind::Image(render_image) => LeadingContent::AppIcon(render_image),
+        IconKind::Svg(name) => LeadingContent::Icon {
+            name: SharedString::from(name),
+            color: None,
+        },
+    }
+}
+
 impl Focusable for SelectPrompt {
     fn focus_handle(&self, _cx: &gpui::App) -> FocusHandle {
         self.focus_handle.clone()
@@ -52,16 +139,17 @@ impl Render for SelectPrompt {
             },
         );
 
-        // VIBRANCY: Use foundation helper - returns None when vibrancy enabled (let Root handle bg)
+        // VIBRANCY: Optional background override when a vibrancy surface is available.
         let vibrancy_bg = get_vibrancy_background(&self.theme);
 
-        let (_main_bg, text_color, muted_color, border_color) =
+        let (_main_bg, text_color, muted_color, border_color, border_color_hex) =
             if self.design_variant == DesignVariant::Default {
                 (
                     rgb(self.theme.colors.background.main),
                     rgb(self.theme.colors.text.secondary),
                     rgb(self.theme.colors.text.muted),
                     rgb(self.theme.colors.ui.border),
+                    self.theme.colors.ui.border,
                 )
             } else {
                 (
@@ -69,6 +157,7 @@ impl Render for SelectPrompt {
                     rgb(colors.text_secondary),
                     rgb(colors.text_muted),
                     rgb(colors.border),
+                    colors.border,
                 )
             };
         let search_box_bg = rgb(resolve_search_box_bg_hex(
@@ -76,6 +165,14 @@ impl Render for SelectPrompt {
             self.design_variant,
             &colors,
         ));
+        let row_accent_color = if self.design_variant == DesignVariant::Default {
+            self.theme.colors.accent.selected
+        } else {
+            colors.accent
+        };
+        let focused_row_bg_hex = (row_accent_color << 8) | ROW_FOCUSED_BG_ALPHA;
+        let hovered_row_bg_hex = (row_accent_color << 8) | ROW_HOVER_BG_ALPHA;
+        let hovered_row_bg = rgba(hovered_row_bg_hex);
 
         let placeholder = self
             .placeholder
@@ -145,8 +242,12 @@ impl Render for SelectPrompt {
                     move |this: &mut SelectPrompt,
                           visible_range: std::ops::Range<usize>,
                           _window,
-                          _cx| {
-                        let row_colors = UnifiedListItemColors::from_theme(&this.theme);
+                          cx| {
+                        let item_colors = UnifiedListItemColors {
+                            selected_opacity: 0.0,
+                            hover_opacity: 0.0,
+                            ..UnifiedListItemColors::from_theme(&this.theme)
+                        };
                         let mut rows = Vec::with_capacity(visible_range.len());
 
                         for display_idx in visible_range {
@@ -154,22 +255,30 @@ impl Render for SelectPrompt {
                                 if let Some(choice) = this.choices.get(choice_idx) {
                                     if let Some(indexed_choice) = this.choice_index.get(choice_idx)
                                     {
-                                        let is_focused = display_idx == this.focused_index;
-                                        let is_selected = this.selected.contains(&choice_idx);
-                                        let is_selected_for_ui = if this.multiple {
-                                            is_selected
-                                        } else {
-                                            is_focused
-                                        };
+                                        let row_state = compute_row_state(
+                                            display_idx,
+                                            this.focused_index,
+                                            choice_idx,
+                                            &this.selected,
+                                            this.hovered_index,
+                                        );
+                                        let is_focused = row_state.is_focused;
+                                        let is_selected = row_state.is_selected;
+                                        let is_hovered = row_state.is_hovered;
                                         let semantic_id =
                                             choice.semantic_id.clone().unwrap_or_else(|| {
                                                 indexed_choice.stable_semantic_id.clone()
                                             });
-                                        let indicator =
-                                            choice_selection_indicator(
-                                                this.multiple,
-                                                is_selected_for_ui,
-                                            );
+                                        let leading = if this.multiple {
+                                            Some(LeadingContent::Emoji(
+                                                choice_selection_indicator(true, is_selected)
+                                                    .into(),
+                                            ))
+                                        } else {
+                                            Some(leading_content_from_icon_kind(
+                                                icon_kind_from_choice(choice),
+                                            ))
+                                        };
                                         let subtitle = indexed_choice
                                             .metadata
                                             .subtitle_text()
@@ -186,34 +295,58 @@ impl Render for SelectPrompt {
                                                     ))
                                                 },
                                             );
-
-                                        rows.push(
-                                            div()
-                                                .id(display_idx)
-                                                .w_full()
-                                                .h(px(LIST_ITEM_HEIGHT))
-                                                .border_b_1()
-                                                .border_color(border_color)
-                                                .child(
-                                                    UnifiedListItem::new(
-                                                        gpui::ElementId::Name(semantic_id.into()),
-                                                        title,
-                                                    )
-                                                    .subtitle_opt(subtitle)
-                                                    .leading(LeadingContent::Emoji(
-                                                        indicator.into(),
-                                                    ))
-                                                    .trailing_opt(trailing)
-                                                    .state(ItemState {
-                                                        is_selected: is_focused,
-                                                        is_hovered: false,
-                                                        is_disabled: false,
-                                                    })
-                                                    .density(Density::Comfortable)
-                                                    .colors(row_colors)
-                                                    .with_accent_bar(is_selected_for_ui),
-                                                ),
+                                        let row_bg = rgba(resolve_row_bg_hex(
+                                            row_state,
+                                            focused_row_bg_hex,
+                                            hovered_row_bg_hex,
+                                        ));
+                                        let hover_handler = cx.listener(
+                                            move |this: &mut SelectPrompt,
+                                                  hovered: &bool,
+                                                  _window,
+                                                  cx| {
+                                                if *hovered {
+                                                    if this.hovered_index != Some(display_idx) {
+                                                        this.hovered_index = Some(display_idx);
+                                                        cx.notify();
+                                                    }
+                                                } else if this.hovered_index == Some(display_idx) {
+                                                    this.hovered_index = None;
+                                                    cx.notify();
+                                                }
+                                            },
                                         );
+
+                                        let mut row = div()
+                                            .id(display_idx)
+                                            .w_full()
+                                            .h(px(LIST_ITEM_HEIGHT))
+                                            .rounded(px(8.0))
+                                            .bg(row_bg)
+                                            .cursor_pointer()
+                                            .on_hover(hover_handler)
+                                            .child(
+                                                UnifiedListItem::new(
+                                                    gpui::ElementId::Name(semantic_id.into()),
+                                                    title,
+                                                )
+                                                .subtitle_opt(subtitle)
+                                                .leading_opt(leading)
+                                                .trailing_opt(trailing)
+                                                .state(ItemState {
+                                                    is_selected,
+                                                    is_hovered,
+                                                    is_disabled: false,
+                                                })
+                                                .density(Density::Comfortable)
+                                                .colors(item_colors),
+                                            );
+
+                                        if !is_focused && !is_selected {
+                                            row = row.hover(move |s| s.bg(hovered_row_bg));
+                                        }
+
+                                        rows.push(row);
                                     }
                                 }
                             }
@@ -235,6 +368,7 @@ impl Render for SelectPrompt {
             .flex_col()
             .flex_1()
             .w_full()
+            .px(px(8.0))
             .child(choices_content);
 
         div()
@@ -243,12 +377,56 @@ impl Render for SelectPrompt {
             .flex_col()
             .w_full()
             .h_full()
-            .when_some(vibrancy_bg, |d, bg| d.bg(bg)) // Only apply bg when vibrancy disabled
+            .bg(_main_bg)
+            .when_some(vibrancy_bg, |d, bg| d.bg(bg))
+            .rounded(px(12.0))
+            .overflow_hidden()
+            .border_1()
+            .border_color(rgba((border_color_hex << 8) | 0x40))
             .text_color(text_color)
             .key_context("select_prompt")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
             .child(input_container)
             .child(choices_container)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{resolve_row_bg_hex, SelectRowState};
+
+    #[test]
+    fn test_resolve_row_bg_hex_uses_focused_accent_for_selected_row() {
+        let focused_bg_hex = 0x55AAFF3A;
+        let hovered_bg_hex = 0x55AAFF26;
+
+        let selected_row = SelectRowState {
+            is_focused: false,
+            is_selected: true,
+            is_hovered: false,
+        };
+
+        assert_eq!(
+            resolve_row_bg_hex(selected_row, focused_bg_hex, hovered_bg_hex),
+            focused_bg_hex
+        );
+    }
+
+    #[test]
+    fn test_resolve_row_bg_hex_uses_hover_color_for_unselected_hovered_row() {
+        let focused_bg_hex = 0x55AAFF3A;
+        let hovered_bg_hex = 0x55AAFF26;
+
+        let hovered_row = SelectRowState {
+            is_focused: false,
+            is_selected: false,
+            is_hovered: true,
+        };
+
+        assert_eq!(
+            resolve_row_bg_hex(hovered_row, focused_bg_hex, hovered_bg_hex),
+            hovered_bg_hex
+        );
     }
 }

@@ -29,9 +29,9 @@ mod tailwind;
 mod tests;
 mod types;
 
-pub(super) use inline::*;
+use inline::*;
 pub use prompt::DivPrompt;
-pub(super) use render_html::*;
-pub(super) use tailwind::*;
-pub(super) use types::*;
+use render_html::*;
+use tailwind::*;
+use types::*;
 pub use types::{ContainerOptions, ContainerPadding};

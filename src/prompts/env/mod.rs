@@ -34,5 +34,5 @@ mod render;
 #[cfg(test)]
 mod tests;
 
-pub(super) use helpers::*;
+use helpers::*;
 pub use prompt::EnvPrompt;
