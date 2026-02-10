@@ -28,7 +28,7 @@ pub use grid_layout::{
     GridOptions, LayoutBounds, LayoutComponentInfo, LayoutComponentType, LayoutInfo,
     ScriptErrorData,
 };
-pub use input::{ExecOptions, MouseData, MouseEventData};
+pub use input::{ExecOptions, MouseData};
 pub use menu_bar::MenuBarItemData;
 pub use primitives::{
     Choice, ClipboardAction, ClipboardEntryType, ClipboardFormat, ClipboardHistoryAction, Field,

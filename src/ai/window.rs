@@ -30,7 +30,6 @@ use gpui_component::{
 };
 #[cfg(target_os = "macos")]
 use objc::{msg_send, sel, sel_impl};
-use regex;
 use tracing::{debug, info};
 
 use super::config::ModelInfo;

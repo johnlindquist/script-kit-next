@@ -235,6 +235,8 @@ impl AiApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let action_id = action_id.strip_prefix("chat:").unwrap_or(action_id);
+
         match action_id {
             "copy_response" => self.copy_last_response(cx),
             "copy_chat" => self.copy_entire_chat(cx),

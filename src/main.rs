@@ -118,6 +118,7 @@ mod permissions_wizard;
 mod app_launcher;
 mod builtins;
 mod fallbacks;
+mod favorites;
 mod menu_bar;
 
 // Frontmost app tracker - Background observer for tracking active application

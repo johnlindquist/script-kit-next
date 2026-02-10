@@ -26,6 +26,7 @@ fn load_favorites_from_path(path: &Path) -> Result<Favorites> {
         .with_context(|| format!("failed to parse favorites JSON at {}", path.display()))
 }
 
+#[allow(dead_code)]
 fn save_favorites_to_path(path: &Path, favorites: &Favorites) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).with_context(|| {
@@ -44,6 +45,7 @@ fn save_favorites_to_path(path: &Path, favorites: &Favorites) -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn toggle_favorite_in_path(path: &Path, id: &str) -> Result<Favorites> {
     let mut favorites = load_favorites_from_path(path)?;
 
@@ -70,10 +72,12 @@ pub fn load_favorites() -> Result<Favorites> {
     load_favorites_from_path(&favorites_file_path())
 }
 
+#[allow(dead_code)]
 pub fn save_favorites(favorites: &Favorites) -> Result<()> {
     save_favorites_to_path(&favorites_file_path(), favorites)
 }
 
+#[allow(dead_code)]
 pub fn toggle_favorite(id: &str) -> Result<()> {
     toggle_favorite_in_path(&favorites_file_path(), id).map(|_| ())
 }

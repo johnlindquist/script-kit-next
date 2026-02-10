@@ -9,6 +9,7 @@
 //! - `$0` - Final cursor position
 //! - `$$` - Escaped literal dollar sign
 
-/// Represents a parsed part of a snippet template
+pub mod placeholders;
+
 include!("part_000.rs");
 include!("part_001.rs");

@@ -20,10 +20,12 @@ pub fn fuzzy_search_windows(windows: &[WindowInfo], query: &str) -> Vec<WindowMa
     if query.is_empty() {
         // If no query, return all windows with equal score, sorted by app name then title
         let mut matches: Vec<usize> = (0..windows.len()).collect();
-        matches.sort_by(|a_idx, b_idx| match windows[*a_idx].app.cmp(&windows[*b_idx].app) {
-            Ordering::Equal => windows[*a_idx].title.cmp(&windows[*b_idx].title),
-            other => other,
-        });
+        matches.sort_by(
+            |a_idx, b_idx| match windows[*a_idx].app.cmp(&windows[*b_idx].app) {
+                Ordering::Equal => windows[*a_idx].title.cmp(&windows[*b_idx].title),
+                other => other,
+            },
+        );
         return matches
             .into_iter()
             .map(|index| WindowMatch {
@@ -87,13 +89,15 @@ pub fn fuzzy_search_windows(windows: &[WindowInfo], query: &str) -> Vec<WindowMa
     }
 
     // Sort by score (highest first), then by app name, then by title for ties
-    matches.sort_by(|(a_idx, a_score), (b_idx, b_score)| match b_score.cmp(a_score) {
-        Ordering::Equal => match windows[*a_idx].app.cmp(&windows[*b_idx].app) {
-            Ordering::Equal => windows[*a_idx].title.cmp(&windows[*b_idx].title),
+    matches.sort_by(
+        |(a_idx, a_score), (b_idx, b_score)| match b_score.cmp(a_score) {
+            Ordering::Equal => match windows[*a_idx].app.cmp(&windows[*b_idx].app) {
+                Ordering::Equal => windows[*a_idx].title.cmp(&windows[*b_idx].title),
+                other => other,
+            },
             other => other,
         },
-        other => other,
-    });
+    );
 
     matches
         .into_iter()

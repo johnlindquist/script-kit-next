@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+pub mod discover;
 pub mod git_ops;
 pub mod manifest;
 pub mod storage;

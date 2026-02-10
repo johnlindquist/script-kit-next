@@ -10,19 +10,218 @@ use super::providers::{AiProvider, ProviderMessage, ProviderRegistry};
 const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
 const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
 const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
+const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
+const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
 
-const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
+pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit TypeScript scripts.
 
-Return ONLY TypeScript source code for one Script Kit script. Do not include explanations.
+RETURN ONLY ONE THING: TypeScript source code for a single Script Kit script.
 
-Required output conventions:
-1) Include metadata comments at the top:
-   // Name: <clear title>
+* No markdown fences. No explanations. No multiple options.
+
+NON-NEGOTIABLE OUTPUT FORMAT
+
+1. The first lines are:
+   // Name: <short, clear, user-facing title>
    // Description: <one-line summary>
-2) Include: import "@johnlindquist/kit";
-3) Use await arg() for user input when useful.
-4) Use await div() for display output when useful.
-5) Keep the script runnable as-is with sensible defaults and light error handling."#;
+2. Near the top include EXACTLY ONE import (and no others):
+   import "@scriptkit/sdk";
+3. Use top-level await (no main(), no async IIFE, no servers).
+4. Prefer Script Kit prompts + UI over console.log.
+
+RUNTIME ASSUMPTIONS
+
+* Script Kit provides globals for prompts/UI, filesystem, HTTP, clipboard, automation, and AI.
+* Do not import node:* modules. Use global path.* utilities plus prompts like path()/find().
+* Write scripts that feel like native tools: interactive, fast, keyboard-friendly.
+
+UX QUALITY BAR
+
+* Ask for missing inputs (arg/fields/path/find/drop/editor). Don't hardcode what you can prompt for.
+* Prefer interactive UI over logs: show results with div(md(...)) or editor(...).
+* Lists should be rich choice objects: { name, value, description?, preview? }.
+  * preview is HTML (often md(...)) or a function returning HTML.
+* Add actions for common operations (Copy/Open/Save/Reveal/Retry) via Action[] on arg/div/editor or setActions().
+* Use sensible defaults and remember preferences when helpful (env/db/store).
+
+ERROR HANDLING
+
+* Treat Esc/cancel as normal: catch and exit quietly (or toast/notify if useful).
+* Validate input early; for strict validation use arg({ onSubmit }) + setHint/setEnter + preventSubmit.
+* For exec(), capture/show stderr/stdout on failure (editor/div) and suggest next steps.
+* For long tasks: show progress (setStatus/setLoading/setProgress) or a "working" div with onInit + submit.
+
+SCRIPT KIT IDIOMS (PREFERRED)
+
+* await arg()/select()/grid()/fields()/editor()/div(md(...))
+* home()/kenvPath()/tmpPath() + path.join/extname/basename (no imports)
+* clipboard.* + getClipboardHistory() for clipboard tools
+* await hide() before disruptive automation (keyboard/mouse/exec) when you don't need the prompt visible
+* div({ html, onInit }) + submit(value) for "working…" screens
+* Use isMac/isWin/isLinux for platform-specific behavior when unavoidable
+
+TEACH BY EXAMPLE (REFERENCE ONLY — ADAPT PATTERNS, DO NOT COPY VERBATIM)
+
+Example 1 — Simple input → output (arg + file write)
+// Name: Save Note
+// Description: Prompt for a note and save it as a text file
+import "@scriptkit/sdk";
+const note = await arg("Note text");
+const outDir = home("Documents", "Notes");
+await ensureDir(outDir);
+const filePath = path.join(outDir, `note-${new Date().toISOString().slice(0, 10)}.txt`);
+await writeFile(filePath, note, "utf8");
+await div(md(`✅ Saved to: \`${filePath}\``));
+
+Example 2 — List with choices + preview
+// Name: Clipboard Picker
+// Description: Search clipboard history, preview items, copy the selection
+import "@scriptkit/sdk";
+const items = (await getClipboardHistory()).slice(0, 100);
+const value = await arg("Pick a clipboard item", items.map((i) => ({
+  name: i.name || i.value.slice(0, 80),
+  description: i.description || formatDateToNow(new Date(i.timestamp)),
+  value: i.value,
+  preview: md(`## Preview\n\n${i.value.slice(0, 2000)}`),
+})));
+await clipboard.writeText(value);
+toast("Copied");
+
+Example 3 — Multi-step workflow + rich HTML output (div(md()))
+// Name: Markdown Card Builder
+// Description: Collect fields, edit markdown, then render a styled preview
+import "@scriptkit/sdk";
+const [title, tags] = await fields(["Title", "Tags (comma-separated)"]);
+const initial = `# ${title}\n\nTags: ${tags}\n\nWrite your content here...\n`;
+const markdown = await editor(initial);
+await div({ html: md(markdown), containerClasses: "p-6 prose dark:prose-invert" }, [
+  { name: "Copy", shortcut: `${cmd}+c`, onAction: () => clipboard.writeText(markdown) },
+  { name: "Save", shortcut: `${cmd}+s`, onAction: () => writeFile(home("Desktop", `${title}.md`), markdown, "utf8") },
+]);
+
+Example 4 — AI-powered helper (ai())
+// Name: AI Rewrite
+// Description: Rewrite text in a chosen tone using ai()
+import "@scriptkit/sdk";
+const tone = await arg("Tone", ["Concise", "Friendly", "Professional"]);
+const input = await editor("Paste text to rewrite...");
+const rewrite = ai(`Rewrite the text in a ${tone} tone. Return only the rewritten text.`);
+const output = await rewrite(input);
+await editor(output);
+
+Example 5 — System automation (exec + readFile/writeFile)
+// Name: Quick Replace In File
+// Description: Replace text in a file, save, then open it
+import "@scriptkit/sdk";
+const filePath = await path({ hint: "Select a text file to edit" });
+const findText = await arg("Find");
+const replaceText = await arg("Replace with");
+const before = await readFile(filePath, "utf8");
+await writeFile(filePath, before.split(findText).join(replaceText), "utf8");
+const openCmd = isMac ? "open" : isWin ? "start" : "xdg-open";
+await exec(`${openCmd} "${filePath}"`);
+toast("Updated");
+
+COMPACT API REFERENCE (ONE LINE PER FUNCTION, GROUPED)
+
+Prompts & Rendering
+* arg(...) — text input or searchable choices (supports actions + preview)
+* select(...) — multi-select list
+* grid(...) — multi-select grid
+* fields(...) — quick form, returns string[]
+* editor(...) — edit/copy large text
+* div(...) — render HTML (pair with md())
+* form(...) — HTML form, returns object
+* textarea(...) — simple textarea
+* drop(...) — drag/drop files or text
+* find(...) — file search prompt
+* path(...) — file/folder picker (also provides path.join/etc)
+* onTab(name, fn) — multi-tab prompt flows
+
+UI Helpers
+* md(markdown) — markdown to HTML
+* toast(message, options?) — in-window toast
+* notify(bodyOrOptions) — system notification
+* setActions(actions, options?) — action palette w/ shortcuts
+* openActions() — open actions menu
+* setHint(text) — hint under input
+* setEnter(text) — enter button label
+* setFooter(text) — footer content
+* setPreview(html, classes?) — preview panel
+* setPanel(html, classes?) — panel content
+* setLoading(boolean) — spinner/loading state
+* setProgress(number) — progress bar 0..1
+* setStatus({ status, message }) — tray status + message
+* show() — show prompt
+* hide(options?) — hide prompt
+* blur() — focus previous app
+* submit(value) — force submit
+* preventSubmit — block submit from onSubmit
+
+Config, State, Time
+* env(key, promptOrFn?) — read/prompt and persist env var
+* db(dataOrKeyOrPath?, data?, fromCache?) — lightweight JSON DB
+* store(key, initial?) — persistent key-value store
+* wait(ms, submitValue?) — delay (optionally submit)
+
+Files & Paths
+* home(...) — home-relative path
+* kenvPath(...) — ~/.kenv-relative path
+* tmpPath(...) — temp path
+* ensureDir(path) — ensure dir exists
+* ensureFile(path) — ensure file exists
+* readFile(path, enc?) — read file
+* writeFile(path, data, enc?) — write file
+* readdir(path) — list dir
+* pathExists(path) — exists?
+* globby(patterns) — glob files
+* replace({ files, from, to }) — replace text in files
+
+Web & Data
+* get(url, config?) — HTTP GET
+* post(url, data?, config?) — HTTP POST
+* put(url, data?, config?) — HTTP PUT
+* patch(url, data?, config?) — HTTP PATCH
+* del(url, config?) — HTTP DELETE
+* download(url, destination) — download a file
+* inspect(data, extension?) — dump data to a file and open it
+
+Automation
+* exec(command, options?) — run a shell command
+* browse(url) — open in browser
+* edit(filePath) — open in external editor
+* clipboard.readText() — read clipboard text
+* clipboard.writeText(text) — write clipboard text
+* clipboard.readImage() — read image buffer
+* clipboard.writeImage(buffer) — write image buffer
+* getClipboardHistory() — clipboard history items
+* removeClipboardItem(id) — remove one history item
+* clearClipboardHistory() — clear history
+* keyboard.type(...textOrKeys) — type (use with caution)
+* mouse.move(points) — move mouse (use with caution)
+
+AI
+* ai(systemPrompt, options?) — returns (input) => text
+* ai.object(promptOrMessages, schema, options?) — structured output via zod
+* assistant(systemPrompt, options?) — multi-turn AI w/ tool calling
+* generate(promptOrMessages, schema, options?) — structured generation
+* mcp(options?) — MCP client
+
+Handy Globals
+* isMac — OS boolean
+* isWin — OS boolean
+* isLinux — OS boolean
+* cmd — "cmd" on macOS, "ctrl" elsewhere
+* args — CLI args array
+* flag — parsed CLI flags
+
+FINAL CHECKLIST
+* Only TypeScript source code.
+* Includes // Name: and // Description: at top.
+* Exactly one import: import "@scriptkit/sdk";
+* Top-level await + Script Kit globals.
+* Interactive UX (prompts, previews, actions) instead of console output.
+* Practical errors + safe cancellation."#;
 
 #[derive(Debug, Clone)]
 pub struct GeneratedScriptOutput {
@@ -76,13 +275,7 @@ pub fn generate_script_from_prompt(
             )
         })?;
 
-    let extracted = extract_script_code(&raw_response);
-    if extracted.trim().is_empty() {
-        anyhow::bail!("AI returned an empty response for script generation (state=empty_response)");
-    }
-
-    let slug = slugify_script_name(normalized_prompt);
-    let finalized = enforce_script_kit_conventions(&extracted, normalized_prompt, &slug);
+    let (slug, finalized) = prepare_script_from_ai_response(normalized_prompt, &raw_response)?;
     let path = write_generated_script(&slug, &finalized).with_context(|| {
         format!(
             "Failed writing AI-generated script (state=write_failed, slug={})",
@@ -105,6 +298,47 @@ pub fn generate_script_from_prompt(
         model_id: selected_model.id,
         provider_id: selected_model.provider,
     })
+}
+
+pub(crate) fn prepare_script_from_ai_response(
+    prompt: &str,
+    raw_response: &str,
+) -> Result<(String, String)> {
+    let normalized_prompt = prompt.trim();
+    if normalized_prompt.is_empty() {
+        anyhow::bail!("AI script generation requires a non-empty prompt");
+    }
+
+    let extracted = extract_script_code(raw_response);
+    if extracted.trim().is_empty() {
+        anyhow::bail!("AI returned an empty response for script generation (state=empty_response)");
+    }
+
+    let slug = slugify_script_name(normalized_prompt);
+    let finalized = enforce_script_kit_conventions(&extracted, normalized_prompt, &slug);
+    Ok((slug, finalized))
+}
+
+pub(crate) fn save_generated_script_from_response(
+    prompt: &str,
+    raw_response: &str,
+) -> Result<PathBuf> {
+    let (slug, script_source) = prepare_script_from_ai_response(prompt, raw_response)?;
+    let script_path = crate::script_creation::create_new_script(&slug).with_context(|| {
+        format!(
+            "Failed to create script for AI response (state=create_failed, slug={})",
+            slug
+        )
+    })?;
+
+    fs::write(&script_path, script_source).with_context(|| {
+        format!(
+            "Failed writing script for AI response (state=write_failed, path={})",
+            script_path.display()
+        )
+    })?;
+
+    Ok(script_path)
 }
 
 fn select_generation_model(
@@ -194,11 +428,9 @@ fn slugify_script_name(prompt: &str) -> String {
         if character.is_ascii_alphanumeric() {
             slug.push(character);
             last_was_hyphen = false;
-        } else if matches!(character, ' ' | '_' | '-') {
-            if !slug.is_empty() && !last_was_hyphen {
-                slug.push('-');
-                last_was_hyphen = true;
-            }
+        } else if matches!(character, ' ' | '_' | '-') && !slug.is_empty() && !last_was_hyphen {
+            slug.push('-');
+            last_was_hyphen = true;
         }
     }
 
@@ -248,10 +480,12 @@ fn description_from_prompt(prompt: &str) -> String {
 }
 
 fn has_kit_import(script: &str) -> bool {
-    script.contains("import \"@johnlindquist/kit\";")
-        || script.contains("import '@johnlindquist/kit';")
-        || script.contains("import \"@scriptkit/sdk\";")
-        || script.contains("import '@scriptkit/sdk';")
+    script.lines().any(|line| {
+        let trimmed = line.trim();
+        trimmed.starts_with("import")
+            && trimmed.contains(SCRIPT_KIT_SDK_IMPORT_MODULE)
+            && (trimmed.contains('\"') || trimmed.contains('\''))
+    })
 }
 
 fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
@@ -276,7 +510,7 @@ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> Str
     }
 
     if !has_kit_import(trimmed_script) {
-        prefix_lines.push("import \"@johnlindquist/kit\";".to_string());
+        prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
     }
 
     let mut output = String::new();
@@ -385,7 +619,7 @@ print("hello")
 
         assert!(output.contains("// Name: Ask User Name"));
         assert!(output.contains("// Description: Ask for user name"));
-        assert!(output.contains("import \"@johnlindquist/kit\";"));
+        assert!(output.contains("import \"@scriptkit/sdk\";"));
         assert!(output.contains("await arg(\"Name?\");"));
     }
 
@@ -393,7 +627,7 @@ print("hello")
     fn test_enforce_script_kit_conventions_keeps_existing_metadata_and_import() {
         let script = r#"// Name: Existing
 // Description: Existing description
-import "@johnlindquist/kit";
+import "@scriptkit/sdk";
 
 await div("ready");
 "#;
@@ -410,10 +644,33 @@ await div("ready");
             "should not duplicate existing Description metadata"
         );
         assert_eq!(
-            output.matches("import \"@johnlindquist/kit\";").count(),
+            output.matches("import \"@scriptkit/sdk\";").count(),
             1,
             "should not duplicate existing import"
         );
+    }
+
+    #[test]
+    fn test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import() {
+        assert!(has_kit_import("import \"@scriptkit/sdk\";"));
+        assert!(has_kit_import("import '@scriptkit/sdk'"));
+        assert!(!has_kit_import("import \"@johnlindquist/kit\";"));
+    }
+
+    #[test]
+    fn test_ai_script_generation_system_prompt_uses_modern_sdk_conventions() {
+        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
+        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
+        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("arg("));
+        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("div("));
+        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("editor("));
+        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("notify("));
+        // New prompt includes examples and comprehensive API reference
+        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("TEACH BY EXAMPLE"));
+        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("COMPACT API REFERENCE"));
+        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("ai("));
+        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("clipboard"));
+        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("home("));
     }
 
     #[test]
@@ -424,5 +681,32 @@ await div("ready");
 
         assert_eq!(first.file_name().unwrap(), "my-script.ts");
         assert_eq!(second.file_name().unwrap(), "my-script-1.ts");
+    }
+
+    #[test]
+    fn test_prepare_script_from_ai_response_adds_conventions_when_ai_omits_them() {
+        let prompt = "Create a weather checker";
+        let response = "await div(\"Sunny\");";
+
+        let (slug, source) = prepare_script_from_ai_response(prompt, response).unwrap();
+        assert_eq!(slug, "create-a-weather-checker");
+        assert!(source.contains("// Name: Create A Weather Checker"));
+        assert!(source.contains("// Description: Create a weather checker"));
+        assert!(source.contains("import \"@scriptkit/sdk\";"));
+        assert!(source.contains("await div(\"Sunny\");"));
+    }
+
+    #[test]
+    fn test_prepare_script_from_ai_response_extracts_typescript_fence_when_present() {
+        let prompt = "Build script";
+        let response = r#"
+```typescript
+await arg("Name?");
+```
+"#;
+
+        let (_slug, source) = prepare_script_from_ai_response(prompt, response).unwrap();
+        assert!(source.contains("await arg(\"Name?\");"));
+        assert!(!source.contains("```"));
     }
 }
