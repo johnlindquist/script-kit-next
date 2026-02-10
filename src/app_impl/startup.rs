@@ -723,19 +723,18 @@ impl ScriptListApp {
                             }
 
                             // Handle Tab/Shift+Tab in ScriptList view for AI actions.
-                            // Tab opens Ask AI chat, Shift+Tab generates a script from the input text.
+                            // Tab opens Ask AI chat, Shift+Tab opens script generation chat mode.
                             if matches!(this.current_view, AppView::ScriptList)
                                 && !this.filter_text.is_empty()
                                 && !this.show_actions_popup
                             {
                                 let query = this.filter_text.clone();
 
-                                // Clear filter text before switching view
-                                this.filter_text.clear();
-
                                 if has_shift {
-                                    this.generate_script_from_ai_prompt(query, cx);
+                                    this.dispatch_ai_script_generation_from_query(query, cx);
                                 } else {
+                                    // Clear filter text before switching view
+                                    this.filter_text.clear();
                                     // Show inline AI chat with the query as initial input
                                     this.show_inline_ai_chat(Some(query), cx);
                                 }

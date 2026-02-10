@@ -11,6 +11,16 @@ fn resolve_grouped_result_index(
     }
 }
 
+fn fallback_keeps_window_open(fallback: &crate::fallbacks::FallbackItem) -> bool {
+    match fallback {
+        crate::fallbacks::FallbackItem::Builtin(builtin) => matches!(
+            builtin.id,
+            "run-in-terminal" | "search-files" | "builtin-generate-script-with-ai"
+        ),
+        crate::fallbacks::FallbackItem::Script(_) => true,
+    }
+}
+
 impl ScriptListApp {
     #[allow(dead_code)]
     pub(crate) fn filtered_scripts(&self) -> Vec<Arc<scripts::Script>> {
@@ -219,14 +229,7 @@ impl ScriptListApp {
             ),
         );
 
-        // Check if this is a "stay open" action (like run-in-terminal which opens a view)
-        // Check if this is a "stay open" action (opens its own view)
-        let should_close = match fallback {
-            crate::fallbacks::FallbackItem::Builtin(builtin) => {
-                !matches!(builtin.id, "run-in-terminal" | "search-files")
-            }
-            crate::fallbacks::FallbackItem::Script(_) => false,
-        };
+        let should_close = !fallback_keeps_window_open(fallback);
 
         // Execute the fallback action
         match fallback {
@@ -260,13 +263,7 @@ impl ScriptListApp {
         {
             logging::log("EXEC", &format!("Executing fallback: {}", fallback.name()));
 
-            // Check if this is a "stay open" action (opens its own view)
-            let should_close = match &fallback {
-                crate::fallbacks::FallbackItem::Builtin(builtin) => {
-                    !matches!(builtin.id, "run-in-terminal" | "search-files")
-                }
-                crate::fallbacks::FallbackItem::Script(_) => false,
-            };
+            let should_close = !fallback_keeps_window_open(&fallback);
 
             // Execute the fallback action
             match &fallback {
@@ -372,13 +369,41 @@ impl ScriptListApp {
                     logging::log("FALLBACK", &format!("SearchFiles: {}", query));
                     self.open_file_search(query, cx);
                 }
+                FallbackResult::ExecuteBuiltin { builtin_id } => {
+                    logging::log(
+                        "FALLBACK",
+                        &format!(
+                            "ExecuteBuiltin: builtin_id='{}' input_len={}",
+                            builtin_id,
+                            input.len()
+                        ),
+                    );
+
+                    let builtin_entry = self
+                        .builtin_entries
+                        .iter()
+                        .find(|entry| entry.id == builtin_id)
+                        .cloned();
+
+                    let Some(entry) = builtin_entry else {
+                        logging::log(
+                            "FALLBACK",
+                            &format!(
+                                "state=failed attempted=execute_builtin_fallback reason=builtin_not_found builtin_id={}",
+                                builtin_id
+                            ),
+                        );
+                        return;
+                    };
+
+                    self.execute_builtin_with_query(&entry, Some(input), cx);
+                }
             },
             Err(e) => {
                 logging::log("FALLBACK", &format!("Fallback execution error: {}", e));
             }
         }
     }
-
 }
 
 #[cfg(test)]
@@ -393,7 +418,10 @@ mod tests {
             GroupedListItem::Item(4),
         ];
 
-        assert_eq!(resolve_grouped_result_index(&grouped_items, 0), Some((1, 3)));
+        assert_eq!(
+            resolve_grouped_result_index(&grouped_items, 0),
+            Some((1, 3))
+        );
     }
 
     #[test]
@@ -404,7 +432,10 @@ mod tests {
             GroupedListItem::SectionHeader("Main".to_string(), None),
         ];
 
-        assert_eq!(resolve_grouped_result_index(&grouped_items, 100), Some((1, 8)));
+        assert_eq!(
+            resolve_grouped_result_index(&grouped_items, 100),
+            Some((1, 8))
+        );
     }
 
     #[test]
@@ -415,5 +446,29 @@ mod tests {
         ];
 
         assert_eq!(resolve_grouped_result_index(&grouped_items, 0), None);
+    }
+
+    #[test]
+    fn test_fallback_keeps_window_open_for_generate_script_builtin() {
+        let fallback = crate::fallbacks::FallbackItem::Builtin(
+            crate::fallbacks::builtins::get_builtin_fallbacks()
+                .into_iter()
+                .find(|fallback| fallback.id == "builtin-generate-script-with-ai")
+                .expect("generate-script fallback should exist"),
+        );
+
+        assert!(fallback_keeps_window_open(&fallback));
+    }
+
+    #[test]
+    fn test_fallback_keeps_window_open_is_false_for_regular_builtin() {
+        let fallback = crate::fallbacks::FallbackItem::Builtin(
+            crate::fallbacks::builtins::get_builtin_fallbacks()
+                .into_iter()
+                .find(|fallback| fallback.id == "search-google")
+                .expect("search-google fallback should exist"),
+        );
+
+        assert!(!fallback_keeps_window_open(&fallback));
     }
 }

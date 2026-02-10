@@ -1,6 +1,7 @@
 use super::*;
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 enum AiScriptGenerationStage {
     SelectModel,
@@ -12,6 +13,7 @@ enum AiScriptGenerationStage {
     OpenEditor,
 }
 
+#[allow(dead_code)]
 impl AiScriptGenerationStage {
     fn as_str(self) -> &'static str {
         match self {
@@ -26,17 +28,21 @@ impl AiScriptGenerationStage {
     }
 }
 
+#[allow(dead_code)]
 const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You are ScriptKitScriptGenerator.
 Generate a complete Script Kit TypeScript script and return code only.
 Requirements:
 - Include metadata comments at the top:
   // Name: <script name>
   // Description: <short summary>
-- Include: import "@scriptkit/sdk";
-- Use idiomatic Script Kit APIs (for example await arg(), await div(), await editor()) when useful.
-- Prefer clear async/await flow and practical defaults.
-- Return a full runnable script with no extra explanation."#;
+- Include exactly one SDK import near the top:
+  import "@scriptkit/sdk";
+- Use top-level await with Script Kit APIs directly when useful:
+  arg(), div(), editor(), notify(), md()
+- For file tasks, prefer Script Kit helpers like home() and writeFile().
+- Return a full runnable script with practical defaults and no extra explanation."#;
 
+#[allow(dead_code)]
 fn build_ai_script_generation_user_prompt(description: &str) -> String {
     format!(
         "Generate a complete Script Kit script for this request:\n\n{}\n\nReturn only the TypeScript script source.",
@@ -44,6 +50,7 @@ fn build_ai_script_generation_user_prompt(description: &str) -> String {
     )
 }
 
+#[allow(dead_code)]
 fn select_default_ai_script_model(
     registry: &crate::ai::ProviderRegistry,
 ) -> Option<crate::ai::ModelInfo> {
@@ -55,6 +62,7 @@ fn select_default_ai_script_model(
         .or_else(|| all_models.first().cloned())
 }
 
+#[allow(dead_code)]
 fn extract_generated_script_source(raw_response: &str) -> Option<String> {
     let trimmed = raw_response.trim();
     if trimmed.is_empty() {
@@ -71,6 +79,7 @@ fn extract_generated_script_source(raw_response: &str) -> Option<String> {
     normalize_generated_script(trimmed.to_string())
 }
 
+#[allow(dead_code)]
 fn extract_first_fenced_block(response: &str, fence_start: &str) -> Option<String> {
     let start_index = response.find(fence_start)?;
     let after_fence = &response[start_index + fence_start.len()..];
@@ -82,6 +91,7 @@ fn extract_first_fenced_block(response: &str, fence_start: &str) -> Option<Strin
     Some(after_newline[..end_index].trim().to_string())
 }
 
+#[allow(dead_code)]
 fn normalize_generated_script(content: String) -> Option<String> {
     let trimmed = content.trim();
     if trimmed.is_empty() {
@@ -91,6 +101,7 @@ fn normalize_generated_script(content: String) -> Option<String> {
     }
 }
 
+#[allow(dead_code)]
 fn derive_script_name_from_description(description: &str) -> String {
     let mut slug = String::new();
     let mut last_was_dash = false;
@@ -121,6 +132,7 @@ fn derive_script_name_from_description(description: &str) -> String {
     }
 }
 
+#[allow(dead_code)]
 fn generate_script_via_ai_backend(
     registry: &crate::ai::ProviderRegistry,
     model_id: &str,
@@ -464,8 +476,199 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    /// Show script generation chat prompt with built-in AI provider support.
+    /// This opens ChatPrompt in script-generation mode with the script generation system prompt.
+    pub fn show_script_generation_chat(
+        &mut self,
+        initial_query: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        use crate::ai::ProviderRegistry;
+        use crate::prompts::{ChatEscapeCallback, ChatPrompt, ChatSubmitCallback};
+
+        // Mark as opened from main menu so ESC returns to main menu
+        self.opened_from_main_menu = true;
+
+        // Create escape callback that signals via channel
+        let escape_sender = self.inline_chat_escape_sender.clone();
+        let escape_callback: ChatEscapeCallback = std::sync::Arc::new(move |_id| {
+            let _ = escape_sender.try_send(());
+        });
+
+        // Use cached registry if available, otherwise build synchronously as fallback
+        let registry = self
+            .cached_provider_registry
+            .clone()
+            .unwrap_or_else(|| ProviderRegistry::from_environment_with_config(Some(&self.config)));
+
+        if !registry.has_any_provider() {
+            crate::logging::log(
+                "CHAT_SCRIPT_GEN",
+                "No AI providers configured - showing setup card",
+            );
+
+            // Create configure callback that signals via channel
+            let configure_sender = self.inline_chat_configure_sender.clone();
+            let configure_callback: crate::prompts::ChatConfigureCallback =
+                std::sync::Arc::new(move || {
+                    crate::logging::log(
+                        "CHAT_SCRIPT_GEN",
+                        "Configure callback triggered - sending signal",
+                    );
+                    let _ = configure_sender.try_send(());
+                });
+
+            // Create Claude Code callback that signals via channel
+            let claude_code_sender = self.inline_chat_claude_code_sender.clone();
+            let claude_code_callback: crate::prompts::ChatClaudeCodeCallback =
+                std::sync::Arc::new(move || {
+                    crate::logging::log(
+                        "CHAT_SCRIPT_GEN",
+                        "Claude Code callback triggered - sending signal",
+                    );
+                    let _ = claude_code_sender.try_send(());
+                });
+
+            // Create a no-op submit callback since we're in setup mode
+            let noop_callback: ChatSubmitCallback = std::sync::Arc::new(|_id, _text| {
+                crate::logging::log(
+                    "CHAT_SCRIPT_GEN",
+                    "No providers - submission ignored (setup mode)",
+                );
+            });
+
+            let chat_prompt = ChatPrompt::new(
+                "script-generation-setup".to_string(),
+                Some("Configure API key to generate scripts...".to_string()),
+                vec![],
+                None, // No hint needed - setup card is the UI
+                None,
+                self.focus_handle.clone(),
+                noop_callback,
+                std::sync::Arc::clone(&self.theme),
+            )
+            .with_title("Generate Script with AI")
+            .with_save_history(false) // Don't save setup state to history
+            .with_escape_callback(escape_callback.clone())
+            .with_needs_setup(true)
+            .with_configure_callback(configure_callback)
+            .with_claude_code_callback(claude_code_callback);
+
+            let entity = cx.new(|_| chat_prompt);
+            self.current_view = AppView::ChatPrompt {
+                id: "script-generation-setup".to_string(),
+                entity,
+            };
+            self.focused_input = FocusedInput::None;
+            self.pending_focus = Some(FocusTarget::ChatPrompt);
+            resize_to_view_sync(ViewType::DivPrompt, 0);
+            cx.notify();
+            return;
+        }
+
+        crate::logging::log(
+            "CHAT_SCRIPT_GEN",
+            &format!(
+                "Showing script generation chat with {} providers",
+                registry.provider_ids().len()
+            ),
+        );
+
+        // Create a no-op callback since built-in AI handles submissions internally
+        let noop_callback: ChatSubmitCallback = std::sync::Arc::new(|_id, _text| {
+            // Built-in AI mode handles this internally
+        });
+        let app_entity = cx.entity().downgrade();
+        let run_script_callback = move |script_path: std::path::PathBuf,
+                                        chat_cx: &mut gpui::Context<ChatPrompt>| {
+            let script_path_string = script_path.to_string_lossy().to_string();
+            let app_entity = app_entity.clone();
+            chat_cx
+                .spawn(async move |_this, cx| {
+                    let _ = cx.update(|cx| {
+                        if let Some(app) = app_entity.upgrade() {
+                            logging::log(
+                                "CHAT_SCRIPT_GEN",
+                                &format!(
+                                    "state=dispatch_run attempted=execute_script_by_path path={}",
+                                    script_path_string
+                                ),
+                            );
+                            app.update(cx, |app, cx| {
+                                app.execute_script_by_path(&script_path_string, cx);
+                            });
+                        } else {
+                            logging::log(
+                                "CHAT_SCRIPT_GEN",
+                                &format!(
+                                    "state=dispatch_run_failed attempted=execute_script_by_path path={} reason=app_entity_unavailable",
+                                    script_path_string
+                                ),
+                            );
+                        }
+                    });
+                })
+                .detach();
+        };
+
+        let placeholder = Some("Describe the script you want to generate...".to_string());
+
+        let mut chat_prompt = ChatPrompt::new(
+            "script-generation".to_string(),
+            placeholder,
+            vec![],
+            None,
+            None,
+            self.focus_handle.clone(),
+            noop_callback,
+            std::sync::Arc::clone(&self.theme),
+        )
+        .with_title("Generate Script with AI")
+        .with_save_history(false)
+        .with_escape_callback(escape_callback)
+        .with_run_script_callback(run_script_callback)
+        .with_builtin_ai(registry, true) // true = prefer Vercel AI Gateway
+        .with_builtin_system_prompt(crate::ai::script_generation::AI_SCRIPT_GENERATION_SYSTEM_PROMPT)
+        .with_script_generation_mode(true);
+
+        // If there's an initial query, set it in the input and auto-submit
+        if let Some(query) = initial_query {
+            chat_prompt.input.set_text(&query);
+            chat_prompt = chat_prompt.with_pending_submit(true);
+        }
+
+        let entity = cx.new(|_| chat_prompt);
+        self.current_view = AppView::ChatPrompt {
+            id: "script-generation".to_string(),
+            entity,
+        };
+        self.focused_input = FocusedInput::None;
+        self.pending_focus = Some(FocusTarget::ChatPrompt);
+        resize_to_view_sync(ViewType::DivPrompt, 0);
+        cx.notify();
+    }
+
+    pub(crate) fn dispatch_ai_script_generation_from_query(
+        &mut self,
+        query: String,
+        cx: &mut Context<Self>,
+    ) {
+        let query = query.trim().to_string();
+        if query.is_empty() {
+            logging::log(
+                "AI_SCRIPT_GEN",
+                "state=ignored attempted=dispatch_ai_script_generation_from_query reason=empty_query",
+            );
+            return;
+        }
+
+        self.filter_text.clear();
+        self.show_script_generation_chat(Some(query), cx);
+    }
+
     /// Generate a Script Kit script from a natural-language prompt using the built-in AI backend.
     /// The generated script is saved to disk and opened in the configured editor.
+    #[allow(dead_code)]
     pub fn generate_script_from_ai_prompt(
         &mut self,
         prompt_description: String,
@@ -680,5 +883,11 @@ import "@scriptkit/sdk";
     fn test_derive_script_name_from_description_uses_fallback_for_symbols() {
         let name = derive_script_name_from_description("@@@ !!!");
         assert_eq!(name, "ai-generated-script");
+    }
+
+    #[test]
+    fn test_ai_script_generation_system_prompt_references_scriptkit_sdk_not_legacy_kit() {
+        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
+        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
     }
 }

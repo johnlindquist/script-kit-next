@@ -16,6 +16,8 @@ impl ScriptListApp {
             ),
         );
 
+        let action_id = action_id.strip_prefix("file:").unwrap_or(action_id);
+
         match action_id {
             "select_file" | "open_directory" => {
                 // For select/open, trigger submission through the path prompt
@@ -200,7 +202,10 @@ impl ScriptListApp {
 
                 match crate::file_search::reveal_in_finder(&path_info.path) {
                     Ok(_) => {
-                        logging::log("UI", &format!("Revealed in {}: {}", file_manager, path_info.path));
+                        logging::log(
+                            "UI",
+                            &format!("Revealed in {}: {}", file_manager, path_info.path),
+                        );
                         self.show_hud(format!("Opened in {}", file_manager), Some(1500), cx);
                         // Hide main window only (not entire app) to keep HUD visible
                         script_kit_gpui::set_main_window_visible(false);
@@ -208,7 +213,10 @@ impl ScriptListApp {
                         platform::hide_main_window();
                     }
                     Err(e) => {
-                        logging::log("ERROR", &format!("Failed to reveal in {}: {}", file_manager, e));
+                        logging::log(
+                            "ERROR",
+                            &format!("Failed to reveal in {}: {}", file_manager, e),
+                        );
                         self.show_hud(
                             format!("Failed to open in {}: {}", file_manager, e),
                             Some(2500),
@@ -261,11 +269,7 @@ impl ScriptListApp {
                     }
                     Err(e) => {
                         logging::log("ERROR", &format!("Failed to open terminal: {}", e));
-                        self.show_hud(
-                            format!("Failed to open terminal: {}", e),
-                            Some(2500),
-                            cx,
-                        );
+                        self.show_hud(format!("Failed to open terminal: {}", e), Some(2500), cx);
                     }
                 }
             }
@@ -368,7 +372,11 @@ impl ScriptListApp {
                                 logging::log("ERROR", &format!("Failed to move to trash: {}", e));
                                 this.last_output =
                                     Some(SharedString::from("Failed to move to Trash"));
-                                this.show_hud(format!("Failed to move to Trash: {}", e), Some(2500), cx);
+                                this.show_hud(
+                                    format!("Failed to move to Trash: {}", e),
+                                    Some(2500),
+                                    cx,
+                                );
                             }
                         }
                         cx.notify();
@@ -385,5 +393,4 @@ impl ScriptListApp {
 
         cx.notify();
     }
-
 }

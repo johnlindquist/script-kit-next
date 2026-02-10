@@ -49,15 +49,26 @@ mod app_impl_state_sync_tests {
     }
 
     #[test]
-    fn test_shift_tab_routes_to_ai_script_generation_in_script_list_tab_interceptor() {
+    fn test_shift_tab_routes_to_shared_ai_script_generation_handler() {
         let startup_tab = fs::read_to_string("src/app_impl/startup_new_tab.rs")
             .expect("Failed to read src/app_impl/startup_new_tab.rs");
 
         assert!(
             startup_tab.contains("if has_shift")
-                && startup_tab.contains("this.generate_script_from_ai_prompt(query, cx);"),
-            "Shift+Tab in ScriptList should route to generate_script_from_ai_prompt. \
+                && startup_tab.contains("this.dispatch_ai_script_generation_from_query(query, cx);"),
+            "Shift+Tab in ScriptList should route to dispatch_ai_script_generation_from_query. \
              Missing expected branch in startup_new_tab.rs"
+        );
+    }
+
+    #[test]
+    fn test_generate_script_builtin_routes_to_shared_ai_script_generation_handler() {
+        let builtin_execution = fs::read_to_string("src/app_execute/builtin_execution.rs")
+            .expect("Failed to read src/app_execute/builtin_execution.rs");
+
+        assert!(
+            builtin_execution.contains("self.dispatch_ai_script_generation_from_query(query, cx);"),
+            "Generate Script built-in should route to dispatch_ai_script_generation_from_query"
         );
     }
 
