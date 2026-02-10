@@ -1,0 +1,2451 @@
+==== spawn @ 2026-02-08T00:32:18.470Z ====
+cmd: codex "exec" "--cd" "/Users/johnlindquist/dev/script-kit-gpui" "--model" "gpt-5.3-codex" "-c" "model_reasoning_effort=\"xhigh\"" "-c" "model_auto_compact_token_limit=120000" "-c" "developer_instructions=\"You are Codex implementer agent \\\"codex-fix-window-unify\\\".\\n\\n## Coordination\\nThis repo runs parallel agents in ONE working tree. Before editing any file, you MUST claim it.\\nCommands (run via shell):\\n  - View roster: ~/.claude/bin/swarm.ts status\\n  - Claim files (blocks until free): ~/.claude/bin/swarm.ts claim --wait --id codex-fix-window-unify path/to/file\\n  - Release: ~/.claude/bin/swarm.ts release --id codex-fix-window-unify path/to/file\\n  - Update status/notes: ~/.claude/bin/swarm.ts update --id codex-fix-window-unify --status in_progress --notes \\\"...\\\"\\nRules:\\n  - Never edit a file you haven't claimed.\\n  - Keep claims tight (claim only what you're actively changing).\\n  - If blocked, set status=blocked and say what you're waiting on.\\n  - When finished, set status=done and release claims.\\n\\n## Development practices (this code is maintained by AI agents)\\n  - Log state transitions with enough context to diagnose failures from logs alone.\\n  - Structured errors: include what was attempted, what failed, and current state.\\n  - Name things for grepability — unique identifiers agents can find on the first search.\\n  - Every behavior change gets a test. Untested code is invisible to the next agent.\\n  - Test names describe the scenario: test_X_does_Y_when_Z.\\n  - Keep functions small and single-purpose. 500-line functions burn agent context.\\n  - Use types to encode constraints (enums > strings for errors).\\n\\n## CRITICAL: Parallel-safe verification\\n  - Other agents are modifying other files RIGHT NOW. Full test suites WILL show their failures.\\n  - ONLY run tests that cover YOUR changed files. Scope every test/check command:\\n    Rust: cargo test -p your-crate -- module::test_name | JS: npx jest your/file.test.ts\\n  - Do NOT run: cargo test (unscoped), cargo check (whole workspace), npm test (unscoped).\\n  - If a scoped test fails, it's YOUR bug — fix it. If tests outside your scope fail, ignore them.\\n\\n## Git commit discipline\\n  - NEVER commit unverified work. Run tests/lints/type-checks FIRST. If it fails, fix it before committing.\\n  - A commit is a declaration: \\\"this works and here's the proof.\\\"\\n  - Commit FREQUENTLY — after each meaningful unit of VERIFIED work, not just at the end.\\n  - A \\\"unit\\\" = one logical change that passes verification (new function, bug fix, refactor, test added).\\n  - NEVER batch an entire task into one giant commit. Small commits are searchable; big ones aren't.\\n  - Commit message format:\\n      Line 1: <type>(<scope>): <what changed> (imperative, max 72 chars)\\n      Line 3+: WHY this change was made, WHAT was verified, and HOW to test it.\\n    Types: feat, fix, refactor, test, docs, chore\\n    Example:\\n      feat(auth): add refresh token rotation\\n      \\n      Tokens now rotate on each refresh call to prevent replay attacks.\\n      The old token is invalidated immediately on rotation.\\n      \\n      Verified: cargo test --lib -- auth::refresh (4 tests pass)\\n      Verified: manual smoke test via curl — token rotates, old token returns 401\\n  - The \\\"Verified:\\\" lines are REQUIRED. Future agents will read git log to understand\\n    what was tested and how to re-verify. This is the most valuable part of the message.\\n  - In your final message, list all commits you made with their hashes.\\n\\n## Time budget\\nYou have approximately 10 minutes. If your task is too broad to complete in time:\\n(1) Commit any verified progress.\\n(2) Run: ~/.claude/bin/swarm.ts update --id YOUR_ID --status needs_split --notes 'suggest: 1) sub-task-desc scope:files 2) sub-task-desc scope:files'.\\n(3) Exit cleanly. The dispatcher will read your suggestions and spawn narrower workers.\"" "--output-last-message" "/Users/johnlindquist/dev/script-kit-gpui/.ai/logs/codex-fix-window-unify.final.md" "--yolo" "You are agent codex-fix-window-unify.\n\nCurrent parallel-agent roster (read this first):\n```\nSWARM SNAPSHOT @ 2026-02-08T00:32:18.467Z\n- codex-fix-cmdbar-consistency [in_progress] scope=src/actions/command_bar/part_01.rs,src/actions/command_bar/part_02.rs,src/actions/command_bar/part_03.rs task=CONSISTENCY FIX: Ensure command bar handling is consistent across all parts. Check src/actions/command_bar/part_01.rs, …\n  claims: src/actions/command_bar/part_02.rs, src/actions/command_bar/part_03.rs\n  notes: claimed command_bar part_02/part_03; auditing consistency and waiting to claim part_01\n- codex-fix-dialog-render-consistency [in_progress] scope=src/actions/dialog/part_02/part_01.rs,src/actions/dialog/part_02/part_02.rs,src/actions/dialog/part_02/part_03.rs task=CONSISTENCY FIX: Ensure dialog rendering functions in src/actions/dialog/part_02/ follow consistent patterns. Check par…\n  claims: src/actions/dialog/part_02/part_01.rs, src/actions/dialog/part_02/part_02.rs, src/actions/dialog/part_02/part_03.rs\n  notes: claiming part_02 dialog files and auditing render token consistency\n- codex-fix-window-unify [starting] scope=src/actions/window/part_02.rs,src/actions/window/part_03.rs task=CONSISTENCY FIX: Unify window open/close/resize behavior. In src/actions/window/part_02.rs…\n```\n\nYour assignment:\n- Task: CONSISTENCY FIX: Unify window open/close/resize behavior. In src/actions/window/part_02.rs and part_03.rs, the open-path and resize-path compute heights differently. The initial open can under-size the empty-result state compared to resize logic. Fix: Extract a shared compute_popup_height() function used by both open and resize paths. Ensure same constants are used everywhere. After fix, run cargo check && cargo clippy --all-targets -- -D warnings\n- Scope: src/actions/window/part_02.rs,src/actions/window/part_03.rs\n\nOperating constraints:\n- Single working tree (no worktrees, no patches).\n- You MUST claim files before editing (~/.claude/bin/swarm.ts claim --wait ...).\n\nDeliverables:\n- Make the code changes required by the task.\n- Run the most relevant tests/linters.\n- In your FINAL message, include: changed files, how to test, and any risks/known gaps."
+
+OpenAI Codex v0.98.0 (research preview)
+--------
+workdir: /Users/johnlindquist/dev/script-kit-gpui
+model: gpt-5.3-codex
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: xhigh
+reasoning summaries: auto
+session id: 019c3aa9-e45a-7af1-8fb9-ab6ebbba277c
+--------
+user
+You are agent codex-fix-window-unify.
+
+Current parallel-agent roster (read this first):
+```
+SWARM SNAPSHOT @ 2026-02-08T00:32:18.467Z
+- codex-fix-cmdbar-consistency [in_progress] scope=src/actions/command_bar/part_01.rs,src/actions/command_bar/part_02.rs,src/actions/command_bar/part_03.rs task=CONSISTENCY FIX: Ensure command bar handling is consistent across all parts. Check src/actions/command_bar/part_01.rs, …
+  claims: src/actions/command_bar/part_02.rs, src/actions/command_bar/part_03.rs
+  notes: claimed command_bar part_02/part_03; auditing consistency and waiting to claim part_01
+- codex-fix-dialog-render-consistency [in_progress] scope=src/actions/dialog/part_02/part_01.rs,src/actions/dialog/part_02/part_02.rs,src/actions/dialog/part_02/part_03.rs task=CONSISTENCY FIX: Ensure dialog rendering functions in src/actions/dialog/part_02/ follow consistent patterns. Check par…
+  claims: src/actions/dialog/part_02/part_01.rs, src/actions/dialog/part_02/part_02.rs, src/actions/dialog/part_02/part_03.rs
+  notes: claiming part_02 dialog files and auditing render token consistency
+- codex-fix-window-unify [starting] scope=src/actions/window/part_02.rs,src/actions/window/part_03.rs task=CONSISTENCY FIX: Unify window open/close/resize behavior. In src/actions/window/part_02.rs…
+```
+
+Your assignment:
+- Task: CONSISTENCY FIX: Unify window open/close/resize behavior. In src/actions/window/part_02.rs and part_03.rs, the open-path and resize-path compute heights differently. The initial open can under-size the empty-result state compared to resize logic. Fix: Extract a shared compute_popup_height() function used by both open and resize paths. Ensure same constants are used everywhere. After fix, run cargo check && cargo clippy --all-targets -- -D warnings
+- Scope: src/actions/window/part_02.rs,src/actions/window/part_03.rs
+
+Operating constraints:
+- Single working tree (no worktrees, no patches).
+- You MUST claim files before editing (~/.claude/bin/swarm.ts claim --wait ...).
+
+Deliverables:
+- Make the code changes required by the task.
+- Run the most relevant tests/linters.
+- In your FINAL message, include: changed files, how to test, and any risks/known gaps.
+warning: Under-development features enabled: responses_websockets. Under-development features are incomplete and may behave unpredictably. To suppress this warning, set `suppress_unstable_features_warning = true` in /Users/johnlindquist/.codex/config.toml.
+mcp: deepwiki starting
+mcp: deepwiki ready
+mcp startup: ready: deepwiki
+
+thinking
+**Planning update protocol and workflows**
+codex
+Working on `codex-fix-window-unify` now. I’ll first claim `src/actions/window/part_02.rs` and `src/actions/window/part_03.rs`, inspect how open vs resize compute popup height, then implement a shared `compute_popup_height()` used in both paths and run `cargo check` plus `cargo clippy --all-targets -- -D warnings`.
+
+thinking
+**Planning sequential command execution**
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts status' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+Repo: /Users/johnlindquist/dev/script-kit-gpui
+Updated: 2026-02-08T00:32:31.532Z
+
+Active agents (3):
+codex-fix-cmdbar-consistency [in_progress] codex/gpt-5.3-codex/exec
+  task: CONSISTENCY FIX: Ensure command bar handling is consistent across all parts. Check src/actions/command_bar/part_01.rs, …
+  scope: src/actions/command_bar/part_01.rs,src/actions/command_bar/part_02.rs,src/actions/command_bar/part_03.rs
+  claims(2): src/actions/command_bar/part_02.rs, src/actions/command_bar/part_03.rs
+  notes: claimed command_bar part_02/part_03; auditing consistency and waiting to claim part_01
+
+codex-fix-dialog-render-consistency [in_progress] codex/gpt-5.3-codex/exec
+  task: CONSISTENCY FIX: Ensure dialog rendering functions in src/actions/dialog/part_02/ follow consistent patterns. Check par…
+  scope: src/actions/dialog/part_02/part_01.rs,src/actions/dialog/part_02/part_02.rs,src/actions/dialog/part_02/part_03.rs
+  claims(3): src/actions/dialog/part_02/part_01.rs, src/actions/dialog/part_02/part_02.rs, src/actions/dialog/part_02/part_03.rs
+  notes: claiming part_02 dialog files and auditing render token consistency
+
+codex-fix-window-unify [in_progress] codex/gpt-5.3-codex/exec
+  task: CONSISTENCY FIX: Unify window open/close/resize behavior. In src/actions/window/part_02.rs and part_03.rs, the open-pat…
+  scope: src/actions/window/part_02.rs,src/actions/window/part_03.rs
+  claims: (none)
+
+thinking
+**Updating in-progress status notes**
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts update --id codex-fix-window-unify --status in_progress --notes "claiming window part_02/part_03 and auditing popup height logic" && ~/.claude/bin/swarm.ts claim --wait --id codex-fix-window-unify src/actions/window/part_02.rs src/actions/window/part_03.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+Updated: codex-fix-window-unify
+Claimed for codex-fix-window-unify: src/actions/window/part_02.rs, src/actions/window/part_03.rs
+
+thinking
+**Planning targeted code inspection**
+codex
+I’ve claimed both window files and will now trace the current height calculations in open and resize paths to identify the exact divergence before patching.
+
+thinking
+**Planning parallel file reads**
+exec
+/bin/zsh -lc "sed -n '1,260p' src/actions/window/part_02.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,280p' src/actions/window/part_03.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_actions_window_key_intent_supports_aliases_and_jump_keys() {
+        let no_mods = gpui::Modifiers::default();
+
+        assert_eq!(
+            actions_window_key_intent("return", &no_mods),
+            Some(ActionsWindowKeyIntent::ExecuteSelected)
+        );
+        assert_eq!(
+            actions_window_key_intent("esc", &no_mods),
+            Some(ActionsWindowKeyIntent::Close)
+        );
+        assert_eq!(
+            actions_window_key_intent("home", &no_mods),
+            Some(ActionsWindowKeyIntent::MoveHome)
+        );
+ succeeded in 51ms:
+
+/// Resize the actions window directly using the window reference
+/// Use this from defer callbacks where we already have access to the window
+pub fn resize_actions_window_direct(
+    window: &mut Window,
+    cx: &mut App,
+    dialog_entity: &Entity<ActionsDialog>,
+) {
+    // Read dialog state to calculate new height
+    let dialog = dialog_entity.read(cx);
+    let num_actions = dialog.filtered_actions.len();
+    let hide_search = dialog.hide_search;
+    let has_header = dialog.context_title.is_some();
+
+    crate::logging::log(
+        "ACTIONS",
+        &format!(
+            "resize_actions_window_direct: num_actions={}, hide_search={}, has_header={}",
+            num_actions, hide_search, has_header
+        ),
+
+thinking
+**Exploring split function and usage**
+codex
+I found `actions_window_dynamic_height()` in `part_02.rs` and both resize paths in `part_03.rs` already call it. I’m now checking where open-path height diverges and whether another height formula exists in these parts that needs to be replaced by a new shared `compute_popup_height()`.
+
+thinking
+**Searching key functions in window actions**
+exec
+/bin/zsh -lc "rg -n \"actions_window_dynamic_height|compute_popup_height|open_actions_window|resize_actions_window|POPUP_MAX_HEIGHT|ACTION_ITEM_HEIGHT|SECTION_HEADER_HEIGHT\" src/actions/window -g '*.rs'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+src/actions/window/part_01.rs:23:    ACTION_ITEM_HEIGHT, HEADER_HEIGHT, POPUP_MAX_HEIGHT, POPUP_WIDTH, SEARCH_INPUT_HEIGHT,
+src/actions/window/part_01.rs:24:    SECTION_HEADER_HEIGHT,
+src/actions/window/part_01.rs:441:                        resize_actions_window_direct(window, cx, &dialog);
+src/actions/window/part_01.rs:455:                        resize_actions_window_direct(window, cx, &dialog);
+src/actions/window/part_02.rs:51:    fn test_actions_window_dynamic_height_matches_single_row_when_empty() {
+src/actions/window/part_02.rs:52:        let empty_height = actions_window_dynamic_height(0, 0, false, false);
+src/actions/window/part_02.rs:53:        let single_row_height = actions_window_dynamic_height(1, 0, false, false);
+src/actions/window/part_02.rs:63:fn actions_window_dynamic_height(
+src/actions/window/part_02.rs:75:    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+src/actions/window/part_02.rs:77:        ACTION_ITEM_HEIGHT
+src/actions/window/part_02.rs:81:    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+src/actions/window/part_02.rs:83:        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+src/actions/window/part_02.rs:104:pub fn open_actions_window(
+src/actions/window/part_02.rs:137:        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+src/actions/window/part_03.rs:4:pub fn resize_actions_window_direct(
+src/actions/window/part_03.rs:18:            "resize_actions_window_direct: num_actions={}, hide_search={}, has_header={}",
+src/actions/window/part_03.rs:31:        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+src/actions/window/part_03.rs:40:            "resize_actions_window_direct: current={:.0}x{:.0}, target_height={:.0}",
+src/actions/window/part_03.rs:49:            "resize_actions_window_direct: skipping - height unchanged",
+src/actions/window/part_03.rs:125:            "resize_actions_window_direct complete: {} items, height={:.0}",
+
+thinking
+**Inspecting constants and functions in part_01**
+exec
+/bin/zsh -lc "sed -n '1,220p' src/actions/window/part_01.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+// Actions Window - Separate vibrancy window for actions panel
+//
+// This creates a floating popup window with its own vibrancy blur effect,
+// similar to Raycast's actions panel. The window is:
+// - Non-draggable (fixed position relative to main window)
+// - Positioned below the header, at the right edge of main window
+// - Auto-closes when app loses focus
+// - Shares the ActionsDialog entity with the main app for keyboard routing
+
+use crate::platform;
+use crate::theme;
+use crate::ui_foundation::{is_key_backspace, is_key_down, is_key_enter, is_key_escape, is_key_up};
+use crate::window_resize::layout::FOOTER_HEIGHT;
+use gpui::{
+    div, prelude::*, px, App, Bounds, Context, DisplayId, Entity, FocusHandle, Focusable, Pixels,
+    Point, Render, Size, Subscription, Window, WindowBounds, WindowHandle, WindowKind,
+    WindowOptions,
+};
+use gpui_component::Root;
+use std::sync::{Mutex, OnceLock};
+
+thinking
+**Investigating height computation discrepancies**
+exec
+/bin/zsh -lc "sed -n '280,520p' src/actions/window/part_03.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+                ),
+            );
+            crate::logging::log_debug(
+                "ACTIONS",
+                &format!(
+                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window context: num_actions={}, hide_search={}, has_header={}, target_height={:.0}",
+                    num_actions, hide_search, has_header, new_height_f32
+                ),
+            );
+        }
+
+        crate::logging::log(
+            "ACTIONS",
+            &format!(
+                "Resized actions window: {} items, height={:.0}",
+                num_actions, new_height_f32
+            ),
+        );
+    }
+}
+
+thinking
+**Planning centralized height computation**
+exec
+/bin/zsh -lc 'rg --files src/actions/window' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+src/actions/window/part_01.rs
+src/actions/window/part_02.rs
+src/actions/window/part_03.rs
+
+thinking
+**Searching module inclusion for parts**
+exec
+/bin/zsh -lc 'rg -n "actions/window/part|mod part_0|include!|pub use .*part_" src/actions -g '"'*.rs'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+Total output lines: 433
+
+src/actions/dialog_behavior_tests.rs:1:include!("dialog_behavior_tests/part_01.rs");
+src/actions/dialog_behavior_tests.rs:2:include!("dialog_behavior_tests/part_02.rs");
+src/actions/dialog_builtin_action_validation_tests_2.rs:1:include!("dialog_builtin_action_validation_tests_2/part_01.rs");
+src/actions/dialog_builtin_action_validation_tests_2.rs:2:include!("dialog_builtin_action_validation_tests_2/part_02.rs");
+src/actions/dialog_builtin_action_validation_tests_2.rs:3:include!("dialog_builtin_action_validation_tests_2/part_03.rs");
+src/actions/dialog_builtin_action_validation_tests_2.rs:4:include!("dialog_builtin_action_validation_tests_2/part_04.rs");
+src/actions/dialog_builtin_action_validation_tests_2.rs:5:include!("dialog_builtin_action_validation_tests_2/part_05.rs");
+src/actions/dialog_builtin_action_validation_tests_13.rs:22:    include!("dialog_builtin_action_validation_tests_13/tests_part_01.rs");
+src/actions/dialog_builtin_action_validation_tests_13.rs:23:    include!("dialog_builtin_action_validation_tests_13/tests_part_02.rs");
+src/actions/dialog_builtin_action_validation_tests_13.rs:24:    include!("dialog_builtin_action_validation_tests_13/tests_part_03.rs");
+src/actions/dialog_builtin_action_validation_tests_13.rs:25:    include!("dialog_builtin_action_validation_tests_13/tests_part_04.rs");
+src/actions/dialog_builtin_action_validation_tests_13.rs:26:    include!("dialog_builtin_action_validation_tests_13/tests_part_05.rs");
+src/actions/dialog_builtin_action_validation_tests_27.rs:1:include!("dialog_builtin_action_validation_tests_27/part_01.rs");
+src/actions/dialog_builtin_action_validation_tests_27.rs:2:include!("dialog_builtin_action_validation_tests_27/part_02.rs");
+src/actions/dialog_builtin_action_validation_tests_27.rs:3:include!("dialog_builtin_action_validation_tests_27/part_03.rs");
+src/actions/dialog_builtin_action_validation_tests_27.rs:4:include!("dialog_builtin_action_validation_tests_27/part_04.rs");
+src/actions/dialog_builtin_action_validation_tests_33.rs:1:include!("dialog_builtin_action_validation_tests_33/part_01.rs");
+src/actions/dialog_builtin_action_validation_tests_33.rs:2:include!("dialog_builtin_action_validation_tests_33/part_02.rs");
+
+thinking
+**Assessing test placement options**
+exec
+/bin/zsh -lc "sed -n '1,360p' src/actions/window/part_02.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_actions_window_key_intent_supports_aliases_and_jump_keys() {
+        let no_mods = gpui::Modifiers::default();
+
+        assert_eq!(
+            actions_window_key_intent("return", &no_mods),
+            Some(ActionsWindowKeyIntent::ExecuteSelected)
+        );
+        assert_eq!(
+            actions_window_key_intent("esc", &no_mods),
+            Some(ActionsWindowKeyIntent::Close)
+        );
+        assert_eq!(
+            actions_window_key_intent("home", &no_mods),
+            Some(ActionsWindowKeyIntent::MoveHome)
+        );
+
+thinking
+**Extracting unified height function**
+exec
+/bin/zsh -lc "rg -n \"actions_window_dynamic_height|compute_popup_height\" src/actions/tests src/actions/*window* -g '*.rs'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+src/actions/window/part_02.rs:51:    fn test_actions_window_dynamic_height_matches_single_row_when_empty() {
+src/actions/window/part_02.rs:52:        let empty_height = actions_window_dynamic_height(0, 0, false, false);
+src/actions/window/part_02.rs:53:        let single_row_height = actions_window_dynamic_height(1, 0, false, false);
+src/actions/window/part_02.rs:63:fn actions_window_dynamic_height(
+src/actions/window/part_02.rs:137:        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+src/actions/window/part_03.rs:31:        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+src/actions/window/part_03.rs:160:            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+
+thinking
+**Preparing coordinated file edits**
+codex
+I’ve confirmed the duplication: both open and resize rebuild the same height inputs inline. I’m going to extract `compute_popup_height(&ActionsDialog)` in `part_02.rs`, switch open + both resize paths to call it, and keep the low-level height math centralized to one constant set.
+
+thinking
+**Creating reusable popup height function**
+file update
+M /Users/johnlindquist/dev/script-kit-gpui/src/actions/window/part_02.rs
+@@ -68,2 +68,3 @@
+ ) -> f32 {
++    const POPUP_BORDER_HEIGHT: f32 = 2.0;
+     let search_box_height = if hide_search {
+@@ -83,3 +84,3 @@
+         .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
++    let border_height = POPUP_BORDER_HEIGHT;
+     items_height + search_box_height + header_height + border_height
+@@ -87,2 +88,17 @@
+ 
++#[inline]
++fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
++    let num_actions = dialog.filtered_actions.len();
++    let hide_search = dialog.hide_search;
++    let has_header = dialog.context_title.is_some();
++
++    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
++        count_section_headers(&dialog.actions, &dialog.filtered_actions)
++    } else {
++        0
++    };
++
++    actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header)
++}
++
+ /// Open the actions window as a separate floating window with vibrancy
+@@ -121,18 +137,6 @@
+ 
+-    // Calculate dynamic window height based on number of actions
+-    // This ensures the window fits the content without empty dark space
++    // Calculate dynamic window height based on number of actions.
++    // Open and resize paths intentionally share compute_popup_height().
+     let dialog = dialog_entity.read(cx);
+-    let num_actions = dialog.filtered_actions.len();
+-    let hide_search = dialog.hide_search;
+-    let has_header = dialog.context_title.is_some();
+-
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let dynamic_height =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let dynamic_height = compute_popup_height(&dialog);
+ 
+apply_patch(auto_approved=true) exited 0 in 12ms:
+Success. Updated the following files:
+M src/actions/window/part_02.rs
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 88d49fb466d7c2641d69ef988d64957ff2803080..8c221fdb4e1320e40d2b50a5599a8543b795fbb8
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -66,6 +66,7 @@
+     hide_search: bool,
+     has_header: bool,
+ ) -> f32 {
++    const POPUP_BORDER_HEIGHT: f32 = 2.0;
+     let search_box_height = if hide_search {
+         0.0
+     } else {
+@@ -81,10 +82,25 @@
+     let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+         .max(min_items_height)
+         .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
++    let border_height = POPUP_BORDER_HEIGHT;
+     items_height + search_box_height + header_height + border_height
+ }
+ 
++#[inline]
++fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
++    let num_actions = dialog.filtered_actions.len();
++    let hide_search = dialog.hide_search;
++    let has_header = dialog.context_title.is_some();
++
++    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
++        count_section_headers(&dialog.actions, &dialog.filtered_actions)
++    } else {
++        0
++    };
++
++    actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header)
++}
++
+ /// Open the actions window as a separate floating window with vibrancy
+ ///
+ /// The window is positioned at the top-right of the main window, below the header.
+@@ -119,22 +135,10 @@
+         gpui::WindowBackgroundAppearance::Opaque
+     };
+ 
+-    // Calculate dynamic window height based on number of actions
+-    // This ensures the window fits the content without empty dark space
++    // Calculate dynamic window height based on number of actions.
++    // Open and resize paths intentionally share compute_popup_height().
+     let dialog = dialog_entity.read(cx);
+-    let num_actions = dialog.filtered_actions.len();
+-    let hide_search = dialog.hide_search;
+-    let has_header = dialog.context_title.is_some();
+-
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let dynamic_height =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let dynamic_height = compute_popup_height(&dialog);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 88d49fb466d7c2641d69ef988d64957ff2803080..8c221fdb4e1320e40d2b50a5599a8543b795fbb8
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -66,6 +66,7 @@
+     hide_search: bool,
+     has_header: bool,
+ ) -> f32 {
++    const POPUP_BORDER_HEIGHT: f32 = 2.0;
+     let search_box_height = if hide_search {
+         0.0
+     } else {
+@@ -81,10 +82,25 @@
+     let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+         .max(min_items_height)
+         .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
++    let border_height = POPUP_BORDER_HEIGHT;
+     items_height + search_box_height + header_height + border_height
+ }
+ 
++#[inline]
++fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
++    let num_actions = dialog.filtered_actions.len();
++    let hide_search = dialog.hide_search;
++    let has_header = dialog.context_title.is_some();
++
++    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
++        count_section_headers(&dialog.actions, &dialog.filtered_actions)
++    } else {
++        0
++    };
++
++    actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header)
++}
++
+ /// Open the actions window as a separate floating window with vibrancy
+ ///
+ /// The window is positioned at the top-right of the main window, below the header.
+@@ -119,22 +135,10 @@
+         gpui::WindowBackgroundAppearance::Opaque
+     };
+ 
+-    // Calculate dynamic window height based on number of actions
+-    // This ensures the window fits the content without empty dark space
++    // Calculate dynamic window height based on number of actions.
++    // Open and resize paths intentionally share compute_popup_height().
+     let dialog = dialog_entity.read(cx);
+-    let num_actions = dialog.filtered_actions.len();
+-    let hide_search = dialog.hide_search;
+-    let has_header = dialog.context_title.is_some();
+-
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let dynamic_height =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let dynamic_height = compute_popup_height(&dialog);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+
+
+thinking
+**Applying patch to part_03**
+file update
+M /Users/johnlindquist/dev/script-kit-gpui/src/actions/window/part_03.rs
+@@ -22,11 +22,3 @@
+ 
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let new_height_f32 =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let new_height_f32 = compute_popup_height(&dialog);
+ 
+@@ -151,11 +143,3 @@
+ 
+-        // Count section headers when using Headers style
+-        let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-            count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-        } else {
+-            0
+-        };
+-
+-        let new_height_f32 =
+-            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++        let new_height_f32 = compute_popup_height(&dialog);
+ 
+apply_patch(auto_approved=true) exited 0 in 21ms:
+Success. Updated the following files:
+M src/actions/window/part_03.rs
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 88d49fb466d7c2641d69ef988d64957ff2803080..8c221fdb4e1320e40d2b50a5599a8543b795fbb8
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -66,6 +66,7 @@
+     hide_search: bool,
+     has_header: bool,
+ ) -> f32 {
++    const POPUP_BORDER_HEIGHT: f32 = 2.0;
+     let search_box_height = if hide_search {
+         0.0
+     } else {
+@@ -81,10 +82,25 @@
+     let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+         .max(min_items_height)
+         .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
++    let border_height = POPUP_BORDER_HEIGHT;
+     items_height + search_box_height + header_height + border_height
+ }
+ 
++#[inline]
++fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
++    let num_actions = dialog.filtered_actions.len();
++    let hide_search = dialog.hide_search;
++    let has_header = dialog.context_title.is_some();
++
++    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
++        count_section_headers(&dialog.actions, &dialog.filtered_actions)
++    } else {
++        0
++    };
++
++    actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header)
++}
++
+ /// Open the actions window as a separate floating window with vibrancy
+ ///
+ /// The window is positioned at the top-right of the main window, below the header.
+@@ -119,22 +135,10 @@
+         gpui::WindowBackgroundAppearance::Opaque
+     };
+ 
+-    // Calculate dynamic window height based on number of actions
+-    // This ensures the window fits the content without empty dark space
++    // Calculate dynamic window height based on number of actions.
++    // Open and resize paths intentionally share compute_popup_height().
+     let dialog = dialog_entity.read(cx);
+-    let num_actions = dialog.filtered_actions.len();
+-    let hide_search = dialog.hide_search;
+-    let has_header = dialog.context_title.is_some();
+-
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let dynamic_height =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let dynamic_height = compute_popup_height(&dialog);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index f41d7a0a87c9d615abedbb73aa9a801a401a379d..e9b184b4d1f54ccd5a3ea2af3cecc4a0b8a5db8b
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -20,15 +20,7 @@
+         ),
+     );
+ 
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let new_height_f32 =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let new_height_f32 = compute_popup_height(&dialog);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -149,15 +141,7 @@
+             ),
+         );
+ 
+-        // Count section headers when using Headers style
+-        let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-            count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-        } else {
+-            0
+-        };
+-
+-        let new_height_f32 =
+-            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++        let new_height_f32 = compute_popup_height(&dialog);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 88d49fb466d7c2641d69ef988d64957ff2803080..8c221fdb4e1320e40d2b50a5599a8543b795fbb8
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -66,6 +66,7 @@
+     hide_search: bool,
+     has_header: bool,
+ ) -> f32 {
++    const POPUP_BORDER_HEIGHT: f32 = 2.0;
+     let search_box_height = if hide_search {
+         0.0
+     } else {
+@@ -81,10 +82,25 @@
+     let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+         .max(min_items_height)
+         .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
++    let border_height = POPUP_BORDER_HEIGHT;
+     items_height + search_box_height + header_height + border_height
+ }
+ 
++#[inline]
++fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
++    let num_actions = dialog.filtered_actions.len();
++    let hide_search = dialog.hide_search;
++    let has_header = dialog.context_title.is_some();
++
++    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
++        count_section_headers(&dialog.actions, &dialog.filtered_actions)
++    } else {
++        0
++    };
++
++    actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header)
++}
++
+ /// Open the actions window as a separate floating window with vibrancy
+ ///
+ /// The window is positioned at the top-right of the main window, below the header.
+@@ -119,22 +135,10 @@
+         gpui::WindowBackgroundAppearance::Opaque
+     };
+ 
+-    // Calculate dynamic window height based on number of actions
+-    // This ensures the window fits the content without empty dark space
++    // Calculate dynamic window height based on number of actions.
++    // Open and resize paths intentionally share compute_popup_height().
+     let dialog = dialog_entity.read(cx);
+-    let num_actions = dialog.filtered_actions.len();
+-    let hide_search = dialog.hide_search;
+-    let has_header = dialog.context_title.is_some();
+-
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let dynamic_height =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let dynamic_height = compute_popup_height(&dialog);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index f41d7a0a87c9d615abedbb73aa9a801a401a379d..e9b184b4d1f54ccd5a3ea2af3cecc4a0b8a5db8b
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -20,15 +20,7 @@
+         ),
+     );
+ 
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let new_height_f32 =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let new_height_f32 = compute_popup_height(&dialog);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -149,15 +141,7 @@
+             ),
+         );
+ 
+-        // Count section headers when using Headers style
+-        let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-            count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-        } else {
+-            0
+-        };
+-
+-        let new_height_f32 =
+-            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++        let new_height_f32 = compute_popup_height(&dialog);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+
+
+thinking
+**Assessing test need for helper extraction**
+codex
+I’ve applied the extraction and rewired all open/resize height calls to the shared helper. Next I’ll inspect the diff for any cleanup issues, then run `cargo check` and `cargo clippy --all-targets -- -D warnings`.
+exec
+/bin/zsh -lc 'git diff -- src/actions/window/part_02.rs src/actions/window/part_03.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 8eb0871..8c221fd 100644
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -46,6 +46,59 @@ mod tests {
+         assert_eq!(selectable_index_at_or_before(&rows, 2), Some(1));
+         assert_eq!(selectable_index_at_or_after(&rows, 2), Some(3));
+     }
++
++    #[test]
++    fn test_actions_window_dynamic_height_matches_single_row_when_empty() {
++        let empty_height = actions_window_dynamic_height(0, 0, false, false);
++        let single_row_height = actions_window_dynamic_height(1, 0, false, false);
++
++        assert!(
++            (empty_height - single_row_height).abs() < 0.001,
++            "empty_height={empty_height}, single_row_height={single_row_height}"
++        );
++    }
++}
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 88d49fb466d7c2641d69ef988d64957ff2803080..8c221fdb4e1320e40d2b50a5599a8543b795fbb8
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -66,6 +66,7 @@
+     hide_search: bool,
+     has_header: bool,
+ ) -> f32 {
++    const POPUP_BORDER_HEIGHT: f32 = 2.0;
+     let search_box_height = if hide_search {
+         0.0
+     } else {
+@@ -81,10 +82,25 @@
+     let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+         .max(min_items_height)
+         .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
++    let border_height = POPUP_BORDER_HEIGHT;
+     items_height + search_box_height + header_height + border_height
+ }
+ 
++#[inline]
++fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
++    let num_actions = dialog.filtered_actions.len();
++    let hide_search = dialog.hide_search;
++    let has_header = dialog.context_title.is_some();
++
++    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
++        count_section_headers(&dialog.actions, &dialog.filtered_actions)
++    } else {
++        0
++    };
++
++    actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header)
++}
++
+ /// Open the actions window as a separate floating window with vibrancy
+ ///
+ /// The window is positioned at the top-right of the main window, below the header.
+@@ -119,22 +135,10 @@
+         gpui::WindowBackgroundAppearance::Opaque
+     };
+ 
+-    // Calculate dynamic window height based on number of actions
+-    // This ensures the window fits the content without empty dark space
++    // Calculate dynamic window height based on number of actions.
++    // Open and resize paths intentionally share compute_popup_height().
+     let dialog = dialog_entity.read(cx);
+-    let num_actions = dialog.filtered_actions.len();
+-    let hide_search = dialog.hide_search;
+-    let has_header = dialog.context_title.is_some();
+-
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let dynamic_height =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let dynamic_height = compute_popup_height(&dialog);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index f41d7a0a87c9d615abedbb73aa9a801a401a379d..e9b184b4d1f54ccd5a3ea2af3cecc4a0b8a5db8b
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -20,15 +20,7 @@
+         ),
+     );
+ 
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let new_height_f32 =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let new_height_f32 = compute_popup_height(&dialog);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -149,15 +141,7 @@
+             ),
+         );
+ 
+-        // Count section headers when using Headers style
+-        let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-            count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-        } else {
+-            0
+-        };
+-
+-        let new_height_f32 =
+-            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++        let new_height_f32 = compute_popup_height(&dialog);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+
+
+thinking
+**Analyzing git state and patch impact**
+exec
+/bin/zsh -lc 'rg -n "''^name'"\\s*=\\s*\\\"\" Cargo.toml" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+2:name = "script-kit-gpui"
+8:name = "script_kit_gpui"
+12:name = "script-kit-gpui"
+17:name = "smoke-test"
+22:name = "storybook"
+177:name = "Script Kit"
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 88d49fb466d7c2641d69ef988d64957ff2803080..8c221fdb4e1320e40d2b50a5599a8543b795fbb8
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -66,6 +66,7 @@
+     hide_search: bool,
+     has_header: bool,
+ ) -> f32 {
++    const POPUP_BORDER_HEIGHT: f32 = 2.0;
+     let search_box_height = if hide_search {
+         0.0
+     } else {
+@@ -81,10 +82,25 @@
+     let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+         .max(min_items_height)
+         .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
++    let border_height = POPUP_BORDER_HEIGHT;
+     items_height + search_box_height + header_height + border_height
+ }
+ 
++#[inline]
++fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
++    let num_actions = dialog.filtered_actions.len();
++    let hide_search = dialog.hide_search;
++    let has_header = dialog.context_title.is_some();
++
++    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
++        count_section_headers(&dialog.actions, &dialog.filtered_actions)
++    } else {
++        0
++    };
++
++    actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header)
++}
++
+ /// Open the actions window as a separate floating window with vibrancy
+ ///
+ /// The window is positioned at the top-right of the main window, below the header.
+@@ -119,22 +135,10 @@
+         gpui::WindowBackgroundAppearance::Opaque
+     };
+ 
+-    // Calculate dynamic window height based on number of actions
+-    // This ensures the window fits the content without empty dark space
++    // Calculate dynamic window height based on number of actions.
++    // Open and resize paths intentionally share compute_popup_height().
+     let dialog = dialog_entity.read(cx);
+-    let num_actions = dialog.filtered_actions.len();
+-    let hide_search = dialog.hide_search;
+-    let has_header = dialog.context_title.is_some();
+-
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let dynamic_height =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let dynamic_height = compute_popup_height(&dialog);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index f41d7a0a87c9d615abedbb73aa9a801a401a379d..e9b184b4d1f54ccd5a3ea2af3cecc4a0b8a5db8b
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -20,15 +20,7 @@
+         ),
+     );
+ 
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let new_height_f32 =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let new_height_f32 = compute_popup_height(&dialog);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -149,15 +141,7 @@
+             ),
+         );
+ 
+-        // Count section headers when using Headers style
+-        let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-            count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-        } else {
+-            0
+-        };
+-
+-        let new_height_f32 =
+-            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++        let new_height_f32 = compute_popup_height(&dialog);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+
+
+thinking
+**Scoping checks to main package**
+codex
+I confirmed the edits are in place. I’ll now run scoped verification on this crate (`cargo check -p script-kit-gpui` and `cargo clippy -p script-kit-gpui --all-targets -- -D warnings`) to avoid unrelated parallel-agent failures.
+
+thinking
+**Executing cargo check with timeout**
+exec
+/bin/zsh -lc 'cargo check -p script-kit-gpui' in /Users/johnlindquist/dev/script-kit-gpuifile update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 88d49fb466d7c2641d69ef988d64957ff2803080..8c221fdb4e1320e40d2b50a5599a8543b795fbb8
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -66,6 +66,7 @@
+     hide_search: bool,
+     has_header: bool,
+ ) -> f32 {
++    const POPUP_BORDER_HEIGHT: f32 = 2.0;
+     let search_box_height = if hide_search {
+         0.0
+     } else {
+@@ -81,10 +82,25 @@
+     let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+         .max(min_items_height)
+         .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
++    let border_height = POPUP_BORDER_HEIGHT;
+     items_height + search_box_height + header_height + border_height
+ }
+ 
++#[inline]
++fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
++    let num_actions = dialog.filtered_actions.len();
++    let hide_search = dialog.hide_search;
++    let has_header = dialog.context_title.is_some();
++
++    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
++        count_section_headers(&dialog.actions, &dialog.filtered_actions)
++    } else {
++        0
++    };
++
++    actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header)
++}
++
+ /// Open the actions window as a separate floating window with vibrancy
+ ///
+ /// The window is positioned at the top-right of the main window, below the header.
+@@ -119,22 +135,10 @@
+         gpui::WindowBackgroundAppearance::Opaque
+     };
+ 
+-    // Calculate dynamic window height based on number of actions
+-    // This ensures the window fits the content without empty dark space
++    // Calculate dynamic window height based on number of actions.
++    // Open and resize paths intentionally share compute_popup_height().
+     let dialog = dialog_entity.read(cx);
+-    let num_actions = dialog.filtered_actions.len();
+-    let hide_search = dialog.hide_search;
+-    let has_header = dialog.context_title.is_some();
+-
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let dynamic_height =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let dynamic_height = compute_popup_height(&dialog);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index f41d7a0a87c9d615abedbb73aa9a801a401a379d..e9b184b4d1f54ccd5a3ea2af3cecc4a0b8a5db8b
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -20,15 +20,7 @@
+         ),
+     );
+ 
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let new_height_f32 =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let new_height_f32 = compute_popup_height(&dialog);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -149,15 +141,7 @@
+             ),
+         );
+ 
+-        // Count section headers when using Headers style
+-        let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-            count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-        } else {
+-            0
+-        };
+-
+-        let new_height_f32 =
+-            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++        let new_height_f32 = compute_popup_height(&dialog);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+
+
+thinking
+**Monitoring command execution**
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 88d49fb466d7c2641d69ef988d64957ff2803080..8c221fdb4e1320e40d2b50a5599a8543b795fbb8
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -66,6 +66,7 @@
+     hide_search: bool,
+     has_header: bool,
+ ) -> f32 {
++    const POPUP_BORDER_HEIGHT: f32 = 2.0;
+     let search_box_height = if hide_search {
+         0.0
+     } else {
+@@ -81,10 +82,25 @@
+     let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+         .max(min_items_height)
+         .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
++    let border_height = POPUP_BORDER_HEIGHT;
+     items_height + search_box_height + header_height + border_height
+ }
+ 
++#[inline]
++fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
++    let num_actions = dialog.filtered_actions.len();
++    let hide_search = dialog.hide_search;
++    let has_header = dialog.context_title.is_some();
++
++    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
++        count_section_headers(&dialog.actions, &dialog.filtered_actions)
++    } else {
++        0
++    };
++
++    actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header)
++}
++
+ /// Open the actions window as a separate floating window with vibrancy
+ ///
+ /// The window is positioned at the top-right of the main window, below the header.
+@@ -119,22 +135,10 @@
+         gpui::WindowBackgroundAppearance::Opaque
+     };
+ 
+-    // Calculate dynamic window height based on number of actions
+-    // This ensures the window fits the content without empty dark space
++    // Calculate dynamic window height based on number of actions.
++    // Open and resize paths intentionally share compute_popup_height().
+     let dialog = dialog_entity.read(cx);
+-    let num_actions = dialog.filtered_actions.len();
+-    let hide_search = dialog.hide_search;
+-    let has_header = dialog.context_title.is_some();
+-
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let dynamic_height =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let dynamic_height = compute_popup_height(&dialog);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index f41d7a0a87c9d615abedbb73aa9a801a401a379d..e9b184b4d1f54ccd5a3ea2af3cecc4a0b8a5db8b
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -20,15 +20,7 @@
+         ),
+     );
+ 
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let new_height_f32 =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let new_height_f32 = compute_popup_height(&dialog);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -149,15 +141,7 @@
+             ),
+         );
+ 
+-        // Count section headers when using Headers style
+-        let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-            count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-        } else {
+-            0
+-        };
+-
+-        let new_height_f32 =
+-            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++        let new_height_f32 = compute_popup_height(&dialog);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+
+ exited 101 in 9.69s:
+    Checking script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+warning: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:32:16
+   |
+32 | pub(super) use inline::*;
+   |                ^^^^^^^^^
+   |
+note: the most public imported item is `pub(self)`
+  --> src/prompts/div/mod.rs:32:16
+   |
+32 | pub(super) use inline::*;
+   |                ^^^^^^^^^
+   = help: reduce the glob import's visibility or increase visibility of imported items
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:34:16
+   |
+34 | pub(super) use render_html::*;
+   |                ^^^^^^^^^^^^^^
+
+thinking
+**Evaluating targeted cargo check limits**
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 88d49fb466d7c2641d69ef988d64957ff2803080..8c221fdb4e1320e40d2b50a5599a8543b795fbb8
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -66,6 +66,7 @@
+     hide_search: bool,
+     has_header: bool,
+ ) -> f32 {
++    const POPUP_BORDER_HEIGHT: f32 = 2.0;
+     let search_box_height = if hide_search {
+         0.0
+     } else {
+@@ -81,10 +82,25 @@
+     let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+         .max(min_items_height)
+         .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
++    let border_height = POPUP_BORDER_HEIGHT;
+     items_height + search_box_height + header_height + border_height
+ }
+ 
++#[inline]
++fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
++    let num_actions = dialog.filtered_actions.len();
++    let hide_search = dialog.hide_search;
++    let has_header = dialog.context_title.is_some();
++
++    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
++        count_section_headers(&dialog.actions, &dialog.filtered_actions)
++    } else {
++        0
++    };
++
++    actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header)
++}
++
+ /// Open the actions window as a separate floating window with vibrancy
+ ///
+ /// The window is positioned at the top-right of the main window, below the header.
+@@ -119,22 +135,10 @@
+         gpui::WindowBackgroundAppearance::Opaque
+     };
+ 
+-    // Calculate dynamic window height based on number of actions
+-    // This ensures the window fits the content without empty dark space
++    // Calculate dynamic window height based on number of actions.
++    // Open and resize paths intentionally share compute_popup_height().
+     let dialog = dialog_entity.read(cx);
+-    let num_actions = dialog.filtered_actions.len();
+-    let hide_search = dialog.hide_search;
+-    let has_header = dialog.context_title.is_some();
+-
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let dynamic_height =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let dynamic_height = compute_popup_height(&dialog);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index f41d7a0a87c9d615abedbb73aa9a801a401a379d..e9b184b4d1f54ccd5a3ea2af3cecc4a0b8a5db8b
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -20,15 +20,7 @@
+         ),
+     );
+ 
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let new_height_f32 =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let new_height_f32 = compute_popup_height(&dialog);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -149,15 +141,7 @@
+             ),
+         );
+ 
+-        // Count section headers when using Headers style
+-        let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-            count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-        } else {
+-            0
+-        };
+-
+-        let new_height_f32 =
+-            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++        let new_height_f32 = compute_popup_height(&dialog);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+
+
+thinking
+**Running Clippy despite errors**
+codex
+`cargo check` failed due unrelated in-progress clipboard-history changes in other files (missing `ClipboardEntry` fields and non-exhaustive `ContentType` matches). I’ll still run the requested clippy command next and capture its result separately.
+
+thinking
+**Running clippy linter with strict warnings**
+exec
+/bin/zsh -lc 'cargo clippy -p script-kit-gpui --all-targets -- -D warnings' in /Users/johnlindquist/dev/script-kit-gpuifile update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 88d49fb466d7c2641d69ef988d64957ff2803080..8c221fdb4e1320e40d2b50a5599a8543b795fbb8
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -66,6 +66,7 @@
+     hide_search: bool,
+     has_header: bool,
+ ) -> f32 {
++    const POPUP_BORDER_HEIGHT: f32 = 2.0;
+     let search_box_height = if hide_search {
+         0.0
+     } else {
+@@ -81,10 +82,25 @@
+     let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+         .max(min_items_height)
+         .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
++    let border_height = POPUP_BORDER_HEIGHT;
+     items_height + search_box_height + header_height + border_height
+ }
+ 
++#[inline]
++fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
++    let num_actions = dialog.filtered_actions.len();
++    let hide_search = dialog.hide_search;
++    let has_header = dialog.context_title.is_some();
++
++    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
++        count_section_headers(&dialog.actions, &dialog.filtered_actions)
++    } else {
++        0
++    };
++
++    actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header)
++}
++
+ /// Open the actions window as a separate floating window with vibrancy
+ ///
+ /// The window is positioned at the top-right of the main window, below the header.
+@@ -119,22 +135,10 @@
+         gpui::WindowBackgroundAppearance::Opaque
+     };
+ 
+-    // Calculate dynamic window height based on number of actions
+-    // This ensures the window fits the content without empty dark space
++    // Calculate dynamic window height based on number of actions.
++    // Open and resize paths intentionally share compute_popup_height().
+     let dialog = dialog_entity.read(cx);
+-    let num_actions = dialog.filtered_actions.len();
+-    let hide_search = dialog.hide_search;
+-    let has_header = dialog.context_title.is_some();
+-
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let dynamic_height =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let dynamic_height = compute_popup_height(&dialog);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index f41d7a0a87c9d615abedbb73aa9a801a401a379d..e9b184b4d1f54ccd5a3ea2af3cecc4a0b8a5db8b
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -20,15 +20,7 @@
+         ),
+     );
+ 
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let new_height_f32 =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let new_height_f32 = compute_popup_height(&dialog);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -149,15 +141,7 @@
+             ),
+         );
+ 
+-        // Count section headers when using Headers style
+-        let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-            count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-        } else {
+-            0
+-        };
+-
+-        let new_height_f32 =
+-            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++        let new_height_f32 = compute_popup_height(&dialog);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+
+
+thinking
+**Planning continuous polling**
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 88d49fb466d7c2641d69ef988d64957ff2803080..8c221fdb4e1320e40d2b50a5599a8543b795fbb8
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -66,6 +66,7 @@
+     hide_search: bool,
+     has_header: bool,
+ ) -> f32 {
++    const POPUP_BORDER_HEIGHT: f32 = 2.0;
+     let search_box_height = if hide_search {
+         0.0
+     } else {
+@@ -81,10 +82,25 @@
+     let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+         .max(min_items_height)
+         .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
++    let border_height = POPUP_BORDER_HEIGHT;
+     items_height + search_box_height + header_height + border_height
+ }
+ 
++#[inline]
++fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
++    let num_actions = dialog.filtered_actions.len();
++    let hide_search = dialog.hide_search;
++    let has_header = dialog.context_title.is_some();
++
++    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
++        count_section_headers(&dialog.actions, &dialog.filtered_actions)
++    } else {
++        0
++    };
++
++    actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header)
++}
++
+ /// Open the actions window as a separate floating window with vibrancy
+ ///
+ /// The window is positioned at the top-right of the main window, below the header.
+@@ -119,22 +135,10 @@
+         gpui::WindowBackgroundAppearance::Opaque
+     };
+ 
+-    // Calculate dynamic window height based on number of actions
+-    // This ensures the window fits the content without empty dark space
++    // Calculate dynamic window height based on number of actions.
++    // Open and resize paths intentionally share compute_popup_height().
+     let dialog = dialog_entity.read(cx);
+-    let num_actions = dialog.filtered_actions.len();
+-    let hide_search = dialog.hide_search;
+-    let has_header = dialog.context_title.is_some();
+-
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let dynamic_height =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let dynamic_height = compute_popup_height(&dialog);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index f41d7a0a87c9d615abedbb73aa9a801a401a379d..e9b184b4d1f54ccd5a3ea2af3cecc4a0b8a5db8b
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -20,15 +20,7 @@
+         ),
+     );
+ 
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let new_height_f32 =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let new_height_f32 = compute_popup_height(&dialog);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -149,15 +141,7 @@
+             ),
+         );
+ 
+-        // Count section headers when using Headers style
+-        let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-            count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-        } else {
+-            0
+-        };
+-
+-        let new_height_f32 =
+-            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++        let new_height_f32 = compute_popup_height(&dialog);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+
+
+thinking
+**Polling process completion**
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 88d49fb466d7c2641d69ef988d64957ff2803080..8c221fdb4e1320e40d2b50a5599a8543b795fbb8
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -66,6 +66,7 @@
+     hide_search: bool,
+     has_header: bool,
+ ) -> f32 {
++    const POPUP_BORDER_HEIGHT: f32 = 2.0;
+     let search_box_height = if hide_search {
+         0.0
+     } else {
+@@ -81,10 +82,25 @@
+     let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+         .max(min_items_height)
+         .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
++    let border_height = POPUP_BORDER_HEIGHT;
+     items_height + search_box_height + header_height + border_height
+ }
+ 
++#[inline]
++fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
++    let num_actions = dialog.filtered_actions.len();
++    let hide_search = dialog.hide_search;
++    let has_header = dialog.context_title.is_some();
++
++    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
++        count_section_headers(&dialog.actions, &dialog.filtered_actions)
++    } else {
++        0
++    };
++
++    actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header)
++}
++
+ /// Open the actions window as a separate floating window with vibrancy
+ ///
+ /// The window is positioned at the top-right of the main window, below the header.
+@@ -119,22 +135,10 @@
+         gpui::WindowBackgroundAppearance::Opaque
+     };
+ 
+-    // Calculate dynamic window height based on number of actions
+-    // This ensures the window fits the content without empty dark space
++    // Calculate dynamic window height based on number of actions.
++    // Open and resize paths intentionally share compute_popup_height().
+     let dialog = dialog_entity.read(cx);
+-    let num_actions = dialog.filtered_actions.len();
+-    let hide_search = dialog.hide_search;
+-    let has_header = dialog.context_title.is_some();
+-
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let dynamic_height =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let dynamic_height = compute_popup_height(&dialog);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index f41d7a0a87c9d615abedbb73aa9a801a401a379d..e9b184b4d1f54ccd5a3ea2af3cecc4a0b8a5db8b
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -20,15 +20,7 @@
+         ),
+     );
+ 
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let new_height_f32 =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let new_height_f32 = compute_popup_height(&dialog);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -149,15 +141,7 @@
+             ),
+         );
+ 
+-        // Count section headers when using Headers style
+-        let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-            count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-        } else {
+-            0
+-        };
+-
+-        let new_height_f32 =
+-            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++        let new_height_f32 = compute_popup_height(&dialog);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+
+
+thinking
+**Handling pending waiting jobs**
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 88d49fb466d7c2641d69ef988d64957ff2803080..8c221fdb4e1320e40d2b50a5599a8543b795fbb8
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -66,6 +66,7 @@
+     hide_search: bool,
+     has_header: bool,
+ ) -> f32 {
++    const POPUP_BORDER_HEIGHT: f32 = 2.0;
+     let search_box_height = if hide_search {
+         0.0
+     } else {
+@@ -81,10 +82,25 @@
+     let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+         .max(min_items_height)
+         .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
++    let border_height = POPUP_BORDER_HEIGHT;
+     items_height + search_box_height + header_height + border_height
+ }
+ 
++#[inline]
++fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
++    let num_actions = dialog.filtered_actions.len();
++    let hide_search = dialog.hide_search;
++    let has_header = dialog.context_title.is_some();
++
++    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
++        count_section_headers(&dialog.actions, &dialog.filtered_actions)
++    } else {
++        0
++    };
++
++    actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header)
++}
++
+ /// Open the actions window as a separate floating window with vibrancy
+ ///
+ /// The window is positioned at the top-right of the main window, below the header.
+@@ -119,22 +135,10 @@
+         gpui::WindowBackgroundAppearance::Opaque
+     };
+ 
+-    // Calculate dynamic window height based on number of actions
+-    // This ensures the window fits the content without empty dark space
++    // Calculate dynamic window height based on number of actions.
++    // Open and resize paths intentionally share compute_popup_height().
+     let dialog = dialog_entity.read(cx);
+-    let num_actions = dialog.filtered_actions.len();
+-    let hide_search = dialog.hide_search;
+-    let has_header = dialog.context_title.is_some();
+-
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let dynamic_height =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let dynamic_height = compute_popup_height(&dialog);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index f41d7a0a87c9d615abedbb73aa9a801a401a379d..e9b184b4d1f54ccd5a3ea2af3cecc4a0b8a5db8b
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -20,15 +20,7 @@
+         ),
+     );
+ 
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let new_height_f32 =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let new_height_f32 = compute_popup_height(&dialog);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -149,15 +141,7 @@
+             ),
+         );
+ 
+-        // Count section headers when using Headers style
+-        let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-            count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-        } else {
+-            0
+-        };
+-
+-        let new_height_f32 =
+-            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++        let new_height_f32 = compute_popup_height(&dialog);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+
+ exited 101 in 18.47s:
+    Checking script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+error[E0761]: file for module `tests` found at both "src/protocol/message/tests.rs" and "src/protocol/message/tests/mod.rs"
+  --> src/protocol/message/mod.rs:87:1
+   |
+87 | mod tests;
+   | ^^^^^^^^^^
+   |
+   = help: delete or rename one of them to remove the ambiguity
+
+error[E0761]: file for module `tests` found at both "src/designs/core/tests.rs" and "src/designs/core/tests/mod.rs"
+ --> src/designs/core/part_04.rs:2:1
+  |
+2 | mod tests;
+  | ^^^^^^^^^^
+  |
+  = help: delete or rename one of them to remove the ambiguity
+
+error: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:32:16
+   |
+
+thinking
+**Assessing targeted test feasibility amid unrelated failures**
+codex
+Clippy also fails globally due many unrelated in-flight changes (module duplication, missing imports, clipboard enum/field migrations). I’ll do a focused diff sanity check on `part_02.rs`/`part_03.rs` now to confirm the new shared height path is wired correctly everywhere.
+exec
+/bin/zsh -lc 'rg -n "compute_popup_height|actions_window_dynamic_height|section_header_count|border_height" src/actions/window/part_02.rs' in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc 'rg -n "compute_popup_height|actions_window_dynamic_height|section_header_count|SEARCH_INPUT_HEIGHT|POPUP_MAX_HEIGHT|border_height" src/actions/window/part_03.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+51:    fn test_actions_window_dynamic_height_matches_single_row_when_empty() {
+52:        let empty_height = actions_window_dynamic_height(0, 0, false, false);
+53:        let single_row_height = actions_window_dynamic_height(1, 0, false, false);
+63:fn actions_window_dynamic_height(
+65:    section_header_count: usize,
+76:    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+85:    let border_height = POPUP_BORDER_HEIGHT;
+86:    items_height + search_box_height + header_height + border_height
+90:fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
+95:    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+101:    actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header)
+139:    // Open and resize paths intentionally share compute_popup_height().
+141:    let dynamic_height = compute_popup_height(&dialog);
+ succeeded in 51ms:
+23:    let new_height_f32 = compute_popup_height(&dialog);
+144:        let new_height_f32 = compute_popup_height(&dialog);
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 88d49fb466d7c2641d69ef988d64957ff2803080..8c221fdb4e1320e40d2b50a5599a8543b795fbb8
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -66,6 +66,7 @@
+     hide_search: bool,
+     has_header: bool,
+ ) -> f32 {
++    const POPUP_BORDER_HEIGHT: f32 = 2.0;
+     let search_box_height = if hide_search {
+         0.0
+     } else {
+@@ -81,10 +82,25 @@
+     let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+         .max(min_items_height)
+         .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
++    let border_height = POPUP_BORDER_HEIGHT;
+     items_height + search_box_height + header_height + border_height
+ }
+ 
++#[inline]
++fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
++    let num_actions = dialog.filtered_actions.len();
++    let hide_search = dialog.hide_search;
++    let has_header = dialog.context_title.is_some();
++
++    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
++        count_section_headers(&dialog.actions, &dialog.filtered_actions)
++    } else {
++        0
++    };
++
++    actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header)
++}
++
+ /// Open the actions window as a separate floating window with vibrancy
+ ///
+ /// The window is positioned at the top-right of the main window, below the header.
+@@ -119,22 +135,10 @@
+         gpui::WindowBackgroundAppearance::Opaque
+     };
+ 
+-    // Calculate dynamic window height based on number of actions
+-    // This ensures the window fits the content without empty dark space
++    // Calculate dynamic window height based on number of actions.
++    // Open and resize paths intentionally share compute_popup_height().
+     let dialog = dialog_entity.read(cx);
+-    let num_actions = dialog.filtered_actions.len();
+-    let hide_search = dialog.hide_search;
+-    let has_header = dialog.context_title.is_some();
+-
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let dynamic_height =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let dynamic_height = compute_popup_height(&dialog);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index f41d7a0a87c9d615abedbb73aa9a801a401a379d..e9b184b4d1f54ccd5a3ea2af3cecc4a0b8a5db8b
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -20,15 +20,7 @@
+         ),
+     );
+ 
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let new_height_f32 =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let new_height_f32 = compute_popup_height(&dialog);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -149,15 +141,7 @@
+             ),
+         );
+ 
+-        // Count section headers when using Headers style
+-        let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-            count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-        } else {
+-            0
+-        };
+-
+-        let new_height_f32 =
+-            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++        let new_height_f32 = compute_popup_height(&dialog);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+
+
+thinking
+**Preparing targeted test attempt despite compile errors**
+exec
+/bin/zsh -lc 'git status --short src/actions/window/part_02.rs src/actions/window/part_03.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+ M src/actions/window/part_02.rs
+ M src/actions/window/part_03.rs
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 88d49fb466d7c2641d69ef988d64957ff2803080..8c221fdb4e1320e40d2b50a5599a8543b795fbb8
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -66,6 +66,7 @@
+     hide_search: bool,
+     has_header: bool,
+ ) -> f32 {
++    const POPUP_BORDER_HEIGHT: f32 = 2.0;
+     let search_box_height = if hide_search {
+         0.0
+     } else {
+@@ -81,10 +82,25 @@
+     let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+         .max(min_items_height)
+         .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
++    let border_height = POPUP_BORDER_HEIGHT;
+     items_height + search_box_height + header_height + border_height
+ }
+ 
++#[inline]
++fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
++    let num_actions = dialog.filtered_actions.len();
++    let hide_search = dialog.hide_search;
++    let has_header = dialog.context_title.is_some();
++
++    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
++        count_section_headers(&dialog.actions, &dialog.filtered_actions)
++    } else {
++        0
++    };
++
++    actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header)
++}
++
+ /// Open the actions window as a separate floating window with vibrancy
+ ///
+ /// The window is positioned at the top-right of the main window, below the header.
+@@ -119,22 +135,10 @@
+         gpui::WindowBackgroundAppearance::Opaque
+     };
+ 
+-    // Calculate dynamic window height based on number of actions
+-    // This ensures the window fits the content without empty dark space
++    // Calculate dynamic window height based on number of actions.
++    // Open and resize paths intentionally share compute_popup_height().
+     let dialog = dialog_entity.read(cx);
+-    let num_actions = dialog.filtered_actions.len();
+-    let hide_search = dialog.hide_search;
+-    let has_header = dialog.context_title.is_some();
+-
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let dynamic_height =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let dynamic_height = compute_popup_height(&dialog);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index f41d7a0a87c9d615abedbb73aa9a801a401a379d..e9b184b4d1f54ccd5a3ea2af3cecc4a0b8a5db8b
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -20,15 +20,7 @@
+         ),
+     );
+ 
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let new_height_f32 =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let new_height_f32 = compute_popup_height(&dialog);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -149,15 +141,7 @@
+             ),
+         );
+ 
+-        // Count section headers when using Headers style
+-        let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-            count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-        } else {
+-            0
+-        };
+-
+-        let new_height_f32 =
+-            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++        let new_height_f32 = compute_popup_height(&dialog);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+
+
+thinking
+**Planning line-number referencing**
+exec
+/bin/zsh -lc "nl -ba src/actions/window/part_02.rs | sed -n '55,180p'" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "nl -ba src/actions/window/part_03.rs | sed -n '1,210p'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+    55	        assert!(
+    56	            (empty_height - single_row_height).abs() < 0.001,
+    57	            "empty_height={empty_height}, single_row_height={single_row_height}"
+    58	        );
+    59	    }
+    60	}
+    61	
+    62	#[inline]
+    63	fn actions_window_dynamic_height(
+    64	    num_actions: usize,
+    65	    section_header_count: usize,
+    66	    hide_search: bool,
+    67	    has_header: bool,
+    68	) -> f32 {
+    69	    const POPUP_BORDER_HEIGHT: f32 = 2.0;
+    70	    let search_box_height = if hide_search {
+    71	        0.0
+    72	    } else {
+    73	        SEARCH_INPUT_HEIGHT
+    74	    };
+ succeeded in 51ms:
+     1	
+     2	/// Resize the actions window directly using the window reference
+     3	/// Use this from defer callbacks where we already have access to the window
+     4	pub fn resize_actions_window_direct(
+     5	    window: &mut Window,
+     6	    cx: &mut App,
+     7	    dialog_entity: &Entity<ActionsDialog>,
+     8	) {
+     9	    // Read dialog state to calculate new height
+    10	    let dialog = dialog_entity.read(cx);
+    11	    let num_actions = dialog.filtered_actions.len();
+    12	    let hide_search = dialog.hide_search;
+    13	    let has_header = dialog.context_title.is_some();
+    14	
+    15	    crate::logging::log(
+    16	        "ACTIONS",
+    17	        &format!(
+    18	            "resize_actions_window_direct: num_actions={}, hide_search={}, has_header={}",
+    19	            num_actions, hide_search, has_header
+    20	        ),
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 88d49fb466d7c2641d69ef988d64957ff2803080..8c221fdb4e1320e40d2b50a5599a8543b795fbb8
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -66,6 +66,7 @@
+     hide_search: bool,
+     has_header: bool,
+ ) -> f32 {
++    const POPUP_BORDER_HEIGHT: f32 = 2.0;
+     let search_box_height = if hide_search {
+         0.0
+     } else {
+@@ -81,10 +82,25 @@
+     let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+         .max(min_items_height)
+         .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
++    let border_height = POPUP_BORDER_HEIGHT;
+     items_height + search_box_height + header_height + border_height
+ }
+ 
++#[inline]
++fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
++    let num_actions = dialog.filtered_actions.len();
++    let hide_search = dialog.hide_search;
++    let has_header = dialog.context_title.is_some();
++
++    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
++        count_section_headers(&dialog.actions, &dialog.filtered_actions)
++    } else {
++        0
++    };
++
++    actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header)
++}
++
+ /// Open the actions window as a separate floating window with vibrancy
+ ///
+ /// The window is positioned at the top-right of the main window, below the header.
+@@ -119,22 +135,10 @@
+         gpui::WindowBackgroundAppearance::Opaque
+     };
+ 
+-    // Calculate dynamic window height based on number of actions
+-    // This ensures the window fits the content without empty dark space
++    // Calculate dynamic window height based on number of actions.
++    // Open and resize paths intentionally share compute_popup_height().
+     let dialog = dialog_entity.read(cx);
+-    let num_actions = dialog.filtered_actions.len();
+-    let hide_search = dialog.hide_search;
+-    let has_header = dialog.context_title.is_some();
+-
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let dynamic_height =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let dynamic_height = compute_popup_height(&dialog);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index f41d7a0a87c9d615abedbb73aa9a801a401a379d..e9b184b4d1f54ccd5a3ea2af3cecc4a0b8a5db8b
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -20,15 +20,7 @@
+         ),
+     );
+ 
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let new_height_f32 =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let new_height_f32 = compute_popup_height(&dialog);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -149,15 +141,7 @@
+             ),
+         );
+ 
+-        // Count section headers when using Headers style
+-        let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-            count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-        } else {
+-            0
+-        };
+-
+-        let new_height_f32 =
+-            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++        let new_height_f32 = compute_popup_height(&dialog);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+
+
+thinking
+**Finalizing status and claims**
+codex
+I’ve validated the wiring in both files and am wrapping up by updating swarm status and releasing claims. After that I’ll send you the change summary plus exact verification results and known blockers.
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts update --id codex-fix-window-unify --status done --notes "extracted shared compute_popup_height for open/resize window paths in part_02/part_03; attempted cargo check and clippy but both blocked by unrelated clipboard/tests compile errors" && ~/.claude/bin/swarm.ts release --id codex-fix-window-unify src/actions/window/part_02.rs src/actions/window/part_03.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+Updated: codex-fix-window-unify
+Released for codex-fix-window-unify: src/actions/window/part_02.rs, src/actions/window/part_03.rs
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 88d49fb466d7c2641d69ef988d64957ff2803080..8c221fdb4e1320e40d2b50a5599a8543b795fbb8
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -66,6 +66,7 @@
+     hide_search: bool,
+     has_header: bool,
+ ) -> f32 {
++    const POPUP_BORDER_HEIGHT: f32 = 2.0;
+     let search_box_height = if hide_search {
+         0.0
+     } else {
+@@ -81,10 +82,25 @@
+     let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+         .max(min_items_height)
+         .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
++    let border_height = POPUP_BORDER_HEIGHT;
+     items_height + search_box_height + header_height + border_height
+ }
+ 
++#[inline]
++fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
++    let num_actions = dialog.filtered_actions.len();
++    let hide_search = dialog.hide_search;
++    let has_header = dialog.context_title.is_some();
++
++    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
++        count_section_headers(&dialog.actions, &dialog.filtered_actions)
++    } else {
++        0
++    };
++
++    actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header)
++}
++
+ /// Open the actions window as a separate floating window with vibrancy
+ ///
+ /// The window is positioned at the top-right of the main window, below the header.
+@@ -119,22 +135,10 @@
+         gpui::WindowBackgroundAppearance::Opaque
+     };
+ 
+-    // Calculate dynamic window height based on number of actions
+-    // This ensures the window fits the content without empty dark space
++    // Calculate dynamic window height based on number of actions.
++    // Open and resize paths intentionally share compute_popup_height().
+     let dialog = dialog_entity.read(cx);
+-    let num_actions = dialog.filtered_actions.len();
+-    let hide_search = dialog.hide_search;
+-    let has_header = dialog.context_title.is_some();
+-
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let dynamic_height =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let dynamic_height = compute_popup_height(&dialog);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index f41d7a0a87c9d615abedbb73aa9a801a401a379d..e9b184b4d1f54ccd5a3ea2af3cecc4a0b8a5db8b
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -20,15 +20,7 @@
+         ),
+     );
+ 
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let new_height_f32 =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let new_height_f32 = compute_popup_height(&dialog);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -149,15 +141,7 @@
+             ),
+         );
+ 
+-        // Count section headers when using Headers style
+-        let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-            count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-        } else {
+-            0
+-        };
+-
+-        let new_height_f32 =
+-            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++        let new_height_f32 = compute_popup_height(&dialog);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+
+
+thinking
+**Summarizing final changes and testing**
+codex
+Changed files:
+- `src/actions/window/part_02.rs:63`  
+  Added shared `compute_popup_height(dialog: &ActionsDialog) -> f32` and kept all popup-size math centralized in `actions_window_dynamic_height(...)`, including a single `POPUP_BORDER_HEIGHT` constant.
+- `src/actions/window/part_02.rs:120`  
+  `open_actions_window(...)` now uses `compute_popup_height(&dialog)` instead of inline/per-path height assembly.
+- `src/actions/window/part_03.rs:23`  
+  `resize_actions_window_direct(...)` now uses `compute_popup_height(&dialog)`.
+- `src/actions/window/part_03.rs:144`  
+  `resize_actions_window(...)` now uses `compute_popup_height(&dialog)`.
+
+How to test:
+1. Run `cargo check -p script-kit-gpui`
+2. Run `cargo clippy -p script-kit-gpui --all-targets -- -D warnings`
+3. Once build is green, open actions popup with empty results and resize/filter changes; initial open and resize should now match height behavior.
+
+Verification results:
+- `cargo check -p script-kit-gpui` failed due unrelated pre-existing errors outside this scope:
+  - `src/clipboard_history/database.rs`, `src/clipboard_history/db_worker/db_impl.rs` (`E0063`, missing `ClipboardEntry` fields)
+  - `src/clipboard_history/clipboard.rs`, `src/clipboard_history/database.rs`, `src/clipboard_history/quick_look.rs`, `src/clipboard_history/temp_file.rs` (`E0004`, non-exhaustive `ContentType` matches)
+- `cargo clippy -p script-kit-gpui --all-targets -- -D warnings` also failed due unrelated repository-wide issues (including the above, plus `E0761` duplicate test module files and many unrelated warnings/errors in tests and prompt modules).
+
+Risks / known gaps:
+- I could not complete a clean check/clippy run because of unrelated parallel changes in other files.
+- Runtime/UI verification of the popup behavior is blocked until those compile errors are resolved.
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 88d49fb466d7c2641d69ef988d64957ff2803080..8c221fdb4e1320e40d2b50a5599a8543b795fbb8
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -66,6 +66,7 @@
+     hide_search: bool,
+     has_header: bool,
+ ) -> f32 {
++    const POPUP_BORDER_HEIGHT: f32 = 2.0;
+     let search_box_height = if hide_search {
+         0.0
+     } else {
+@@ -81,10 +82,25 @@
+     let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+         .max(min_items_height)
+         .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
++    let border_height = POPUP_BORDER_HEIGHT;
+     items_height + search_box_height + header_height + border_height
+ }
+ 
++#[inline]
++fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
++    let num_actions = dialog.filtered_actions.len();
++    let hide_search = dialog.hide_search;
++    let has_header = dialog.context_title.is_some();
++
++    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
++        count_section_headers(&dialog.actions, &dialog.filtered_actions)
++    } else {
++        0
++    };
++
++    actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header)
++}
++
+ /// Open the actions window as a separate floating window with vibrancy
+ ///
+ /// The window is positioned at the top-right of the main window, below the header.
+@@ -119,22 +135,10 @@
+         gpui::WindowBackgroundAppearance::Opaque
+     };
+ 
+-    // Calculate dynamic window height based on number of actions
+-    // This ensures the window fits the content without empty dark space
++    // Calculate dynamic window height based on number of actions.
++    // Open and resize paths intentionally share compute_popup_height().
+     let dialog = dialog_entity.read(cx);
+-    let num_actions = dialog.filtered_actions.len();
+-    let hide_search = dialog.hide_search;
+-    let has_header = dialog.context_title.is_some();
+-
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let dynamic_height =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let dynamic_height = compute_popup_height(&dialog);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index f41d7a0a87c9d615abedbb73aa9a801a401a379d..e9b184b4d1f54ccd5a3ea2af3cecc4a0b8a5db8b
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -20,15 +20,7 @@
+         ),
+     );
+ 
+-    // Count section headers when using Headers style
+-    let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-        count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-    } else {
+-        0
+-    };
+-
+-    let new_height_f32 =
+-        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++    let new_height_f32 = compute_popup_height(&dialog);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -149,15 +141,7 @@
+             ),
+         );
+ 
+-        // Count section headers when using Headers style
+-        let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
+-            count_section_headers(&dialog.actions, &dialog.filtered_actions)
+-        } else {
+-            0
+-        };
+-
+-        let new_height_f32 =
+-            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
++        let new_height_f32 = compute_popup_height(&dialog);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+
+tokens used
+126,407
+Changed files:
+- `src/actions/window/part_02.rs:63`  
+  Added shared `compute_popup_height(dialog: &ActionsDialog) -> f32` and kept all popup-size math centralized in `actions_window_dynamic_height(...)`, including a single `POPUP_BORDER_HEIGHT` constant.
+- `src/actions/window/part_02.rs:120`  
+  `open_actions_window(...)` now uses `compute_popup_height(&dialog)` instead of inline/per-path height assembly.
+- `src/actions/window/part_03.rs:23`  
+  `resize_actions_window_direct(...)` now uses `compute_popup_height(&dialog)`.
+- `src/actions/window/part_03.rs:144`  
+  `resize_actions_window(...)` now uses `compute_popup_height(&dialog)`.
+
+How to test:
+1. Run `cargo check -p script-kit-gpui`
+2. Run `cargo clippy -p script-kit-gpui --all-targets -- -D warnings`
+3. Once build is green, open actions popup with empty results and resize/filter changes; initial open and resize should now match height behavior.
+
+Verification results:
+- `cargo check -p script-kit-gpui` failed due unrelated pre-existing errors outside this scope:
+  - `src/clipboard_history/database.rs`, `src/clipboard_history/db_worker/db_impl.rs` (`E0063`, missing `ClipboardEntry` fields)
+  - `src/clipboard_history/clipboard.rs`, `src/clipboard_history/database.rs`, `src/clipboard_history/quick_look.rs`, `src/clipboard_history/temp_file.rs` (`E0004`, non-exhaustive `ContentType` matches)
+- `cargo clippy -p script-kit-gpui --all-targets -- -D warnings` also failed due unrelated repository-wide issues (including the above, plus `E0761` duplicate test module files and many unrelated warnings/errors in tests and prompt modules).
+
+Risks / known gaps:
+- I could not complete a clean check/clippy run because of unrelated parallel changes in other files.
+- Runtime/UI verification of the popup behavior is blocked until those compile errors are resolved.
+
+
+==== exit @ 2026-02-08T00:35:40.161Z code=0 status=done ====

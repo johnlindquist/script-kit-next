@@ -1,0 +1,3753 @@
+==== spawn @ 2026-02-07T23:59:23.734Z ====
+cmd: codex "exec" "--cd" "/Users/johnlindquist/dev/script-kit-gpui" "--model" "gpt-5.3-codex" "-c" "model_reasoning_effort=\"xhigh\"" "-c" "model_auto_compact_token_limit=120000" "-c" "developer_instructions=\"You are Codex implementer agent \\\"codex-fix-window-logging\\\".\\n\\n## Coordination\\nThis repo runs parallel agents in ONE working tree. Before editing any file, you MUST claim it.\\nCommands (run via shell):\\n  - View roster: ~/.claude/bin/swarm.ts status\\n  - Claim files (blocks until free): ~/.claude/bin/swarm.ts claim --wait --id codex-fix-window-logging path/to/file\\n  - Release: ~/.claude/bin/swarm.ts release --id codex-fix-window-logging path/to/file\\n  - Update status/notes: ~/.claude/bin/swarm.ts update --id codex-fix-window-logging --status in_progress --notes \\\"...\\\"\\nRules:\\n  - Never edit a file you haven't claimed.\\n  - Keep claims tight (claim only what you're actively changing).\\n  - If blocked, set status=blocked and say what you're waiting on.\\n  - When finished, set status=done and release claims.\\n\\n## Development practices (this code is maintained by AI agents)\\n  - Log state transitions with enough context to diagnose failures from logs alone.\\n  - Structured errors: include what was attempted, what failed, and current state.\\n  - Name things for grepability — unique identifiers agents can find on the first search.\\n  - Every behavior change gets a test. Untested code is invisible to the next agent.\\n  - Test names describe the scenario: test_X_does_Y_when_Z.\\n  - Keep functions small and single-purpose. 500-line functions burn agent context.\\n  - Use types to encode constraints (enums > strings for errors).\\n\\n## CRITICAL: Parallel-safe verification\\n  - Other agents are modifying other files RIGHT NOW. Full test suites WILL show their failures.\\n  - ONLY run tests that cover YOUR changed files. Scope every test/check command:\\n    Rust: cargo test -p your-crate -- module::test_name | JS: npx jest your/file.test.ts\\n  - Do NOT run: cargo test (unscoped), cargo check (whole workspace), npm test (unscoped).\\n  - If a scoped test fails, it's YOUR bug — fix it. If tests outside your scope fail, ignore them.\\n\\n## Git commit discipline\\n  - NEVER commit unverified work. Run tests/lints/type-checks FIRST. If it fails, fix it before committing.\\n  - A commit is a declaration: \\\"this works and here's the proof.\\\"\\n  - Commit FREQUENTLY — after each meaningful unit of VERIFIED work, not just at the end.\\n  - A \\\"unit\\\" = one logical change that passes verification (new function, bug fix, refactor, test added).\\n  - NEVER batch an entire task into one giant commit. Small commits are searchable; big ones aren't.\\n  - Commit message format:\\n      Line 1: <type>(<scope>): <what changed> (imperative, max 72 chars)\\n      Line 3+: WHY this change was made, WHAT was verified, and HOW to test it.\\n    Types: feat, fix, refactor, test, docs, chore\\n    Example:\\n      feat(auth): add refresh token rotation\\n      \\n      Tokens now rotate on each refresh call to prevent replay attacks.\\n      The old token is invalidated immediately on rotation.\\n      \\n      Verified: cargo test --lib -- auth::refresh (4 tests pass)\\n      Verified: manual smoke test via curl — token rotates, old token returns 401\\n  - The \\\"Verified:\\\" lines are REQUIRED. Future agents will read git log to understand\\n    what was tested and how to re-verify. This is the most valuable part of the message.\\n  - In your final message, list all commits you made with their hashes.\\n\\n## Time budget\\nYou have approximately 10 minutes. If your task is too broad to complete in time:\\n(1) Commit any verified progress.\\n(2) Run: ~/.claude/bin/swarm.ts update --id YOUR_ID --status needs_split --notes 'suggest: 1) sub-task-desc scope:files 2) sub-task-desc scope:files'.\\n(3) Exit cleanly. The dispatcher will read your suggestions and spawn narrower workers.\"" "--output-last-message" "/Users/johnlindquist/dev/script-kit-gpui/.ai/logs/codex-fix-window-logging.final.md" "--yolo" "You are agent codex-fix-window-logging.\n\nCurrent parallel-agent roster (read this first):\n```\nSWARM SNAPSHOT @ 2026-02-07T23:59:23.731Z\n- codex-fix-empty-states [in_progress] scope=src/actions/dialog/part_04/body_part_02.rs,src/actions/dialog/part_04/body_part_03.rs,src/actions/dialog/part_01.rs task=MINOR FIX: True-empty and search-empty states share same UI copy. Both 'no actions available' and 'no actions match you…\n  claims: src/actions/dialog/part_01.rs, src/actions/dialog/part_04/body_part_02.rs\n  notes: implemented empty-state message helper + tests; wired render branch to helper; running verification\n- codex-fix-window-logging [starting] scope=src/actions/window/part_02.rs,src/actions/window/part_03.rs task=MINOR FIX: Several window-operation failures silently ignored in src/actions/window/part_02.rs:204,248,279. Add debug/w…\n```\n\nYour assignment:\n- Task: MINOR FIX: Several window-operation failures silently ignored in src/actions/window/part_02.rs:204,248,279. Add debug/warn logging for failed window resize, position, and focus operations. Also fix m10: unify open-path vs resize-path height for empty state between part_02.rs:106 and part_03.rs:38. After fix, run cargo check && cargo clippy --all-targets -- -D warnings\n- Scope: src/actions/window/part_02.rs,src/actions/window/part_03.rs\n\nOperating constraints:\n- Single working tree (no worktrees, no patches).\n- You MUST claim files before editing (~/.claude/bin/swarm.ts claim --wait ...).\n\nDeliverables:\n- Make the code changes required by the task.\n- Run the most relevant tests/linters.\n- In your FINAL message, include: changed files, how to test, and any risks/known gaps."
+
+OpenAI Codex v0.98.0 (research preview)
+--------
+workdir: /Users/johnlindquist/dev/script-kit-gpui
+model: gpt-5.3-codex
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: xhigh
+reasoning summaries: auto
+session id: 019c3a8b-c28a-7a12-b803-619ea7b76d74
+--------
+user
+You are agent codex-fix-window-logging.
+
+Current parallel-agent roster (read this first):
+```
+SWARM SNAPSHOT @ 2026-02-07T23:59:23.731Z
+- codex-fix-empty-states [in_progress] scope=src/actions/dialog/part_04/body_part_02.rs,src/actions/dialog/part_04/body_part_03.rs,src/actions/dialog/part_01.rs task=MINOR FIX: True-empty and search-empty states share same UI copy. Both 'no actions available' and 'no actions match you…
+  claims: src/actions/dialog/part_01.rs, src/actions/dialog/part_04/body_part_02.rs
+  notes: implemented empty-state message helper + tests; wired render branch to helper; running verification
+- codex-fix-window-logging [starting] scope=src/actions/window/part_02.rs,src/actions/window/part_03.rs task=MINOR FIX: Several window-operation failures silently ignored in src/actions/window/part_02.rs:204,248,279. Add debug/w…
+```
+
+Your assignment:
+- Task: MINOR FIX: Several window-operation failures silently ignored in src/actions/window/part_02.rs:204,248,279. Add debug/warn logging for failed window resize, position, and focus operations. Also fix m10: unify open-path vs resize-path height for empty state between part_02.rs:106 and part_03.rs:38. After fix, run cargo check && cargo clippy --all-targets -- -D warnings
+- Scope: src/actions/window/part_02.rs,src/actions/window/part_03.rs
+
+Operating constraints:
+- Single working tree (no worktrees, no patches).
+- You MUST claim files before editing (~/.claude/bin/swarm.ts claim --wait ...).
+
+Deliverables:
+- Make the code changes required by the task.
+- Run the most relevant tests/linters.
+- In your FINAL message, include: changed files, how to test, and any risks/known gaps.
+warning: Under-development features enabled: responses_websockets. Under-development features are incomplete and may behave unpredictably. To suppress this warning, set `suppress_unstable_features_warning = true` in /Users/johnlindquist/.codex/config.toml.
+mcp: deepwiki starting
+mcp: deepwiki ready
+mcp startup: ready: deepwiki
+
+thinking
+**Clarifying verification and testing steps**
+codex
+I’m taking `codex-fix-window-logging` and will first sync swarm status, claim the two scoped files, then inspect the cited lines in `src/actions/window/part_02.rs` and `src/actions/window/part_03.rs` before editing.
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts status && ~/.claude/bin/swarm.ts update --id codex-fix-window-logging --status in_progress --notes "claiming window action files for logging + empty height fix"' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+Repo: /Users/johnlindquist/dev/script-kit-gpui
+Updated: 2026-02-07T23:59:34.385Z
+
+Active agents (2):
+codex-fix-empty-states [in_progress] codex/gpt-5.3-codex/exec
+  task: MINOR FIX: True-empty and search-empty states share same UI copy. Both 'no actions available' and 'no actions match you…
+  scope: src/actions/dialog/part_04/body_part_02.rs,src/actions/dialog/part_04/body_part_03.rs,src/actions/dialog/part_01.rs
+  claims(2): src/actions/dialog/part_01.rs, src/actions/dialog/part_04/body_part_02.rs
+  notes: implemented empty-state message helper + tests; wired render branch to helper; running verification
+
+codex-fix-window-logging [in_progress] codex/gpt-5.3-codex/exec
+  task: MINOR FIX: Several window-operation failures silently ignored in src/actions/window/part_02.rs:204,248,279. Add debug/w…
+  scope: src/actions/window/part_02.rs,src/actions/window/part_03.rs
+  claims: (none)
+  notes: spawned codex (exec)
+
+Inactive agents (221):
+- codex-accessibility [done] done. exit=0. final=.ai/logs/codex-accessibility.final.md. See final message file.
+- codex-action-labels [failed] failed. exit=1. final=.ai/logs/codex-action-labels.final.md.
+- codex-actions-audit [failed] failed. exit=1. final=.ai/logs/codex-actions-audit.final.md. See final message file.
+codex
+I confirmed roster and set status `in_progress`. Next I’ll claim `src/actions/window/part_02.rs` and `src/actions/window/part_03.rs`, then inspect the exact failure paths and height values.
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts claim --wait --id codex-fix-window-logging src/actions/window/part_02.rs && ~/.claude/bin/swarm.ts claim --wait --id codex-fix-window-logging src/actions/window/part_03.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+Claimed for codex-fix-window-logging: src/actions/window/part_02.rs
+Claimed for codex-fix-window-logging: src/actions/window/part_03.rs
+
+thinking
+**Preparing parallel file inspection**
+codex
+I have both files claimed. I’m now reading the relevant sections around the referenced lines to patch logging for failed operations and align empty-state height handling.
+exec
+/bin/zsh -lc "nl -ba src/actions/window/part_02.rs | sed -n '70,340p'" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "nl -ba src/actions/window/part_03.rs | sed -n '1,140p'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+    70	    display_id: Option<DisplayId>,
+    71	    dialog_entity: Entity<ActionsDialog>,
+    72	    position: WindowPosition,
+    73	) -> anyhow::Result<WindowHandle<Root>> {
+    74	    // Close any existing actions window first
+    75	    close_actions_window(cx);
+    76	
+    77	    // Load theme for vibrancy settings
+    78	    let theme = theme::load_theme();
+    79	    let window_background = if theme.is_vibrancy_enabled() {
+    80	        gpui::WindowBackgroundAppearance::Blurred
+    81	    } else {
+    82	        gpui::WindowBackgroundAppearance::Opaque
+    83	    };
+    84	
+    85	    // Calculate dynamic window height based on number of actions
+    86	    // This ensures the window fits the content without empty dark space
+    87	    let dialog = dialog_entity.read(cx);
+    88	    let num_actions = dialog.filtered_actions.len();
+    89	    let hide_search = dialog.hide_search;
+ succeeded in 51ms:
+     1	
+     2	/// Resize the actions window directly using the window reference
+     3	/// Use this from defer callbacks where we already have access to the window
+     4	pub fn resize_actions_window_direct(
+     5	    window: &mut Window,
+     6	    cx: &mut App,
+     7	    dialog_entity: &Entity<ActionsDialog>,
+     8	) {
+     9	    // Read dialog state to calculate new height
+    10	    let dialog = dialog_entity.read(cx);
+    11	    let num_actions = dialog.filtered_actions.len();
+    12	    let hide_search = dialog.hide_search;
+    13	    let has_header = dialog.context_title.is_some();
+    14	
+    15	    crate::logging::log(
+    16	        "ACTIONS",
+    17	        &format!(
+    18	            "resize_actions_window_direct: num_actions={}, hide_search={}, has_header={}",
+    19	            num_actions, hide_search, has_header
+    20	        ),
+exec
+/bin/zsh -lc "nl -ba src/actions/window/part_03.rs | sed -n '140,260p'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+   140	        "ACTIONS",
+   141	        &format!(
+   142	            "resize_actions_window_direct complete: {} items, height={:.0}",
+   143	            num_actions, new_height_f32
+   144	        ),
+   145	    );
+   146	}
+   147	
+   148	/// Resize the actions window to fit the current number of filtered actions
+   149	/// Call this after filtering changes the action count
+   150	///
+   151	/// The window is "pinned to bottom" - the search input stays in place and
+   152	/// the window shrinks/grows from the top.
+   153	pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>) {
+   154	    crate::logging::log("ACTIONS", "resize_actions_window called");
+   155	    if let Some(handle) = get_actions_window_handle() {
+   156	        // Read dialog state to calculate new height
+   157	        let dialog = dialog_entity.read(cx);
+   158	        let num_actions = dialog.filtered_actions.len();
+   159	        let hide_search = dialog.hide_search;
+exec
+/bin/zsh -lc "nl -ba src/actions/window/part_03.rs | sed -n '260,520p'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+   260	                                let screens: cocoa::base::id = NSScreen::screens(nil);
+   261	                                let _primary: cocoa::base::id =
+   262	                                    msg_send![screens, objectAtIndex: 0u64];
+   263	                            }
+   264	
+   265	                            // In macOS coords (bottom-left origin):
+   266	                            // - frame.origin.y is the BOTTOM of the window
+   267	                            // - To keep bottom fixed, we keep origin.y the same
+   268	                            // - Only change the height
+   269	                            let new_frame = NSRect::new(
+   270	                                NSPoint::new(frame.origin.x, frame.origin.y),
+   271	                                NSSize::new(frame.size.width, new_height_f32 as f64),
+   272	                            );
+   273	
+   274	                            let animate = true;
+   275	                            let _: () =
+   276	                                msg_send![ns_window, setFrame:new_frame display:true animate:animate];
+   277	
+   278	                            crate::logging::log(
+   279	                                "ACTIONS",
+
+thinking
+**Assessing height unification and test locations**
+exec
+/bin/zsh -lc "sed -n '1,360p' src/actions/window/part_03.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,260p' src/actions/window/part_02.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_actions_window_key_intent_supports_aliases_and_jump_keys() {
+        let no_mods = gpui::Modifiers::default();
+
+        assert_eq!(
+            actions_window_key_intent("return", &no_mods),
+            Some(ActionsWindowKeyIntent::ExecuteSelected)
+        );
+        assert_eq!(
+            actions_window_key_intent("esc", &no_mods),
+            Some(ActionsWindowKeyIntent::Close)
+        );
+        assert_eq!(
+            actions_window_key_intent("home", &no_mods),
+            Some(ActionsWindowKeyIntent::MoveHome)
+        );
+ succeeded in 51ms:
+
+/// Resize the actions window directly using the window reference
+/// Use this from defer callbacks where we already have access to the window
+pub fn resize_actions_window_direct(
+    window: &mut Window,
+    cx: &mut App,
+    dialog_entity: &Entity<ActionsDialog>,
+) {
+    // Read dialog state to calculate new height
+    let dialog = dialog_entity.read(cx);
+    let num_actions = dialog.filtered_actions.len();
+    let hide_search = dialog.hide_search;
+    let has_header = dialog.context_title.is_some();
+
+    crate::logging::log(
+        "ACTIONS",
+        &format!(
+            "resize_actions_window_direct: num_actions={}, hide_search={}, has_header={}",
+            num_actions, hide_search, has_header
+        ),
+
+thinking
+**Inspecting module structure**
+exec
+/bin/zsh -lc 'ls -la src/actions/window && rg -n "mod tests|open_actions_window|resize_actions_window|notify_actions_window|close_actions_window" src/actions/window -S' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+total 96
+drwxr-xr-x    5 johnlindquist  staff    160 Feb  7 15:27 .
+drwxr-xr-x  122 johnlindquist  staff   3904 Feb  7 16:00 ..
+-rw-r--r--    1 johnlindquist  staff  18876 Feb  7 16:54 part_01.rs
+-rw-r--r--    1 johnlindquist  staff  10935 Feb  7 15:27 part_02.rs
+-rw-r--r--    1 johnlindquist  staff  12963 Feb  7 15:27 part_03.rs
+src/actions/window/part_01.rs:148:fn should_auto_close_actions_window(
+src/actions/window/part_01.rs:294:                should_auto_close_actions_window(main_window_focused, actions_window_active);
+src/actions/window/part_01.rs:443:                        resize_actions_window_direct(window, cx, &dialog);
+src/actions/window/part_01.rs:457:                        resize_actions_window_direct(window, cx, &dialog);
+src/actions/window/part_01.rs:480:    fn test_should_auto_close_actions_window_returns_true_when_neither_window_is_focused() {
+src/actions/window/part_01.rs:481:        assert!(should_auto_close_actions_window(false, false));
+src/actions/window/part_01.rs:485:    fn test_should_auto_close_actions_window_returns_false_when_main_window_is_focused() {
+src/actions/window/part_01.rs:486:        assert!(!should_auto_close_actions_window(true, false));
+src/actions/window/part_01.rs:490:    fn test_should_auto_close_actions_window_returns_false_when_actions_window_is_active() {
+src/actions/window/part_01.rs:491:        assert!(!should_auto_close_actions_window(false, true));
+src/actions/window/part_02.rs:2:mod tests {
+src/actions/window/part_02.rs:67:pub fn open_actions_window(
+src/actions/window/part_02.rs:75:    close_actions_window(cx);
+src/actions/window/part_02.rs:242:pub fn close_actions_window(cx: &mut App) {
+
+thinking
+**Assessing helper function placement**
+exec
+/bin/zsh -lc 'rg -n "include!|mod part_0|pub mod window|actions/window" src/actions -S && sed -n '"'1,220p' src/actions/window/part_01.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+Total output lines: 653
+
+src/actions/dialog_behavior_tests.rs:1:include!("dialog_behavior_tests/part_01.rs");
+src/actions/dialog_behavior_tests.rs:2:include!("dialog_behavior_tests/part_02.rs");
+src/actions/dialog_builtin_action_validation_tests_2.rs:1:include!("dialog_builtin_action_validation_tests_2/part_01.rs");
+src/actions/dialog_builtin_action_validation_tests_2.rs:2:include!("dialog_builtin_action_validation_tests_2/part_02.rs");
+src/actions/dialog_builtin_action_validation_tests_2.rs:3:include!("dialog_builtin_action_validation_tests_2/part_03.rs");
+src/actions/dialog_builtin_action_validation_tests_2.rs:4:include!("dialog_builtin_action_validation_tests_2/part_04.rs");
+src/actions/dialog_builtin_action_validation_tests_2.rs:5:include!("dialog_builtin_action_validation_tests_2/part_05.rs");
+src/actions/dialog_builtin_action_validation_tests_13.rs:22:    include!("dialog_builtin_action_validation_tests_13/tests_part_01.rs");
+src/actions/dialog_builtin_action_validation_tests_13.rs:23:    include!("dialog_builtin_action_validation_tests_13/tests_part_02.rs");
+src/actions/dialog_builtin_action_validation_tests_13.rs:24:    include!("dialog_builtin_action_validation_tests_13/tests_part_03.rs");
+src/actions/dialog_builtin_action_validation_tests_13.rs:25:    include!("dialog_builtin_action_validation_tests_13/tests_part_04.rs");
+src/actions/dialog_builtin_action_validation_tests_13.rs:26:    include!("dialog_builtin_action_validation_tests_13/tests_part_05.rs");
+src/actions/dialog_builtin_action_validation_tests_27.rs:1:include!("dialog_builtin_action_validation_tests_27/part_01.rs");
+src/actions/dialog_builtin_action_validation_tests_27.rs:2:include!("dialog_builtin_action_validation_tests_27/part_02.rs");
+src/actions/dialog_builtin_action_validation_tests_27.rs:3:include!("dialog_builtin_action_validation_tests_27/part_03.rs");
+src/actions/dialog_builtin_action_validation_tests_27.rs:4:include!("dialog_builtin_action_validation_tests_27/part_04.rs");
+src/actions/dialog_builtin_action_validation_tests_33.rs:1:include!("dialog_builtin_action_validation_tests_33/part_01.rs");
+src/actions/dialog_builtin_action_validation_tests_33.rs:2:include!("dialog_builtin_action_validation_tests_33/part_02.rs");
+
+thinking
+**Evaluating logging improvements**
+codex
+I found the exact silent-failure sites and confirmed the open path currently lacks the empty-state minimum row height that resize paths already apply. Next I’m checking available logging APIs (`warn`/`debug`) to align with existing conventions before patching.
+exec
+/bin/zsh -lc "rg -n \"pub fn (log|warn|debug|error)\\(|logging::warn|logging::debug|logging::log\\(\" src -S" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+Total output lines: 2565
+
+src/app_actions/sdk_actions.rs:6:                    logging::log(
+src/app_actions/sdk_actions.rs:24:                    logging::log(
+src/app_actions/sdk_actions.rs:41:                    logging::log(
+src/app_actions/sdk_actions.rs:56:                            logging::log(
+src/app_actions/sdk_actions.rs:65:                            logging::log("UI", "Response channel disconnected - script exited");
+src/app_actions/sdk_actions.rs:70:                logging::log("UI", &format!("Unknown action: {}", action_name));
+src/app_actions/sdk_actions.rs:73:            logging::log("UI", &format!("Unknown action: {}", action_name));
+src/app_actions/sdk_actions.rs:82:                logging::log(
+src/app_actions/handle_action.rs:29:                Ok(_) => logging::log("UI", &format!("Revealed in {}: {}", file_manager, path_str)),
+src/app_actions/handle_action.rs:30:                Err(e) => logging::log(
+src/app_actions/handle_action.rs:55:            logging::log(
+src/app_actions/handle_action.rs:65:                    logging::log(
+src/app_actions/handle_action.rs:75:                    logging::log(
+src/app_actions/handle_action.rs:104:            logging::log(
+src/app_actions/handle_action.rs:114:                    logging::log(
+src/app_actions/handle_action.rs:124:                    logging::log(
+src/app_actions/handle_action.rs:238:        logging::log("UI", &format!("Action selected: {}", action_id));
+src/app_actions/handle_action.rs:312:                        logging::log("ERROR", &format!("Failed to toggle clipboard pin: {}", e));
+
+thinking
+**Locating logging module definition**
+exec
+/bin/zsh -lc "rg -n \"mod logging|pub fn log\\(|pub fn debug|pub fn warn|pub fn error\" src/logging* src -g 'logging*.rs' -S" in /Users/johnlindquist/dev/script-kit-gpui exited 1 in 50ms:
+
+
+thinking
+**Listing source directory contents**
+exec
+/bin/zsh -lc "rg --files src | rg '/logging|"'^src/logging'"'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+src/logging/part_000.rs
+src/logging/part_004.rs
+src/logging/part_001.rs
+src/logging/mod.rs
+src/logging/tests/part_000.rs
+src/logging/tests/part_001.rs
+src/logging/part_002.rs
+src/logging/part_003.rs
+exec
+/bin/zsh -lc "sed -n '1,260p' src/logging/mod.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,260p' src/logging/part_000.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+#![allow(dead_code)]
+//! Structured JSONL logging for AI agents and human-readable stderr output.
+//!
+//! This module provides dual-output logging:
+//! - **JSONL to file** (~/.scriptkit/logs/script-kit-gpui.jsonl) - structured for AI agent parsing
+//! - **Pretty to stderr** - human-readable for developers
+//! - **Compact AI mode** (SCRIPT_KIT_AI_LOG=1) - ultra-compact line format for AI context
+//!
+//! # Compact AI Format
+//!
+//! When `SCRIPT_KIT_AI_LOG=1` is set, stderr uses compact format:
+//! ```text
+//! SS.mmm|L|C|message
+//! ```
+//! Where:
+//! - SS.mmm = seconds.milliseconds within current minute (resets each minute)
+//! - L = single char level (i/w/e/d/t)
+//! - C = single char category code (see AGENTS.md for legend)
+//!
+//!
+ succeeded in 52ms:
+use std::cell::RefCell;
+use std::collections::VecDeque;
+use std::fmt::Write as FmtWrite;
+use std::fs::{self, File, OpenOptions};
+use std::io::Write;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Mutex, OnceLock};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use serde_json::{Map, Value};
+use tracing::field::{Field, Visit};
+use tracing::{Level, Subscriber};
+use tracing_appender::non_blocking::WorkerGuard;
+use tracing_subscriber::fmt::{FmtContext, FormatEvent, FormatFields, MakeWriter};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::registry::LookupSpan;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{fmt, EnvFilter};
+use uuid::Uuid;
+// =============================================================================
+
+thinking
+**Searching for warning functions**
+exec
+/bin/zsh -lc 'rg -n "pub fn (log|warn|debug|error)" src/logging -S' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+src/logging/part_001.rs:458:pub fn log_path() -> PathBuf {
+src/logging/part_002.rs:11:pub fn log(category: &str, message: &str) {
+src/logging/part_002.rs:103:pub fn log_debug(category: &str, message: &str) {
+src/logging/part_002.rs:108:pub fn log_debug(_category: &str, _message: &str) {
+src/logging/part_002.rs:117:pub fn log_script_event(script_id: &str, action: &str, duration_ms: Option<u64>, success: bool) {
+src/logging/part_002.rs:150:pub fn log_ui_event(component: &str, action: &str, details: Option<&str>) {
+src/logging/part_002.rs:167:pub fn log_key_event(key: &str, modifiers: &str, action: &str) {
+src/logging/part_002.rs:181:pub fn log_perf(operation: &str, duration_ms: u64, threshold_ms: u64) {
+src/logging/part_002.rs:216:pub fn log_error(category: &str, error: &str, context: Option<&str>) {
+src/logging/part_002.rs:269:pub fn log_protocol_send(fd: i32, json: &str) {
+src/logging/part_002.rs:299:pub fn log_protocol_recv(msg_type: &str, json_len: usize) {
+src/logging/part_002.rs:333:pub fn log_mouse_enter(item_index: usize, item_id: Option<&str>) {
+src/logging/part_002.rs:350:pub fn log_mouse_leave(item_index: usize, item_id: Option<&str>) {
+src/logging/part_002.rs:367:pub fn log_mouse_hover_state(item_index: usize, is_hovered: bool, is_focused: bool) {
+src/logging/part_002.rs:395:pub fn log_scroll_position(scroll_top: f32, visible_start: usize, visible_end: usize) {
+src/logging/part_002.rs:417:pub fn log_scroll_to_item(target_index: usize, reason: &str) {
+src/logging/part_002.rs:434:pub fn log_scroll_bounds(viewport_height: f32, content_height: f32, item_count: usize) {
+src/logging/part_002.rs:456:pub fn log_scroll_adjustment(from: f32, to: f32, reason: &str) {
+src/logging/part_003.rs:8:pub fn log_scroll_perf_start(operation: &str) -> u128 {
+src/logging/part_003.rs:30:pub fn log_scroll_perf_end(operation: &str, start_micros: u128) {
+
+thinking
+**Planning debug and warn logging**
+exec
+/bin/zsh -lc "sed -n '1,280p' src/logging/part_002.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+// =============================================================================
+// BACKWARD COMPATIBILITY - Legacy log() function wrappers
+// =============================================================================
+
+/// Legacy log function - wraps tracing::info! for backward compatibility.
+///
+/// Prefer using tracing macros directly for structured fields:
+/// ```rust
+/// tracing::info!(category = "UI", duration_ms = 42, "Button clicked");
+/// ```
+pub fn log(category: &str, message: &str) {
+    // Add to legacy buffer for UI display
+    add_to_buffer(category, message);
+
+    let correlation_id = current_correlation_id();
+    let level = legacy_level_for_category(category);
+
+    // Write to capture file if capture is enabled
+    if is_capture_enabled() {
+        let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ");
+
+thinking
+**Planning debug and warn logging**
+exec
+/bin/zsh -lc "rg -n \"configure_actions_popup_window\" -S src && sed -n '1,220p' src/platform.rs" in /Users/johnlindquist/dev/script-kit-gpui exited 1 in 51ms:
+src/confirm/window.rs:296:                            platform::configure_actions_popup_window(ns_window, is_dark);
+src/platform/secondary_window_config.rs:29:pub unsafe fn configure_actions_popup_window(window: id, is_dark: bool) {
+src/platform/secondary_window_config.rs:123:pub fn configure_actions_popup_window(_window: *mut std::ffi::c_void, _is_dark: bool) {
+src/actions/window/part_02.rs:222:                            platform::configure_actions_popup_window(ns_window, is_dark);
+sed: src/platform.rs: No such file or directory
+
+thinking
+**Identifying platform module location**
+exec
+/bin/zsh -lc "sed -n '1,220p' src/platform/secondary_window_config.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,180p' src/platform/mod.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+// ============================================================================
+// Actions Popup Window Configuration
+// ============================================================================
+
+/// Configure the actions popup window as a non-movable child window with vibrancy.
+///
+/// This function configures a popup window with:
+/// - isMovable = false - prevents window dragging
+/// - isMovableByWindowBackground = false - prevents dragging by clicking background
+/// - Same window level as main window (NSFloatingWindowLevel = 3)
+/// - hidesOnDeactivate = true - auto-hides when app loses focus
+/// - hasShadow = true - shadow for depth perception
+/// - Disabled restoration - no position caching
+/// - animationBehavior = NSWindowAnimationBehaviorNone - no animation on close
+/// - Appearance-aware vibrancy (VibrantDark/VibrantLight on views, window appearance nil) + POPOVER material for frosted glass effect
+///
+/// # Arguments
+/// * `window` - The NSWindow pointer to configure
+/// * `is_dark` - Whether to use dark vibrancy (true) or light vibrancy (false)
+///
+ succeeded in 51ms:
+//! Platform-specific window configuration abstraction.
+//!
+//! This module provides cross-platform abstractions for window behavior configuration,
+//! with macOS-specific implementations for floating panel behavior and space management.
+//!
+//! # macOS Behavior
+//!
+//! On macOS, this module configures windows as floating panels that:
+//! - Float above normal windows (NSFloatingWindowLevel = 3)
+//! - Move to the active space when shown (NSWindowCollectionBehaviorMoveToActiveSpace = 2)
+//! - Disable window state restoration to prevent position caching
+//!
+//! # Other Platforms
+//!
+//! On non-macOS platforms, these functions are no-ops, allowing cross-platform code
+//! to call them without conditional compilation at the call site.
+
+include!("app_window_management.rs");
+include!("visibility_focus.rs");
+include!("vibrancy_swizzle_materials.rs");
+
+thinking
+**Planning helper function and logging additions**
+codex
+I have enough context and will apply a focused patch in these two files only.
+
+Plan:
+1. Add a shared height helper in `src/actions/window/part_02.rs` and use it from open/resize paths so empty-state height is identical between open and resize.
+2. Replace the three silent `handle.update` ignores in `src/actions/window/part_02.rs` with explicit `warn` + `debug` logs that include operation and state context.
+3. Tighten resize failure logging in `src/actions/window/part_03.rs` so failed resize updates emit `warn` with contextual debug details.
+4. Add a unit test in `src/actions/window/part_02.rs` validating empty-state minimum row height behavior.
+5. Run required verification commands: `cargo check` and `cargo clippy --all-targets -- -D warnings`.
+
+thinking
+**Creating unified window height helper**
+codex
+I’m about to patch both claimed files: introducing a shared height calculator, wiring open/resize paths to it, and replacing ignored `handle.update` results with warn/debug logs that include operation context.
+file update
+M /Users/johnlindquist/dev/script-kit-gpui/src/actions/window/part_02.rs
+@@ -48,2 +48,39 @@
+     }
++
++    #[test]
++    fn test_actions_window_dynamic_height_matches_single_row_when_empty() {
++        let empty_height = actions_window_dynamic_height(0, 0, false, false);
++        let single_row_height = actions_window_dynamic_height(1, 0, false, false);
++
++        assert!(
++            (empty_height - single_row_height).abs() < 0.001,
++            "empty_height={empty_height}, single_row_height={single_row_height}"
++        );
++    }
++}
++
++#[inline]
++fn actions_window_dynamic_height(
++    num_actions: usize,
++    section_header_count: usize,
++    hide_search: bool,
++    has_header: bool,
++) -> f32 {
++    let search_box_height = if hide_search {
++        0.0
++    } else {
++        SEARCH_INPUT_HEIGHT
++    };
++    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
++    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
++    let min_items_height = if num_actions == 0 {
++        ACTION_ITEM_HEIGHT
++    } else {
++        0.0
++    };
++    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
++        .max(min_items_height)
++        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
++    let border_height = 2.0;
++    items_height + search_box_height + header_height + border_height
+ }
+@@ -98,13 +135,4 @@
+ 
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0; // top + bottom border
+-    let dynamic_height = items_height + search_box_height + header_height + border_height;
++    let dynamic_height =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+@@ -203,3 +231,3 @@
+     {
+-        let _ = handle.update(cx, |_root, window, cx| {
++        let configure_result = handle.update(cx, |_root, window, cx| {
+             window.defer(cx, |_window, _cx| {
+@@ -227,2 +255,17 @@
+         });
++
++        if let Err(error) = configure_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window update failed: operation=position_focus error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window context: display_id={display_id:?}, position={position:?}"
++                ),
++            );
++        }
+     }
+@@ -247,5 +290,17 @@
+                 // Close the window
+-                let _ = handle.update(cx, |_root, window, _cx| {
++                let close_result = handle.update(cx, |_root, window, _cx| {
+                     window.remove_window();
+                 });
++                if let Err(error) = close_result {
++                    crate::logging::log(
++                        "WARN",
++                        &format!(
++                            "ACTIONS_WINDOW_OP_FAIL close_actions_window update failed: operation=focus_cleanup error={error:?}"
++                        ),
++                    );
++                    crate::logging::log_debug(
++                        "ACTIONS",
++                        "ACTIONS_WINDOW_OP_FAIL close_actions_window context: remove_window requested",
++                    );
++                }
+             }
+@@ -278,5 +333,17 @@
+     if let Some(handle) = get_actions_window_handle() {
+-        let _ = handle.update(cx, |_root, _window, cx| {
++        let notify_result = handle.update(cx, |_root, _window, cx| {
+             cx.notify();
+         });
++        if let Err(error) = notify_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL notify_actions_window update failed: operation=focus_refresh error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                "ACTIONS_WINDOW_OP_FAIL notify_actions_window context: cx.notify() skipped",
++            );
++        }
+     }
+apply_patch(auto_approved=true) exited 0 in 11ms:
+Success. Updated the following files:
+M /Users/johnlindquist/dev/script-kit-gpui/src/actions/window/part_02.rs
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 8eb0871286d407f7fdf41e816217d0cb0513c0a4..88d49fb466d7c2641d69ef988d64957ff2803080
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -46,6 +46,43 @@
+         assert_eq!(selectable_index_at_or_before(&rows, 2), Some(1));
+         assert_eq!(selectable_index_at_or_after(&rows, 2), Some(3));
+     }
++
++    #[test]
++    fn test_actions_window_dynamic_height_matches_single_row_when_empty() {
++        let empty_height = actions_window_dynamic_height(0, 0, false, false);
++        let single_row_height = actions_window_dynamic_height(1, 0, false, false);
++
++        assert!(
++            (empty_height - single_row_height).abs() < 0.001,
++            "empty_height={empty_height}, single_row_height={single_row_height}"
++        );
++    }
++}
++
++#[inline]
++fn actions_window_dynamic_height(
++    num_actions: usize,
++    section_header_count: usize,
++    hide_search: bool,
++    has_header: bool,
++) -> f32 {
++    let search_box_height = if hide_search {
++        0.0
++    } else {
++        SEARCH_INPUT_HEIGHT
++    };
++    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
++    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
++    let min_items_height = if num_actions == 0 {
++        ACTION_ITEM_HEIGHT
++    } else {
++        0.0
++    };
++    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
++        .max(min_items_height)
++        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
++    let border_height = 2.0;
++    items_height + search_box_height + header_height + border_height
+ }
+ 
+ /// Open the actions window as a separate floating window with vibrancy
+@@ -96,17 +133,8 @@
+         0
+     };
+ 
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0; // top + bottom border
+-    let dynamic_height = items_height + search_box_height + header_height + border_height;
++    let dynamic_height =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+@@ -201,7 +229,7 @@
+     // internal state borrowed immediately after open_window returns.
+     #[cfg(target_os = "macos")]
+     {
+-        let _ = handle.update(cx, |_root, window, cx| {
++        let configure_result = handle.update(cx, |_root, window, cx| {
+             window.defer(cx, |_window, _cx| {
+                 use cocoa::appkit::NSApp;
+                 use cocoa::base::nil;
+@@ -225,6 +253,21 @@
+                 }
+             });
+         });
++
++        if let Err(error) = configure_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window update failed: operation=position_focus error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window context: display_id={display_id:?}, position={position:?}"
++                ),
++            );
++        }
+     }
+ 
+     // Store the handle globally
+@@ -245,9 +288,21 @@
+             if let Some(handle) = guard.take() {
+                 crate::logging::log("ACTIONS", "Closing actions popup window");
+                 // Close the window
+-                let _ = handle.update(cx, |_root, window, _cx| {
++                let close_result = handle.update(cx, |_root, window, _cx| {
+                     window.remove_window();
+                 });
++                if let Err(error) = close_result {
++                    crate::logging::log(
++                        "WARN",
++                        &format!(
++                            "ACTIONS_WINDOW_OP_FAIL close_actions_window update failed: operation=focus_cleanup error={error:?}"
++                        ),
++                    );
++                    crate::logging::log_debug(
++                        "ACTIONS",
++                        "ACTIONS_WINDOW_OP_FAIL close_actions_window context: remove_window requested",
++                    );
++                }
+             }
+         }
+     }
+@@ -276,8 +331,20 @@
+ /// Notify the actions window to re-render (call after updating dialog entity)
+ pub fn notify_actions_window(cx: &mut App) {
+     if let Some(handle) = get_actions_window_handle() {
+-        let _ = handle.update(cx, |_root, _window, cx| {
++        let notify_result = handle.update(cx, |_root, _window, cx| {
+             cx.notify();
+         });
++        if let Err(error) = notify_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL notify_actions_window update failed: operation=focus_refresh error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                "ACTIONS_WINDOW_OP_FAIL notify_actions_window context: cx.notify() skipped",
++            );
++        }
+     }
+ }
+
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 8eb0871286d407f7fdf41e816217d0cb0513c0a4..88d49fb466d7c2641d69ef988d64957ff2803080
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -46,6 +46,43 @@
+         assert_eq!(selectable_index_at_or_before(&rows, 2), Some(1));
+         assert_eq!(selectable_index_at_or_after(&rows, 2), Some(3));
+     }
++
++    #[test]
++    fn test_actions_window_dynamic_height_matches_single_row_when_empty() {
++        let empty_height = actions_window_dynamic_height(0, 0, false, false);
++        let single_row_height = actions_window_dynamic_height(1, 0, false, false);
++
++        assert!(
++            (empty_height - single_row_height).abs() < 0.001,
++            "empty_height={empty_height}, single_row_height={single_row_height}"
++        );
++    }
++}
++
++#[inline]
++fn actions_window_dynamic_height(
++    num_actions: usize,
++    section_header_count: usize,
++    hide_search: bool,
++    has_header: bool,
++) -> f32 {
++    let search_box_height = if hide_search {
++        0.0
++    } else {
++        SEARCH_INPUT_HEIGHT
++    };
++    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
++    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
++    let min_items_height = if num_actions == 0 {
++        ACTION_ITEM_HEIGHT
++    } else {
++        0.0
++    };
++    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
++        .max(min_items_height)
++        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
++    let border_height = 2.0;
++    items_height + search_box_height + header_height + border_height
+ }
+ 
+ /// Open the actions window as a separate floating window with vibrancy
+@@ -96,17 +133,8 @@
+         0
+     };
+ 
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0; // top + bottom border
+-    let dynamic_height = items_height + search_box_height + header_height + border_height;
++    let dynamic_height =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+@@ -201,7 +229,7 @@
+     // internal state borrowed immediately after open_window returns.
+     #[cfg(target_os = "macos")]
+     {
+-        let _ = handle.update(cx, |_root, window, cx| {
++        let configure_result = handle.update(cx, |_root, window, cx| {
+             window.defer(cx, |_window, _cx| {
+                 use cocoa::appkit::NSApp;
+                 use cocoa::base::nil;
+@@ -225,6 +253,21 @@
+                 }
+             });
+         });
++
++        if let Err(error) = configure_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window update failed: operation=position_focus error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window context: display_id={display_id:?}, position={position:?}"
++                ),
++            );
++        }
+     }
+ 
+     // Store the handle globally
+@@ -245,9 +288,21 @@
+             if let Some(handle) = guard.take() {
+                 crate::logging::log("ACTIONS", "Closing actions popup window");
+                 // Close the window
+-                let _ = handle.update(cx, |_root, window, _cx| {
++                let close_result = handle.update(cx, |_root, window, _cx| {
+                     window.remove_window();
+                 });
++                if let Err(error) = close_result {
++                    crate::logging::log(
++                        "WARN",
++                        &format!(
++                            "ACTIONS_WINDOW_OP_FAIL close_actions_window update failed: operation=focus_cleanup error={error:?}"
++                        ),
++                    );
++                    crate::logging::log_debug(
++                        "ACTIONS",
++                        "ACTIONS_WINDOW_OP_FAIL close_actions_window context: remove_window requested",
++                    );
++                }
+             }
+         }
+     }
+@@ -276,8 +331,20 @@
+ /// Notify the actions window to re-render (call after updating dialog entity)
+ pub fn notify_actions_window(cx: &mut App) {
+     if let Some(handle) = get_actions_window_handle() {
+-        let _ = handle.update(cx, |_root, _window, cx| {
++        let notify_result = handle.update(cx, |_root, _window, cx| {
+             cx.notify();
+         });
++        if let Err(error) = notify_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL notify_actions_window update failed: operation=focus_refresh error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                "ACTIONS_WINDOW_OP_FAIL notify_actions_window context: cx.notify() skipped",
++            );
++        }
+     }
+ }
+
+
+thinking
+**Preparing next patch part**
+file update
+M /Users/johnlindquist/dev/script-kit-gpui/src/actions/window/part_03.rs
+@@ -29,21 +29,4 @@
+ 
+-    // Calculate new height
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    // When no actions, still need space for "No actions match" message (use 1 row height)
+-    let min_items_height = if num_actions == 0 {
+-        ACTION_ITEM_HEIGHT
+-    } else {
+-        0.0
+-    };
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .max(min_items_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
+-    let new_height_f32 = items_height + search_box_height + header_height + border_height;
++    let new_height_f32 =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+@@ -175,21 +158,4 @@
+ 
+-        // Calculate new height (same logic as open_actions_window)
+-        let search_box_height = if hide_search {
+-            0.0
+-        } else {
+-            SEARCH_INPUT_HEIGHT
+-        };
+-        let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-        let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-        // When no actions, still need space for "No actions match" message
+-        let min_items_height = if num_actions == 0 {
+-            ACTION_ITEM_HEIGHT
+-        } else {
+-            0.0
+-        };
+-        let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-            .max(min_items_height)
+-            .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-        let border_height = 2.0; // top + bottom border
+-        let new_height_f32 = items_height + search_box_height + header_height + border_height;
++        let new_height_f32 =
++            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+@@ -308,4 +274,16 @@
+ 
+-        if let Err(e) = update_result {
+-            crate::logging::log("ACTIONS", &format!("handle.update FAILED: {:?}", e));
++        if let Err(error) = update_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window update failed: operation=resize error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window context: num_actions={}, hide_search={}, has_header={}, target_height={:.0}",
++                    num_actions, hide_search, has_header, new_height_f32
++                ),
++            );
+         }
+apply_patch(auto_approved=true) exited 0 in 17ms:
+Success. Updated the following files:
+M /Users/johnlindquist/dev/script-kit-gpui/src/actions/window/part_03.rs
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 8eb0871286d407f7fdf41e816217d0cb0513c0a4..88d49fb466d7c2641d69ef988d64957ff2803080
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -46,6 +46,43 @@
+         assert_eq!(selectable_index_at_or_before(&rows, 2), Some(1));
+         assert_eq!(selectable_index_at_or_after(&rows, 2), Some(3));
+     }
++
++    #[test]
++    fn test_actions_window_dynamic_height_matches_single_row_when_empty() {
++        let empty_height = actions_window_dynamic_height(0, 0, false, false);
++        let single_row_height = actions_window_dynamic_height(1, 0, false, false);
++
++        assert!(
++            (empty_height - single_row_height).abs() < 0.001,
++            "empty_height={empty_height}, single_row_height={single_row_height}"
++        );
++    }
++}
++
++#[inline]
++fn actions_window_dynamic_height(
++    num_actions: usize,
++    section_header_count: usize,
++    hide_search: bool,
++    has_header: bool,
++) -> f32 {
++    let search_box_height = if hide_search {
++        0.0
++    } else {
++        SEARCH_INPUT_HEIGHT
++    };
++    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
++    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
++    let min_items_height = if num_actions == 0 {
++        ACTION_ITEM_HEIGHT
++    } else {
++        0.0
++    };
++    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
++        .max(min_items_height)
++        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
++    let border_height = 2.0;
++    items_height + search_box_height + header_height + border_height
+ }
+ 
+ /// Open the actions window as a separate floating window with vibrancy
+@@ -96,17 +133,8 @@
+         0
+     };
+ 
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0; // top + bottom border
+-    let dynamic_height = items_height + search_box_height + header_height + border_height;
++    let dynamic_height =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+@@ -201,7 +229,7 @@
+     // internal state borrowed immediately after open_window returns.
+     #[cfg(target_os = "macos")]
+     {
+-        let _ = handle.update(cx, |_root, window, cx| {
++        let configure_result = handle.update(cx, |_root, window, cx| {
+             window.defer(cx, |_window, _cx| {
+                 use cocoa::appkit::NSApp;
+                 use cocoa::base::nil;
+@@ -225,6 +253,21 @@
+                 }
+             });
+         });
++
++        if let Err(error) = configure_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window update failed: operation=position_focus error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window context: display_id={display_id:?}, position={position:?}"
++                ),
++            );
++        }
+     }
+ 
+     // Store the handle globally
+@@ -245,9 +288,21 @@
+             if let Some(handle) = guard.take() {
+                 crate::logging::log("ACTIONS", "Closing actions popup window");
+                 // Close the window
+-                let _ = handle.update(cx, |_root, window, _cx| {
++                let close_result = handle.update(cx, |_root, window, _cx| {
+                     window.remove_window();
+                 });
++                if let Err(error) = close_result {
++                    crate::logging::log(
++                        "WARN",
++                        &format!(
++                            "ACTIONS_WINDOW_OP_FAIL close_actions_window update failed: operation=focus_cleanup error={error:?}"
++                        ),
++                    );
++                    crate::logging::log_debug(
++                        "ACTIONS",
++                        "ACTIONS_WINDOW_OP_FAIL close_actions_window context: remove_window requested",
++                    );
++                }
+             }
+         }
+     }
+@@ -276,8 +331,20 @@
+ /// Notify the actions window to re-render (call after updating dialog entity)
+ pub fn notify_actions_window(cx: &mut App) {
+     if let Some(handle) = get_actions_window_handle() {
+-        let _ = handle.update(cx, |_root, _window, cx| {
++        let notify_result = handle.update(cx, |_root, _window, cx| {
+             cx.notify();
+         });
++        if let Err(error) = notify_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL notify_actions_window update failed: operation=focus_refresh error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                "ACTIONS_WINDOW_OP_FAIL notify_actions_window context: cx.notify() skipped",
++            );
++        }
+     }
+ }
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index bad1fdea41cd0d16ad570998c34d5556bd10f106..f41d7a0a87c9d615abedbb73aa9a801a401a379d
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -27,25 +27,8 @@
+         0
+     };
+ 
+-    // Calculate new height
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    // When no actions, still need space for "No actions match" message (use 1 row height)
+-    let min_items_height = if num_actions == 0 {
+-        ACTION_ITEM_HEIGHT
+-    } else {
+-        0.0
+-    };
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .max(min_items_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
+-    let new_height_f32 = items_height + search_box_height + header_height + border_height;
++    let new_height_f32 =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -173,25 +156,8 @@
+             0
+         };
+ 
+-        // Calculate new height (same logic as open_actions_window)
+-        let search_box_height = if hide_search {
+-            0.0
+-        } else {
+-            SEARCH_INPUT_HEIGHT
+-        };
+-        let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-        let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-        // When no actions, still need space for "No actions match" message
+-        let min_items_height = if num_actions == 0 {
+-            ACTION_ITEM_HEIGHT
+-        } else {
+-            0.0
+-        };
+-        let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-            .max(min_items_height)
+-            .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-        let border_height = 2.0; // top + bottom border
+-        let new_height_f32 = items_height + search_box_height + header_height + border_height;
++        let new_height_f32 =
++            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+@@ -306,8 +272,20 @@
+             cx.notify();
+         });
+ 
+-        if let Err(e) = update_result {
+-            crate::logging::log("ACTIONS", &format!("handle.update FAILED: {:?}", e));
++        if let Err(error) = update_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window update failed: operation=resize error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window context: num_actions={}, hide_search={}, has_header={}, target_height={:.0}",
++                    num_actions, hide_search, has_header, new_height_f32
++                ),
++            );
+         }
+ 
+         crate::logging::log(
+
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 8eb0871286d407f7fdf41e816217d0cb0513c0a4..88d49fb466d7c2641d69ef988d64957ff2803080
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -46,6 +46,43 @@
+         assert_eq!(selectable_index_at_or_before(&rows, 2), Some(1));
+         assert_eq!(selectable_index_at_or_after(&rows, 2), Some(3));
+     }
++
++    #[test]
++    fn test_actions_window_dynamic_height_matches_single_row_when_empty() {
++        let empty_height = actions_window_dynamic_height(0, 0, false, false);
++        let single_row_height = actions_window_dynamic_height(1, 0, false, false);
++
++        assert!(
++            (empty_height - single_row_height).abs() < 0.001,
++            "empty_height={empty_height}, single_row_height={single_row_height}"
++        );
++    }
++}
++
++#[inline]
++fn actions_window_dynamic_height(
++    num_actions: usize,
++    section_header_count: usize,
++    hide_search: bool,
++    has_header: bool,
++) -> f32 {
++    let search_box_height = if hide_search {
++        0.0
++    } else {
++        SEARCH_INPUT_HEIGHT
++    };
++    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
++    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
++    let min_items_height = if num_actions == 0 {
++        ACTION_ITEM_HEIGHT
++    } else {
++        0.0
++    };
++    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
++        .max(min_items_height)
++        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
++    let border_height = 2.0;
++    items_height + search_box_height + header_height + border_height
+ }
+ 
+ /// Open the actions window as a separate floating window with vibrancy
+@@ -96,17 +133,8 @@
+         0
+     };
+ 
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0; // top + bottom border
+-    let dynamic_height = items_height + search_box_height + header_height + border_height;
++    let dynamic_height =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+@@ -201,7 +229,7 @@
+     // internal state borrowed immediately after open_window returns.
+     #[cfg(target_os = "macos")]
+     {
+-        let _ = handle.update(cx, |_root, window, cx| {
++        let configure_result = handle.update(cx, |_root, window, cx| {
+             window.defer(cx, |_window, _cx| {
+                 use cocoa::appkit::NSApp;
+                 use cocoa::base::nil;
+@@ -225,6 +253,21 @@
+                 }
+             });
+         });
++
++        if let Err(error) = configure_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window update failed: operation=position_focus error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window context: display_id={display_id:?}, position={position:?}"
++                ),
++            );
++        }
+     }
+ 
+     // Store the handle globally
+@@ -245,9 +288,21 @@
+             if let Some(handle) = guard.take() {
+                 crate::logging::log("ACTIONS", "Closing actions popup window");
+                 // Close the window
+-                let _ = handle.update(cx, |_root, window, _cx| {
++                let close_result = handle.update(cx, |_root, window, _cx| {
+                     window.remove_window();
+                 });
++                if let Err(error) = close_result {
++                    crate::logging::log(
++                        "WARN",
++                        &format!(
++                            "ACTIONS_WINDOW_OP_FAIL close_actions_window update failed: operation=focus_cleanup error={error:?}"
++                        ),
++                    );
++                    crate::logging::log_debug(
++                        "ACTIONS",
++                        "ACTIONS_WINDOW_OP_FAIL close_actions_window context: remove_window requested",
++                    );
++                }
+             }
+         }
+     }
+@@ -276,8 +331,20 @@
+ /// Notify the actions window to re-render (call after updating dialog entity)
+ pub fn notify_actions_window(cx: &mut App) {
+     if let Some(handle) = get_actions_window_handle() {
+-        let _ = handle.update(cx, |_root, _window, cx| {
++        let notify_result = handle.update(cx, |_root, _window, cx| {
+             cx.notify();
+         });
++        if let Err(error) = notify_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL notify_actions_window update failed: operation=focus_refresh error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                "ACTIONS_WINDOW_OP_FAIL notify_actions_window context: cx.notify() skipped",
++            );
++        }
+     }
+ }
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index bad1fdea41cd0d16ad570998c34d5556bd10f106..f41d7a0a87c9d615abedbb73aa9a801a401a379d
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -27,25 +27,8 @@
+         0
+     };
+ 
+-    // Calculate new height
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    // When no actions, still need space for "No actions match" message (use 1 row height)
+-    let min_items_height = if num_actions == 0 {
+-        ACTION_ITEM_HEIGHT
+-    } else {
+-        0.0
+-    };
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .max(min_items_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
+-    let new_height_f32 = items_height + search_box_height + header_height + border_height;
++    let new_height_f32 =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -173,25 +156,8 @@
+             0
+         };
+ 
+-        // Calculate new height (same logic as open_actions_window)
+-        let search_box_height = if hide_search {
+-            0.0
+-        } else {
+-            SEARCH_INPUT_HEIGHT
+-        };
+-        let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-        let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-        // When no actions, still need space for "No actions match" message
+-        let min_items_height = if num_actions == 0 {
+-            ACTION_ITEM_HEIGHT
+-        } else {
+-            0.0
+-        };
+-        let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-            .max(min_items_height)
+-            .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-        let border_height = 2.0; // top + bottom border
+-        let new_height_f32 = items_height + search_box_height + header_height + border_height;
++        let new_height_f32 =
++            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+@@ -306,8 +272,20 @@
+             cx.notify();
+         });
+ 
+-        if let Err(e) = update_result {
+-            crate::logging::log("ACTIONS", &format!("handle.update FAILED: {:?}", e));
++        if let Err(error) = update_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window update failed: operation=resize error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window context: num_actions={}, hide_search={}, has_header={}, target_height={:.0}",
++                    num_actions, hide_search, has_header, new_height_f32
++                ),
++            );
+         }
+ 
+         crate::logging::log(
+
+
+thinking
+**Planning code quality checks**
+codex
+Patch is in place in both files. I’m quickly reviewing the diff for compile/lint issues, then I’ll run the required verification commands (`cargo check` and `cargo clippy --all-targets -- -D warnings`).
+exec
+/bin/zsh -lc 'git diff -- src/actions/window/part_02.rs src/actions/window/part_03.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 8eb0871..88d49fb 100644
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -46,6 +46,43 @@ mod tests {
+         assert_eq!(selectable_index_at_or_before(&rows, 2), Some(1));
+         assert_eq!(selectable_index_at_or_after(&rows, 2), Some(3));
+     }
++
++    #[test]
++    fn test_actions_window_dynamic_height_matches_single_row_when_empty() {
++        let empty_height = actions_window_dynamic_height(0, 0, false, false);
++        let single_row_height = actions_window_dynamic_height(1, 0, false, false);
++
++        assert!(
++            (empty_height - single_row_height).abs() < 0.001,
++            "empty_height={empty_height}, single_row_height={single_row_height}"
++        );
++    }
++}
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 8eb0871286d407f7fdf41e816217d0cb0513c0a4..88d49fb466d7c2641d69ef988d64957ff2803080
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -46,6 +46,43 @@
+         assert_eq!(selectable_index_at_or_before(&rows, 2), Some(1));
+         assert_eq!(selectable_index_at_or_after(&rows, 2), Some(3));
+     }
++
++    #[test]
++    fn test_actions_window_dynamic_height_matches_single_row_when_empty() {
++        let empty_height = actions_window_dynamic_height(0, 0, false, false);
++        let single_row_height = actions_window_dynamic_height(1, 0, false, false);
++
++        assert!(
++            (empty_height - single_row_height).abs() < 0.001,
++            "empty_height={empty_height}, single_row_height={single_row_height}"
++        );
++    }
++}
++
++#[inline]
++fn actions_window_dynamic_height(
++    num_actions: usize,
++    section_header_count: usize,
++    hide_search: bool,
++    has_header: bool,
++) -> f32 {
++    let search_box_height = if hide_search {
++        0.0
++    } else {
++        SEARCH_INPUT_HEIGHT
++    };
++    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
++    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
++    let min_items_height = if num_actions == 0 {
++        ACTION_ITEM_HEIGHT
++    } else {
++        0.0
++    };
++    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
++        .max(min_items_height)
++        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
++    let border_height = 2.0;
++    items_height + search_box_height + header_height + border_height
+ }
+ 
+ /// Open the actions window as a separate floating window with vibrancy
+@@ -96,17 +133,8 @@
+         0
+     };
+ 
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0; // top + bottom border
+-    let dynamic_height = items_height + search_box_height + header_height + border_height;
++    let dynamic_height =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+@@ -201,7 +229,7 @@
+     // internal state borrowed immediately after open_window returns.
+     #[cfg(target_os = "macos")]
+     {
+-        let _ = handle.update(cx, |_root, window, cx| {
++        let configure_result = handle.update(cx, |_root, window, cx| {
+             window.defer(cx, |_window, _cx| {
+                 use cocoa::appkit::NSApp;
+                 use cocoa::base::nil;
+@@ -225,6 +253,21 @@
+                 }
+             });
+         });
++
++        if let Err(error) = configure_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window update failed: operation=position_focus error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window context: display_id={display_id:?}, position={position:?}"
++                ),
++            );
++        }
+     }
+ 
+     // Store the handle globally
+@@ -245,9 +288,21 @@
+             if let Some(handle) = guard.take() {
+                 crate::logging::log("ACTIONS", "Closing actions popup window");
+                 // Close the window
+-                let _ = handle.update(cx, |_root, window, _cx| {
++                let close_result = handle.update(cx, |_root, window, _cx| {
+                     window.remove_window();
+                 });
++                if let Err(error) = close_result {
++                    crate::logging::log(
++                        "WARN",
++                        &format!(
++                            "ACTIONS_WINDOW_OP_FAIL close_actions_window update failed: operation=focus_cleanup error={error:?}"
++                        ),
++                    );
++                    crate::logging::log_debug(
++                        "ACTIONS",
++                        "ACTIONS_WINDOW_OP_FAIL close_actions_window context: remove_window requested",
++                    );
++                }
+             }
+         }
+     }
+@@ -276,8 +331,20 @@
+ /// Notify the actions window to re-render (call after updating dialog entity)
+ pub fn notify_actions_window(cx: &mut App) {
+     if let Some(handle) = get_actions_window_handle() {
+-        let _ = handle.update(cx, |_root, _window, cx| {
++        let notify_result = handle.update(cx, |_root, _window, cx| {
+             cx.notify();
+         });
++        if let Err(error) = notify_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL notify_actions_window update failed: operation=focus_refresh error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                "ACTIONS_WINDOW_OP_FAIL notify_actions_window context: cx.notify() skipped",
++            );
++        }
+     }
+ }
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index bad1fdea41cd0d16ad570998c34d5556bd10f106..f41d7a0a87c9d615abedbb73aa9a801a401a379d
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -27,25 +27,8 @@
+         0
+     };
+ 
+-    // Calculate new height
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    // When no actions, still need space for "No actions match" message (use 1 row height)
+-    let min_items_height = if num_actions == 0 {
+-        ACTION_ITEM_HEIGHT
+-    } else {
+-        0.0
+-    };
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .max(min_items_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
+-    let new_height_f32 = items_height + search_box_height + header_height + border_height;
++    let new_height_f32 =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -173,25 +156,8 @@
+             0
+         };
+ 
+-        // Calculate new height (same logic as open_actions_window)
+-        let search_box_height = if hide_search {
+-            0.0
+-        } else {
+-            SEARCH_INPUT_HEIGHT
+-        };
+-        let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-        let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-        // When no actions, still need space for "No actions match" message
+-        let min_items_height = if num_actions == 0 {
+-            ACTION_ITEM_HEIGHT
+-        } else {
+-            0.0
+-        };
+-        let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-            .max(min_items_height)
+-            .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-        let border_height = 2.0; // top + bottom border
+-        let new_height_f32 = items_height + search_box_height + header_height + border_height;
++        let new_height_f32 =
++            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+@@ -306,8 +272,20 @@
+             cx.notify();
+         });
+ 
+-        if let Err(e) = update_result {
+-            crate::logging::log("ACTIONS", &format!("handle.update FAILED: {:?}", e));
++        if let Err(error) = update_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window update failed: operation=resize error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window context: num_actions={}, hide_search={}, has_header={}, target_height={:.0}",
++                    num_actions, hide_search, has_header, new_height_f32
++                ),
++            );
+         }
+ 
+         crate::logging::log(
+
+
+thinking
+**Planning targeted test run**
+codex
+The diff looks consistent. I’m running a scoped unit test for the new empty-height behavior first, then the required `cargo check` and `cargo clippy --all-targets -- -D warnings`.
+exec
+/bin/zsh -lc 'cargo test test_actions_window_dynamic_height_matches_single_row_when_empty -- --nocapture' in /Users/johnlindquist/dev/script-kit-gpui exited 101 in 18.73s:
+   Compiling script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+error[E0761]: file for module `tests` found at both "src/protocol/message/tests.rs" and "src/protocol/message/tests/mod.rs"
+  --> src/protocol/message/mod.rs:87:1
+   |
+87 | mod tests;
+   | ^^^^^^^^^^
+   |
+   = help: delete or rename one of them to remove the ambiguity
+
+error[E0761]: file for module `tests` found at both "src/designs/core/tests.rs" and "src/designs/core/tests/mod.rs"
+ --> src/designs/core/part_04.rs:2:1
+  |
+2 | mod tests;
+  | ^^^^^^^^^^
+  |
+  = help: delete or rename one of them to remove the ambiguity
+
+warning: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:32:16
+   |
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 8eb0871286d407f7fdf41e816217d0cb0513c0a4..88d49fb466d7c2641d69ef988d64957ff2803080
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -46,6 +46,43 @@
+         assert_eq!(selectable_index_at_or_before(&rows, 2), Some(1));
+         assert_eq!(selectable_index_at_or_after(&rows, 2), Some(3));
+     }
++
++    #[test]
++    fn test_actions_window_dynamic_height_matches_single_row_when_empty() {
++        let empty_height = actions_window_dynamic_height(0, 0, false, false);
++        let single_row_height = actions_window_dynamic_height(1, 0, false, false);
++
++        assert!(
++            (empty_height - single_row_height).abs() < 0.001,
++            "empty_height={empty_height}, single_row_height={single_row_height}"
++        );
++    }
++}
++
++#[inline]
++fn actions_window_dynamic_height(
++    num_actions: usize,
++    section_header_count: usize,
++    hide_search: bool,
++    has_header: bool,
++) -> f32 {
++    let search_box_height = if hide_search {
++        0.0
++    } else {
++        SEARCH_INPUT_HEIGHT
++    };
++    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
++    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
++    let min_items_height = if num_actions == 0 {
++        ACTION_ITEM_HEIGHT
++    } else {
++        0.0
++    };
++    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
++        .max(min_items_height)
++        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
++    let border_height = 2.0;
++    items_height + search_box_height + header_height + border_height
+ }
+ 
+ /// Open the actions window as a separate floating window with vibrancy
+@@ -96,17 +133,8 @@
+         0
+     };
+ 
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0; // top + bottom border
+-    let dynamic_height = items_height + search_box_height + header_height + border_height;
++    let dynamic_height =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+@@ -201,7 +229,7 @@
+     // internal state borrowed immediately after open_window returns.
+     #[cfg(target_os = "macos")]
+     {
+-        let _ = handle.update(cx, |_root, window, cx| {
++        let configure_result = handle.update(cx, |_root, window, cx| {
+             window.defer(cx, |_window, _cx| {
+                 use cocoa::appkit::NSApp;
+                 use cocoa::base::nil;
+@@ -225,6 +253,21 @@
+                 }
+             });
+         });
++
++        if let Err(error) = configure_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window update failed: operation=position_focus error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window context: display_id={display_id:?}, position={position:?}"
++                ),
++            );
++        }
+     }
+ 
+     // Store the handle globally
+@@ -245,9 +288,21 @@
+             if let Some(handle) = guard.take() {
+                 crate::logging::log("ACTIONS", "Closing actions popup window");
+                 // Close the window
+-                let _ = handle.update(cx, |_root, window, _cx| {
++                let close_result = handle.update(cx, |_root, window, _cx| {
+                     window.remove_window();
+                 });
++                if let Err(error) = close_result {
++                    crate::logging::log(
++                        "WARN",
++                        &format!(
++                            "ACTIONS_WINDOW_OP_FAIL close_actions_window update failed: operation=focus_cleanup error={error:?}"
++                        ),
++                    );
++                    crate::logging::log_debug(
++                        "ACTIONS",
++                        "ACTIONS_WINDOW_OP_FAIL close_actions_window context: remove_window requested",
++                    );
++                }
+             }
+         }
+     }
+@@ -276,8 +331,20 @@
+ /// Notify the actions window to re-render (call after updating dialog entity)
+ pub fn notify_actions_window(cx: &mut App) {
+     if let Some(handle) = get_actions_window_handle() {
+-        let _ = handle.update(cx, |_root, _window, cx| {
++        let notify_result = handle.update(cx, |_root, _window, cx| {
+             cx.notify();
+         });
++        if let Err(error) = notify_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL notify_actions_window update failed: operation=focus_refresh error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                "ACTIONS_WINDOW_OP_FAIL notify_actions_window context: cx.notify() skipped",
++            );
++        }
+     }
+ }
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index bad1fdea41cd0d16ad570998c34d5556bd10f106..f41d7a0a87c9d615abedbb73aa9a801a401a379d
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -27,25 +27,8 @@
+         0
+     };
+ 
+-    // Calculate new height
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    // When no actions, still need space for "No actions match" message (use 1 row height)
+-    let min_items_height = if num_actions == 0 {
+-        ACTION_ITEM_HEIGHT
+-    } else {
+-        0.0
+-    };
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .max(min_items_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
+-    let new_height_f32 = items_height + search_box_height + header_height + border_height;
++    let new_height_f32 =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -173,25 +156,8 @@
+             0
+         };
+ 
+-        // Calculate new height (same logic as open_actions_window)
+-        let search_box_height = if hide_search {
+-            0.0
+-        } else {
+-            SEARCH_INPUT_HEIGHT
+-        };
+-        let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-        let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-        // When no actions, still need space for "No actions match" message
+-        let min_items_height = if num_actions == 0 {
+-            ACTION_ITEM_HEIGHT
+-        } else {
+-            0.0
+-        };
+-        let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-            .max(min_items_height)
+-            .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-        let border_height = 2.0; // top + bottom border
+-        let new_height_f32 = items_height + search_box_height + header_height + border_height;
++        let new_height_f32 =
++            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+@@ -306,8 +272,20 @@
+             cx.notify();
+         });
+ 
+-        if let Err(e) = update_result {
+-            crate::logging::log("ACTIONS", &format!("handle.update FAILED: {:?}", e));
++        if let Err(error) = update_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window update failed: operation=resize error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window context: num_actions={}, hide_search={}, has_header={}, target_height={:.0}",
++                    num_actions, hide_search, has_header, new_height_f32
++                ),
++            );
+         }
+ 
+         crate::logging::log(
+
+
+thinking
+**Running cargo checks despite errors**
+exec
+/bin/zsh -lc 'cargo check' in /Users/johnlindquist/dev/script-kit-gpui exited 101 in 9.88s:
+    Checking script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+warning: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:32:16
+   |
+32 | pub(super) use inline::*;
+   |                ^^^^^^^^^
+   |
+note: the most public imported item is `pub(self)`
+  --> src/prompts/div/mod.rs:32:16
+   |
+32 | pub(super) use inline::*;
+   |                ^^^^^^^^^
+   = help: reduce the glob import's visibility or increase visibility of imported items
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:34:16
+   |
+34 | pub(super) use render_html::*;
+   |                ^^^^^^^^^^^^^^
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 8eb0871286d407f7fdf41e816217d0cb0513c0a4..88d49fb466d7c2641d69ef988d64957ff2803080
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -46,6 +46,43 @@
+         assert_eq!(selectable_index_at_or_before(&rows, 2), Some(1));
+         assert_eq!(selectable_index_at_or_after(&rows, 2), Some(3));
+     }
++
++    #[test]
++    fn test_actions_window_dynamic_height_matches_single_row_when_empty() {
++        let empty_height = actions_window_dynamic_height(0, 0, false, false);
++        let single_row_height = actions_window_dynamic_height(1, 0, false, false);
++
++        assert!(
++            (empty_height - single_row_height).abs() < 0.001,
++            "empty_height={empty_height}, single_row_height={single_row_height}"
++        );
++    }
++}
++
++#[inline]
++fn actions_window_dynamic_height(
++    num_actions: usize,
++    section_header_count: usize,
++    hide_search: bool,
++    has_header: bool,
++) -> f32 {
++    let search_box_height = if hide_search {
++        0.0
++    } else {
++        SEARCH_INPUT_HEIGHT
++    };
++    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
++    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
++    let min_items_height = if num_actions == 0 {
++        ACTION_ITEM_HEIGHT
++    } else {
++        0.0
++    };
++    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
++        .max(min_items_height)
++        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
++    let border_height = 2.0;
++    items_height + search_box_height + header_height + border_height
+ }
+ 
+ /// Open the actions window as a separate floating window with vibrancy
+@@ -96,17 +133,8 @@
+         0
+     };
+ 
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0; // top + bottom border
+-    let dynamic_height = items_height + search_box_height + header_height + border_height;
++    let dynamic_height =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+@@ -201,7 +229,7 @@
+     // internal state borrowed immediately after open_window returns.
+     #[cfg(target_os = "macos")]
+     {
+-        let _ = handle.update(cx, |_root, window, cx| {
++        let configure_result = handle.update(cx, |_root, window, cx| {
+             window.defer(cx, |_window, _cx| {
+                 use cocoa::appkit::NSApp;
+                 use cocoa::base::nil;
+@@ -225,6 +253,21 @@
+                 }
+             });
+         });
++
++        if let Err(error) = configure_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window update failed: operation=position_focus error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window context: display_id={display_id:?}, position={position:?}"
++                ),
++            );
++        }
+     }
+ 
+     // Store the handle globally
+@@ -245,9 +288,21 @@
+             if let Some(handle) = guard.take() {
+                 crate::logging::log("ACTIONS", "Closing actions popup window");
+                 // Close the window
+-                let _ = handle.update(cx, |_root, window, _cx| {
++                let close_result = handle.update(cx, |_root, window, _cx| {
+                     window.remove_window();
+                 });
++                if let Err(error) = close_result {
++                    crate::logging::log(
++                        "WARN",
++                        &format!(
++                            "ACTIONS_WINDOW_OP_FAIL close_actions_window update failed: operation=focus_cleanup error={error:?}"
++                        ),
++                    );
++                    crate::logging::log_debug(
++                        "ACTIONS",
++                        "ACTIONS_WINDOW_OP_FAIL close_actions_window context: remove_window requested",
++                    );
++                }
+             }
+         }
+     }
+@@ -276,8 +331,20 @@
+ /// Notify the actions window to re-render (call after updating dialog entity)
+ pub fn notify_actions_window(cx: &mut App) {
+     if let Some(handle) = get_actions_window_handle() {
+-        let _ = handle.update(cx, |_root, _window, cx| {
++        let notify_result = handle.update(cx, |_root, _window, cx| {
+             cx.notify();
+         });
++        if let Err(error) = notify_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL notify_actions_window update failed: operation=focus_refresh error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                "ACTIONS_WINDOW_OP_FAIL notify_actions_window context: cx.notify() skipped",
++            );
++        }
+     }
+ }
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index bad1fdea41cd0d16ad570998c34d5556bd10f106..f41d7a0a87c9d615abedbb73aa9a801a401a379d
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -27,25 +27,8 @@
+         0
+     };
+ 
+-    // Calculate new height
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    // When no actions, still need space for "No actions match" message (use 1 row height)
+-    let min_items_height = if num_actions == 0 {
+-        ACTION_ITEM_HEIGHT
+-    } else {
+-        0.0
+-    };
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .max(min_items_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
+-    let new_height_f32 = items_height + search_box_height + header_height + border_height;
++    let new_height_f32 =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -173,25 +156,8 @@
+             0
+         };
+ 
+-        // Calculate new height (same logic as open_actions_window)
+-        let search_box_height = if hide_search {
+-            0.0
+-        } else {
+-            SEARCH_INPUT_HEIGHT
+-        };
+-        let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-        let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-        // When no actions, still need space for "No actions match" message
+-        let min_items_height = if num_actions == 0 {
+-            ACTION_ITEM_HEIGHT
+-        } else {
+-            0.0
+-        };
+-        let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-            .max(min_items_height)
+-            .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-        let border_height = 2.0; // top + bottom border
+-        let new_height_f32 = items_height + search_box_height + header_height + border_height;
++        let new_height_f32 =
++            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+@@ -306,8 +272,20 @@
+             cx.notify();
+         });
+ 
+-        if let Err(e) = update_result {
+-            crate::logging::log("ACTIONS", &format!("handle.update FAILED: {:?}", e));
++        if let Err(error) = update_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window update failed: operation=resize error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window context: num_actions={}, hide_search={}, has_header={}, target_height={:.0}",
++                    num_actions, hide_search, has_header, new_height_f32
++                ),
++            );
+         }
+ 
+         crate::logging::log(
+
+
+thinking
+**Running lint checks**
+exec
+/bin/zsh -lc 'cargo clippy --all-targets -- -D warnings' in /Users/johnlindquist/dev/script-kit-gpui exited 101 in 18.55s:
+    Checking script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+error[E0761]: file for module `tests` found at both "src/protocol/message/tests.rs" and "src/protocol/message/tests/mod.rs"
+  --> src/protocol/message/mod.rs:87:1
+   |
+87 | mod tests;
+   | ^^^^^^^^^^
+   |
+   = help: delete or rename one of them to remove the ambiguity
+
+error[E0761]: file for module `tests` found at both "src/designs/core/tests.rs" and "src/designs/core/tests/mod.rs"
+ --> src/designs/core/part_04.rs:2:1
+  |
+2 | mod tests;
+  | ^^^^^^^^^^
+  |
+  = help: delete or rename one of them to remove the ambiguity
+
+error: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:32:16
+   |
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 8eb0871286d407f7fdf41e816217d0cb0513c0a4..88d49fb466d7c2641d69ef988d64957ff2803080
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -46,6 +46,43 @@
+         assert_eq!(selectable_index_at_or_before(&rows, 2), Some(1));
+         assert_eq!(selectable_index_at_or_after(&rows, 2), Some(3));
+     }
++
++    #[test]
++    fn test_actions_window_dynamic_height_matches_single_row_when_empty() {
++        let empty_height = actions_window_dynamic_height(0, 0, false, false);
++        let single_row_height = actions_window_dynamic_height(1, 0, false, false);
++
++        assert!(
++            (empty_height - single_row_height).abs() < 0.001,
++            "empty_height={empty_height}, single_row_height={single_row_height}"
++        );
++    }
++}
++
++#[inline]
++fn actions_window_dynamic_height(
++    num_actions: usize,
++    section_header_count: usize,
++    hide_search: bool,
++    has_header: bool,
++) -> f32 {
++    let search_box_height = if hide_search {
++        0.0
++    } else {
++        SEARCH_INPUT_HEIGHT
++    };
++    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
++    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
++    let min_items_height = if num_actions == 0 {
++        ACTION_ITEM_HEIGHT
++    } else {
++        0.0
++    };
++    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
++        .max(min_items_height)
++        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
++    let border_height = 2.0;
++    items_height + search_box_height + header_height + border_height
+ }
+ 
+ /// Open the actions window as a separate floating window with vibrancy
+@@ -96,17 +133,8 @@
+         0
+     };
+ 
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0; // top + bottom border
+-    let dynamic_height = items_height + search_box_height + header_height + border_height;
++    let dynamic_height =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+@@ -201,7 +229,7 @@
+     // internal state borrowed immediately after open_window returns.
+     #[cfg(target_os = "macos")]
+     {
+-        let _ = handle.update(cx, |_root, window, cx| {
++        let configure_result = handle.update(cx, |_root, window, cx| {
+             window.defer(cx, |_window, _cx| {
+                 use cocoa::appkit::NSApp;
+                 use cocoa::base::nil;
+@@ -225,6 +253,21 @@
+                 }
+             });
+         });
++
++        if let Err(error) = configure_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window update failed: operation=position_focus error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window context: display_id={display_id:?}, position={position:?}"
++                ),
++            );
++        }
+     }
+ 
+     // Store the handle globally
+@@ -245,9 +288,21 @@
+             if let Some(handle) = guard.take() {
+                 crate::logging::log("ACTIONS", "Closing actions popup window");
+                 // Close the window
+-                let _ = handle.update(cx, |_root, window, _cx| {
++                let close_result = handle.update(cx, |_root, window, _cx| {
+                     window.remove_window();
+                 });
++                if let Err(error) = close_result {
++                    crate::logging::log(
++                        "WARN",
++                        &format!(
++                            "ACTIONS_WINDOW_OP_FAIL close_actions_window update failed: operation=focus_cleanup error={error:?}"
++                        ),
++                    );
++                    crate::logging::log_debug(
++                        "ACTIONS",
++                        "ACTIONS_WINDOW_OP_FAIL close_actions_window context: remove_window requested",
++                    );
++                }
+             }
+         }
+     }
+@@ -276,8 +331,20 @@
+ /// Notify the actions window to re-render (call after updating dialog entity)
+ pub fn notify_actions_window(cx: &mut App) {
+     if let Some(handle) = get_actions_window_handle() {
+-        let _ = handle.update(cx, |_root, _window, cx| {
++        let notify_result = handle.update(cx, |_root, _window, cx| {
+             cx.notify();
+         });
++        if let Err(error) = notify_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL notify_actions_window update failed: operation=focus_refresh error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                "ACTIONS_WINDOW_OP_FAIL notify_actions_window context: cx.notify() skipped",
++            );
++        }
+     }
+ }
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index bad1fdea41cd0d16ad570998c34d5556bd10f106..f41d7a0a87c9d615abedbb73aa9a801a401a379d
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -27,25 +27,8 @@
+         0
+     };
+ 
+-    // Calculate new height
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    // When no actions, still need space for "No actions match" message (use 1 row height)
+-    let min_items_height = if num_actions == 0 {
+-        ACTION_ITEM_HEIGHT
+-    } else {
+-        0.0
+-    };
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .max(min_items_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
+-    let new_height_f32 = items_height + search_box_height + header_height + border_height;
++    let new_height_f32 =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -173,25 +156,8 @@
+             0
+         };
+ 
+-        // Calculate new height (same logic as open_actions_window)
+-        let search_box_height = if hide_search {
+-            0.0
+-        } else {
+-            SEARCH_INPUT_HEIGHT
+-        };
+-        let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-        let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-        // When no actions, still need space for "No actions match" message
+-        let min_items_height = if num_actions == 0 {
+-            ACTION_ITEM_HEIGHT
+-        } else {
+-            0.0
+-        };
+-        let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-            .max(min_items_height)
+-            .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-        let border_height = 2.0; // top + bottom border
+-        let new_height_f32 = items_height + search_box_height + header_height + border_height;
++        let new_height_f32 =
++            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+@@ -306,8 +272,20 @@
+             cx.notify();
+         });
+ 
+-        if let Err(e) = update_result {
+-            crate::logging::log("ACTIONS", &format!("handle.update FAILED: {:?}", e));
++        if let Err(error) = update_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window update failed: operation=resize error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window context: num_actions={}, hide_search={}, has_header={}, target_height={:.0}",
++                    num_actions, hide_search, has_header, new_height_f32
++                ),
++            );
+         }
+ 
+         crate::logging::log(
+
+
+thinking
+**Confirming no syntax errors**
+exec
+/bin/zsh -lc "cargo check --message-format short 2>&1 | rg \"src/actions/window/part_0[23]\\.rs\"" in /Users/johnlindquist/dev/script-kit-gpui exited 1 in 9.63s:
+
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 8eb0871286d407f7fdf41e816217d0cb0513c0a4..88d49fb466d7c2641d69ef988d64957ff2803080
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -46,6 +46,43 @@
+         assert_eq!(selectable_index_at_or_before(&rows, 2), Some(1));
+         assert_eq!(selectable_index_at_or_after(&rows, 2), Some(3));
+     }
++
++    #[test]
++    fn test_actions_window_dynamic_height_matches_single_row_when_empty() {
++        let empty_height = actions_window_dynamic_height(0, 0, false, false);
++        let single_row_height = actions_window_dynamic_height(1, 0, false, false);
++
++        assert!(
++            (empty_height - single_row_height).abs() < 0.001,
++            "empty_height={empty_height}, single_row_height={single_row_height}"
++        );
++    }
++}
++
++#[inline]
++fn actions_window_dynamic_height(
++    num_actions: usize,
++    section_header_count: usize,
++    hide_search: bool,
++    has_header: bool,
++) -> f32 {
++    let search_box_height = if hide_search {
++        0.0
++    } else {
++        SEARCH_INPUT_HEIGHT
++    };
++    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
++    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
++    let min_items_height = if num_actions == 0 {
++        ACTION_ITEM_HEIGHT
++    } else {
++        0.0
++    };
++    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
++        .max(min_items_height)
++        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
++    let border_height = 2.0;
++    items_height + search_box_height + header_height + border_height
+ }
+ 
+ /// Open the actions window as a separate floating window with vibrancy
+@@ -96,17 +133,8 @@
+         0
+     };
+ 
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0; // top + bottom border
+-    let dynamic_height = items_height + search_box_height + header_height + border_height;
++    let dynamic_height =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+@@ -201,7 +229,7 @@
+     // internal state borrowed immediately after open_window returns.
+     #[cfg(target_os = "macos")]
+     {
+-        let _ = handle.update(cx, |_root, window, cx| {
++        let configure_result = handle.update(cx, |_root, window, cx| {
+             window.defer(cx, |_window, _cx| {
+                 use cocoa::appkit::NSApp;
+                 use cocoa::base::nil;
+@@ -225,6 +253,21 @@
+                 }
+             });
+         });
++
++        if let Err(error) = configure_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window update failed: operation=position_focus error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window context: display_id={display_id:?}, position={position:?}"
++                ),
++            );
++        }
+     }
+ 
+     // Store the handle globally
+@@ -245,9 +288,21 @@
+             if let Some(handle) = guard.take() {
+                 crate::logging::log("ACTIONS", "Closing actions popup window");
+                 // Close the window
+-                let _ = handle.update(cx, |_root, window, _cx| {
++                let close_result = handle.update(cx, |_root, window, _cx| {
+                     window.remove_window();
+                 });
++                if let Err(error) = close_result {
++                    crate::logging::log(
++                        "WARN",
++                        &format!(
++                            "ACTIONS_WINDOW_OP_FAIL close_actions_window update failed: operation=focus_cleanup error={error:?}"
++                        ),
++                    );
++                    crate::logging::log_debug(
++                        "ACTIONS",
++                        "ACTIONS_WINDOW_OP_FAIL close_actions_window context: remove_window requested",
++                    );
++                }
+             }
+         }
+     }
+@@ -276,8 +331,20 @@
+ /// Notify the actions window to re-render (call after updating dialog entity)
+ pub fn notify_actions_window(cx: &mut App) {
+     if let Some(handle) = get_actions_window_handle() {
+-        let _ = handle.update(cx, |_root, _window, cx| {
++        let notify_result = handle.update(cx, |_root, _window, cx| {
+             cx.notify();
+         });
++        if let Err(error) = notify_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL notify_actions_window update failed: operation=focus_refresh error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                "ACTIONS_WINDOW_OP_FAIL notify_actions_window context: cx.notify() skipped",
++            );
++        }
+     }
+ }
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index bad1fdea41cd0d16ad570998c34d5556bd10f106..f41d7a0a87c9d615abedbb73aa9a801a401a379d
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -27,25 +27,8 @@
+         0
+     };
+ 
+-    // Calculate new height
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    // When no actions, still need space for "No actions match" message (use 1 row height)
+-    let min_items_height = if num_actions == 0 {
+-        ACTION_ITEM_HEIGHT
+-    } else {
+-        0.0
+-    };
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .max(min_items_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
+-    let new_height_f32 = items_height + search_box_height + header_height + border_height;
++    let new_height_f32 =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -173,25 +156,8 @@
+             0
+         };
+ 
+-        // Calculate new height (same logic as open_actions_window)
+-        let search_box_height = if hide_search {
+-            0.0
+-        } else {
+-            SEARCH_INPUT_HEIGHT
+-        };
+-        let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-        let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-        // When no actions, still need space for "No actions match" message
+-        let min_items_height = if num_actions == 0 {
+-            ACTION_ITEM_HEIGHT
+-        } else {
+-            0.0
+-        };
+-        let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-            .max(min_items_height)
+-            .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-        let border_height = 2.0; // top + bottom border
+-        let new_height_f32 = items_height + search_box_height + header_height + border_height;
++        let new_height_f32 =
++            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+@@ -306,8 +272,20 @@
+             cx.notify();
+         });
+ 
+-        if let Err(e) = update_result {
+-            crate::logging::log("ACTIONS", &format!("handle.update FAILED: {:?}", e));
++        if let Err(error) = update_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window update failed: operation=resize error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window context: num_actions={}, hide_search={}, has_header={}, target_height={:.0}",
++                    num_actions, hide_search, has_header, new_height_f32
++                ),
++            );
+         }
+ 
+         crate::logging::log(
+
+
+thinking
+**Deciding commit strategy amid verification issues**
+codex
+I ran the required verification commands; they failed due pre-existing workspace issues outside this task’s scope. I’m now checking that only the intended files changed, then I’ll release claims and post final results with exact failure context.
+exec
+/bin/zsh -lc 'git status --short src/actions/window/part_02.rs src/actions/window/part_03.rs && git diff --stat src/actions/window/part_02.rs src/actions/window/part_03.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+ M src/actions/window/part_02.rs
+ M src/actions/window/part_03.rs
+ src/actions/window/part_02.rs | 95 ++++++++++++++++++++++++++++++++++++-------
+ src/actions/window/part_03.rs | 58 ++++++++------------------
+ 2 files changed, 99 insertions(+), 54 deletions(-)
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 8eb0871286d407f7fdf41e816217d0cb0513c0a4..88d49fb466d7c2641d69ef988d64957ff2803080
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -46,6 +46,43 @@
+         assert_eq!(selectable_index_at_or_before(&rows, 2), Some(1));
+         assert_eq!(selectable_index_at_or_after(&rows, 2), Some(3));
+     }
++
++    #[test]
++    fn test_actions_window_dynamic_height_matches_single_row_when_empty() {
++        let empty_height = actions_window_dynamic_height(0, 0, false, false);
++        let single_row_height = actions_window_dynamic_height(1, 0, false, false);
++
++        assert!(
++            (empty_height - single_row_height).abs() < 0.001,
++            "empty_height={empty_height}, single_row_height={single_row_height}"
++        );
++    }
++}
++
++#[inline]
++fn actions_window_dynamic_height(
++    num_actions: usize,
++    section_header_count: usize,
++    hide_search: bool,
++    has_header: bool,
++) -> f32 {
++    let search_box_height = if hide_search {
++        0.0
++    } else {
++        SEARCH_INPUT_HEIGHT
++    };
++    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
++    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
++    let min_items_height = if num_actions == 0 {
++        ACTION_ITEM_HEIGHT
++    } else {
++        0.0
++    };
++    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
++        .max(min_items_height)
++        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
++    let border_height = 2.0;
++    items_height + search_box_height + header_height + border_height
+ }
+ 
+ /// Open the actions window as a separate floating window with vibrancy
+@@ -96,17 +133,8 @@
+         0
+     };
+ 
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0; // top + bottom border
+-    let dynamic_height = items_height + search_box_height + header_height + border_height;
++    let dynamic_height =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+@@ -201,7 +229,7 @@
+     // internal state borrowed immediately after open_window returns.
+     #[cfg(target_os = "macos")]
+     {
+-        let _ = handle.update(cx, |_root, window, cx| {
++        let configure_result = handle.update(cx, |_root, window, cx| {
+             window.defer(cx, |_window, _cx| {
+                 use cocoa::appkit::NSApp;
+                 use cocoa::base::nil;
+@@ -225,6 +253,21 @@
+                 }
+             });
+         });
++
++        if let Err(error) = configure_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window update failed: operation=position_focus error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window context: display_id={display_id:?}, position={position:?}"
++                ),
++            );
++        }
+     }
+ 
+     // Store the handle globally
+@@ -245,9 +288,21 @@
+             if let Some(handle) = guard.take() {
+                 crate::logging::log("ACTIONS", "Closing actions popup window");
+                 // Close the window
+-                let _ = handle.update(cx, |_root, window, _cx| {
++                let close_result = handle.update(cx, |_root, window, _cx| {
+                     window.remove_window();
+                 });
++                if let Err(error) = close_result {
++                    crate::logging::log(
++                        "WARN",
++                        &format!(
++                            "ACTIONS_WINDOW_OP_FAIL close_actions_window update failed: operation=focus_cleanup error={error:?}"
++                        ),
++                    );
++                    crate::logging::log_debug(
++                        "ACTIONS",
++                        "ACTIONS_WINDOW_OP_FAIL close_actions_window context: remove_window requested",
++                    );
++                }
+             }
+         }
+     }
+@@ -276,8 +331,20 @@
+ /// Notify the actions window to re-render (call after updating dialog entity)
+ pub fn notify_actions_window(cx: &mut App) {
+     if let Some(handle) = get_actions_window_handle() {
+-        let _ = handle.update(cx, |_root, _window, cx| {
++        let notify_result = handle.update(cx, |_root, _window, cx| {
+             cx.notify();
+         });
++        if let Err(error) = notify_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL notify_actions_window update failed: operation=focus_refresh error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                "ACTIONS_WINDOW_OP_FAIL notify_actions_window context: cx.notify() skipped",
++            );
++        }
+     }
+ }
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index bad1fdea41cd0d16ad570998c34d5556bd10f106..f41d7a0a87c9d615abedbb73aa9a801a401a379d
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -27,25 +27,8 @@
+         0
+     };
+ 
+-    // Calculate new height
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    // When no actions, still need space for "No actions match" message (use 1 row height)
+-    let min_items_height = if num_actions == 0 {
+-        ACTION_ITEM_HEIGHT
+-    } else {
+-        0.0
+-    };
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .max(min_items_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
+-    let new_height_f32 = items_height + search_box_height + header_height + border_height;
++    let new_height_f32 =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -173,25 +156,8 @@
+             0
+         };
+ 
+-        // Calculate new height (same logic as open_actions_window)
+-        let search_box_height = if hide_search {
+-            0.0
+-        } else {
+-            SEARCH_INPUT_HEIGHT
+-        };
+-        let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-        let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-        // When no actions, still need space for "No actions match" message
+-        let min_items_height = if num_actions == 0 {
+-            ACTION_ITEM_HEIGHT
+-        } else {
+-            0.0
+-        };
+-        let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-            .max(min_items_height)
+-            .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-        let border_height = 2.0; // top + bottom border
+-        let new_height_f32 = items_height + search_box_height + header_height + border_height;
++        let new_height_f32 =
++            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+@@ -306,8 +272,20 @@
+             cx.notify();
+         });
+ 
+-        if let Err(e) = update_result {
+-            crate::logging::log("ACTIONS", &format!("handle.update FAILED: {:?}", e));
++        if let Err(error) = update_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window update failed: operation=resize error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window context: num_actions={}, hide_search={}, has_header={}, target_height={:.0}",
++                    num_actions, hide_search, has_header, new_height_f32
++                ),
++            );
+         }
+ 
+         crate::logging::log(
+
+
+thinking
+**Verifying final line references**
+exec
+/bin/zsh -lc "nl -ba src/actions/window/part_02.rs | sed -n '1,230p'" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "nl -ba src/actions/window/part_02.rs | sed -n '230,390p'" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "nl -ba src/actions/window/part_03.rs | sed -n '1,340p'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+     1	#[cfg(test)]
+     2	mod tests {
+     3	    use super::*;
+     4	
+     5	    #[test]
+     6	    fn test_actions_window_key_intent_supports_aliases_and_jump_keys() {
+     7	        let no_mods = gpui::Modifiers::default();
+     8	
+     9	        assert_eq!(
+    10	            actions_window_key_intent("return", &no_mods),
+    11	            Some(ActionsWindowKeyIntent::ExecuteSelected)
+    12	        );
+    13	        assert_eq!(
+    14	            actions_window_key_intent("esc", &no_mods),
+    15	            Some(ActionsWindowKeyIntent::Close)
+    16	        );
+    17	        assert_eq!(
+    18	            actions_window_key_intent("home", &no_mods),
+    19	            Some(ActionsWindowKeyIntent::MoveHome)
+    20	        );
+ succeeded in 52ms:
+   230	    #[cfg(target_os = "macos")]
+   231	    {
+   232	        let configure_result = handle.update(cx, |_root, window, cx| {
+   233	            window.defer(cx, |_window, _cx| {
+   234	                use cocoa::appkit::NSApp;
+   235	                use cocoa::base::nil;
+   236	                use objc::{msg_send, sel, sel_impl};
+   237	
+   238	                // Get the NSWindow from the app's windows array
+   239	                // The popup window should be the most recently created one
+   240	                unsafe {
+   241	                    let app: cocoa::base::id = NSApp();
+   242	                    let windows: cocoa::base::id = msg_send![app, windows];
+   243	                    let count: usize = msg_send![windows, count];
+   244	                    if count > 0 {
+   245	                        // Get the last window (most recently created)
+   246	                        let ns_window: cocoa::base::id = msg_send![windows, lastObject];
+   247	                        if ns_window != nil {
+   248	                            let theme = crate::theme::load_theme();
+   249	                            let is_dark = theme.should_use_dark_vibrancy();
+ succeeded in 51ms:
+     1	
+     2	/// Resize the actions window directly using the window reference
+     3	/// Use this from defer callbacks where we already have access to the window
+     4	pub fn resize_actions_window_direct(
+     5	    window: &mut Window,
+     6	    cx: &mut App,
+     7	    dialog_entity: &Entity<ActionsDialog>,
+     8	) {
+     9	    // Read dialog state to calculate new height
+    10	    let dialog = dialog_entity.read(cx);
+    11	    let num_actions = dialog.filtered_actions.len();
+    12	    let hide_search = dialog.hide_search;
+    13	    let has_header = dialog.context_title.is_some();
+    14	
+    15	    crate::logging::log(
+    16	        "ACTIONS",
+    17	        &format!(
+    18	            "resize_actions_window_direct: num_actions={}, hide_search={}, has_header={}",
+    19	            num_actions, hide_search, has_header
+    20	        ),
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 8eb0871286d407f7fdf41e816217d0cb0513c0a4..88d49fb466d7c2641d69ef988d64957ff2803080
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -46,6 +46,43 @@
+         assert_eq!(selectable_index_at_or_before(&rows, 2), Some(1));
+         assert_eq!(selectable_index_at_or_after(&rows, 2), Some(3));
+     }
++
++    #[test]
++    fn test_actions_window_dynamic_height_matches_single_row_when_empty() {
++        let empty_height = actions_window_dynamic_height(0, 0, false, false);
++        let single_row_height = actions_window_dynamic_height(1, 0, false, false);
++
++        assert!(
++            (empty_height - single_row_height).abs() < 0.001,
++            "empty_height={empty_height}, single_row_height={single_row_height}"
++        );
++    }
++}
++
++#[inline]
++fn actions_window_dynamic_height(
++    num_actions: usize,
++    section_header_count: usize,
++    hide_search: bool,
++    has_header: bool,
++) -> f32 {
++    let search_box_height = if hide_search {
++        0.0
++    } else {
++        SEARCH_INPUT_HEIGHT
++    };
++    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
++    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
++    let min_items_height = if num_actions == 0 {
++        ACTION_ITEM_HEIGHT
++    } else {
++        0.0
++    };
++    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
++        .max(min_items_height)
++        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
++    let border_height = 2.0;
++    items_height + search_box_height + header_height + border_height
+ }
+ 
+ /// Open the actions window as a separate floating window with vibrancy
+@@ -96,17 +133,8 @@
+         0
+     };
+ 
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0; // top + bottom border
+-    let dynamic_height = items_height + search_box_height + header_height + border_height;
++    let dynamic_height =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+@@ -201,7 +229,7 @@
+     // internal state borrowed immediately after open_window returns.
+     #[cfg(target_os = "macos")]
+     {
+-        let _ = handle.update(cx, |_root, window, cx| {
++        let configure_result = handle.update(cx, |_root, window, cx| {
+             window.defer(cx, |_window, _cx| {
+                 use cocoa::appkit::NSApp;
+                 use cocoa::base::nil;
+@@ -225,6 +253,21 @@
+                 }
+             });
+         });
++
++        if let Err(error) = configure_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window update failed: operation=position_focus error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window context: display_id={display_id:?}, position={position:?}"
++                ),
++            );
++        }
+     }
+ 
+     // Store the handle globally
+@@ -245,9 +288,21 @@
+             if let Some(handle) = guard.take() {
+                 crate::logging::log("ACTIONS", "Closing actions popup window");
+                 // Close the window
+-                let _ = handle.update(cx, |_root, window, _cx| {
++                let close_result = handle.update(cx, |_root, window, _cx| {
+                     window.remove_window();
+                 });
++                if let Err(error) = close_result {
++                    crate::logging::log(
++                        "WARN",
++                        &format!(
++                            "ACTIONS_WINDOW_OP_FAIL close_actions_window update failed: operation=focus_cleanup error={error:?}"
++                        ),
++                    );
++                    crate::logging::log_debug(
++                        "ACTIONS",
++                        "ACTIONS_WINDOW_OP_FAIL close_actions_window context: remove_window requested",
++                    );
++                }
+             }
+         }
+     }
+@@ -276,8 +331,20 @@
+ /// Notify the actions window to re-render (call after updating dialog entity)
+ pub fn notify_actions_window(cx: &mut App) {
+     if let Some(handle) = get_actions_window_handle() {
+-        let _ = handle.update(cx, |_root, _window, cx| {
++        let notify_result = handle.update(cx, |_root, _window, cx| {
+             cx.notify();
+         });
++        if let Err(error) = notify_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL notify_actions_window update failed: operation=focus_refresh error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                "ACTIONS_WINDOW_OP_FAIL notify_actions_window context: cx.notify() skipped",
++            );
++        }
+     }
+ }
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index bad1fdea41cd0d16ad570998c34d5556bd10f106..f41d7a0a87c9d615abedbb73aa9a801a401a379d
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -27,25 +27,8 @@
+         0
+     };
+ 
+-    // Calculate new height
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    // When no actions, still need space for "No actions match" message (use 1 row height)
+-    let min_items_height = if num_actions == 0 {
+-        ACTION_ITEM_HEIGHT
+-    } else {
+-        0.0
+-    };
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .max(min_items_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
+-    let new_height_f32 = items_height + search_box_height + header_height + border_height;
++    let new_height_f32 =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -173,25 +156,8 @@
+             0
+         };
+ 
+-        // Calculate new height (same logic as open_actions_window)
+-        let search_box_height = if hide_search {
+-            0.0
+-        } else {
+-            SEARCH_INPUT_HEIGHT
+-        };
+-        let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-        let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-        // When no actions, still need space for "No actions match" message
+-        let min_items_height = if num_actions == 0 {
+-            ACTION_ITEM_HEIGHT
+-        } else {
+-            0.0
+-        };
+-        let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-            .max(min_items_height)
+-            .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-        let border_height = 2.0; // top + bottom border
+-        let new_height_f32 = items_height + search_box_height + header_height + border_height;
++        let new_height_f32 =
++            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+@@ -306,8 +272,20 @@
+             cx.notify();
+         });
+ 
+-        if let Err(e) = update_result {
+-            crate::logging::log("ACTIONS", &format!("handle.update FAILED: {:?}", e));
++        if let Err(error) = update_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window update failed: operation=resize error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window context: num_actions={}, hide_search={}, has_header={}, target_height={:.0}",
++                    num_actions, hide_search, has_header, new_height_f32
++                ),
++            );
+         }
+ 
+         crate::logging::log(
+
+
+thinking
+**Updating release status and notes**
+codex
+I’ve confirmed only the two scoped files changed. I’m now updating swarm status with verification results and releasing both claims before sending the final handoff.
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts update --id codex-fix-window-logging --status done --notes "implemented window op failure warn/debug logs + shared empty-state height helper; cargo check/clippy blocked by unrelated workspace errors" && ~/.claude/bin/swarm.ts release --id codex-fix-window-logging src/actions/window/part_02.rs && ~/.claude/bin/swarm.ts release --id codex-fix-window-logging src/actions/window/part_03.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+Updated: codex-fix-window-logging
+Released for codex-fix-window-logging: src/actions/window/part_02.rs
+Released for codex-fix-window-logging: src/actions/window/part_03.rs
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 8eb0871286d407f7fdf41e816217d0cb0513c0a4..88d49fb466d7c2641d69ef988d64957ff2803080
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -46,6 +46,43 @@
+         assert_eq!(selectable_index_at_or_before(&rows, 2), Some(1));
+         assert_eq!(selectable_index_at_or_after(&rows, 2), Some(3));
+     }
++
++    #[test]
++    fn test_actions_window_dynamic_height_matches_single_row_when_empty() {
++        let empty_height = actions_window_dynamic_height(0, 0, false, false);
++        let single_row_height = actions_window_dynamic_height(1, 0, false, false);
++
++        assert!(
++            (empty_height - single_row_height).abs() < 0.001,
++            "empty_height={empty_height}, single_row_height={single_row_height}"
++        );
++    }
++}
++
++#[inline]
++fn actions_window_dynamic_height(
++    num_actions: usize,
++    section_header_count: usize,
++    hide_search: bool,
++    has_header: bool,
++) -> f32 {
++    let search_box_height = if hide_search {
++        0.0
++    } else {
++        SEARCH_INPUT_HEIGHT
++    };
++    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
++    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
++    let min_items_height = if num_actions == 0 {
++        ACTION_ITEM_HEIGHT
++    } else {
++        0.0
++    };
++    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
++        .max(min_items_height)
++        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
++    let border_height = 2.0;
++    items_height + search_box_height + header_height + border_height
+ }
+ 
+ /// Open the actions window as a separate floating window with vibrancy
+@@ -96,17 +133,8 @@
+         0
+     };
+ 
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0; // top + bottom border
+-    let dynamic_height = items_height + search_box_height + header_height + border_height;
++    let dynamic_height =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+@@ -201,7 +229,7 @@
+     // internal state borrowed immediately after open_window returns.
+     #[cfg(target_os = "macos")]
+     {
+-        let _ = handle.update(cx, |_root, window, cx| {
++        let configure_result = handle.update(cx, |_root, window, cx| {
+             window.defer(cx, |_window, _cx| {
+                 use cocoa::appkit::NSApp;
+                 use cocoa::base::nil;
+@@ -225,6 +253,21 @@
+                 }
+             });
+         });
++
++        if let Err(error) = configure_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window update failed: operation=position_focus error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window context: display_id={display_id:?}, position={position:?}"
++                ),
++            );
++        }
+     }
+ 
+     // Store the handle globally
+@@ -245,9 +288,21 @@
+             if let Some(handle) = guard.take() {
+                 crate::logging::log("ACTIONS", "Closing actions popup window");
+                 // Close the window
+-                let _ = handle.update(cx, |_root, window, _cx| {
++                let close_result = handle.update(cx, |_root, window, _cx| {
+                     window.remove_window();
+                 });
++                if let Err(error) = close_result {
++                    crate::logging::log(
++                        "WARN",
++                        &format!(
++                            "ACTIONS_WINDOW_OP_FAIL close_actions_window update failed: operation=focus_cleanup error={error:?}"
++                        ),
++                    );
++                    crate::logging::log_debug(
++                        "ACTIONS",
++                        "ACTIONS_WINDOW_OP_FAIL close_actions_window context: remove_window requested",
++                    );
++                }
+             }
+         }
+     }
+@@ -276,8 +331,20 @@
+ /// Notify the actions window to re-render (call after updating dialog entity)
+ pub fn notify_actions_window(cx: &mut App) {
+     if let Some(handle) = get_actions_window_handle() {
+-        let _ = handle.update(cx, |_root, _window, cx| {
++        let notify_result = handle.update(cx, |_root, _window, cx| {
+             cx.notify();
+         });
++        if let Err(error) = notify_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL notify_actions_window update failed: operation=focus_refresh error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                "ACTIONS_WINDOW_OP_FAIL notify_actions_window context: cx.notify() skipped",
++            );
++        }
+     }
+ }
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index bad1fdea41cd0d16ad570998c34d5556bd10f106..f41d7a0a87c9d615abedbb73aa9a801a401a379d
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -27,25 +27,8 @@
+         0
+     };
+ 
+-    // Calculate new height
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    // When no actions, still need space for "No actions match" message (use 1 row height)
+-    let min_items_height = if num_actions == 0 {
+-        ACTION_ITEM_HEIGHT
+-    } else {
+-        0.0
+-    };
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .max(min_items_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
+-    let new_height_f32 = items_height + search_box_height + header_height + border_height;
++    let new_height_f32 =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -173,25 +156,8 @@
+             0
+         };
+ 
+-        // Calculate new height (same logic as open_actions_window)
+-        let search_box_height = if hide_search {
+-            0.0
+-        } else {
+-            SEARCH_INPUT_HEIGHT
+-        };
+-        let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-        let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-        // When no actions, still need space for "No actions match" message
+-        let min_items_height = if num_actions == 0 {
+-            ACTION_ITEM_HEIGHT
+-        } else {
+-            0.0
+-        };
+-        let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-            .max(min_items_height)
+-            .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-        let border_height = 2.0; // top + bottom border
+-        let new_height_f32 = items_height + search_box_height + header_height + border_height;
++        let new_height_f32 =
++            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+@@ -306,8 +272,20 @@
+             cx.notify();
+         });
+ 
+-        if let Err(e) = update_result {
+-            crate::logging::log("ACTIONS", &format!("handle.update FAILED: {:?}", e));
++        if let Err(error) = update_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window update failed: operation=resize error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window context: num_actions={}, hide_search={}, has_header={}, target_height={:.0}",
++                    num_actions, hide_search, has_header, new_height_f32
++                ),
++            );
+         }
+ 
+         crate::logging::log(
+
+
+thinking
+**Crafting detailed final response**
+codex
+Implemented the assigned fixes in the scoped window files.
+
+Changed files:
+- `src/actions/window/part_02.rs:50` added `test_actions_window_dynamic_height_matches_single_row_when_empty`.
+- `src/actions/window/part_02.rs:63` added shared `actions_window_dynamic_height(...)` and used it in open-path sizing at `src/actions/window/part_02.rs:136`.
+- `src/actions/window/part_02.rs:257` added warn/debug logging for failed popup configure update (position/focus context).
+- `src/actions/window/part_02.rs:294` added warn/debug logging for failed close update.
+- `src/actions/window/part_02.rs:337` added warn/debug logging for failed notify update.
+- `src/actions/window/part_03.rs:30` and `src/actions/window/part_03.rs:159` switched resize paths to the shared height helper (unifies empty-state height with open path).
+- `src/actions/window/part_03.rs:275` upgraded resize update failure logging to warn + debug context.
+
+Verification run:
+- `cargo check` failed due pre-existing unrelated workspace errors (examples: `src/clipboard_history/database.rs` missing new `ClipboardEntry` fields; non-exhaustive `ContentType` matches).
+- `cargo clippy --all-targets -- -D warnings` failed due pre-existing unrelated workspace issues (examples: duplicate `tests` module files in `src/protocol/message` and `src/designs/core`, plus many existing test/import warnings/errors).
+- `cargo test test_actions_window_dynamic_height_matches_single_row_when_empty -- --nocapture` also blocked by unrelated compile/test-tree errors.
+
+How to test once workspace baseline is green:
+1. `cargo test test_actions_window_dynamic_height_matches_single_row_when_empty -- --nocapture`
+2. `cargo check`
+3. `cargo clippy --all-targets -- -D warnings`
+4. Optional runtime log check: `echo '{"type":"show"}' | SCRIPT_KIT_AI_LOG=1 ./target/debug/script-kit-gpui 2>&1`
+
+Risks / known gaps:
+- I could not complete a green verification pass because of unrelated existing compile/clippy failures outside `src/actions/window/`.
+- Logging paths for update failures are now explicit, but runtime exercise of those failure branches wasn’t possible in this workspace state.
+
+Commits:
+- None (not committed because required verification is currently failing due unrelated repo issues).
+file update:
+diff --git a/src/actions/window/part_02.rs b/src/actions/window/part_02.rs
+index 8eb0871286d407f7fdf41e816217d0cb0513c0a4..88d49fb466d7c2641d69ef988d64957ff2803080
+--- a/src/actions/window/part_02.rs
++++ b/src/actions/window/part_02.rs
+@@ -46,6 +46,43 @@
+         assert_eq!(selectable_index_at_or_before(&rows, 2), Some(1));
+         assert_eq!(selectable_index_at_or_after(&rows, 2), Some(3));
+     }
++
++    #[test]
++    fn test_actions_window_dynamic_height_matches_single_row_when_empty() {
++        let empty_height = actions_window_dynamic_height(0, 0, false, false);
++        let single_row_height = actions_window_dynamic_height(1, 0, false, false);
++
++        assert!(
++            (empty_height - single_row_height).abs() < 0.001,
++            "empty_height={empty_height}, single_row_height={single_row_height}"
++        );
++    }
++}
++
++#[inline]
++fn actions_window_dynamic_height(
++    num_actions: usize,
++    section_header_count: usize,
++    hide_search: bool,
++    has_header: bool,
++) -> f32 {
++    let search_box_height = if hide_search {
++        0.0
++    } else {
++        SEARCH_INPUT_HEIGHT
++    };
++    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
++    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
++    let min_items_height = if num_actions == 0 {
++        ACTION_ITEM_HEIGHT
++    } else {
++        0.0
++    };
++    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
++        .max(min_items_height)
++        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
++    let border_height = 2.0;
++    items_height + search_box_height + header_height + border_height
+ }
+ 
+ /// Open the actions window as a separate floating window with vibrancy
+@@ -96,17 +133,8 @@
+         0
+     };
+ 
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0; // top + bottom border
+-    let dynamic_height = items_height + search_box_height + header_height + border_height;
++    let dynamic_height =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+     // Calculate window position:
+     // - X: Right edge of main window, minus actions width, minus margin
+@@ -201,7 +229,7 @@
+     // internal state borrowed immediately after open_window returns.
+     #[cfg(target_os = "macos")]
+     {
+-        let _ = handle.update(cx, |_root, window, cx| {
++        let configure_result = handle.update(cx, |_root, window, cx| {
+             window.defer(cx, |_window, _cx| {
+                 use cocoa::appkit::NSApp;
+                 use cocoa::base::nil;
+@@ -225,6 +253,21 @@
+                 }
+             });
+         });
++
++        if let Err(error) = configure_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window update failed: operation=position_focus error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL configure_popup_window context: display_id={display_id:?}, position={position:?}"
++                ),
++            );
++        }
+     }
+ 
+     // Store the handle globally
+@@ -245,9 +288,21 @@
+             if let Some(handle) = guard.take() {
+                 crate::logging::log("ACTIONS", "Closing actions popup window");
+                 // Close the window
+-                let _ = handle.update(cx, |_root, window, _cx| {
++                let close_result = handle.update(cx, |_root, window, _cx| {
+                     window.remove_window();
+                 });
++                if let Err(error) = close_result {
++                    crate::logging::log(
++                        "WARN",
++                        &format!(
++                            "ACTIONS_WINDOW_OP_FAIL close_actions_window update failed: operation=focus_cleanup error={error:?}"
++                        ),
++                    );
++                    crate::logging::log_debug(
++                        "ACTIONS",
++                        "ACTIONS_WINDOW_OP_FAIL close_actions_window context: remove_window requested",
++                    );
++                }
+             }
+         }
+     }
+@@ -276,8 +331,20 @@
+ /// Notify the actions window to re-render (call after updating dialog entity)
+ pub fn notify_actions_window(cx: &mut App) {
+     if let Some(handle) = get_actions_window_handle() {
+-        let _ = handle.update(cx, |_root, _window, cx| {
++        let notify_result = handle.update(cx, |_root, _window, cx| {
+             cx.notify();
+         });
++        if let Err(error) = notify_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL notify_actions_window update failed: operation=focus_refresh error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                "ACTIONS_WINDOW_OP_FAIL notify_actions_window context: cx.notify() skipped",
++            );
++        }
+     }
+ }
+diff --git a/src/actions/window/part_03.rs b/src/actions/window/part_03.rs
+index bad1fdea41cd0d16ad570998c34d5556bd10f106..f41d7a0a87c9d615abedbb73aa9a801a401a379d
+--- a/src/actions/window/part_03.rs
++++ b/src/actions/window/part_03.rs
+@@ -27,25 +27,8 @@
+         0
+     };
+ 
+-    // Calculate new height
+-    let search_box_height = if hide_search {
+-        0.0
+-    } else {
+-        SEARCH_INPUT_HEIGHT
+-    };
+-    let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-    let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-    // When no actions, still need space for "No actions match" message (use 1 row height)
+-    let min_items_height = if num_actions == 0 {
+-        ACTION_ITEM_HEIGHT
+-    } else {
+-        0.0
+-    };
+-    let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-        .max(min_items_height)
+-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-    let border_height = 2.0;
+-    let new_height_f32 = items_height + search_box_height + header_height + border_height;
++    let new_height_f32 =
++        actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+     let current_bounds = window.bounds();
+     let current_height_f32: f32 = current_bounds.size.height.into();
+@@ -173,25 +156,8 @@
+             0
+         };
+ 
+-        // Calculate new height (same logic as open_actions_window)
+-        let search_box_height = if hide_search {
+-            0.0
+-        } else {
+-            SEARCH_INPUT_HEIGHT
+-        };
+-        let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+-        let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
+-        // When no actions, still need space for "No actions match" message
+-        let min_items_height = if num_actions == 0 {
+-            ACTION_ITEM_HEIGHT
+-        } else {
+-            0.0
+-        };
+-        let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
+-            .max(min_items_height)
+-            .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+-        let border_height = 2.0; // top + bottom border
+-        let new_height_f32 = items_height + search_box_height + header_height + border_height;
++        let new_height_f32 =
++            actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header);
+ 
+         let update_result = handle.update(cx, |_root, window, cx| {
+             let current_bounds = window.bounds();
+@@ -306,8 +272,20 @@
+             cx.notify();
+         });
+ 
+-        if let Err(e) = update_result {
+-            crate::logging::log("ACTIONS", &format!("handle.update FAILED: {:?}", e));
++        if let Err(error) = update_result {
++            crate::logging::log(
++                "WARN",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window update failed: operation=resize error={error:?}"
++                ),
++            );
++            crate::logging::log_debug(
++                "ACTIONS",
++                &format!(
++                    "ACTIONS_WINDOW_OP_FAIL resize_actions_window context: num_actions={}, hide_search={}, has_header={}, target_height={:.0}",
++                    num_actions, hide_search, has_header, new_height_f32
++                ),
++            );
+         }
+ 
+         crate::logging::log(
+
+tokens used
+189,506
+Implemented the assigned fixes in the scoped window files.
+
+Changed files:
+- `src/actions/window/part_02.rs:50` added `test_actions_window_dynamic_height_matches_single_row_when_empty`.
+- `src/actions/window/part_02.rs:63` added shared `actions_window_dynamic_height(...)` and used it in open-path sizing at `src/actions/window/part_02.rs:136`.
+- `src/actions/window/part_02.rs:257` added warn/debug logging for failed popup configure update (position/focus context).
+- `src/actions/window/part_02.rs:294` added warn/debug logging for failed close update.
+- `src/actions/window/part_02.rs:337` added warn/debug logging for failed notify update.
+- `src/actions/window/part_03.rs:30` and `src/actions/window/part_03.rs:159` switched resize paths to the shared height helper (unifies empty-state height with open path).
+- `src/actions/window/part_03.rs:275` upgraded resize update failure logging to warn + debug context.
+
+Verification run:
+- `cargo check` failed due pre-existing unrelated workspace errors (examples: `src/clipboard_history/database.rs` missing new `ClipboardEntry` fields; non-exhaustive `ContentType` matches).
+- `cargo clippy --all-targets -- -D warnings` failed due pre-existing unrelated workspace issues (examples: duplicate `tests` module files in `src/protocol/message` and `src/designs/core`, plus many existing test/import warnings/errors).
+- `cargo test test_actions_window_dynamic_height_matches_single_row_when_empty -- --nocapture` also blocked by unrelated compile/test-tree errors.
+
+How to test once workspace baseline is green:
+1. `cargo test test_actions_window_dynamic_height_matches_single_row_when_empty -- --nocapture`
+2. `cargo check`
+3. `cargo clippy --all-targets -- -D warnings`
+4. Optional runtime log check: `echo '{"type":"show"}' | SCRIPT_KIT_AI_LOG=1 ./target/debug/script-kit-gpui 2>&1`
+
+Risks / known gaps:
+- I could not complete a green verification pass because of unrelated existing compile/clippy failures outside `src/actions/window/`.
+- Logging paths for update failures are now explicit, but runtime exercise of those failure branches wasn’t possible in this workspace state.
+
+Commits:
+- None (not committed because required verification is currently failing due unrelated repo issues).
+
+
+==== exit @ 2026-02-08T00:03:37.467Z code=0 status=done ====

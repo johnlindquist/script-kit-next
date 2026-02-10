@@ -1,0 +1,1564 @@
+==== spawn @ 2026-02-07T23:36:49.241Z ====
+cmd: codex "exec" "--cd" "/Users/johnlindquist/dev/script-kit-gpui" "--model" "gpt-5.3-codex" "-c" "model_reasoning_effort=\"xhigh\"" "-c" "model_auto_compact_token_limit=120000" "-c" "developer_instructions=\"You are Codex implementer agent \\\"codex-fix-deeplink-encoding\\\".\\n\\n## Coordination\\nThis repo runs parallel agents in ONE working tree. Before editing any file, you MUST claim it.\\nCommands (run via shell):\\n  - View roster: ~/.claude/bin/swarm.ts status\\n  - Claim files (blocks until free): ~/.claude/bin/swarm.ts claim --wait --id codex-fix-deeplink-encoding path/to/file\\n  - Release: ~/.claude/bin/swarm.ts release --id codex-fix-deeplink-encoding path/to/file\\n  - Update status/notes: ~/.claude/bin/swarm.ts update --id codex-fix-deeplink-encoding --status in_progress --notes \\\"...\\\"\\nRules:\\n  - Never edit a file you haven't claimed.\\n  - Keep claims tight (claim only what you're actively changing).\\n  - If blocked, set status=blocked and say what you're waiting on.\\n  - When finished, set status=done and release claims.\\n\\n## Development practices (this code is maintained by AI agents)\\n  - Log state transitions with enough context to diagnose failures from logs alone.\\n  - Structured errors: include what was attempted, what failed, and current state.\\n  - Name things for grepability — unique identifiers agents can find on the first search.\\n  - Every behavior change gets a test. Untested code is invisible to the next agent.\\n  - Test names describe the scenario: test_X_does_Y_when_Z.\\n  - Keep functions small and single-purpose. 500-line functions burn agent context.\\n  - Use types to encode constraints (enums > strings for errors).\\n\\n## CRITICAL: Parallel-safe verification\\n  - Other agents are modifying other files RIGHT NOW. Full test suites WILL show their failures.\\n  - ONLY run tests that cover YOUR changed files. Scope every test/check command:\\n    Rust: cargo test -p your-crate -- module::test_name | JS: npx jest your/file.test.ts\\n  - Do NOT run: cargo test (unscoped), cargo check (whole workspace), npm test (unscoped).\\n  - If a scoped test fails, it's YOUR bug — fix it. If tests outside your scope fail, ignore them.\\n\\n## Git commit discipline\\n  - NEVER commit unverified work. Run tests/lints/type-checks FIRST. If it fails, fix it before committing.\\n  - A commit is a declaration: \\\"this works and here's the proof.\\\"\\n  - Commit FREQUENTLY — after each meaningful unit of VERIFIED work, not just at the end.\\n  - A \\\"unit\\\" = one logical change that passes verification (new function, bug fix, refactor, test added).\\n  - NEVER batch an entire task into one giant commit. Small commits are searchable; big ones aren't.\\n  - Commit message format:\\n      Line 1: <type>(<scope>): <what changed> (imperative, max 72 chars)\\n      Line 3+: WHY this change was made, WHAT was verified, and HOW to test it.\\n    Types: feat, fix, refactor, test, docs, chore\\n    Example:\\n      feat(auth): add refresh token rotation\\n      \\n      Tokens now rotate on each refresh call to prevent replay attacks.\\n      The old token is invalidated immediately on rotation.\\n      \\n      Verified: cargo test --lib -- auth::refresh (4 tests pass)\\n      Verified: manual smoke test via curl — token rotates, old token returns 401\\n  - The \\\"Verified:\\\" lines are REQUIRED. Future agents will read git log to understand\\n    what was tested and how to re-verify. This is the most valuable part of the message.\\n  - In your final message, list all commits you made with their hashes.\\n\\n## Time budget\\nYou have approximately 10 minutes. If your task is too broad to complete in time:\\n(1) Commit any verified progress.\\n(2) Run: ~/.claude/bin/swarm.ts update --id YOUR_ID --status needs_split --notes 'suggest: 1) sub-task-desc scope:files 2) sub-task-desc scope:files'.\\n(3) Exit cleanly. The dispatcher will read your suggestions and spawn narrower workers.\"" "--output-last-message" "/Users/johnlindquist/dev/script-kit-gpui/.ai/logs/codex-fix-deeplink-encoding.final.md" "--yolo" "You are agent codex-fix-deeplink-encoding.\n\nCurrent parallel-agent roster (read this first):\n```\nSWARM SNAPSHOT @ 2026-02-07T23:36:49.238Z\n- codex-fix-deeplink-encoding [starting] scope=src/actions/builders/shared.rs task=MEDIUM FIX: Fix to_deeplink_name in src/actions/builders/shared.rs. (1) Lines 7,10: URL-encode non-ASCII characters or …\n- codex-fix-window-autoclose [in_progress] scope=src/actions/window/part_01.rs,src/actions/window/part_02.rs,src/actions/window/part_03.rs task=HIGH FIX: Fix non-deterministic auto-close on focus loss for actions window AND stale ACTIONS_WINDOW singleton handle. …\n  claims: src/actions/window/part_01.rs, src/actions/window/part_02.rs, src/actions/window/part_03.rs\n  notes: Investigating actions window focus-loss auto-close + singleton stale handle paths; claiming files next.\n```\n\nYour assignment:\n- Task: MEDIUM FIX: Fix to_deeplink_name in src/actions/builders/shared.rs. (1) Lines 7,10: URL-encode non-ASCII characters or add percent-decoding to the deeplink parser. (2) Lines 12-15: Handle empty/symbol-only names - return a sentinel slug like '_unnamed' instead of empty string to prevent meaningless 'scriptkit://run/' URLs. After fix, run cargo check && cargo clippy --all-targets -- -D warnings\n- Scope: src/actions/builders/shared.rs\n\nOperating constraints:\n- Single working tree (no worktrees, no patches).\n- You MUST claim files before editing (~/.claude/bin/swarm.ts claim --wait ...).\n\nDeliverables:\n- Make the code changes required by the task.\n- Run the most relevant tests/linters.\n- In your FINAL message, include: changed files, how to test, and any risks/known gaps."
+
+OpenAI Codex v0.98.0 (research preview)
+--------
+workdir: /Users/johnlindquist/dev/script-kit-gpui
+model: gpt-5.3-codex
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: xhigh
+reasoning summaries: auto
+session id: 019c3a77-178c-7943-a958-bbbc2f6b803b
+--------
+user
+You are agent codex-fix-deeplink-encoding.
+
+Current parallel-agent roster (read this first):
+```
+SWARM SNAPSHOT @ 2026-02-07T23:36:49.238Z
+- codex-fix-deeplink-encoding [starting] scope=src/actions/builders/shared.rs task=MEDIUM FIX: Fix to_deeplink_name in src/actions/builders/shared.rs. (1) Lines 7,10: URL-encode non-ASCII characters or …
+- codex-fix-window-autoclose [in_progress] scope=src/actions/window/part_01.rs,src/actions/window/part_02.rs,src/actions/window/part_03.rs task=HIGH FIX: Fix non-deterministic auto-close on focus loss for actions window AND stale ACTIONS_WINDOW singleton handle. …
+  claims: src/actions/window/part_01.rs, src/actions/window/part_02.rs, src/actions/window/part_03.rs
+  notes: Investigating actions window focus-loss auto-close + singleton stale handle paths; claiming files next.
+```
+
+Your assignment:
+- Task: MEDIUM FIX: Fix to_deeplink_name in src/actions/builders/shared.rs. (1) Lines 7,10: URL-encode non-ASCII characters or add percent-decoding to the deeplink parser. (2) Lines 12-15: Handle empty/symbol-only names - return a sentinel slug like '_unnamed' instead of empty string to prevent meaningless 'scriptkit://run/' URLs. After fix, run cargo check && cargo clippy --all-targets -- -D warnings
+- Scope: src/actions/builders/shared.rs
+
+Operating constraints:
+- Single working tree (no worktrees, no patches).
+- You MUST claim files before editing (~/.claude/bin/swarm.ts claim --wait ...).
+
+Deliverables:
+- Make the code changes required by the task.
+- Run the most relevant tests/linters.
+- In your FINAL message, include: changed files, how to test, and any risks/known gaps.
+warning: Under-development features enabled: responses_websockets. Under-development features are incomplete and may behave unpredictably. To suppress this warning, set `suppress_unstable_features_warning = true` in /Users/johnlindquist/.codex/config.toml.
+mcp: deepwiki starting
+mcp: deepwiki ready
+mcp startup: ready: deepwiki
+
+thinking
+**Resolving conflicting verification requirements**
+codex
+I’m taking the `codex-fix-deeplink-encoding` task and will first verify swarm status, claim `src/actions/builders/shared.rs`, then inspect and patch `to_deeplink_name` for encoding and empty-name handling. After the change I’ll run scoped Rust checks/lint for verification.
+
+thinking
+**Running status command**
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts status' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 53ms:
+Repo: /Users/johnlindquist/dev/script-kit-gpui
+Updated: 2026-02-07T23:37:02.083Z
+
+Active agents (2):
+codex-fix-deeplink-encoding [in_progress] codex/gpt-5.3-codex/exec
+  task: MEDIUM FIX: Fix to_deeplink_name in src/actions/builders/shared.rs. (1) Lines 7,10: URL-encode non-ASCII characters or …
+  scope: src/actions/builders/shared.rs
+  claims: (none)
+  notes: spawned codex (exec)
+
+codex-fix-window-autoclose [in_progress] codex/gpt-5.3-codex/exec
+  task: HIGH FIX: Fix non-deterministic auto-close on focus loss for actions window AND stale ACTIONS_WINDOW singleton handle. …
+  scope: src/actions/window/part_01.rs,src/actions/window/part_02.rs,src/actions/window/part_03.rs
+  claims(3): src/actions/window/part_01.rs, src/actions/window/part_02.rs, src/actions/window/part_03.rs
+  notes: Investigating actions window focus-loss auto-close + singleton stale handle paths; claiming files next.
+
+Inactive agents (210):
+- codex-accessibility [done] done. exit=0. final=.ai/logs/codex-accessibility.final.md. See final message file.
+- codex-action-labels [failed] failed. exit=1. final=.ai/logs/codex-action-labels.final.md.
+- codex-actions-audit [failed] failed. exit=1. final=.ai/logs/codex-actions-audit.final.md. See final message file.
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts claim --wait --id codex-fix-deeplink-encoding src/actions/builders/shared.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+Claimed for codex-fix-deeplink-encoding: src/actions/builders/shared.rs
+
+thinking
+**Adding update status notes**
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts update --id codex-fix-deeplink-encoding --status in_progress --notes "Claimed shared.rs; inspecting to_deeplink_name encoding + empty slug handling"' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+Updated: codex-fix-deeplink-encoding
+codex
+I’ve claimed `src/actions/builders/shared.rs` and I’m inspecting the current `to_deeplink_name` implementation to apply the encoding and sentinel-slug fix precisely.
+
+thinking
+**Inspecting file content**
+exec
+/bin/zsh -lc 'nl -ba src/actions/builders/shared.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+     1	/// Convert a script name to a deeplink-safe format (lowercase, hyphenated)
+     2	///
+     3	/// Examples:
+     4	/// - "My Script" -> "my-script"
+     5	/// - "Clipboard History" -> "clipboard-history"
+     6	/// - "hello_world" -> "hello-world"
+     7	pub fn to_deeplink_name(name: &str) -> String {
+     8	    name.to_lowercase()
+     9	        .chars()
+    10	        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+    11	        .collect::<String>()
+    12	        .split('-')
+    13	        .filter(|s| !s.is_empty())
+    14	        .collect::<Vec<_>>()
+    15	        .join("-")
+    16	}
+    17	
+    18	/// Format a shortcut string for display in the UI
+    19	/// Converts "cmd+shift+c" to "⌘⇧C"
+    20	pub(crate) fn format_shortcut_hint(shortcut: &str) -> String {
+
+thinking
+**Inspecting deeplink encoding and tests**
+exec
+/bin/zsh -lc "rg -n \"to_deeplink_name|scriptkit://run|deeplink\" src -g '*.rs'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 53ms:
+Total output lines: 1534
+
+src/app_actions/handle_action.rs:563:            "copy_deeplink" => {
+src/app_actions/handle_action.rs:564:                logging::log("UI", "Copy deeplink action");
+src/app_actions/handle_action.rs:567:                    let deeplink_name = crate::actions::to_deeplink_name(name);
+src/app_actions/handle_action.rs:568:                    let deeplink_url = format!("scriptkit://run/{}", deeplink_name);
+src/app_actions/handle_action.rs:572:                        match self.pbcopy(&deeplink_url) {
+src/app_actions/handle_action.rs:576:                                    &format!("Copied deeplink to clipboard: {}", deeplink_url),
+src/app_actions/handle_action.rs:578:                                self.show_hud(format!("Copied: {}", deeplink_url), Some(2000), cx);
+src/app_actions/handle_action.rs:583:                                    "Failed to copy deeplink".to_string(),
+src/app_actions/handle_action.rs:594:                        match Clipboard::new().and_then(|mut c| c.set_text(&deeplink_url)) {
+src/app_actions/handle_action.rs:598:                                    &format!("Copied deeplink to clipboard: {}", deeplink_url),
+src/app_actions/handle_action.rs:600:                                self.show_hud(format!("Copied: {}", deeplink_url), Some(2000), cx);
+src/app_actions/handle_action.rs:603:                                logging::log("ERROR", &format!("Failed to copy deeplink: {}", e));
+src/app_actions/handle_action.rs:605:                                    "Failed to copy deeplink".to_string(),
+src/app_actions/handle_action/main_actions_01.rs:137:            "copy_deeplink" => {
+src/app_actions/handle_action/main_actions_01.rs:138:                logging::log("UI", "Copy deeplink action");
+src/app_actions/handle_action/main_actions_01.rs:141:                    let deeplink_name = crate::actions::to_deeplink_name(name);
+src/app_actions/handle_action/main_actions_01.rs:142:                    let deeplink_url = format!("scriptkit://run/{}", deeplink_name);
+src/app_actions/handle_action/main_actions_01.rs:146:                        match self.pbcopy(&deeplink_url) {
+
+thinking
+**Deciding to encode non-ASCII in target file**
+exec
+/bin/zsh -lc "nl -ba src/main_sections/deeplink.rs | sed -n '1,140p'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+     1	// DEEPLINK_CHANNEL: Channel for handling scriptkit:// URL scheme events
+     2	// URLs are sent from on_open_urls callback and processed inside the app
+     3	static DEEPLINK_CHANNEL: std::sync::OnceLock<(
+     4	    async_channel::Sender<String>,
+     5	    async_channel::Receiver<String>,
+     6	)> = std::sync::OnceLock::new();
+     7	
+     8	/// Get the deeplink channel, initializing it on first access.
+     9	fn deeplink_channel() -> &'static (
+    10	    async_channel::Sender<String>,
+    11	    async_channel::Receiver<String>,
+    12	) {
+    13	    DEEPLINK_CHANNEL.get_or_init(|| async_channel::bounded(10))
+    14	}
+    15	
+    16	/// Parse a scriptkit:// URL and extract the command ID
+    17	/// Supported formats:
+    18	/// - scriptkit://commands/{command_id} - Execute any command (app/builtin/script/scriptlet)
+    19	/// - scriptkit://run/{script_name} - Execute a script by name (legacy)
+    20	/// - scriptkit://notes/{note_id} - Open a specific note
+
+thinking
+**Analyzing command ID encoding**
+exec
+/bin/zsh -lc "rg -n \"script/\\{\\}|strip_prefix\\(\\\"script/\\\"|deeplink.*run|to_deeplink_name\\(\" src/main_entry src/app_actions src/config src -g '*.rs'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+Total output lines: 431
+
+src/app_actions/handle_action.rs:567:                    let deeplink_name = crate::actions::to_deeplink_name(name);
+src/app_actions/handle_action.rs:568:                    let deeplink_url = format!("scriptkit://run/{}", deeplink_name);
+src/app_actions/handle_action.rs:694:                            Some(format!("script/{}", m.script.name))
+src/app_actions/handle_action.rs:763:                            (format!("script/{}", m.script.name), m.script.name.clone())
+src/app_actions/handle_action.rs:811:                            Some(format!("script/{}", m.script.name))
+src/app_actions/handle_action/main_actions_02.rs:6:                            (format!("script/{}", m.script.name), m.script.name.clone())
+src/app_actions/handle_action/main_actions_02.rs:54:                            Some(format!("script/{}", m.script.name))
+src/app_actions/handle_action/main_actions_01.rs:141:                    let deeplink_name = crate::actions::to_deeplink_name(name);
+src/app_actions/handle_action/main_actions_01.rs:142:                    let deeplink_url = format!("scriptkit://run/{}", deeplink_name);
+src/app_actions/handle_action/main_actions_01.rs:268:                            Some(format!("script/{}", m.script.name))
+src/app_actions/handle_action.rs:567:                    let deeplink_name = crate::actions::to_deeplink_name(name);
+src/app_actions/handle_action.rs:568:                    let deeplink_url = format!("scriptkit://run/{}", deeplink_name);
+src/app_actions/handle_action.rs:694:                            Some(format!("script/{}", m.script.name))
+src/app_actions/handle_action.rs:763:                            (format!("script/{}", m.script.name), m.script.name.clone())
+src/app_actions/handle_action.rs:811:                            Some(format!("script/{}", m.script.name))
+src/app_actions/handle_action/main_actions_02.rs:6:                            (format!("script/{}", m.script.name), m.script.name.clone())
+src/app_actions/handle_action/main_actions_02.rs:54:                            Some(format!("script/{}", m.script.name))
+src/app_actions/handle_action/main_actions_01.rs:141:                    let deeplink_name = crate::actions::to_deeplink_name(name);
+
+thinking
+**Planning targeted test updates**
+codex
+I confirmed `parse_deeplink_url` currently does not decode `run/` paths, so I’ll implement the non-ASCII URL-encoding path inside `to_deeplink_name` (within your scoped file) and add focused unit tests there for both percent-encoding and `_unnamed` fallback.
+
+thinking
+**Inspecting external crates**
+exec
+/bin/zsh -lc "rg -n \"percent|urlencoding|url::|utf8_percent_encode\" Cargo.toml src -g 'Cargo.toml' -g '*.rs'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+src/app_actions/handle_action.rs:112:    /// Simple percent-encoding for URL query strings.
+src/app_actions/handle_action.rs:113:    fn percent_encode_for_url(&self, input: &str) -> String {
+src/app_actions/handle_action.rs:1293:                    let encoded_path = self.percent_encode_for_url(&path_str);
+src/app_actions/handle_action/main_actions_03.rs:194:                    let encoded_path = self.percent_encode_for_url(&path_str);
+src/builtins/part_001_entries/entries_001.rs:119:        vec!["volume", "mute", "0", "percent", "zero", "off"],
+src/builtins/part_001_entries/entries_001.rs:128:        vec!["volume", "25", "percent", "low", "quiet"],
+src/builtins/part_001_entries/entries_001.rs:137:        vec!["volume", "50", "percent", "half", "medium"],
+src/builtins/part_001_entries/entries_001.rs:146:        vec!["volume", "75", "percent", "high", "loud"],
+src/builtins/part_001_entries/entries_001.rs:155:        vec!["volume", "100", "percent", "max", "full"],
+src/logging/tests/part_001.rs:14:        let savings_percent =
+src/logging/tests/part_001.rs:19:            savings_percent > 60.0,
+src/logging/tests/part_001.rs:21:            savings_percent
+src/logging/tests/part_001.rs:26:            savings_percent > 80.0,
+src/logging/tests/part_001.rs:28:            savings_percent
+src/components/scrollbar.rs:171:    /// If not set, the scrollbar will use percentage-based positioning
+src/components/scrollbar.rs:293:            // Create a flex container for percentage-based positioning
+src/hud_manager/part_000.rs:80:/// Lighten a color by a percentage (0.0 - 1.0)
+src/hud_manager/part_000.rs:92:/// Darken a color by a percentage (0.0 - 1.0)
+src/render_script_list/part_000.rs:1226:                let opacity_percent = (self.theme.get_opacity().main * 100.0).round() as i32;
+src/render_script_list/part_000.rs:1231:                    opacity_percent, material, appearance
+
+thinking
+**Designing slug postprocessing**
+🌐 Searching the web...
+🌐 Searched the web
+
+thinking
+**Correcting tool usage**
+exec
+/bin/zsh -lc "sed -n '1,80p' Cargo.toml" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 53ms:
+[package]
+name = "script-kit-gpui"
+version = "0.1.0"
+edition = "2021"
+default-run = "script-kit-gpui"
+
+[lib]
+name = "script_kit_gpui"
+path = "src/lib.rs"
+
+[[bin]]
+name = "script-kit-gpui"
+path = "src/main.rs"
+test = false  # Tests run via lib.rs only - avoids duplicate test runs
+
+[[bin]]
+name = "smoke-test"
+path = "src/bin/smoke-test.rs"
+test = false
+
+
+thinking
+**Inspecting fallback percent encoding**
+exec
+/bin/zsh -lc "nl -ba src/fallbacks/builtins.rs | sed -n '1,80p'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+     1	//! Built-in fallback command definitions
+     2	//!
+     3	//! This module defines the default fallback commands that appear when no scripts
+     4	//! match the user's input. Fallbacks are Raycast-style actions like "Search Google",
+     5	//! "Open URL", "Calculate", etc.
+     6	//!
+     7	//! NOTE: Some items are currently unused as this is a new module being integrated.
+     8	#![allow(dead_code)]
+     9	
+    10	use crate::scripts::input_detection::{is_file_path, is_math_expression, is_url, InputType};
+    11	
+    12	/// Simple percent-encoding for URL query strings
+    13	/// Encodes characters that are not unreserved per RFC 3986
+    14	fn percent_encode(input: &str) -> String {
+    15	    let mut encoded = String::with_capacity(input.len() * 3);
+    16	    for byte in input.bytes() {
+    17	        match byte {
+    18	            // Unreserved characters: A-Z a-z 0-9 - . _ ~
+    19	            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+    20	                encoded.push(byte as char);
+
+thinking
+**Inspecting module structure around shared**
+exec
+/bin/zsh -lc "nl -ba src/actions/builders/mod.rs | sed -n '1,220p'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+nl: src/actions/builders/mod.rs: No such file or directory
+
+thinking
+**Locating module declarations**
+exec
+/bin/zsh -lc "rg --files src/actions | rg 'builders'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+src/actions/builders_tests/part_04.rs
+src/actions/builders_tests/part_01.rs
+src/actions/builders_tests/part_02.rs
+src/actions/builders_tests/part_03.rs
+src/actions/builders.rs
+src/actions/builders_rewire.rs
+src/actions/tests/builders.rs
+src/actions/builders_tests.rs
+src/actions/builders/chat.rs
+src/actions/builders/shared.rs
+src/actions/builders/tests.rs
+src/actions/builders/clipboard.rs
+src/actions/builders/file_path.rs
+src/actions/builders/scriptlet.rs
+src/actions/builders/notes.rs
+src/actions/builders/script_context.rs
+
+thinking
+**Planning code inspection scope**
+exec
+/bin/zsh -lc "nl -ba src/actions/builders.rs | sed -n '1,220p'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+     1	//! Action builders
+     2	//!
+     3	//! Factory functions for creating context-specific action lists.
+     4	
+     5	mod chat;
+     6	mod clipboard;
+     7	mod file_path;
+     8	mod notes;
+     9	mod script_context;
+    10	mod scriptlet;
+    11	mod shared;
+    12	
+    13	pub use chat::{ChatModelInfo, ChatPromptInfo};
+    14	pub use clipboard::ClipboardEntryInfo;
+    15	pub use notes::{NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo};
+    16	pub use shared::to_deeplink_name;
+    17	
+    18	#[allow(unused_imports)]
+    19	pub(crate) use scriptlet::get_scriptlet_defined_actions;
+    20	#[allow(unused_imports)]
+
+thinking
+**Planning in-file testing approach**
+codex
+I’m about to edit `src/actions/builders/shared.rs` to make `to_deeplink_name` percent-encode non-ASCII slug bytes and return `_unnamed` when normalization would otherwise produce an empty slug, then add unit tests in the same file.
+
+thinking
+**Implementing deeplink name normalization and encoding**
+file update
+M /Users/johnlindquist/dev/script-kit-gpui/src/actions/builders/shared.rs
+@@ -6,4 +6,6 @@
+ /// - "hello_world" -> "hello-world"
++/// - "Café Script" -> "caf%C3%A9-script"
+ pub fn to_deeplink_name(name: &str) -> String {
+-    name.to_lowercase()
++    let normalized = name
++        .to_lowercase()
+         .chars()
+@@ -14,5 +16,32 @@
+         .collect::<Vec<_>>()
+-        .join("-")
++        .join("-");
++
++    if normalized.is_empty() {
++        return "_unnamed".to_string();
++    }
++
++    percent_encode_non_ascii(&normalized)
+ }
+ 
++fn percent_encode_non_ascii(input: &str) -> String {
++    const HEX: &[u8; 16] = b"0123456789ABCDEF";
++    let mut encoded = String::with_capacity(input.len());
++
++    for c in input.chars() {
++        if c.is_ascii() {
++            encoded.push(c);
++            continue;
++        }
++
++        let mut utf8_buf = [0u8; 4];
++        for byte in c.encode_utf8(&mut utf8_buf).as_bytes() {
++            encoded.push('%');
++            encoded.push(HEX[(byte >> 4) as usize] as char);
++            encoded.push(HEX[(byte & 0x0F) as usize] as char);
++        }
++    }
++
++    encoded
++}
++
+ /// Format a shortcut string for display in the UI
+@@ -52 +81,19 @@
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::to_deeplink_name;
++
++    #[test]
++    fn test_to_deeplink_name_percent_encodes_non_ascii_when_present() {
++        assert_eq!(to_deeplink_name("Café Script"), "caf%C3%A9-script");
++        assert_eq!(to_deeplink_name("日本語"), "%E6%97%A5%E6%9C%AC%E8%AA%9E");
++    }
++
++    #[test]
++    fn test_to_deeplink_name_returns_unnamed_when_input_is_empty_or_symbols() {
++        assert_eq!(to_deeplink_name(""), "_unnamed");
++        assert_eq!(to_deeplink_name("   "), "_unnamed");
++        assert_eq!(to_deeplink_name("!@#$%^&*()"), "_unnamed");
++    }
++}
+apply_patch(auto_approved=true) exited 0 in 11ms:
+Success. Updated the following files:
+M /Users/johnlindquist/dev/script-kit-gpui/src/actions/builders/shared.rs
+file update:
+diff --git a/src/actions/builders/shared.rs b/src/actions/builders/shared.rs
+index a4a89877cf61da44005eeaf06d0c0deaacd87ef7..64570d566ab9cb65cc9424a6912c9ac2294076f8
+--- a/src/actions/builders/shared.rs
++++ b/src/actions/builders/shared.rs
+@@ -4,17 +4,46 @@
+ /// - "My Script" -> "my-script"
+ /// - "Clipboard History" -> "clipboard-history"
+ /// - "hello_world" -> "hello-world"
++/// - "Café Script" -> "caf%C3%A9-script"
+ pub fn to_deeplink_name(name: &str) -> String {
+-    name.to_lowercase()
++    let normalized = name
++        .to_lowercase()
+         .chars()
+         .map(|c| if c.is_alphanumeric() { c } else { '-' })
+         .collect::<String>()
+         .split('-')
+         .filter(|s| !s.is_empty())
+         .collect::<Vec<_>>()
+-        .join("-")
++        .join("-");
++
++    if normalized.is_empty() {
++        return "_unnamed".to_string();
++    }
++
++    percent_encode_non_ascii(&normalized)
+ }
+ 
++fn percent_encode_non_ascii(input: &str) -> String {
++    const HEX: &[u8; 16] = b"0123456789ABCDEF";
++    let mut encoded = String::with_capacity(input.len());
++
++    for c in input.chars() {
++        if c.is_ascii() {
++            encoded.push(c);
++            continue;
++        }
++
++        let mut utf8_buf = [0u8; 4];
++        for byte in c.encode_utf8(&mut utf8_buf).as_bytes() {
++            encoded.push('%');
++            encoded.push(HEX[(byte >> 4) as usize] as char);
++            encoded.push(HEX[(byte & 0x0F) as usize] as char);
++        }
++    }
++
++    encoded
++}
++
+ /// Format a shortcut string for display in the UI
+ /// Converts "cmd+shift+c" to "⌘⇧C"
+ pub(crate) fn format_shortcut_hint(shortcut: &str) -> String {
+@@ -50,3 +79,21 @@
+ 
+     result
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::to_deeplink_name;
++
++    #[test]
++    fn test_to_deeplink_name_percent_encodes_non_ascii_when_present() {
++        assert_eq!(to_deeplink_name("Café Script"), "caf%C3%A9-script");
++        assert_eq!(to_deeplink_name("日本語"), "%E6%97%A5%E6%9C%AC%E8%AA%9E");
++    }
++
++    #[test]
++    fn test_to_deeplink_name_returns_unnamed_when_input_is_empty_or_symbols() {
++        assert_eq!(to_deeplink_name(""), "_unnamed");
++        assert_eq!(to_deeplink_name("   "), "_unnamed");
++        assert_eq!(to_deeplink_name("!@#$%^&*()"), "_unnamed");
++    }
++}
+
+file update:
+diff --git a/src/actions/builders/shared.rs b/src/actions/builders/shared.rs
+index a4a89877cf61da44005eeaf06d0c0deaacd87ef7..64570d566ab9cb65cc9424a6912c9ac2294076f8
+--- a/src/actions/builders/shared.rs
++++ b/src/actions/builders/shared.rs
+@@ -4,17 +4,46 @@
+ /// - "My Script" -> "my-script"
+ /// - "Clipboard History" -> "clipboard-history"
+ /// - "hello_world" -> "hello-world"
++/// - "Café Script" -> "caf%C3%A9-script"
+ pub fn to_deeplink_name(name: &str) -> String {
+-    name.to_lowercase()
++    let normalized = name
++        .to_lowercase()
+         .chars()
+         .map(|c| if c.is_alphanumeric() { c } else { '-' })
+         .collect::<String>()
+         .split('-')
+         .filter(|s| !s.is_empty())
+         .collect::<Vec<_>>()
+-        .join("-")
++        .join("-");
++
++    if normalized.is_empty() {
++        return "_unnamed".to_string();
++    }
++
++    percent_encode_non_ascii(&normalized)
+ }
+ 
++fn percent_encode_non_ascii(input: &str) -> String {
++    const HEX: &[u8; 16] = b"0123456789ABCDEF";
++    let mut encoded = String::with_capacity(input.len());
++
++    for c in input.chars() {
++        if c.is_ascii() {
++            encoded.push(c);
++            continue;
++        }
++
++        let mut utf8_buf = [0u8; 4];
++        for byte in c.encode_utf8(&mut utf8_buf).as_bytes() {
++            encoded.push('%');
++            encoded.push(HEX[(byte >> 4) as usize] as char);
++            encoded.push(HEX[(byte & 0x0F) as usize] as char);
++        }
++    }
++
++    encoded
++}
++
+ /// Format a shortcut string for display in the UI
+ /// Converts "cmd+shift+c" to "⌘⇧C"
+ pub(crate) fn format_shortcut_hint(shortcut: &str) -> String {
+@@ -50,3 +79,21 @@
+ 
+     result
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::to_deeplink_name;
++
++    #[test]
++    fn test_to_deeplink_name_percent_encodes_non_ascii_when_present() {
++        assert_eq!(to_deeplink_name("Café Script"), "caf%C3%A9-script");
++        assert_eq!(to_deeplink_name("日本語"), "%E6%97%A5%E6%9C%AC%E8%AA%9E");
++    }
++
++    #[test]
++    fn test_to_deeplink_name_returns_unnamed_when_input_is_empty_or_symbols() {
++        assert_eq!(to_deeplink_name(""), "_unnamed");
++        assert_eq!(to_deeplink_name("   "), "_unnamed");
++        assert_eq!(to_deeplink_name("!@#$%^&*()"), "_unnamed");
++    }
++}
+
+
+thinking
+**Checking file formatting**
+exec
+/bin/zsh -lc 'nl -ba src/actions/builders/shared.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+     1	/// Convert a script name to a deeplink-safe format (lowercase, hyphenated)
+     2	///
+     3	/// Examples:
+     4	/// - "My Script" -> "my-script"
+     5	/// - "Clipboard History" -> "clipboard-history"
+     6	/// - "hello_world" -> "hello-world"
+     7	/// - "Café Script" -> "caf%C3%A9-script"
+     8	pub fn to_deeplink_name(name: &str) -> String {
+     9	    let normalized = name
+    10	        .to_lowercase()
+    11	        .chars()
+    12	        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+    13	        .collect::<String>()
+    14	        .split('-')
+    15	        .filter(|s| !s.is_empty())
+    16	        .collect::<Vec<_>>()
+    17	        .join("-");
+    18	
+    19	    if normalized.is_empty() {
+    20	        return "_unnamed".to_string();
+file update:
+diff --git a/src/actions/builders/shared.rs b/src/actions/builders/shared.rs
+index a4a89877cf61da44005eeaf06d0c0deaacd87ef7..64570d566ab9cb65cc9424a6912c9ac2294076f8
+--- a/src/actions/builders/shared.rs
++++ b/src/actions/builders/shared.rs
+@@ -4,17 +4,46 @@
+ /// - "My Script" -> "my-script"
+ /// - "Clipboard History" -> "clipboard-history"
+ /// - "hello_world" -> "hello-world"
++/// - "Café Script" -> "caf%C3%A9-script"
+ pub fn to_deeplink_name(name: &str) -> String {
+-    name.to_lowercase()
++    let normalized = name
++        .to_lowercase()
+         .chars()
+         .map(|c| if c.is_alphanumeric() { c } else { '-' })
+         .collect::<String>()
+         .split('-')
+         .filter(|s| !s.is_empty())
+         .collect::<Vec<_>>()
+-        .join("-")
++        .join("-");
++
++    if normalized.is_empty() {
++        return "_unnamed".to_string();
++    }
++
++    percent_encode_non_ascii(&normalized)
+ }
+ 
++fn percent_encode_non_ascii(input: &str) -> String {
++    const HEX: &[u8; 16] = b"0123456789ABCDEF";
++    let mut encoded = String::with_capacity(input.len());
++
++    for c in input.chars() {
++        if c.is_ascii() {
++            encoded.push(c);
++            continue;
++        }
++
++        let mut utf8_buf = [0u8; 4];
++        for byte in c.encode_utf8(&mut utf8_buf).as_bytes() {
++            encoded.push('%');
++            encoded.push(HEX[(byte >> 4) as usize] as char);
++            encoded.push(HEX[(byte & 0x0F) as usize] as char);
++        }
++    }
++
++    encoded
++}
++
+ /// Format a shortcut string for display in the UI
+ /// Converts "cmd+shift+c" to "⌘⇧C"
+ pub(crate) fn format_shortcut_hint(shortcut: &str) -> String {
+@@ -50,3 +79,21 @@
+ 
+     result
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::to_deeplink_name;
++
++    #[test]
++    fn test_to_deeplink_name_percent_encodes_non_ascii_when_present() {
++        assert_eq!(to_deeplink_name("Café Script"), "caf%C3%A9-script");
++        assert_eq!(to_deeplink_name("日本語"), "%E6%97%A5%E6%9C%AC%E8%AA%9E");
++    }
++
++    #[test]
++    fn test_to_deeplink_name_returns_unnamed_when_input_is_empty_or_symbols() {
++        assert_eq!(to_deeplink_name(""), "_unnamed");
++        assert_eq!(to_deeplink_name("   "), "_unnamed");
++        assert_eq!(to_deeplink_name("!@#$%^&*()"), "_unnamed");
++    }
++}
+
+
+thinking
+**Planning targeted test run**
+codex
+The patch is in place in `shared.rs`; next I’m running scoped verification: targeted unit tests for the new `to_deeplink_name` behavior, then package-scoped `cargo check` and `cargo clippy` with warnings denied.
+
+thinking
+**Planning sequential checks and tests**
+exec
+/bin/zsh -lc 'cargo test --lib test_to_deeplink_name_' in /Users/johnlindquist/dev/script-kit-gpui exited 101 in 18.21s:
+   Compiling script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+error[E0761]: file for module `tests` found at both "src/protocol/message/tests.rs" and "src/protocol/message/tests/mod.rs"
+  --> src/protocol/message/mod.rs:87:1
+   |
+87 | mod tests;
+   | ^^^^^^^^^^
+   |
+   = help: delete or rename one of them to remove the ambiguity
+
+error[E0761]: file for module `tests` found at both "src/designs/core/tests.rs" and "src/designs/core/tests/mod.rs"
+ --> src/designs/core/part_04.rs:2:1
+  |
+2 | mod tests;
+  | ^^^^^^^^^^
+  |
+  = help: delete or rename one of them to remove the ambiguity
+
+error[E0412]: cannot find type `Action` in this scope
+   --> src/actions/builders_tests/part_01.rs:18:26
+    |
+file update:
+diff --git a/src/actions/builders/shared.rs b/src/actions/builders/shared.rs
+index a4a89877cf61da44005eeaf06d0c0deaacd87ef7..64570d566ab9cb65cc9424a6912c9ac2294076f8
+--- a/src/actions/builders/shared.rs
++++ b/src/actions/builders/shared.rs
+@@ -4,17 +4,46 @@
+ /// - "My Script" -> "my-script"
+ /// - "Clipboard History" -> "clipboard-history"
+ /// - "hello_world" -> "hello-world"
++/// - "Café Script" -> "caf%C3%A9-script"
+ pub fn to_deeplink_name(name: &str) -> String {
+-    name.to_lowercase()
++    let normalized = name
++        .to_lowercase()
+         .chars()
+         .map(|c| if c.is_alphanumeric() { c } else { '-' })
+         .collect::<String>()
+         .split('-')
+         .filter(|s| !s.is_empty())
+         .collect::<Vec<_>>()
+-        .join("-")
++        .join("-");
++
++    if normalized.is_empty() {
++        return "_unnamed".to_string();
++    }
++
++    percent_encode_non_ascii(&normalized)
+ }
+ 
++fn percent_encode_non_ascii(input: &str) -> String {
++    const HEX: &[u8; 16] = b"0123456789ABCDEF";
++    let mut encoded = String::with_capacity(input.len());
++
++    for c in input.chars() {
++        if c.is_ascii() {
++            encoded.push(c);
++            continue;
++        }
++
++        let mut utf8_buf = [0u8; 4];
++        for byte in c.encode_utf8(&mut utf8_buf).as_bytes() {
++            encoded.push('%');
++            encoded.push(HEX[(byte >> 4) as usize] as char);
++            encoded.push(HEX[(byte & 0x0F) as usize] as char);
++        }
++    }
++
++    encoded
++}
++
+ /// Format a shortcut string for display in the UI
+ /// Converts "cmd+shift+c" to "⌘⇧C"
+ pub(crate) fn format_shortcut_hint(shortcut: &str) -> String {
+@@ -50,3 +79,21 @@
+ 
+     result
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::to_deeplink_name;
++
++    #[test]
++    fn test_to_deeplink_name_percent_encodes_non_ascii_when_present() {
++        assert_eq!(to_deeplink_name("Café Script"), "caf%C3%A9-script");
++        assert_eq!(to_deeplink_name("日本語"), "%E6%97%A5%E6%9C%AC%E8%AA%9E");
++    }
++
++    #[test]
++    fn test_to_deeplink_name_returns_unnamed_when_input_is_empty_or_symbols() {
++        assert_eq!(to_deeplink_name(""), "_unnamed");
++        assert_eq!(to_deeplink_name("   "), "_unnamed");
++        assert_eq!(to_deeplink_name("!@#$%^&*()"), "_unnamed");
++    }
++}
+
+
+thinking
+**Running checks despite unrelated compile errors**
+codex
+The scoped test command hit unrelated pre-existing compile breakages across other test modules, not in `shared.rs`; I’ll still run the requested check/clippy commands next and capture the same-state evidence for this branch.
+
+thinking
+**Running scoped cargo check**
+exec
+/bin/zsh -lc 'cargo check -p script-kit-gpui' in /Users/johnlindquist/dev/script-kit-gpui exited 101 in 9.38s:
+    Checking script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+warning: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:32:16
+   |
+32 | pub(super) use inline::*;
+   |                ^^^^^^^^^
+   |
+note: the most public imported item is `pub(self)`
+  --> src/prompts/div/mod.rs:32:16
+   |
+32 | pub(super) use inline::*;
+   |                ^^^^^^^^^
+   = help: reduce the glob import's visibility or increase visibility of imported items
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:34:16
+   |
+34 | pub(super) use render_html::*;
+   |                ^^^^^^^^^^^^^^
+file update:
+diff --git a/src/actions/builders/shared.rs b/src/actions/builders/shared.rs
+index a4a89877cf61da44005eeaf06d0c0deaacd87ef7..64570d566ab9cb65cc9424a6912c9ac2294076f8
+--- a/src/actions/builders/shared.rs
++++ b/src/actions/builders/shared.rs
+@@ -4,17 +4,46 @@
+ /// - "My Script" -> "my-script"
+ /// - "Clipboard History" -> "clipboard-history"
+ /// - "hello_world" -> "hello-world"
++/// - "Café Script" -> "caf%C3%A9-script"
+ pub fn to_deeplink_name(name: &str) -> String {
+-    name.to_lowercase()
++    let normalized = name
++        .to_lowercase()
+         .chars()
+         .map(|c| if c.is_alphanumeric() { c } else { '-' })
+         .collect::<String>()
+         .split('-')
+         .filter(|s| !s.is_empty())
+         .collect::<Vec<_>>()
+-        .join("-")
++        .join("-");
++
++    if normalized.is_empty() {
++        return "_unnamed".to_string();
++    }
++
++    percent_encode_non_ascii(&normalized)
+ }
+ 
++fn percent_encode_non_ascii(input: &str) -> String {
++    const HEX: &[u8; 16] = b"0123456789ABCDEF";
++    let mut encoded = String::with_capacity(input.len());
++
++    for c in input.chars() {
++        if c.is_ascii() {
++            encoded.push(c);
++            continue;
++        }
++
++        let mut utf8_buf = [0u8; 4];
++        for byte in c.encode_utf8(&mut utf8_buf).as_bytes() {
++            encoded.push('%');
++            encoded.push(HEX[(byte >> 4) as usize] as char);
++            encoded.push(HEX[(byte & 0x0F) as usize] as char);
++        }
++    }
++
++    encoded
++}
++
+ /// Format a shortcut string for display in the UI
+ /// Converts "cmd+shift+c" to "⌘⇧C"
+ pub(crate) fn format_shortcut_hint(shortcut: &str) -> String {
+@@ -50,3 +79,21 @@
+ 
+     result
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::to_deeplink_name;
++
++    #[test]
++    fn test_to_deeplink_name_percent_encodes_non_ascii_when_present() {
++        assert_eq!(to_deeplink_name("Café Script"), "caf%C3%A9-script");
++        assert_eq!(to_deeplink_name("日本語"), "%E6%97%A5%E6%9C%AC%E8%AA%9E");
++    }
++
++    #[test]
++    fn test_to_deeplink_name_returns_unnamed_when_input_is_empty_or_symbols() {
++        assert_eq!(to_deeplink_name(""), "_unnamed");
++        assert_eq!(to_deeplink_name("   "), "_unnamed");
++        assert_eq!(to_deeplink_name("!@#$%^&*()"), "_unnamed");
++    }
++}
+
+
+thinking
+**Running clippy with all targets**
+exec
+/bin/zsh -lc 'cargo clippy -p script-kit-gpui --all-targets -- -D warnings' in /Users/johnlindquist/dev/script-kit-gpui exited 101 in 17.98s:
+    Checking script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+error[E0761]: file for module `tests` found at both "src/protocol/message/tests.rs" and "src/protocol/message/tests/mod.rs"
+  --> src/protocol/message/mod.rs:87:1
+   |
+87 | mod tests;
+   | ^^^^^^^^^^
+   |
+   = help: delete or rename one of them to remove the ambiguity
+
+error[E0761]: file for module `tests` found at both "src/designs/core/tests.rs" and "src/designs/core/tests/mod.rs"
+ --> src/designs/core/part_04.rs:2:1
+  |
+2 | mod tests;
+  | ^^^^^^^^^^
+  |
+  = help: delete or rename one of them to remove the ambiguity
+
+error: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:32:16
+   |
+file update:
+diff --git a/src/actions/builders/shared.rs b/src/actions/builders/shared.rs
+index a4a89877cf61da44005eeaf06d0c0deaacd87ef7..64570d566ab9cb65cc9424a6912c9ac2294076f8
+--- a/src/actions/builders/shared.rs
++++ b/src/actions/builders/shared.rs
+@@ -4,17 +4,46 @@
+ /// - "My Script" -> "my-script"
+ /// - "Clipboard History" -> "clipboard-history"
+ /// - "hello_world" -> "hello-world"
++/// - "Café Script" -> "caf%C3%A9-script"
+ pub fn to_deeplink_name(name: &str) -> String {
+-    name.to_lowercase()
++    let normalized = name
++        .to_lowercase()
+         .chars()
+         .map(|c| if c.is_alphanumeric() { c } else { '-' })
+         .collect::<String>()
+         .split('-')
+         .filter(|s| !s.is_empty())
+         .collect::<Vec<_>>()
+-        .join("-")
++        .join("-");
++
++    if normalized.is_empty() {
++        return "_unnamed".to_string();
++    }
++
++    percent_encode_non_ascii(&normalized)
+ }
+ 
++fn percent_encode_non_ascii(input: &str) -> String {
++    const HEX: &[u8; 16] = b"0123456789ABCDEF";
++    let mut encoded = String::with_capacity(input.len());
++
++    for c in input.chars() {
++        if c.is_ascii() {
++            encoded.push(c);
++            continue;
++        }
++
++        let mut utf8_buf = [0u8; 4];
++        for byte in c.encode_utf8(&mut utf8_buf).as_bytes() {
++            encoded.push('%');
++            encoded.push(HEX[(byte >> 4) as usize] as char);
++            encoded.push(HEX[(byte & 0x0F) as usize] as char);
++        }
++    }
++
++    encoded
++}
++
+ /// Format a shortcut string for display in the UI
+ /// Converts "cmd+shift+c" to "⌘⇧C"
+ pub(crate) fn format_shortcut_hint(shortcut: &str) -> String {
+@@ -50,3 +79,21 @@
+ 
+     result
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::to_deeplink_name;
++
++    #[test]
++    fn test_to_deeplink_name_percent_encodes_non_ascii_when_present() {
++        assert_eq!(to_deeplink_name("Café Script"), "caf%C3%A9-script");
++        assert_eq!(to_deeplink_name("日本語"), "%E6%97%A5%E6%9C%AC%E8%AA%9E");
++    }
++
++    #[test]
++    fn test_to_deeplink_name_returns_unnamed_when_input_is_empty_or_symbols() {
++        assert_eq!(to_deeplink_name(""), "_unnamed");
++        assert_eq!(to_deeplink_name("   "), "_unnamed");
++        assert_eq!(to_deeplink_name("!@#$%^&*()"), "_unnamed");
++    }
++}
+
+
+thinking
+**Assessing test options amid baseline failures**
+codex
+`cargo check` and `cargo clippy` both fail due pre-existing repository-wide errors unrelated to `shared.rs` (module duplication, clipboard model mismatches, and broad test import breakages). I’m now reviewing the exact diff to ensure only the intended deeplink fix is present.
+
+thinking
+**Reviewing targeted file changes**
+exec
+/bin/zsh -lc 'git diff -- src/actions/builders/shared.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+diff --git a/src/actions/builders/shared.rs b/src/actions/builders/shared.rs
+index a4a8987..64570d5 100644
+--- a/src/actions/builders/shared.rs
++++ b/src/actions/builders/shared.rs
+@@ -4,15 +4,44 @@
+ /// - "My Script" -> "my-script"
+ /// - "Clipboard History" -> "clipboard-history"
+ /// - "hello_world" -> "hello-world"
++/// - "Café Script" -> "caf%C3%A9-script"
+ pub fn to_deeplink_name(name: &str) -> String {
+-    name.to_lowercase()
++    let normalized = name
++        .to_lowercase()
+         .chars()
+         .map(|c| if c.is_alphanumeric() { c } else { '-' })
+         .collect::<String>()
+         .split('-')
+         .filter(|s| !s.is_empty())
+         .collect::<Vec<_>>()
+-        .join("-")
+file update:
+diff --git a/src/actions/builders/shared.rs b/src/actions/builders/shared.rs
+index a4a89877cf61da44005eeaf06d0c0deaacd87ef7..64570d566ab9cb65cc9424a6912c9ac2294076f8
+--- a/src/actions/builders/shared.rs
++++ b/src/actions/builders/shared.rs
+@@ -4,17 +4,46 @@
+ /// - "My Script" -> "my-script"
+ /// - "Clipboard History" -> "clipboard-history"
+ /// - "hello_world" -> "hello-world"
++/// - "Café Script" -> "caf%C3%A9-script"
+ pub fn to_deeplink_name(name: &str) -> String {
+-    name.to_lowercase()
++    let normalized = name
++        .to_lowercase()
+         .chars()
+         .map(|c| if c.is_alphanumeric() { c } else { '-' })
+         .collect::<String>()
+         .split('-')
+         .filter(|s| !s.is_empty())
+         .collect::<Vec<_>>()
+-        .join("-")
++        .join("-");
++
++    if normalized.is_empty() {
++        return "_unnamed".to_string();
++    }
++
++    percent_encode_non_ascii(&normalized)
+ }
+ 
++fn percent_encode_non_ascii(input: &str) -> String {
++    const HEX: &[u8; 16] = b"0123456789ABCDEF";
++    let mut encoded = String::with_capacity(input.len());
++
++    for c in input.chars() {
++        if c.is_ascii() {
++            encoded.push(c);
++            continue;
++        }
++
++        let mut utf8_buf = [0u8; 4];
++        for byte in c.encode_utf8(&mut utf8_buf).as_bytes() {
++            encoded.push('%');
++            encoded.push(HEX[(byte >> 4) as usize] as char);
++            encoded.push(HEX[(byte & 0x0F) as usize] as char);
++        }
++    }
++
++    encoded
++}
++
+ /// Format a shortcut string for display in the UI
+ /// Converts "cmd+shift+c" to "⌘⇧C"
+ pub(crate) fn format_shortcut_hint(shortcut: &str) -> String {
+@@ -50,3 +79,21 @@
+ 
+     result
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::to_deeplink_name;
++
++    #[test]
++    fn test_to_deeplink_name_percent_encodes_non_ascii_when_present() {
++        assert_eq!(to_deeplink_name("Café Script"), "caf%C3%A9-script");
++        assert_eq!(to_deeplink_name("日本語"), "%E6%97%A5%E6%9C%AC%E8%AA%9E");
++    }
++
++    #[test]
++    fn test_to_deeplink_name_returns_unnamed_when_input_is_empty_or_symbols() {
++        assert_eq!(to_deeplink_name(""), "_unnamed");
++        assert_eq!(to_deeplink_name("   "), "_unnamed");
++        assert_eq!(to_deeplink_name("!@#$%^&*()"), "_unnamed");
++    }
++}
+
+
+thinking
+**Clarifying commit policy amid test failures**
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts update --id codex-fix-deeplink-encoding --status in_progress --notes "Implemented to_deeplink_name percent-encoding + _unnamed fallback with unit tests in shared.rs; verifying commands captured unrelated repo failures"' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 53ms:
+Updated: codex-fix-deeplink-encoding
+file update:
+diff --git a/src/actions/builders/shared.rs b/src/actions/builders/shared.rs
+index a4a89877cf61da44005eeaf06d0c0deaacd87ef7..64570d566ab9cb65cc9424a6912c9ac2294076f8
+--- a/src/actions/builders/shared.rs
++++ b/src/actions/builders/shared.rs
+@@ -4,17 +4,46 @@
+ /// - "My Script" -> "my-script"
+ /// - "Clipboard History" -> "clipboard-history"
+ /// - "hello_world" -> "hello-world"
++/// - "Café Script" -> "caf%C3%A9-script"
+ pub fn to_deeplink_name(name: &str) -> String {
+-    name.to_lowercase()
++    let normalized = name
++        .to_lowercase()
+         .chars()
+         .map(|c| if c.is_alphanumeric() { c } else { '-' })
+         .collect::<String>()
+         .split('-')
+         .filter(|s| !s.is_empty())
+         .collect::<Vec<_>>()
+-        .join("-")
++        .join("-");
++
++    if normalized.is_empty() {
++        return "_unnamed".to_string();
++    }
++
++    percent_encode_non_ascii(&normalized)
+ }
+ 
++fn percent_encode_non_ascii(input: &str) -> String {
++    const HEX: &[u8; 16] = b"0123456789ABCDEF";
++    let mut encoded = String::with_capacity(input.len());
++
++    for c in input.chars() {
++        if c.is_ascii() {
++            encoded.push(c);
++            continue;
++        }
++
++        let mut utf8_buf = [0u8; 4];
++        for byte in c.encode_utf8(&mut utf8_buf).as_bytes() {
++            encoded.push('%');
++            encoded.push(HEX[(byte >> 4) as usize] as char);
++            encoded.push(HEX[(byte & 0x0F) as usize] as char);
++        }
++    }
++
++    encoded
++}
++
+ /// Format a shortcut string for display in the UI
+ /// Converts "cmd+shift+c" to "⌘⇧C"
+ pub(crate) fn format_shortcut_hint(shortcut: &str) -> String {
+@@ -50,3 +79,21 @@
+ 
+     result
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::to_deeplink_name;
++
++    #[test]
++    fn test_to_deeplink_name_percent_encodes_non_ascii_when_present() {
++        assert_eq!(to_deeplink_name("Café Script"), "caf%C3%A9-script");
++        assert_eq!(to_deeplink_name("日本語"), "%E6%97%A5%E6%9C%AC%E8%AA%9E");
++    }
++
++    #[test]
++    fn test_to_deeplink_name_returns_unnamed_when_input_is_empty_or_symbols() {
++        assert_eq!(to_deeplink_name(""), "_unnamed");
++        assert_eq!(to_deeplink_name("   "), "_unnamed");
++        assert_eq!(to_deeplink_name("!@#$%^&*()"), "_unnamed");
++    }
++}
+
+
+thinking
+**Verifying formatting and changes**
+exec
+/bin/zsh -lc 'git status --short -- src/actions/builders/shared.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+ M src/actions/builders/shared.rs
+file update:
+diff --git a/src/actions/builders/shared.rs b/src/actions/builders/shared.rs
+index a4a89877cf61da44005eeaf06d0c0deaacd87ef7..64570d566ab9cb65cc9424a6912c9ac2294076f8
+--- a/src/actions/builders/shared.rs
++++ b/src/actions/builders/shared.rs
+@@ -4,17 +4,46 @@
+ /// - "My Script" -> "my-script"
+ /// - "Clipboard History" -> "clipboard-history"
+ /// - "hello_world" -> "hello-world"
++/// - "Café Script" -> "caf%C3%A9-script"
+ pub fn to_deeplink_name(name: &str) -> String {
+-    name.to_lowercase()
++    let normalized = name
++        .to_lowercase()
+         .chars()
+         .map(|c| if c.is_alphanumeric() { c } else { '-' })
+         .collect::<String>()
+         .split('-')
+         .filter(|s| !s.is_empty())
+         .collect::<Vec<_>>()
+-        .join("-")
++        .join("-");
++
++    if normalized.is_empty() {
++        return "_unnamed".to_string();
++    }
++
++    percent_encode_non_ascii(&normalized)
+ }
+ 
++fn percent_encode_non_ascii(input: &str) -> String {
++    const HEX: &[u8; 16] = b"0123456789ABCDEF";
++    let mut encoded = String::with_capacity(input.len());
++
++    for c in input.chars() {
++        if c.is_ascii() {
++            encoded.push(c);
++            continue;
++        }
++
++        let mut utf8_buf = [0u8; 4];
++        for byte in c.encode_utf8(&mut utf8_buf).as_bytes() {
++            encoded.push('%');
++            encoded.push(HEX[(byte >> 4) as usize] as char);
++            encoded.push(HEX[(byte & 0x0F) as usize] as char);
++        }
++    }
++
++    encoded
++}
++
+ /// Format a shortcut string for display in the UI
+ /// Converts "cmd+shift+c" to "⌘⇧C"
+ pub(crate) fn format_shortcut_hint(shortcut: &str) -> String {
+@@ -50,3 +79,21 @@
+ 
+     result
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::to_deeplink_name;
++
++    #[test]
++    fn test_to_deeplink_name_percent_encodes_non_ascii_when_present() {
++        assert_eq!(to_deeplink_name("Café Script"), "caf%C3%A9-script");
++        assert_eq!(to_deeplink_name("日本語"), "%E6%97%A5%E6%9C%AC%E8%AA%9E");
++    }
++
++    #[test]
++    fn test_to_deeplink_name_returns_unnamed_when_input_is_empty_or_symbols() {
++        assert_eq!(to_deeplink_name(""), "_unnamed");
++        assert_eq!(to_deeplink_name("   "), "_unnamed");
++        assert_eq!(to_deeplink_name("!@#$%^&*()"), "_unnamed");
++    }
++}
+
+
+thinking
+**Planning test summary and release**
+codex
+I’ve finished the scoped code change and verification attempts; next I’m marking the agent status as done with notes and releasing the file claim.
+
+thinking
+**Completing update and release**
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts update --id codex-fix-deeplink-encoding --status done --notes "Updated src/actions/builders/shared.rs: to_deeplink_name now percent-encodes non-ASCII and returns _unnamed on empty slug; added local unit tests. Verification attempted with cargo check/clippy but blocked by unrelated repo errors (duplicate test modules, clipboard ContentType exhaustiveness, missing ClipboardEntry fields)."' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 53ms:
+Updated: codex-fix-deeplink-encoding
+file update:
+diff --git a/src/actions/builders/shared.rs b/src/actions/builders/shared.rs
+index a4a89877cf61da44005eeaf06d0c0deaacd87ef7..64570d566ab9cb65cc9424a6912c9ac2294076f8
+--- a/src/actions/builders/shared.rs
++++ b/src/actions/builders/shared.rs
+@@ -4,17 +4,46 @@
+ /// - "My Script" -> "my-script"
+ /// - "Clipboard History" -> "clipboard-history"
+ /// - "hello_world" -> "hello-world"
++/// - "Café Script" -> "caf%C3%A9-script"
+ pub fn to_deeplink_name(name: &str) -> String {
+-    name.to_lowercase()
++    let normalized = name
++        .to_lowercase()
+         .chars()
+         .map(|c| if c.is_alphanumeric() { c } else { '-' })
+         .collect::<String>()
+         .split('-')
+         .filter(|s| !s.is_empty())
+         .collect::<Vec<_>>()
+-        .join("-")
++        .join("-");
++
++    if normalized.is_empty() {
++        return "_unnamed".to_string();
++    }
++
++    percent_encode_non_ascii(&normalized)
+ }
+ 
++fn percent_encode_non_ascii(input: &str) -> String {
++    const HEX: &[u8; 16] = b"0123456789ABCDEF";
++    let mut encoded = String::with_capacity(input.len());
++
++    for c in input.chars() {
++        if c.is_ascii() {
++            encoded.push(c);
++            continue;
++        }
++
++        let mut utf8_buf = [0u8; 4];
++        for byte in c.encode_utf8(&mut utf8_buf).as_bytes() {
++            encoded.push('%');
++            encoded.push(HEX[(byte >> 4) as usize] as char);
++            encoded.push(HEX[(byte & 0x0F) as usize] as char);
++        }
++    }
++
++    encoded
++}
++
+ /// Format a shortcut string for display in the UI
+ /// Converts "cmd+shift+c" to "⌘⇧C"
+ pub(crate) fn format_shortcut_hint(shortcut: &str) -> String {
+@@ -50,3 +79,21 @@
+ 
+     result
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::to_deeplink_name;
++
++    #[test]
++    fn test_to_deeplink_name_percent_encodes_non_ascii_when_present() {
++        assert_eq!(to_deeplink_name("Café Script"), "caf%C3%A9-script");
++        assert_eq!(to_deeplink_name("日本語"), "%E6%97%A5%E6%9C%AC%E8%AA%9E");
++    }
++
++    #[test]
++    fn test_to_deeplink_name_returns_unnamed_when_input_is_empty_or_symbols() {
++        assert_eq!(to_deeplink_name(""), "_unnamed");
++        assert_eq!(to_deeplink_name("   "), "_unnamed");
++        assert_eq!(to_deeplink_name("!@#$%^&*()"), "_unnamed");
++    }
++}
+
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts release --id codex-fix-deeplink-encoding src/actions/builders/shared.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+Released for codex-fix-deeplink-encoding: src/actions/builders/shared.rs
+file update:
+diff --git a/src/actions/builders/shared.rs b/src/actions/builders/shared.rs
+index a4a89877cf61da44005eeaf06d0c0deaacd87ef7..64570d566ab9cb65cc9424a6912c9ac2294076f8
+--- a/src/actions/builders/shared.rs
++++ b/src/actions/builders/shared.rs
+@@ -4,17 +4,46 @@
+ /// - "My Script" -> "my-script"
+ /// - "Clipboard History" -> "clipboard-history"
+ /// - "hello_world" -> "hello-world"
++/// - "Café Script" -> "caf%C3%A9-script"
+ pub fn to_deeplink_name(name: &str) -> String {
+-    name.to_lowercase()
++    let normalized = name
++        .to_lowercase()
+         .chars()
+         .map(|c| if c.is_alphanumeric() { c } else { '-' })
+         .collect::<String>()
+         .split('-')
+         .filter(|s| !s.is_empty())
+         .collect::<Vec<_>>()
+-        .join("-")
++        .join("-");
++
++    if normalized.is_empty() {
++        return "_unnamed".to_string();
++    }
++
++    percent_encode_non_ascii(&normalized)
+ }
+ 
++fn percent_encode_non_ascii(input: &str) -> String {
++    const HEX: &[u8; 16] = b"0123456789ABCDEF";
++    let mut encoded = String::with_capacity(input.len());
++
++    for c in input.chars() {
++        if c.is_ascii() {
++            encoded.push(c);
++            continue;
++        }
++
++        let mut utf8_buf = [0u8; 4];
++        for byte in c.encode_utf8(&mut utf8_buf).as_bytes() {
++            encoded.push('%');
++            encoded.push(HEX[(byte >> 4) as usize] as char);
++            encoded.push(HEX[(byte & 0x0F) as usize] as char);
++        }
++    }
++
++    encoded
++}
++
+ /// Format a shortcut string for display in the UI
+ /// Converts "cmd+shift+c" to "⌘⇧C"
+ pub(crate) fn format_shortcut_hint(shortcut: &str) -> String {
+@@ -50,3 +79,21 @@
+ 
+     result
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::to_deeplink_name;
++
++    #[test]
++    fn test_to_deeplink_name_percent_encodes_non_ascii_when_present() {
++        assert_eq!(to_deeplink_name("Café Script"), "caf%C3%A9-script");
++        assert_eq!(to_deeplink_name("日本語"), "%E6%97%A5%E6%9C%AC%E8%AA%9E");
++    }
++
++    #[test]
++    fn test_to_deeplink_name_returns_unnamed_when_input_is_empty_or_symbols() {
++        assert_eq!(to_deeplink_name(""), "_unnamed");
++        assert_eq!(to_deeplink_name("   "), "_unnamed");
++        assert_eq!(to_deeplink_name("!@#$%^&*()"), "_unnamed");
++    }
++}
+
+
+thinking
+**Preparing final summary structure**
+codex
+Changed `to_deeplink_name` in `src/actions/builders/shared.rs:8` to address both requested issues:
+
+- Non-ASCII slug chars are now percent-encoded (UTF-8 bytes, uppercase hex), e.g. `Café Script -> caf%C3%A9-script`.
+- Empty/symbol-only input now returns sentinel slug `_unnamed` instead of `""`.
+
+Also added focused unit tests in `src/actions/builders/shared.rs:83`:
+
+- `test_to_deeplink_name_percent_encodes_non_ascii_when_present`
+- `test_to_deeplink_name_returns_unnamed_when_input_is_empty_or_symbols`
+
+**Verification run**
+
+- `cargo check -p script-kit-gpui` (failed due unrelated pre-existing repo errors)
+- `cargo clippy -p script-kit-gpui --all-targets -- -D warnings` (failed due unrelated pre-existing repo errors)
+- `cargo test --lib test_to_deeplink_name_` (failed before running due unrelated pre-existing repo errors)
+
+Key unrelated blockers observed:
+
+- Duplicate test module files: `src/protocol/message/mod.rs:87`, `src/designs/core/part_04.rs:2`
+- Missing `ClipboardEntry` fields in other areas: `src/clipboard_history/database.rs:454`, `src/clipboard_history/db_worker/db_impl.rs:67`
+- Non-exhaustive `ContentType` matches: `src/clipboard_history/clipboard.rs:53`, `src/clipboard_history/database.rs:222`
+
+**How to test (once repo baseline compiles again)**
+
+1. `cargo test --lib test_to_deeplink_name_percent_encodes_non_ascii_when_present`
+2. `cargo test --lib test_to_deeplink_name_returns_unnamed_when_input_is_empty_or_symbols`
+3. `cargo check -p script-kit-gpui`
+4. `cargo clippy -p script-kit-gpui --all-targets -- -D warnings`
+
+**Risks / known gaps**
+
+- Existing tests across the repo still expect old empty-string behavior for symbol-only names; those tests were not updated in this scoped task.
+- Parser-side percent-decoding (`scriptkit://run/...`) is still not implemented; this change takes the encoding approach instead.
+
+Commits made: none.
+file update:
+diff --git a/src/actions/builders/shared.rs b/src/actions/builders/shared.rs
+index a4a89877cf61da44005eeaf06d0c0deaacd87ef7..64570d566ab9cb65cc9424a6912c9ac2294076f8
+--- a/src/actions/builders/shared.rs
++++ b/src/actions/builders/shared.rs
+@@ -4,17 +4,46 @@
+ /// - "My Script" -> "my-script"
+ /// - "Clipboard History" -> "clipboard-history"
+ /// - "hello_world" -> "hello-world"
++/// - "Café Script" -> "caf%C3%A9-script"
+ pub fn to_deeplink_name(name: &str) -> String {
+-    name.to_lowercase()
++    let normalized = name
++        .to_lowercase()
+         .chars()
+         .map(|c| if c.is_alphanumeric() { c } else { '-' })
+         .collect::<String>()
+         .split('-')
+         .filter(|s| !s.is_empty())
+         .collect::<Vec<_>>()
+-        .join("-")
++        .join("-");
++
++    if normalized.is_empty() {
++        return "_unnamed".to_string();
++    }
++
++    percent_encode_non_ascii(&normalized)
+ }
+ 
++fn percent_encode_non_ascii(input: &str) -> String {
++    const HEX: &[u8; 16] = b"0123456789ABCDEF";
++    let mut encoded = String::with_capacity(input.len());
++
++    for c in input.chars() {
++        if c.is_ascii() {
++            encoded.push(c);
++            continue;
++        }
++
++        let mut utf8_buf = [0u8; 4];
++        for byte in c.encode_utf8(&mut utf8_buf).as_bytes() {
++            encoded.push('%');
++            encoded.push(HEX[(byte >> 4) as usize] as char);
++            encoded.push(HEX[(byte & 0x0F) as usize] as char);
++        }
++    }
++
++    encoded
++}
++
+ /// Format a shortcut string for display in the UI
+ /// Converts "cmd+shift+c" to "⌘⇧C"
+ pub(crate) fn format_shortcut_hint(shortcut: &str) -> String {
+@@ -50,3 +79,21 @@
+ 
+     result
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::to_deeplink_name;
++
++    #[test]
++    fn test_to_deeplink_name_percent_encodes_non_ascii_when_present() {
++        assert_eq!(to_deeplink_name("Café Script"), "caf%C3%A9-script");
++        assert_eq!(to_deeplink_name("日本語"), "%E6%97%A5%E6%9C%AC%E8%AA%9E");
++    }
++
++    #[test]
++    fn test_to_deeplink_name_returns_unnamed_when_input_is_empty_or_symbols() {
++        assert_eq!(to_deeplink_name(""), "_unnamed");
++        assert_eq!(to_deeplink_name("   "), "_unnamed");
++        assert_eq!(to_deeplink_name("!@#$%^&*()"), "_unnamed");
++    }
++}
+
+tokens used
+72,167
+Changed `to_deeplink_name` in `src/actions/builders/shared.rs:8` to address both requested issues:
+
+- Non-ASCII slug chars are now percent-encoded (UTF-8 bytes, uppercase hex), e.g. `Café Script -> caf%C3%A9-script`.
+- Empty/symbol-only input now returns sentinel slug `_unnamed` instead of `""`.
+
+Also added focused unit tests in `src/actions/builders/shared.rs:83`:
+
+- `test_to_deeplink_name_percent_encodes_non_ascii_when_present`
+- `test_to_deeplink_name_returns_unnamed_when_input_is_empty_or_symbols`
+
+**Verification run**
+
+- `cargo check -p script-kit-gpui` (failed due unrelated pre-existing repo errors)
+- `cargo clippy -p script-kit-gpui --all-targets -- -D warnings` (failed due unrelated pre-existing repo errors)
+- `cargo test --lib test_to_deeplink_name_` (failed before running due unrelated pre-existing repo errors)
+
+Key unrelated blockers observed:
+
+- Duplicate test module files: `src/protocol/message/mod.rs:87`, `src/designs/core/part_04.rs:2`
+- Missing `ClipboardEntry` fields in other areas: `src/clipboard_history/database.rs:454`, `src/clipboard_history/db_worker/db_impl.rs:67`
+- Non-exhaustive `ContentType` matches: `src/clipboard_history/clipboard.rs:53`, `src/clipboard_history/database.rs:222`
+
+**How to test (once repo baseline compiles again)**
+
+1. `cargo test --lib test_to_deeplink_name_percent_encodes_non_ascii_when_present`
+2. `cargo test --lib test_to_deeplink_name_returns_unnamed_when_input_is_empty_or_symbols`
+3. `cargo check -p script-kit-gpui`
+4. `cargo clippy -p script-kit-gpui --all-targets -- -D warnings`
+
+**Risks / known gaps**
+
+- Existing tests across the repo still expect old empty-string behavior for symbol-only names; those tests were not updated in this scoped task.
+- Parser-side percent-decoding (`scriptkit://run/...`) is still not implemented; this change takes the encoding approach instead.
+
+Commits made: none.
+
+
+==== exit @ 2026-02-07T23:39:45.221Z code=0 status=done ====

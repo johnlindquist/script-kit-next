@@ -1,0 +1,2902 @@
+==== spawn @ 2026-02-08T02:59:25.198Z ====
+cmd: codex "exec" "--cd" "/Users/johnlindquist/dev/script-kit-gpui" "--model" "gpt-5.3-codex" "-c" "model_reasoning_effort=\"xhigh\"" "-c" "model_auto_compact_token_limit=120000" "-c" "developer_instructions=\"You are Codex implementer agent \\\"codex-wire-clipboard-exclusions\\\".\\n\\n## Coordination\\nThis repo runs parallel agents in ONE working tree. Before editing any file, you MUST claim it.\\nCommands (run via shell):\\n  - View roster: ~/.claude/bin/swarm.ts status\\n  - Claim files (blocks until free): ~/.claude/bin/swarm.ts claim --wait --id codex-wire-clipboard-exclusions path/to/file\\n  - Release: ~/.claude/bin/swarm.ts release --id codex-wire-clipboard-exclusions path/to/file\\n  - Update status/notes: ~/.claude/bin/swarm.ts update --id codex-wire-clipboard-exclusions --status in_progress --notes \\\"...\\\"\\nRules:\\n  - Never edit a file you haven't claimed.\\n  - Keep claims tight (claim only what you're actively changing).\\n  - If blocked, set status=blocked and say what you're waiting on.\\n  - When finished, set status=done and release claims.\\n\\n## Development practices (this code is maintained by AI agents)\\n  - Log state transitions with enough context to diagnose failures from logs alone.\\n  - Structured errors: include what was attempted, what failed, and current state.\\n  - Name things for grepability — unique identifiers agents can find on the first search.\\n  - Every behavior change gets a test. Untested code is invisible to the next agent.\\n  - Test names describe the scenario: test_X_does_Y_when_Z.\\n  - Keep functions small and single-purpose. 500-line functions burn agent context.\\n  - Use types to encode constraints (enums > strings for errors).\\n\\n## CRITICAL: Parallel-safe verification\\n  - Other agents are modifying other files RIGHT NOW. Full test suites WILL show their failures.\\n  - ONLY run tests that cover YOUR changed files. Scope every test/check command:\\n    Rust: cargo test -p your-crate -- module::test_name | JS: npx jest your/file.test.ts\\n  - Do NOT run: cargo test (unscoped), cargo check (whole workspace), npm test (unscoped).\\n  - If a scoped test fails, it's YOUR bug — fix it. If tests outside your scope fail, ignore them.\\n\\n## Git commit discipline\\n  - NEVER commit unverified work. Run tests/lints/type-checks FIRST. If it fails, fix it before committing.\\n  - A commit is a declaration: \\\"this works and here's the proof.\\\"\\n  - Commit FREQUENTLY — after each meaningful unit of VERIFIED work, not just at the end.\\n  - A \\\"unit\\\" = one logical change that passes verification (new function, bug fix, refactor, test added).\\n  - NEVER batch an entire task into one giant commit. Small commits are searchable; big ones aren't.\\n  - Commit message format:\\n      Line 1: <type>(<scope>): <what changed> (imperative, max 72 chars)\\n      Line 3+: WHY this change was made, WHAT was verified, and HOW to test it.\\n    Types: feat, fix, refactor, test, docs, chore\\n    Example:\\n      feat(auth): add refresh token rotation\\n      \\n      Tokens now rotate on each refresh call to prevent replay attacks.\\n      The old token is invalidated immediately on rotation.\\n      \\n      Verified: cargo test --lib -- auth::refresh (4 tests pass)\\n      Verified: manual smoke test via curl — token rotates, old token returns 401\\n  - The \\\"Verified:\\\" lines are REQUIRED. Future agents will read git log to understand\\n    what was tested and how to re-verify. This is the most valuable part of the message.\\n  - In your final message, list all commits you made with their hashes.\\n\\n## Time budget\\nYou have approximately 10 minutes. If your task is too broad to complete in time:\\n(1) Commit any verified progress.\\n(2) Run: ~/.claude/bin/swarm.ts update --id YOUR_ID --status needs_split --notes 'suggest: 1) sub-task-desc scope:files 2) sub-task-desc scope:files'.\\n(3) Exit cleanly. The dispatcher will read your suggestions and spawn narrower workers.\"" "--output-last-message" "/Users/johnlindquist/dev/script-kit-gpui/.ai/logs/codex-wire-clipboard-exclusions.final.md" "--yolo" "You are agent codex-wire-clipboard-exclusions.\n\nCurrent parallel-agent roster (read this first):\n```\nSWARM SNAPSHOT @ 2026-02-08T02:59:25.175Z\n- codex-wire-clipboard-exclusions [starting] scope=src/clipboard_history/** task=Wire up the existing clipboard password manager exclusion list (src/clipboard_history/exclusions.rs) into the actual cl…\n- codex-wire-favorites [in_progress] scope=src/favorites/**,src/builtins/part_000.rs,src/builtins/part_001_entries/**,src/app_execute/builtin_execution.rs,src/actions/builders/script_context.rs task=Wire up the existing src/favorites/mod.rs storage module into the app as a working feature. The module already has load…\n  claims: src/builtins/part_000.rs, src/builtins/part_001_entries/entries_003.rs, src/app_execute/builtin_execution.rs, src/actions/builders/script_context.rs\n  notes: Claimed builtins/builtin_execution/script_context; implementing favorites builtin + toggle action wiring\n- codex-wire-quicklinks [in_progress] scope=src/quicklinks/**,src/builtins/part_000.rs,src/builtins/part_001_entries/**,src/app_execute/builtin_execution.rs task=Wire up the existing src/quicklinks/mod.rs storage module into the app as a working built-in feature. The module alread…\n  notes: spawned codex (exec)\n```\n\nYour assignment:\n- Task: Wire up the existing clipboard password manager exclusion list (src/clipboard_history/exclusions.rs) into the actual clipboard monitor so passwords are never captured. The module exports should_exclude_clipboard(bundle_id) which checks against known password manager bundle IDs. You need to: (1) Find where clipboard events are captured/stored in src/clipboard_history/clipboard.rs and src/clipboard_history/monitor.rs, (2) Call should_exclude_clipboard() with the source app's bundle ID before storing clipboard content, (3) If the source matches a password manager, skip recording that clipboard entry entirely, (4) Remove the #[allow(unused_imports)] from the re-export in src/clipboard_history/mod.rs since it will now be used. Run cargo check && cargo clippy --all-targets -- -D warnings && cargo test after changes.\n- Scope: src/clipboard_history/**\n\nOperating constraints:\n- Single working tree (no worktrees, no patches).\n- You MUST claim files before editing (~/.claude/bin/swarm.ts claim --wait ...).\n\nDeliverables:\n- Make the code changes required by the task.\n- Run the most relevant tests/linters.\n- In your FINAL message, include: changed files, how to test, and any risks/known gaps."
+
+OpenAI Codex v0.98.0 (research preview)
+--------
+workdir: /Users/johnlindquist/dev/script-kit-gpui
+model: gpt-5.3-codex
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: xhigh
+reasoning summaries: auto
+session id: 019c3b30-93c1-72b2-b50d-9297315178d0
+--------
+user
+You are agent codex-wire-clipboard-exclusions.
+
+Current parallel-agent roster (read this first):
+```
+SWARM SNAPSHOT @ 2026-02-08T02:59:25.175Z
+- codex-wire-clipboard-exclusions [starting] scope=src/clipboard_history/** task=Wire up the existing clipboard password manager exclusion list (src/clipboard_history/exclusions.rs) into the actual cl…
+- codex-wire-favorites [in_progress] scope=src/favorites/**,src/builtins/part_000.rs,src/builtins/part_001_entries/**,src/app_execute/builtin_execution.rs,src/actions/builders/script_context.rs task=Wire up the existing src/favorites/mod.rs storage module into the app as a working feature. The module already has load…
+  claims: src/builtins/part_000.rs, src/builtins/part_001_entries/entries_003.rs, src/app_execute/builtin_execution.rs, src/actions/builders/script_context.rs
+  notes: Claimed builtins/builtin_execution/script_context; implementing favorites builtin + toggle action wiring
+- codex-wire-quicklinks [in_progress] scope=src/quicklinks/**,src/builtins/part_000.rs,src/builtins/part_001_entries/**,src/app_execute/builtin_execution.rs task=Wire up the existing src/quicklinks/mod.rs storage module into the app as a working built-in feature. The module alread…
+  notes: spawned codex (exec)
+```
+
+Your assignment:
+- Task: Wire up the existing clipboard password manager exclusion list (src/clipboard_history/exclusions.rs) into the actual clipboard monitor so passwords are never captured. The module exports should_exclude_clipboard(bundle_id) which checks against known password manager bundle IDs. You need to: (1) Find where clipboard events are captured/stored in src/clipboard_history/clipboard.rs and src/clipboard_history/monitor.rs, (2) Call should_exclude_clipboard() with the source app's bundle ID before storing clipboard content, (3) If the source matches a password manager, skip recording that clipboard entry entirely, (4) Remove the #[allow(unused_imports)] from the re-export in src/clipboard_history/mod.rs since it will now be used. Run cargo check && cargo clippy --all-targets -- -D warnings && cargo test after changes.
+- Scope: src/clipboard_history/**
+
+Operating constraints:
+- Single working tree (no worktrees, no patches).
+- You MUST claim files before editing (~/.claude/bin/swarm.ts claim --wait ...).
+
+Deliverables:
+- Make the code changes required by the task.
+- Run the most relevant tests/linters.
+- In your FINAL message, include: changed files, how to test, and any risks/known gaps.
+warning: Under-development features enabled: responses_websockets. Under-development features are incomplete and may behave unpredictably. To suppress this warning, set `suppress_unstable_features_warning = true` in /Users/johnlindquist/.codex/config.toml.
+mcp: deepwiki starting
+mcp: deepwiki ready
+mcp startup: ready: deepwiki
+
+thinking
+**Reconciling conflicting test commands**
+codex
+I’ll wire the clipboard exclusion check into the clipboard capture path in `src/clipboard_history/**`, then run scoped Rust verification for this area. First I’m checking the swarm roster and locating the exact capture/store call sites before editing.
+
+thinking
+**Running status command**
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts status' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+Repo: /Users/johnlindquist/dev/script-kit-gpui
+Updated: 2026-02-08T02:59:44.005Z
+
+Active agents (3):
+codex-wire-clipboard-exclusions [in_progress] codex/gpt-5.3-codex/exec
+  task: Wire up the existing clipboard password manager exclusion list (src/clipboard_history/exclusions.rs) into the actual cl…
+  scope: src/clipboard_history/**
+  claims: (none)
+  notes: spawned codex (exec)
+
+codex-wire-favorites [in_progress] codex/gpt-5.3-codex/exec
+  task: Wire up the existing src/favorites/mod.rs storage module into the app as a working feature. The module already has load…
+  scope: src/favorites/**,src/builtins/part_000.rs,src/builtins/part_001_entries/**,src/app_execute/builtin_execution.rs,src/act…
+  claims(4): src/builtins/part_000.rs, src/builtins/part_001_entries/entries_003.rs, src/app_execute/builtin_execution.rs, src/actions/builders/script_context.rs
+  notes: Claimed builtins/builtin_execution/script_context; implementing favorites builtin + toggle action wiring
+
+codex-wire-quicklinks [in_progress] codex/gpt-5.3-codex/exec
+  task: Wire up the existing src/quicklinks/mod.rs storage module into the app as a working built-in feature. The module alread…
+  scope: src/quicklinks/**,src/builtins/part_000.rs,src/builtins/part_001_entries/**,src/app_execute/builtin_execution.rs
+  claims: (none)
+
+thinking
+**Planning parallel file reads**
+codex
+I confirmed no existing claims for this task. Next I’m inspecting `clipboard.rs`, `monitor.rs`, `exclusions.rs`, and `mod.rs` to identify the store path and minimal edit points.
+exec
+/bin/zsh -lc 'rg --files src/clipboard_history' in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,240p' src/clipboard_history/exclusions.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,200p' src/clipboard_history/mod.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,280p' src/clipboard_history/clipboard.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,320p' src/clipboard_history/monitor.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+src/clipboard_history/macos_paste.rs
+src/clipboard_history/clipboard.rs
+src/clipboard_history/mod.rs
+src/clipboard_history/image.rs
+src/clipboard_history/db_worker/db_impl.rs
+src/clipboard_history/db_worker/mod.rs
+src/clipboard_history/quick_look.rs
+src/clipboard_history/open_with.rs
+src/clipboard_history/change_detection.rs
+src/clipboard_history/blob_store.rs
+src/clipboard_history/exclusions.rs
+src/clipboard_history/monitor.rs
+src/clipboard_history/config.rs
+src/clipboard_history/database.rs
+src/clipboard_history/temp_file.rs
+src/clipboard_history/types.rs
+src/clipboard_history/cache.rs
+ succeeded in 51ms:
+//! Clipboard operations
+//!
+//! Functions for copying entries back to the system clipboard.
+
+use anyhow::{Context, Result};
+use arboard::Clipboard;
+use rusqlite::params;
+use tracing::{debug, info};
+
+use super::blob_store::is_blob_content;
+use super::cache::refresh_entry_cache;
+use super::database::get_connection;
+use super::image::decode_base64_image;
+use super::macos_paste::copy_blob_with_file_url;
+use super::types::ContentType;
+
+/// Copy an entry back to the clipboard
+///
+/// # Arguments
+/// * `id` - The entry ID to copy
+ succeeded in 51ms:
+//! Clipboard History Module
+//!
+//! Provides SQLite-backed clipboard history with background monitoring.
+//!
+//! ## Features
+//! - Stores text and base64-encoded images
+//! - Background polling every 500ms
+//! - Time-based retention (default 30 days)
+//! - Pin/unpin entries to prevent deletion
+//! - Pagination support for lazy loading
+//! - Time-based grouping (Today, Yesterday, This Week, etc.)
+//! - OCR text storage for image entries
+//!
+//! ## Module Structure
+//! - `types`: Core types (ContentType, TimeGroup, ClipboardEntry)
+//! - `config`: Retention and text length configuration
+//! - `cache`: LRU caching for images and entries
+//! - `database`: SQLite operations (CRUD, migrations)
+//! - `image`: Image encoding/decoding (PNG, RGBA)
+//! - `monitor`: Background clipboard polling and maintenance
+ succeeded in 51ms:
+pub const EXCLUDED_BUNDLE_IDS: &[&str] = &[
+    "com.1password.1password",
+    "com.agilebits.onepassword7",
+    "com.bitwarden.desktop",
+    "com.lastpass.LastPass",
+    "org.keepassxc.keepassxc",
+    "com.dashlane.Dashlane",
+];
+
+pub fn should_exclude_clipboard(source_bundle_id: &str) -> bool {
+    EXCLUDED_BUNDLE_IDS
+        .iter()
+        .any(|excluded| source_bundle_id.starts_with(excluded))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+
+    #[test]
+ succeeded in 51ms:
+//! Clipboard monitoring
+//!
+//! Background threads for clipboard polling and entry maintenance.
+
+use anyhow::{Context, Result};
+use arboard::Clipboard;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
+use std::thread;
+use std::time::{Duration, Instant};
+use tracing::{debug, error, info, warn};
+use uuid::Uuid;
+
+use super::cache::{
+    cache_image, get_cached_entries, get_cached_image, init_cache_timestamp, refresh_entry_cache,
+};
+use super::change_detection::ClipboardChangeDetector;
+use super::config::{get_max_text_content_len, get_retention_days, is_text_over_limit};
+use super::database::{
+    add_entry, get_connection, get_entry_content, prune_old_entries, run_incremental_vacuum,
+
+thinking
+**Inspecting source bundle retrieval**
+exec
+/bin/zsh -lc "sed -n '320,680p' src/clipboard_history/monitor.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+    let mut hasher = DefaultHasher::new();
+    text.hash(&mut hasher);
+    hasher.finish()
+}
+
+/// Sleep with interruptible checks against a stop flag.
+/// Returns true if sleep completed, false if stop was signaled.
+fn interruptible_sleep(duration: Duration, stop_flag: &AtomicBool) -> bool {
+    let check_interval = Duration::from_secs(1);
+    let mut remaining = duration;
+
+    while remaining > Duration::ZERO {
+        if stop_flag.load(Ordering::Relaxed) {
+            return false;
+        }
+        let sleep_time = remaining.min(check_interval);
+        thread::sleep(sleep_time);
+        remaining = remaining.saturating_sub(sleep_time);
+    }
+    true
+
+thinking
+**Searching for bundle ID**
+codex
+I found the main capture path in `monitor.rs` (`capture_clipboard_content`). I’m now tracing where source app metadata (bundle ID) is available so we can gate storage before `add_entry`.
+exec
+/bin/zsh -lc 'rg -n "bundle|source app|pasteboard|frontmost|owner|clipboard source" src/clipboard_history src | head -n 200' in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,280p' src/clipboard_history/change_detection.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+src/clipboard_history/macos_paste.rs:4://! are placed on the pasteboard. This allows:
+src/clipboard_history/macos_paste.rs:39:        // Get the general pasteboard
+src/clipboard_history/macos_paste.rs:40:        let pasteboard: id = NSPasteboard::generalPasteboard(nil);
+src/clipboard_history/macos_paste.rs:41:        if pasteboard.is_null() {
+src/clipboard_history/macos_paste.rs:42:            anyhow::bail!("Failed to get general pasteboard");
+src/clipboard_history/macos_paste.rs:45:        // Clear the pasteboard and get a new change count
+src/clipboard_history/macos_paste.rs:46:        let _: i64 = msg_send![pasteboard, clearContents];
+src/clipboard_history/macos_paste.rs:88:        // Write both objects to the pasteboard
+src/clipboard_history/macos_paste.rs:89:        let success: bool = msg_send![pasteboard, writeObjects: objects];
+src/clipboard_history/db_worker/db_impl.rs:75:                source_app_bundle_id: None,
+src/clipboard_history/db_worker/db_impl.rs:132:            source_app_bundle_id: None,
+src/clipboard_history/open_with.rs:10:    pub bundle_id: Option<String>,
+src/clipboard_history/open_with.rs:20:    use core_foundation::bundle::CFBundle;
+src/clipboard_history/open_with.rs:68:                let (name, bundle_id) = bundle_metadata(&app_path);
+src/clipboard_history/open_with.rs:71:                    bundle_id,
+src/clipboard_history/open_with.rs:90:    fn bundle_metadata(app_path: &Path) -> (String, Option<String>) {
+src/clipboard_history/open_with.rs:97:        let Some(bundle_url) = CFURL::from_path(app_path, true) else {
+src/clipboard_history/open_with.rs:100:        let Some(bundle) = CFBundle::new(bundle_url) else {
+src/clipboard_history/open_with.rs:104:        let info = bundle.info_dictionary();
+src/clipboard_history/open_with.rs:105:        let name = bundle_string_value(&info, "CFBundleDisplayName")
+ succeeded in 51ms:
+//! Clipboard change detection
+//!
+//! Platform-specific efficient clipboard change detection.
+//! Uses NSPasteboard changeCount on macOS for cheap polling (no payload reads).
+
+#[cfg(target_os = "macos")]
+use objc::sel;
+#[cfg(target_os = "macos")]
+use objc::sel_impl;
+
+use tracing::debug;
+
+/// Get the current clipboard change count.
+///
+/// On macOS, this reads NSPasteboard.generalPasteboard.changeCount which is
+/// a cheap integer read. Returns None on other platforms.
+///
+/// The change count is an integer that increments each time the clipboard
+/// content changes. By comparing consecutive values, we can detect changes
+/// without reading the actual clipboard payload.
+
+thinking
+**Checking source app usage**
+exec
+/bin/zsh -lc 'rg -n "source_app|source bundle|bundle_id" src/clipboard_history | head -n 200' in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '260,620p' src/clipboard_history/database.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,260p' src/clipboard_history/database.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+src/clipboard_history/db_worker/db_impl.rs:74:                source_app_name: None,
+src/clipboard_history/db_worker/db_impl.rs:75:                source_app_bundle_id: None,
+src/clipboard_history/db_worker/db_impl.rs:131:            source_app_name: None,
+src/clipboard_history/db_worker/db_impl.rs:132:            source_app_bundle_id: None,
+src/clipboard_history/open_with.rs:10:    pub bundle_id: Option<String>,
+src/clipboard_history/open_with.rs:68:                let (name, bundle_id) = bundle_metadata(&app_path);
+src/clipboard_history/open_with.rs:71:                    bundle_id,
+src/clipboard_history/open_with.rs:108:        let bundle_id = bundle_string_value(&info, "CFBundleIdentifier");
+src/clipboard_history/open_with.rs:110:        (name, bundle_id)
+src/clipboard_history/exclusions.rs:10:pub fn should_exclude_clipboard(source_bundle_id: &str) -> bool {
+src/clipboard_history/exclusions.rs:13:        .any(|excluded| source_bundle_id.starts_with(excluded))
+src/clipboard_history/exclusions.rs:21:    fn test_should_exclude_clipboard_does_match_when_bundle_id_is_exact() {
+src/clipboard_history/exclusions.rs:28:    fn test_should_exclude_clipboard_does_match_when_bundle_id_has_excluded_prefix() {
+src/clipboard_history/exclusions.rs:34:    fn test_should_exclude_clipboard_does_not_match_when_bundle_id_is_not_excluded() {
+src/clipboard_history/database.rs:461:                source_app_name: None,
+src/clipboard_history/database.rs:462:                source_app_bundle_id: None,
+src/clipboard_history/database.rs:819:                source_app_name: None,
+src/clipboard_history/database.rs:820:                source_app_bundle_id: None,
+src/clipboard_history/temp_file.rs:75:            source_app_name: None,
+src/clipboard_history/temp_file.rs:76:            source_app_bundle_id: None,
+ succeeded in 51ms:
+//! Clipboard history database operations
+//!
+//! SQLite database management for clipboard entries, including CRUD operations,
+//! migrations, and background maintenance.
+
+use anyhow::{Context, Result};
+use rusqlite::{params, Connection};
+use sha2::{Digest, Sha256};
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex, OnceLock};
+use tracing::{debug, error, info};
+use uuid::Uuid;
+
+use super::cache::{
+    clear_all_caches, evict_image_cache, refresh_entry_cache, remove_entry_from_cache,
+    update_pin_status_in_cache, upsert_entry_in_cache,
+};
+use super::config::{get_max_text_content_len, get_retention_days, is_text_over_limit};
+use super::image::get_image_dimensions;
+use super::types::{ClipboardEntry, ClipboardEntryMeta, ContentType};
+ succeeded in 51ms:
+}
+
+/// Add a new entry to clipboard history
+///
+/// Returns the ID of the entry (either existing or newly created).
+#[tracing::instrument(skip(content), fields(content_type = ?content_type, content_len = content.len()))]
+pub fn add_entry(content: &str, content_type: ContentType) -> Result<String> {
+    if content_type == ContentType::Text && is_text_over_limit(content) {
+        anyhow::bail!(
+            "Clipboard text exceeds max length ({} bytes)",
+            get_max_text_content_len()
+        );
+    }
+
+    let conn = get_connection()?;
+    let conn = conn
+        .lock()
+        .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+
+    let timestamp = chrono::Utc::now().timestamp_millis();
+
+thinking
+**Identifying source app bundle retrieval**
+exec
+/bin/zsh -lc 'rg -n "get_last_real_app_bundle_id|frontmost_app_tracker" src | head -n 200' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+src/hotkey_pollers.rs:123:                    // Menu bar tracking is now handled by frontmost_app_tracker module
+src/hotkey_pollers.rs:181:                                // Menu bar items are now tracked by frontmost_app_tracker
+src/frontmost_app_tracker/part_000.rs:98:pub fn get_last_real_app_bundle_id() -> Option<String> {
+src/frontmost_app_tracker/part_001.rs:69:    fn test_get_last_real_app_bundle_id_returns_none_when_not_set() {
+src/frontmost_app_tracker/part_001.rs:77:        assert_eq!(get_last_real_app_bundle_id(), None);
+src/frontmost_app_tracker/part_001.rs:83:    fn test_get_last_real_app_bundle_id_returns_bundle_id_when_set() {
+src/frontmost_app_tracker/part_001.rs:96:            get_last_real_app_bundle_id().as_deref(),
+src/frontmost_app_tracker/mod.rs:24://! use crate::frontmost_app_tracker::{start_tracking, get_last_real_app, get_cached_menu_items};
+src/app_impl/filter_input_change.rs:453:        // Menu bar items are now pre-fetched by frontmost_app_tracker
+src/app_impl/filtering_cache.rs:128:            let cached = frontmost_app_tracker::get_cached_menu_items();
+src/app_impl/filtering_cache.rs:129:            let bundle_id = frontmost_app_tracker::get_last_real_app().map(|a| a.bundle_id);
+src/main_sections/app_state.rs:233:    // Menu bar integration: Now handled by frontmost_app_tracker module
+src/app_impl/startup.rs:454:            // Menu bar integration: Now handled by frontmost_app_tracker module
+src/app_impl/startup_new_state.rs:168:            // Menu bar integration: Now handled by frontmost_app_tracker module
+src/app_impl/filter_input_updates.rs:75:        // Menu bar items are now pre-fetched by frontmost_app_tracker
+src/lib.rs:101:pub mod frontmost_app_tracker;
+src/main.rs:125:mod frontmost_app_tracker;
+src/main_entry/runtime_init.rs:17:        frontmost_app_tracker::start_tracking();
+src/main_entry/app_run_setup.rs:276:        frontmost_app_tracker::start_tracking();
+
+thinking
+**Evaluating source app detection**
+exec
+/bin/zsh -lc 'rg -n "NSPasteboard|generalPasteboard|bundleIdentifier|frontmostApplication|NSWorkspace" src | head -n 240' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+src/menu_executor/part_000.rs:285:        let workspace_class = Class::get("NSWorkspace").context("Failed to get NSWorkspace")?;
+src/menu_executor/part_000.rs:287:        let frontmost_app: *mut Object = msg_send![workspace, frontmostApplication];
+src/menu_executor/part_000.rs:300:        let bundle_id: *mut Object = msg_send![frontmost_app, bundleIdentifier];
+src/frontmost_app_tracker/part_000.rs:60:/// NSWorkspace observer to watch for application activation events.
+src/frontmost_app_tracker/part_000.rs:75:    // Set up NSWorkspace observer for app activation
+src/frontmost_app_tracker/part_000.rs:132:        let workspace_class = match Class::get("NSWorkspace") {
+src/frontmost_app_tracker/part_000.rs:146:        let bundle_id = get_nsstring(msg_send![app, bundleIdentifier]);
+src/frontmost_app_tracker/part_000.rs:181:/// Set up the NSWorkspace notification observer
+src/frontmost_app_tracker/part_000.rs:254:                let key = objc_nsstring("NSWorkspaceApplicationKey");
+src/frontmost_app_tracker/part_000.rs:268:                let bundle_id = get_nsstring(msg_send![app, bundleIdentifier]);
+src/frontmost_app_tracker/part_000.rs:354:        let Some(workspace_class) = require_objc_class("NSWorkspace") else {
+src/frontmost_app_tracker/part_000.rs:360:        // Register for NSWorkspaceDidActivateApplicationNotification
+src/frontmost_app_tracker/part_000.rs:361:        let notification_name = objc_nsstring("NSWorkspaceDidActivateApplicationNotification");
+src/frontmost_app_tracker/part_000.rs:378:        logging::log("APP", "NSWorkspace observer registered for app activation");
+src/frontmost_app_tracker/part_001.rs:171:        let result = make_objc_cstring("NSWorkspaceDidActivateApplicationNotification");
+src/frontmost_app_tracker/mod.rs:13://! A background observer watches for `NSWorkspaceDidActivateApplicationNotification`.
+src/menu_bar/part_001.rs:61:        let workspace_class = Class::get("NSWorkspace").context("Failed to get NSWorkspace")?;
+src/menu_bar/part_001.rs:76:        let bundle_id: *mut Object = msg_send![menu_owner, bundleIdentifier];
+src/window_control/part_000.rs:77:// AppKit (NSWorkspace/NSRunningApplication) FFI bindings
+src/window_control/part_001.rs:37:        let workspace_class = Class::get("NSWorkspace").context("Failed to get NSWorkspace")?;
+
+thinking
+**Inspecting module exports**
+exec
+/bin/zsh -lc "sed -n '1,220p' src/frontmost_app_tracker/part_000.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,220p' src/frontmost_app_tracker/mod.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+//! Frontmost Application Tracker
+//!
+//! Tracks the "last real application" that was active before Script Kit.
+//! This module provides a global, always-updated view of what app the user
+//! was working in, which is useful for:
+//!
+//! - **Menu Bar Actions**: Get menu items from the app the user was in
+//! - **Window Tiling**: Tile/move windows of the previous app
+//! - **Context Actions**: Any action that should target "the app I was just using"
+//!
+//! ## Architecture
+//!
+//! A background observer watches for `NSWorkspaceDidActivateApplicationNotification`.
+//! When an app activates:
+//! - If it's NOT Script Kit → update the tracked "last real app"
+//! - If it IS Script Kit → ignore (keep tracking the previous app)
+//!
+//! This means when Script Kit opens, we already know which app was active,
+//! with no race conditions or timing issues.
+//!
+ succeeded in 51ms:
+use crate::logging;
+use crate::menu_bar::{get_menu_bar_for_pid, MenuBarItem};
+use parking_lot::RwLock;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::LazyLock;
+/// Information about a tracked application
+#[derive(Debug, Clone)]
+pub struct TrackedApp {
+    /// Process ID
+    pub pid: i32,
+    /// Bundle identifier (e.g., "com.google.Chrome")
+    pub bundle_id: String,
+    /// Localized display name (e.g., "Google Chrome")
+    pub name: String,
+}
+/// Global state for the frontmost app tracker
+#[derive(Default)]
+struct TrackerState {
+    /// The last "real" application (not Script Kit)
+    last_real_app: Option<TrackedApp>,
+
+thinking
+**Planning exclusion integration**
+codex
+I confirmed the capture/write path is in `monitor.rs`; `clipboard.rs` only handles copying history entries back to the system clipboard. I’m claiming `monitor.rs` and `mod.rs` now, then I’ll add an exclusion gate using the source app bundle ID before any `add_entry` call.
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts claim --wait --id codex-wire-clipboard-exclusions src/clipboard_history/monitor.rs' in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc '~/.claude/bin/swarm.ts claim --wait --id codex-wire-clipboard-exclusions src/clipboard_history/mod.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+Claimed for codex-wire-clipboard-exclusions: src/clipboard_history/monitor.rs
+ succeeded in 51ms:
+Claimed for codex-wire-clipboard-exclusions: src/clipboard_history/mod.rs
+
+thinking
+**Planning status update notes**
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts update --id codex-wire-clipboard-exclusions --status in_progress --notes "Claimed monitor/mod; wiring exclusion check before clipboard add_entry calls"' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+Updated: codex-wire-clipboard-exclusions
+
+thinking
+**Planning precise function patching**
+exec
+/bin/zsh -lc "sed -n '1,260p' src/clipboard_history/monitor.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+//! Clipboard monitoring
+//!
+//! Background threads for clipboard polling and entry maintenance.
+
+use anyhow::{Context, Result};
+use arboard::Clipboard;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
+use std::thread;
+use std::time::{Duration, Instant};
+use tracing::{debug, error, info, warn};
+use uuid::Uuid;
+
+use super::cache::{
+    cache_image, get_cached_entries, get_cached_image, init_cache_timestamp, refresh_entry_cache,
+};
+use super::change_detection::ClipboardChangeDetector;
+use super::config::{get_max_text_content_len, get_retention_days, is_text_over_limit};
+use super::database::{
+    add_entry, get_connection, get_entry_content, prune_old_entries, run_incremental_vacuum,
+
+thinking
+**Integrating exclusion logic with tests**
+codex
+I’m now editing `monitor.rs` to add a pre-store exclusion gate and a focused unit test for that decision path, then I’ll remove the now-unneeded `#[allow(unused_imports)]` on the exclusions re-export in `mod.rs`.
+file update
+M /Users/johnlindquist/dev/script-kit-gpui/src/clipboard_history/monitor.rs
+@@ -23,2 +23,3 @@
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+@@ -202,2 +203,11 @@
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+@@ -314,2 +324,6 @@
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+@@ -477,2 +491,19 @@
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+apply_patch(auto_approved=true) exited 0 in 12ms:
+Success. Updated the following files:
+M /Users/johnlindquist/dev/script-kit-gpui/src/clipboard_history/monitor.rs
+file update:
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+file update:
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+
+thinking
+**Removing allow attribute from mod.rs**
+file update
+M /Users/johnlindquist/dev/script-kit-gpui/src/clipboard_history/mod.rs
+@@ -50,3 +50,2 @@
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+apply_patch(auto_approved=true) exited 0 in 17ms:
+Success. Updated the following files:
+M /Users/johnlindquist/dev/script-kit-gpui/src/clipboard_history/mod.rs
+file update:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd9eff56c5ca1a9e324cdcf31704091a119..d5a66447ffc69a4a30bf68c7e358fd7d17b24eff
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+file update:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd9eff56c5ca1a9e324cdcf31704091a119..d5a66447ffc69a4a30bf68c7e358fd7d17b24eff
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+
+thinking
+**Planning final code checks**
+codex
+The exclusion gate and tests are in place. I’m reviewing the diff for correctness, then running scoped Rust verification around `clipboard_history` to ensure this compiles and the new behavior is covered.
+exec
+/bin/zsh -lc 'git diff -- src/clipboard_history/monitor.rs src/clipboard_history/mod.rs' in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc 'rg -n "should_skip_clipboard_capture|clipboard_capture_skipped_excluded_source|should_exclude_clipboard" src/clipboard_history/monitor.rs src/clipboard_history/mod.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd..d5a6644 100644
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@ pub use types::{
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c0..3f12f90 100644
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@ use super::database::{
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
+ succeeded in 50ms:
+src/clipboard_history/mod.rs:51:pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+src/clipboard_history/monitor.rs:24:use super::should_exclude_clipboard;
+src/clipboard_history/monitor.rs:205:    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
+src/clipboard_history/monitor.rs:208:            "clipboard_capture_skipped_excluded_source"
+src/clipboard_history/monitor.rs:325:fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
+src/clipboard_history/monitor.rs:326:    source_bundle_id.is_some_and(should_exclude_clipboard)
+src/clipboard_history/monitor.rs:494:    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
+src/clipboard_history/monitor.rs:495:        assert!(should_skip_clipboard_capture(Some(
+src/clipboard_history/monitor.rs:498:        assert!(should_skip_clipboard_capture(Some(
+src/clipboard_history/monitor.rs:504:    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
+src/clipboard_history/monitor.rs:506:        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
+src/clipboard_history/monitor.rs:507:        assert!(!should_skip_clipboard_capture(None));
+file update:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd9eff56c5ca1a9e324cdcf31704091a119..d5a66447ffc69a4a30bf68c7e358fd7d17b24eff
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+
+thinking
+**Confirming package name**
+exec
+/bin/zsh -lc "sed -n '1,120p' Cargo.toml" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+[package]
+name = "script-kit-gpui"
+version = "0.1.0"
+edition = "2021"
+default-run = "script-kit-gpui"
+
+[lib]
+name = "script_kit_gpui"
+path = "src/lib.rs"
+
+[[bin]]
+name = "script-kit-gpui"
+path = "src/main.rs"
+test = false  # Tests run via lib.rs only - avoids duplicate test runs
+
+[[bin]]
+name = "smoke-test"
+path = "src/bin/smoke-test.rs"
+test = false
+
+file update:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd9eff56c5ca1a9e324cdcf31704091a119..d5a66447ffc69a4a30bf68c7e358fd7d17b24eff
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+
+thinking
+**Planning scoped Rust checks and tests**
+codex
+I’m running targeted verification for this module now: `cargo check`/`clippy` scoped to the library, then focused `cargo test` filters for clipboard history exclusion behavior.
+exec
+/bin/zsh -lc 'cargo check --lib' in /Users/johnlindquist/dev/script-kit-gpuifile update:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd9eff56c5ca1a9e324cdcf31704091a119..d5a66447ffc69a4a30bf68c7e358fd7d17b24eff
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+
+thinking
+**Monitoring ongoing command session**
+file update:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd9eff56c5ca1a9e324cdcf31704091a119..d5a66447ffc69a4a30bf68c7e358fd7d17b24eff
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+ succeeded in 3.99s:
+    Checking script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+warning: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:32:16
+   |
+32 | pub(super) use inline::*;
+   |                ^^^^^^^^^
+   |
+note: the most public imported item is `pub(self)`
+  --> src/prompts/div/mod.rs:32:16
+   |
+32 | pub(super) use inline::*;
+   |                ^^^^^^^^^
+   = help: reduce the glob import's visibility or increase visibility of imported items
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:34:16
+   |
+34 | pub(super) use render_html::*;
+   |                ^^^^^^^^^^^^^^
+
+thinking
+**Planning scoped Clippy run despite baseline warnings**
+exec
+/bin/zsh -lc 'cargo clippy --lib --tests -- -D warnings' in /Users/johnlindquist/dev/script-kit-gpuifile update:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd9eff56c5ca1a9e324cdcf31704091a119..d5a66447ffc69a4a30bf68c7e358fd7d17b24eff
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+
+thinking
+**Planning process exit polling**
+file update:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd9eff56c5ca1a9e324cdcf31704091a119..d5a66447ffc69a4a30bf68c7e358fd7d17b24eff
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+
+thinking
+**Noticing long output without completion**
+file update:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd9eff56c5ca1a9e324cdcf31704091a119..d5a66447ffc69a4a30bf68c7e358fd7d17b24eff
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+
+thinking
+**Polling for job completion**
+file update:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd9eff56c5ca1a9e324cdcf31704091a119..d5a66447ffc69a4a30bf68c7e358fd7d17b24eff
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+ exited 101 in 20.29s:
+    Checking script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+error[E0761]: file for module `tests` found at both "src/protocol/message/tests.rs" and "src/protocol/message/tests/mod.rs"
+  --> src/protocol/message/mod.rs:87:1
+   |
+87 | mod tests;
+   | ^^^^^^^^^^
+   |
+   = help: delete or rename one of them to remove the ambiguity
+
+error[E0761]: file for module `tests` found at both "src/designs/core/tests.rs" and "src/designs/core/tests/mod.rs"
+ --> src/designs/core/part_04.rs:2:1
+  |
+2 | mod tests;
+  | ^^^^^^^^^^
+  |
+  = help: delete or rename one of them to remove the ambiguity
+
+error: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:32:16
+   |
+
+thinking
+**Assessing partial test runs despite errors**
+codex
+`cargo check --lib` succeeded for the code path I changed. I’m now running the narrowed `cargo test` filter for the new monitor tests; with this shared tree it may still be blocked by unrelated in-progress agent edits, and I’ll report that explicitly if so.
+exec
+/bin/zsh -lc 'cargo test --lib clipboard_history::monitor::tests::test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded -- --exact' in /Users/johnlindquist/dev/script-kit-gpuifile update:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd9eff56c5ca1a9e324cdcf31704091a119..d5a66447ffc69a4a30bf68c7e358fd7d17b24eff
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+
+thinking
+**Considering poll failure handling**
+file update:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd9eff56c5ca1a9e324cdcf31704091a119..d5a66447ffc69a4a30bf68c7e358fd7d17b24eff
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+
+thinking
+**Waiting on job completion**
+file update:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd9eff56c5ca1a9e324cdcf31704091a119..d5a66447ffc69a4a30bf68c7e358fd7d17b24eff
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+
+thinking
+**Continuing polling for completion**
+file update:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd9eff56c5ca1a9e324cdcf31704091a119..d5a66447ffc69a4a30bf68c7e358fd7d17b24eff
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+ exited 101 in 19.68s:
+   Compiling script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+error[E0761]: file for module `tests` found at both "src/protocol/message/tests.rs" and "src/protocol/message/tests/mod.rs"
+  --> src/protocol/message/mod.rs:87:1
+   |
+87 | mod tests;
+   | ^^^^^^^^^^
+   |
+   = help: delete or rename one of them to remove the ambiguity
+
+error[E0761]: file for module `tests` found at both "src/designs/core/tests.rs" and "src/designs/core/tests/mod.rs"
+ --> src/designs/core/part_04.rs:2:1
+  |
+2 | mod tests;
+  | ^^^^^^^^^^
+  |
+  = help: delete or rename one of them to remove the ambiguity
+
+error[E0412]: cannot find type `Action` in this scope
+   --> src/actions/builders_tests/part_01.rs:18:26
+    |
+
+thinking
+**Confirming test compilation limits**
+exec
+/bin/zsh -lc 'rustfmt src/clipboard_history/monitor.rs src/clipboard_history/mod.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+
+file update:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd9eff56c5ca1a9e324cdcf31704091a119..d5a66447ffc69a4a30bf68c7e358fd7d17b24eff
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+
+thinking
+**Checking formatting impact**
+exec
+/bin/zsh -lc 'git diff -- src/clipboard_history/monitor.rs src/clipboard_history/mod.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd..d5a6644 100644
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@ pub use types::{
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c0..3f12f90 100644
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@ use super::database::{
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
+file update:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd9eff56c5ca1a9e324cdcf31704091a119..d5a66447ffc69a4a30bf68c7e358fd7d17b24eff
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+
+thinking
+**Verifying build after formatting**
+exec
+/bin/zsh -lc 'cargo check --lib' in /Users/johnlindquist/dev/script-kit-gpuifile update:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd9eff56c5ca1a9e324cdcf31704091a119..d5a66447ffc69a4a30bf68c7e358fd7d17b24eff
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+
+thinking
+**Planning completion polling**
+file update:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd9eff56c5ca1a9e324cdcf31704091a119..d5a66447ffc69a4a30bf68c7e358fd7d17b24eff
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+ exited 101 in 3.35s:
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Checking script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+warning: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:32:16
+   |
+32 | pub(super) use inline::*;
+   |                ^^^^^^^^^
+   |
+note: the most public imported item is `pub(self)`
+  --> src/prompts/div/mod.rs:32:16
+   |
+32 | pub(super) use inline::*;
+   |                ^^^^^^^^^
+   = help: reduce the glob import's visibility or increase visibility of imported items
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:34:16
+
+thinking
+**Scoping compilation to user changes**
+exec
+/bin/zsh -lc 'git status --short src/clipboard_history/monitor.rs src/clipboard_history/mod.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+ M src/clipboard_history/mod.rs
+ M src/clipboard_history/monitor.rs
+file update:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd9eff56c5ca1a9e324cdcf31704091a119..d5a66447ffc69a4a30bf68c7e358fd7d17b24eff
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+
+thinking
+**Deciding against committing due to partial verification**
+exec
+/bin/zsh -lc "nl -ba src/clipboard_history/monitor.rs | sed -n '486,532p'" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "nl -ba src/clipboard_history/monitor.rs | sed -n '316,350p'" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "nl -ba src/clipboard_history/mod.rs | sed -n '44,60p'" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "nl -ba src/clipboard_history/monitor.rs | sed -n '190,240p'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+    44	#[allow(unused_imports)]
+    45	pub use types::{
+    46	    classify_timestamp, group_entries_by_time, ClipboardEntry, ClipboardEntryMeta, ContentType,
+    47	    TimeGroup,
+    48	};
+    49	
+    50	// Clipboard source exclusions
+    51	pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+    52	
+    53	// DB Worker (new architecture - message passing instead of global mutex)
+    54	#[allow(unused_imports)]
+    55	pub use db_worker::{get_db_sender, start_db_worker, DbRequest};
+    56	
+    57	// Config
+    58	#[allow(unused_imports)]
+    59	pub use config::{
+    60	    get_max_text_content_len, get_retention_days, set_max_text_content_len, set_retention_days,
+ succeeded in 51ms:
+   190	
+   191	    Ok(())
+   192	}
+   193	
+   194	/// Capture current clipboard content and add to history if new.
+   195	///
+   196	/// Uses content hashing for deduplication after OS-level change detection.
+   197	/// This is called only when the OS reports a clipboard change, making it
+   198	/// much more efficient than reading payloads on every poll.
+   199	fn capture_clipboard_content(
+   200	    clipboard: &mut Clipboard,
+   201	    last_text_hash: &mut Option<u64>,
+   202	    last_image_hash: &mut Option<u64>,
+   203	) {
+   204	    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
+   205	    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
+   206	        debug!(
+   207	            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
+   208	            "clipboard_capture_skipped_excluded_source"
+   209	        );
+ succeeded in 51ms:
+   316	                    Err(e) => {
+   317	                        warn!(error = %e, "Failed to update image entry timestamp");
+   318	                    }
+   319	                }
+   320	            }
+   321	        }
+   322	    }
+   323	}
+   324	
+   325	fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
+   326	    source_bundle_id.is_some_and(should_exclude_clipboard)
+   327	}
+   328	
+   329	/// Compute a simple hash of text content for change detection.
+   330	fn compute_text_hash(text: &str) -> u64 {
+   331	    use std::collections::hash_map::DefaultHasher;
+   332	    use std::hash::{Hash, Hasher};
+   333	
+   334	    let mut hasher = DefaultHasher::new();
+   335	    text.hash(&mut hasher);
+ succeeded in 51ms:
+   486	        let is_new_after_success = last_text.as_ref() != Some(&new_text);
+   487	        assert!(
+   488	            !is_new_after_success,
+   489	            "After success, same text should not be 'new'"
+   490	        );
+   491	    }
+   492	
+   493	    #[test]
+   494	    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
+   495	        assert!(should_skip_clipboard_capture(Some(
+   496	            "com.1password.1password"
+   497	        )));
+   498	        assert!(should_skip_clipboard_capture(Some(
+   499	            "com.bitwarden.desktop.autofill"
+   500	        )));
+   501	    }
+   502	
+   503	    #[test]
+   504	    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
+   505	    ) {
+file update:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd9eff56c5ca1a9e324cdcf31704091a119..d5a66447ffc69a4a30bf68c7e358fd7d17b24eff
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+
+thinking
+**Setting task status done with notes**
+codex
+Code changes are complete for this task; I’m now updating swarm status with verification results and releasing my file claims.
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts update --id codex-wire-clipboard-exclusions --status done --notes "Wired source bundle exclusion gate in clipboard monitor; removed unused-import allow on exclusions re-export; check/clippy/test commands attempted but blocked by unrelated concurrent compile errors in other modules"' in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc '~/.claude/bin/swarm.ts release --id codex-wire-clipboard-exclusions src/clipboard_history/mod.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+Updated: codex-wire-clipboard-exclusions
+ succeeded in 50ms:
+Released for codex-wire-clipboard-exclusions: src/clipboard_history/mod.rs
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts release --id codex-wire-clipboard-exclusions src/clipboard_history/monitor.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+Released for codex-wire-clipboard-exclusions: src/clipboard_history/monitor.rs
+file update:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd9eff56c5ca1a9e324cdcf31704091a119..d5a66447ffc69a4a30bf68c7e358fd7d17b24eff
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+
+thinking
+**Considering optional final status check**
+exec
+/bin/zsh -lc "~/.claude/bin/swarm.ts status | sed -n '1,80p'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+Repo: /Users/johnlindquist/dev/script-kit-gpui
+Updated: 2026-02-08T03:03:27.082Z
+
+Active agents (3):
+codex-wire-emoji [in_progress] codex/gpt-5.3-codex/exec
+  task: Wire up the existing src/emoji/mod.rs static emoji database into the app as a working built-in feature. The module has …
+  scope: src/emoji/**,src/builtins/part_000.rs,src/builtins/part_001_entries/**,src/app_execute/builtin_execution.rs
+  claims: (none)
+  notes: Starting emoji built-in wiring; preparing claims and reading existing emoji + clipboard flow
+
+codex-wire-favorites [in_progress] codex/gpt-5.3-codex/exec
+  task: Wire up the existing src/favorites/mod.rs storage module into the app as a working feature. The module already has load…
+  scope: src/favorites/**,src/builtins/part_000.rs,src/builtins/part_001_entries/**,src/app_execute/builtin_execution.rs,src/act…
+  claims(10): src/builtins/part_000.rs, src/builtins/part_001_entries/entries_003.rs, src/app_execute/builtin_execution.rs, src/actions/builders/script_context.rs, src/app_a…
+  notes: Implementing Favorites builtin, action toggle handler, favorites prefix filter, and list indicator | [claim-wait] codex-wire-quicklinks waiting for src/builtins/part_000.rs
+
+codex-wire-quicklinks [blocked] codex/gpt-5.3-codex/exec
+  task: Wire up the existing src/quicklinks/mod.rs storage module into the app as a working built-in feature. The module alread…
+  scope: src/quicklinks/**,src/builtins/part_000.rs,src/builtins/part_001_entries/**,src/app_execute/builtin_execution.rs
+  claims(2): src/builtins/part_001_entries/entries_000.rs, src/quicklinks/mod.rs
+file update:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd9eff56c5ca1a9e324cdcf31704091a119..d5a66447ffc69a4a30bf68c7e358fd7d17b24eff
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+
+thinking
+**Gathering final change summary**
+exec
+/bin/zsh -lc 'git diff --stat -- src/clipboard_history/monitor.rs src/clipboard_history/mod.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+ src/clipboard_history/mod.rs     |  1 -
+ src/clipboard_history/monitor.rs | 31 +++++++++++++++++++++++++++++++
+ 2 files changed, 31 insertions(+), 1 deletion(-)
+file update:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd9eff56c5ca1a9e324cdcf31704091a119..d5a66447ffc69a4a30bf68c7e358fd7d17b24eff
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+
+thinking
+**Summarizing final deliverable details**
+codex
+Implemented the clipboard exclusion wiring in the monitor path so excluded password-manager sources are not recorded.
+
+**Changed files**
+- `src/clipboard_history/monitor.rs:204`
+- `src/clipboard_history/monitor.rs:325`
+- `src/clipboard_history/monitor.rs:494`
+- `src/clipboard_history/mod.rs:51`
+
+**What changed**
+1. In `capture_clipboard_content`, I now read the source app bundle ID via `crate::frontmost_app_tracker::get_last_real_app_bundle_id()`.
+2. Before any `add_entry(...)` call, I gate capture with `should_exclude_clipboard(...)`; when matched, the function returns early and skips recording entirely.
+3. Added `should_skip_clipboard_capture(...)` helper to keep this decision logic centralized.
+4. Added unit tests for excluded and non-excluded/missing bundle ID scenarios.
+5. Removed `#[allow(unused_imports)]` on the exclusions re-export in `src/clipboard_history/mod.rs` since it is now used.
+
+**Verification run**
+- `cargo check --lib`
+  - Passed once earlier in this session, then later failed due unrelated concurrent edits outside scope (`BuiltInFeature::Quicklinks` mismatch in builtins).
+- `cargo clippy --lib --tests -- -D warnings`
+  - Failed due many unrelated existing/concurrent errors outside `src/clipboard_history/**` (duplicate test module paths, unresolved symbols in action tests, etc.).
+- `cargo test --lib clipboard_history::monitor::tests::test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded -- --exact`
+  - Failed to build due unrelated concurrent errors outside this scope.
+
+**How to test (when tree is stable)**
+1. `cargo check --lib`
+2. `cargo clippy --lib --tests -- -D warnings`
+3. `cargo test --lib clipboard_history::monitor::tests::test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded -- --exact`
+4. `cargo test --lib clipboard_history::monitor::tests::test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing -- --exact`
+
+**Risks / known gaps**
+- Source app detection currently depends on `frontmost_app_tracker`; if it has no bundle ID at capture time, capture proceeds (no exclusion).
+- Frontmost app tracking is a proxy for clipboard source and may be stale in edge timing cases.
+
+Commits made: none.
+file update:
+diff --git a/src/clipboard_history/mod.rs b/src/clipboard_history/mod.rs
+index 23294dd9eff56c5ca1a9e324cdcf31704091a119..d5a66447ffc69a4a30bf68c7e358fd7d17b24eff
+--- a/src/clipboard_history/mod.rs
++++ b/src/clipboard_history/mod.rs
+@@ -48,7 +48,6 @@
+ };
+ 
+ // Clipboard source exclusions
+-#[allow(unused_imports)]
+ pub use exclusions::{should_exclude_clipboard, EXCLUDED_BUNDLE_IDS};
+ 
+ // DB Worker (new architecture - message passing instead of global mutex)
+diff --git a/src/clipboard_history/monitor.rs b/src/clipboard_history/monitor.rs
+index c65b0c06e3e17ba5589f8080042d4c047748c88c..3f12f90bbccbd57662fab7bd2a1ca9c9ce501bc2
+--- a/src/clipboard_history/monitor.rs
++++ b/src/clipboard_history/monitor.rs
+@@ -21,6 +21,7 @@
+     run_wal_checkpoint, trim_oversize_text_entries,
+ };
+ use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
++use super::should_exclude_clipboard;
+ use super::types::ContentType;
+ 
+ /// Interval between background pruning checks (1 hour)
+@@ -200,6 +201,15 @@
+     last_text_hash: &mut Option<u64>,
+     last_image_hash: &mut Option<u64>,
+ ) {
++    let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
++    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
++        debug!(
++            source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
++            "clipboard_capture_skipped_excluded_source"
++        );
++        return;
++    }
++
+     // Check for text changes
+     if let Ok(text) = clipboard.get_text() {
+         if !text.is_empty() {
+@@ -312,6 +322,10 @@
+     }
+ }
+ 
++fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
++    source_bundle_id.is_some_and(should_exclude_clipboard)
++}
++
+ /// Compute a simple hash of text content for change detection.
+ fn compute_text_hash(text: &str) -> u64 {
+     use std::collections::hash_map::DefaultHasher;
+@@ -475,4 +489,21 @@
+             "After success, same text should not be 'new'"
+         );
+     }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
++        assert!(should_skip_clipboard_capture(Some(
++            "com.1password.1password"
++        )));
++        assert!(should_skip_clipboard_capture(Some(
++            "com.bitwarden.desktop.autofill"
++        )));
++    }
++
++    #[test]
++    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
++    ) {
++        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
++        assert!(!should_skip_clipboard_capture(None));
++    }
+ }
+
+tokens used
+140,626
+Implemented the clipboard exclusion wiring in the monitor path so excluded password-manager sources are not recorded.
+
+**Changed files**
+- `src/clipboard_history/monitor.rs:204`
+- `src/clipboard_history/monitor.rs:325`
+- `src/clipboard_history/monitor.rs:494`
+- `src/clipboard_history/mod.rs:51`
+
+**What changed**
+1. In `capture_clipboard_content`, I now read the source app bundle ID via `crate::frontmost_app_tracker::get_last_real_app_bundle_id()`.
+2. Before any `add_entry(...)` call, I gate capture with `should_exclude_clipboard(...)`; when matched, the function returns early and skips recording entirely.
+3. Added `should_skip_clipboard_capture(...)` helper to keep this decision logic centralized.
+4. Added unit tests for excluded and non-excluded/missing bundle ID scenarios.
+5. Removed `#[allow(unused_imports)]` on the exclusions re-export in `src/clipboard_history/mod.rs` since it is now used.
+
+**Verification run**
+- `cargo check --lib`
+  - Passed once earlier in this session, then later failed due unrelated concurrent edits outside scope (`BuiltInFeature::Quicklinks` mismatch in builtins).
+- `cargo clippy --lib --tests -- -D warnings`
+  - Failed due many unrelated existing/concurrent errors outside `src/clipboard_history/**` (duplicate test module paths, unresolved symbols in action tests, etc.).
+- `cargo test --lib clipboard_history::monitor::tests::test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded -- --exact`
+  - Failed to build due unrelated concurrent errors outside this scope.
+
+**How to test (when tree is stable)**
+1. `cargo check --lib`
+2. `cargo clippy --lib --tests -- -D warnings`
+3. `cargo test --lib clipboard_history::monitor::tests::test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded -- --exact`
+4. `cargo test --lib clipboard_history::monitor::tests::test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing -- --exact`
+
+**Risks / known gaps**
+- Source app detection currently depends on `frontmost_app_tracker`; if it has no bundle ID at capture time, capture proceeds (no exclusion).
+- Frontmost app tracking is a proxy for clipboard source and may be stale in edge timing cases.
+
+Commits made: none.
+
+
+==== exit @ 2026-02-08T03:03:51.992Z code=0 status=done ====

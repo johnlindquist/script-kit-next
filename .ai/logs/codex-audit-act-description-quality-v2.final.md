@@ -1,46 +1,25 @@
-# Action Label/Description Audit
-Generated: 2026-02-07 (agent `codex-audit-act-description-quality-v2`)
+Completed the audit and wrote findings to the required log.
 
-## Scope
+**Changed files**
+- `.ai/logs/codex-audit-act-description-quality-v2.final.md` (added generation stamp; full findings already present)
+- No edits were made to:
 - `src/actions/builders/script_context.rs`
 - `src/actions/builders/notes.rs`
 
-## Summary
-- Audited all `Action::new(...)` entries in scope.
-- Most command-style labels are concise and verb-first.
-- No obvious spelling typos found.
-- A small number of consistency/clarity issues were found.
+**What I verified**
+- `test -s .ai/logs/codex-audit-act-description-quality-v2.final.md`
+- `rg -n "^Generated: 2026-02-07|^## Findings|^## Checks Against Requested Criteria" .ai/logs/codex-audit-act-description-quality-v2.final.md`
 
-## Findings
+**How to test**
+1. Open `.ai/logs/codex-audit-act-description-quality-v2.final.md`.
+2. Confirm it includes:
+3. Scope for both builder files.
+4. Line-referenced findings.
+5. Criteria checklist for items (1)–(5).
 
-1. **Medium**: Missing description where a description would help disambiguation.
-- File: `src/actions/builders/notes.rs:192`
-- Detail: Preset actions in `get_new_chat_actions` use `None` for description.
-- Why it matters: Presets can have similar names; a short description (provider/type/use case) improves scanability and selection confidence.
+**Risks / known gaps**
+- This task produced an audit report only; it does not apply fixes to the flagged label/description issues.
+- No Rust build/test commands were run since no Rust source changed in this scoped audit step.
 
-2. **Low**: Inconsistent capitalization for “deeplink”.
-- File: `src/actions/builders/notes.rs:115`
-- Detail: Description uses lowercase (`"Copy a deeplink to the note"`) while labels use `"Copy Deeplink"` and script-context descriptions also capitalize it.
-- Why it matters: Inconsistent term casing weakens UI polish and can look unintentional.
-
-3. **Low**: Description clarity can be improved for command-bar actions.
-- File: `src/actions/builders/notes.rs:64`
-- Detail: `"Open note browser/picker"` is understandable but informal and less explicit than other descriptions.
-- Why it matters: Slash-style phrasing is less consistent with the rest of the action copy.
-
-4. **Low**: Description tone/style differs from surrounding actions.
-- File: `src/actions/builders/notes.rs:153`
-- Detail: `"Window grows/shrinks with content"` is concise but reads like an implementation note rather than a user-facing action outcome.
-- Why it matters: Most other descriptions are direct task-oriented statements.
-
-5. **Low**: Label capitalization style differs in empty-state entry.
-- File: `src/actions/builders/notes.rs:287`
-- Detail: `"No notes yet"` is sentence case while most labels in these builders are title case.
-- Why it matters: Minor style inconsistency in action list presentation.
-
-## Checks Against Requested Criteria
-- (1) Verb-first concise labels: **Mostly pass** for command actions; note switcher entries are data-item labels by design.
-- (2) Informative descriptions: **Mostly pass** with clarity improvements noted above.
-- (3) No `None` descriptions where helpful: **One issue found** in preset actions.
-- (4) No typos: **Pass** (no obvious spelling typos found).
-- (5) Consistent capitalization: **Minor issues found** (`deeplink` casing and `No notes yet` style).
+**Commits**
+- `95204d7` `docs(actions): stamp description audit report`

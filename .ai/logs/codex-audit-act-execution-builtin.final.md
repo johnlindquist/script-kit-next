@@ -1,62 +1,23 @@
-# Audit: Built-in Action Execution Path
+Added the audit report and traced the full built-in execution path from selection to handler dispatch.
 
-## Scope
-- `src/app_impl/*`
-- Related execution code: `src/app_execute/builtin_execution.rs`, `src/app_execute/builtin_confirmation.rs`
+Changed files:
+- `.ai/logs/codex-audit-act-execution-builtin.final.md`
+- `.ai/logs/codex-audit-act-execution-scripts.final.md` (was already staged in the tree and got included in the commit)
 
-## Execution Path (built-ins)
-1. Built-ins are materialized at startup via `builtins::get_builtin_entries(...)` in `src/app_impl/startup.rs:72` / `src/app_impl/startup_new_prelude.rs:56`.
-2. They flow into search/grouped results via `self.builtin_entries` in `src/app_impl/filtering_cache.rs:61` and grouped result construction.
-3. User selection reaches execution via:
-- Main list selection: `src/app_impl/selection_fallback.rs:179` -> `self.execute_builtin(...)`
-- Alias + trailing space: `src/app_impl/filter_input_change.rs:438` -> `self.execute_builtin(...)`
-- Hotkey/deeplink/command-id execution: `src/app_impl/execution_scripts.rs:345` -> `self.execute_builtin(...)`
-4. Actual dispatch is the feature match in `src/app_execute/builtin_execution.rs:122`.
-5. Confirmation flow for dangerous commands:
-- Confirmation open/check: `src/app_execute/builtin_execution.rs:26`
-- Modal result handling: `src/main_sections/render_impl.rs:42` -> `src/app_execute/builtin_confirmation.rs:4`
+How to test:
+1. `cargo test test_get_builtin_entries_hides_preview_ai_commands -- --nocapture`
+2. `cargo test builtin_confirmation_modal_failure_does_not_auto_confirm -- --nocapture`
 
-## Findings (ordered by severity)
+Verification run:
+- `cargo test test_get_builtin_entries_hides_preview_ai_commands -- --nocapture` passed.
+- `cargo test builtin_confirmation_modal_failure_does_not_auto_confirm -- --nocapture` ran with 0 matched tests.
+- A stricter path-specific run (`cargo test app_actions::tests::clipboard_actions::builtin_confirmation_modal_failure_does_not_auto_confirm -- --nocapture`) failed due unrelated concurrent clipboard-history compile breakages outside this task’s scope.
 
-### 1. Hotkey/deeplink execution can incorrectly re-show the main window for built-ins that open AI/Notes windows
-- Severity: High
-- Evidence:
-  - `NO_MAIN_WINDOW_BUILTINS` omits `builtin-open-ai` and `builtin-open-notes` in `src/app_impl/execution_scripts.rs:317`.
-  - These IDs are valid built-ins in `src/builtins/part_001_entries/entries_002.rs:46` and `src/builtins/part_001_entries/entries_002.rs:10`.
-  - `execute_by_command_id_or_path` returns `needs_main_window` from that list (`src/app_impl/execution_scripts.rs:355`), and callers use that to decide whether to show the main window (e.g. `src/hotkey_pollers.rs:273`).
-- Impact:
-  - Command-id flows (`builtin/<id>`) for `builtin-open-ai` / `builtin-open-notes` can reopen main UI even though those actions intentionally transition to secondary windows.
+Risks / known gaps (from the audit):
+- `builtin-open-ai` / `builtin-open-notes` are missing from `NO_MAIN_WINDOW_BUILTINS` in `src/app_impl/execution_scripts.rs:317`, so hotkey/deeplink command-ID execution can re-show the main window.
+- Confirmation modal open failure in `src/app_execute/builtin_execution.rs:87` is log-only (no user-facing toast/HUD).
+- Several AI command failure paths log `Failed to open AI` without user feedback (`src/app_execute/builtin_execution.rs:634`, `src/app_execute/builtin_execution.rs:677`, `src/app_execute/builtin_execution.rs:709`, `src/app_execute/builtin_execution.rs:752`, `src/app_execute/builtin_execution.rs:796`).
+- Orphaned built-in variants remain defined/handled but not constructed by entry builders.
 
-### 2. Confirmation modal open failure logs an error but provides no user-visible feedback
-- Severity: Medium
-- Evidence:
-  - On `open_confirm_window(...)` failure, code only logs and skips execution (`src/app_execute/builtin_execution.rs:87`-`107`), with no toast/HUD.
-- Impact:
-  - User sees no action and no reason when a dangerous builtin cannot open its confirmation dialog.
-
-### 3. Several AI command failure paths only log `Failed to open AI` without toast/HUD feedback
-- Severity: Medium
-- Evidence:
-  - `SendScreenToAi` branch: `src/app_execute/builtin_execution.rs:634`-`636`
-  - `SendFocusedWindowToAi` branch: `src/app_execute/builtin_execution.rs:677`-`679`
-  - `SendSelectedTextToAi` branch: `src/app_execute/builtin_execution.rs:709`-`711`
-  - `SendBrowserTabToAi` branch: `src/app_execute/builtin_execution.rs:752`-`754`
-  - Preset placeholder branch: `src/app_execute/builtin_execution.rs:796`-`798`
-- Impact:
-  - Action appears to fail silently from the user perspective in those error cases.
-
-### 4. Orphaned built-in command variants exist (defined and handled, but not constructible from built-in entries)
-- Severity: Low
-- Evidence:
-  - Defined `AiCommandType` variants include: `ClearConversation`, `SendScreenAreaToAi`, `CreateAiPreset`, `ImportAiPresets`, `SearchAiPresets` (`src/builtins/part_000.rs:95`-`114`).
-  - Built-in entries only construct `OpenAi`, `NewConversation`, `SendScreenToAi`, `SendFocusedWindowToAi`, `SendSelectedTextToAi`, `SendBrowserTabToAi` (`src/builtins/part_001_entries/entries_002.rs:45`-`123`).
-  - Command-id execution only resolves IDs through `get_builtin_entries(...)` (`src/app_impl/execution_scripts.rs:348`).
-  - `BuiltInFeature::AppLauncher` and `BuiltInFeature::App(String)` are also defined (`src/builtins/part_000.rs:189`-`191`) but not produced by current entry builders.
-- Impact:
-  - Some defined/handled actions are unreachable from built-in selection and command-id execution.
-
-## Checkpoint Summary
-- (1) Every `BuiltInFeature` variant has an execution match arm: **Pass** (exhaustive `match` in `src/app_execute/builtin_execution.rs:122`).
-- (2) Error handling for failures: **Partial** (several failures are log-only).
-- (3) User feedback on success/failure: **Partial** (many paths have toast/HUD, but gaps above).
-- (4) No orphaned actions: **Fail** (unreachable defined variants and legacy feature variants).
+Commits made:
+- `e42cc78`
