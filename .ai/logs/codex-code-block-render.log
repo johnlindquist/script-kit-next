@@ -1,0 +1,3048 @@
+==== spawn @ 2026-02-08T07:15:57.303Z ====
+cmd: codex "exec" "--cd" "/Users/johnlindquist/dev/script-kit-gpui" "--model" "gpt-5.3-codex" "-c" "model_reasoning_effort=\"xhigh\"" "-c" "model_auto_compact_token_limit=120000" "-c" "developer_instructions=\"You are Codex implementer agent \\\"codex-code-block-render\\\".\\n\\n## Coordination\\nThis repo runs parallel agents in ONE working tree. Before editing any file, you MUST claim it.\\nCommands (run via shell):\\n  - View roster: ~/.claude/bin/swarm.ts status\\n  - Claim files (blocks until free): ~/.claude/bin/swarm.ts claim --wait --id codex-code-block-render path/to/file\\n  - Release: ~/.claude/bin/swarm.ts release --id codex-code-block-render path/to/file\\n  - Update status/notes: ~/.claude/bin/swarm.ts update --id codex-code-block-render --status in_progress --notes \\\"...\\\"\\nRules:\\n  - Never edit a file you haven't claimed.\\n  - Keep claims tight (claim only what you're actively changing).\\n  - If blocked, set status=blocked and say what you're waiting on.\\n  - When finished, set status=done and release claims.\\n\\n## Development practices (this code is maintained by AI agents)\\n  - Log state transitions with enough context to diagnose failures from logs alone.\\n  - Structured errors: include what was attempted, what failed, and current state.\\n  - Name things for grepability — unique identifiers agents can find on the first search.\\n  - Every behavior change gets a test. Untested code is invisible to the next agent.\\n  - Test names describe the scenario: test_X_does_Y_when_Z.\\n  - Keep functions small and single-purpose. 500-line functions burn agent context.\\n  - Use types to encode constraints (enums > strings for errors).\\n\\n## CRITICAL: Parallel-safe verification\\n  - Other agents are modifying other files RIGHT NOW. Full test suites WILL show their failures.\\n  - ONLY run tests that cover YOUR changed files. Scope every test/check command:\\n    Rust: cargo test -p your-crate -- module::test_name | JS: npx jest your/file.test.ts\\n  - Do NOT run: cargo test (unscoped), cargo check (whole workspace), npm test (unscoped).\\n  - If a scoped test fails, it's YOUR bug — fix it. If tests outside your scope fail, ignore them.\\n\\n## Git commit discipline\\n  - NEVER commit unverified work. Run tests/lints/type-checks FIRST. If it fails, fix it before committing.\\n  - A commit is a declaration: \\\"this works and here's the proof.\\\"\\n  - Commit FREQUENTLY — after each meaningful unit of VERIFIED work, not just at the end.\\n  - A \\\"unit\\\" = one logical change that passes verification (new function, bug fix, refactor, test added).\\n  - NEVER batch an entire task into one giant commit. Small commits are searchable; big ones aren't.\\n  - Commit message format:\\n      Line 1: <type>(<scope>): <what changed> (imperative, max 72 chars)\\n      Line 3+: WHY this change was made, WHAT was verified, and HOW to test it.\\n    Types: feat, fix, refactor, test, docs, chore\\n    Example:\\n      feat(auth): add refresh token rotation\\n      \\n      Tokens now rotate on each refresh call to prevent replay attacks.\\n      The old token is invalidated immediately on rotation.\\n      \\n      Verified: cargo test --lib -- auth::refresh (4 tests pass)\\n      Verified: manual smoke test via curl — token rotates, old token returns 401\\n  - The \\\"Verified:\\\" lines are REQUIRED. Future agents will read git log to understand\\n    what was tested and how to re-verify. This is the most valuable part of the message.\\n  - In your final message, list all commits you made with their hashes.\\n\\n## Time budget\\nYou have approximately 10 minutes. If your task is too broad to complete in time:\\n(1) Commit any verified progress.\\n(2) Run: ~/.claude/bin/swarm.ts update --id YOUR_ID --status needs_split --notes 'suggest: 1) sub-task-desc scope:files 2) sub-task-desc scope:files'.\\n(3) Exit cleanly. The dispatcher will read your suggestions and spawn narrower workers.\"" "--output-last-message" "/Users/johnlindquist/dev/script-kit-gpui/.ai/logs/codex-code-block-render.final.md" "--yolo" "You are agent codex-code-block-render.\n\nCurrent parallel-agent roster (read this first):\n```\nSWARM SNAPSHOT @ 2026-02-08T07:15:57.300Z\n- codex-code-block-render [starting] scope=src/prompts/chat/render_messages.rs,src/prompts/chat/render_core.rs,src/prompts/chat/prompt.rs task=In the script generation ChatPrompt, the AI-generated script code is rendered as plain text instead of as a code block …\n- codex-footer-button-style [in_progress] scope=src/prompts/chat/render_core.rs,src/prompts/chat/prompt.rs task=In the script generation ChatPrompt footer (src/prompts/chat/render_core.rs), the Save/Run/Save and Run buttons don't m…\n  claims: src/prompts/chat/render_core.rs, src/prompts/chat/prompt.rs\n  notes: Inspecting footer button rendering for script_generation_mode and preparing style/placement fix\n```\n\nYour assignment:\n- Task: In the script generation ChatPrompt, the AI-generated script code is rendered as plain text instead of as a code block with monospace font. Looking at the screenshot, the code (// Name:, import, await arg(), etc.) appears in the regular chat message font. The chat prompt renders messages via render_turn/render_messages in src/prompts/chat/render_messages.rs. The markdown rendering for chat messages should be rendering fenced code blocks with a monospace font and code-block styling (dark background, monospace font family). Check how the chat prompt renders assistant message content - it likely uses a markdown renderer or just renders raw text. If there's a markdown/code block renderer, make sure it's being used for assistant messages. If messages are rendered as plain text, add code block detection and render fenced code blocks (triple backtick blocks) with monospace font (font_family 'monospace' or the theme's code font), a slightly different background color, and proper padding. Run cargo check.\n- Scope: src/prompts/chat/render_messages.rs,src/prompts/chat/render_core.rs,src/prompts/chat/prompt.rs\n\nOperating constraints:\n- Single working tree (no worktrees, no patches).\n- You MUST claim files before editing (~/.claude/bin/swarm.ts claim --wait ...).\n\nDeliverables:\n- Make the code changes required by the task.\n- Run the most relevant tests/linters.\n- In your FINAL message, include: changed files, how to test, and any risks/known gaps."
+
+OpenAI Codex v0.98.0 (research preview)
+--------
+workdir: /Users/johnlindquist/dev/script-kit-gpui
+model: gpt-5.3-codex
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: xhigh
+reasoning summaries: auto
+session id: 019c3c1b-7127-7d10-a67f-93f07731310f
+--------
+user
+You are agent codex-code-block-render.
+
+Current parallel-agent roster (read this first):
+```
+SWARM SNAPSHOT @ 2026-02-08T07:15:57.300Z
+- codex-code-block-render [starting] scope=src/prompts/chat/render_messages.rs,src/prompts/chat/render_core.rs,src/prompts/chat/prompt.rs task=In the script generation ChatPrompt, the AI-generated script code is rendered as plain text instead of as a code block …
+- codex-footer-button-style [in_progress] scope=src/prompts/chat/render_core.rs,src/prompts/chat/prompt.rs task=In the script generation ChatPrompt footer (src/prompts/chat/render_core.rs), the Save/Run/Save and Run buttons don't m…
+  claims: src/prompts/chat/render_core.rs, src/prompts/chat/prompt.rs
+  notes: Inspecting footer button rendering for script_generation_mode and preparing style/placement fix
+```
+
+Your assignment:
+- Task: In the script generation ChatPrompt, the AI-generated script code is rendered as plain text instead of as a code block with monospace font. Looking at the screenshot, the code (// Name:, import, await arg(), etc.) appears in the regular chat message font. The chat prompt renders messages via render_turn/render_messages in src/prompts/chat/render_messages.rs. The markdown rendering for chat messages should be rendering fenced code blocks with a monospace font and code-block styling (dark background, monospace font family). Check how the chat prompt renders assistant message content - it likely uses a markdown renderer or just renders raw text. If there's a markdown/code block renderer, make sure it's being used for assistant messages. If messages are rendered as plain text, add code block detection and render fenced code blocks (triple backtick blocks) with monospace font (font_family 'monospace' or the theme's code font), a slightly different background color, and proper padding. Run cargo check.
+- Scope: src/prompts/chat/render_messages.rs,src/prompts/chat/render_core.rs,src/prompts/chat/prompt.rs
+
+Operating constraints:
+- Single working tree (no worktrees, no patches).
+- You MUST claim files before editing (~/.claude/bin/swarm.ts claim --wait ...).
+
+Deliverables:
+- Make the code changes required by the task.
+- Run the most relevant tests/linters.
+- In your FINAL message, include: changed files, how to test, and any risks/known gaps.
+warning: Under-development features enabled: responses_websockets. Under-development features are incomplete and may behave unpredictably. To suppress this warning, set `suppress_unstable_features_warning = true` in /Users/johnlindquist/.codex/config.toml.
+mcp: deepwiki starting
+mcp: deepwiki ready
+mcp startup: ready: deepwiki
+
+thinking
+**Reconciling verification and claiming strategy**
+codex
+I’m starting on the code-block rendering fix in chat messages and will first inspect `render_messages` to confirm how assistant markdown is currently rendered before making any edits.
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts update --id codex-code-block-render --status in_progress --notes "Investigating assistant message markdown rendering path for code block styling bug" && ~/.claude/bin/swarm.ts status' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+Updated: codex-code-block-render
+Repo: /Users/johnlindquist/dev/script-kit-gpui
+Updated: 2026-02-08T07:16:11.518Z
+
+Active agents (2):
+codex-code-block-render [in_progress] codex/gpt-5.3-codex/exec
+  task: In the script generation ChatPrompt, the AI-generated script code is rendered as plain text instead of as a code block …
+  scope: src/prompts/chat/render_messages.rs,src/prompts/chat/render_core.rs,src/prompts/chat/prompt.rs
+  claims: (none)
+  notes: Investigating assistant message markdown rendering path for code block styling bug
+
+codex-footer-button-style [in_progress] codex/gpt-5.3-codex/exec
+  task: In the script generation ChatPrompt footer (src/prompts/chat/render_core.rs), the Save/Run/Save and Run buttons don't m…
+  scope: src/prompts/chat/render_core.rs,src/prompts/chat/prompt.rs
+  claims(2): src/prompts/chat/render_core.rs, src/prompts/chat/prompt.rs
+  notes: Inspecting footer button rendering for script_generation_mode and preparing style/placement fix
+
+Inactive agents (269):
+- codex-accessibility [done] done. exit=0. final=.ai/logs/codex-accessibility.final.md. See final message file.
+- codex-action-labels [failed] failed. exit=1. final=.ai/logs/codex-action-labels.final.md.
+
+thinking
+**Planning parallel file inspection**
+exec
+/bin/zsh -lc "sed -n '1,260p' src/prompts/chat/render_messages.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc 'rg -n "render_turn|render_messages|markdown|code|fenced|assistant|message" src/prompts/chat/render_messages.rs src/prompts/chat/render_core.rs src/prompts/chat/prompt.rs' in /Users/johnlindquist/dev/script-kit-gpui exited 1 in 52ms:
+sed: src/prompts/chat/render_messages.rs: No such file or directory
+ exited 2 in 50ms:
+rg: src/prompts/chat/render_messages.rs: No such file or directory (os error 2)
+src/prompts/chat/render_core.rs:125:        let status_message = self.script_generation_status.clone();
+src/prompts/chat/render_core.rs:127:        if !show_actions && status_message.is_none() {
+src/prompts/chat/render_core.rs:177:        if let Some(status) = status_message {
+src/prompts/chat/render_core.rs:241:        // Process needs_initial_response on first render (used for scriptlets with pre-populated messages)
+src/prompts/chat/render_core.rs:251:                "Processing needs_initial_response - auto-responding to initial messages",
+src/prompts/chat/render_core.rs:261:        let on_claude_code = self.on_claude_code.clone();
+src/prompts/chat/render_core.rs:291:                        if let Some(ref callback) = on_claude_code {
+src/prompts/chat/render_core.rs:438:        let messages_content = if has_turns {
+src/prompts/chat/render_core.rs:449:                            .child(this.render_turn(turn, ix, cx))
+src/prompts/chat/render_core.rs:462:                .id("chat-messages")
+src/prompts/chat/render_core.rs:531:                .id("chat-messages")
+src/prompts/chat/render_core.rs:561:            // Scrollable message area
+src/prompts/chat/render_core.rs:562:            .child(messages_content)
+src/prompts/chat/prompt.rs:4:    pub messages: Vec<ChatPromptMessage>,
+src/prompts/chat/prompt.rs:22:    pub(super) streaming_message_id: Option<String>,
+src/prompts/chat/prompt.rs:41:    // Auto-respond flag: when true, respond to initial messages on first render (for scriptlets)
+src/prompts/chat/prompt.rs:60:    pub(super) on_claude_code: Option<ChatClaudeCodeCallback>,
+src/prompts/chat/prompt.rs:64:    // Generated once at construction so all messages share the same session.
+src/prompts/chat/prompt.rs:77:        messages: Vec<ChatPromptMessage>,
+
+thinking
+**Locating missing source file**
+codex
+I found that `src/prompts/chat/render_messages.rs` doesn’t exist at that path in this checkout, so I’m locating the actual message-render file before proceeding with the fix.
+exec
+/bin/zsh -lc 'rg --files src/prompts/chat | rg "render.*messages|messages|chat"' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+src/prompts/chat/render_input.rs
+src/prompts/chat/render_turns.rs
+src/prompts/chat/render_setup.rs
+src/prompts/chat/tests.rs
+src/prompts/chat/streaming.rs
+src/prompts/chat/render_core.rs
+src/prompts/chat/prompt.rs
+src/prompts/chat/state.rs
+src/prompts/chat/mod.rs
+src/prompts/chat/types.rs
+src/prompts/chat/actions.rs
+
+thinking
+**Inspecting render_turns file**
+exec
+/bin/zsh -lc "sed -n '1,320p' src/prompts/chat/render_turns.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc 'rg -n "render_turn|markdown|code|fence|assistant|message|text" src/prompts/chat/render_turns.rs src/prompts/chat/render_core.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+use super::*;
+
+impl ChatPrompt {
+    pub(super) fn render_turn(
+        &self,
+        turn: &ConversationTurn,
+        turn_index: usize,
+        cx: &Context<Self>,
+    ) -> impl IntoElement {
+        let colors = &self.prompt_colors;
+
+        // VIBRANCY: Use theme-aware overlay for subtle lift that lets blur show through
+        // Dark mode: white overlay brightens; Light mode: much subtler black overlay
+        let container_bg = if self.theme.is_dark_mode() {
+            theme::hover_overlay_bg(&self.theme, 0x15) // ~8% white overlay for dark mode
+        } else {
+            theme::hover_overlay_bg(&self.theme, 0x08) // ~3% black overlay for light mode
+        };
+        let copy_hover_bg = theme::hover_overlay_bg(&self.theme, 0x28); // ~16% for hover
+        let error_color = self.theme.colors.ui.error;
+ succeeded in 50ms:
+src/prompts/chat/render_turns.rs:4:    pub(super) fn render_turn(
+src/prompts/chat/render_turns.rs:8:        cx: &Context<Self>,
+src/prompts/chat/render_turns.rs:26:        // Note: removed overflow_hidden() to allow text to wrap naturally
+src/prompts/chat/render_turns.rs:34:                    .text_sm()
+src/prompts/chat/render_turns.rs:36:                    .text_color(rgb(colors.text_secondary))
+src/prompts/chat/render_turns.rs:52:        // Error state - show error message with optional retry button
+src/prompts/chat/render_turns.rs:55:            let error_message = error_type.display_message();
+src/prompts/chat/render_turns.rs:60:                    .text_sm()
+src/prompts/chat/render_turns.rs:61:                    .text_color(rgb(error_color))
+src/prompts/chat/render_turns.rs:62:                    .child(error_message.to_string()),
+src/prompts/chat/render_turns.rs:67:                let message_id = turn.message_id.clone();
+src/prompts/chat/render_turns.rs:77:                        .text_xs()
+src/prompts/chat/render_turns.rs:79:                        .text_color(rgb(colors.text_primary))
+src/prompts/chat/render_turns.rs:82:                            if let Some(msg_id) = &message_id {
+src/prompts/chat/render_turns.rs:93:            if !detail.is_empty() && detail != error_message {
+src/prompts/chat/render_turns.rs:102:                        .text_xs()
+src/prompts/chat/render_turns.rs:104:                        .text_color(rgb(error_color))
+src/prompts/chat/render_turns.rs:110:        else if let Some(ref response) = turn.assistant_response {
+src/prompts/chat/render_turns.rs:111:            // Use markdown rendering for assistant responses
+src/prompts/chat/render_turns.rs:114:                content = content.child(div().text_xs().opacity(0.6).child("Thinking..."));
+
+thinking
+**Locating markdown rendering function**
+codex
+I found the message rendering in `render_turns.rs`, and assistant responses already flow through `render_markdown(...)`; next I’m tracing that renderer to see why fenced code isn’t styled monospace.
+exec
+/bin/zsh -lc "rg -n \"fn render_markdown|render_markdown\\(\" src/prompts/chat -g'*.rs'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+src/prompts/chat/render_turns.rs:123:                        .child(render_markdown(response, colors))
+src/prompts/chat/render_turns.rs:138:                        .child(render_markdown(response, colors)),
+
+thinking
+**Planning global usage search**
+exec
+/bin/zsh -lc 'rg -n "render_markdown" src | head -n 40' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+src/ai/window/render_streaming.rs:81:                .child(render_markdown(&self.streaming_content, &colors))
+src/ai/window/render_message.rs:289:                            .child(render_markdown(&display_content, &colors))
+src/ai/window.rs:41:use crate::prompts::markdown::render_markdown;
+src/prompts/markdown/api.rs:7:pub fn render_markdown(text: &str, colors: &PromptColors) -> gpui::Div {
+src/prompts/markdown/api.rs:8:    render_markdown_with_scope(text, colors, None)
+src/prompts/markdown/api.rs:16:pub fn render_markdown_with_scope(
+src/prompts/markdown/mod.rs:38:pub use api::{render_markdown, render_markdown_with_scope};
+src/prompts/markdown/test_support.rs:31:/// `render_markdown` but produces `TestBlock` values instead of GPUI elements.
+src/prompts/chat/render_turns.rs:123:                        .child(render_markdown(response, colors))
+src/prompts/chat/render_turns.rs:138:                        .child(render_markdown(response, colors)),
+src/prompts/chat/mod.rs:29:use crate::prompts::markdown::render_markdown;
+src/notes/markdown.rs:415:pub fn render_markdown_preview(markdown: &str, theme: &Theme) -> impl IntoElement {
+src/notes/window/render_editor_body.rs:114:                .child(markdown::render_markdown_preview(&content, cx.theme()))
+
+thinking
+**Inspecting markdown renderer modules**
+exec
+/bin/zsh -lc "sed -n '1,260p' src/prompts/markdown/api.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,360p' src/prompts/markdown/mod.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+use super::*;
+
+/// Render markdown text to GPUI elements.
+///
+/// Uses a global cache to avoid re-parsing markdown and re-highlighting code
+/// on every render frame. The cache is keyed on (content hash, dark-mode flag).
+pub fn render_markdown(text: &str, colors: &PromptColors) -> gpui::Div {
+    render_markdown_with_scope(text, colors, None)
+}
+
+/// Render markdown with a stable scope identifier.
+///
+/// When `scope` is stable across updates (for example: assistant message ID while
+/// streaming), interactive element IDs remain stable too, allowing GPUI to reuse
+/// unchanged subtrees instead of replacing the entire markdown tree every tick.
+pub fn render_markdown_with_scope(
+    text: &str,
+    colors: &PromptColors,
+    scope: Option<&str>,
+) -> gpui::Div {
+exec
+/bin/zsh -lc "rg -n \"code|fence|monospace|font_family|background|block\" src/prompts/markdown -g'*.rs'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+//! Markdown rendering for chat messages
+//!
+//! Uses pulldown-cmark for parsing and syntect for fenced code highlighting.
+//! Supports: headings, lists, blockquotes, bold/italic, inline code, code blocks, links.
+//!
+//! Performance: The markdown is parsed once and cached in a global HashMap keyed
+//! by content hash + dark-mode flag. On subsequent render frames (e.g. during
+//! scrolling at 60fps) we skip pulldown-cmark parsing and syntect highlighting
+//! entirely, and only build cheap GPUI elements from the cached representation.
+
+use gpui::{
+    div, prelude::*, px, rgb, rgba, AnyElement, ClipboardItem, FontWeight, IntoElement,
+    SharedString,
+};
+use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
+ succeeded in 51ms:
+src/prompts/markdown/api.rs:5:/// Uses a global cache to avoid re-parsing markdown and re-highlighting code
+src/prompts/markdown/api.rs:21:    // Check cache for parsed blocks
+src/prompts/markdown/api.rs:28:    let parsed_blocks = if let Ok(guard) = cache.lock() {
+src/prompts/markdown/api.rs:34:    let parsed_blocks = parsed_blocks.unwrap_or_else(|| {
+src/prompts/markdown/api.rs:35:        let blocks = Arc::new(parse_markdown(text, colors.is_dark));
+src/prompts/markdown/api.rs:43:            guard.insert(key, blocks.clone());
+src/prompts/markdown/api.rs:45:        blocks
+src/prompts/markdown/api.rs:48:    let elements = build_markdown_elements(parsed_blocks.as_slice(), colors, render_scope_hash);
+src/prompts/markdown/tests.rs:6:    let blocks = parse_markdown_blocks(md);
+src/prompts/markdown/tests.rs:8:        blocks,
+src/prompts/markdown/tests.rs:20:    let blocks = parse_markdown_blocks(md);
+src/prompts/markdown/tests.rs:22:        blocks,
+src/prompts/markdown/tests.rs:34:    let blocks = parse_markdown_blocks(md);
+src/prompts/markdown/tests.rs:36:        blocks,
+src/prompts/markdown/tests.rs:47:fn paragraph_after_list_is_separate_block() {
+src/prompts/markdown/tests.rs:49:    let blocks = parse_markdown_blocks(md);
+src/prompts/markdown/tests.rs:51:        blocks,
+src/prompts/markdown/tests.rs:63:    let blocks = parse_markdown_blocks(md);
+src/prompts/markdown/tests.rs:65:        blocks,
+src/prompts/markdown/tests.rs:76:fn list_with_bold_and_inline_code() {
+
+thinking
+**Investigating code block rendering issue**
+exec
+/bin/zsh -lc "sed -n '360,620p' src/prompts/chat/prompt.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+    }
+
+    /// Whether providers are currently loading
+    pub fn loading_providers(&self) -> bool {
+        self.loading_providers
+    }
+
+    /// Mutably set the provider registry after construction (e.g., when background loading completes).
+    /// Clears loading_providers and updates available models.
+    pub fn set_provider_registry(
+        &mut self,
+        registry: ProviderRegistry,
+        prefer_vercel: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let available_models = registry.get_all_models();
+
+        let selected_model = if prefer_vercel {
+            available_models
+                .iter()
+
+thinking
+**Exploring message parsing in chat module**
+exec
+/bin/zsh -lc "rg -n \"script_generation|assistant_response|message\\.content|get_content\\(|streaming|append|push|messages.push|fence|"'```" src/prompts/chat -g'"'*.rs'" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,360p' src/prompts/chat/streaming.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,360p' src/prompts/chat/types.rs" in /Users/johnlindquist/dev/script-kit-gpui exited 1 in 52ms:
+zsh:1: unmatched "
+ succeeded in 52ms:
+use super::*;
+/// Available AI models for the chat
+#[derive(Clone, Debug, PartialEq)]
+pub struct ChatModel {
+    pub id: String,
+    pub name: String,
+    pub provider: String,
+}
+
+impl ChatModel {
+    pub fn new(
+        id: impl Into<String>,
+        name: impl Into<String>,
+        provider: impl Into<String>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            name: name.into(),
+            provider: provider.into(),
+        }
+ succeeded in 52ms:
+use super::*;
+
+impl ChatPrompt {
+    pub(super) fn handle_submit(&mut self, cx: &mut Context<Self>) {
+        let text = self.input.text().to_string();
+        let pending_image = self.pending_image.take();
+        let pending_render = self.pending_image_render.take();
+
+        if text.trim().is_empty() && pending_image.is_none() {
+            return;
+        }
+        logging::log("CHAT", &format!("User submitted: {}", text));
+        self.input.clear();
+        self.clear_script_generation_status();
+
+        // If built-in AI mode is enabled, handle the AI call directly
+        if self.has_builtin_ai() {
+            // Cache the render image for conversation history display
+            // We need the user message ID, which will be generated in handle_builtin_ai_submit
+            self.handle_builtin_ai_submit(text, pending_image, pending_render, cx);
+
+thinking
+**Analyzing markdown rendering paths**
+exec
+/bin/zsh -lc "sed -n '400,620p' src/prompts/chat/render_core.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(rgb(colors.text_secondary))
+                                    .child("Connecting to AI..."),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(rgb(colors.text_tertiary))
+                                    .child("Loading providers and models"),
+                            ),
+                    ),
+                )
+                .into_any_element();
+        }
+
+        // Input area at TOP
+        let has_pending_image = self.pending_image.is_some();
+        let input_area = div()
+
+thinking
+**Assessing markdown parsing for code blocks**
+exec
+/bin/zsh -lc "sed -n '1,280p' src/prompts/markdown/parse.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+use super::*;
+
+fn flush_spans_to_active_list_item(spans: &mut Vec<InlineSpan>, list_item_stack: &mut [ListItem]) {
+    if spans.is_empty() {
+        return;
+    }
+    if let Some(item) = list_item_stack.last_mut() {
+        item.spans.append(spans);
+    }
+}
+
+pub(super) fn parse_markdown(text: &str, is_dark: bool) -> Vec<ParsedBlock> {
+    let mut options = Options::empty();
+    options.insert(Options::ENABLE_STRIKETHROUGH);
+    options.insert(Options::ENABLE_TABLES);
+    options.insert(Options::ENABLE_TASKLISTS);
+    options.insert(Options::ENABLE_SMART_PUNCTUATION);
+
+    let parser = Parser::new_ext(text, options);
+
+
+thinking
+**Assessing script generation handling**
+exec
+/bin/zsh -lc "rg -n \"script_generation_mode|script generation|script_generation\" src/prompts/chat src -g'*.rs'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+src/prompts/chat/tests.rs:12:        should_show_script_generation_actions, ChatInputKeyAction, ChatScrollDirection,
+src/prompts/chat/tests.rs:158:    fn should_show_script_generation_actions_only_when_draft_is_ready() {
+src/prompts/chat/tests.rs:160:            should_show_script_generation_actions(true, false, true),
+src/prompts/chat/tests.rs:164:            !should_show_script_generation_actions(false, false, true),
+src/prompts/chat/tests.rs:165:            "Script actions should stay hidden when script generation mode is disabled"
+src/prompts/chat/tests.rs:168:            !should_show_script_generation_actions(true, true, true),
+src/prompts/chat/tests.rs:172:            !should_show_script_generation_actions(true, false, false),
+src/prompts/chat/tests.rs:178:    fn script_generation_actions_render_in_footer_instead_of_standalone_row() {
+src/prompts/chat/tests.rs:189:            "Legacy standalone script generation action row should be removed"
+src/prompts/chat/tests.rs:192:            normalized.contains("self.render_script_generation_footer_actions(cx)"),
+src/prompts/chat/tests.rs:193:            "Footer should include script generation controls next to existing footer actions"
+src/prompts/chat/tests.rs:196:            !normalized.contains("self.render_script_generation_actions(cx)"),
+src/prompts/chat/tests.rs:197:            "Main render tree should no longer insert script generation controls as a separate row"
+src/prompts/chat/tests.rs:202:    fn script_generation_action_should_run_after_save_only_for_run_variants() {
+src/prompts/chat/streaming.rs:14:        self.clear_script_generation_status();
+src/prompts/chat/render_core.rs:44:        if let Some(script_actions) = self.render_script_generation_footer_actions(cx) {
+src/prompts/chat/render_core.rs:120:    fn render_script_generation_footer_actions(
+src/prompts/chat/render_core.rs:124:        let show_actions = self.should_show_script_generation_actions();
+src/prompts/chat/render_core.rs:125:        let status_message = self.script_generation_status.clone();
+src/prompts/chat/render_core.rs:162:                        this.handle_script_generation_action(action, cx);
+
+thinking
+**Planning code fence handling**
+codex
+I confirmed assistant messages already go through the markdown renderer, so the issue is likely that script-generation responses are plain script text without fences. I’m now checking the chat tests and module layout so I can add a targeted helper + test for code-block detection.
+exec
+/bin/zsh -lc "sed -n '1,320p' src/prompts/chat/tests.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,320p' src/prompts/chat/mod.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,260p' src/prompts/chat/render_setup.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+//! ChatPrompt - Raycast-style chat interface
+//!
+//! Features:
+//! - Input at TOP (not bottom)
+//! - Messages bundled as conversation turns (user prompt + AI response in same container)
+//! - Full-width containers (not bubbles)
+//! - Footer with model selector and "Continue in Chat"
+//! - Actions menu (⌘+K) with model picker
+
+use crate::components::prompt_footer::PromptFooterColors;
+use crate::components::TextInputState;
+use crate::designs::icon_variations::IconName;
+use gpui::{
+    div, img, list, prelude::*, px, rgb, rgba, svg, AnyElement, App, Context, ExternalPaths,
+    FocusHandle, Focusable, Hsla, KeyDownEvent, ListAlignment, ListSizingBehavior, ListState,
+    Render, RenderImage, ScrollWheelEvent, Timer, Window,
+};
+use gpui_component::{scroll::ScrollableElement, theme::ActiveTheme};
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+ succeeded in 52ms:
+use super::*;
+#[cfg(test)]
+#[allow(clippy::module_inception)]
+mod tests {
+    use std::{collections::HashMap, fs};
+
+    use crate::protocol::ChatPromptMessage;
+
+    use super::{
+        next_chat_scroll_follow_state, next_reveal_boundary, resolve_chat_input_key_action,
+        resolve_setup_card_key, should_ignore_stream_reveal_update,
+        should_show_script_generation_actions, ChatInputKeyAction, ChatScrollDirection,
+        ScriptGenerationAction, SetupCardAction,
+    };
+
+    #[test]
+    fn resolve_setup_card_key_cycles_focus_for_tab_and_arrows() {
+        assert_eq!(
+            resolve_setup_card_key("tab", false, 0),
+            (1, SetupCardAction::None, true)
+ succeeded in 51ms:
+use super::*;
+
+impl ChatPrompt {
+    pub(super) fn render_setup_card(&self, cx: &Context<Self>) -> impl IntoElement {
+        let colors = &self.prompt_colors;
+
+        let accent_full = rgba((colors.accent_color << 8) | 0xFF);
+        let accent_25 = rgba((colors.accent_color << 8) | 0x40);
+        let muted_bg = rgba((colors.code_bg << 8) | 0x60);
+        let muted_bg_hover = rgba((colors.code_bg << 8) | 0x90);
+        let ring_color = rgba((colors.accent_color << 8) | 0x80);
+        let kbd_bg = rgba((colors.code_bg << 8) | 0x50);
+        let accent_text = rgb(self.theme.colors.text.on_accent);
+
+        let on_configure = self.on_configure.clone();
+        let on_claude_code = self.on_claude_code.clone();
+        let is_configure_focused = self.setup_focus_index == 0;
+        let is_claude_focused = self.setup_focus_index == 1;
+
+        div()
+
+thinking
+**Inspecting additional style tests**
+exec
+/bin/zsh -lc "sed -n '320,680p' src/prompts/chat/tests.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+            normalized.contains(
+                "chat.mark_conversation_turns_dirty();chat.ensure_conversation_turns_cache();chat.scroll_turns_to_bottom();cx.notify();returntrue;"
+            ),
+            "Built-in stream completion should refresh turns and re-apply bottom follow before breaking"
+        );
+    }
+
+    /// Verify that reveal never skips content — each boundary advances
+    /// monotonically and covers the full string.
+    #[test]
+    fn reveal_offsets_are_monotonically_increasing() {
+        let content = "- First\n- Second\n- Third item with longer text\n\nParagraph after.\n";
+        let mut offset = 0;
+        let mut prev = 0;
+        let mut reconstructed = String::new();
+        let mut boundary_count = 0usize;
+        while let Some(new_offset) = next_reveal_boundary(content, offset) {
+            assert!(
+                new_offset > prev,
+                "Offset did not advance: prev={}, new={}",
+
+thinking
+**Planning helper tests and claiming files**
+codex
+I’ve narrowed the root cause: script-generation replies can be raw script text (no triple-backticks), so markdown treats them as normal paragraphs. I’m going to add a chat helper that wraps script-like assistant output in fenced markdown only in script-generation mode, then wire it into `render_turns` and add tests.
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts claim --wait --id codex-code-block-render src/prompts/chat/render_turns.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+Claimed for codex-code-block-render: src/prompts/chat/render_turns.rs
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts claim --wait --id codex-code-block-render src/prompts/chat/types.rs' in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc '~/.claude/bin/swarm.ts claim --wait --id codex-code-block-render src/prompts/chat/tests.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+Claimed for codex-code-block-render: src/prompts/chat/tests.rs
+ succeeded in 137ms:
+Claimed for codex-code-block-render: src/prompts/chat/types.rs
+
+thinking
+**Planning status update integration**
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts update --id codex-code-block-render --status in_progress --notes "Implementing script-generation code fence fallback in chat render path + tests"' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+Updated: codex-code-block-render
+
+thinking
+**Designing code wrapping heuristic**
+exec
+/bin/zsh -lc 'rg -n "extract|fence|```|code block|script" src/ai/script_generation.rs | head -n 80' in /Users/johnlindquist/dev/script-kit-gpui exited 1 in 52ms:
+zsh:1: unmatched "
+
+thinking
+**Simplifying search pattern**
+exec
+/bin/zsh -lc 'rg -n "extract|fence|code block|script" src/ai/script_generation.rs | head -n 120' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+10:const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
+11:const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
+13:const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
+14:const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+17:    r#"You write production-ready Script Kit TypeScript scripts.
+19:Return ONLY TypeScript source code for one Script Kit script.
+20:Do not return markdown fences or explanations.
+25:   // Description: <one-line summary>
+27:   import "@scriptkit/sdk";
+31:5) Keep the script runnable as-is with sensible defaults and practical error handling."#;
+41:pub fn generate_script_from_prompt(
+47:        anyhow::bail!("AI script generation requires a non-empty prompt");
+61:            "correlation_id=ai-script-generation state=provider_ready model_id={} provider_id={} prompt_len={}",
+71:            "Generate a Script Kit script for this user request:\n\n{}",
+80:                "AI script generation failed (attempted=send_message, model_id={}, provider_id={})",
+85:    let (slug, finalized) = prepare_script_from_ai_response(normalized_prompt, &raw_response)?;
+86:    let path = write_generated_script(&slug, &finalized).with_context(|| {
+88:            "Failed writing AI-generated script (state=write_failed, slug={})",
+96:            "correlation_id=ai-script-generation state=script_written path={} slug={}",
+110:pub(crate) fn prepare_script_from_ai_response(
+
+thinking
+**Planning code fencing helper**
+codex
+I’m now applying three focused edits: add a script-generation markdown fallback helper in `types.rs`, switch `render_turns.rs` to use that helper for assistant content, and add direct unit tests in `chat/tests.rs` for wrap/no-wrap behavior.
+file update
+M /Users/johnlindquist/dev/script-kit-gpui/src/prompts/chat/types.rs
+@@ -1,2 +1,3 @@
+ use super::*;
++use std::borrow::Cow;
+ /// Available AI models for the chat
+@@ -140,2 +141,24 @@
+ 
++/// Normalize assistant content for markdown rendering in script-generation mode.
++///
++/// Script generation prompts ask models to return raw TypeScript without markdown
++/// fences. Wrap that raw code in a fenced block so the chat renderer can apply
++/// code-block styling while preserving non-script chat behavior.
++pub(crate) fn assistant_response_markdown_source<'a>(
++    script_generation_mode: bool,
++    response: &'a str,
++) -> Cow<'a, str> {
++    if !script_generation_mode {
++        return Cow::Borrowed(response);
++    }
++
++    let trimmed = response.trim();
++    if trimmed.is_empty() || response.contains("```") {
++        return Cow::Borrowed(response);
++    }
++
++    let code_body = response.trim_end_matches('\n');
++    Cow::Owned(format!("```typescript\n{}\n```", code_body))
++}
++
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+apply_patch(auto_approved=true) exited 0 in 11ms:
+Success. Updated the following files:
+M src/prompts/chat/types.rs
+file update:
+diff --git a/src/prompts/chat/types.rs b/src/prompts/chat/types.rs
+index 2ab2ee2e26318b52e2014c73ae18176ef4e45c6d..26d83fd784ef7ceaf0abd208c27f09d31461f85c
+--- a/src/prompts/chat/types.rs
++++ b/src/prompts/chat/types.rs
+@@ -1,4 +1,5 @@
+ use super::*;
++use std::borrow::Cow;
+ /// Available AI models for the chat
+ #[derive(Clone, Debug, PartialEq)]
+ pub struct ChatModel {
+@@ -138,6 +139,28 @@
+     script_generation_mode && !is_streaming && has_draft
+ }
+ 
++/// Normalize assistant content for markdown rendering in script-generation mode.
++///
++/// Script generation prompts ask models to return raw TypeScript without markdown
++/// fences. Wrap that raw code in a fenced block so the chat renderer can apply
++/// code-block styling while preserving non-script chat behavior.
++pub(crate) fn assistant_response_markdown_source<'a>(
++    script_generation_mode: bool,
++    response: &'a str,
++) -> Cow<'a, str> {
++    if !script_generation_mode {
++        return Cow::Borrowed(response);
++    }
++
++    let trimmed = response.trim();
++    if trimmed.is_empty() || response.contains("```") {
++        return Cow::Borrowed(response);
++    }
++
++    let code_body = response.trim_end_matches('\n');
++    Cow::Owned(format!("```typescript\n{}\n```", code_body))
++}
++
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub(crate) enum ChatInputKeyAction {
+     Escape,
+
+file update:
+diff --git a/src/prompts/chat/types.rs b/src/prompts/chat/types.rs
+index 2ab2ee2e26318b52e2014c73ae18176ef4e45c6d..26d83fd784ef7ceaf0abd208c27f09d31461f85c
+--- a/src/prompts/chat/types.rs
++++ b/src/prompts/chat/types.rs
+@@ -1,4 +1,5 @@
+ use super::*;
++use std::borrow::Cow;
+ /// Available AI models for the chat
+ #[derive(Clone, Debug, PartialEq)]
+ pub struct ChatModel {
+@@ -138,6 +139,28 @@
+     script_generation_mode && !is_streaming && has_draft
+ }
+ 
++/// Normalize assistant content for markdown rendering in script-generation mode.
++///
++/// Script generation prompts ask models to return raw TypeScript without markdown
++/// fences. Wrap that raw code in a fenced block so the chat renderer can apply
++/// code-block styling while preserving non-script chat behavior.
++pub(crate) fn assistant_response_markdown_source<'a>(
++    script_generation_mode: bool,
++    response: &'a str,
++) -> Cow<'a, str> {
++    if !script_generation_mode {
++        return Cow::Borrowed(response);
++    }
++
++    let trimmed = response.trim();
++    if trimmed.is_empty() || response.contains("```") {
++        return Cow::Borrowed(response);
++    }
++
++    let code_body = response.trim_end_matches('\n');
++    Cow::Owned(format!("```typescript\n{}\n```", code_body))
++}
++
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub(crate) enum ChatInputKeyAction {
+     Escape,
+
+
+thinking
+**Patching render logic**
+file update
+M /Users/johnlindquist/dev/script-kit-gpui/src/prompts/chat/render_turns.rs
+@@ -110,2 +110,5 @@
+         else if let Some(ref response) = turn.assistant_response {
++            let markdown_response =
++                super::types::assistant_response_markdown_source(self.script_generation_mode, response);
++
+             // Use markdown rendering for assistant responses
+@@ -122,3 +125,3 @@
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors))
++                        .child(render_markdown(markdown_response.as_ref(), colors))
+                         .child(
+@@ -137,3 +140,3 @@
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors)),
++                        .child(render_markdown(markdown_response.as_ref(), colors)),
+                 );
+apply_patch(auto_approved=true) exited 0 in 18ms:
+Success. Updated the following files:
+M src/prompts/chat/render_turns.rs
+file update:
+diff --git a/src/prompts/chat/render_turns.rs b/src/prompts/chat/render_turns.rs
+index 3db150ffbdb0aa4acdd14fc317206f1b8537e6f0..1ea7130f6af81745a66f150802377e777bd11db7
+--- a/src/prompts/chat/render_turns.rs
++++ b/src/prompts/chat/render_turns.rs
+@@ -108,6 +108,9 @@
+         }
+         // AI response (only show if no error, or show partial if stream interrupted)
+         else if let Some(ref response) = turn.assistant_response {
++            let markdown_response =
++                super::types::assistant_response_markdown_source(self.script_generation_mode, response);
++
+             // Use markdown rendering for assistant responses
+             if turn.streaming && response.is_empty() {
+                 // Empty streaming state
+@@ -120,7 +123,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors))
++                        .child(render_markdown(markdown_response.as_ref(), colors))
+                         .child(
+                             div()
+                                 .text_sm()
+@@ -135,7 +138,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors)),
++                        .child(render_markdown(markdown_response.as_ref(), colors)),
+                 );
+             }
+         }
+diff --git a/src/prompts/chat/types.rs b/src/prompts/chat/types.rs
+index 2ab2ee2e26318b52e2014c73ae18176ef4e45c6d..26d83fd784ef7ceaf0abd208c27f09d31461f85c
+--- a/src/prompts/chat/types.rs
++++ b/src/prompts/chat/types.rs
+@@ -1,4 +1,5 @@
+ use super::*;
++use std::borrow::Cow;
+ /// Available AI models for the chat
+ #[derive(Clone, Debug, PartialEq)]
+ pub struct ChatModel {
+@@ -138,6 +139,28 @@
+     script_generation_mode && !is_streaming && has_draft
+ }
+ 
++/// Normalize assistant content for markdown rendering in script-generation mode.
++///
++/// Script generation prompts ask models to return raw TypeScript without markdown
++/// fences. Wrap that raw code in a fenced block so the chat renderer can apply
++/// code-block styling while preserving non-script chat behavior.
++pub(crate) fn assistant_response_markdown_source<'a>(
++    script_generation_mode: bool,
++    response: &'a str,
++) -> Cow<'a, str> {
++    if !script_generation_mode {
++        return Cow::Borrowed(response);
++    }
++
++    let trimmed = response.trim();
++    if trimmed.is_empty() || response.contains("```") {
++        return Cow::Borrowed(response);
++    }
++
++    let code_body = response.trim_end_matches('\n');
++    Cow::Owned(format!("```typescript\n{}\n```", code_body))
++}
++
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub(crate) enum ChatInputKeyAction {
+     Escape,
+
+file update:
+diff --git a/src/prompts/chat/render_turns.rs b/src/prompts/chat/render_turns.rs
+index 3db150ffbdb0aa4acdd14fc317206f1b8537e6f0..1ea7130f6af81745a66f150802377e777bd11db7
+--- a/src/prompts/chat/render_turns.rs
++++ b/src/prompts/chat/render_turns.rs
+@@ -108,6 +108,9 @@
+         }
+         // AI response (only show if no error, or show partial if stream interrupted)
+         else if let Some(ref response) = turn.assistant_response {
++            let markdown_response =
++                super::types::assistant_response_markdown_source(self.script_generation_mode, response);
++
+             // Use markdown rendering for assistant responses
+             if turn.streaming && response.is_empty() {
+                 // Empty streaming state
+@@ -120,7 +123,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors))
++                        .child(render_markdown(markdown_response.as_ref(), colors))
+                         .child(
+                             div()
+                                 .text_sm()
+@@ -135,7 +138,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors)),
++                        .child(render_markdown(markdown_response.as_ref(), colors)),
+                 );
+             }
+         }
+diff --git a/src/prompts/chat/types.rs b/src/prompts/chat/types.rs
+index 2ab2ee2e26318b52e2014c73ae18176ef4e45c6d..26d83fd784ef7ceaf0abd208c27f09d31461f85c
+--- a/src/prompts/chat/types.rs
++++ b/src/prompts/chat/types.rs
+@@ -1,4 +1,5 @@
+ use super::*;
++use std::borrow::Cow;
+ /// Available AI models for the chat
+ #[derive(Clone, Debug, PartialEq)]
+ pub struct ChatModel {
+@@ -138,6 +139,28 @@
+     script_generation_mode && !is_streaming && has_draft
+ }
+ 
++/// Normalize assistant content for markdown rendering in script-generation mode.
++///
++/// Script generation prompts ask models to return raw TypeScript without markdown
++/// fences. Wrap that raw code in a fenced block so the chat renderer can apply
++/// code-block styling while preserving non-script chat behavior.
++pub(crate) fn assistant_response_markdown_source<'a>(
++    script_generation_mode: bool,
++    response: &'a str,
++) -> Cow<'a, str> {
++    if !script_generation_mode {
++        return Cow::Borrowed(response);
++    }
++
++    let trimmed = response.trim();
++    if trimmed.is_empty() || response.contains("```") {
++        return Cow::Borrowed(response);
++    }
++
++    let code_body = response.trim_end_matches('\n');
++    Cow::Owned(format!("```typescript\n{}\n```", code_body))
++}
++
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub(crate) enum ChatInputKeyAction {
+     Escape,
+
+
+thinking
+**Running test patches**
+file update
+M /Users/johnlindquist/dev/script-kit-gpui/src/prompts/chat/tests.rs
+@@ -216,2 +216,43 @@
+ 
++    #[test]
++    fn assistant_response_markdown_source_wraps_plain_script_in_script_generation_mode() {
++        let response = r#"// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(
++            normalized.as_ref(),
++            r#"```typescript
++// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++```"#
++        );
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_existing_fence_unchanged() {
++        let response = r#"```typescript
++await div("Hello");
++```"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_plain_text_when_not_script_generation() {
++        let response = r#"// Name: Example
++await div("Hello");"#;
++
++        let normalized = super::types::assistant_response_markdown_source(false, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
+     // --- next_reveal_boundary tests ---
+apply_patch(auto_approved=true) exited 0 in 23ms:
+Success. Updated the following files:
+M src/prompts/chat/tests.rs
+file update:
+diff --git a/src/prompts/chat/render_turns.rs b/src/prompts/chat/render_turns.rs
+index 3db150ffbdb0aa4acdd14fc317206f1b8537e6f0..1ea7130f6af81745a66f150802377e777bd11db7
+--- a/src/prompts/chat/render_turns.rs
++++ b/src/prompts/chat/render_turns.rs
+@@ -108,6 +108,9 @@
+         }
+         // AI response (only show if no error, or show partial if stream interrupted)
+         else if let Some(ref response) = turn.assistant_response {
++            let markdown_response =
++                super::types::assistant_response_markdown_source(self.script_generation_mode, response);
++
+             // Use markdown rendering for assistant responses
+             if turn.streaming && response.is_empty() {
+                 // Empty streaming state
+@@ -120,7 +123,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors))
++                        .child(render_markdown(markdown_response.as_ref(), colors))
+                         .child(
+                             div()
+                                 .text_sm()
+@@ -135,7 +138,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors)),
++                        .child(render_markdown(markdown_response.as_ref(), colors)),
+                 );
+             }
+         }
+diff --git a/src/prompts/chat/tests.rs b/src/prompts/chat/tests.rs
+index ada5d9437a9d216977a66cca0b71598d62fee57c..1ed5945d929e0aee523ebbdd7f64ae5a4eefb1ab
+--- a/src/prompts/chat/tests.rs
++++ b/src/prompts/chat/tests.rs
+@@ -214,6 +214,47 @@
+         );
+     }
+ 
++    #[test]
++    fn assistant_response_markdown_source_wraps_plain_script_in_script_generation_mode() {
++        let response = r#"// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(
++            normalized.as_ref(),
++            r#"```typescript
++// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++```"#
++        );
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_existing_fence_unchanged() {
++        let response = r#"```typescript
++await div("Hello");
++```"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_plain_text_when_not_script_generation() {
++        let response = r#"// Name: Example
++await div("Hello");"#;
++
++        let normalized = super::types::assistant_response_markdown_source(false, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
+     // --- next_reveal_boundary tests ---
+ 
+     #[test]
+diff --git a/src/prompts/chat/types.rs b/src/prompts/chat/types.rs
+index 2ab2ee2e26318b52e2014c73ae18176ef4e45c6d..26d83fd784ef7ceaf0abd208c27f09d31461f85c
+--- a/src/prompts/chat/types.rs
++++ b/src/prompts/chat/types.rs
+@@ -1,4 +1,5 @@
+ use super::*;
++use std::borrow::Cow;
+ /// Available AI models for the chat
+ #[derive(Clone, Debug, PartialEq)]
+ pub struct ChatModel {
+@@ -138,6 +139,28 @@
+     script_generation_mode && !is_streaming && has_draft
+ }
+ 
++/// Normalize assistant content for markdown rendering in script-generation mode.
++///
++/// Script generation prompts ask models to return raw TypeScript without markdown
++/// fences. Wrap that raw code in a fenced block so the chat renderer can apply
++/// code-block styling while preserving non-script chat behavior.
++pub(crate) fn assistant_response_markdown_source<'a>(
++    script_generation_mode: bool,
++    response: &'a str,
++) -> Cow<'a, str> {
++    if !script_generation_mode {
++        return Cow::Borrowed(response);
++    }
++
++    let trimmed = response.trim();
++    if trimmed.is_empty() || response.contains("```") {
++        return Cow::Borrowed(response);
++    }
++
++    let code_body = response.trim_end_matches('\n');
++    Cow::Owned(format!("```typescript\n{}\n```", code_body))
++}
++
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub(crate) enum ChatInputKeyAction {
+     Escape,
+
+file update:
+diff --git a/src/prompts/chat/render_turns.rs b/src/prompts/chat/render_turns.rs
+index 3db150ffbdb0aa4acdd14fc317206f1b8537e6f0..1ea7130f6af81745a66f150802377e777bd11db7
+--- a/src/prompts/chat/render_turns.rs
++++ b/src/prompts/chat/render_turns.rs
+@@ -108,6 +108,9 @@
+         }
+         // AI response (only show if no error, or show partial if stream interrupted)
+         else if let Some(ref response) = turn.assistant_response {
++            let markdown_response =
++                super::types::assistant_response_markdown_source(self.script_generation_mode, response);
++
+             // Use markdown rendering for assistant responses
+             if turn.streaming && response.is_empty() {
+                 // Empty streaming state
+@@ -120,7 +123,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors))
++                        .child(render_markdown(markdown_response.as_ref(), colors))
+                         .child(
+                             div()
+                                 .text_sm()
+@@ -135,7 +138,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors)),
++                        .child(render_markdown(markdown_response.as_ref(), colors)),
+                 );
+             }
+         }
+diff --git a/src/prompts/chat/tests.rs b/src/prompts/chat/tests.rs
+index ada5d9437a9d216977a66cca0b71598d62fee57c..1ed5945d929e0aee523ebbdd7f64ae5a4eefb1ab
+--- a/src/prompts/chat/tests.rs
++++ b/src/prompts/chat/tests.rs
+@@ -214,6 +214,47 @@
+         );
+     }
+ 
++    #[test]
++    fn assistant_response_markdown_source_wraps_plain_script_in_script_generation_mode() {
++        let response = r#"// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(
++            normalized.as_ref(),
++            r#"```typescript
++// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++```"#
++        );
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_existing_fence_unchanged() {
++        let response = r#"```typescript
++await div("Hello");
++```"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_plain_text_when_not_script_generation() {
++        let response = r#"// Name: Example
++await div("Hello");"#;
++
++        let normalized = super::types::assistant_response_markdown_source(false, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
+     // --- next_reveal_boundary tests ---
+ 
+     #[test]
+diff --git a/src/prompts/chat/types.rs b/src/prompts/chat/types.rs
+index 2ab2ee2e26318b52e2014c73ae18176ef4e45c6d..26d83fd784ef7ceaf0abd208c27f09d31461f85c
+--- a/src/prompts/chat/types.rs
++++ b/src/prompts/chat/types.rs
+@@ -1,4 +1,5 @@
+ use super::*;
++use std::borrow::Cow;
+ /// Available AI models for the chat
+ #[derive(Clone, Debug, PartialEq)]
+ pub struct ChatModel {
+@@ -138,6 +139,28 @@
+     script_generation_mode && !is_streaming && has_draft
+ }
+ 
++/// Normalize assistant content for markdown rendering in script-generation mode.
++///
++/// Script generation prompts ask models to return raw TypeScript without markdown
++/// fences. Wrap that raw code in a fenced block so the chat renderer can apply
++/// code-block styling while preserving non-script chat behavior.
++pub(crate) fn assistant_response_markdown_source<'a>(
++    script_generation_mode: bool,
++    response: &'a str,
++) -> Cow<'a, str> {
++    if !script_generation_mode {
++        return Cow::Borrowed(response);
++    }
++
++    let trimmed = response.trim();
++    if trimmed.is_empty() || response.contains("```") {
++        return Cow::Borrowed(response);
++    }
++
++    let code_body = response.trim_end_matches('\n');
++    Cow::Owned(format!("```typescript\n{}\n```", code_body))
++}
++
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub(crate) enum ChatInputKeyAction {
+     Escape,
+
+
+thinking
+**Preparing targeted Rust formatting**
+codex
+The code changes are in place; I’m running formatter and scoped Rust checks/tests for the chat module to validate the new code-block wrapping behavior.
+exec
+/bin/zsh -lc 'rustfmt src/prompts/chat/types.rs src/prompts/chat/render_turns.rs src/prompts/chat/tests.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+
+exec
+/bin/zsh -lc 'cargo test -p script-kit-gpui prompts::chat::tests::tests::assistant_response_markdown_source_wraps_plain_script_in_script_generation_mode -- --exact' in /Users/johnlindquist/dev/script-kit-gpui exited 101 in 19.66s:
+    Blocking waiting for file lock on build directory
+   Compiling script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+error[E0761]: file for module `tests` found at both "src/protocol/message/tests.rs" and "src/protocol/message/tests/mod.rs"
+  --> src/protocol/message/mod.rs:87:1
+   |
+87 | mod tests;
+   | ^^^^^^^^^^
+   |
+   = help: delete or rename one of them to remove the ambiguity
+
+error[E0761]: file for module `tests` found at both "src/designs/core/tests.rs" and "src/designs/core/tests/mod.rs"
+ --> src/designs/core/part_04.rs:2:1
+  |
+2 | mod tests;
+  | ^^^^^^^^^^
+  |
+  = help: delete or rename one of them to remove the ambiguity
+
+warning: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:32:16
+file update:
+diff --git a/src/prompts/chat/render_turns.rs b/src/prompts/chat/render_turns.rs
+index 3db150ffbdb0aa4acdd14fc317206f1b8537e6f0..3cdadfb2d8a4f3f44b6b0697f70999e99a86c1ee
+--- a/src/prompts/chat/render_turns.rs
++++ b/src/prompts/chat/render_turns.rs
+@@ -108,6 +108,11 @@
+         }
+         // AI response (only show if no error, or show partial if stream interrupted)
+         else if let Some(ref response) = turn.assistant_response {
++            let markdown_response = super::types::assistant_response_markdown_source(
++                self.script_generation_mode,
++                response,
++            );
++
+             // Use markdown rendering for assistant responses
+             if turn.streaming && response.is_empty() {
+                 // Empty streaming state
+@@ -120,7 +125,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors))
++                        .child(render_markdown(markdown_response.as_ref(), colors))
+                         .child(
+                             div()
+                                 .text_sm()
+@@ -135,7 +140,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors)),
++                        .child(render_markdown(markdown_response.as_ref(), colors)),
+                 );
+             }
+         }
+diff --git a/src/prompts/chat/tests.rs b/src/prompts/chat/tests.rs
+index ada5d9437a9d216977a66cca0b71598d62fee57c..1ed5945d929e0aee523ebbdd7f64ae5a4eefb1ab
+--- a/src/prompts/chat/tests.rs
++++ b/src/prompts/chat/tests.rs
+@@ -214,6 +214,47 @@
+         );
+     }
+ 
++    #[test]
++    fn assistant_response_markdown_source_wraps_plain_script_in_script_generation_mode() {
++        let response = r#"// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(
++            normalized.as_ref(),
++            r#"```typescript
++// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++```"#
++        );
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_existing_fence_unchanged() {
++        let response = r#"```typescript
++await div("Hello");
++```"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_plain_text_when_not_script_generation() {
++        let response = r#"// Name: Example
++await div("Hello");"#;
++
++        let normalized = super::types::assistant_response_markdown_source(false, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
+     // --- next_reveal_boundary tests ---
+ 
+     #[test]
+diff --git a/src/prompts/chat/types.rs b/src/prompts/chat/types.rs
+index 2ab2ee2e26318b52e2014c73ae18176ef4e45c6d..26d83fd784ef7ceaf0abd208c27f09d31461f85c
+--- a/src/prompts/chat/types.rs
++++ b/src/prompts/chat/types.rs
+@@ -1,4 +1,5 @@
+ use super::*;
++use std::borrow::Cow;
+ /// Available AI models for the chat
+ #[derive(Clone, Debug, PartialEq)]
+ pub struct ChatModel {
+@@ -138,6 +139,28 @@
+     script_generation_mode && !is_streaming && has_draft
+ }
+ 
++/// Normalize assistant content for markdown rendering in script-generation mode.
++///
++/// Script generation prompts ask models to return raw TypeScript without markdown
++/// fences. Wrap that raw code in a fenced block so the chat renderer can apply
++/// code-block styling while preserving non-script chat behavior.
++pub(crate) fn assistant_response_markdown_source<'a>(
++    script_generation_mode: bool,
++    response: &'a str,
++) -> Cow<'a, str> {
++    if !script_generation_mode {
++        return Cow::Borrowed(response);
++    }
++
++    let trimmed = response.trim();
++    if trimmed.is_empty() || response.contains("```") {
++        return Cow::Borrowed(response);
++    }
++
++    let code_body = response.trim_end_matches('\n');
++    Cow::Owned(format!("```typescript\n{}\n```", code_body))
++}
++
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub(crate) enum ChatInputKeyAction {
+     Escape,
+
+
+thinking
+**Adjusting test strategy due unrelated failures**
+codex
+The targeted `cargo test` still triggers unrelated existing test-module failures in this branch, so I’m switching to `cargo check -p script-kit-gpui` to validate compile correctness for this change as requested.
+exec
+/bin/zsh -lc 'cargo check -p script-kit-gpui' in /Users/johnlindquist/dev/script-kit-gpui exited 101 in 6.99s:
+    Checking script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+warning: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:32:16
+   |
+32 | pub(super) use inline::*;
+   |                ^^^^^^^^^
+   |
+note: the most public imported item is `pub(self)`
+  --> src/prompts/div/mod.rs:32:16
+   |
+32 | pub(super) use inline::*;
+   |                ^^^^^^^^^
+   = help: reduce the glob import's visibility or increase visibility of imported items
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:34:16
+   |
+34 | pub(super) use render_html::*;
+   |                ^^^^^^^^^^^^^^
+file update:
+diff --git a/src/prompts/chat/render_turns.rs b/src/prompts/chat/render_turns.rs
+index 3db150ffbdb0aa4acdd14fc317206f1b8537e6f0..3cdadfb2d8a4f3f44b6b0697f70999e99a86c1ee
+--- a/src/prompts/chat/render_turns.rs
++++ b/src/prompts/chat/render_turns.rs
+@@ -108,6 +108,11 @@
+         }
+         // AI response (only show if no error, or show partial if stream interrupted)
+         else if let Some(ref response) = turn.assistant_response {
++            let markdown_response = super::types::assistant_response_markdown_source(
++                self.script_generation_mode,
++                response,
++            );
++
+             // Use markdown rendering for assistant responses
+             if turn.streaming && response.is_empty() {
+                 // Empty streaming state
+@@ -120,7 +125,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors))
++                        .child(render_markdown(markdown_response.as_ref(), colors))
+                         .child(
+                             div()
+                                 .text_sm()
+@@ -135,7 +140,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors)),
++                        .child(render_markdown(markdown_response.as_ref(), colors)),
+                 );
+             }
+         }
+diff --git a/src/prompts/chat/tests.rs b/src/prompts/chat/tests.rs
+index ada5d9437a9d216977a66cca0b71598d62fee57c..1ed5945d929e0aee523ebbdd7f64ae5a4eefb1ab
+--- a/src/prompts/chat/tests.rs
++++ b/src/prompts/chat/tests.rs
+@@ -214,6 +214,47 @@
+         );
+     }
+ 
++    #[test]
++    fn assistant_response_markdown_source_wraps_plain_script_in_script_generation_mode() {
++        let response = r#"// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(
++            normalized.as_ref(),
++            r#"```typescript
++// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++```"#
++        );
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_existing_fence_unchanged() {
++        let response = r#"```typescript
++await div("Hello");
++```"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_plain_text_when_not_script_generation() {
++        let response = r#"// Name: Example
++await div("Hello");"#;
++
++        let normalized = super::types::assistant_response_markdown_source(false, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
+     // --- next_reveal_boundary tests ---
+ 
+     #[test]
+diff --git a/src/prompts/chat/types.rs b/src/prompts/chat/types.rs
+index 2ab2ee2e26318b52e2014c73ae18176ef4e45c6d..26d83fd784ef7ceaf0abd208c27f09d31461f85c
+--- a/src/prompts/chat/types.rs
++++ b/src/prompts/chat/types.rs
+@@ -1,4 +1,5 @@
+ use super::*;
++use std::borrow::Cow;
+ /// Available AI models for the chat
+ #[derive(Clone, Debug, PartialEq)]
+ pub struct ChatModel {
+@@ -138,6 +139,28 @@
+     script_generation_mode && !is_streaming && has_draft
+ }
+ 
++/// Normalize assistant content for markdown rendering in script-generation mode.
++///
++/// Script generation prompts ask models to return raw TypeScript without markdown
++/// fences. Wrap that raw code in a fenced block so the chat renderer can apply
++/// code-block styling while preserving non-script chat behavior.
++pub(crate) fn assistant_response_markdown_source<'a>(
++    script_generation_mode: bool,
++    response: &'a str,
++) -> Cow<'a, str> {
++    if !script_generation_mode {
++        return Cow::Borrowed(response);
++    }
++
++    let trimmed = response.trim();
++    if trimmed.is_empty() || response.contains("```") {
++        return Cow::Borrowed(response);
++    }
++
++    let code_body = response.trim_end_matches('\n');
++    Cow::Owned(format!("```typescript\n{}\n```", code_body))
++}
++
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub(crate) enum ChatInputKeyAction {
+     Escape,
+
+
+thinking
+**Running scoped cargo check**
+exec
+/bin/zsh -lc 'cargo check -p script-kit-gpui --lib' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 5.22s:
+    Blocking waiting for file lock on build directory
+    Checking script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+warning: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:32:16
+   |
+32 | pub(super) use inline::*;
+   |                ^^^^^^^^^
+   |
+note: the most public imported item is `pub(self)`
+  --> src/prompts/div/mod.rs:32:16
+   |
+32 | pub(super) use inline::*;
+   |                ^^^^^^^^^
+   = help: reduce the glob import's visibility or increase visibility of imported items
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:34:16
+   |
+34 | pub(super) use render_html::*;
+file update:
+diff --git a/src/prompts/chat/render_turns.rs b/src/prompts/chat/render_turns.rs
+index 3db150ffbdb0aa4acdd14fc317206f1b8537e6f0..3cdadfb2d8a4f3f44b6b0697f70999e99a86c1ee
+--- a/src/prompts/chat/render_turns.rs
++++ b/src/prompts/chat/render_turns.rs
+@@ -108,6 +108,11 @@
+         }
+         // AI response (only show if no error, or show partial if stream interrupted)
+         else if let Some(ref response) = turn.assistant_response {
++            let markdown_response = super::types::assistant_response_markdown_source(
++                self.script_generation_mode,
++                response,
++            );
++
+             // Use markdown rendering for assistant responses
+             if turn.streaming && response.is_empty() {
+                 // Empty streaming state
+@@ -120,7 +125,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors))
++                        .child(render_markdown(markdown_response.as_ref(), colors))
+                         .child(
+                             div()
+                                 .text_sm()
+@@ -135,7 +140,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors)),
++                        .child(render_markdown(markdown_response.as_ref(), colors)),
+                 );
+             }
+         }
+diff --git a/src/prompts/chat/tests.rs b/src/prompts/chat/tests.rs
+index ada5d9437a9d216977a66cca0b71598d62fee57c..1ed5945d929e0aee523ebbdd7f64ae5a4eefb1ab
+--- a/src/prompts/chat/tests.rs
++++ b/src/prompts/chat/tests.rs
+@@ -214,6 +214,47 @@
+         );
+     }
+ 
++    #[test]
++    fn assistant_response_markdown_source_wraps_plain_script_in_script_generation_mode() {
++        let response = r#"// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(
++            normalized.as_ref(),
++            r#"```typescript
++// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++```"#
++        );
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_existing_fence_unchanged() {
++        let response = r#"```typescript
++await div("Hello");
++```"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_plain_text_when_not_script_generation() {
++        let response = r#"// Name: Example
++await div("Hello");"#;
++
++        let normalized = super::types::assistant_response_markdown_source(false, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
+     // --- next_reveal_boundary tests ---
+ 
+     #[test]
+diff --git a/src/prompts/chat/types.rs b/src/prompts/chat/types.rs
+index 2ab2ee2e26318b52e2014c73ae18176ef4e45c6d..26d83fd784ef7ceaf0abd208c27f09d31461f85c
+--- a/src/prompts/chat/types.rs
++++ b/src/prompts/chat/types.rs
+@@ -1,4 +1,5 @@
+ use super::*;
++use std::borrow::Cow;
+ /// Available AI models for the chat
+ #[derive(Clone, Debug, PartialEq)]
+ pub struct ChatModel {
+@@ -138,6 +139,28 @@
+     script_generation_mode && !is_streaming && has_draft
+ }
+ 
++/// Normalize assistant content for markdown rendering in script-generation mode.
++///
++/// Script generation prompts ask models to return raw TypeScript without markdown
++/// fences. Wrap that raw code in a fenced block so the chat renderer can apply
++/// code-block styling while preserving non-script chat behavior.
++pub(crate) fn assistant_response_markdown_source<'a>(
++    script_generation_mode: bool,
++    response: &'a str,
++) -> Cow<'a, str> {
++    if !script_generation_mode {
++        return Cow::Borrowed(response);
++    }
++
++    let trimmed = response.trim();
++    if trimmed.is_empty() || response.contains("```") {
++        return Cow::Borrowed(response);
++    }
++
++    let code_body = response.trim_end_matches('\n');
++    Cow::Owned(format!("```typescript\n{}\n```", code_body))
++}
++
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub(crate) enum ChatInputKeyAction {
+     Escape,
+
+
+thinking
+**Evaluating test run limitations**
+exec
+/bin/zsh -lc 'git status --short' in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc 'git diff -- src/prompts/chat/types.rs src/prompts/chat/render_turns.rs src/prompts/chat/tests.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+ M .ai/logs/codex-audit-act-description-quality-v2.final.md
+ M .ai/logs/codex-audit-act-execution-builtin.final.md
+ M .ai/logs/codex-audit-act-execution-scripts.final.md
+ M .ai/logs/codex-audit-act-keyboard-nav.final.md
+ M .ai/logs/codex-audit-act-section-grouping.final.md
+ M .ai/logs/codex-audit-act-theme-dialog-render.final.md
+ M .ai/roster.json
+ M src/actions/builders.rs
+ M src/actions/builders/chat.rs
+ M src/actions/builders/clipboard.rs
+ M src/actions/builders/file_path.rs
+ M src/actions/builders/notes.rs
+ M src/actions/builders/script_context.rs
+ M src/actions/builders/scriptlet.rs
+ M src/actions/builders/shared.rs
+ M src/actions/command_bar/part_01.rs
+ M src/actions/command_bar/part_02.rs
+ M src/actions/constants.rs
+ M src/actions/dialog/part_01.rs
+ M src/actions/dialog/part_02/part_01.rs
+ succeeded in 51ms:
+diff --git a/src/prompts/chat/render_turns.rs b/src/prompts/chat/render_turns.rs
+index 3db150f..3cdadfb 100644
+--- a/src/prompts/chat/render_turns.rs
++++ b/src/prompts/chat/render_turns.rs
+@@ -108,6 +108,11 @@ impl ChatPrompt {
+         }
+         // AI response (only show if no error, or show partial if stream interrupted)
+         else if let Some(ref response) = turn.assistant_response {
++            let markdown_response = super::types::assistant_response_markdown_source(
++                self.script_generation_mode,
++                response,
++            );
++
+             // Use markdown rendering for assistant responses
+             if turn.streaming && response.is_empty() {
+                 // Empty streaming state
+@@ -120,7 +125,7 @@ impl ChatPrompt {
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+file update:
+diff --git a/src/prompts/chat/render_turns.rs b/src/prompts/chat/render_turns.rs
+index 3db150ffbdb0aa4acdd14fc317206f1b8537e6f0..3cdadfb2d8a4f3f44b6b0697f70999e99a86c1ee
+--- a/src/prompts/chat/render_turns.rs
++++ b/src/prompts/chat/render_turns.rs
+@@ -108,6 +108,11 @@
+         }
+         // AI response (only show if no error, or show partial if stream interrupted)
+         else if let Some(ref response) = turn.assistant_response {
++            let markdown_response = super::types::assistant_response_markdown_source(
++                self.script_generation_mode,
++                response,
++            );
++
+             // Use markdown rendering for assistant responses
+             if turn.streaming && response.is_empty() {
+                 // Empty streaming state
+@@ -120,7 +125,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors))
++                        .child(render_markdown(markdown_response.as_ref(), colors))
+                         .child(
+                             div()
+                                 .text_sm()
+@@ -135,7 +140,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors)),
++                        .child(render_markdown(markdown_response.as_ref(), colors)),
+                 );
+             }
+         }
+diff --git a/src/prompts/chat/tests.rs b/src/prompts/chat/tests.rs
+index ada5d9437a9d216977a66cca0b71598d62fee57c..1ed5945d929e0aee523ebbdd7f64ae5a4eefb1ab
+--- a/src/prompts/chat/tests.rs
++++ b/src/prompts/chat/tests.rs
+@@ -214,6 +214,47 @@
+         );
+     }
+ 
++    #[test]
++    fn assistant_response_markdown_source_wraps_plain_script_in_script_generation_mode() {
++        let response = r#"// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(
++            normalized.as_ref(),
++            r#"```typescript
++// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++```"#
++        );
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_existing_fence_unchanged() {
++        let response = r#"```typescript
++await div("Hello");
++```"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_plain_text_when_not_script_generation() {
++        let response = r#"// Name: Example
++await div("Hello");"#;
++
++        let normalized = super::types::assistant_response_markdown_source(false, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
+     // --- next_reveal_boundary tests ---
+ 
+     #[test]
+diff --git a/src/prompts/chat/types.rs b/src/prompts/chat/types.rs
+index 2ab2ee2e26318b52e2014c73ae18176ef4e45c6d..26d83fd784ef7ceaf0abd208c27f09d31461f85c
+--- a/src/prompts/chat/types.rs
++++ b/src/prompts/chat/types.rs
+@@ -1,4 +1,5 @@
+ use super::*;
++use std::borrow::Cow;
+ /// Available AI models for the chat
+ #[derive(Clone, Debug, PartialEq)]
+ pub struct ChatModel {
+@@ -138,6 +139,28 @@
+     script_generation_mode && !is_streaming && has_draft
+ }
+ 
++/// Normalize assistant content for markdown rendering in script-generation mode.
++///
++/// Script generation prompts ask models to return raw TypeScript without markdown
++/// fences. Wrap that raw code in a fenced block so the chat renderer can apply
++/// code-block styling while preserving non-script chat behavior.
++pub(crate) fn assistant_response_markdown_source<'a>(
++    script_generation_mode: bool,
++    response: &'a str,
++) -> Cow<'a, str> {
++    if !script_generation_mode {
++        return Cow::Borrowed(response);
++    }
++
++    let trimmed = response.trim();
++    if trimmed.is_empty() || response.contains("```") {
++        return Cow::Borrowed(response);
++    }
++
++    let code_body = response.trim_end_matches('\n');
++    Cow::Owned(format!("```typescript\n{}\n```", code_body))
++}
++
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub(crate) enum ChatInputKeyAction {
+     Escape,
+
+
+thinking
+**Investigating test file duplication**
+exec
+/bin/zsh -lc "sed -n '1,260p' src/prompts/chat/tests.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+use super::*;
+#[cfg(test)]
+#[allow(clippy::module_inception)]
+mod tests {
+    use std::{collections::HashMap, fs};
+
+    use crate::protocol::ChatPromptMessage;
+
+    use super::{
+        next_chat_scroll_follow_state, next_reveal_boundary, resolve_chat_input_key_action,
+        resolve_setup_card_key, should_ignore_stream_reveal_update,
+        should_show_script_generation_actions, ChatInputKeyAction, ChatScrollDirection,
+        ScriptGenerationAction, SetupCardAction,
+    };
+
+    #[test]
+    fn resolve_setup_card_key_cycles_focus_for_tab_and_arrows() {
+        assert_eq!(
+            resolve_setup_card_key("tab", false, 0),
+            (1, SetupCardAction::None, true)
+file update:
+diff --git a/src/prompts/chat/render_turns.rs b/src/prompts/chat/render_turns.rs
+index 3db150ffbdb0aa4acdd14fc317206f1b8537e6f0..3cdadfb2d8a4f3f44b6b0697f70999e99a86c1ee
+--- a/src/prompts/chat/render_turns.rs
++++ b/src/prompts/chat/render_turns.rs
+@@ -108,6 +108,11 @@
+         }
+         // AI response (only show if no error, or show partial if stream interrupted)
+         else if let Some(ref response) = turn.assistant_response {
++            let markdown_response = super::types::assistant_response_markdown_source(
++                self.script_generation_mode,
++                response,
++            );
++
+             // Use markdown rendering for assistant responses
+             if turn.streaming && response.is_empty() {
+                 // Empty streaming state
+@@ -120,7 +125,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors))
++                        .child(render_markdown(markdown_response.as_ref(), colors))
+                         .child(
+                             div()
+                                 .text_sm()
+@@ -135,7 +140,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors)),
++                        .child(render_markdown(markdown_response.as_ref(), colors)),
+                 );
+             }
+         }
+diff --git a/src/prompts/chat/tests.rs b/src/prompts/chat/tests.rs
+index ada5d9437a9d216977a66cca0b71598d62fee57c..1ed5945d929e0aee523ebbdd7f64ae5a4eefb1ab
+--- a/src/prompts/chat/tests.rs
++++ b/src/prompts/chat/tests.rs
+@@ -214,6 +214,47 @@
+         );
+     }
+ 
++    #[test]
++    fn assistant_response_markdown_source_wraps_plain_script_in_script_generation_mode() {
++        let response = r#"// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(
++            normalized.as_ref(),
++            r#"```typescript
++// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++```"#
++        );
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_existing_fence_unchanged() {
++        let response = r#"```typescript
++await div("Hello");
++```"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_plain_text_when_not_script_generation() {
++        let response = r#"// Name: Example
++await div("Hello");"#;
++
++        let normalized = super::types::assistant_response_markdown_source(false, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
+     // --- next_reveal_boundary tests ---
+ 
+     #[test]
+diff --git a/src/prompts/chat/types.rs b/src/prompts/chat/types.rs
+index 2ab2ee2e26318b52e2014c73ae18176ef4e45c6d..26d83fd784ef7ceaf0abd208c27f09d31461f85c
+--- a/src/prompts/chat/types.rs
++++ b/src/prompts/chat/types.rs
+@@ -1,4 +1,5 @@
+ use super::*;
++use std::borrow::Cow;
+ /// Available AI models for the chat
+ #[derive(Clone, Debug, PartialEq)]
+ pub struct ChatModel {
+@@ -138,6 +139,28 @@
+     script_generation_mode && !is_streaming && has_draft
+ }
+ 
++/// Normalize assistant content for markdown rendering in script-generation mode.
++///
++/// Script generation prompts ask models to return raw TypeScript without markdown
++/// fences. Wrap that raw code in a fenced block so the chat renderer can apply
++/// code-block styling while preserving non-script chat behavior.
++pub(crate) fn assistant_response_markdown_source<'a>(
++    script_generation_mode: bool,
++    response: &'a str,
++) -> Cow<'a, str> {
++    if !script_generation_mode {
++        return Cow::Borrowed(response);
++    }
++
++    let trimmed = response.trim();
++    if trimmed.is_empty() || response.contains("```") {
++        return Cow::Borrowed(response);
++    }
++
++    let code_body = response.trim_end_matches('\n');
++    Cow::Owned(format!("```typescript\n{}\n```", code_body))
++}
++
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub(crate) enum ChatInputKeyAction {
+     Escape,
+
+
+thinking
+**Ensuring single copy of builtin stream**
+exec
+/bin/zsh -lc "sed -n '260,520p' src/prompts/chat/tests.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+    #[test]
+    fn reveal_boundary_empty_remaining() {
+        assert_eq!(next_reveal_boundary("hello", 5), None);
+        assert_eq!(next_reveal_boundary("", 0), None);
+    }
+
+    #[test]
+    fn reveal_boundary_reveals_through_newline() {
+        let text = "first line\nsecond line\n";
+        assert_eq!(next_reveal_boundary(text, 0), Some(11)); // "first line\n"
+        assert_eq!(next_reveal_boundary(text, 11), Some(23)); // "second line\n"
+    }
+
+    #[test]
+    fn reveal_boundary_word_by_word_without_newline() {
+        let text = "hello world foo";
+        // "hello " → advances past word + whitespace to start of "world"
+        assert_eq!(next_reveal_boundary(text, 0), Some(6));
+        assert_eq!(next_reveal_boundary(text, 6), Some(12)); // "world "
+                                                             // "foo" — partial word, no trailing whitespace
+file update:
+diff --git a/src/prompts/chat/render_turns.rs b/src/prompts/chat/render_turns.rs
+index 3db150ffbdb0aa4acdd14fc317206f1b8537e6f0..3cdadfb2d8a4f3f44b6b0697f70999e99a86c1ee
+--- a/src/prompts/chat/render_turns.rs
++++ b/src/prompts/chat/render_turns.rs
+@@ -108,6 +108,11 @@
+         }
+         // AI response (only show if no error, or show partial if stream interrupted)
+         else if let Some(ref response) = turn.assistant_response {
++            let markdown_response = super::types::assistant_response_markdown_source(
++                self.script_generation_mode,
++                response,
++            );
++
+             // Use markdown rendering for assistant responses
+             if turn.streaming && response.is_empty() {
+                 // Empty streaming state
+@@ -120,7 +125,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors))
++                        .child(render_markdown(markdown_response.as_ref(), colors))
+                         .child(
+                             div()
+                                 .text_sm()
+@@ -135,7 +140,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors)),
++                        .child(render_markdown(markdown_response.as_ref(), colors)),
+                 );
+             }
+         }
+diff --git a/src/prompts/chat/tests.rs b/src/prompts/chat/tests.rs
+index ada5d9437a9d216977a66cca0b71598d62fee57c..1ed5945d929e0aee523ebbdd7f64ae5a4eefb1ab
+--- a/src/prompts/chat/tests.rs
++++ b/src/prompts/chat/tests.rs
+@@ -214,6 +214,47 @@
+         );
+     }
+ 
++    #[test]
++    fn assistant_response_markdown_source_wraps_plain_script_in_script_generation_mode() {
++        let response = r#"// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(
++            normalized.as_ref(),
++            r#"```typescript
++// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++```"#
++        );
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_existing_fence_unchanged() {
++        let response = r#"```typescript
++await div("Hello");
++```"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_plain_text_when_not_script_generation() {
++        let response = r#"// Name: Example
++await div("Hello");"#;
++
++        let normalized = super::types::assistant_response_markdown_source(false, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
+     // --- next_reveal_boundary tests ---
+ 
+     #[test]
+diff --git a/src/prompts/chat/types.rs b/src/prompts/chat/types.rs
+index 2ab2ee2e26318b52e2014c73ae18176ef4e45c6d..26d83fd784ef7ceaf0abd208c27f09d31461f85c
+--- a/src/prompts/chat/types.rs
++++ b/src/prompts/chat/types.rs
+@@ -1,4 +1,5 @@
+ use super::*;
++use std::borrow::Cow;
+ /// Available AI models for the chat
+ #[derive(Clone, Debug, PartialEq)]
+ pub struct ChatModel {
+@@ -138,6 +139,28 @@
+     script_generation_mode && !is_streaming && has_draft
+ }
+ 
++/// Normalize assistant content for markdown rendering in script-generation mode.
++///
++/// Script generation prompts ask models to return raw TypeScript without markdown
++/// fences. Wrap that raw code in a fenced block so the chat renderer can apply
++/// code-block styling while preserving non-script chat behavior.
++pub(crate) fn assistant_response_markdown_source<'a>(
++    script_generation_mode: bool,
++    response: &'a str,
++) -> Cow<'a, str> {
++    if !script_generation_mode {
++        return Cow::Borrowed(response);
++    }
++
++    let trimmed = response.trim();
++    if trimmed.is_empty() || response.contains("```") {
++        return Cow::Borrowed(response);
++    }
++
++    let code_body = response.trim_end_matches('\n');
++    Cow::Owned(format!("```typescript\n{}\n```", code_body))
++}
++
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub(crate) enum ChatInputKeyAction {
+     Escape,
+
+
+thinking
+**Verifying test additions and type definitions**
+exec
+/bin/zsh -lc "sed -n '90,210p' src/prompts/chat/types.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+
+    if key.eq_ignore_ascii_case("up") || key.eq_ignore_ascii_case("arrowup") {
+        let next_index = if current_index == 0 {
+            1
+        } else {
+            current_index - 1
+        };
+        return (next_index, SetupCardAction::None, true);
+    }
+
+    if key.eq_ignore_ascii_case("down") || key.eq_ignore_ascii_case("arrowdown") {
+        let next_index = (current_index + 1) % 2;
+        return (next_index, SetupCardAction::None, true);
+    }
+
+    if key.eq_ignore_ascii_case("enter") || key.eq_ignore_ascii_case("return") || key == " " {
+        let action = if current_index == 0 {
+            SetupCardAction::ActivateConfigure
+        } else {
+            SetupCardAction::ActivateClaudeCode
+file update:
+diff --git a/src/prompts/chat/render_turns.rs b/src/prompts/chat/render_turns.rs
+index 3db150ffbdb0aa4acdd14fc317206f1b8537e6f0..3cdadfb2d8a4f3f44b6b0697f70999e99a86c1ee
+--- a/src/prompts/chat/render_turns.rs
++++ b/src/prompts/chat/render_turns.rs
+@@ -108,6 +108,11 @@
+         }
+         // AI response (only show if no error, or show partial if stream interrupted)
+         else if let Some(ref response) = turn.assistant_response {
++            let markdown_response = super::types::assistant_response_markdown_source(
++                self.script_generation_mode,
++                response,
++            );
++
+             // Use markdown rendering for assistant responses
+             if turn.streaming && response.is_empty() {
+                 // Empty streaming state
+@@ -120,7 +125,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors))
++                        .child(render_markdown(markdown_response.as_ref(), colors))
+                         .child(
+                             div()
+                                 .text_sm()
+@@ -135,7 +140,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors)),
++                        .child(render_markdown(markdown_response.as_ref(), colors)),
+                 );
+             }
+         }
+diff --git a/src/prompts/chat/tests.rs b/src/prompts/chat/tests.rs
+index ada5d9437a9d216977a66cca0b71598d62fee57c..1ed5945d929e0aee523ebbdd7f64ae5a4eefb1ab
+--- a/src/prompts/chat/tests.rs
++++ b/src/prompts/chat/tests.rs
+@@ -214,6 +214,47 @@
+         );
+     }
+ 
++    #[test]
++    fn assistant_response_markdown_source_wraps_plain_script_in_script_generation_mode() {
++        let response = r#"// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(
++            normalized.as_ref(),
++            r#"```typescript
++// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++```"#
++        );
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_existing_fence_unchanged() {
++        let response = r#"```typescript
++await div("Hello");
++```"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_plain_text_when_not_script_generation() {
++        let response = r#"// Name: Example
++await div("Hello");"#;
++
++        let normalized = super::types::assistant_response_markdown_source(false, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
+     // --- next_reveal_boundary tests ---
+ 
+     #[test]
+diff --git a/src/prompts/chat/types.rs b/src/prompts/chat/types.rs
+index 2ab2ee2e26318b52e2014c73ae18176ef4e45c6d..26d83fd784ef7ceaf0abd208c27f09d31461f85c
+--- a/src/prompts/chat/types.rs
++++ b/src/prompts/chat/types.rs
+@@ -1,4 +1,5 @@
+ use super::*;
++use std::borrow::Cow;
+ /// Available AI models for the chat
+ #[derive(Clone, Debug, PartialEq)]
+ pub struct ChatModel {
+@@ -138,6 +139,28 @@
+     script_generation_mode && !is_streaming && has_draft
+ }
+ 
++/// Normalize assistant content for markdown rendering in script-generation mode.
++///
++/// Script generation prompts ask models to return raw TypeScript without markdown
++/// fences. Wrap that raw code in a fenced block so the chat renderer can apply
++/// code-block styling while preserving non-script chat behavior.
++pub(crate) fn assistant_response_markdown_source<'a>(
++    script_generation_mode: bool,
++    response: &'a str,
++) -> Cow<'a, str> {
++    if !script_generation_mode {
++        return Cow::Borrowed(response);
++    }
++
++    let trimmed = response.trim();
++    if trimmed.is_empty() || response.contains("```") {
++        return Cow::Borrowed(response);
++    }
++
++    let code_body = response.trim_end_matches('\n');
++    Cow::Owned(format!("```typescript\n{}\n```", code_body))
++}
++
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub(crate) enum ChatInputKeyAction {
+     Escape,
+
+
+thinking
+**Deciding against committing due to dirty tree**
+exec
+/bin/zsh -lc "nl -ba src/prompts/chat/types.rs | sed -n '130,210p'" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "nl -ba src/prompts/chat/tests.rs | sed -n '200,290p'" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "nl -ba src/prompts/chat/render_turns.rs | sed -n '102,170p'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+   130	        matches!(self, Self::Run | Self::SaveAndRun)
+   131	    }
+   132	}
+   133	
+   134	pub(crate) fn should_show_script_generation_actions(
+   135	    script_generation_mode: bool,
+   136	    is_streaming: bool,
+   137	    has_draft: bool,
+   138	) -> bool {
+   139	    script_generation_mode && !is_streaming && has_draft
+   140	}
+   141	
+   142	/// Normalize assistant content for markdown rendering in script-generation mode.
+   143	///
+   144	/// Script generation prompts ask models to return raw TypeScript without markdown
+   145	/// fences. Wrap that raw code in a fenced block so the chat renderer can apply
+   146	/// code-block styling while preserving non-script chat behavior.
+   147	pub(crate) fn assistant_response_markdown_source<'a>(
+   148	    script_generation_mode: bool,
+   149	    response: &'a str,
+ succeeded in 51ms:
+   200	
+   201	    #[test]
+   202	    fn script_generation_action_should_run_after_save_only_for_run_variants() {
+   203	        assert!(
+   204	            !ScriptGenerationAction::Save.should_run_after_save(),
+   205	            "Save should not run the script"
+   206	        );
+   207	        assert!(
+   208	            ScriptGenerationAction::Run.should_run_after_save(),
+   209	            "Run should run after saving"
+   210	        );
+   211	        assert!(
+   212	            ScriptGenerationAction::SaveAndRun.should_run_after_save(),
+   213	            "SaveAndRun should run after saving"
+   214	        );
+   215	    }
+   216	
+   217	    #[test]
+   218	    fn assistant_response_markdown_source_wraps_plain_script_in_script_generation_mode() {
+   219	        let response = r#"// Name: Example
+ succeeded in 51ms:
+   102	                        .text_xs()
+   103	                        .opacity(0.5)
+   104	                        .text_color(rgb(error_color))
+   105	                        .child(truncated),
+   106	                );
+   107	            }
+   108	        }
+   109	        // AI response (only show if no error, or show partial if stream interrupted)
+   110	        else if let Some(ref response) = turn.assistant_response {
+   111	            let markdown_response = super::types::assistant_response_markdown_source(
+   112	                self.script_generation_mode,
+   113	                response,
+   114	            );
+   115	
+   116	            // Use markdown rendering for assistant responses
+   117	            if turn.streaming && response.is_empty() {
+   118	                // Empty streaming state
+   119	                content = content.child(div().text_xs().opacity(0.6).child("Thinking..."));
+   120	            } else if turn.streaming {
+   121	                // Streaming with content - render markdown separately from cursor
+file update:
+diff --git a/src/prompts/chat/render_turns.rs b/src/prompts/chat/render_turns.rs
+index 3db150ffbdb0aa4acdd14fc317206f1b8537e6f0..3cdadfb2d8a4f3f44b6b0697f70999e99a86c1ee
+--- a/src/prompts/chat/render_turns.rs
++++ b/src/prompts/chat/render_turns.rs
+@@ -108,6 +108,11 @@
+         }
+         // AI response (only show if no error, or show partial if stream interrupted)
+         else if let Some(ref response) = turn.assistant_response {
++            let markdown_response = super::types::assistant_response_markdown_source(
++                self.script_generation_mode,
++                response,
++            );
++
+             // Use markdown rendering for assistant responses
+             if turn.streaming && response.is_empty() {
+                 // Empty streaming state
+@@ -120,7 +125,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors))
++                        .child(render_markdown(markdown_response.as_ref(), colors))
+                         .child(
+                             div()
+                                 .text_sm()
+@@ -135,7 +140,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors)),
++                        .child(render_markdown(markdown_response.as_ref(), colors)),
+                 );
+             }
+         }
+diff --git a/src/prompts/chat/tests.rs b/src/prompts/chat/tests.rs
+index ada5d9437a9d216977a66cca0b71598d62fee57c..1ed5945d929e0aee523ebbdd7f64ae5a4eefb1ab
+--- a/src/prompts/chat/tests.rs
++++ b/src/prompts/chat/tests.rs
+@@ -214,6 +214,47 @@
+         );
+     }
+ 
++    #[test]
++    fn assistant_response_markdown_source_wraps_plain_script_in_script_generation_mode() {
++        let response = r#"// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(
++            normalized.as_ref(),
++            r#"```typescript
++// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++```"#
++        );
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_existing_fence_unchanged() {
++        let response = r#"```typescript
++await div("Hello");
++```"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_plain_text_when_not_script_generation() {
++        let response = r#"// Name: Example
++await div("Hello");"#;
++
++        let normalized = super::types::assistant_response_markdown_source(false, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
+     // --- next_reveal_boundary tests ---
+ 
+     #[test]
+diff --git a/src/prompts/chat/types.rs b/src/prompts/chat/types.rs
+index 2ab2ee2e26318b52e2014c73ae18176ef4e45c6d..26d83fd784ef7ceaf0abd208c27f09d31461f85c
+--- a/src/prompts/chat/types.rs
++++ b/src/prompts/chat/types.rs
+@@ -1,4 +1,5 @@
+ use super::*;
++use std::borrow::Cow;
+ /// Available AI models for the chat
+ #[derive(Clone, Debug, PartialEq)]
+ pub struct ChatModel {
+@@ -138,6 +139,28 @@
+     script_generation_mode && !is_streaming && has_draft
+ }
+ 
++/// Normalize assistant content for markdown rendering in script-generation mode.
++///
++/// Script generation prompts ask models to return raw TypeScript without markdown
++/// fences. Wrap that raw code in a fenced block so the chat renderer can apply
++/// code-block styling while preserving non-script chat behavior.
++pub(crate) fn assistant_response_markdown_source<'a>(
++    script_generation_mode: bool,
++    response: &'a str,
++) -> Cow<'a, str> {
++    if !script_generation_mode {
++        return Cow::Borrowed(response);
++    }
++
++    let trimmed = response.trim();
++    if trimmed.is_empty() || response.contains("```") {
++        return Cow::Borrowed(response);
++    }
++
++    let code_body = response.trim_end_matches('\n');
++    Cow::Owned(format!("```typescript\n{}\n```", code_body))
++}
++
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub(crate) enum ChatInputKeyAction {
+     Escape,
+
+
+thinking
+**Planning parallel release and update**
+codex
+I’ve finished the implementation and validation pass for this task’s files; next I’m releasing my file claims and marking this agent done with verification notes.
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts update --id codex-code-block-render --status done --notes "Implemented script-generation markdown code-fence fallback in render_turns/types; added tests. Verification: cargo check -p script-kit-gpui --lib passed. Full cargo check currently fails in src/prompts/chat/render_core.rs due concurrent agent signature mismatch."' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+Updated: codex-code-block-render
+file update:
+diff --git a/src/prompts/chat/render_turns.rs b/src/prompts/chat/render_turns.rs
+index 3db150ffbdb0aa4acdd14fc317206f1b8537e6f0..3cdadfb2d8a4f3f44b6b0697f70999e99a86c1ee
+--- a/src/prompts/chat/render_turns.rs
++++ b/src/prompts/chat/render_turns.rs
+@@ -108,6 +108,11 @@
+         }
+         // AI response (only show if no error, or show partial if stream interrupted)
+         else if let Some(ref response) = turn.assistant_response {
++            let markdown_response = super::types::assistant_response_markdown_source(
++                self.script_generation_mode,
++                response,
++            );
++
+             // Use markdown rendering for assistant responses
+             if turn.streaming && response.is_empty() {
+                 // Empty streaming state
+@@ -120,7 +125,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors))
++                        .child(render_markdown(markdown_response.as_ref(), colors))
+                         .child(
+                             div()
+                                 .text_sm()
+@@ -135,7 +140,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors)),
++                        .child(render_markdown(markdown_response.as_ref(), colors)),
+                 );
+             }
+         }
+diff --git a/src/prompts/chat/tests.rs b/src/prompts/chat/tests.rs
+index ada5d9437a9d216977a66cca0b71598d62fee57c..1ed5945d929e0aee523ebbdd7f64ae5a4eefb1ab
+--- a/src/prompts/chat/tests.rs
++++ b/src/prompts/chat/tests.rs
+@@ -214,6 +214,47 @@
+         );
+     }
+ 
++    #[test]
++    fn assistant_response_markdown_source_wraps_plain_script_in_script_generation_mode() {
++        let response = r#"// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(
++            normalized.as_ref(),
++            r#"```typescript
++// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++```"#
++        );
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_existing_fence_unchanged() {
++        let response = r#"```typescript
++await div("Hello");
++```"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_plain_text_when_not_script_generation() {
++        let response = r#"// Name: Example
++await div("Hello");"#;
++
++        let normalized = super::types::assistant_response_markdown_source(false, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
+     // --- next_reveal_boundary tests ---
+ 
+     #[test]
+diff --git a/src/prompts/chat/types.rs b/src/prompts/chat/types.rs
+index 2ab2ee2e26318b52e2014c73ae18176ef4e45c6d..26d83fd784ef7ceaf0abd208c27f09d31461f85c
+--- a/src/prompts/chat/types.rs
++++ b/src/prompts/chat/types.rs
+@@ -1,4 +1,5 @@
+ use super::*;
++use std::borrow::Cow;
+ /// Available AI models for the chat
+ #[derive(Clone, Debug, PartialEq)]
+ pub struct ChatModel {
+@@ -138,6 +139,28 @@
+     script_generation_mode && !is_streaming && has_draft
+ }
+ 
++/// Normalize assistant content for markdown rendering in script-generation mode.
++///
++/// Script generation prompts ask models to return raw TypeScript without markdown
++/// fences. Wrap that raw code in a fenced block so the chat renderer can apply
++/// code-block styling while preserving non-script chat behavior.
++pub(crate) fn assistant_response_markdown_source<'a>(
++    script_generation_mode: bool,
++    response: &'a str,
++) -> Cow<'a, str> {
++    if !script_generation_mode {
++        return Cow::Borrowed(response);
++    }
++
++    let trimmed = response.trim();
++    if trimmed.is_empty() || response.contains("```") {
++        return Cow::Borrowed(response);
++    }
++
++    let code_body = response.trim_end_matches('\n');
++    Cow::Owned(format!("```typescript\n{}\n```", code_body))
++}
++
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub(crate) enum ChatInputKeyAction {
+     Escape,
+
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts release --id codex-code-block-render src/prompts/chat/render_turns.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+Released for codex-code-block-render: src/prompts/chat/render_turns.rs
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts release --id codex-code-block-render src/prompts/chat/types.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 62ms:
+Released for codex-code-block-render: src/prompts/chat/types.rs
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts release --id codex-code-block-render src/prompts/chat/tests.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+Released for codex-code-block-render: src/prompts/chat/tests.rs
+file update:
+diff --git a/src/prompts/chat/render_turns.rs b/src/prompts/chat/render_turns.rs
+index 3db150ffbdb0aa4acdd14fc317206f1b8537e6f0..3cdadfb2d8a4f3f44b6b0697f70999e99a86c1ee
+--- a/src/prompts/chat/render_turns.rs
++++ b/src/prompts/chat/render_turns.rs
+@@ -108,6 +108,11 @@
+         }
+         // AI response (only show if no error, or show partial if stream interrupted)
+         else if let Some(ref response) = turn.assistant_response {
++            let markdown_response = super::types::assistant_response_markdown_source(
++                self.script_generation_mode,
++                response,
++            );
++
+             // Use markdown rendering for assistant responses
+             if turn.streaming && response.is_empty() {
+                 // Empty streaming state
+@@ -120,7 +125,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors))
++                        .child(render_markdown(markdown_response.as_ref(), colors))
+                         .child(
+                             div()
+                                 .text_sm()
+@@ -135,7 +140,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors)),
++                        .child(render_markdown(markdown_response.as_ref(), colors)),
+                 );
+             }
+         }
+diff --git a/src/prompts/chat/tests.rs b/src/prompts/chat/tests.rs
+index ada5d9437a9d216977a66cca0b71598d62fee57c..1ed5945d929e0aee523ebbdd7f64ae5a4eefb1ab
+--- a/src/prompts/chat/tests.rs
++++ b/src/prompts/chat/tests.rs
+@@ -214,6 +214,47 @@
+         );
+     }
+ 
++    #[test]
++    fn assistant_response_markdown_source_wraps_plain_script_in_script_generation_mode() {
++        let response = r#"// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(
++            normalized.as_ref(),
++            r#"```typescript
++// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++```"#
++        );
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_existing_fence_unchanged() {
++        let response = r#"```typescript
++await div("Hello");
++```"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_plain_text_when_not_script_generation() {
++        let response = r#"// Name: Example
++await div("Hello");"#;
++
++        let normalized = super::types::assistant_response_markdown_source(false, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
+     // --- next_reveal_boundary tests ---
+ 
+     #[test]
+diff --git a/src/prompts/chat/types.rs b/src/prompts/chat/types.rs
+index 2ab2ee2e26318b52e2014c73ae18176ef4e45c6d..26d83fd784ef7ceaf0abd208c27f09d31461f85c
+--- a/src/prompts/chat/types.rs
++++ b/src/prompts/chat/types.rs
+@@ -1,4 +1,5 @@
+ use super::*;
++use std::borrow::Cow;
+ /// Available AI models for the chat
+ #[derive(Clone, Debug, PartialEq)]
+ pub struct ChatModel {
+@@ -138,6 +139,28 @@
+     script_generation_mode && !is_streaming && has_draft
+ }
+ 
++/// Normalize assistant content for markdown rendering in script-generation mode.
++///
++/// Script generation prompts ask models to return raw TypeScript without markdown
++/// fences. Wrap that raw code in a fenced block so the chat renderer can apply
++/// code-block styling while preserving non-script chat behavior.
++pub(crate) fn assistant_response_markdown_source<'a>(
++    script_generation_mode: bool,
++    response: &'a str,
++) -> Cow<'a, str> {
++    if !script_generation_mode {
++        return Cow::Borrowed(response);
++    }
++
++    let trimmed = response.trim();
++    if trimmed.is_empty() || response.contains("```") {
++        return Cow::Borrowed(response);
++    }
++
++    let code_body = response.trim_end_matches('\n');
++    Cow::Owned(format!("```typescript\n{}\n```", code_body))
++}
++
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub(crate) enum ChatInputKeyAction {
+     Escape,
+
+
+thinking
+**Checking final status**
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts status' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+Repo: /Users/johnlindquist/dev/script-kit-gpui
+Updated: 2026-02-08T07:19:42.028Z
+
+Active agents (1):
+codex-footer-button-style [in_progress] codex/gpt-5.3-codex/exec
+  task: In the script generation ChatPrompt footer (src/prompts/chat/render_core.rs), the Save/Run/Save and Run buttons don't m…
+  scope: src/prompts/chat/render_core.rs,src/prompts/chat/prompt.rs
+  claims(2): src/prompts/chat/render_core.rs, src/prompts/chat/prompt.rs
+  notes: Inspecting footer button rendering for script_generation_mode and preparing style/placement fix
+
+Inactive agents (270):
+- codex-accessibility [done] done. exit=0. final=.ai/logs/codex-accessibility.final.md. See final message file.
+- codex-action-labels [failed] failed. exit=1. final=.ai/logs/codex-action-labels.final.md.
+- codex-actions-audit [failed] failed. exit=1. final=.ai/logs/codex-actions-audit.final.md. See final message file.
+- codex-actions-consistency [failed] failed. exit=1. final=.ai/logs/codex-actions-consistency.final.md.
+- codex-actions-dialog [done] done. exit=0. final=.ai/logs/codex-actions-dialog.final.md. See final message file.
+- codex-actions-feedback [failed] failed. exit=1. final=.ai/logs/codex-actions-feedback.final.md.
+- codex-actions-feedback-v2 [done] done. exit=0. final=.ai/logs/codex-actions-feedback-v2.final.md. See final message file.
+- codex-actions-ux [done] done. exit=0. final=.ai/logs/codex-actions-ux.final.md. See final message file.
+- codex-agents-md [done] done. exit=0. final=.ai/logs/codex-agents-md.final.md. See final message file.
+file update:
+diff --git a/src/prompts/chat/render_turns.rs b/src/prompts/chat/render_turns.rs
+index 3db150ffbdb0aa4acdd14fc317206f1b8537e6f0..3cdadfb2d8a4f3f44b6b0697f70999e99a86c1ee
+--- a/src/prompts/chat/render_turns.rs
++++ b/src/prompts/chat/render_turns.rs
+@@ -108,6 +108,11 @@
+         }
+         // AI response (only show if no error, or show partial if stream interrupted)
+         else if let Some(ref response) = turn.assistant_response {
++            let markdown_response = super::types::assistant_response_markdown_source(
++                self.script_generation_mode,
++                response,
++            );
++
+             // Use markdown rendering for assistant responses
+             if turn.streaming && response.is_empty() {
+                 // Empty streaming state
+@@ -120,7 +125,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors))
++                        .child(render_markdown(markdown_response.as_ref(), colors))
+                         .child(
+                             div()
+                                 .text_sm()
+@@ -135,7 +140,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors)),
++                        .child(render_markdown(markdown_response.as_ref(), colors)),
+                 );
+             }
+         }
+diff --git a/src/prompts/chat/tests.rs b/src/prompts/chat/tests.rs
+index ada5d9437a9d216977a66cca0b71598d62fee57c..1ed5945d929e0aee523ebbdd7f64ae5a4eefb1ab
+--- a/src/prompts/chat/tests.rs
++++ b/src/prompts/chat/tests.rs
+@@ -214,6 +214,47 @@
+         );
+     }
+ 
++    #[test]
++    fn assistant_response_markdown_source_wraps_plain_script_in_script_generation_mode() {
++        let response = r#"// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(
++            normalized.as_ref(),
++            r#"```typescript
++// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++```"#
++        );
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_existing_fence_unchanged() {
++        let response = r#"```typescript
++await div("Hello");
++```"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_plain_text_when_not_script_generation() {
++        let response = r#"// Name: Example
++await div("Hello");"#;
++
++        let normalized = super::types::assistant_response_markdown_source(false, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
+     // --- next_reveal_boundary tests ---
+ 
+     #[test]
+diff --git a/src/prompts/chat/types.rs b/src/prompts/chat/types.rs
+index 2ab2ee2e26318b52e2014c73ae18176ef4e45c6d..26d83fd784ef7ceaf0abd208c27f09d31461f85c
+--- a/src/prompts/chat/types.rs
++++ b/src/prompts/chat/types.rs
+@@ -1,4 +1,5 @@
+ use super::*;
++use std::borrow::Cow;
+ /// Available AI models for the chat
+ #[derive(Clone, Debug, PartialEq)]
+ pub struct ChatModel {
+@@ -138,6 +139,28 @@
+     script_generation_mode && !is_streaming && has_draft
+ }
+ 
++/// Normalize assistant content for markdown rendering in script-generation mode.
++///
++/// Script generation prompts ask models to return raw TypeScript without markdown
++/// fences. Wrap that raw code in a fenced block so the chat renderer can apply
++/// code-block styling while preserving non-script chat behavior.
++pub(crate) fn assistant_response_markdown_source<'a>(
++    script_generation_mode: bool,
++    response: &'a str,
++) -> Cow<'a, str> {
++    if !script_generation_mode {
++        return Cow::Borrowed(response);
++    }
++
++    let trimmed = response.trim();
++    if trimmed.is_empty() || response.contains("```") {
++        return Cow::Borrowed(response);
++    }
++
++    let code_body = response.trim_end_matches('\n');
++    Cow::Owned(format!("```typescript\n{}\n```", code_body))
++}
++
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub(crate) enum ChatInputKeyAction {
+     Escape,
+
+
+thinking
+**Summarizing final changes and testing**
+codex
+Implemented the code-block rendering fix on the actual chat turn renderer (`render_turns.rs`; `render_messages.rs` does not exist in this checkout).
+
+Changed files:
+- `src/prompts/chat/types.rs:147`
+  - Added `assistant_response_markdown_source(...)` to wrap raw script-generation responses in a fenced `typescript` block when no ``` fence exists.
+- `src/prompts/chat/render_turns.rs:111`
+  - Assistant responses now pass through `assistant_response_markdown_source(...)` before `render_markdown(...)` (streaming and non-streaming paths).
+- `src/prompts/chat/tests.rs:217`
+  - Added tests for:
+    - wrapping plain script text in script-generation mode
+    - preserving already fenced responses
+    - leaving plain text unchanged outside script-generation mode
+
+Verification run:
+- `cargo check -p script-kit-gpui --lib` passed.
+- `cargo check -p script-kit-gpui` currently fails due concurrent/unrelated work in `src/prompts/chat/render_core.rs` (argument mismatch in `render_script_generation_footer_button` call).
+- `cargo test -p script-kit-gpui ...` is currently blocked by unrelated existing test-module compile issues in other areas of the repo.
+
+How to test:
+1. Run `cargo check -p script-kit-gpui --lib`.
+2. Open script-generation chat mode and generate a script response without markdown fences.
+3. Confirm the assistant response renders as a code block (monospace, code-block background/padding) instead of regular chat text.
+
+Risks / known gaps:
+- In script-generation mode, any non-empty unfenced assistant response is wrapped as code; if a model returns prose + code, prose will also be fenced.
+- Full workspace `cargo check`/`cargo test` could not be used as a clean signal due unrelated in-progress failures outside this change set.
+file update:
+diff --git a/src/prompts/chat/render_turns.rs b/src/prompts/chat/render_turns.rs
+index 3db150ffbdb0aa4acdd14fc317206f1b8537e6f0..3cdadfb2d8a4f3f44b6b0697f70999e99a86c1ee
+--- a/src/prompts/chat/render_turns.rs
++++ b/src/prompts/chat/render_turns.rs
+@@ -108,6 +108,11 @@
+         }
+         // AI response (only show if no error, or show partial if stream interrupted)
+         else if let Some(ref response) = turn.assistant_response {
++            let markdown_response = super::types::assistant_response_markdown_source(
++                self.script_generation_mode,
++                response,
++            );
++
+             // Use markdown rendering for assistant responses
+             if turn.streaming && response.is_empty() {
+                 // Empty streaming state
+@@ -120,7 +125,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors))
++                        .child(render_markdown(markdown_response.as_ref(), colors))
+                         .child(
+                             div()
+                                 .text_sm()
+@@ -135,7 +140,7 @@
+                         .w_full()
+                         .min_w_0()
+                         .overflow_x_hidden()
+-                        .child(render_markdown(response, colors)),
++                        .child(render_markdown(markdown_response.as_ref(), colors)),
+                 );
+             }
+         }
+diff --git a/src/prompts/chat/tests.rs b/src/prompts/chat/tests.rs
+index ada5d9437a9d216977a66cca0b71598d62fee57c..1ed5945d929e0aee523ebbdd7f64ae5a4eefb1ab
+--- a/src/prompts/chat/tests.rs
++++ b/src/prompts/chat/tests.rs
+@@ -214,6 +214,47 @@
+         );
+     }
+ 
++    #[test]
++    fn assistant_response_markdown_source_wraps_plain_script_in_script_generation_mode() {
++        let response = r#"// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(
++            normalized.as_ref(),
++            r#"```typescript
++// Name: Example
++// Description: Example script
++import "@scriptkit/sdk";
++
++await div("Hello");
++```"#
++        );
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_existing_fence_unchanged() {
++        let response = r#"```typescript
++await div("Hello");
++```"#;
++
++        let normalized = super::types::assistant_response_markdown_source(true, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
++    #[test]
++    fn assistant_response_markdown_source_keeps_plain_text_when_not_script_generation() {
++        let response = r#"// Name: Example
++await div("Hello");"#;
++
++        let normalized = super::types::assistant_response_markdown_source(false, response);
++        assert_eq!(normalized.as_ref(), response);
++    }
++
+     // --- next_reveal_boundary tests ---
+ 
+     #[test]
+diff --git a/src/prompts/chat/types.rs b/src/prompts/chat/types.rs
+index 2ab2ee2e26318b52e2014c73ae18176ef4e45c6d..26d83fd784ef7ceaf0abd208c27f09d31461f85c
+--- a/src/prompts/chat/types.rs
++++ b/src/prompts/chat/types.rs
+@@ -1,4 +1,5 @@
+ use super::*;
++use std::borrow::Cow;
+ /// Available AI models for the chat
+ #[derive(Clone, Debug, PartialEq)]
+ pub struct ChatModel {
+@@ -138,6 +139,28 @@
+     script_generation_mode && !is_streaming && has_draft
+ }
+ 
++/// Normalize assistant content for markdown rendering in script-generation mode.
++///
++/// Script generation prompts ask models to return raw TypeScript without markdown
++/// fences. Wrap that raw code in a fenced block so the chat renderer can apply
++/// code-block styling while preserving non-script chat behavior.
++pub(crate) fn assistant_response_markdown_source<'a>(
++    script_generation_mode: bool,
++    response: &'a str,
++) -> Cow<'a, str> {
++    if !script_generation_mode {
++        return Cow::Borrowed(response);
++    }
++
++    let trimmed = response.trim();
++    if trimmed.is_empty() || response.contains("```") {
++        return Cow::Borrowed(response);
++    }
++
++    let code_body = response.trim_end_matches('\n');
++    Cow::Owned(format!("```typescript\n{}\n```", code_body))
++}
++
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub(crate) enum ChatInputKeyAction {
+     Escape,
+
+tokens used
+158,559
+Implemented the code-block rendering fix on the actual chat turn renderer (`render_turns.rs`; `render_messages.rs` does not exist in this checkout).
+
+Changed files:
+- `src/prompts/chat/types.rs:147`
+  - Added `assistant_response_markdown_source(...)` to wrap raw script-generation responses in a fenced `typescript` block when no ``` fence exists.
+- `src/prompts/chat/render_turns.rs:111`
+  - Assistant responses now pass through `assistant_response_markdown_source(...)` before `render_markdown(...)` (streaming and non-streaming paths).
+- `src/prompts/chat/tests.rs:217`
+  - Added tests for:
+    - wrapping plain script text in script-generation mode
+    - preserving already fenced responses
+    - leaving plain text unchanged outside script-generation mode
+
+Verification run:
+- `cargo check -p script-kit-gpui --lib` passed.
+- `cargo check -p script-kit-gpui` currently fails due concurrent/unrelated work in `src/prompts/chat/render_core.rs` (argument mismatch in `render_script_generation_footer_button` call).
+- `cargo test -p script-kit-gpui ...` is currently blocked by unrelated existing test-module compile issues in other areas of the repo.
+
+How to test:
+1. Run `cargo check -p script-kit-gpui --lib`.
+2. Open script-generation chat mode and generate a script response without markdown fences.
+3. Confirm the assistant response renders as a code block (monospace, code-block background/padding) instead of regular chat text.
+
+Risks / known gaps:
+- In script-generation mode, any non-empty unfenced assistant response is wrapped as code; if a model returns prose + code, prose will also be fenced.
+- Full workspace `cargo check`/`cargo test` could not be used as a clean signal due unrelated in-progress failures outside this change set.
+
+
+==== exit @ 2026-02-08T07:19:55.663Z code=0 status=done ====

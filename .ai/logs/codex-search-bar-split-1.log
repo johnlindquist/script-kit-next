@@ -1,0 +1,2946 @@
+==== spawn @ 2026-02-10T05:32:14.336Z ====
+cmd: codex "exec" "--cd" "/Users/johnlindquist/dev/script-kit-gpui" "--model" "gpt-5.3-codex" "-c" "model_reasoning_effort=\"xhigh\"" "-c" "model_auto_compact_token_limit=120000" "-c" "developer_instructions=\"You are Codex implementer agent \\\"codex-search-bar-split-1\\\".\\n\\n## Coordination\\nThis repo runs parallel agents in ONE working tree. Before editing any file, you MUST claim it.\\nCommands (run via shell):\\n  - View roster: ~/.claude/bin/swarm.ts status\\n  - Claim files (blocks until free): ~/.claude/bin/swarm.ts claim --wait --id codex-search-bar-split-1 path/to/file\\n  - Release: ~/.claude/bin/swarm.ts release --id codex-search-bar-split-1 path/to/file\\n  - Update status/notes: ~/.claude/bin/swarm.ts update --id codex-search-bar-split-1 --status in_progress --notes \\\"...\\\"\\nRules:\\n  - Never edit a file you haven't claimed.\\n  - Keep claims tight (claim only what you're actively changing).\\n  - If blocked, set status=blocked and say what you're waiting on.\\n  - When finished, set status=done and release claims.\\n\\n## Development practices (this code is maintained by AI agents)\\n  - Log state transitions with enough context to diagnose failures from logs alone.\\n  - Structured errors: include what was attempted, what failed, and current state.\\n  - Name things for grepability — unique identifiers agents can find on the first search.\\n  - Every behavior change gets a test. Untested code is invisible to the next agent.\\n  - Test names describe the scenario: test_X_does_Y_when_Z.\\n  - Keep functions small and single-purpose. 500-line functions burn agent context.\\n  - Use types to encode constraints (enums > strings for errors).\\n\\n## CRITICAL: Parallel-safe verification\\n  - Other agents are modifying other files RIGHT NOW. Full test suites WILL show their failures.\\n  - ONLY run tests that cover YOUR changed files. Scope every test/check command:\\n    Rust: cargo test -p your-crate -- module::test_name | JS: npx jest your/file.test.ts\\n  - Do NOT run: cargo test (unscoped), cargo check (whole workspace), npm test (unscoped).\\n  - If a scoped test fails, it's YOUR bug — fix it. If tests outside your scope fail, ignore them.\\n\\n## Git commit discipline\\n  - NEVER commit unverified work. Run tests/lints/type-checks FIRST. If it fails, fix it before committing.\\n  - A commit is a declaration: \\\"this works and here's the proof.\\\"\\n  - Commit FREQUENTLY — after each meaningful unit of VERIFIED work, not just at the end.\\n  - A \\\"unit\\\" = one logical change that passes verification (new function, bug fix, refactor, test added).\\n  - NEVER batch an entire task into one giant commit. Small commits are searchable; big ones aren't.\\n  - Commit message format:\\n      Line 1: <type>(<scope>): <what changed> (imperative, max 72 chars)\\n      Line 3+: WHY this change was made, WHAT was verified, and HOW to test it.\\n    Types: feat, fix, refactor, test, docs, chore\\n    Example:\\n      feat(auth): add refresh token rotation\\n      \\n      Tokens now rotate on each refresh call to prevent replay attacks.\\n      The old token is invalidated immediately on rotation.\\n      \\n      Verified: cargo test --lib -- auth::refresh (4 tests pass)\\n      Verified: manual smoke test via curl — token rotates, old token returns 401\\n  - The \\\"Verified:\\\" lines are REQUIRED. Future agents will read git log to understand\\n    what was tested and how to re-verify. This is the most valuable part of the message.\\n  - In your final message, list all commits you made with their hashes.\\n\\n## Time budget\\nYou have approximately 10 minutes. If your task is too broad to complete in time:\\n(1) Commit any verified progress.\\n(2) Run: ~/.claude/bin/swarm.ts update --id YOUR_ID --status needs_split --notes 'suggest: 1) sub-task-desc scope:files 2) sub-task-desc scope:files'.\\n(3) Exit cleanly. The dispatcher will read your suggestions and spawn narrower workers.\"" "--output-last-message" "/Users/johnlindquist/dev/script-kit-gpui/.ai/logs/codex-search-bar-split-1.final.md" "--yolo" "You are agent codex-search-bar-split-1.\n\nCurrent parallel-agent roster (read this first):\n```\nSWARM SNAPSHOT @ 2026-02-10T05:32:14.328Z\n- codex-list-polish-split-1 [in_progress] scope=src/prompts/select/render.rs task=In src/prompts/select/render.rs, remove per-row bottom borders (.border_b_1().border_color(...)) from list item rows. A…\n  claims: src/prompts/select/render.rs\n  notes: claiming render.rs and applying row style changes\n- codex-search-bar-split-1 [starting] scope=src/components/prompt_header.rs task=In src/components/prompt_header.rs, transform the search input from a full-width header strip into a floating input. Ad…\n```\n\nYour assignment:\n- Task: In src/components/prompt_header.rs, transform the search input from a full-width header strip into a floating input. Add outer spacing to the input container: .pt(px(8.0)).px(px(8.0)).pb(px(6.0)). Make the input field itself .rounded(px(10.0)). Add a subtle border using the theme border color at low alpha (0x33). Remove the old border_b_1 style if present. Use theme.colors tokens only, never hardcode rgb values. Run cargo check && cargo clippy --all-targets -- -D warnings && cargo test after.\n- Scope: src/components/prompt_header.rs\n\nOperating constraints:\n- Single working tree (no worktrees, no patches).\n- You MUST claim files before editing (~/.claude/bin/swarm.ts claim --wait ...).\n\nDeliverables:\n- Make the code changes required by the task.\n- Run the most relevant tests/linters.\n- In your FINAL message, include: changed files, how to test, and any risks/known gaps."
+
+OpenAI Codex v0.98.0 (research preview)
+--------
+workdir: /Users/johnlindquist/dev/script-kit-gpui
+model: gpt-5.3-codex
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: xhigh
+reasoning summaries: auto
+session id: 019c4609-34b2-71e0-9a4c-c882bcfb4047
+--------
+user
+You are agent codex-search-bar-split-1.
+
+Current parallel-agent roster (read this first):
+```
+SWARM SNAPSHOT @ 2026-02-10T05:32:14.328Z
+- codex-list-polish-split-1 [in_progress] scope=src/prompts/select/render.rs task=In src/prompts/select/render.rs, remove per-row bottom borders (.border_b_1().border_color(...)) from list item rows. A…
+  claims: src/prompts/select/render.rs
+  notes: claiming render.rs and applying row style changes
+- codex-search-bar-split-1 [starting] scope=src/components/prompt_header.rs task=In src/components/prompt_header.rs, transform the search input from a full-width header strip into a floating input. Ad…
+```
+
+Your assignment:
+- Task: In src/components/prompt_header.rs, transform the search input from a full-width header strip into a floating input. Add outer spacing to the input container: .pt(px(8.0)).px(px(8.0)).pb(px(6.0)). Make the input field itself .rounded(px(10.0)). Add a subtle border using the theme border color at low alpha (0x33). Remove the old border_b_1 style if present. Use theme.colors tokens only, never hardcode rgb values. Run cargo check && cargo clippy --all-targets -- -D warnings && cargo test after.
+- Scope: src/components/prompt_header.rs
+
+Operating constraints:
+- Single working tree (no worktrees, no patches).
+- You MUST claim files before editing (~/.claude/bin/swarm.ts claim --wait ...).
+
+Deliverables:
+- Make the code changes required by the task.
+- Run the most relevant tests/linters.
+- In your FINAL message, include: changed files, how to test, and any risks/known gaps.
+warning: Under-development features enabled: responses_websockets. Under-development features are incomplete and may behave unpredictably. To suppress this warning, set `suppress_unstable_features_warning = true` in /Users/johnlindquist/.codex/config.toml.
+mcp: deepwiki starting
+mcp: deepwiki ready
+mcp startup: ready: deepwiki
+
+thinking
+**Resolving testing and commit conflicts**
+codex
+Applying the `prompt_header.rs` style change now. I’ll claim the file, inspect the current header/input styles, then patch only that file and run scoped verification commands that won’t conflict with parallel agents.
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts status && ~/.claude/bin/swarm.ts claim --wait --id codex-search-bar-split-1 src/components/prompt_header.rs && ~/.claude/bin/swarm.ts update --id codex-search-bar-split-1 --status in_progress --notes "claimed prompt_header.rs; inspecting current search header styles"' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+Repo: /Users/johnlindquist/dev/script-kit-gpui
+Updated: 2026-02-10T05:32:34.055Z
+
+Active agents (2):
+codex-list-polish-split-1 [in_progress] codex/gpt-5.3-codex/exec
+  task: In src/prompts/select/render.rs, remove per-row bottom borders (.border_b_1().border_color(...)) from list item rows. A…
+  scope: src/prompts/select/render.rs
+  claims(1): src/prompts/select/render.rs
+  notes: claiming render.rs and applying row style changes
+
+codex-search-bar-split-1 [in_progress] codex/gpt-5.3-codex/exec
+  task: In src/components/prompt_header.rs, transform the search input from a full-width header strip into a floating input. Ad…
+  scope: src/components/prompt_header.rs
+  claims: (none)
+  notes: spawned codex (exec)
+
+Inactive agents (281):
+- codex-accessibility [done] done. exit=0. final=.ai/logs/codex-accessibility.final.md. See final message file.
+- codex-action-labels [failed] failed. exit=1. final=.ai/logs/codex-action-labels.final.md.
+- codex-actions-audit [failed] failed. exit=1. final=.ai/logs/codex-actions-audit.final.md. See final message file.
+
+thinking
+**Preparing file inspection**
+codex
+File is claimed and status is in progress. Next I’m reading `src/components/prompt_header.rs` to locate the current full-width strip styles and update only the input container and field.
+exec
+/bin/zsh -lc "sed -n '1,260p' src/components/prompt_header.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+//! Reusable PromptHeader component for GPUI Script Kit
+//!
+//! This module provides a theme-aware header component used across all prompt types.
+//! It includes a search input with blinking cursor, action buttons, and logo.
+//!
+
+#![allow(dead_code)]
+
+#[path = "prompt_header/component.rs"]
+mod component;
+#[cfg(test)]
+#[path = "prompt_header/tests.rs"]
+mod tests;
+#[path = "prompt_header/types.rs"]
+mod types;
+
+#[allow(unused_imports)]
+pub use component::{HeaderClickCallback, PromptHeader};
+#[allow(unused_imports)]
+pub use types::{
+
+thinking
+**Assessing file scope boundaries**
+exec
+/bin/zsh -lc "sed -n '1,320p' src/components/prompt_header/component.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+use gpui::*;
+use std::rc::Rc;
+
+use crate::components::{
+    button::{BUTTON_GHOST_HEIGHT, BUTTON_GHOST_PADDING_X, BUTTON_GHOST_PADDING_Y},
+    Button, ButtonColors, ButtonVariant,
+};
+use crate::panel::{CURSOR_GAP_X, CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y, CURSOR_WIDTH};
+use crate::ui_foundation::{hstack, HexColorExt};
+
+use super::{PromptHeaderColors, PromptHeaderConfig, HEADER_PATH_PREFIX_MAX_WIDTH_PX};
+
+/// Callback type for button click events
+pub type HeaderClickCallback = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
+
+/// A reusable header component for prompts
+///
+/// Displays:
+/// - Search input with blinking cursor
+/// - Path prefix (optional)
+
+thinking
+**Analyzing header render styling**
+codex
+I found the actual styling in `src/components/prompt_header/component.rs` (the top-level file is only a module shim). I’m inspecting the header render block now to update the container padding/border and input rounding exactly as requested.
+exec
+/bin/zsh -lc "sed -n '320,720p' src/components/prompt_header/component.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+                    .py(px(BUTTON_GHOST_PADDING_Y))
+                    .rounded(px(6.))
+                    .bg(rgba(transparent_bg))
+                    .cursor_pointer()
+                    .text_sm()
+                    .font_weight(FontWeight::MEDIUM)
+                    .font_family(crate::list_item::FONT_SYSTEM_UI)
+                    .text_color(colors.text_muted.to_rgb())
+                    .hover(move |style| {
+                        style
+                            .bg(rgba(colors.hover_overlay))
+                            .text_color(colors.text_primary.to_rgb())
+                    })
+                    .child("Ask AI"),
+            )
+            // "Tab" badge button - ghost/transparent style with border
+            .child(
+                div()
+                    .flex_shrink_0()
+                    .min_h(px(BUTTON_GHOST_HEIGHT))
+
+thinking
+**Investigating border style in header**
+exec
+/bin/zsh -lc "rg -n \"border_b_1|render_input_area|PromptHeader\" src/components/prompt_header -g '*.rs'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+src/components/prompt_header/tests.rs:1:use super::PromptHeaderColors;
+src/components/prompt_header/tests.rs:15:fn render_input_area_section() -> String {
+src/components/prompt_header/tests.rs:20:        .find("fn render_input_area")
+src/components/prompt_header/tests.rs:21:        .expect("render_input_area not found in prompt_header/component.rs");
+src/components/prompt_header/tests.rs:30:    let colors = PromptHeaderColors::from_theme(&theme);
+src/components/prompt_header/tests.rs:136:fn test_render_input_area_uses_theme_tokens_for_input_and_placeholder_text() {
+src/components/prompt_header/tests.rs:137:    let section = render_input_area_section();
+src/components/prompt_header/tests.rs:141:        "PromptHeader placeholder text should use text_muted theme token. Section:\n{}",
+src/components/prompt_header/tests.rs:146:        "PromptHeader typed text should use text_primary theme token. Section:\n{}",
+src/components/prompt_header/tests.rs:152:fn test_render_input_area_does_not_hardcode_hex_input_text_colors() {
+src/components/prompt_header/tests.rs:153:    let section = render_input_area_section();
+src/components/prompt_header/tests.rs:157:        "PromptHeader input should not hardcode rgb hex text colors. Section:\n{}",
+src/components/prompt_header/tests.rs:162:        "PromptHeader input should not hardcode rgba hex text colors. Section:\n{}",
+src/components/prompt_header/component.rs:11:use super::{PromptHeaderColors, PromptHeaderConfig, HEADER_PATH_PREFIX_MAX_WIDTH_PX};
+src/components/prompt_header/component.rs:26:pub struct PromptHeader {
+src/components/prompt_header/component.rs:27:    config: PromptHeaderConfig,
+src/components/prompt_header/component.rs:28:    colors: PromptHeaderColors,
+src/components/prompt_header/component.rs:33:impl PromptHeader {
+src/components/prompt_header/component.rs:34:    /// Create a new PromptHeader with the given configuration and colors
+src/components/prompt_header/component.rs:35:    pub fn new(config: PromptHeaderConfig, colors: PromptHeaderColors) -> Self {
+
+thinking
+**Inspecting test expectations for border**
+exec
+/bin/zsh -lc "sed -n '1,280p' src/components/prompt_header/tests.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+use super::PromptHeaderColors;
+use crate::theme::Theme;
+use std::fs;
+
+fn render_ask_ai_hint_section() -> String {
+    let content = fs::read_to_string("src/components/prompt_header/component.rs")
+        .expect("Failed to read src/components/prompt_header/component.rs");
+
+    let start = content
+        .find("fn render_ask_ai_hint")
+        .expect("render_ask_ai_hint not found in prompt_header/component.rs");
+    content[start..content.len().min(start + 2600)].to_string()
+}
+
+fn render_input_area_section() -> String {
+    let content = fs::read_to_string("src/components/prompt_header/component.rs")
+        .expect("Failed to read src/components/prompt_header/component.rs");
+
+    let start = content
+        .find("fn render_input_area")
+
+thinking
+**Planning test updates**
+exec
+/bin/zsh -lc "sed -n '1,240p' src/components/prompt_header/types.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+use crate::designs::DesignColors;
+use crate::theme::Theme;
+
+/// Path prefix text is clipped/truncated beyond this width to preserve query visibility.
+pub const HEADER_PATH_PREFIX_MAX_WIDTH_PX: f32 = 320.0;
+/// Reserved action slot width when running in compact density mode.
+pub const HEADER_ACTIONS_MIN_WIDTH_COMPACT_PX: f32 = 168.0;
+/// Reserved action slot width for the default header density.
+pub const HEADER_ACTIONS_MIN_WIDTH_NORMAL_PX: f32 = 200.0;
+/// Reserved action slot width for expanded action labels/shortcuts.
+pub const HEADER_ACTIONS_MIN_WIDTH_EXPANDED_PX: f32 = 236.0;
+
+/// Horizontal density policy for the right-side actions slot.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum HeaderActionsDensity {
+    /// Tight layout for narrower prompt widths.
+    Compact,
+    /// Default layout used by existing prompts.
+    #[default]
+    Normal,
+
+thinking
+**Planning floating input styling**
+exec
+/bin/zsh -lc "rg -n \"rgba8\\(0x33\\)|border\\.rgba8|border_color\\(colors\\.border|search_box_bg\" src/components src/prompts | head -n 80" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+src/prompts/select/search.rs:208:pub(super) fn resolve_search_box_bg_hex(
+src/prompts/select/tests.rs:169:fn test_select_prompt_resolves_search_box_bg_by_design_variant() {
+src/prompts/select/tests.rs:179:        resolve_search_box_bg_hex(&theme, DesignVariant::Default, &design_colors),
+src/prompts/select/tests.rs:183:        resolve_search_box_bg_hex(&theme, DesignVariant::Minimal, &design_colors),
+src/components/prompt_footer.rs:349:        let shortcut_bg = self.colors.border.rgba8(0x20);
+src/components/prompt_footer.rs:350:        let shortcut_border = self.colors.border.rgba8(0x40);
+src/components/prompt_footer.rs:418:            .bg(self.colors.border.rgba8(0x40)) // 25% opacity
+src/components/prompt_footer.rs:497:            .border_color(colors.border.rgba8(PROMPT_FOOTER_BORDER_OPACITY))
+src/components/prompt_footer.rs:502:                color: colors.border.rgba8(footer_shadow_alpha(colors)),
+src/prompts/select/render.rs:161:        let search_box_bg = rgb(resolve_search_box_bg_hex(
+src/prompts/select/render.rs:193:            .bg(search_box_bg)
+src/components/prompt_header/component.rs:241:                .search_box_bg
+src/components/prompt_header/component.rs:346:                    .border_color(colors.border.to_rgb())
+src/components/prompt_header/types.rs:62:    pub search_box_bg: u32,
+src/components/prompt_header/types.rs:91:            search_box_bg: theme.colors.background.search_box,
+src/components/prompt_header/types.rs:110:            search_box_bg: colors.background_secondary,
+
+thinking
+**Reviewing prompt footer styles**
+exec
+/bin/zsh -lc "sed -n '450,560p' src/components/prompt_footer.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+        }
+
+        // Build the buttons container
+        let mut buttons = hstack().gap(px(PROMPT_FOOTER_BUTTON_GAP_PX)).items_center();
+
+        // Primary button
+        buttons = buttons.child(self.render_button(
+            "footer-primary-button",
+            self.config.primary_label.clone(),
+            self.config.primary_shortcut.clone(),
+            self.config.primary_disabled,
+            self.on_primary_click.clone(),
+        ));
+
+        // Divider + Secondary button (if enabled)
+        if self.config.show_secondary {
+            buttons = buttons.child(self.render_divider());
+            buttons = buttons.child(self.render_button(
+                "footer-secondary-button",
+                self.config.secondary_label.clone(),
+
+thinking
+**Inspecting header border styling**
+exec
+/bin/zsh -lc "rg -n \"PromptHeader::new|border_b_1\\(|prompt_header\" src/prompts src/components | head -n 120" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+src/components/prompt_input.rs:485:// prompt rendering. See prompt_header.rs for similar pattern.
+src/prompts/select/render.rs:194:            .border_b_1()
+src/components/mod.rs:40:pub mod prompt_header;
+src/components/mod.rs:78:pub use prompt_header::{PromptHeader, PromptHeaderColors, PromptHeaderConfig};
+src/components/form_fields_tests.rs:172:fn test_arg_prompt_header_uses_design_token_large_input_size() {
+src/prompts/path/render.rs:154:        let header = PromptHeader::new(header_config, header_colors)
+src/components/prompt_header/tests.rs:6:    let content = fs::read_to_string("src/components/prompt_header/component.rs")
+src/components/prompt_header/tests.rs:7:        .expect("Failed to read src/components/prompt_header/component.rs");
+src/components/prompt_header/tests.rs:11:        .expect("render_ask_ai_hint not found in prompt_header/component.rs");
+src/components/prompt_header/tests.rs:16:    let content = fs::read_to_string("src/components/prompt_header/component.rs")
+src/components/prompt_header/tests.rs:17:        .expect("Failed to read src/components/prompt_header/component.rs");
+src/components/prompt_header/tests.rs:21:        .expect("render_input_area not found in prompt_header/component.rs");
+src/components/prompt_header/tests.rs:26:fn test_prompt_header_colors_from_theme_uses_on_accent_text_token_for_logo() {
+src/components/form_fields/tests.rs:172:fn test_arg_prompt_header_uses_design_token_large_input_size() {
+src/prompts/markdown/code_table.rs:65:                    d.border_b_1().border_color(header_border_color)
+src/prompts/markdown/code_table.rs:191:            .border_b_1()
+src/prompts/markdown/code_table.rs:224:            row_div = row_div.border_b_1().border_color(border_color);
+src/prompts/markdown/inline_render.rs:34:                    .border_b_1()
+src/prompts/markdown/inline_render.rs:50:                .border_b_1()
+src/prompts/markdown/inline_render.rs:185:                .border_b_1()
+
+thinking
+**Inspecting prompt header usage**
+exec
+/bin/zsh -lc "sed -n '100,250p' src/prompts/path/render.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+                            IconKind::Emoji("📄".to_string())
+                        };
+
+                        // No description needed - folder icon 📁 is sufficient
+                        let description: Option<String> = None;
+
+                        // Use ListItem component for consistent styling with main menu
+                        ListItem::new(name.clone(), list_colors)
+                            .index(ix)
+                            .icon_kind(icon)
+                            .description_opt(description)
+                            .selected(is_selected)
+                            .with_accent_bar(true)
+                            .into_any_element()
+                    })
+                    .collect()
+            },
+        )
+        .track_scroll(&self.list_scroll_handle)
+        .flex_1()
+
+thinking
+**Inspecting container header styling**
+exec
+/bin/zsh -lc "rg -n \"struct PromptContainer|header|border_b_1|show_divider\" src/components/prompt_container.rs && sed -n '1,320p' src/components/prompt_container.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+4://! prompt window layout with consistent styling. It handles the header, content,
+23:pub struct PromptContainerColors {
+86:pub struct PromptContainerConfig {
+89:    /// Show divider after header (default: true)
+90:    pub show_divider: bool,
+105:            show_divider: true,
+126:    /// Set whether to show divider after header
+127:    pub fn show_divider(mut self, show: bool) -> Self {
+128:        self.show_divider = show;
+167:pub struct PromptContainer {
+170:    header: Option<AnyElement>,
+181:            header: None,
+193:    /// Set the header element
+194:    pub fn header(mut self, element: impl IntoElement) -> Self {
+195:        self.header = Some(element.into_any_element());
+217:    /// Render the divider between header and content
+252:            header,
+256:        let has_header = header.is_some();
+267:        // Add header if present
+268:        if let Some(header) = header {
+
+thinking
+**Planning file claims for edits**
+codex
+I confirmed the render code lives in `src/components/prompt_header/component.rs`, so I need to edit that file (and its tests) to implement this safely. I’m claiming those files now before patching.
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts claim --wait --id codex-search-bar-split-1 src/components/prompt_header/component.rs && ~/.claude/bin/swarm.ts claim --wait --id codex-search-bar-split-1 src/components/prompt_header/tests.rs && ~/.claude/bin/swarm.ts update --id codex-search-bar-split-1 --status in_progress --notes "claimed component.rs/tests.rs; implementing floating search input styles"' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+Claimed for codex-search-bar-split-1: src/components/prompt_header/component.rs
+Claimed for codex-search-bar-split-1: src/components/prompt_header/tests.rs
+Updated: codex-search-bar-split-1
+
+thinking
+**Designing floating input styling**
+codex
+I’m implementing the floating look in `render_input_area`: wrapping the input with the requested outer padding, adding a rounded inner field, and applying a low-alpha border from `colors.border`. I’ll also add focused tests for these new style tokens.
+exec
+/bin/zsh -lc "rg -n \"pub fn hstack|fn hstack\" src/ui_foundation.rs src/ui_foundation -g '*.rs'" in /Users/johnlindquist/dev/script-kit-gpui exited 2 in 51ms:
+rg: src/ui_foundation.rs: No such file or directory (os error 2)
+src/ui_foundation/part_000.rs:462:pub fn hstack() -> Div {
+
+thinking
+**Opening stack function**
+exec
+/bin/zsh -lc "sed -n '430,530p' src/ui_foundation/part_000.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+impl HexColorExt for u32 {
+    #[inline]
+    fn to_rgb(self) -> Hsla {
+        gpui::rgb(self).into()
+    }
+
+    #[inline]
+    fn rgba8(self, alpha: u8) -> Hsla {
+        gpui::rgba((self << 8) | alpha as u32).into()
+    }
+
+    #[inline]
+    fn with_opacity(self, opacity: f32) -> Hsla {
+        let alpha = (opacity.clamp(0.0, 1.0) * 255.0) as u8;
+        gpui::rgba((self << 8) | alpha as u32).into()
+    }
+}
+// ============================================================================
+// Layout Primitives - Free functions for common patterns
+// ============================================================================
+
+thinking
+**Refactoring input container spacing**
+file update
+M /Users/johnlindquist/dev/script-kit-gpui/src/components/prompt_header/component.rs
+@@ -75,5 +75,5 @@
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+@@ -150,3 +150,15 @@
+ 
+-        input
++        div()
++            .flex_1()
++            .pt(px(8.0))
++            .px(px(8.0))
++            .pb(px(6.0))
++            .child(
++                input
++                    .px(px(10.0))
++                    .py(px(6.0))
++                    .rounded(px(10.0))
++                    .border_1()
++                    .border_color(colors.border.rgba8(0x33)),
++            )
+     }
+apply_patch(auto_approved=true) exited 0 in 12ms:
+Success. Updated the following files:
+M src/components/prompt_header/component.rs
+file update:
+diff --git a/src/components/prompt_header/component.rs b/src/components/prompt_header/component.rs
+index 65c601023d0284641c2a103679defefb1064b5e5..37d3188f4f96c26d4a6b4cba158f66a255b654b9
+--- a/src/components/prompt_header/component.rs
++++ b/src/components/prompt_header/component.rs
+@@ -73,9 +73,9 @@
+             colors.text_primary.to_rgb()
+         };
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+             .text_color(text_color);
+ 
+@@ -148,7 +148,19 @@
+             );
+         }
+ 
+-        input
++        div()
++            .flex_1()
++            .pt(px(8.0))
++            .px(px(8.0))
++            .pb(px(6.0))
++            .child(
++                input
++                    .px(px(10.0))
++                    .py(px(6.0))
++                    .rounded(px(10.0))
++                    .border_1()
++                    .border_color(colors.border.rgba8(0x33)),
++            )
+     }
+ 
+     /// Render the action buttons area (Run + Actions) - no separators style
+
+file update:
+diff --git a/src/components/prompt_header/component.rs b/src/components/prompt_header/component.rs
+index 65c601023d0284641c2a103679defefb1064b5e5..37d3188f4f96c26d4a6b4cba158f66a255b654b9
+--- a/src/components/prompt_header/component.rs
++++ b/src/components/prompt_header/component.rs
+@@ -73,9 +73,9 @@
+             colors.text_primary.to_rgb()
+         };
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+             .text_color(text_color);
+ 
+@@ -148,7 +148,19 @@
+             );
+         }
+ 
+-        input
++        div()
++            .flex_1()
++            .pt(px(8.0))
++            .px(px(8.0))
++            .pb(px(6.0))
++            .child(
++                input
++                    .px(px(10.0))
++                    .py(px(6.0))
++                    .rounded(px(10.0))
++                    .border_1()
++                    .border_color(colors.border.rgba8(0x33)),
++            )
+     }
+ 
+     /// Render the action buttons area (Run + Actions) - no separators style
+
+
+thinking
+**Adding detailed UI spacing tests**
+file update
+M /Users/johnlindquist/dev/script-kit-gpui/src/components/prompt_header/tests.rs
+@@ -165 +165,48 @@
+ }
++
++#[test]
++fn test_render_input_area_wraps_floating_input_with_requested_outer_spacing() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".pt(px(8.0))"),
++        "PromptHeader floating input should apply top spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".px(px(8.0))"),
++        "PromptHeader floating input should apply horizontal spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".pb(px(6.0))"),
++        "PromptHeader floating input should apply bottom spacing token. Section:\n{}",
++        section
++    );
++}
++
++#[test]
++fn test_render_input_area_uses_rounded_low_alpha_theme_border_for_floating_field() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".rounded(px(10.0))"),
++        "PromptHeader floating input field should use 10px rounding. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_1()"),
++        "PromptHeader floating input field should include a subtle border. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_color(colors.border.rgba8(0x33))"),
++        "PromptHeader floating input border should use theme border token with low alpha. Section:\n{}",
++        section
++    );
++    assert!(
++        !section.contains(".border_b_1()"),
++        "PromptHeader floating input should not use legacy bottom border strip styling. Section:\n{}",
++        section
++    );
++}
+apply_patch(auto_approved=true) exited 0 in 17ms:
+Success. Updated the following files:
+M src/components/prompt_header/tests.rs
+file update:
+diff --git a/src/components/prompt_header/component.rs b/src/components/prompt_header/component.rs
+index 65c601023d0284641c2a103679defefb1064b5e5..37d3188f4f96c26d4a6b4cba158f66a255b654b9
+--- a/src/components/prompt_header/component.rs
++++ b/src/components/prompt_header/component.rs
+@@ -73,9 +73,9 @@
+             colors.text_primary.to_rgb()
+         };
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+             .text_color(text_color);
+ 
+@@ -148,7 +148,19 @@
+             );
+         }
+ 
+-        input
++        div()
++            .flex_1()
++            .pt(px(8.0))
++            .px(px(8.0))
++            .pb(px(6.0))
++            .child(
++                input
++                    .px(px(10.0))
++                    .py(px(6.0))
++                    .rounded(px(10.0))
++                    .border_1()
++                    .border_color(colors.border.rgba8(0x33)),
++            )
+     }
+ 
+     /// Render the action buttons area (Run + Actions) - no separators style
+diff --git a/src/components/prompt_header/tests.rs b/src/components/prompt_header/tests.rs
+index 8631adf85d3c220b8bc3de554ff02e9268afa101..4dabe76dca47a622ee07ea8f429b9d20c24b61fa
+--- a/src/components/prompt_header/tests.rs
++++ b/src/components/prompt_header/tests.rs
+@@ -163,3 +163,50 @@
+         section
+     );
+ }
++
++#[test]
++fn test_render_input_area_wraps_floating_input_with_requested_outer_spacing() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".pt(px(8.0))"),
++        "PromptHeader floating input should apply top spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".px(px(8.0))"),
++        "PromptHeader floating input should apply horizontal spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".pb(px(6.0))"),
++        "PromptHeader floating input should apply bottom spacing token. Section:\n{}",
++        section
++    );
++}
++
++#[test]
++fn test_render_input_area_uses_rounded_low_alpha_theme_border_for_floating_field() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".rounded(px(10.0))"),
++        "PromptHeader floating input field should use 10px rounding. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_1()"),
++        "PromptHeader floating input field should include a subtle border. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_color(colors.border.rgba8(0x33))"),
++        "PromptHeader floating input border should use theme border token with low alpha. Section:\n{}",
++        section
++    );
++    assert!(
++        !section.contains(".border_b_1()"),
++        "PromptHeader floating input should not use legacy bottom border strip styling. Section:\n{}",
++        section
++    );
++}
+
+file update:
+diff --git a/src/components/prompt_header/component.rs b/src/components/prompt_header/component.rs
+index 65c601023d0284641c2a103679defefb1064b5e5..37d3188f4f96c26d4a6b4cba158f66a255b654b9
+--- a/src/components/prompt_header/component.rs
++++ b/src/components/prompt_header/component.rs
+@@ -73,9 +73,9 @@
+             colors.text_primary.to_rgb()
+         };
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+             .text_color(text_color);
+ 
+@@ -148,7 +148,19 @@
+             );
+         }
+ 
+-        input
++        div()
++            .flex_1()
++            .pt(px(8.0))
++            .px(px(8.0))
++            .pb(px(6.0))
++            .child(
++                input
++                    .px(px(10.0))
++                    .py(px(6.0))
++                    .rounded(px(10.0))
++                    .border_1()
++                    .border_color(colors.border.rgba8(0x33)),
++            )
+     }
+ 
+     /// Render the action buttons area (Run + Actions) - no separators style
+diff --git a/src/components/prompt_header/tests.rs b/src/components/prompt_header/tests.rs
+index 8631adf85d3c220b8bc3de554ff02e9268afa101..4dabe76dca47a622ee07ea8f429b9d20c24b61fa
+--- a/src/components/prompt_header/tests.rs
++++ b/src/components/prompt_header/tests.rs
+@@ -163,3 +163,50 @@
+         section
+     );
+ }
++
++#[test]
++fn test_render_input_area_wraps_floating_input_with_requested_outer_spacing() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".pt(px(8.0))"),
++        "PromptHeader floating input should apply top spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".px(px(8.0))"),
++        "PromptHeader floating input should apply horizontal spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".pb(px(6.0))"),
++        "PromptHeader floating input should apply bottom spacing token. Section:\n{}",
++        section
++    );
++}
++
++#[test]
++fn test_render_input_area_uses_rounded_low_alpha_theme_border_for_floating_field() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".rounded(px(10.0))"),
++        "PromptHeader floating input field should use 10px rounding. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_1()"),
++        "PromptHeader floating input field should include a subtle border. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_color(colors.border.rgba8(0x33))"),
++        "PromptHeader floating input border should use theme border token with low alpha. Section:\n{}",
++        section
++    );
++    assert!(
++        !section.contains(".border_b_1()"),
++        "PromptHeader floating input should not use legacy bottom border strip styling. Section:\n{}",
++        section
++    );
++}
+
+
+thinking
+**Checking code formatting**
+exec
+/bin/zsh -lc "sed -n '40,170p' src/components/prompt_header/component.rs && sed -n '120,280p' src/components/prompt_header/tests.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+            on_actions_click: None,
+        }
+    }
+
+    /// Set the primary button click callback
+    pub fn on_primary_click(mut self, callback: HeaderClickCallback) -> Self {
+        self.on_primary_click = Some(Rc::new(callback));
+        self
+    }
+
+    /// Set the actions button click callback
+    pub fn on_actions_click(mut self, callback: HeaderClickCallback) -> Self {
+        self.on_actions_click = Some(Rc::new(callback));
+        self
+    }
+
+    /// Render the search input area with cursor
+    fn render_input_area(&self) -> impl IntoElement {
+        let colors = self.colors;
+        let filter_is_empty = self.config.filter_text.is_empty();
+file update:
+diff --git a/src/components/prompt_header/component.rs b/src/components/prompt_header/component.rs
+index 65c601023d0284641c2a103679defefb1064b5e5..37d3188f4f96c26d4a6b4cba158f66a255b654b9
+--- a/src/components/prompt_header/component.rs
++++ b/src/components/prompt_header/component.rs
+@@ -73,9 +73,9 @@
+             colors.text_primary.to_rgb()
+         };
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+             .text_color(text_color);
+ 
+@@ -148,7 +148,19 @@
+             );
+         }
+ 
+-        input
++        div()
++            .flex_1()
++            .pt(px(8.0))
++            .px(px(8.0))
++            .pb(px(6.0))
++            .child(
++                input
++                    .px(px(10.0))
++                    .py(px(6.0))
++                    .rounded(px(10.0))
++                    .border_1()
++                    .border_color(colors.border.rgba8(0x33)),
++            )
+     }
+ 
+     /// Render the action buttons area (Run + Actions) - no separators style
+diff --git a/src/components/prompt_header/tests.rs b/src/components/prompt_header/tests.rs
+index 8631adf85d3c220b8bc3de554ff02e9268afa101..4dabe76dca47a622ee07ea8f429b9d20c24b61fa
+--- a/src/components/prompt_header/tests.rs
++++ b/src/components/prompt_header/tests.rs
+@@ -163,3 +163,50 @@
+         section
+     );
+ }
++
++#[test]
++fn test_render_input_area_wraps_floating_input_with_requested_outer_spacing() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".pt(px(8.0))"),
++        "PromptHeader floating input should apply top spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".px(px(8.0))"),
++        "PromptHeader floating input should apply horizontal spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".pb(px(6.0))"),
++        "PromptHeader floating input should apply bottom spacing token. Section:\n{}",
++        section
++    );
++}
++
++#[test]
++fn test_render_input_area_uses_rounded_low_alpha_theme_border_for_floating_field() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".rounded(px(10.0))"),
++        "PromptHeader floating input field should use 10px rounding. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_1()"),
++        "PromptHeader floating input field should include a subtle border. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_color(colors.border.rgba8(0x33))"),
++        "PromptHeader floating input border should use theme border token with low alpha. Section:\n{}",
++        section
++    );
++    assert!(
++        !section.contains(".border_b_1()"),
++        "PromptHeader floating input should not use legacy bottom border strip styling. Section:\n{}",
++        section
++    );
++}
+
+
+thinking
+**Scoping Rust verification commands**
+exec
+/bin/zsh -lc 'rg -n "''^name'"\\s*=\\s*\\\"\" Cargo.toml && sed -n '1,80p' Cargo.toml" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+2:name = "script-kit-gpui"
+8:name = "script_kit_gpui"
+12:name = "script-kit-gpui"
+17:name = "smoke-test"
+22:name = "storybook"
+177:name = "Script Kit"
+[package]
+name = "script-kit-gpui"
+version = "0.1.0"
+edition = "2021"
+default-run = "script-kit-gpui"
+
+[lib]
+name = "script_kit_gpui"
+path = "src/lib.rs"
+
+[[bin]]
+name = "script-kit-gpui"
+path = "src/main.rs"
+test = false  # Tests run via lib.rs only - avoids duplicate test runs
+file update:
+diff --git a/src/components/prompt_header/component.rs b/src/components/prompt_header/component.rs
+index 65c601023d0284641c2a103679defefb1064b5e5..37d3188f4f96c26d4a6b4cba158f66a255b654b9
+--- a/src/components/prompt_header/component.rs
++++ b/src/components/prompt_header/component.rs
+@@ -73,9 +73,9 @@
+             colors.text_primary.to_rgb()
+         };
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+             .text_color(text_color);
+ 
+@@ -148,7 +148,19 @@
+             );
+         }
+ 
+-        input
++        div()
++            .flex_1()
++            .pt(px(8.0))
++            .px(px(8.0))
++            .pb(px(6.0))
++            .child(
++                input
++                    .px(px(10.0))
++                    .py(px(6.0))
++                    .rounded(px(10.0))
++                    .border_1()
++                    .border_color(colors.border.rgba8(0x33)),
++            )
+     }
+ 
+     /// Render the action buttons area (Run + Actions) - no separators style
+diff --git a/src/components/prompt_header/tests.rs b/src/components/prompt_header/tests.rs
+index 8631adf85d3c220b8bc3de554ff02e9268afa101..4dabe76dca47a622ee07ea8f429b9d20c24b61fa
+--- a/src/components/prompt_header/tests.rs
++++ b/src/components/prompt_header/tests.rs
+@@ -163,3 +163,50 @@
+         section
+     );
+ }
++
++#[test]
++fn test_render_input_area_wraps_floating_input_with_requested_outer_spacing() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".pt(px(8.0))"),
++        "PromptHeader floating input should apply top spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".px(px(8.0))"),
++        "PromptHeader floating input should apply horizontal spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".pb(px(6.0))"),
++        "PromptHeader floating input should apply bottom spacing token. Section:\n{}",
++        section
++    );
++}
++
++#[test]
++fn test_render_input_area_uses_rounded_low_alpha_theme_border_for_floating_field() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".rounded(px(10.0))"),
++        "PromptHeader floating input field should use 10px rounding. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_1()"),
++        "PromptHeader floating input field should include a subtle border. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_color(colors.border.rgba8(0x33))"),
++        "PromptHeader floating input border should use theme border token with low alpha. Section:\n{}",
++        section
++    );
++    assert!(
++        !section.contains(".border_b_1()"),
++        "PromptHeader floating input should not use legacy bottom border strip styling. Section:\n{}",
++        section
++    );
++}
+
+
+thinking
+**Planning targeted package checks and tests**
+codex
+Edits are in place. I’m running verification now: package-scoped `cargo check`, package-scoped `cargo clippy --all-targets -D warnings`, then a scoped `cargo test` filter for `prompt_header` tests.
+exec
+/bin/zsh -lc 'cargo check -p script-kit-gpui' in /Users/johnlindquist/dev/script-kit-gpuifile update:
+diff --git a/src/components/prompt_header/component.rs b/src/components/prompt_header/component.rs
+index 65c601023d0284641c2a103679defefb1064b5e5..37d3188f4f96c26d4a6b4cba158f66a255b654b9
+--- a/src/components/prompt_header/component.rs
++++ b/src/components/prompt_header/component.rs
+@@ -73,9 +73,9 @@
+             colors.text_primary.to_rgb()
+         };
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+             .text_color(text_color);
+ 
+@@ -148,7 +148,19 @@
+             );
+         }
+ 
+-        input
++        div()
++            .flex_1()
++            .pt(px(8.0))
++            .px(px(8.0))
++            .pb(px(6.0))
++            .child(
++                input
++                    .px(px(10.0))
++                    .py(px(6.0))
++                    .rounded(px(10.0))
++                    .border_1()
++                    .border_color(colors.border.rgba8(0x33)),
++            )
+     }
+ 
+     /// Render the action buttons area (Run + Actions) - no separators style
+diff --git a/src/components/prompt_header/tests.rs b/src/components/prompt_header/tests.rs
+index 8631adf85d3c220b8bc3de554ff02e9268afa101..4dabe76dca47a622ee07ea8f429b9d20c24b61fa
+--- a/src/components/prompt_header/tests.rs
++++ b/src/components/prompt_header/tests.rs
+@@ -163,3 +163,50 @@
+         section
+     );
+ }
++
++#[test]
++fn test_render_input_area_wraps_floating_input_with_requested_outer_spacing() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".pt(px(8.0))"),
++        "PromptHeader floating input should apply top spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".px(px(8.0))"),
++        "PromptHeader floating input should apply horizontal spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".pb(px(6.0))"),
++        "PromptHeader floating input should apply bottom spacing token. Section:\n{}",
++        section
++    );
++}
++
++#[test]
++fn test_render_input_area_uses_rounded_low_alpha_theme_border_for_floating_field() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".rounded(px(10.0))"),
++        "PromptHeader floating input field should use 10px rounding. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_1()"),
++        "PromptHeader floating input field should include a subtle border. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_color(colors.border.rgba8(0x33))"),
++        "PromptHeader floating input border should use theme border token with low alpha. Section:\n{}",
++        section
++    );
++    assert!(
++        !section.contains(".border_b_1()"),
++        "PromptHeader floating input should not use legacy bottom border strip styling. Section:\n{}",
++        section
++    );
++}
+
+Reconnecting... 1/5 (stream disconnected before completion: websocket closed by server before response.completed)
+
+thinking
+**Handling ongoing command status**
+file update:
+diff --git a/src/components/prompt_header/component.rs b/src/components/prompt_header/component.rs
+index 65c601023d0284641c2a103679defefb1064b5e5..37d3188f4f96c26d4a6b4cba158f66a255b654b9
+--- a/src/components/prompt_header/component.rs
++++ b/src/components/prompt_header/component.rs
+@@ -73,9 +73,9 @@
+             colors.text_primary.to_rgb()
+         };
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+             .text_color(text_color);
+ 
+@@ -148,7 +148,19 @@
+             );
+         }
+ 
+-        input
++        div()
++            .flex_1()
++            .pt(px(8.0))
++            .px(px(8.0))
++            .pb(px(6.0))
++            .child(
++                input
++                    .px(px(10.0))
++                    .py(px(6.0))
++                    .rounded(px(10.0))
++                    .border_1()
++                    .border_color(colors.border.rgba8(0x33)),
++            )
+     }
+ 
+     /// Render the action buttons area (Run + Actions) - no separators style
+diff --git a/src/components/prompt_header/tests.rs b/src/components/prompt_header/tests.rs
+index 8631adf85d3c220b8bc3de554ff02e9268afa101..4dabe76dca47a622ee07ea8f429b9d20c24b61fa
+--- a/src/components/prompt_header/tests.rs
++++ b/src/components/prompt_header/tests.rs
+@@ -163,3 +163,50 @@
+         section
+     );
+ }
++
++#[test]
++fn test_render_input_area_wraps_floating_input_with_requested_outer_spacing() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".pt(px(8.0))"),
++        "PromptHeader floating input should apply top spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".px(px(8.0))"),
++        "PromptHeader floating input should apply horizontal spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".pb(px(6.0))"),
++        "PromptHeader floating input should apply bottom spacing token. Section:\n{}",
++        section
++    );
++}
++
++#[test]
++fn test_render_input_area_uses_rounded_low_alpha_theme_border_for_floating_field() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".rounded(px(10.0))"),
++        "PromptHeader floating input field should use 10px rounding. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_1()"),
++        "PromptHeader floating input field should include a subtle border. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_color(colors.border.rgba8(0x33))"),
++        "PromptHeader floating input border should use theme border token with low alpha. Section:\n{}",
++        section
++    );
++    assert!(
++        !section.contains(".border_b_1()"),
++        "PromptHeader floating input should not use legacy bottom border strip styling. Section:\n{}",
++        section
++    );
++}
+
+codex
+`cargo check` is waiting on the shared build lock from another agent process. I’m polling until it completes, then continuing with clippy/tests.
+file update:
+diff --git a/src/components/prompt_header/component.rs b/src/components/prompt_header/component.rs
+index 65c601023d0284641c2a103679defefb1064b5e5..37d3188f4f96c26d4a6b4cba158f66a255b654b9
+--- a/src/components/prompt_header/component.rs
++++ b/src/components/prompt_header/component.rs
+@@ -73,9 +73,9 @@
+             colors.text_primary.to_rgb()
+         };
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+             .text_color(text_color);
+ 
+@@ -148,7 +148,19 @@
+             );
+         }
+ 
+-        input
++        div()
++            .flex_1()
++            .pt(px(8.0))
++            .px(px(8.0))
++            .pb(px(6.0))
++            .child(
++                input
++                    .px(px(10.0))
++                    .py(px(6.0))
++                    .rounded(px(10.0))
++                    .border_1()
++                    .border_color(colors.border.rgba8(0x33)),
++            )
+     }
+ 
+     /// Render the action buttons area (Run + Actions) - no separators style
+diff --git a/src/components/prompt_header/tests.rs b/src/components/prompt_header/tests.rs
+index 8631adf85d3c220b8bc3de554ff02e9268afa101..4dabe76dca47a622ee07ea8f429b9d20c24b61fa
+--- a/src/components/prompt_header/tests.rs
++++ b/src/components/prompt_header/tests.rs
+@@ -163,3 +163,50 @@
+         section
+     );
+ }
++
++#[test]
++fn test_render_input_area_wraps_floating_input_with_requested_outer_spacing() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".pt(px(8.0))"),
++        "PromptHeader floating input should apply top spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".px(px(8.0))"),
++        "PromptHeader floating input should apply horizontal spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".pb(px(6.0))"),
++        "PromptHeader floating input should apply bottom spacing token. Section:\n{}",
++        section
++    );
++}
++
++#[test]
++fn test_render_input_area_uses_rounded_low_alpha_theme_border_for_floating_field() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".rounded(px(10.0))"),
++        "PromptHeader floating input field should use 10px rounding. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_1()"),
++        "PromptHeader floating input field should include a subtle border. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_color(colors.border.rgba8(0x33))"),
++        "PromptHeader floating input border should use theme border token with low alpha. Section:\n{}",
++        section
++    );
++    assert!(
++        !section.contains(".border_b_1()"),
++        "PromptHeader floating input should not use legacy bottom border strip styling. Section:\n{}",
++        section
++    );
++}
+
+
+thinking
+**Polling for lock release**
+file update:
+diff --git a/src/components/prompt_header/component.rs b/src/components/prompt_header/component.rs
+index 65c601023d0284641c2a103679defefb1064b5e5..37d3188f4f96c26d4a6b4cba158f66a255b654b9
+--- a/src/components/prompt_header/component.rs
++++ b/src/components/prompt_header/component.rs
+@@ -73,9 +73,9 @@
+             colors.text_primary.to_rgb()
+         };
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+             .text_color(text_color);
+ 
+@@ -148,7 +148,19 @@
+             );
+         }
+ 
+-        input
++        div()
++            .flex_1()
++            .pt(px(8.0))
++            .px(px(8.0))
++            .pb(px(6.0))
++            .child(
++                input
++                    .px(px(10.0))
++                    .py(px(6.0))
++                    .rounded(px(10.0))
++                    .border_1()
++                    .border_color(colors.border.rgba8(0x33)),
++            )
+     }
+ 
+     /// Render the action buttons area (Run + Actions) - no separators style
+diff --git a/src/components/prompt_header/tests.rs b/src/components/prompt_header/tests.rs
+index 8631adf85d3c220b8bc3de554ff02e9268afa101..4dabe76dca47a622ee07ea8f429b9d20c24b61fa
+--- a/src/components/prompt_header/tests.rs
++++ b/src/components/prompt_header/tests.rs
+@@ -163,3 +163,50 @@
+         section
+     );
+ }
++
++#[test]
++fn test_render_input_area_wraps_floating_input_with_requested_outer_spacing() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".pt(px(8.0))"),
++        "PromptHeader floating input should apply top spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".px(px(8.0))"),
++        "PromptHeader floating input should apply horizontal spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".pb(px(6.0))"),
++        "PromptHeader floating input should apply bottom spacing token. Section:\n{}",
++        section
++    );
++}
++
++#[test]
++fn test_render_input_area_uses_rounded_low_alpha_theme_border_for_floating_field() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".rounded(px(10.0))"),
++        "PromptHeader floating input field should use 10px rounding. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_1()"),
++        "PromptHeader floating input field should include a subtle border. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_color(colors.border.rgba8(0x33))"),
++        "PromptHeader floating input border should use theme border token with low alpha. Section:\n{}",
++        section
++    );
++    assert!(
++        !section.contains(".border_b_1()"),
++        "PromptHeader floating input should not use legacy bottom border strip styling. Section:\n{}",
++        section
++    );
++}
+
+ exited 101 in 1m 54s:
+    Blocking waiting for file lock on build directory
+    Checking script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+error[E0425]: cannot find function `footer_button_font_size_px` in module `crate::components::prompt_footer`
+  --> src/prompts/chat/render_core.rs:39:47
+   |
+39 |             crate::components::prompt_footer::footer_button_font_size_px(&self.theme);
+   |                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^ not found in `crate::components::prompt_footer`
+
+error[E0603]: function `footer_button_hover_rgba` is private
+   --> src/prompts/chat/render_core.rs:40:63
+    |
+ 40 |         let hover_bg = rgba(crate::components::prompt_footer::footer_button_hover_rgba(
+    |                                                               ^^^^^^^^^^^^^^^^^^^^^^^^ private function
+    |
+note: the function `footer_button_hover_rgba` is defined here
+   --> src/components/prompt_footer.rs:158:1
+    |
+158 | fn footer_button_hover_rgba(colors: PromptFooterColors) -> u32 {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+thinking
+**Attempting tests despite unrelated compile errors**
+exec
+/bin/zsh -lc 'cargo clippy -p script-kit-gpui --all-targets -- -D warnings' in /Users/johnlindquist/dev/script-kit-gpui exited 101 in 19.12s:
+    Blocking waiting for file lock on build directory
+    Checking script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+error[E0761]: file for module `tests` found at both "src/protocol/message/tests.rs" and "src/protocol/message/tests/mod.rs"
+  --> src/protocol/message/mod.rs:87:1
+   |
+87 | mod tests;
+   | ^^^^^^^^^^
+   |
+   = help: delete or rename one of them to remove the ambiguity
+
+error[E0761]: file for module `tests` found at both "src/designs/core/tests.rs" and "src/designs/core/tests/mod.rs"
+ --> src/designs/core/part_04.rs:2:1
+  |
+2 | mod tests;
+  | ^^^^^^^^^^
+  |
+  = help: delete or rename one of them to remove the ambiguity
+
+error[E0425]: cannot find function `footer_button_font_size_px` in module `crate::components::prompt_footer`
+  --> src/prompts/chat/render_core.rs:39:47
+file update:
+diff --git a/src/components/prompt_header/component.rs b/src/components/prompt_header/component.rs
+index 65c601023d0284641c2a103679defefb1064b5e5..37d3188f4f96c26d4a6b4cba158f66a255b654b9
+--- a/src/components/prompt_header/component.rs
++++ b/src/components/prompt_header/component.rs
+@@ -73,9 +73,9 @@
+             colors.text_primary.to_rgb()
+         };
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+             .text_color(text_color);
+ 
+@@ -148,7 +148,19 @@
+             );
+         }
+ 
+-        input
++        div()
++            .flex_1()
++            .pt(px(8.0))
++            .px(px(8.0))
++            .pb(px(6.0))
++            .child(
++                input
++                    .px(px(10.0))
++                    .py(px(6.0))
++                    .rounded(px(10.0))
++                    .border_1()
++                    .border_color(colors.border.rgba8(0x33)),
++            )
+     }
+ 
+     /// Render the action buttons area (Run + Actions) - no separators style
+diff --git a/src/components/prompt_header/tests.rs b/src/components/prompt_header/tests.rs
+index 8631adf85d3c220b8bc3de554ff02e9268afa101..4dabe76dca47a622ee07ea8f429b9d20c24b61fa
+--- a/src/components/prompt_header/tests.rs
++++ b/src/components/prompt_header/tests.rs
+@@ -163,3 +163,50 @@
+         section
+     );
+ }
++
++#[test]
++fn test_render_input_area_wraps_floating_input_with_requested_outer_spacing() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".pt(px(8.0))"),
++        "PromptHeader floating input should apply top spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".px(px(8.0))"),
++        "PromptHeader floating input should apply horizontal spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".pb(px(6.0))"),
++        "PromptHeader floating input should apply bottom spacing token. Section:\n{}",
++        section
++    );
++}
++
++#[test]
++fn test_render_input_area_uses_rounded_low_alpha_theme_border_for_floating_field() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".rounded(px(10.0))"),
++        "PromptHeader floating input field should use 10px rounding. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_1()"),
++        "PromptHeader floating input field should include a subtle border. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_color(colors.border.rgba8(0x33))"),
++        "PromptHeader floating input border should use theme border token with low alpha. Section:\n{}",
++        section
++    );
++    assert!(
++        !section.contains(".border_b_1()"),
++        "PromptHeader floating input should not use legacy bottom border strip styling. Section:\n{}",
++        section
++    );
++}
+
+
+thinking
+**Assessing test run limitations due to compile errors**
+exec
+/bin/zsh -lc "rg -n \"border_b_1\\(|pt\\(px\\(8\\.0\\)\\)|pb\\(px\\(6\\.0\\)\\)|rounded\\(px\\(10\\.0\\)\\)|border_color\\(colors\\.border\\.rgba8\\(0x33\\)\\)\" src/components/prompt_header/component.rs src/components/prompt_header/tests.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+src/components/prompt_header/tests.rs:172:        section.contains(".pt(px(8.0))"),
+src/components/prompt_header/tests.rs:182:        section.contains(".pb(px(6.0))"),
+src/components/prompt_header/tests.rs:193:        section.contains(".rounded(px(10.0))"),
+src/components/prompt_header/tests.rs:203:        section.contains(".border_color(colors.border.rgba8(0x33))"),
+src/components/prompt_header/tests.rs:208:        !section.contains(".border_b_1()"),
+src/components/prompt_header/component.rs:153:            .pt(px(8.0))
+src/components/prompt_header/component.rs:155:            .pb(px(6.0))
+src/components/prompt_header/component.rs:160:                    .rounded(px(10.0))
+src/components/prompt_header/component.rs:162:                    .border_color(colors.border.rgba8(0x33)),
+file update:
+diff --git a/src/components/prompt_header/component.rs b/src/components/prompt_header/component.rs
+index 65c601023d0284641c2a103679defefb1064b5e5..37d3188f4f96c26d4a6b4cba158f66a255b654b9
+--- a/src/components/prompt_header/component.rs
++++ b/src/components/prompt_header/component.rs
+@@ -73,9 +73,9 @@
+             colors.text_primary.to_rgb()
+         };
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+             .text_color(text_color);
+ 
+@@ -148,7 +148,19 @@
+             );
+         }
+ 
+-        input
++        div()
++            .flex_1()
++            .pt(px(8.0))
++            .px(px(8.0))
++            .pb(px(6.0))
++            .child(
++                input
++                    .px(px(10.0))
++                    .py(px(6.0))
++                    .rounded(px(10.0))
++                    .border_1()
++                    .border_color(colors.border.rgba8(0x33)),
++            )
+     }
+ 
+     /// Render the action buttons area (Run + Actions) - no separators style
+diff --git a/src/components/prompt_header/tests.rs b/src/components/prompt_header/tests.rs
+index 8631adf85d3c220b8bc3de554ff02e9268afa101..4dabe76dca47a622ee07ea8f429b9d20c24b61fa
+--- a/src/components/prompt_header/tests.rs
++++ b/src/components/prompt_header/tests.rs
+@@ -163,3 +163,50 @@
+         section
+     );
+ }
++
++#[test]
++fn test_render_input_area_wraps_floating_input_with_requested_outer_spacing() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".pt(px(8.0))"),
++        "PromptHeader floating input should apply top spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".px(px(8.0))"),
++        "PromptHeader floating input should apply horizontal spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".pb(px(6.0))"),
++        "PromptHeader floating input should apply bottom spacing token. Section:\n{}",
++        section
++    );
++}
++
++#[test]
++fn test_render_input_area_uses_rounded_low_alpha_theme_border_for_floating_field() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".rounded(px(10.0))"),
++        "PromptHeader floating input field should use 10px rounding. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_1()"),
++        "PromptHeader floating input field should include a subtle border. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_color(colors.border.rgba8(0x33))"),
++        "PromptHeader floating input border should use theme border token with low alpha. Section:\n{}",
++        section
++    );
++    assert!(
++        !section.contains(".border_b_1()"),
++        "PromptHeader floating input should not use legacy bottom border strip styling. Section:\n{}",
++        section
++    );
++}
+
+codex
+I’ve confirmed the requested style tokens are present and no `border_b_1` remains in the input render section. Next I’m capturing the exact diff and then finalizing with verification results (including unrelated blocking errors from parallel work).
+exec
+/bin/zsh -lc 'git diff -- src/components/prompt_header/component.rs src/components/prompt_header/tests.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+diff --git a/src/components/prompt_header/component.rs b/src/components/prompt_header/component.rs
+index 65c6010..37d3188 100644
+--- a/src/components/prompt_header/component.rs
++++ b/src/components/prompt_header/component.rs
+@@ -73,9 +73,9 @@ impl PromptHeader {
+             colors.text_primary.to_rgb()
+         };
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+             .text_color(text_color);
+ 
+@@ -148,7 +148,19 @@ impl PromptHeader {
+             );
+         }
+ 
+file update:
+diff --git a/src/components/prompt_header/component.rs b/src/components/prompt_header/component.rs
+index 65c601023d0284641c2a103679defefb1064b5e5..37d3188f4f96c26d4a6b4cba158f66a255b654b9
+--- a/src/components/prompt_header/component.rs
++++ b/src/components/prompt_header/component.rs
+@@ -73,9 +73,9 @@
+             colors.text_primary.to_rgb()
+         };
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+             .text_color(text_color);
+ 
+@@ -148,7 +148,19 @@
+             );
+         }
+ 
+-        input
++        div()
++            .flex_1()
++            .pt(px(8.0))
++            .px(px(8.0))
++            .pb(px(6.0))
++            .child(
++                input
++                    .px(px(10.0))
++                    .py(px(6.0))
++                    .rounded(px(10.0))
++                    .border_1()
++                    .border_color(colors.border.rgba8(0x33)),
++            )
+     }
+ 
+     /// Render the action buttons area (Run + Actions) - no separators style
+diff --git a/src/components/prompt_header/tests.rs b/src/components/prompt_header/tests.rs
+index 8631adf85d3c220b8bc3de554ff02e9268afa101..4dabe76dca47a622ee07ea8f429b9d20c24b61fa
+--- a/src/components/prompt_header/tests.rs
++++ b/src/components/prompt_header/tests.rs
+@@ -163,3 +163,50 @@
+         section
+     );
+ }
++
++#[test]
++fn test_render_input_area_wraps_floating_input_with_requested_outer_spacing() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".pt(px(8.0))"),
++        "PromptHeader floating input should apply top spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".px(px(8.0))"),
++        "PromptHeader floating input should apply horizontal spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".pb(px(6.0))"),
++        "PromptHeader floating input should apply bottom spacing token. Section:\n{}",
++        section
++    );
++}
++
++#[test]
++fn test_render_input_area_uses_rounded_low_alpha_theme_border_for_floating_field() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".rounded(px(10.0))"),
++        "PromptHeader floating input field should use 10px rounding. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_1()"),
++        "PromptHeader floating input field should include a subtle border. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_color(colors.border.rgba8(0x33))"),
++        "PromptHeader floating input border should use theme border token with low alpha. Section:\n{}",
++        section
++    );
++    assert!(
++        !section.contains(".border_b_1()"),
++        "PromptHeader floating input should not use legacy bottom border strip styling. Section:\n{}",
++        section
++    );
++}
+
+
+thinking
+**Running scoped tests despite errors**
+exec
+/bin/zsh -lc 'cargo test -p script-kit-gpui prompt_header::tests:: -- --nocapture' in /Users/johnlindquist/dev/script-kit-gpuifile update:
+diff --git a/src/components/prompt_header/component.rs b/src/components/prompt_header/component.rs
+index 65c601023d0284641c2a103679defefb1064b5e5..37d3188f4f96c26d4a6b4cba158f66a255b654b9
+--- a/src/components/prompt_header/component.rs
++++ b/src/components/prompt_header/component.rs
+@@ -73,9 +73,9 @@
+             colors.text_primary.to_rgb()
+         };
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+             .text_color(text_color);
+ 
+@@ -148,7 +148,19 @@
+             );
+         }
+ 
+-        input
++        div()
++            .flex_1()
++            .pt(px(8.0))
++            .px(px(8.0))
++            .pb(px(6.0))
++            .child(
++                input
++                    .px(px(10.0))
++                    .py(px(6.0))
++                    .rounded(px(10.0))
++                    .border_1()
++                    .border_color(colors.border.rgba8(0x33)),
++            )
+     }
+ 
+     /// Render the action buttons area (Run + Actions) - no separators style
+diff --git a/src/components/prompt_header/tests.rs b/src/components/prompt_header/tests.rs
+index 8631adf85d3c220b8bc3de554ff02e9268afa101..4dabe76dca47a622ee07ea8f429b9d20c24b61fa
+--- a/src/components/prompt_header/tests.rs
++++ b/src/components/prompt_header/tests.rs
+@@ -163,3 +163,50 @@
+         section
+     );
+ }
++
++#[test]
++fn test_render_input_area_wraps_floating_input_with_requested_outer_spacing() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".pt(px(8.0))"),
++        "PromptHeader floating input should apply top spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".px(px(8.0))"),
++        "PromptHeader floating input should apply horizontal spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".pb(px(6.0))"),
++        "PromptHeader floating input should apply bottom spacing token. Section:\n{}",
++        section
++    );
++}
++
++#[test]
++fn test_render_input_area_uses_rounded_low_alpha_theme_border_for_floating_field() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".rounded(px(10.0))"),
++        "PromptHeader floating input field should use 10px rounding. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_1()"),
++        "PromptHeader floating input field should include a subtle border. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_color(colors.border.rgba8(0x33))"),
++        "PromptHeader floating input border should use theme border token with low alpha. Section:\n{}",
++        section
++    );
++    assert!(
++        !section.contains(".border_b_1()"),
++        "PromptHeader floating input should not use legacy bottom border strip styling. Section:\n{}",
++        section
++    );
++}
+
+Reconnecting... 1/5 (stream disconnected before completion: websocket closed by server before response.completed)
+
+thinking
+**Identifying need for polling**
+file update:
+diff --git a/src/components/prompt_header/component.rs b/src/components/prompt_header/component.rs
+index 65c601023d0284641c2a103679defefb1064b5e5..37d3188f4f96c26d4a6b4cba158f66a255b654b9
+--- a/src/components/prompt_header/component.rs
++++ b/src/components/prompt_header/component.rs
+@@ -73,9 +73,9 @@
+             colors.text_primary.to_rgb()
+         };
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+             .text_color(text_color);
+ 
+@@ -148,7 +148,19 @@
+             );
+         }
+ 
+-        input
++        div()
++            .flex_1()
++            .pt(px(8.0))
++            .px(px(8.0))
++            .pb(px(6.0))
++            .child(
++                input
++                    .px(px(10.0))
++                    .py(px(6.0))
++                    .rounded(px(10.0))
++                    .border_1()
++                    .border_color(colors.border.rgba8(0x33)),
++            )
+     }
+ 
+     /// Render the action buttons area (Run + Actions) - no separators style
+diff --git a/src/components/prompt_header/tests.rs b/src/components/prompt_header/tests.rs
+index 8631adf85d3c220b8bc3de554ff02e9268afa101..4dabe76dca47a622ee07ea8f429b9d20c24b61fa
+--- a/src/components/prompt_header/tests.rs
++++ b/src/components/prompt_header/tests.rs
+@@ -163,3 +163,50 @@
+         section
+     );
+ }
++
++#[test]
++fn test_render_input_area_wraps_floating_input_with_requested_outer_spacing() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".pt(px(8.0))"),
++        "PromptHeader floating input should apply top spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".px(px(8.0))"),
++        "PromptHeader floating input should apply horizontal spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".pb(px(6.0))"),
++        "PromptHeader floating input should apply bottom spacing token. Section:\n{}",
++        section
++    );
++}
++
++#[test]
++fn test_render_input_area_uses_rounded_low_alpha_theme_border_for_floating_field() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".rounded(px(10.0))"),
++        "PromptHeader floating input field should use 10px rounding. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_1()"),
++        "PromptHeader floating input field should include a subtle border. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_color(colors.border.rgba8(0x33))"),
++        "PromptHeader floating input border should use theme border token with low alpha. Section:\n{}",
++        section
++    );
++    assert!(
++        !section.contains(".border_b_1()"),
++        "PromptHeader floating input should not use legacy bottom border strip styling. Section:\n{}",
++        section
++    );
++}
+
+
+thinking
+**Checking test process status**
+file update:
+diff --git a/src/components/prompt_header/component.rs b/src/components/prompt_header/component.rs
+index 65c601023d0284641c2a103679defefb1064b5e5..37d3188f4f96c26d4a6b4cba158f66a255b654b9
+--- a/src/components/prompt_header/component.rs
++++ b/src/components/prompt_header/component.rs
+@@ -73,9 +73,9 @@
+             colors.text_primary.to_rgb()
+         };
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+             .text_color(text_color);
+ 
+@@ -148,7 +148,19 @@
+             );
+         }
+ 
+-        input
++        div()
++            .flex_1()
++            .pt(px(8.0))
++            .px(px(8.0))
++            .pb(px(6.0))
++            .child(
++                input
++                    .px(px(10.0))
++                    .py(px(6.0))
++                    .rounded(px(10.0))
++                    .border_1()
++                    .border_color(colors.border.rgba8(0x33)),
++            )
+     }
+ 
+     /// Render the action buttons area (Run + Actions) - no separators style
+diff --git a/src/components/prompt_header/tests.rs b/src/components/prompt_header/tests.rs
+index 8631adf85d3c220b8bc3de554ff02e9268afa101..4dabe76dca47a622ee07ea8f429b9d20c24b61fa
+--- a/src/components/prompt_header/tests.rs
++++ b/src/components/prompt_header/tests.rs
+@@ -163,3 +163,50 @@
+         section
+     );
+ }
++
++#[test]
++fn test_render_input_area_wraps_floating_input_with_requested_outer_spacing() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".pt(px(8.0))"),
++        "PromptHeader floating input should apply top spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".px(px(8.0))"),
++        "PromptHeader floating input should apply horizontal spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".pb(px(6.0))"),
++        "PromptHeader floating input should apply bottom spacing token. Section:\n{}",
++        section
++    );
++}
++
++#[test]
++fn test_render_input_area_uses_rounded_low_alpha_theme_border_for_floating_field() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".rounded(px(10.0))"),
++        "PromptHeader floating input field should use 10px rounding. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_1()"),
++        "PromptHeader floating input field should include a subtle border. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_color(colors.border.rgba8(0x33))"),
++        "PromptHeader floating input border should use theme border token with low alpha. Section:\n{}",
++        section
++    );
++    assert!(
++        !section.contains(".border_b_1()"),
++        "PromptHeader floating input should not use legacy bottom border strip styling. Section:\n{}",
++        section
++    );
++}
+
+
+thinking
+**Waiting for compilation completion**
+file update:
+diff --git a/src/components/prompt_header/component.rs b/src/components/prompt_header/component.rs
+index 65c601023d0284641c2a103679defefb1064b5e5..37d3188f4f96c26d4a6b4cba158f66a255b654b9
+--- a/src/components/prompt_header/component.rs
++++ b/src/components/prompt_header/component.rs
+@@ -73,9 +73,9 @@
+             colors.text_primary.to_rgb()
+         };
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+             .text_color(text_color);
+ 
+@@ -148,7 +148,19 @@
+             );
+         }
+ 
+-        input
++        div()
++            .flex_1()
++            .pt(px(8.0))
++            .px(px(8.0))
++            .pb(px(6.0))
++            .child(
++                input
++                    .px(px(10.0))
++                    .py(px(6.0))
++                    .rounded(px(10.0))
++                    .border_1()
++                    .border_color(colors.border.rgba8(0x33)),
++            )
+     }
+ 
+     /// Render the action buttons area (Run + Actions) - no separators style
+diff --git a/src/components/prompt_header/tests.rs b/src/components/prompt_header/tests.rs
+index 8631adf85d3c220b8bc3de554ff02e9268afa101..4dabe76dca47a622ee07ea8f429b9d20c24b61fa
+--- a/src/components/prompt_header/tests.rs
++++ b/src/components/prompt_header/tests.rs
+@@ -163,3 +163,50 @@
+         section
+     );
+ }
++
++#[test]
++fn test_render_input_area_wraps_floating_input_with_requested_outer_spacing() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".pt(px(8.0))"),
++        "PromptHeader floating input should apply top spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".px(px(8.0))"),
++        "PromptHeader floating input should apply horizontal spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".pb(px(6.0))"),
++        "PromptHeader floating input should apply bottom spacing token. Section:\n{}",
++        section
++    );
++}
++
++#[test]
++fn test_render_input_area_uses_rounded_low_alpha_theme_border_for_floating_field() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".rounded(px(10.0))"),
++        "PromptHeader floating input field should use 10px rounding. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_1()"),
++        "PromptHeader floating input field should include a subtle border. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_color(colors.border.rgba8(0x33))"),
++        "PromptHeader floating input border should use theme border token with low alpha. Section:\n{}",
++        section
++    );
++    assert!(
++        !section.contains(".border_b_1()"),
++        "PromptHeader floating input should not use legacy bottom border strip styling. Section:\n{}",
++        section
++    );
++}
+
+
+thinking
+**Polling until exit**
+file update:
+diff --git a/src/components/prompt_header/component.rs b/src/components/prompt_header/component.rs
+index 65c601023d0284641c2a103679defefb1064b5e5..37d3188f4f96c26d4a6b4cba158f66a255b654b9
+--- a/src/components/prompt_header/component.rs
++++ b/src/components/prompt_header/component.rs
+@@ -73,9 +73,9 @@
+             colors.text_primary.to_rgb()
+         };
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+             .text_color(text_color);
+ 
+@@ -148,7 +148,19 @@
+             );
+         }
+ 
+-        input
++        div()
++            .flex_1()
++            .pt(px(8.0))
++            .px(px(8.0))
++            .pb(px(6.0))
++            .child(
++                input
++                    .px(px(10.0))
++                    .py(px(6.0))
++                    .rounded(px(10.0))
++                    .border_1()
++                    .border_color(colors.border.rgba8(0x33)),
++            )
+     }
+ 
+     /// Render the action buttons area (Run + Actions) - no separators style
+diff --git a/src/components/prompt_header/tests.rs b/src/components/prompt_header/tests.rs
+index 8631adf85d3c220b8bc3de554ff02e9268afa101..4dabe76dca47a622ee07ea8f429b9d20c24b61fa
+--- a/src/components/prompt_header/tests.rs
++++ b/src/components/prompt_header/tests.rs
+@@ -163,3 +163,50 @@
+         section
+     );
+ }
++
++#[test]
++fn test_render_input_area_wraps_floating_input_with_requested_outer_spacing() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".pt(px(8.0))"),
++        "PromptHeader floating input should apply top spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".px(px(8.0))"),
++        "PromptHeader floating input should apply horizontal spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".pb(px(6.0))"),
++        "PromptHeader floating input should apply bottom spacing token. Section:\n{}",
++        section
++    );
++}
++
++#[test]
++fn test_render_input_area_uses_rounded_low_alpha_theme_border_for_floating_field() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".rounded(px(10.0))"),
++        "PromptHeader floating input field should use 10px rounding. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_1()"),
++        "PromptHeader floating input field should include a subtle border. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_color(colors.border.rgba8(0x33))"),
++        "PromptHeader floating input border should use theme border token with low alpha. Section:\n{}",
++        section
++    );
++    assert!(
++        !section.contains(".border_b_1()"),
++        "PromptHeader floating input should not use legacy bottom border strip styling. Section:\n{}",
++        section
++    );
++}
+
+file update:
+diff --git a/src/components/prompt_header/component.rs b/src/components/prompt_header/component.rs
+index 65c601023d0284641c2a103679defefb1064b5e5..37d3188f4f96c26d4a6b4cba158f66a255b654b9
+--- a/src/components/prompt_header/component.rs
++++ b/src/components/prompt_header/component.rs
+@@ -73,9 +73,9 @@
+             colors.text_primary.to_rgb()
+         };
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+             .text_color(text_color);
+ 
+@@ -148,7 +148,19 @@
+             );
+         }
+ 
+-        input
++        div()
++            .flex_1()
++            .pt(px(8.0))
++            .px(px(8.0))
++            .pb(px(6.0))
++            .child(
++                input
++                    .px(px(10.0))
++                    .py(px(6.0))
++                    .rounded(px(10.0))
++                    .border_1()
++                    .border_color(colors.border.rgba8(0x33)),
++            )
+     }
+ 
+     /// Render the action buttons area (Run + Actions) - no separators style
+diff --git a/src/components/prompt_header/tests.rs b/src/components/prompt_header/tests.rs
+index 8631adf85d3c220b8bc3de554ff02e9268afa101..4dabe76dca47a622ee07ea8f429b9d20c24b61fa
+--- a/src/components/prompt_header/tests.rs
++++ b/src/components/prompt_header/tests.rs
+@@ -163,3 +163,50 @@
+         section
+     );
+ }
++
++#[test]
++fn test_render_input_area_wraps_floating_input_with_requested_outer_spacing() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".pt(px(8.0))"),
++        "PromptHeader floating input should apply top spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".px(px(8.0))"),
++        "PromptHeader floating input should apply horizontal spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".pb(px(6.0))"),
++        "PromptHeader floating input should apply bottom spacing token. Section:\n{}",
++        section
++    );
++}
++
++#[test]
++fn test_render_input_area_uses_rounded_low_alpha_theme_border_for_floating_field() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".rounded(px(10.0))"),
++        "PromptHeader floating input field should use 10px rounding. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_1()"),
++        "PromptHeader floating input field should include a subtle border. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_color(colors.border.rgba8(0x33))"),
++        "PromptHeader floating input border should use theme border token with low alpha. Section:\n{}",
++        section
++    );
++    assert!(
++        !section.contains(".border_b_1()"),
++        "PromptHeader floating input should not use legacy bottom border strip styling. Section:\n{}",
++        section
++    );
++}
+
+ exited 101 in 1m 30s:
+    Blocking waiting for file lock on build directory
+   Compiling script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+error[E0761]: file for module `tests` found at both "src/protocol/message/tests.rs" and "src/protocol/message/tests/mod.rs"
+  --> src/protocol/message/mod.rs:87:1
+   |
+87 | mod tests;
+   | ^^^^^^^^^^
+   |
+   = help: delete or rename one of them to remove the ambiguity
+
+error[E0761]: file for module `tests` found at both "src/designs/core/tests.rs" and "src/designs/core/tests/mod.rs"
+ --> src/designs/core/part_04.rs:2:1
+  |
+2 | mod tests;
+  | ^^^^^^^^^^
+  |
+  = help: delete or rename one of them to remove the ambiguity
+
+error[E0432]: unresolved imports `self::search::fuzzy_search_unified_with_builtins`, `self::search::fuzzy_search_unified_with_windows`
+  --> src/scripts/mod.rs:54:5
+
+thinking
+**Avoiding unverified commit due to test failures**
+exec
+/bin/zsh -lc 'git status --short -- src/components/prompt_header.rs src/components/prompt_header/component.rs src/components/prompt_header/tests.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+ M src/components/prompt_header.rs
+ M src/components/prompt_header/component.rs
+ M src/components/prompt_header/tests.rs
+file update:
+diff --git a/src/components/prompt_header/component.rs b/src/components/prompt_header/component.rs
+index 65c601023d0284641c2a103679defefb1064b5e5..37d3188f4f96c26d4a6b4cba158f66a255b654b9
+--- a/src/components/prompt_header/component.rs
++++ b/src/components/prompt_header/component.rs
+@@ -73,9 +73,9 @@
+             colors.text_primary.to_rgb()
+         };
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+             .text_color(text_color);
+ 
+@@ -148,7 +148,19 @@
+             );
+         }
+ 
+-        input
++        div()
++            .flex_1()
++            .pt(px(8.0))
++            .px(px(8.0))
++            .pb(px(6.0))
++            .child(
++                input
++                    .px(px(10.0))
++                    .py(px(6.0))
++                    .rounded(px(10.0))
++                    .border_1()
++                    .border_color(colors.border.rgba8(0x33)),
++            )
+     }
+ 
+     /// Render the action buttons area (Run + Actions) - no separators style
+diff --git a/src/components/prompt_header/tests.rs b/src/components/prompt_header/tests.rs
+index 8631adf85d3c220b8bc3de554ff02e9268afa101..4dabe76dca47a622ee07ea8f429b9d20c24b61fa
+--- a/src/components/prompt_header/tests.rs
++++ b/src/components/prompt_header/tests.rs
+@@ -163,3 +163,50 @@
+         section
+     );
+ }
++
++#[test]
++fn test_render_input_area_wraps_floating_input_with_requested_outer_spacing() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".pt(px(8.0))"),
++        "PromptHeader floating input should apply top spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".px(px(8.0))"),
++        "PromptHeader floating input should apply horizontal spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".pb(px(6.0))"),
++        "PromptHeader floating input should apply bottom spacing token. Section:\n{}",
++        section
++    );
++}
++
++#[test]
++fn test_render_input_area_uses_rounded_low_alpha_theme_border_for_floating_field() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".rounded(px(10.0))"),
++        "PromptHeader floating input field should use 10px rounding. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_1()"),
++        "PromptHeader floating input field should include a subtle border. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_color(colors.border.rgba8(0x33))"),
++        "PromptHeader floating input border should use theme border token with low alpha. Section:\n{}",
++        section
++    );
++    assert!(
++        !section.contains(".border_b_1()"),
++        "PromptHeader floating input should not use legacy bottom border strip styling. Section:\n{}",
++        section
++    );
++}
+
+Reconnecting... 1/5 (stream disconnected before completion: websocket closed by server before response.completed)
+2026-02-10T05:38:30.452459Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 503 Service Unavailable, url: wss://chatgpt.com/backend-api/codex/responses
+Reconnecting... 2/5 (unexpected status 503 Service Unavailable: upstream connect error or disconnect/reset before headers. retried and the latest reset reason: remote connection failure, transport failure reason: delayed connect error: Connection refused, url: wss://chatgpt.com/backend-api/codex/responses, cf-ray: 9cb942badef0e061-DEN)
+2026-02-10T05:38:31.218412Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: HTTP error: 503 Service Unavailable, url: wss://chatgpt.com/backend-api/codex/responses
+Reconnecting... 3/5 (unexpected status 503 Service Unavailable: upstream connect error or disconnect/reset before headers. retried and the latest reset reason: remote connection failure, transport failure reason: delayed connect error: Connection refused, url: wss://chatgpt.com/backend-api/codex/responses, cf-ray: 9cb942bfdf247b27-DEN)
+
+thinking
+**Inspecting unexpected file modification**
+exec
+/bin/zsh -lc "git diff -- src/components/prompt_header.rs | sed -n '1,160p'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+diff --git a/src/components/prompt_header.rs b/src/components/prompt_header.rs
+index cae2ef6..f12712c 100644
+--- a/src/components/prompt_header.rs
++++ b/src/components/prompt_header.rs
+@@ -14,7 +14,9 @@ mod tests;
+ #[path = "prompt_header/types.rs"]
+ mod types;
+ 
++#[allow(unused_imports)]
+ pub use component::{HeaderClickCallback, PromptHeader};
++#[allow(unused_imports)]
+ pub use types::{
+     HeaderActionsDensity, PromptHeaderColors, PromptHeaderConfig,
+     HEADER_ACTIONS_MIN_WIDTH_COMPACT_PX, HEADER_ACTIONS_MIN_WIDTH_EXPANDED_PX,
+file update:
+diff --git a/src/components/prompt_header/component.rs b/src/components/prompt_header/component.rs
+index 65c601023d0284641c2a103679defefb1064b5e5..37d3188f4f96c26d4a6b4cba158f66a255b654b9
+--- a/src/components/prompt_header/component.rs
++++ b/src/components/prompt_header/component.rs
+@@ -73,9 +73,9 @@
+             colors.text_primary.to_rgb()
+         };
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+             .text_color(text_color);
+ 
+@@ -148,7 +148,19 @@
+             );
+         }
+ 
+-        input
++        div()
++            .flex_1()
++            .pt(px(8.0))
++            .px(px(8.0))
++            .pb(px(6.0))
++            .child(
++                input
++                    .px(px(10.0))
++                    .py(px(6.0))
++                    .rounded(px(10.0))
++                    .border_1()
++                    .border_color(colors.border.rgba8(0x33)),
++            )
+     }
+ 
+     /// Render the action buttons area (Run + Actions) - no separators style
+diff --git a/src/components/prompt_header/tests.rs b/src/components/prompt_header/tests.rs
+index 8631adf85d3c220b8bc3de554ff02e9268afa101..4dabe76dca47a622ee07ea8f429b9d20c24b61fa
+--- a/src/components/prompt_header/tests.rs
++++ b/src/components/prompt_header/tests.rs
+@@ -163,3 +163,50 @@
+         section
+     );
+ }
++
++#[test]
++fn test_render_input_area_wraps_floating_input_with_requested_outer_spacing() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".pt(px(8.0))"),
++        "PromptHeader floating input should apply top spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".px(px(8.0))"),
++        "PromptHeader floating input should apply horizontal spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".pb(px(6.0))"),
++        "PromptHeader floating input should apply bottom spacing token. Section:\n{}",
++        section
++    );
++}
++
++#[test]
++fn test_render_input_area_uses_rounded_low_alpha_theme_border_for_floating_field() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".rounded(px(10.0))"),
++        "PromptHeader floating input field should use 10px rounding. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_1()"),
++        "PromptHeader floating input field should include a subtle border. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_color(colors.border.rgba8(0x33))"),
++        "PromptHeader floating input border should use theme border token with low alpha. Section:\n{}",
++        section
++    );
++    assert!(
++        !section.contains(".border_b_1()"),
++        "PromptHeader floating input should not use legacy bottom border strip styling. Section:\n{}",
++        section
++    );
++}
+
+
+thinking
+**Noticing preexisting unexpected changes**
+exec
+/bin/zsh -lc "nl -ba src/components/prompt_header/component.rs | sed -n '56,190p' && nl -ba src/components/prompt_header/tests.rs | sed -n '150,250p'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+    56	    /// Render the search input area with cursor
+    57	    fn render_input_area(&self) -> impl IntoElement {
+    58	        let colors = self.colors;
+    59	        let filter_is_empty = self.config.filter_text.is_empty();
+    60	        let cursor_visible = self.config.cursor_visible && self.config.is_focused;
+    61	
+    62	        // Display text: filter text or placeholder
+    63	        let display_text: SharedString = if filter_is_empty {
+    64	            self.config.placeholder.clone().into()
+    65	        } else {
+    66	            self.config.filter_text.clone().into()
+    67	        };
+    68	
+    69	        // Text color: muted for placeholder, primary for input
+    70	        let text_color = if filter_is_empty {
+    71	            colors.text_muted.to_rgb()
+    72	        } else {
+    73	            colors.text_primary.to_rgb()
+    74	        };
+    75	
+file update:
+diff --git a/src/components/prompt_header/component.rs b/src/components/prompt_header/component.rs
+index 65c601023d0284641c2a103679defefb1064b5e5..37d3188f4f96c26d4a6b4cba158f66a255b654b9
+--- a/src/components/prompt_header/component.rs
++++ b/src/components/prompt_header/component.rs
+@@ -73,9 +73,9 @@
+             colors.text_primary.to_rgb()
+         };
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+             .text_color(text_color);
+ 
+@@ -148,7 +148,19 @@
+             );
+         }
+ 
+-        input
++        div()
++            .flex_1()
++            .pt(px(8.0))
++            .px(px(8.0))
++            .pb(px(6.0))
++            .child(
++                input
++                    .px(px(10.0))
++                    .py(px(6.0))
++                    .rounded(px(10.0))
++                    .border_1()
++                    .border_color(colors.border.rgba8(0x33)),
++            )
+     }
+ 
+     /// Render the action buttons area (Run + Actions) - no separators style
+diff --git a/src/components/prompt_header/tests.rs b/src/components/prompt_header/tests.rs
+index 8631adf85d3c220b8bc3de554ff02e9268afa101..4dabe76dca47a622ee07ea8f429b9d20c24b61fa
+--- a/src/components/prompt_header/tests.rs
++++ b/src/components/prompt_header/tests.rs
+@@ -163,3 +163,50 @@
+         section
+     );
+ }
++
++#[test]
++fn test_render_input_area_wraps_floating_input_with_requested_outer_spacing() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".pt(px(8.0))"),
++        "PromptHeader floating input should apply top spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".px(px(8.0))"),
++        "PromptHeader floating input should apply horizontal spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".pb(px(6.0))"),
++        "PromptHeader floating input should apply bottom spacing token. Section:\n{}",
++        section
++    );
++}
++
++#[test]
++fn test_render_input_area_uses_rounded_low_alpha_theme_border_for_floating_field() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".rounded(px(10.0))"),
++        "PromptHeader floating input field should use 10px rounding. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_1()"),
++        "PromptHeader floating input field should include a subtle border. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_color(colors.border.rgba8(0x33))"),
++        "PromptHeader floating input border should use theme border token with low alpha. Section:\n{}",
++        section
++    );
++    assert!(
++        !section.contains(".border_b_1()"),
++        "PromptHeader floating input should not use legacy bottom border strip styling. Section:\n{}",
++        section
++    );
++}
+
+
+thinking
+**Deciding final swarm update approach**
+codex
+Code changes are complete and scoped to the prompt header component/tests. I’m releasing claims and marking this agent done with a note that workspace-wide compile failures (outside this scope) blocked a clean cargo gate run.
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts update --id codex-search-bar-split-1 --status done --notes "floating input styles applied in prompt_header/component.rs + tests; verification commands attempted but blocked by unrelated workspace compile/test errors" && ~/.claude/bin/swarm.ts release --id codex-search-bar-split-1 src/components/prompt_header/component.rs && ~/.claude/bin/swarm.ts release --id codex-search-bar-split-1 src/components/prompt_header/tests.rs && ~/.claude/bin/swarm.ts release --id codex-search-bar-split-1 src/components/prompt_header.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 141ms:
+Released for codex-search-bar-split-1: src/components/prompt_header/tests.rs
+Released for codex-search-bar-split-1: src/components/prompt_header.rs
+file update:
+diff --git a/src/components/prompt_header/component.rs b/src/components/prompt_header/component.rs
+index 65c601023d0284641c2a103679defefb1064b5e5..37d3188f4f96c26d4a6b4cba158f66a255b654b9
+--- a/src/components/prompt_header/component.rs
++++ b/src/components/prompt_header/component.rs
+@@ -73,9 +73,9 @@
+             colors.text_primary.to_rgb()
+         };
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+             .text_color(text_color);
+ 
+@@ -148,7 +148,19 @@
+             );
+         }
+ 
+-        input
++        div()
++            .flex_1()
++            .pt(px(8.0))
++            .px(px(8.0))
++            .pb(px(6.0))
++            .child(
++                input
++                    .px(px(10.0))
++                    .py(px(6.0))
++                    .rounded(px(10.0))
++                    .border_1()
++                    .border_color(colors.border.rgba8(0x33)),
++            )
+     }
+ 
+     /// Render the action buttons area (Run + Actions) - no separators style
+diff --git a/src/components/prompt_header/tests.rs b/src/components/prompt_header/tests.rs
+index 8631adf85d3c220b8bc3de554ff02e9268afa101..4dabe76dca47a622ee07ea8f429b9d20c24b61fa
+--- a/src/components/prompt_header/tests.rs
++++ b/src/components/prompt_header/tests.rs
+@@ -163,3 +163,50 @@
+         section
+     );
+ }
++
++#[test]
++fn test_render_input_area_wraps_floating_input_with_requested_outer_spacing() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".pt(px(8.0))"),
++        "PromptHeader floating input should apply top spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".px(px(8.0))"),
++        "PromptHeader floating input should apply horizontal spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".pb(px(6.0))"),
++        "PromptHeader floating input should apply bottom spacing token. Section:\n{}",
++        section
++    );
++}
++
++#[test]
++fn test_render_input_area_uses_rounded_low_alpha_theme_border_for_floating_field() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".rounded(px(10.0))"),
++        "PromptHeader floating input field should use 10px rounding. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_1()"),
++        "PromptHeader floating input field should include a subtle border. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_color(colors.border.rgba8(0x33))"),
++        "PromptHeader floating input border should use theme border token with low alpha. Section:\n{}",
++        section
++    );
++    assert!(
++        !section.contains(".border_b_1()"),
++        "PromptHeader floating input should not use legacy bottom border strip styling. Section:\n{}",
++        section
++    );
++}
+
+
+thinking
+**Crafting final concise report**
+codex
+Implemented the prompt-header floating input styling in the prompt header component.
+
+**Changed files**
+- `src/components/prompt_header/component.rs:57`
+  - `render_input_area()` now wraps the input with:
+    - `.pt(px(8.0)).px(px(8.0)).pb(px(6.0))`
+  - Input field now uses:
+    - `.rounded(px(10.0))`
+    - `.border_1()`
+    - `.border_color(colors.border.rgba8(0x33))`
+  - Kept theme-token usage (`colors.border`) and no `border_b_1` strip styling in this input section.
+- `src/components/prompt_header/tests.rs:168`
+  - Added tests to assert:
+    - required outer spacing tokens are present
+    - floating field has rounded 10px + low-alpha theme border
+    - legacy `.border_b_1()` is absent in `render_input_area`
+
+**How to test**
+1. Run:
+   - `cargo check -p script-kit-gpui`
+   - `cargo clippy -p script-kit-gpui --all-targets -- -D warnings`
+   - `cargo test -p script-kit-gpui prompt_header::tests:: -- --nocapture`
+2. After workspace issues are resolved, run your requested full gate:
+   - `cargo check && cargo clippy --all-targets -- -D warnings && cargo test`
+
+**Verification results / known gaps**
+- All three verification commands were executed, but they failed due unrelated existing workspace errors outside this task (examples: `src/prompts/chat/render_core.rs`, `src/protocol/message/mod.rs`, multiple `src/actions/tests/*` modules).
+- Because of those pre-existing failures, I could not complete a clean end-to-end cargo gate pass for this branch.
+
+Commits made: none.
+file update:
+diff --git a/src/components/prompt_header/component.rs b/src/components/prompt_header/component.rs
+index 65c601023d0284641c2a103679defefb1064b5e5..37d3188f4f96c26d4a6b4cba158f66a255b654b9
+--- a/src/components/prompt_header/component.rs
++++ b/src/components/prompt_header/component.rs
+@@ -73,9 +73,9 @@
+             colors.text_primary.to_rgb()
+         };
+ 
+-        // Build input container using hstack() helper
++        // Build floating input field content using hstack() helper
+         let mut input = hstack()
+-            .flex_1()
++            .w_full()
+             .text_size(px(colors.input_font_size))
+             .text_color(text_color);
+ 
+@@ -148,7 +148,19 @@
+             );
+         }
+ 
+-        input
++        div()
++            .flex_1()
++            .pt(px(8.0))
++            .px(px(8.0))
++            .pb(px(6.0))
++            .child(
++                input
++                    .px(px(10.0))
++                    .py(px(6.0))
++                    .rounded(px(10.0))
++                    .border_1()
++                    .border_color(colors.border.rgba8(0x33)),
++            )
+     }
+ 
+     /// Render the action buttons area (Run + Actions) - no separators style
+diff --git a/src/components/prompt_header/tests.rs b/src/components/prompt_header/tests.rs
+index 8631adf85d3c220b8bc3de554ff02e9268afa101..4dabe76dca47a622ee07ea8f429b9d20c24b61fa
+--- a/src/components/prompt_header/tests.rs
++++ b/src/components/prompt_header/tests.rs
+@@ -163,3 +163,50 @@
+         section
+     );
+ }
++
++#[test]
++fn test_render_input_area_wraps_floating_input_with_requested_outer_spacing() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".pt(px(8.0))"),
++        "PromptHeader floating input should apply top spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".px(px(8.0))"),
++        "PromptHeader floating input should apply horizontal spacing token. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".pb(px(6.0))"),
++        "PromptHeader floating input should apply bottom spacing token. Section:\n{}",
++        section
++    );
++}
++
++#[test]
++fn test_render_input_area_uses_rounded_low_alpha_theme_border_for_floating_field() {
++    let section = render_input_area_section();
++
++    assert!(
++        section.contains(".rounded(px(10.0))"),
++        "PromptHeader floating input field should use 10px rounding. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_1()"),
++        "PromptHeader floating input field should include a subtle border. Section:\n{}",
++        section
++    );
++    assert!(
++        section.contains(".border_color(colors.border.rgba8(0x33))"),
++        "PromptHeader floating input border should use theme border token with low alpha. Section:\n{}",
++        section
++    );
++    assert!(
++        !section.contains(".border_b_1()"),
++        "PromptHeader floating input should not use legacy bottom border strip styling. Section:\n{}",
++        section
++    );
++}
+
+tokens used
+180,054
+Implemented the prompt-header floating input styling in the prompt header component.
+
+**Changed files**
+- `src/components/prompt_header/component.rs:57`
+  - `render_input_area()` now wraps the input with:
+    - `.pt(px(8.0)).px(px(8.0)).pb(px(6.0))`
+  - Input field now uses:
+    - `.rounded(px(10.0))`
+    - `.border_1()`
+    - `.border_color(colors.border.rgba8(0x33))`
+  - Kept theme-token usage (`colors.border`) and no `border_b_1` strip styling in this input section.
+- `src/components/prompt_header/tests.rs:168`
+  - Added tests to assert:
+    - required outer spacing tokens are present
+    - floating field has rounded 10px + low-alpha theme border
+    - legacy `.border_b_1()` is absent in `render_input_area`
+
+**How to test**
+1. Run:
+   - `cargo check -p script-kit-gpui`
+   - `cargo clippy -p script-kit-gpui --all-targets -- -D warnings`
+   - `cargo test -p script-kit-gpui prompt_header::tests:: -- --nocapture`
+2. After workspace issues are resolved, run your requested full gate:
+   - `cargo check && cargo clippy --all-targets -- -D warnings && cargo test`
+
+**Verification results / known gaps**
+- All three verification commands were executed, but they failed due unrelated existing workspace errors outside this task (examples: `src/prompts/chat/render_core.rs`, `src/protocol/message/mod.rs`, multiple `src/actions/tests/*` modules).
+- Because of those pre-existing failures, I could not complete a clean end-to-end cargo gate pass for this branch.
+
+Commits made: none.
+[swarm-commit-gate] author=swarm:codex-search-bar-split-1 start_sha=7a6c0cb31c1cfca916e9e1fdda23a3d9c1b7e0aa commits=0 files=(none)
+[swarm-policy] scope=src/components/prompt_header.rs commits=(none) out_of_scope=(none) report_changed=(none) issue=missing_agent_report_json
+[swarm-report] issue=missing_agent_report_json policy_issue=missing_agent_report_json commits=0 files=(none)

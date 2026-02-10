@@ -1,0 +1,4245 @@
+==== spawn @ 2026-02-08T00:44:30.654Z ====
+cmd: codex "exec" "--cd" "/Users/johnlindquist/dev/script-kit-gpui" "--model" "gpt-5.3-codex" "-c" "model_reasoning_effort=\"xhigh\"" "-c" "model_auto_compact_token_limit=120000" "-c" "developer_instructions=\"You are Codex implementer agent \\\"codex-fix-exports-prelude\\\".\\n\\n## Coordination\\nThis repo runs parallel agents in ONE working tree. Before editing any file, you MUST claim it.\\nCommands (run via shell):\\n  - View roster: ~/.claude/bin/swarm.ts status\\n  - Claim files (blocks until free): ~/.claude/bin/swarm.ts claim --wait --id codex-fix-exports-prelude path/to/file\\n  - Release: ~/.claude/bin/swarm.ts release --id codex-fix-exports-prelude path/to/file\\n  - Update status/notes: ~/.claude/bin/swarm.ts update --id codex-fix-exports-prelude --status in_progress --notes \\\"...\\\"\\nRules:\\n  - Never edit a file you haven't claimed.\\n  - Keep claims tight (claim only what you're actively changing).\\n  - If blocked, set status=blocked and say what you're waiting on.\\n  - When finished, set status=done and release claims.\\n\\n## Development practices (this code is maintained by AI agents)\\n  - Log state transitions with enough context to diagnose failures from logs alone.\\n  - Structured errors: include what was attempted, what failed, and current state.\\n  - Name things for grepability — unique identifiers agents can find on the first search.\\n  - Every behavior change gets a test. Untested code is invisible to the next agent.\\n  - Test names describe the scenario: test_X_does_Y_when_Z.\\n  - Keep functions small and single-purpose. 500-line functions burn agent context.\\n  - Use types to encode constraints (enums > strings for errors).\\n\\n## CRITICAL: Parallel-safe verification\\n  - Other agents are modifying other files RIGHT NOW. Full test suites WILL show their failures.\\n  - ONLY run tests that cover YOUR changed files. Scope every test/check command:\\n    Rust: cargo test -p your-crate -- module::test_name | JS: npx jest your/file.test.ts\\n  - Do NOT run: cargo test (unscoped), cargo check (whole workspace), npm test (unscoped).\\n  - If a scoped test fails, it's YOUR bug — fix it. If tests outside your scope fail, ignore them.\\n\\n## Git commit discipline\\n  - NEVER commit unverified work. Run tests/lints/type-checks FIRST. If it fails, fix it before committing.\\n  - A commit is a declaration: \\\"this works and here's the proof.\\\"\\n  - Commit FREQUENTLY — after each meaningful unit of VERIFIED work, not just at the end.\\n  - A \\\"unit\\\" = one logical change that passes verification (new function, bug fix, refactor, test added).\\n  - NEVER batch an entire task into one giant commit. Small commits are searchable; big ones aren't.\\n  - Commit message format:\\n      Line 1: <type>(<scope>): <what changed> (imperative, max 72 chars)\\n      Line 3+: WHY this change was made, WHAT was verified, and HOW to test it.\\n    Types: feat, fix, refactor, test, docs, chore\\n    Example:\\n      feat(auth): add refresh token rotation\\n      \\n      Tokens now rotate on each refresh call to prevent replay attacks.\\n      The old token is invalidated immediately on rotation.\\n      \\n      Verified: cargo test --lib -- auth::refresh (4 tests pass)\\n      Verified: manual smoke test via curl — token rotates, old token returns 401\\n  - The \\\"Verified:\\\" lines are REQUIRED. Future agents will read git log to understand\\n    what was tested and how to re-verify. This is the most valuable part of the message.\\n  - In your final message, list all commits you made with their hashes.\\n\\n## Time budget\\nYou have approximately 10 minutes. If your task is too broad to complete in time:\\n(1) Commit any verified progress.\\n(2) Run: ~/.claude/bin/swarm.ts update --id YOUR_ID --status needs_split --notes 'suggest: 1) sub-task-desc scope:files 2) sub-task-desc scope:files'.\\n(3) Exit cleanly. The dispatcher will read your suggestions and spawn narrower workers.\"" "--output-last-message" "/Users/johnlindquist/dev/script-kit-gpui/.ai/logs/codex-fix-exports-prelude.final.md" "--yolo" "You are agent codex-fix-exports-prelude.\n\nCurrent parallel-agent roster (read this first):\n```\nSWARM SNAPSHOT @ 2026-02-08T00:44:30.651Z\n- codex-fix-body-render-alignment [in_progress] scope=src/actions/dialog/part_04/body_part_01.rs,src/actions/dialog/part_04/body_part_02.rs,src/actions/dialog/part_04/body_part_03.rs task=CONSISTENCY FIX: Ensure dialog body rendering across src/actions/dialog/part_04/body_part_01.rs, body_part_02.rs, body_…\n  claims: src/actions/dialog/part_04/body_part_01.rs, src/actions/dialog/part_04/body_part_02.rs, src/actions/dialog/part_04/body_part_03.rs\n  notes: claimed body_part_01/02/03; auditing render consistency across separators spacing empty-state layout theme tokens\n- codex-fix-exports-prelude [starting] scope=src/actions/mod.rs,src/actions/prelude.rs,src/actions/types.rs,src/actions/dialog.rs,src/actions/builders.rs,src/actions/window.rs,src/actions/command_bar.rs task=CONSISTENCY FIX: Review and fix module exports in src/actions/mod.rs and src/actions/prelude.rs. Ensure: (1) All public…\n- codex-fix-part02-render-alignment [in_progress] scope=src/actions/dialog/part_02/part_01.rs,src/actions/dialog/part_02/part_02.rs,src/actions/dialog/part_02/part_03.rs task=CONSISTENCY FIX: Ensure all dialog part_02 rendering subfiles (src/actions/dialo…\n```\n\nYour assignment:\n- Task: CONSISTENCY FIX: Review and fix module exports in src/actions/mod.rs and src/actions/prelude.rs. Ensure: (1) All public types needed by consumers are exported in prelude (2) No unnecessary pub items leak implementation details (3) Module structure is clean (no unused mod declarations) (4) Consistent visibility modifiers. After fix, run cargo check && cargo clippy --all-targets -- -D warnings\n- Scope: src/actions/mod.rs,src/actions/prelude.rs,src/actions/types.rs,src/actions/dialog.rs,src/actions/builders.rs,src/actions/window.rs,src/actions/command_bar.rs\n\nOperating constraints:\n- Single working tree (no worktrees, no patches).\n- You MUST claim files before editing (~/.claude/bin/swarm.ts claim --wait ...).\n\nDeliverables:\n- Make the code changes required by the task.\n- Run the most relevant tests/linters.\n- In your FINAL message, include: changed files, how to test, and any risks/known gaps."
+
+OpenAI Codex v0.98.0 (research preview)
+--------
+workdir: /Users/johnlindquist/dev/script-kit-gpui
+model: gpt-5.3-codex
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: xhigh
+reasoning summaries: auto
+session id: 019c3ab5-1071-7120-8cc7-9219109efd69
+--------
+user
+You are agent codex-fix-exports-prelude.
+
+Current parallel-agent roster (read this first):
+```
+SWARM SNAPSHOT @ 2026-02-08T00:44:30.651Z
+- codex-fix-body-render-alignment [in_progress] scope=src/actions/dialog/part_04/body_part_01.rs,src/actions/dialog/part_04/body_part_02.rs,src/actions/dialog/part_04/body_part_03.rs task=CONSISTENCY FIX: Ensure dialog body rendering across src/actions/dialog/part_04/body_part_01.rs, body_part_02.rs, body_…
+  claims: src/actions/dialog/part_04/body_part_01.rs, src/actions/dialog/part_04/body_part_02.rs, src/actions/dialog/part_04/body_part_03.rs
+  notes: claimed body_part_01/02/03; auditing render consistency across separators spacing empty-state layout theme tokens
+- codex-fix-exports-prelude [starting] scope=src/actions/mod.rs,src/actions/prelude.rs,src/actions/types.rs,src/actions/dialog.rs,src/actions/builders.rs,src/actions/window.rs,src/actions/command_bar.rs task=CONSISTENCY FIX: Review and fix module exports in src/actions/mod.rs and src/actions/prelude.rs. Ensure: (1) All public…
+- codex-fix-part02-render-alignment [in_progress] scope=src/actions/dialog/part_02/part_01.rs,src/actions/dialog/part_02/part_02.rs,src/actions/dialog/part_02/part_03.rs task=CONSISTENCY FIX: Ensure all dialog part_02 rendering subfiles (src/actions/dialo…
+```
+
+Your assignment:
+- Task: CONSISTENCY FIX: Review and fix module exports in src/actions/mod.rs and src/actions/prelude.rs. Ensure: (1) All public types needed by consumers are exported in prelude (2) No unnecessary pub items leak implementation details (3) Module structure is clean (no unused mod declarations) (4) Consistent visibility modifiers. After fix, run cargo check && cargo clippy --all-targets -- -D warnings
+- Scope: src/actions/mod.rs,src/actions/prelude.rs,src/actions/types.rs,src/actions/dialog.rs,src/actions/builders.rs,src/actions/window.rs,src/actions/command_bar.rs
+
+Operating constraints:
+- Single working tree (no worktrees, no patches).
+- You MUST claim files before editing (~/.claude/bin/swarm.ts claim --wait ...).
+
+Deliverables:
+- Make the code changes required by the task.
+- Run the most relevant tests/linters.
+- In your FINAL message, include: changed files, how to test, and any risks/known gaps.
+warning: Under-development features enabled: responses_websockets. Under-development features are incomplete and may behave unpredictably. To suppress this warning, set `suppress_unstable_features_warning = true` in /Users/johnlindquist/.codex/config.toml.
+mcp: deepwiki starting
+mcp: deepwiki ready
+mcp startup: ready: deepwiki
+
+thinking
+**Reconciling conflicting test and check scope**
+codex
+Reviewing `src/actions/mod.rs` and `src/actions/prelude.rs` first to map current exports and identify any leaks or missing public items, then I’ll make minimal scoped fixes and run crate-scoped `check`/`clippy` verification. I’ll claim files before any edits.
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts status && ~/.claude/bin/swarm.ts update --id codex-fix-exports-prelude --status in_progress --notes "auditing actions module exports and prelude surface"' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+Repo: /Users/johnlindquist/dev/script-kit-gpui
+Updated: 2026-02-08T00:44:42.563Z
+
+Active agents (3):
+codex-fix-body-render-alignment [in_progress] codex/gpt-5.3-codex/exec
+  task: CONSISTENCY FIX: Ensure dialog body rendering across src/actions/dialog/part_04/body_part_01.rs, body_part_02.rs, body_…
+  scope: src/actions/dialog/part_04/body_part_01.rs,src/actions/dialog/part_04/body_part_02.rs,src/actions/dialog/part_04/body_p…
+  claims(3): src/actions/dialog/part_04/body_part_01.rs, src/actions/dialog/part_04/body_part_02.rs, src/actions/dialog/part_04/body_part_03.rs
+  notes: claimed body_part_01/02/03; auditing render consistency across separators spacing empty-state layout theme tokens
+
+codex-fix-exports-prelude [in_progress] codex/gpt-5.3-codex/exec
+  task: CONSISTENCY FIX: Review and fix module exports in src/actions/mod.rs and src/actions/prelude.rs. Ensure: (1) All public…
+  scope: src/actions/mod.rs,src/actions/prelude.rs,src/actions/types.rs,src/actions/dialog.rs,src/actions/builders.rs,src/action…
+  claims: (none)
+  notes: spawned codex (exec)
+
+codex-fix-part02-render-alignment [in_progress] codex/gpt-5.3-codex/exec
+  task: CONSISTENCY FIX: Ensure all dialog part_02 rendering subfiles (src/actions/dialog/part_02/part_01.rs, part_02.rs, part_…
+  scope: src/actions/dialog/part_02/part_01.rs,src/actions/dialog/part_02/part_02.rs,src/actions/dialog/part_02/part_03.rs
+  claims(3): src/actions/dialog/part_02/part_01.rs, src/actions/dialog/part_02/part_02.rs, src/actions/dialog/part_02/part_03.rs
+
+thinking
+**Preparing parallel file inspection**
+exec
+/bin/zsh -lc "sed -n '1,240p' src/actions/mod.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,260p' src/actions/types.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,240p' src/actions/prelude.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+//! Actions Dialog Module
+//!
+//! Provides a searchable action menu as a compact overlay popup for quick access
+//! to script management and global actions (edit, create, settings, quit, etc.)
+//!
+//! The dialog can be rendered in two ways:
+//! 1. As an inline overlay within the main window (legacy)
+//! 2. As a separate floating window with its own vibrancy blur (preferred)
+//!
+//! ## Module Structure
+//! - `types`: Core types (Action, ActionCategory, ScriptInfo)
+//! - `builders`: Factory functions for creating action lists
+//! - `constants`: Popup dimensions and styling constants
+//! - `dialog`: ActionsDialog struct and implementation
+//! - `window`: Separate vibrancy window for actions panel
+
+#[path = "builders_rewire.rs"]
+mod builders;
+mod command_bar;
+mod constants;
+ succeeded in 51ms:
+include!("types/script_info.rs");
+include!("types/action_model.rs");
+include!("types/tests.rs");
+ succeeded in 51ms:
+//! Curated actions API surface for consumers that prefer explicit imports.
+//!
+//! This module keeps action-related imports discoverable without pulling every
+//! helper from `actions` root exports.
+#![allow(unused_imports)]
+
+pub use super::builders::{
+    ChatModelInfo, ChatPromptInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo,
+    NotesInfo,
+};
+pub use super::dialog::ActionsDialog;
+pub use super::types::{
+    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
+    SectionStyle,
+};
+pub use super::window::{
+    close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
+    resize_actions_window, WindowPosition,
+};
+
+thinking
+**Inspecting related modules**
+codex
+I’ve gathered the current `mod.rs`/`prelude.rs` exports; next I’m checking the underlying module files to see which items are actually public and whether `prelude` is missing consumer-facing types/functions.
+exec
+/bin/zsh -lc "sed -n '1,260p' src/actions/builders.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,260p' src/actions/command_bar.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,280p' src/actions/window.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,260p' src/actions/dialog.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+//! Action builders
+//!
+//! Factory functions for creating context-specific action lists.
+
+mod chat;
+mod clipboard;
+mod file_path;
+mod notes;
+mod script_context;
+mod scriptlet;
+mod shared;
+
+pub use chat::{ChatModelInfo, ChatPromptInfo};
+pub use clipboard::ClipboardEntryInfo;
+pub use notes::{NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo};
+pub use shared::to_deeplink_name;
+
+#[allow(unused_imports)]
+pub(crate) use scriptlet::get_scriptlet_defined_actions;
+#[allow(unused_imports)]
+ succeeded in 53ms:
+include!("command_bar/part_01.rs");
+include!("command_bar/part_02.rs");
+include!("command_bar/part_03.rs");
+ succeeded in 53ms:
+#![allow(dead_code)]
+
+include!("dialog/part_01.rs");
+include!("dialog/part_02.rs");
+include!("dialog/part_03.rs");
+include!("dialog_part_04_rewire.rs");
+include!("dialog/part_05.rs");
+ succeeded in 53ms:
+include!("window/part_01.rs");
+include!("window/part_02.rs");
+include!("window/part_03.rs");
+
+thinking
+**Inspecting public declarations**
+exec
+/bin/zsh -lc 'rg -n "''^pub(?:'"\\(["'^'"\\)]*\\))?\\s+(?:struct|enum|fn|trait|type|use|const|mod)\" src/actions -g '*.rs'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+src/actions/command_bar/part_01.rs:155:pub struct CommandBarConfig {
+src/actions/command_bar/part_01.rs:239:pub type CommandBarActionCallback = Arc<dyn Fn(&str) + Send + Sync>;
+src/actions/command_bar/part_01.rs:246:pub struct CommandBar {
+src/actions/command_bar/part_03.rs:5:pub trait CommandBarHost {
+src/actions/command_bar/part_03.rs:104:pub fn is_command_bar_open() -> bool {
+src/actions/window/part_01.rs:31:pub(super) fn count_section_headers(actions: &[Action], filtered_indices: &[usize]) -> usize {
+src/actions/window/part_01.rs:208:pub enum WindowPosition {
+src/actions/window/part_01.rs:219:pub struct ActionsWindow {
+src/actions/prelude.rs:7:pub use super::builders::{
+src/actions/prelude.rs:11:pub use super::dialog::ActionsDialog;
+src/actions/prelude.rs:12:pub use super::types::{
+src/actions/prelude.rs:16:pub use super::window::{
+src/actions/window/part_02.rs:120:pub fn open_actions_window(
+src/actions/window/part_02.rs:289:pub fn close_actions_window(cx: &mut App) {
+src/actions/window/part_02.rs:316:pub fn is_actions_window_open() -> bool {
+src/actions/window/part_02.rs:326:pub fn get_actions_window_handle() -> Option<WindowHandle<Root>> {
+src/actions/window/part_02.rs:336:pub fn notify_actions_window(cx: &mut App) {
+src/actions/builders/chat.rs:6:pub struct ChatPromptInfo {
+src/actions/builders/chat.rs:15:pub struct ChatModelInfo {
+src/actions/builders/chat.rs:28:pub fn get_chat_context_actions(info: &ChatPromptInfo) -> Vec<Action> {
+
+thinking
+**Inspecting module source mapping**
+codex
+I found a `builders_rewire.rs` indirection that `mod.rs` currently uses instead of `builders.rs`; I’m inspecting that file and call sites now to ensure export cleanup doesn’t break existing imports.
+exec
+/bin/zsh -lc "sed -n '1,260p' src/actions/builders_rewire.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "rg -n \"actions::prelude|use crate::actions::\\{["'^'"\\}]*|use crate::actions::\" src -g '*.rs'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+//! Action builders
+//!
+//! Factory functions for creating context-specific action lists.
+
+// Re-export action types into the builders module namespace so
+// existing submodules can import them as `super::types::*`.
+pub(super) mod types {
+    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
+}
+
+#[path = "builders/chat.rs"]
+mod chat;
+#[path = "builders/clipboard.rs"]
+mod clipboard;
+#[path = "builders/file_path.rs"]
+mod file_path;
+#[path = "builders/notes.rs"]
+mod notes;
+#[path = "builders/script_context.rs"]
+mod script_context;
+ succeeded in 51ms:
+src/ai/window/command_bar.rs:97:        use crate::actions::{
+src/app_impl/actions_toggle.rs:193:        use crate::actions::{ActionsDialog, ActionsDialogConfig};
+src/app_impl/actions_toggle.rs:290:        use crate::actions::{
+src/app_impl/actions_toggle.rs:359:        use crate::actions::{ChatModelInfo, ChatPromptInfo};
+src/app_impl/webcam_actions.rs:199:        use crate::actions::{Action, ActionCategory};
+src/ai/window.rs:40:use crate::actions::{get_ai_command_bar_actions, CommandBar, CommandBarConfig};
+src/actions/command_bar/part_02.rs:397:    use crate::actions::types::ActionCategory;
+src/notes/window.rs:34:use crate::actions::{
+src/actions/dialog_builtin_action_validation_tests_6/tests_part_01.rs:1:    use crate::actions::builders::*;
+src/actions/dialog_builtin_action_validation_tests_6/tests_part_01.rs:2:    use crate::actions::dialog::{
+src/actions/dialog_builtin_action_validation_tests_6/tests_part_01.rs:5:    use crate::actions::types::*;
+src/actions/dialog_builtin_action_validation_tests_6/tests_part_01.rs:6:    use crate::actions::CommandBarConfig;
+src/actions/dialog_builtin_action_validation_tests_32/part_01.rs:6:use crate::actions::builders::{
+src/actions/dialog_builtin_action_validation_tests_32/part_01.rs:13:use crate::actions::command_bar::CommandBarConfig;
+src/actions/dialog_builtin_action_validation_tests_32/part_01.rs:14:use crate::actions::dialog::{
+src/actions/dialog_builtin_action_validation_tests_32/part_01.rs:17:use crate::actions::types::{Action, ActionCategory, SectionStyle};
+src/actions/dialog_builtin_action_validation_tests_32/part_01.rs:18:use crate::actions::ActionsDialog;
+src/actions/dialog/part_05.rs:8:    use crate::actions::types::{Action, ActionCategory};
+src/actions/dialog_builtin_action_validation_tests_40/tests_part_01.rs:1:    use crate::actions::builders::*;
+src/actions/dialog_builtin_action_validation_tests_40/tests_part_01.rs:2:    use crate::actions::dialog::ActionsDialog;
+
+thinking
+**Investigating prelude imports**
+exec
+/bin/zsh -lc "rg -n \"actions::prelude\" src -g '*.rs'" in /Users/johnlindquist/dev/script-kit-gpui exited 1 in 51ms:
+
+
+thinking
+**Assessing module export completeness**
+exec
+/bin/zsh -lc "sed -n '1,260p' src/actions/types/script_info.rs && sed -n '1,260p' src/actions/types/action_model.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+// Action types and data structures
+//
+// Core types for the actions system including Action, ActionCategory, and ScriptInfo.
+//
+// # Architecture Overview
+//
+// The actions system is **intentionally decoupled** from the standard selection callbacks:
+//
+// - **on_select callback is bypassed by design** for keyboard navigation
+// - Actions route through `handle_action()` in the main app via keyboard events
+// - This enables consistent keyboard-driven action execution across all contexts
+//
+// ## Key Types
+//
+// - [`Action`]: Represents a single action item with id, title, category, and optional shortcut
+// - [`ActionCategory`]: Categorizes actions (ScriptContext, ScriptOps, GlobalOps)
+// - [`ScriptInfo`]: Context about the focused script/item for building context-specific actions
+//
+// ## Action ID Conventions
+//
+
+thinking
+**Inspecting module exports and usage**
+exec
+/bin/zsh -lc "rg -n \"use crate::actions::\\{|crate::actions::[A-Z_a-z0-9]+\" src -g '*.rs'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+src/app_actions/handle_action.rs:195:                        actions.extend(crate::actions::get_scriptlet_context_actions_with_custom(
+src/app_actions/handle_action.rs:199:                        actions.extend(crate::actions::get_script_context_actions(script));
+src/app_actions/handle_action.rs:203:                actions.extend(crate::actions::get_global_actions());
+src/app_actions/handle_action.rs:694:                    let deeplink_name = crate::actions::to_deeplink_name(name);
+src/app_actions/handle_action/main_actions_01.rs:141:                    let deeplink_name = crate::actions::to_deeplink_name(name);
+src/ai/window/command_bar.rs:97:        use crate::actions::{
+src/app_impl/startup_new_actions.rs:298:                                crate::actions::notify_actions_window(cx);
+src/app_impl/startup_new_actions.rs:299:                                crate::actions::resize_actions_window(cx, dialog);
+src/app_impl/startup_new_actions.rs:311:                                        crate::actions::notify_actions_window(cx);
+src/app_impl/startup_new_actions.rs:312:                                        crate::actions::resize_actions_window(cx, dialog);
+src/app_impl/actions_dialog.rs:79:            crate::actions::notify_actions_window(cx);
+src/app_impl/actions_dialog.rs:112:            crate::actions::notify_actions_window(cx);
+src/app_impl/actions_dialog.rs:113:            crate::actions::resize_actions_window(cx, dialog);
+src/app_impl/actions_dialog.rs:122:                crate::actions::notify_actions_window(cx);
+src/app_impl/actions_dialog.rs:123:                crate::actions::resize_actions_window(cx, dialog);
+src/ai/window.rs:40:use crate::actions::{get_ai_command_bar_actions, CommandBar, CommandBarConfig};
+src/app_impl/startup_new_arrow.rs:34:                                    crate::actions::notify_actions_window(cx);
+src/app_impl/startup_new_arrow.rs:55:                                            crate::actions::notify_actions_window(cx);
+src/app_impl/startup_new_arrow.rs:116:                                            crate::actions::notify_actions_window(cx);
+src/app_impl/startup_new_arrow.rs:209:                                            crate::actions::notify_actions_window(cx);
+
+thinking
+**Inspecting module visibility and exports**
+exec
+/bin/zsh -lc "sed -n '1,220p' src/ai/window.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '150,440p' src/app_impl/actions_toggle.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,220p' src/ai/window/command_bar.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,220p' src/notes/window.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+//! AI Chat Window
+//!
+//! A separate floating window for AI chat, built with gpui-component.
+//! This is completely independent from the main Script Kit launcher window.
+
+use anyhow::Result;
+use chrono::{Datelike, NaiveDate, Utc};
+use gpui::{
+    div, hsla, img, list, point, prelude::*, px, rgba, size, svg, App, BoxShadow, Context,
+    CursorStyle, Entity, ExternalPaths, FocusHandle, Focusable, IntoElement, KeyDownEvent,
+    ListAlignment, ListSizingBehavior, ListState, MouseMoveEvent, ParentElement, Render,
+    RenderImage, ScrollWheelEvent, SharedString, Styled, Subscription, Window, WindowBounds,
+    WindowOptions,
+};
+
+use crate::designs::icon_variations::IconName as LocalIconName;
+
+#[cfg(target_os = "macos")]
+use cocoa::appkit::NSApp;
+#[cfg(target_os = "macos")]
+ succeeded in 51ms:
+                    // Open - push overlay to save arg prompt focus state
+                    self.show_actions_popup = true;
+                    self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
+
+                    let theme_arc = std::sync::Arc::clone(&self.theme);
+                    let dialog = cx.new(|cx| {
+                        let focus_handle = cx.focus_handle();
+                        let mut dialog = ActionsDialog::with_script(
+                            focus_handle,
+                            std::sync::Arc::new(|_action_id| {}), // Callback handled separately
+                            None,                                 // No script info for arg prompts
+                            theme_arc,
+                        );
+                        // Set SDK actions to replace built-in actions
+                        dialog.set_sdk_actions(sdk_actions);
+                        dialog
+                    });
+
+                    // Show search input at bottom (Raycast-style)
+
+ succeeded in 51ms:
+use super::*;
+
+impl AiApp {
+    pub(super) fn show_command_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Open the command bar (CommandBar handles window creation internally)
+        self.command_bar.open(window, cx);
+
+        // CRITICAL: Focus main focus_handle so keyboard events route to us
+        // The ActionsWindow is a visual-only popup - it does NOT take keyboard focus.
+        // macOS popup windows often don't receive keyboard events properly.
+        // This also unfocuses the Input component which would otherwise consume arrow keys.
+        self.focus_handle.focus(window, cx);
+
+        // Request command bar focus on next render for keyboard routing
+        // This ensures the focus persists even if something else tries to steal it
+        self.needs_command_bar_focus = true;
+
+        // Log focus state for debugging - check both main handle AND input's focus state
+        let main_focused = self.focus_handle.is_focused(window);
+        let input_focused = self
+ succeeded in 51ms:
+//! Notes Window
+//!
+//! A separate floating window for notes, built with gpui-component.
+//! This is completely independent from the main Script Kit launcher window.
+
+use anyhow::Result;
+use gpui::{
+    div, prelude::*, px, rgba, size, AnyElement, App, Context, CursorStyle, Entity, FocusHandle,
+    Focusable, IntoElement, KeyDownEvent, MouseMoveEvent, ParentElement, Render, Styled,
+    Subscription, Window, WindowBounds, WindowOptions,
+};
+
+#[cfg(target_os = "macos")]
+use cocoa::appkit::NSApp;
+#[cfg(target_os = "macos")]
+use cocoa::base::{id, nil};
+use gpui_component::{
+    button::{Button, ButtonVariants},
+    input::{Input, InputEvent, InputState, Search},
+    kbd::Kbd,
+
+thinking
+**Assessing export visibility and leaks**
+exec
+/bin/zsh -lc "rg -n \"actions::types::\" src --glob '"'!src/actions/**'"'" in /Users/johnlindquist/dev/script-kit-gpui exited 1 in 51ms:
+
+
+thinking
+**Analyzing module structure and file usage**
+exec
+/bin/zsh -lc "sed -n '1,120p' src/actions/builders/chat.rs && sed -n '1,120p' src/actions/builders/script_context.rs && sed -n '1,80p' src/actions/builders/clipboard.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+use super::types::{Action, ActionCategory};
+use crate::designs::icon_variations::IconName;
+
+/// Information about a chat prompt for action building
+#[derive(Debug, Clone)]
+pub struct ChatPromptInfo {
+    pub current_model: Option<String>,
+    pub available_models: Vec<ChatModelInfo>,
+    pub has_messages: bool,
+    pub has_response: bool,
+}
+
+/// Information about an available chat model
+#[derive(Debug, Clone)]
+pub struct ChatModelInfo {
+    pub id: String,
+    pub display_name: String,
+    pub provider: String,
+}
+
+
+thinking
+**Refactoring builder module aliases**
+exec
+/bin/zsh -lc 'rg -n "pub (struct|enum|fn|type|trait)" src/actions/dialog/part_01.rs src/actions/dialog/part_02.rs src/actions/dialog/part_03.rs src/actions/dialog_part_04_rewire.rs src/actions/dialog/part_05.rs src/actions/command_bar/part_01.rs src/actions/command_bar/part_02.rs src/actions/command_bar/part_03.rs src/actions/window/part_01.rs src/actions/window/part_02.rs src/actions/window/part_03.rs src/actions/types/script_info.rs src/actions/types/action_model.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+src/actions/command_bar/part_01.rs:155:pub struct CommandBarConfig {
+src/actions/command_bar/part_01.rs:180:    pub fn main_menu_style() -> Self {
+src/actions/command_bar/part_01.rs:194:    pub fn ai_style() -> Self {
+src/actions/command_bar/part_01.rs:208:    pub fn no_search() -> Self {
+src/actions/command_bar/part_01.rs:223:    pub fn notes_style() -> Self {
+src/actions/command_bar/part_01.rs:239:pub type CommandBarActionCallback = Arc<dyn Fn(&str) + Send + Sync>;
+src/actions/command_bar/part_01.rs:246:pub struct CommandBar {
+src/actions/command_bar/part_03.rs:5:pub trait CommandBarHost {
+src/actions/command_bar/part_03.rs:104:pub fn is_command_bar_open() -> bool {
+src/actions/window/part_02.rs:120:pub fn open_actions_window(
+src/actions/window/part_02.rs:289:pub fn close_actions_window(cx: &mut App) {
+src/actions/window/part_02.rs:316:pub fn is_actions_window_open() -> bool {
+src/actions/window/part_02.rs:326:pub fn get_actions_window_handle() -> Option<WindowHandle<Root>> {
+src/actions/window/part_02.rs:336:pub fn notify_actions_window(cx: &mut App) {
+src/actions/window/part_03.rs:4:pub fn resize_actions_window_direct(
+src/actions/window/part_03.rs:128:pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>) {
+src/actions/command_bar/part_02.rs:10:    pub fn new(actions: Vec<Action>, config: CommandBarConfig, theme: Arc<theme::Theme>) -> Self {
+src/actions/command_bar/part_02.rs:22:    pub fn with_on_action(mut self, callback: CommandBarActionCallback) -> Self {
+src/actions/command_bar/part_02.rs:28:    pub fn set_on_action(&mut self, callback: CommandBarActionCallback) {
+src/actions/command_bar/part_02.rs:33:    pub fn set_actions(&mut self, actions: Vec<Action>, cx: &mut App) {
+
+thinking
+**Assessing public exports and prelude scope**
+exec
+/bin/zsh -lc 'rg -n "pub fn (with_|new|set_|show_|toggle_|open_|close_|is_|resize_|notify_|get_)" src/actions/dialog/part_01.rs src/actions/dialog/part_02.rs src/actions/dialog/part_03.rs src/actions/dialog_part_04_rewire.rs src/actions/dialog/part_05.rs | head -n 120' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+
+
+thinking
+**Inspecting function visibility**
+exec
+/bin/zsh -lc "sed -n '1,280p' src/actions/dialog/part_01.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,260p' src/actions/dialog/part_02.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,260p' src/actions/dialog/part_03.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+include!("part_02/part_01.rs");
+include!("part_02/part_02.rs");
+include!("part_02/part_03.rs");
+ succeeded in 51ms:
+
+impl Focusable for ActionsDialog {
+    fn focus_handle(&self, _cx: &App) -> FocusHandle {
+        self.focus_handle.clone()
+    }
+}
+ succeeded in 51ms:
+// Actions Dialog
+//
+// The main ActionsDialog struct and its implementation, providing a searchable
+// action menu as a compact overlay popup.
+
+
+use crate::components::scrollbar::{Scrollbar, ScrollbarColors};
+use crate::designs::{get_tokens, DesignColors, DesignVariant};
+use crate::logging;
+use crate::protocol::ProtocolAction;
+use crate::theme;
+use gpui::{
+    div, list, prelude::*, px, rgb, rgba, svg, App, BoxShadow, Context, ElementId, FocusHandle,
+    Focusable, ListAlignment, ListState, Render, SharedString, Window,
+};
+use std::collections::HashSet;
+use std::sync::Arc;
+
+use super::builders::{
+    format_shortcut_hint as format_shortcut_hint_shared, get_chat_context_actions,
+
+thinking
+**Evaluating module visibility and exports**
+exec
+/bin/zsh -lc "ls -1 && rg -n \"\\[lib\\]|\\[\\[bin\\]\\]|name\\s*=\\s*\\\"script-kit-gpui\\\"\" Cargo.toml && sed -n '1,220p' Cargo.toml" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+AGENTS.md
+BUNDLING.md
+CLAUDE.md
+CLAUDE.md.bak
+CLEANUP.md
+CODEMAP.md
+Cargo.lock
+Cargo.toml
+DESIGNING_POPUP_WINDOWS.md
+DEV.md
+EDITOR_PLAN.md
+GLOSSARY.md
+GPUI_RECOMMENDATIONS.md
+HOW_TO_AUTOMATE.md
+LIGHT_THEME.md
+MCP.md
+MENU_PLAN.md
+NEW_NOTE_PLAN.md
+RAYCAST_PARITY.md
+README.md
+
+thinking
+**Inspecting library exports**
+exec
+/bin/zsh -lc "sed -n '1,260p' src/lib.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+#![allow(unexpected_cfgs)]
+#![recursion_limit = "2048"]
+
+//! Script Kit GPUI - A GPUI-based launcher for Script Kit
+//!
+//! This library provides the core functionality for executing scripts
+//! with bidirectional JSONL communication.
+
+// Actions - Reusable action dialog component
+// Provides ActionsDialog with configurable layout for script actions, AI command bar, etc.
+pub mod actions;
+
+// App Shell - Unified frame and chrome for all prompts
+// Provides ShellSpec, HeaderSpec, FooterSpec, ChromeSpec for consistent prompt layout
+pub mod app_shell;
+
+#[cfg(target_os = "macos")]
+pub mod camera;
+pub mod components;
+pub mod config;
+
+thinking
+**Evaluating public API exports and prelude completeness**
+codex
+I’m now narrowing to concrete export changes: I’ll align `prelude` with the actual public type surface (`CommandBar*`, `ClipboardEntryInfo`, callback aliases), and then add a small compile-time test in-scope so this stays enforced.
+exec
+/bin/zsh -lc "sed -n '1,260p' src/actions/dialog/part_02/part_03.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,260p' src/actions/dialog/part_02/part_02.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,260p' src/actions/dialog/part_02/part_01.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+impl ActionsDialog {
+
+    /// Set actions from SDK (replaces built-in actions)
+    ///
+    /// Converts `ProtocolAction` items to internal `Action` format and updates
+    /// the actions list. Filters out actions with `visible: false`.
+    /// The `has_action` field on each action determines routing:
+    /// - `has_action=true`: Send ActionTriggered back to SDK
+    /// - `has_action=false`: Submit value directly
+    pub fn set_sdk_actions(&mut self, actions: Vec<ProtocolAction>) {
+        let total_count = actions.len();
+        let mut sdk_action_indices = Vec::new();
+        let mut seen_names: HashSet<String> = HashSet::new();
+        let mut duplicate_names = Vec::new();
+
+        let converted: Vec<Action> = actions
+            .iter()
+            .enumerate()
+            .filter_map(|(protocol_index, pa)| {
+                if !pa.is_visible() {
+ succeeded in 50ms:
+const ACTIONS_DIALOG_LIST_OVERDRAW_PX: f32 = 100.0;
+
+impl ActionsDialog {
+    pub fn new(
+        focus_handle: FocusHandle,
+        on_select: ActionCallback,
+        theme: Arc<theme::Theme>,
+    ) -> Self {
+        Self::with_script_and_design(focus_handle, on_select, None, theme, DesignVariant::Default)
+    }
+
+    pub fn with_script(
+        focus_handle: FocusHandle,
+        on_select: ActionCallback,
+        focused_script: Option<ScriptInfo>,
+        theme: Arc<theme::Theme>,
+    ) -> Self {
+        Self::with_script_and_design(
+            focus_handle,
+            on_select,
+ succeeded in 51ms:
+const ACTIONS_DIALOG_COLOR_ALPHA_MAX: f32 = 255.0;
+const ACTIONS_DIALOG_SEARCH_BORDER_ALPHA_SCALE: f32 = 2.0;
+const ACTIONS_DIALOG_CONTAINER_BORDER_MIN_ALPHA: u8 = 0x80;
+const ACTIONS_DIALOG_VIBRANT_DIALOG_MIN_OPACITY: f32 = 0.50;
+const ACTIONS_DIALOG_OPAQUE_DIALOG_MIN_OPACITY: f32 = 0.95;
+
+fn actions_dialog_alpha_u8(opacity: f32) -> u8 {
+    (opacity.clamp(0.0, 1.0) * ACTIONS_DIALOG_COLOR_ALPHA_MAX) as u8
+}
+
+fn actions_dialog_search_border_alpha(border_inactive_opacity: f32) -> u8 {
+    let scaled_border_opacity =
+        (border_inactive_opacity * ACTIONS_DIALOG_SEARCH_BORDER_ALPHA_SCALE).min(1.0);
+    actions_dialog_alpha_u8(scaled_border_opacity)
+}
+
+fn actions_dialog_container_border_alpha(border_inactive_opacity: f32) -> u8 {
+    actions_dialog_search_border_alpha(border_inactive_opacity)
+        .max(ACTIONS_DIALOG_CONTAINER_BORDER_MIN_ALPHA)
+}
+
+thinking
+**Assessing exports and module cleanup**
+exec
+/bin/zsh -lc "diff -u src/actions/builders.rs src/actions/builders_rewire.rs | sed -n '1,240p'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+--- src/actions/builders.rs	2026-02-07 09:09:21
++++ src/actions/builders_rewire.rs	2026-02-07 17:40:39
+@@ -2,12 +2,25 @@
+ //!
+ //! Factory functions for creating context-specific action lists.
+ 
++// Re-export action types into the builders module namespace so
++// existing submodules can import them as `super::types::*`.
++pub(super) mod types {
++    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
++}
++
++#[path = "builders/chat.rs"]
+ mod chat;
++#[path = "builders/clipboard.rs"]
+ mod clipboard;
++#[path = "builders/file_path.rs"]
+ mod file_path;
++#[path = "builders/notes.rs"]
+ mod notes;
+
+thinking
+**Auditing and aligning type exports**
+codex
+I have enough context and I’m moving to edits now: claim `src/actions/mod.rs`, `src/actions/prelude.rs`, and `src/actions/builders.rs`, then apply a focused export cleanup (including prelude coverage test) without touching unrelated behavior.
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts claim --wait --id codex-fix-exports-prelude src/actions/mod.rs src/actions/prelude.rs src/actions/builders.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+Claimed for codex-fix-exports-prelude: src/actions/mod.rs, src/actions/prelude.rs, src/actions/builders.rs
+
+thinking
+**Preparing coordinated multi-file edits**
+file update
+M /Users/johnlindquist/dev/script-kit-gpui/src/actions/mod.rs
+@@ -16,3 +16,2 @@
+ 
+-#[path = "builders_rewire.rs"]
+ mod builders;
+@@ -29,6 +28,6 @@
+ 
+-pub use builders::to_deeplink_name;
+-#[allow(unused_imports)]
+-pub use builders::ClipboardEntryInfo;
+-#[allow(unused_imports)]
++pub use builders::{
++    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
++    NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
++};
+ pub(crate) use builders::{
+@@ -36,21 +35,13 @@
+ };
+-// Chat prompt info types for ActionsDialog::with_chat
+-pub use builders::{ChatModelInfo, ChatPromptInfo};
++pub use builders::{
++    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
++    get_notes_command_bar_actions,
++};
++pub use command_bar::{
++    is_command_bar_open, CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
++};
+ pub use dialog::ActionsDialog;
+-pub use types::ScriptInfo;
+-
+-// Public API for AI window integration (re-exported but may appear unused until integration)
+-#[allow(unused_imports)]
+-pub use builders::get_ai_command_bar_actions;
+-#[allow(unused_imports)]
+-pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
+-// Public API for Notes window integration
+-#[allow(unused_imports)]
+-pub use builders::{get_notes_command_bar_actions, NotesInfo};
+-// Public API for Notes note switcher (Cmd+P) dialog
+-#[allow(unused_imports)]
+-pub use builders::{get_note_switcher_actions, NoteSwitcherNoteInfo};
+-#[allow(unused_imports)]
+ pub use types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+@@ -63,6 +54,2 @@
+ // get_actions_window_handle available but not re-exported (use window:: directly if needed)
+-
+-// CommandBar - high-level reusable component for command palette functionality
+-#[allow(unused_imports)]
+-pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, CommandBarHost};
+ 
+apply_patch(auto_approved=true) exited 0 in 11ms:
+Success. Updated the following files:
+M /Users/johnlindquist/dev/script-kit-gpui/src/actions/mod.rs
+file update:
+diff --git a/src/actions/mod.rs b/src/actions/mod.rs
+index 2a5f14b924cd3c748d30704ad97416401f9963f3..b2e9b79f99ad60722cd867d5ec6f392469023a36
+--- a/src/actions/mod.rs
++++ b/src/actions/mod.rs
+@@ -14,7 +14,6 @@
+ //! - `dialog`: ActionsDialog struct and implementation
+ //! - `window`: Separate vibrancy window for actions panel
+ 
+-#[path = "builders_rewire.rs"]
+ mod builders;
+ mod command_bar;
+ mod constants;
+@@ -27,32 +26,24 @@
+ // - ActionsDialog: the main dialog component
+ // - Window functions for separate vibrancy window
+ 
+-pub use builders::to_deeplink_name;
+-#[allow(unused_imports)]
+-pub use builders::ClipboardEntryInfo;
+-#[allow(unused_imports)]
++pub use builders::{
++    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
++    NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
++};
+ pub(crate) use builders::{
+     get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
+ };
+-// Chat prompt info types for ActionsDialog::with_chat
+-pub use builders::{ChatModelInfo, ChatPromptInfo};
++pub use builders::{
++    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
++    get_notes_command_bar_actions,
++};
++pub use command_bar::{
++    is_command_bar_open, CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
++};
+ pub use dialog::ActionsDialog;
+-pub use types::ScriptInfo;
+-
+-// Public API for AI window integration (re-exported but may appear unused until integration)
+-#[allow(unused_imports)]
+-pub use builders::get_ai_command_bar_actions;
+-#[allow(unused_imports)]
+-pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
+-// Public API for Notes window integration
+-#[allow(unused_imports)]
+-pub use builders::{get_notes_command_bar_actions, NotesInfo};
+-// Public API for Notes note switcher (Cmd+P) dialog
+-#[allow(unused_imports)]
+-pub use builders::{get_note_switcher_actions, NoteSwitcherNoteInfo};
+-#[allow(unused_imports)]
+ pub use types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ 
+ // Window functions for separate vibrancy window
+@@ -61,10 +52,6 @@
+     resize_actions_window, WindowPosition,
+ };
+ // get_actions_window_handle available but not re-exported (use window:: directly if needed)
+-
+-// CommandBar - high-level reusable component for command palette functionality
+-#[allow(unused_imports)]
+-pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, CommandBarHost};
+ 
+ pub mod prelude;
+ 
+
+file update:
+diff --git a/src/actions/mod.rs b/src/actions/mod.rs
+index 2a5f14b924cd3c748d30704ad97416401f9963f3..b2e9b79f99ad60722cd867d5ec6f392469023a36
+--- a/src/actions/mod.rs
++++ b/src/actions/mod.rs
+@@ -14,7 +14,6 @@
+ //! - `dialog`: ActionsDialog struct and implementation
+ //! - `window`: Separate vibrancy window for actions panel
+ 
+-#[path = "builders_rewire.rs"]
+ mod builders;
+ mod command_bar;
+ mod constants;
+@@ -27,32 +26,24 @@
+ // - ActionsDialog: the main dialog component
+ // - Window functions for separate vibrancy window
+ 
+-pub use builders::to_deeplink_name;
+-#[allow(unused_imports)]
+-pub use builders::ClipboardEntryInfo;
+-#[allow(unused_imports)]
++pub use builders::{
++    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
++    NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
++};
+ pub(crate) use builders::{
+     get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
+ };
+-// Chat prompt info types for ActionsDialog::with_chat
+-pub use builders::{ChatModelInfo, ChatPromptInfo};
++pub use builders::{
++    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
++    get_notes_command_bar_actions,
++};
++pub use command_bar::{
++    is_command_bar_open, CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
++};
+ pub use dialog::ActionsDialog;
+-pub use types::ScriptInfo;
+-
+-// Public API for AI window integration (re-exported but may appear unused until integration)
+-#[allow(unused_imports)]
+-pub use builders::get_ai_command_bar_actions;
+-#[allow(unused_imports)]
+-pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
+-// Public API for Notes window integration
+-#[allow(unused_imports)]
+-pub use builders::{get_notes_command_bar_actions, NotesInfo};
+-// Public API for Notes note switcher (Cmd+P) dialog
+-#[allow(unused_imports)]
+-pub use builders::{get_note_switcher_actions, NoteSwitcherNoteInfo};
+-#[allow(unused_imports)]
+ pub use types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ 
+ // Window functions for separate vibrancy window
+@@ -61,10 +52,6 @@
+     resize_actions_window, WindowPosition,
+ };
+ // get_actions_window_handle available but not re-exported (use window:: directly if needed)
+-
+-// CommandBar - high-level reusable component for command palette functionality
+-#[allow(unused_imports)]
+-pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, CommandBarHost};
+ 
+ pub mod prelude;
+ 
+
+
+thinking
+**Identifying needed patch**
+file update
+M /Users/johnlindquist/dev/script-kit-gpui/src/actions/builders.rs
+@@ -4,2 +4,8 @@
+ 
++// Re-export action types into the builders module namespace so
++// submodules can import them as `super::types::*`.
++pub(super) mod types {
++    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
++}
++
+ mod chat;
+apply_patch(auto_approved=true) exited 0 in 17ms:
+Success. Updated the following files:
+M /Users/johnlindquist/dev/script-kit-gpui/src/actions/builders.rs
+file update:
+diff --git a/src/actions/builders.rs b/src/actions/builders.rs
+index b263292552118682059ea3366b86365db9042991..3bc42052822feb80b6dd711c6b6ad59c544925d1
+--- a/src/actions/builders.rs
++++ b/src/actions/builders.rs
+@@ -2,6 +2,12 @@
+ //!
+ //! Factory functions for creating context-specific action lists.
+ 
++// Re-export action types into the builders module namespace so
++// submodules can import them as `super::types::*`.
++pub(super) mod types {
++    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
++}
++
+ mod chat;
+ mod clipboard;
+ mod file_path;
+diff --git a/src/actions/mod.rs b/src/actions/mod.rs
+index 2a5f14b924cd3c748d30704ad97416401f9963f3..b2e9b79f99ad60722cd867d5ec6f392469023a36
+--- a/src/actions/mod.rs
++++ b/src/actions/mod.rs
+@@ -14,7 +14,6 @@
+ //! - `dialog`: ActionsDialog struct and implementation
+ //! - `window`: Separate vibrancy window for actions panel
+ 
+-#[path = "builders_rewire.rs"]
+ mod builders;
+ mod command_bar;
+ mod constants;
+@@ -27,32 +26,24 @@
+ // - ActionsDialog: the main dialog component
+ // - Window functions for separate vibrancy window
+ 
+-pub use builders::to_deeplink_name;
+-#[allow(unused_imports)]
+-pub use builders::ClipboardEntryInfo;
+-#[allow(unused_imports)]
++pub use builders::{
++    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
++    NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
++};
+ pub(crate) use builders::{
+     get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
+ };
+-// Chat prompt info types for ActionsDialog::with_chat
+-pub use builders::{ChatModelInfo, ChatPromptInfo};
++pub use builders::{
++    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
++    get_notes_command_bar_actions,
++};
++pub use command_bar::{
++    is_command_bar_open, CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
++};
+ pub use dialog::ActionsDialog;
+-pub use types::ScriptInfo;
+-
+-// Public API for AI window integration (re-exported but may appear unused until integration)
+-#[allow(unused_imports)]
+-pub use builders::get_ai_command_bar_actions;
+-#[allow(unused_imports)]
+-pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
+-// Public API for Notes window integration
+-#[allow(unused_imports)]
+-pub use builders::{get_notes_command_bar_actions, NotesInfo};
+-// Public API for Notes note switcher (Cmd+P) dialog
+-#[allow(unused_imports)]
+-pub use builders::{get_note_switcher_actions, NoteSwitcherNoteInfo};
+-#[allow(unused_imports)]
+ pub use types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ 
+ // Window functions for separate vibrancy window
+@@ -61,10 +52,6 @@
+     resize_actions_window, WindowPosition,
+ };
+ // get_actions_window_handle available but not re-exported (use window:: directly if needed)
+-
+-// CommandBar - high-level reusable component for command palette functionality
+-#[allow(unused_imports)]
+-pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, CommandBarHost};
+ 
+ pub mod prelude;
+ 
+
+file update:
+diff --git a/src/actions/builders.rs b/src/actions/builders.rs
+index b263292552118682059ea3366b86365db9042991..3bc42052822feb80b6dd711c6b6ad59c544925d1
+--- a/src/actions/builders.rs
++++ b/src/actions/builders.rs
+@@ -2,6 +2,12 @@
+ //!
+ //! Factory functions for creating context-specific action lists.
+ 
++// Re-export action types into the builders module namespace so
++// submodules can import them as `super::types::*`.
++pub(super) mod types {
++    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
++}
++
+ mod chat;
+ mod clipboard;
+ mod file_path;
+diff --git a/src/actions/mod.rs b/src/actions/mod.rs
+index 2a5f14b924cd3c748d30704ad97416401f9963f3..b2e9b79f99ad60722cd867d5ec6f392469023a36
+--- a/src/actions/mod.rs
++++ b/src/actions/mod.rs
+@@ -14,7 +14,6 @@
+ //! - `dialog`: ActionsDialog struct and implementation
+ //! - `window`: Separate vibrancy window for actions panel
+ 
+-#[path = "builders_rewire.rs"]
+ mod builders;
+ mod command_bar;
+ mod constants;
+@@ -27,32 +26,24 @@
+ // - ActionsDialog: the main dialog component
+ // - Window functions for separate vibrancy window
+ 
+-pub use builders::to_deeplink_name;
+-#[allow(unused_imports)]
+-pub use builders::ClipboardEntryInfo;
+-#[allow(unused_imports)]
++pub use builders::{
++    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
++    NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
++};
+ pub(crate) use builders::{
+     get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
+ };
+-// Chat prompt info types for ActionsDialog::with_chat
+-pub use builders::{ChatModelInfo, ChatPromptInfo};
++pub use builders::{
++    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
++    get_notes_command_bar_actions,
++};
++pub use command_bar::{
++    is_command_bar_open, CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
++};
+ pub use dialog::ActionsDialog;
+-pub use types::ScriptInfo;
+-
+-// Public API for AI window integration (re-exported but may appear unused until integration)
+-#[allow(unused_imports)]
+-pub use builders::get_ai_command_bar_actions;
+-#[allow(unused_imports)]
+-pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
+-// Public API for Notes window integration
+-#[allow(unused_imports)]
+-pub use builders::{get_notes_command_bar_actions, NotesInfo};
+-// Public API for Notes note switcher (Cmd+P) dialog
+-#[allow(unused_imports)]
+-pub use builders::{get_note_switcher_actions, NoteSwitcherNoteInfo};
+-#[allow(unused_imports)]
+ pub use types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ 
+ // Window functions for separate vibrancy window
+@@ -61,10 +52,6 @@
+     resize_actions_window, WindowPosition,
+ };
+ // get_actions_window_handle available but not re-exported (use window:: directly if needed)
+-
+-// CommandBar - high-level reusable component for command palette functionality
+-#[allow(unused_imports)]
+-pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, CommandBarHost};
+ 
+ pub mod prelude;
+ 
+
+
+thinking
+**Applying prelude patch**
+codex
+I’ve applied `mod.rs`/`builders.rs` changes and I’m now updating `prelude.rs` to include the full consumer-facing type set plus a compile-time unit test that enforces the export contract.
+file update
+M /Users/johnlindquist/dev/script-kit-gpui/src/actions/prelude.rs
+@@ -4,7 +4,8 @@
+ //! helper from `actions` root exports.
+-#![allow(unused_imports)]
+-
+ pub use super::builders::{
+-    ChatModelInfo, ChatPromptInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo,
+-    NotesInfo,
++    ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
++    NoteSwitcherNoteInfo, NotesInfo,
++};
++pub use super::command_bar::{
++    CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
+ };
+@@ -12,4 +13,4 @@
+ pub use super::types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
+-    SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+@@ -19 +20,36 @@
+ };
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn test_prelude_exports_include_public_actions_types_for_consumers() {
++        fn assert_type_available<T: 'static>() {
++            let _ = std::any::TypeId::of::<T>();
++        }
++
++        assert_type_available::<Action>();
++        assert_type_available::<ActionCallback>();
++        assert_type_available::<ActionCategory>();
++        assert_type_available::<ActionsDialog>();
++        assert_type_available::<ActionsDialogConfig>();
++        assert_type_available::<AnchorPosition>();
++        assert_type_available::<ChatModelInfo>();
++        assert_type_available::<ChatPromptInfo>();
++        assert_type_available::<ClipboardEntryInfo>();
++        assert_type_available::<CloseCallback>();
++        assert_type_available::<CommandBar>();
++        assert_type_available::<CommandBarActionCallback>();
++        assert_type_available::<CommandBarConfig>();
++        assert_type_available::<NewChatModelInfo>();
++        assert_type_available::<NewChatPresetInfo>();
++        assert_type_available::<NoteSwitcherNoteInfo>();
++        assert_type_available::<NotesInfo>();
++        assert_type_available::<ScriptInfo>();
++        assert_type_available::<SearchPosition>();
++        assert_type_available::<SectionStyle>();
++        assert_type_available::<WindowPosition>();
++        let _ = Option::<&dyn CommandBarHost>::None;
++    }
++}
+apply_patch(auto_approved=true) exited 0 in 19ms:
+Success. Updated the following files:
+M /Users/johnlindquist/dev/script-kit-gpui/src/actions/prelude.rs
+file update:
+diff --git a/src/actions/builders.rs b/src/actions/builders.rs
+index b263292552118682059ea3366b86365db9042991..3bc42052822feb80b6dd711c6b6ad59c544925d1
+--- a/src/actions/builders.rs
++++ b/src/actions/builders.rs
+@@ -2,6 +2,12 @@
+ //!
+ //! Factory functions for creating context-specific action lists.
+ 
++// Re-export action types into the builders module namespace so
++// submodules can import them as `super::types::*`.
++pub(super) mod types {
++    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
++}
++
+ mod chat;
+ mod clipboard;
+ mod file_path;
+diff --git a/src/actions/mod.rs b/src/actions/mod.rs
+index 2a5f14b924cd3c748d30704ad97416401f9963f3..b2e9b79f99ad60722cd867d5ec6f392469023a36
+--- a/src/actions/mod.rs
++++ b/src/actions/mod.rs
+@@ -14,7 +14,6 @@
+ //! - `dialog`: ActionsDialog struct and implementation
+ //! - `window`: Separate vibrancy window for actions panel
+ 
+-#[path = "builders_rewire.rs"]
+ mod builders;
+ mod command_bar;
+ mod constants;
+@@ -27,32 +26,24 @@
+ // - ActionsDialog: the main dialog component
+ // - Window functions for separate vibrancy window
+ 
+-pub use builders::to_deeplink_name;
+-#[allow(unused_imports)]
+-pub use builders::ClipboardEntryInfo;
+-#[allow(unused_imports)]
++pub use builders::{
++    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
++    NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
++};
+ pub(crate) use builders::{
+     get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
+ };
+-// Chat prompt info types for ActionsDialog::with_chat
+-pub use builders::{ChatModelInfo, ChatPromptInfo};
++pub use builders::{
++    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
++    get_notes_command_bar_actions,
++};
++pub use command_bar::{
++    is_command_bar_open, CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
++};
+ pub use dialog::ActionsDialog;
+-pub use types::ScriptInfo;
+-
+-// Public API for AI window integration (re-exported but may appear unused until integration)
+-#[allow(unused_imports)]
+-pub use builders::get_ai_command_bar_actions;
+-#[allow(unused_imports)]
+-pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
+-// Public API for Notes window integration
+-#[allow(unused_imports)]
+-pub use builders::{get_notes_command_bar_actions, NotesInfo};
+-// Public API for Notes note switcher (Cmd+P) dialog
+-#[allow(unused_imports)]
+-pub use builders::{get_note_switcher_actions, NoteSwitcherNoteInfo};
+-#[allow(unused_imports)]
+ pub use types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ 
+ // Window functions for separate vibrancy window
+@@ -61,10 +52,6 @@
+     resize_actions_window, WindowPosition,
+ };
+ // get_actions_window_handle available but not re-exported (use window:: directly if needed)
+-
+-// CommandBar - high-level reusable component for command palette functionality
+-#[allow(unused_imports)]
+-pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, CommandBarHost};
+ 
+ pub mod prelude;
+ 
+diff --git a/src/actions/prelude.rs b/src/actions/prelude.rs
+index a21f5e852ac05b70af5fa8fd7099c6ecbe506a0c..f70f98a002cd7a9e5415b80b8e8b61b2dc9ed2b8
+--- a/src/actions/prelude.rs
++++ b/src/actions/prelude.rs
+@@ -2,18 +2,54 @@
+ //!
+ //! This module keeps action-related imports discoverable without pulling every
+ //! helper from `actions` root exports.
+-#![allow(unused_imports)]
+-
+ pub use super::builders::{
+-    ChatModelInfo, ChatPromptInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo,
+-    NotesInfo,
++    ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
++    NoteSwitcherNoteInfo, NotesInfo,
++};
++pub use super::command_bar::{
++    CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
+ };
+ pub use super::dialog::ActionsDialog;
+ pub use super::types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
+-    SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ pub use super::window::{
+     close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
+     resize_actions_window, WindowPosition,
+ };
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn test_prelude_exports_include_public_actions_types_for_consumers() {
++        fn assert_type_available<T: 'static>() {
++            let _ = std::any::TypeId::of::<T>();
++        }
++
++        assert_type_available::<Action>();
++        assert_type_available::<ActionCallback>();
++        assert_type_available::<ActionCategory>();
++        assert_type_available::<ActionsDialog>();
++        assert_type_available::<ActionsDialogConfig>();
++        assert_type_available::<AnchorPosition>();
++        assert_type_available::<ChatModelInfo>();
++        assert_type_available::<ChatPromptInfo>();
++        assert_type_available::<ClipboardEntryInfo>();
++        assert_type_available::<CloseCallback>();
++        assert_type_available::<CommandBar>();
++        assert_type_available::<CommandBarActionCallback>();
++        assert_type_available::<CommandBarConfig>();
++        assert_type_available::<NewChatModelInfo>();
++        assert_type_available::<NewChatPresetInfo>();
++        assert_type_available::<NoteSwitcherNoteInfo>();
++        assert_type_available::<NotesInfo>();
++        assert_type_available::<ScriptInfo>();
++        assert_type_available::<SearchPosition>();
++        assert_type_available::<SectionStyle>();
++        assert_type_available::<WindowPosition>();
++        let _ = Option::<&dyn CommandBarHost>::None;
++    }
++}
+
+file update:
+diff --git a/src/actions/builders.rs b/src/actions/builders.rs
+index b263292552118682059ea3366b86365db9042991..3bc42052822feb80b6dd711c6b6ad59c544925d1
+--- a/src/actions/builders.rs
++++ b/src/actions/builders.rs
+@@ -2,6 +2,12 @@
+ //!
+ //! Factory functions for creating context-specific action lists.
+ 
++// Re-export action types into the builders module namespace so
++// submodules can import them as `super::types::*`.
++pub(super) mod types {
++    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
++}
++
+ mod chat;
+ mod clipboard;
+ mod file_path;
+diff --git a/src/actions/mod.rs b/src/actions/mod.rs
+index 2a5f14b924cd3c748d30704ad97416401f9963f3..b2e9b79f99ad60722cd867d5ec6f392469023a36
+--- a/src/actions/mod.rs
++++ b/src/actions/mod.rs
+@@ -14,7 +14,6 @@
+ //! - `dialog`: ActionsDialog struct and implementation
+ //! - `window`: Separate vibrancy window for actions panel
+ 
+-#[path = "builders_rewire.rs"]
+ mod builders;
+ mod command_bar;
+ mod constants;
+@@ -27,32 +26,24 @@
+ // - ActionsDialog: the main dialog component
+ // - Window functions for separate vibrancy window
+ 
+-pub use builders::to_deeplink_name;
+-#[allow(unused_imports)]
+-pub use builders::ClipboardEntryInfo;
+-#[allow(unused_imports)]
++pub use builders::{
++    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
++    NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
++};
+ pub(crate) use builders::{
+     get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
+ };
+-// Chat prompt info types for ActionsDialog::with_chat
+-pub use builders::{ChatModelInfo, ChatPromptInfo};
++pub use builders::{
++    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
++    get_notes_command_bar_actions,
++};
++pub use command_bar::{
++    is_command_bar_open, CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
++};
+ pub use dialog::ActionsDialog;
+-pub use types::ScriptInfo;
+-
+-// Public API for AI window integration (re-exported but may appear unused until integration)
+-#[allow(unused_imports)]
+-pub use builders::get_ai_command_bar_actions;
+-#[allow(unused_imports)]
+-pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
+-// Public API for Notes window integration
+-#[allow(unused_imports)]
+-pub use builders::{get_notes_command_bar_actions, NotesInfo};
+-// Public API for Notes note switcher (Cmd+P) dialog
+-#[allow(unused_imports)]
+-pub use builders::{get_note_switcher_actions, NoteSwitcherNoteInfo};
+-#[allow(unused_imports)]
+ pub use types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ 
+ // Window functions for separate vibrancy window
+@@ -61,10 +52,6 @@
+     resize_actions_window, WindowPosition,
+ };
+ // get_actions_window_handle available but not re-exported (use window:: directly if needed)
+-
+-// CommandBar - high-level reusable component for command palette functionality
+-#[allow(unused_imports)]
+-pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, CommandBarHost};
+ 
+ pub mod prelude;
+ 
+diff --git a/src/actions/prelude.rs b/src/actions/prelude.rs
+index a21f5e852ac05b70af5fa8fd7099c6ecbe506a0c..f70f98a002cd7a9e5415b80b8e8b61b2dc9ed2b8
+--- a/src/actions/prelude.rs
++++ b/src/actions/prelude.rs
+@@ -2,18 +2,54 @@
+ //!
+ //! This module keeps action-related imports discoverable without pulling every
+ //! helper from `actions` root exports.
+-#![allow(unused_imports)]
+-
+ pub use super::builders::{
+-    ChatModelInfo, ChatPromptInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo,
+-    NotesInfo,
++    ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
++    NoteSwitcherNoteInfo, NotesInfo,
++};
++pub use super::command_bar::{
++    CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
+ };
+ pub use super::dialog::ActionsDialog;
+ pub use super::types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
+-    SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ pub use super::window::{
+     close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
+     resize_actions_window, WindowPosition,
+ };
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn test_prelude_exports_include_public_actions_types_for_consumers() {
++        fn assert_type_available<T: 'static>() {
++            let _ = std::any::TypeId::of::<T>();
++        }
++
++        assert_type_available::<Action>();
++        assert_type_available::<ActionCallback>();
++        assert_type_available::<ActionCategory>();
++        assert_type_available::<ActionsDialog>();
++        assert_type_available::<ActionsDialogConfig>();
++        assert_type_available::<AnchorPosition>();
++        assert_type_available::<ChatModelInfo>();
++        assert_type_available::<ChatPromptInfo>();
++        assert_type_available::<ClipboardEntryInfo>();
++        assert_type_available::<CloseCallback>();
++        assert_type_available::<CommandBar>();
++        assert_type_available::<CommandBarActionCallback>();
++        assert_type_available::<CommandBarConfig>();
++        assert_type_available::<NewChatModelInfo>();
++        assert_type_available::<NewChatPresetInfo>();
++        assert_type_available::<NoteSwitcherNoteInfo>();
++        assert_type_available::<NotesInfo>();
++        assert_type_available::<ScriptInfo>();
++        assert_type_available::<SearchPosition>();
++        assert_type_available::<SectionStyle>();
++        assert_type_available::<WindowPosition>();
++        let _ = Option::<&dyn CommandBarHost>::None;
++    }
++}
+
+
+thinking
+**Verifying compile with cargo check**
+codex
+Edits are in place; I’m running scoped verification now (`cargo check` then `cargo clippy --all-targets -D warnings` on package `script-kit-gpui`) to confirm the export surface compiles cleanly after removing the rewire module path.
+exec
+/bin/zsh -lc 'cargo check -p script-kit-gpui' in /Users/johnlindquist/dev/script-kit-gpuifile update:
+diff --git a/src/actions/builders.rs b/src/actions/builders.rs
+index b263292552118682059ea3366b86365db9042991..3bc42052822feb80b6dd711c6b6ad59c544925d1
+--- a/src/actions/builders.rs
++++ b/src/actions/builders.rs
+@@ -2,6 +2,12 @@
+ //!
+ //! Factory functions for creating context-specific action lists.
+ 
++// Re-export action types into the builders module namespace so
++// submodules can import them as `super::types::*`.
++pub(super) mod types {
++    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
++}
++
+ mod chat;
+ mod clipboard;
+ mod file_path;
+diff --git a/src/actions/mod.rs b/src/actions/mod.rs
+index 2a5f14b924cd3c748d30704ad97416401f9963f3..b2e9b79f99ad60722cd867d5ec6f392469023a36
+--- a/src/actions/mod.rs
++++ b/src/actions/mod.rs
+@@ -14,7 +14,6 @@
+ //! - `dialog`: ActionsDialog struct and implementation
+ //! - `window`: Separate vibrancy window for actions panel
+ 
+-#[path = "builders_rewire.rs"]
+ mod builders;
+ mod command_bar;
+ mod constants;
+@@ -27,32 +26,24 @@
+ // - ActionsDialog: the main dialog component
+ // - Window functions for separate vibrancy window
+ 
+-pub use builders::to_deeplink_name;
+-#[allow(unused_imports)]
+-pub use builders::ClipboardEntryInfo;
+-#[allow(unused_imports)]
++pub use builders::{
++    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
++    NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
++};
+ pub(crate) use builders::{
+     get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
+ };
+-// Chat prompt info types for ActionsDialog::with_chat
+-pub use builders::{ChatModelInfo, ChatPromptInfo};
++pub use builders::{
++    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
++    get_notes_command_bar_actions,
++};
++pub use command_bar::{
++    is_command_bar_open, CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
++};
+ pub use dialog::ActionsDialog;
+-pub use types::ScriptInfo;
+-
+-// Public API for AI window integration (re-exported but may appear unused until integration)
+-#[allow(unused_imports)]
+-pub use builders::get_ai_command_bar_actions;
+-#[allow(unused_imports)]
+-pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
+-// Public API for Notes window integration
+-#[allow(unused_imports)]
+-pub use builders::{get_notes_command_bar_actions, NotesInfo};
+-// Public API for Notes note switcher (Cmd+P) dialog
+-#[allow(unused_imports)]
+-pub use builders::{get_note_switcher_actions, NoteSwitcherNoteInfo};
+-#[allow(unused_imports)]
+ pub use types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ 
+ // Window functions for separate vibrancy window
+@@ -61,10 +52,6 @@
+     resize_actions_window, WindowPosition,
+ };
+ // get_actions_window_handle available but not re-exported (use window:: directly if needed)
+-
+-// CommandBar - high-level reusable component for command palette functionality
+-#[allow(unused_imports)]
+-pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, CommandBarHost};
+ 
+ pub mod prelude;
+ 
+diff --git a/src/actions/prelude.rs b/src/actions/prelude.rs
+index a21f5e852ac05b70af5fa8fd7099c6ecbe506a0c..f70f98a002cd7a9e5415b80b8e8b61b2dc9ed2b8
+--- a/src/actions/prelude.rs
++++ b/src/actions/prelude.rs
+@@ -2,18 +2,54 @@
+ //!
+ //! This module keeps action-related imports discoverable without pulling every
+ //! helper from `actions` root exports.
+-#![allow(unused_imports)]
+-
+ pub use super::builders::{
+-    ChatModelInfo, ChatPromptInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo,
+-    NotesInfo,
++    ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
++    NoteSwitcherNoteInfo, NotesInfo,
++};
++pub use super::command_bar::{
++    CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
+ };
+ pub use super::dialog::ActionsDialog;
+ pub use super::types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
+-    SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ pub use super::window::{
+     close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
+     resize_actions_window, WindowPosition,
+ };
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn test_prelude_exports_include_public_actions_types_for_consumers() {
++        fn assert_type_available<T: 'static>() {
++            let _ = std::any::TypeId::of::<T>();
++        }
++
++        assert_type_available::<Action>();
++        assert_type_available::<ActionCallback>();
++        assert_type_available::<ActionCategory>();
++        assert_type_available::<ActionsDialog>();
++        assert_type_available::<ActionsDialogConfig>();
++        assert_type_available::<AnchorPosition>();
++        assert_type_available::<ChatModelInfo>();
++        assert_type_available::<ChatPromptInfo>();
++        assert_type_available::<ClipboardEntryInfo>();
++        assert_type_available::<CloseCallback>();
++        assert_type_available::<CommandBar>();
++        assert_type_available::<CommandBarActionCallback>();
++        assert_type_available::<CommandBarConfig>();
++        assert_type_available::<NewChatModelInfo>();
++        assert_type_available::<NewChatPresetInfo>();
++        assert_type_available::<NoteSwitcherNoteInfo>();
++        assert_type_available::<NotesInfo>();
++        assert_type_available::<ScriptInfo>();
++        assert_type_available::<SearchPosition>();
++        assert_type_available::<SectionStyle>();
++        assert_type_available::<WindowPosition>();
++        let _ = Option::<&dyn CommandBarHost>::None;
++    }
++}
+
+file update:
+diff --git a/src/actions/builders.rs b/src/actions/builders.rs
+index b263292552118682059ea3366b86365db9042991..3bc42052822feb80b6dd711c6b6ad59c544925d1
+--- a/src/actions/builders.rs
++++ b/src/actions/builders.rs
+@@ -2,6 +2,12 @@
+ //!
+ //! Factory functions for creating context-specific action lists.
+ 
++// Re-export action types into the builders module namespace so
++// submodules can import them as `super::types::*`.
++pub(super) mod types {
++    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
++}
++
+ mod chat;
+ mod clipboard;
+ mod file_path;
+diff --git a/src/actions/mod.rs b/src/actions/mod.rs
+index 2a5f14b924cd3c748d30704ad97416401f9963f3..b2e9b79f99ad60722cd867d5ec6f392469023a36
+--- a/src/actions/mod.rs
++++ b/src/actions/mod.rs
+@@ -14,7 +14,6 @@
+ //! - `dialog`: ActionsDialog struct and implementation
+ //! - `window`: Separate vibrancy window for actions panel
+ 
+-#[path = "builders_rewire.rs"]
+ mod builders;
+ mod command_bar;
+ mod constants;
+@@ -27,32 +26,24 @@
+ // - ActionsDialog: the main dialog component
+ // - Window functions for separate vibrancy window
+ 
+-pub use builders::to_deeplink_name;
+-#[allow(unused_imports)]
+-pub use builders::ClipboardEntryInfo;
+-#[allow(unused_imports)]
++pub use builders::{
++    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
++    NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
++};
+ pub(crate) use builders::{
+     get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
+ };
+-// Chat prompt info types for ActionsDialog::with_chat
+-pub use builders::{ChatModelInfo, ChatPromptInfo};
++pub use builders::{
++    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
++    get_notes_command_bar_actions,
++};
++pub use command_bar::{
++    is_command_bar_open, CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
++};
+ pub use dialog::ActionsDialog;
+-pub use types::ScriptInfo;
+-
+-// Public API for AI window integration (re-exported but may appear unused until integration)
+-#[allow(unused_imports)]
+-pub use builders::get_ai_command_bar_actions;
+-#[allow(unused_imports)]
+-pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
+-// Public API for Notes window integration
+-#[allow(unused_imports)]
+-pub use builders::{get_notes_command_bar_actions, NotesInfo};
+-// Public API for Notes note switcher (Cmd+P) dialog
+-#[allow(unused_imports)]
+-pub use builders::{get_note_switcher_actions, NoteSwitcherNoteInfo};
+-#[allow(unused_imports)]
+ pub use types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ 
+ // Window functions for separate vibrancy window
+@@ -61,10 +52,6 @@
+     resize_actions_window, WindowPosition,
+ };
+ // get_actions_window_handle available but not re-exported (use window:: directly if needed)
+-
+-// CommandBar - high-level reusable component for command palette functionality
+-#[allow(unused_imports)]
+-pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, CommandBarHost};
+ 
+ pub mod prelude;
+ 
+diff --git a/src/actions/prelude.rs b/src/actions/prelude.rs
+index a21f5e852ac05b70af5fa8fd7099c6ecbe506a0c..f70f98a002cd7a9e5415b80b8e8b61b2dc9ed2b8
+--- a/src/actions/prelude.rs
++++ b/src/actions/prelude.rs
+@@ -2,18 +2,54 @@
+ //!
+ //! This module keeps action-related imports discoverable without pulling every
+ //! helper from `actions` root exports.
+-#![allow(unused_imports)]
+-
+ pub use super::builders::{
+-    ChatModelInfo, ChatPromptInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo,
+-    NotesInfo,
++    ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
++    NoteSwitcherNoteInfo, NotesInfo,
++};
++pub use super::command_bar::{
++    CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
+ };
+ pub use super::dialog::ActionsDialog;
+ pub use super::types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
+-    SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ pub use super::window::{
+     close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
+     resize_actions_window, WindowPosition,
+ };
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn test_prelude_exports_include_public_actions_types_for_consumers() {
++        fn assert_type_available<T: 'static>() {
++            let _ = std::any::TypeId::of::<T>();
++        }
++
++        assert_type_available::<Action>();
++        assert_type_available::<ActionCallback>();
++        assert_type_available::<ActionCategory>();
++        assert_type_available::<ActionsDialog>();
++        assert_type_available::<ActionsDialogConfig>();
++        assert_type_available::<AnchorPosition>();
++        assert_type_available::<ChatModelInfo>();
++        assert_type_available::<ChatPromptInfo>();
++        assert_type_available::<ClipboardEntryInfo>();
++        assert_type_available::<CloseCallback>();
++        assert_type_available::<CommandBar>();
++        assert_type_available::<CommandBarActionCallback>();
++        assert_type_available::<CommandBarConfig>();
++        assert_type_available::<NewChatModelInfo>();
++        assert_type_available::<NewChatPresetInfo>();
++        assert_type_available::<NoteSwitcherNoteInfo>();
++        assert_type_available::<NotesInfo>();
++        assert_type_available::<ScriptInfo>();
++        assert_type_available::<SearchPosition>();
++        assert_type_available::<SectionStyle>();
++        assert_type_available::<WindowPosition>();
++        let _ = Option::<&dyn CommandBarHost>::None;
++    }
++}
+
+ exited 101 in 9.73s:
+    Checking script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+warning: unused imports: `get_global_actions`, `get_script_context_actions`, and `get_scriptlet_context_actions_with_custom`
+  --> src/actions/mod.rs:34:5
+   |
+34 |     get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
+   |     ^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:32:16
+   |
+32 | pub(super) use inline::*;
+   |                ^^^^^^^^^
+   |
+note: the most public imported item is `pub(self)`
+  --> src/prompts/div/mod.rs:32:16
+   |
+32 | pub(super) use inline::*;
+   |                ^^^^^^^^^
+Reconnecting... 1/5 (stream disconnected before completion: websocket closed by server before response.completed)
+
+thinking
+**Allowing unused imports in mod for warnings**
+codex
+`cargo check -p script-kit-gpui` surfaced unrelated, in-flight compile errors from other modules (clipboard worker changes), plus one warning introduced by my visibility tightening. I’m patching that warning now, then I’ll rerun the requested verification commands and report exact blockers.
+file update
+M /Users/johnlindquist/dev/script-kit-gpui/src/actions/mod.rs
+@@ -32,2 +32,3 @@
+ };
++#[allow(unused_imports)]
+ pub(crate) use builders::{
+apply_patch(auto_approved=true) exited 0 in 20ms:
+Success. Updated the following files:
+M /Users/johnlindquist/dev/script-kit-gpui/src/actions/mod.rs
+file update:
+diff --git a/src/actions/builders.rs b/src/actions/builders.rs
+index b263292552118682059ea3366b86365db9042991..3bc42052822feb80b6dd711c6b6ad59c544925d1
+--- a/src/actions/builders.rs
++++ b/src/actions/builders.rs
+@@ -2,6 +2,12 @@
+ //!
+ //! Factory functions for creating context-specific action lists.
+ 
++// Re-export action types into the builders module namespace so
++// submodules can import them as `super::types::*`.
++pub(super) mod types {
++    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
++}
++
+ mod chat;
+ mod clipboard;
+ mod file_path;
+diff --git a/src/actions/mod.rs b/src/actions/mod.rs
+index 2a5f14b924cd3c748d30704ad97416401f9963f3..e125ef3b2bcbbe5738b52054dd0ec3d47525f73e
+--- a/src/actions/mod.rs
++++ b/src/actions/mod.rs
+@@ -14,7 +14,6 @@
+ //! - `dialog`: ActionsDialog struct and implementation
+ //! - `window`: Separate vibrancy window for actions panel
+ 
+-#[path = "builders_rewire.rs"]
+ mod builders;
+ mod command_bar;
+ mod constants;
+@@ -27,32 +26,25 @@
+ // - ActionsDialog: the main dialog component
+ // - Window functions for separate vibrancy window
+ 
+-pub use builders::to_deeplink_name;
+-#[allow(unused_imports)]
+-pub use builders::ClipboardEntryInfo;
++pub use builders::{
++    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
++    NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
++};
+ #[allow(unused_imports)]
+ pub(crate) use builders::{
+     get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
+ };
+-// Chat prompt info types for ActionsDialog::with_chat
+-pub use builders::{ChatModelInfo, ChatPromptInfo};
++pub use builders::{
++    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
++    get_notes_command_bar_actions,
++};
++pub use command_bar::{
++    is_command_bar_open, CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
++};
+ pub use dialog::ActionsDialog;
+-pub use types::ScriptInfo;
+-
+-// Public API for AI window integration (re-exported but may appear unused until integration)
+-#[allow(unused_imports)]
+-pub use builders::get_ai_command_bar_actions;
+-#[allow(unused_imports)]
+-pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
+-// Public API for Notes window integration
+-#[allow(unused_imports)]
+-pub use builders::{get_notes_command_bar_actions, NotesInfo};
+-// Public API for Notes note switcher (Cmd+P) dialog
+-#[allow(unused_imports)]
+-pub use builders::{get_note_switcher_actions, NoteSwitcherNoteInfo};
+-#[allow(unused_imports)]
+ pub use types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ 
+ // Window functions for separate vibrancy window
+@@ -61,10 +53,6 @@
+     resize_actions_window, WindowPosition,
+ };
+ // get_actions_window_handle available but not re-exported (use window:: directly if needed)
+-
+-// CommandBar - high-level reusable component for command palette functionality
+-#[allow(unused_imports)]
+-pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, CommandBarHost};
+ 
+ pub mod prelude;
+ 
+diff --git a/src/actions/prelude.rs b/src/actions/prelude.rs
+index a21f5e852ac05b70af5fa8fd7099c6ecbe506a0c..f70f98a002cd7a9e5415b80b8e8b61b2dc9ed2b8
+--- a/src/actions/prelude.rs
++++ b/src/actions/prelude.rs
+@@ -2,18 +2,54 @@
+ //!
+ //! This module keeps action-related imports discoverable without pulling every
+ //! helper from `actions` root exports.
+-#![allow(unused_imports)]
+-
+ pub use super::builders::{
+-    ChatModelInfo, ChatPromptInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo,
+-    NotesInfo,
++    ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
++    NoteSwitcherNoteInfo, NotesInfo,
++};
++pub use super::command_bar::{
++    CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
+ };
+ pub use super::dialog::ActionsDialog;
+ pub use super::types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
+-    SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ pub use super::window::{
+     close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
+     resize_actions_window, WindowPosition,
+ };
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn test_prelude_exports_include_public_actions_types_for_consumers() {
++        fn assert_type_available<T: 'static>() {
++            let _ = std::any::TypeId::of::<T>();
++        }
++
++        assert_type_available::<Action>();
++        assert_type_available::<ActionCallback>();
++        assert_type_available::<ActionCategory>();
++        assert_type_available::<ActionsDialog>();
++        assert_type_available::<ActionsDialogConfig>();
++        assert_type_available::<AnchorPosition>();
++        assert_type_available::<ChatModelInfo>();
++        assert_type_available::<ChatPromptInfo>();
++        assert_type_available::<ClipboardEntryInfo>();
++        assert_type_available::<CloseCallback>();
++        assert_type_available::<CommandBar>();
++        assert_type_available::<CommandBarActionCallback>();
++        assert_type_available::<CommandBarConfig>();
++        assert_type_available::<NewChatModelInfo>();
++        assert_type_available::<NewChatPresetInfo>();
++        assert_type_available::<NoteSwitcherNoteInfo>();
++        assert_type_available::<NotesInfo>();
++        assert_type_available::<ScriptInfo>();
++        assert_type_available::<SearchPosition>();
++        assert_type_available::<SectionStyle>();
++        assert_type_available::<WindowPosition>();
++        let _ = Option::<&dyn CommandBarHost>::None;
++    }
++}
+
+file update:
+diff --git a/src/actions/builders.rs b/src/actions/builders.rs
+index b263292552118682059ea3366b86365db9042991..3bc42052822feb80b6dd711c6b6ad59c544925d1
+--- a/src/actions/builders.rs
++++ b/src/actions/builders.rs
+@@ -2,6 +2,12 @@
+ //!
+ //! Factory functions for creating context-specific action lists.
+ 
++// Re-export action types into the builders module namespace so
++// submodules can import them as `super::types::*`.
++pub(super) mod types {
++    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
++}
++
+ mod chat;
+ mod clipboard;
+ mod file_path;
+diff --git a/src/actions/mod.rs b/src/actions/mod.rs
+index 2a5f14b924cd3c748d30704ad97416401f9963f3..e125ef3b2bcbbe5738b52054dd0ec3d47525f73e
+--- a/src/actions/mod.rs
++++ b/src/actions/mod.rs
+@@ -14,7 +14,6 @@
+ //! - `dialog`: ActionsDialog struct and implementation
+ //! - `window`: Separate vibrancy window for actions panel
+ 
+-#[path = "builders_rewire.rs"]
+ mod builders;
+ mod command_bar;
+ mod constants;
+@@ -27,32 +26,25 @@
+ // - ActionsDialog: the main dialog component
+ // - Window functions for separate vibrancy window
+ 
+-pub use builders::to_deeplink_name;
+-#[allow(unused_imports)]
+-pub use builders::ClipboardEntryInfo;
++pub use builders::{
++    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
++    NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
++};
+ #[allow(unused_imports)]
+ pub(crate) use builders::{
+     get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
+ };
+-// Chat prompt info types for ActionsDialog::with_chat
+-pub use builders::{ChatModelInfo, ChatPromptInfo};
++pub use builders::{
++    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
++    get_notes_command_bar_actions,
++};
++pub use command_bar::{
++    is_command_bar_open, CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
++};
+ pub use dialog::ActionsDialog;
+-pub use types::ScriptInfo;
+-
+-// Public API for AI window integration (re-exported but may appear unused until integration)
+-#[allow(unused_imports)]
+-pub use builders::get_ai_command_bar_actions;
+-#[allow(unused_imports)]
+-pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
+-// Public API for Notes window integration
+-#[allow(unused_imports)]
+-pub use builders::{get_notes_command_bar_actions, NotesInfo};
+-// Public API for Notes note switcher (Cmd+P) dialog
+-#[allow(unused_imports)]
+-pub use builders::{get_note_switcher_actions, NoteSwitcherNoteInfo};
+-#[allow(unused_imports)]
+ pub use types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ 
+ // Window functions for separate vibrancy window
+@@ -61,10 +53,6 @@
+     resize_actions_window, WindowPosition,
+ };
+ // get_actions_window_handle available but not re-exported (use window:: directly if needed)
+-
+-// CommandBar - high-level reusable component for command palette functionality
+-#[allow(unused_imports)]
+-pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, CommandBarHost};
+ 
+ pub mod prelude;
+ 
+diff --git a/src/actions/prelude.rs b/src/actions/prelude.rs
+index a21f5e852ac05b70af5fa8fd7099c6ecbe506a0c..f70f98a002cd7a9e5415b80b8e8b61b2dc9ed2b8
+--- a/src/actions/prelude.rs
++++ b/src/actions/prelude.rs
+@@ -2,18 +2,54 @@
+ //!
+ //! This module keeps action-related imports discoverable without pulling every
+ //! helper from `actions` root exports.
+-#![allow(unused_imports)]
+-
+ pub use super::builders::{
+-    ChatModelInfo, ChatPromptInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo,
+-    NotesInfo,
++    ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
++    NoteSwitcherNoteInfo, NotesInfo,
++};
++pub use super::command_bar::{
++    CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
+ };
+ pub use super::dialog::ActionsDialog;
+ pub use super::types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
+-    SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ pub use super::window::{
+     close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
+     resize_actions_window, WindowPosition,
+ };
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn test_prelude_exports_include_public_actions_types_for_consumers() {
++        fn assert_type_available<T: 'static>() {
++            let _ = std::any::TypeId::of::<T>();
++        }
++
++        assert_type_available::<Action>();
++        assert_type_available::<ActionCallback>();
++        assert_type_available::<ActionCategory>();
++        assert_type_available::<ActionsDialog>();
++        assert_type_available::<ActionsDialogConfig>();
++        assert_type_available::<AnchorPosition>();
++        assert_type_available::<ChatModelInfo>();
++        assert_type_available::<ChatPromptInfo>();
++        assert_type_available::<ClipboardEntryInfo>();
++        assert_type_available::<CloseCallback>();
++        assert_type_available::<CommandBar>();
++        assert_type_available::<CommandBarActionCallback>();
++        assert_type_available::<CommandBarConfig>();
++        assert_type_available::<NewChatModelInfo>();
++        assert_type_available::<NewChatPresetInfo>();
++        assert_type_available::<NoteSwitcherNoteInfo>();
++        assert_type_available::<NotesInfo>();
++        assert_type_available::<ScriptInfo>();
++        assert_type_available::<SearchPosition>();
++        assert_type_available::<SectionStyle>();
++        assert_type_available::<WindowPosition>();
++        let _ = Option::<&dyn CommandBarHost>::None;
++    }
++}
+
+
+thinking
+**Verifying build status**
+file update:
+diff --git a/src/actions/builders.rs b/src/actions/builders.rs
+index b263292552118682059ea3366b86365db9042991..3bc42052822feb80b6dd711c6b6ad59c544925d1
+--- a/src/actions/builders.rs
++++ b/src/actions/builders.rs
+@@ -2,6 +2,12 @@
+ //!
+ //! Factory functions for creating context-specific action lists.
+ 
++// Re-export action types into the builders module namespace so
++// submodules can import them as `super::types::*`.
++pub(super) mod types {
++    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
++}
++
+ mod chat;
+ mod clipboard;
+ mod file_path;
+diff --git a/src/actions/mod.rs b/src/actions/mod.rs
+index 2a5f14b924cd3c748d30704ad97416401f9963f3..e125ef3b2bcbbe5738b52054dd0ec3d47525f73e
+--- a/src/actions/mod.rs
++++ b/src/actions/mod.rs
+@@ -14,7 +14,6 @@
+ //! - `dialog`: ActionsDialog struct and implementation
+ //! - `window`: Separate vibrancy window for actions panel
+ 
+-#[path = "builders_rewire.rs"]
+ mod builders;
+ mod command_bar;
+ mod constants;
+@@ -27,32 +26,25 @@
+ // - ActionsDialog: the main dialog component
+ // - Window functions for separate vibrancy window
+ 
+-pub use builders::to_deeplink_name;
+-#[allow(unused_imports)]
+-pub use builders::ClipboardEntryInfo;
++pub use builders::{
++    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
++    NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
++};
+ #[allow(unused_imports)]
+ pub(crate) use builders::{
+     get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
+ };
+-// Chat prompt info types for ActionsDialog::with_chat
+-pub use builders::{ChatModelInfo, ChatPromptInfo};
++pub use builders::{
++    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
++    get_notes_command_bar_actions,
++};
++pub use command_bar::{
++    is_command_bar_open, CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
++};
+ pub use dialog::ActionsDialog;
+-pub use types::ScriptInfo;
+-
+-// Public API for AI window integration (re-exported but may appear unused until integration)
+-#[allow(unused_imports)]
+-pub use builders::get_ai_command_bar_actions;
+-#[allow(unused_imports)]
+-pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
+-// Public API for Notes window integration
+-#[allow(unused_imports)]
+-pub use builders::{get_notes_command_bar_actions, NotesInfo};
+-// Public API for Notes note switcher (Cmd+P) dialog
+-#[allow(unused_imports)]
+-pub use builders::{get_note_switcher_actions, NoteSwitcherNoteInfo};
+-#[allow(unused_imports)]
+ pub use types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ 
+ // Window functions for separate vibrancy window
+@@ -61,10 +53,6 @@
+     resize_actions_window, WindowPosition,
+ };
+ // get_actions_window_handle available but not re-exported (use window:: directly if needed)
+-
+-// CommandBar - high-level reusable component for command palette functionality
+-#[allow(unused_imports)]
+-pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, CommandBarHost};
+ 
+ pub mod prelude;
+ 
+diff --git a/src/actions/prelude.rs b/src/actions/prelude.rs
+index a21f5e852ac05b70af5fa8fd7099c6ecbe506a0c..f70f98a002cd7a9e5415b80b8e8b61b2dc9ed2b8
+--- a/src/actions/prelude.rs
++++ b/src/actions/prelude.rs
+@@ -2,18 +2,54 @@
+ //!
+ //! This module keeps action-related imports discoverable without pulling every
+ //! helper from `actions` root exports.
+-#![allow(unused_imports)]
+-
+ pub use super::builders::{
+-    ChatModelInfo, ChatPromptInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo,
+-    NotesInfo,
++    ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
++    NoteSwitcherNoteInfo, NotesInfo,
++};
++pub use super::command_bar::{
++    CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
+ };
+ pub use super::dialog::ActionsDialog;
+ pub use super::types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
+-    SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ pub use super::window::{
+     close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
+     resize_actions_window, WindowPosition,
+ };
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn test_prelude_exports_include_public_actions_types_for_consumers() {
++        fn assert_type_available<T: 'static>() {
++            let _ = std::any::TypeId::of::<T>();
++        }
++
++        assert_type_available::<Action>();
++        assert_type_available::<ActionCallback>();
++        assert_type_available::<ActionCategory>();
++        assert_type_available::<ActionsDialog>();
++        assert_type_available::<ActionsDialogConfig>();
++        assert_type_available::<AnchorPosition>();
++        assert_type_available::<ChatModelInfo>();
++        assert_type_available::<ChatPromptInfo>();
++        assert_type_available::<ClipboardEntryInfo>();
++        assert_type_available::<CloseCallback>();
++        assert_type_available::<CommandBar>();
++        assert_type_available::<CommandBarActionCallback>();
++        assert_type_available::<CommandBarConfig>();
++        assert_type_available::<NewChatModelInfo>();
++        assert_type_available::<NewChatPresetInfo>();
++        assert_type_available::<NoteSwitcherNoteInfo>();
++        assert_type_available::<NotesInfo>();
++        assert_type_available::<ScriptInfo>();
++        assert_type_available::<SearchPosition>();
++        assert_type_available::<SectionStyle>();
++        assert_type_available::<WindowPosition>();
++        let _ = Option::<&dyn CommandBarHost>::None;
++    }
++}
+
+
+thinking
+**Running clippy to diagnose errors**
+Reconnecting... 1/5 (stream disconnected before completion: websocket closed by server before response.completed)
+
+thinking
+**Running clippy for diagnostics**
+exec
+/bin/zsh -lc 'cargo clippy -p script-kit-gpui --all-targets -- -D warnings' in /Users/johnlindquist/dev/script-kit-gpuifile update:
+diff --git a/src/actions/builders.rs b/src/actions/builders.rs
+index b263292552118682059ea3366b86365db9042991..3bc42052822feb80b6dd711c6b6ad59c544925d1
+--- a/src/actions/builders.rs
++++ b/src/actions/builders.rs
+@@ -2,6 +2,12 @@
+ //!
+ //! Factory functions for creating context-specific action lists.
+ 
++// Re-export action types into the builders module namespace so
++// submodules can import them as `super::types::*`.
++pub(super) mod types {
++    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
++}
++
+ mod chat;
+ mod clipboard;
+ mod file_path;
+diff --git a/src/actions/mod.rs b/src/actions/mod.rs
+index 2a5f14b924cd3c748d30704ad97416401f9963f3..e125ef3b2bcbbe5738b52054dd0ec3d47525f73e
+--- a/src/actions/mod.rs
++++ b/src/actions/mod.rs
+@@ -14,7 +14,6 @@
+ //! - `dialog`: ActionsDialog struct and implementation
+ //! - `window`: Separate vibrancy window for actions panel
+ 
+-#[path = "builders_rewire.rs"]
+ mod builders;
+ mod command_bar;
+ mod constants;
+@@ -27,32 +26,25 @@
+ // - ActionsDialog: the main dialog component
+ // - Window functions for separate vibrancy window
+ 
+-pub use builders::to_deeplink_name;
+-#[allow(unused_imports)]
+-pub use builders::ClipboardEntryInfo;
++pub use builders::{
++    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
++    NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
++};
+ #[allow(unused_imports)]
+ pub(crate) use builders::{
+     get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
+ };
+-// Chat prompt info types for ActionsDialog::with_chat
+-pub use builders::{ChatModelInfo, ChatPromptInfo};
++pub use builders::{
++    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
++    get_notes_command_bar_actions,
++};
++pub use command_bar::{
++    is_command_bar_open, CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
++};
+ pub use dialog::ActionsDialog;
+-pub use types::ScriptInfo;
+-
+-// Public API for AI window integration (re-exported but may appear unused until integration)
+-#[allow(unused_imports)]
+-pub use builders::get_ai_command_bar_actions;
+-#[allow(unused_imports)]
+-pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
+-// Public API for Notes window integration
+-#[allow(unused_imports)]
+-pub use builders::{get_notes_command_bar_actions, NotesInfo};
+-// Public API for Notes note switcher (Cmd+P) dialog
+-#[allow(unused_imports)]
+-pub use builders::{get_note_switcher_actions, NoteSwitcherNoteInfo};
+-#[allow(unused_imports)]
+ pub use types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ 
+ // Window functions for separate vibrancy window
+@@ -61,10 +53,6 @@
+     resize_actions_window, WindowPosition,
+ };
+ // get_actions_window_handle available but not re-exported (use window:: directly if needed)
+-
+-// CommandBar - high-level reusable component for command palette functionality
+-#[allow(unused_imports)]
+-pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, CommandBarHost};
+ 
+ pub mod prelude;
+ 
+diff --git a/src/actions/prelude.rs b/src/actions/prelude.rs
+index a21f5e852ac05b70af5fa8fd7099c6ecbe506a0c..f70f98a002cd7a9e5415b80b8e8b61b2dc9ed2b8
+--- a/src/actions/prelude.rs
++++ b/src/actions/prelude.rs
+@@ -2,18 +2,54 @@
+ //!
+ //! This module keeps action-related imports discoverable without pulling every
+ //! helper from `actions` root exports.
+-#![allow(unused_imports)]
+-
+ pub use super::builders::{
+-    ChatModelInfo, ChatPromptInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo,
+-    NotesInfo,
++    ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
++    NoteSwitcherNoteInfo, NotesInfo,
++};
++pub use super::command_bar::{
++    CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
+ };
+ pub use super::dialog::ActionsDialog;
+ pub use super::types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
+-    SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ pub use super::window::{
+     close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
+     resize_actions_window, WindowPosition,
+ };
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn test_prelude_exports_include_public_actions_types_for_consumers() {
++        fn assert_type_available<T: 'static>() {
++            let _ = std::any::TypeId::of::<T>();
++        }
++
++        assert_type_available::<Action>();
++        assert_type_available::<ActionCallback>();
++        assert_type_available::<ActionCategory>();
++        assert_type_available::<ActionsDialog>();
++        assert_type_available::<ActionsDialogConfig>();
++        assert_type_available::<AnchorPosition>();
++        assert_type_available::<ChatModelInfo>();
++        assert_type_available::<ChatPromptInfo>();
++        assert_type_available::<ClipboardEntryInfo>();
++        assert_type_available::<CloseCallback>();
++        assert_type_available::<CommandBar>();
++        assert_type_available::<CommandBarActionCallback>();
++        assert_type_available::<CommandBarConfig>();
++        assert_type_available::<NewChatModelInfo>();
++        assert_type_available::<NewChatPresetInfo>();
++        assert_type_available::<NoteSwitcherNoteInfo>();
++        assert_type_available::<NotesInfo>();
++        assert_type_available::<ScriptInfo>();
++        assert_type_available::<SearchPosition>();
++        assert_type_available::<SectionStyle>();
++        assert_type_available::<WindowPosition>();
++        let _ = Option::<&dyn CommandBarHost>::None;
++    }
++}
+
+
+thinking
+**Checking quick poll completion**
+file update:
+diff --git a/src/actions/builders.rs b/src/actions/builders.rs
+index b263292552118682059ea3366b86365db9042991..3bc42052822feb80b6dd711c6b6ad59c544925d1
+--- a/src/actions/builders.rs
++++ b/src/actions/builders.rs
+@@ -2,6 +2,12 @@
+ //!
+ //! Factory functions for creating context-specific action lists.
+ 
++// Re-export action types into the builders module namespace so
++// submodules can import them as `super::types::*`.
++pub(super) mod types {
++    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
++}
++
+ mod chat;
+ mod clipboard;
+ mod file_path;
+diff --git a/src/actions/mod.rs b/src/actions/mod.rs
+index 2a5f14b924cd3c748d30704ad97416401f9963f3..e125ef3b2bcbbe5738b52054dd0ec3d47525f73e
+--- a/src/actions/mod.rs
++++ b/src/actions/mod.rs
+@@ -14,7 +14,6 @@
+ //! - `dialog`: ActionsDialog struct and implementation
+ //! - `window`: Separate vibrancy window for actions panel
+ 
+-#[path = "builders_rewire.rs"]
+ mod builders;
+ mod command_bar;
+ mod constants;
+@@ -27,32 +26,25 @@
+ // - ActionsDialog: the main dialog component
+ // - Window functions for separate vibrancy window
+ 
+-pub use builders::to_deeplink_name;
+-#[allow(unused_imports)]
+-pub use builders::ClipboardEntryInfo;
++pub use builders::{
++    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
++    NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
++};
+ #[allow(unused_imports)]
+ pub(crate) use builders::{
+     get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
+ };
+-// Chat prompt info types for ActionsDialog::with_chat
+-pub use builders::{ChatModelInfo, ChatPromptInfo};
++pub use builders::{
++    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
++    get_notes_command_bar_actions,
++};
++pub use command_bar::{
++    is_command_bar_open, CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
++};
+ pub use dialog::ActionsDialog;
+-pub use types::ScriptInfo;
+-
+-// Public API for AI window integration (re-exported but may appear unused until integration)
+-#[allow(unused_imports)]
+-pub use builders::get_ai_command_bar_actions;
+-#[allow(unused_imports)]
+-pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
+-// Public API for Notes window integration
+-#[allow(unused_imports)]
+-pub use builders::{get_notes_command_bar_actions, NotesInfo};
+-// Public API for Notes note switcher (Cmd+P) dialog
+-#[allow(unused_imports)]
+-pub use builders::{get_note_switcher_actions, NoteSwitcherNoteInfo};
+-#[allow(unused_imports)]
+ pub use types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ 
+ // Window functions for separate vibrancy window
+@@ -61,10 +53,6 @@
+     resize_actions_window, WindowPosition,
+ };
+ // get_actions_window_handle available but not re-exported (use window:: directly if needed)
+-
+-// CommandBar - high-level reusable component for command palette functionality
+-#[allow(unused_imports)]
+-pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, CommandBarHost};
+ 
+ pub mod prelude;
+ 
+diff --git a/src/actions/prelude.rs b/src/actions/prelude.rs
+index a21f5e852ac05b70af5fa8fd7099c6ecbe506a0c..f70f98a002cd7a9e5415b80b8e8b61b2dc9ed2b8
+--- a/src/actions/prelude.rs
++++ b/src/actions/prelude.rs
+@@ -2,18 +2,54 @@
+ //!
+ //! This module keeps action-related imports discoverable without pulling every
+ //! helper from `actions` root exports.
+-#![allow(unused_imports)]
+-
+ pub use super::builders::{
+-    ChatModelInfo, ChatPromptInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo,
+-    NotesInfo,
++    ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
++    NoteSwitcherNoteInfo, NotesInfo,
++};
++pub use super::command_bar::{
++    CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
+ };
+ pub use super::dialog::ActionsDialog;
+ pub use super::types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
+-    SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ pub use super::window::{
+     close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
+     resize_actions_window, WindowPosition,
+ };
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn test_prelude_exports_include_public_actions_types_for_consumers() {
++        fn assert_type_available<T: 'static>() {
++            let _ = std::any::TypeId::of::<T>();
++        }
++
++        assert_type_available::<Action>();
++        assert_type_available::<ActionCallback>();
++        assert_type_available::<ActionCategory>();
++        assert_type_available::<ActionsDialog>();
++        assert_type_available::<ActionsDialogConfig>();
++        assert_type_available::<AnchorPosition>();
++        assert_type_available::<ChatModelInfo>();
++        assert_type_available::<ChatPromptInfo>();
++        assert_type_available::<ClipboardEntryInfo>();
++        assert_type_available::<CloseCallback>();
++        assert_type_available::<CommandBar>();
++        assert_type_available::<CommandBarActionCallback>();
++        assert_type_available::<CommandBarConfig>();
++        assert_type_available::<NewChatModelInfo>();
++        assert_type_available::<NewChatPresetInfo>();
++        assert_type_available::<NoteSwitcherNoteInfo>();
++        assert_type_available::<NotesInfo>();
++        assert_type_available::<ScriptInfo>();
++        assert_type_available::<SearchPosition>();
++        assert_type_available::<SectionStyle>();
++        assert_type_available::<WindowPosition>();
++        let _ = Option::<&dyn CommandBarHost>::None;
++    }
++}
+
+
+thinking
+**Polling process status**
+file update:
+diff --git a/src/actions/builders.rs b/src/actions/builders.rs
+index b263292552118682059ea3366b86365db9042991..3bc42052822feb80b6dd711c6b6ad59c544925d1
+--- a/src/actions/builders.rs
++++ b/src/actions/builders.rs
+@@ -2,6 +2,12 @@
+ //!
+ //! Factory functions for creating context-specific action lists.
+ 
++// Re-export action types into the builders module namespace so
++// submodules can import them as `super::types::*`.
++pub(super) mod types {
++    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
++}
++
+ mod chat;
+ mod clipboard;
+ mod file_path;
+diff --git a/src/actions/mod.rs b/src/actions/mod.rs
+index 2a5f14b924cd3c748d30704ad97416401f9963f3..e125ef3b2bcbbe5738b52054dd0ec3d47525f73e
+--- a/src/actions/mod.rs
++++ b/src/actions/mod.rs
+@@ -14,7 +14,6 @@
+ //! - `dialog`: ActionsDialog struct and implementation
+ //! - `window`: Separate vibrancy window for actions panel
+ 
+-#[path = "builders_rewire.rs"]
+ mod builders;
+ mod command_bar;
+ mod constants;
+@@ -27,32 +26,25 @@
+ // - ActionsDialog: the main dialog component
+ // - Window functions for separate vibrancy window
+ 
+-pub use builders::to_deeplink_name;
+-#[allow(unused_imports)]
+-pub use builders::ClipboardEntryInfo;
++pub use builders::{
++    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
++    NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
++};
+ #[allow(unused_imports)]
+ pub(crate) use builders::{
+     get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
+ };
+-// Chat prompt info types for ActionsDialog::with_chat
+-pub use builders::{ChatModelInfo, ChatPromptInfo};
++pub use builders::{
++    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
++    get_notes_command_bar_actions,
++};
++pub use command_bar::{
++    is_command_bar_open, CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
++};
+ pub use dialog::ActionsDialog;
+-pub use types::ScriptInfo;
+-
+-// Public API for AI window integration (re-exported but may appear unused until integration)
+-#[allow(unused_imports)]
+-pub use builders::get_ai_command_bar_actions;
+-#[allow(unused_imports)]
+-pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
+-// Public API for Notes window integration
+-#[allow(unused_imports)]
+-pub use builders::{get_notes_command_bar_actions, NotesInfo};
+-// Public API for Notes note switcher (Cmd+P) dialog
+-#[allow(unused_imports)]
+-pub use builders::{get_note_switcher_actions, NoteSwitcherNoteInfo};
+-#[allow(unused_imports)]
+ pub use types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ 
+ // Window functions for separate vibrancy window
+@@ -61,10 +53,6 @@
+     resize_actions_window, WindowPosition,
+ };
+ // get_actions_window_handle available but not re-exported (use window:: directly if needed)
+-
+-// CommandBar - high-level reusable component for command palette functionality
+-#[allow(unused_imports)]
+-pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, CommandBarHost};
+ 
+ pub mod prelude;
+ 
+diff --git a/src/actions/prelude.rs b/src/actions/prelude.rs
+index a21f5e852ac05b70af5fa8fd7099c6ecbe506a0c..f70f98a002cd7a9e5415b80b8e8b61b2dc9ed2b8
+--- a/src/actions/prelude.rs
++++ b/src/actions/prelude.rs
+@@ -2,18 +2,54 @@
+ //!
+ //! This module keeps action-related imports discoverable without pulling every
+ //! helper from `actions` root exports.
+-#![allow(unused_imports)]
+-
+ pub use super::builders::{
+-    ChatModelInfo, ChatPromptInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo,
+-    NotesInfo,
++    ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
++    NoteSwitcherNoteInfo, NotesInfo,
++};
++pub use super::command_bar::{
++    CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
+ };
+ pub use super::dialog::ActionsDialog;
+ pub use super::types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
+-    SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ pub use super::window::{
+     close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
+     resize_actions_window, WindowPosition,
+ };
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn test_prelude_exports_include_public_actions_types_for_consumers() {
++        fn assert_type_available<T: 'static>() {
++            let _ = std::any::TypeId::of::<T>();
++        }
++
++        assert_type_available::<Action>();
++        assert_type_available::<ActionCallback>();
++        assert_type_available::<ActionCategory>();
++        assert_type_available::<ActionsDialog>();
++        assert_type_available::<ActionsDialogConfig>();
++        assert_type_available::<AnchorPosition>();
++        assert_type_available::<ChatModelInfo>();
++        assert_type_available::<ChatPromptInfo>();
++        assert_type_available::<ClipboardEntryInfo>();
++        assert_type_available::<CloseCallback>();
++        assert_type_available::<CommandBar>();
++        assert_type_available::<CommandBarActionCallback>();
++        assert_type_available::<CommandBarConfig>();
++        assert_type_available::<NewChatModelInfo>();
++        assert_type_available::<NewChatPresetInfo>();
++        assert_type_available::<NoteSwitcherNoteInfo>();
++        assert_type_available::<NotesInfo>();
++        assert_type_available::<ScriptInfo>();
++        assert_type_available::<SearchPosition>();
++        assert_type_available::<SectionStyle>();
++        assert_type_available::<WindowPosition>();
++        let _ = Option::<&dyn CommandBarHost>::None;
++    }
++}
+
+
+thinking
+**Planning repeated polling**
+file update:
+diff --git a/src/actions/builders.rs b/src/actions/builders.rs
+index b263292552118682059ea3366b86365db9042991..3bc42052822feb80b6dd711c6b6ad59c544925d1
+--- a/src/actions/builders.rs
++++ b/src/actions/builders.rs
+@@ -2,6 +2,12 @@
+ //!
+ //! Factory functions for creating context-specific action lists.
+ 
++// Re-export action types into the builders module namespace so
++// submodules can import them as `super::types::*`.
++pub(super) mod types {
++    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
++}
++
+ mod chat;
+ mod clipboard;
+ mod file_path;
+diff --git a/src/actions/mod.rs b/src/actions/mod.rs
+index 2a5f14b924cd3c748d30704ad97416401f9963f3..e125ef3b2bcbbe5738b52054dd0ec3d47525f73e
+--- a/src/actions/mod.rs
++++ b/src/actions/mod.rs
+@@ -14,7 +14,6 @@
+ //! - `dialog`: ActionsDialog struct and implementation
+ //! - `window`: Separate vibrancy window for actions panel
+ 
+-#[path = "builders_rewire.rs"]
+ mod builders;
+ mod command_bar;
+ mod constants;
+@@ -27,32 +26,25 @@
+ // - ActionsDialog: the main dialog component
+ // - Window functions for separate vibrancy window
+ 
+-pub use builders::to_deeplink_name;
+-#[allow(unused_imports)]
+-pub use builders::ClipboardEntryInfo;
++pub use builders::{
++    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
++    NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
++};
+ #[allow(unused_imports)]
+ pub(crate) use builders::{
+     get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
+ };
+-// Chat prompt info types for ActionsDialog::with_chat
+-pub use builders::{ChatModelInfo, ChatPromptInfo};
++pub use builders::{
++    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
++    get_notes_command_bar_actions,
++};
++pub use command_bar::{
++    is_command_bar_open, CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
++};
+ pub use dialog::ActionsDialog;
+-pub use types::ScriptInfo;
+-
+-// Public API for AI window integration (re-exported but may appear unused until integration)
+-#[allow(unused_imports)]
+-pub use builders::get_ai_command_bar_actions;
+-#[allow(unused_imports)]
+-pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
+-// Public API for Notes window integration
+-#[allow(unused_imports)]
+-pub use builders::{get_notes_command_bar_actions, NotesInfo};
+-// Public API for Notes note switcher (Cmd+P) dialog
+-#[allow(unused_imports)]
+-pub use builders::{get_note_switcher_actions, NoteSwitcherNoteInfo};
+-#[allow(unused_imports)]
+ pub use types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ 
+ // Window functions for separate vibrancy window
+@@ -61,10 +53,6 @@
+     resize_actions_window, WindowPosition,
+ };
+ // get_actions_window_handle available but not re-exported (use window:: directly if needed)
+-
+-// CommandBar - high-level reusable component for command palette functionality
+-#[allow(unused_imports)]
+-pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, CommandBarHost};
+ 
+ pub mod prelude;
+ 
+diff --git a/src/actions/prelude.rs b/src/actions/prelude.rs
+index a21f5e852ac05b70af5fa8fd7099c6ecbe506a0c..f70f98a002cd7a9e5415b80b8e8b61b2dc9ed2b8
+--- a/src/actions/prelude.rs
++++ b/src/actions/prelude.rs
+@@ -2,18 +2,54 @@
+ //!
+ //! This module keeps action-related imports discoverable without pulling every
+ //! helper from `actions` root exports.
+-#![allow(unused_imports)]
+-
+ pub use super::builders::{
+-    ChatModelInfo, ChatPromptInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo,
+-    NotesInfo,
++    ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
++    NoteSwitcherNoteInfo, NotesInfo,
++};
++pub use super::command_bar::{
++    CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
+ };
+ pub use super::dialog::ActionsDialog;
+ pub use super::types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
+-    SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ pub use super::window::{
+     close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
+     resize_actions_window, WindowPosition,
+ };
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn test_prelude_exports_include_public_actions_types_for_consumers() {
++        fn assert_type_available<T: 'static>() {
++            let _ = std::any::TypeId::of::<T>();
++        }
++
++        assert_type_available::<Action>();
++        assert_type_available::<ActionCallback>();
++        assert_type_available::<ActionCategory>();
++        assert_type_available::<ActionsDialog>();
++        assert_type_available::<ActionsDialogConfig>();
++        assert_type_available::<AnchorPosition>();
++        assert_type_available::<ChatModelInfo>();
++        assert_type_available::<ChatPromptInfo>();
++        assert_type_available::<ClipboardEntryInfo>();
++        assert_type_available::<CloseCallback>();
++        assert_type_available::<CommandBar>();
++        assert_type_available::<CommandBarActionCallback>();
++        assert_type_available::<CommandBarConfig>();
++        assert_type_available::<NewChatModelInfo>();
++        assert_type_available::<NewChatPresetInfo>();
++        assert_type_available::<NoteSwitcherNoteInfo>();
++        assert_type_available::<NotesInfo>();
++        assert_type_available::<ScriptInfo>();
++        assert_type_available::<SearchPosition>();
++        assert_type_available::<SectionStyle>();
++        assert_type_available::<WindowPosition>();
++        let _ = Option::<&dyn CommandBarHost>::None;
++    }
++}
+
+ exited 101 in 18.63s:
+    Checking script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+error[E0761]: file for module `tests` found at both "src/protocol/message/tests.rs" and "src/protocol/message/tests/mod.rs"
+  --> src/protocol/message/mod.rs:87:1
+   |
+87 | mod tests;
+   | ^^^^^^^^^^
+   |
+   = help: delete or rename one of them to remove the ambiguity
+
+error[E0761]: file for module `tests` found at both "src/designs/core/tests.rs" and "src/designs/core/tests/mod.rs"
+ --> src/designs/core/part_04.rs:2:1
+  |
+2 | mod tests;
+  | ^^^^^^^^^^
+  |
+  = help: delete or rename one of them to remove the ambiguity
+
+error: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:32:16
+   |
+
+thinking
+**Inspecting changed files**
+exec
+/bin/zsh -lc 'git status --short' in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc 'git diff -- src/actions/mod.rs src/actions/prelude.rs src/actions/builders.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+ M .ai/logs/codex-audit-act-description-quality-v2.final.md
+ M .ai/logs/codex-audit-act-execution-builtin.final.md
+ M .ai/logs/codex-audit-act-execution-scripts.final.md
+ M .ai/logs/codex-audit-act-keyboard-nav.final.md
+ M .ai/logs/codex-audit-act-section-grouping.final.md
+ M .ai/logs/codex-audit-act-theme-dialog-render.final.md
+ M .ai/roster.json
+ M src/actions/builders.rs
+ M src/actions/builders/chat.rs
+ M src/actions/builders/clipboard.rs
+ M src/actions/builders/file_path.rs
+ M src/actions/builders/notes.rs
+ M src/actions/builders/script_context.rs
+ M src/actions/builders/scriptlet.rs
+ M src/actions/builders/shared.rs
+ M src/actions/command_bar/part_01.rs
+ M src/actions/command_bar/part_02.rs
+ M src/actions/constants.rs
+ M src/actions/dialog/part_01.rs
+ M src/actions/dialog/part_02/part_01.rs
+ succeeded in 51ms:
+diff --git a/src/actions/builders.rs b/src/actions/builders.rs
+index b263292..3bc4205 100644
+--- a/src/actions/builders.rs
++++ b/src/actions/builders.rs
+@@ -2,6 +2,12 @@
+ //!
+ //! Factory functions for creating context-specific action lists.
+ 
++// Re-export action types into the builders module namespace so
++// submodules can import them as `super::types::*`.
++pub(super) mod types {
++    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
++}
++
+ mod chat;
+ mod clipboard;
+ mod file_path;
+diff --git a/src/actions/mod.rs b/src/actions/mod.rs
+index 2a5f14b..e125ef3 100644
+--- a/src/actions/mod.rs
+file update:
+diff --git a/src/actions/builders.rs b/src/actions/builders.rs
+index b263292552118682059ea3366b86365db9042991..3bc42052822feb80b6dd711c6b6ad59c544925d1
+--- a/src/actions/builders.rs
++++ b/src/actions/builders.rs
+@@ -2,6 +2,12 @@
+ //!
+ //! Factory functions for creating context-specific action lists.
+ 
++// Re-export action types into the builders module namespace so
++// submodules can import them as `super::types::*`.
++pub(super) mod types {
++    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
++}
++
+ mod chat;
+ mod clipboard;
+ mod file_path;
+diff --git a/src/actions/mod.rs b/src/actions/mod.rs
+index 2a5f14b924cd3c748d30704ad97416401f9963f3..e125ef3b2bcbbe5738b52054dd0ec3d47525f73e
+--- a/src/actions/mod.rs
++++ b/src/actions/mod.rs
+@@ -14,7 +14,6 @@
+ //! - `dialog`: ActionsDialog struct and implementation
+ //! - `window`: Separate vibrancy window for actions panel
+ 
+-#[path = "builders_rewire.rs"]
+ mod builders;
+ mod command_bar;
+ mod constants;
+@@ -27,32 +26,25 @@
+ // - ActionsDialog: the main dialog component
+ // - Window functions for separate vibrancy window
+ 
+-pub use builders::to_deeplink_name;
+-#[allow(unused_imports)]
+-pub use builders::ClipboardEntryInfo;
++pub use builders::{
++    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
++    NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
++};
+ #[allow(unused_imports)]
+ pub(crate) use builders::{
+     get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
+ };
+-// Chat prompt info types for ActionsDialog::with_chat
+-pub use builders::{ChatModelInfo, ChatPromptInfo};
++pub use builders::{
++    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
++    get_notes_command_bar_actions,
++};
++pub use command_bar::{
++    is_command_bar_open, CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
++};
+ pub use dialog::ActionsDialog;
+-pub use types::ScriptInfo;
+-
+-// Public API for AI window integration (re-exported but may appear unused until integration)
+-#[allow(unused_imports)]
+-pub use builders::get_ai_command_bar_actions;
+-#[allow(unused_imports)]
+-pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
+-// Public API for Notes window integration
+-#[allow(unused_imports)]
+-pub use builders::{get_notes_command_bar_actions, NotesInfo};
+-// Public API for Notes note switcher (Cmd+P) dialog
+-#[allow(unused_imports)]
+-pub use builders::{get_note_switcher_actions, NoteSwitcherNoteInfo};
+-#[allow(unused_imports)]
+ pub use types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ 
+ // Window functions for separate vibrancy window
+@@ -61,10 +53,6 @@
+     resize_actions_window, WindowPosition,
+ };
+ // get_actions_window_handle available but not re-exported (use window:: directly if needed)
+-
+-// CommandBar - high-level reusable component for command palette functionality
+-#[allow(unused_imports)]
+-pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, CommandBarHost};
+ 
+ pub mod prelude;
+ 
+diff --git a/src/actions/prelude.rs b/src/actions/prelude.rs
+index a21f5e852ac05b70af5fa8fd7099c6ecbe506a0c..f70f98a002cd7a9e5415b80b8e8b61b2dc9ed2b8
+--- a/src/actions/prelude.rs
++++ b/src/actions/prelude.rs
+@@ -2,18 +2,54 @@
+ //!
+ //! This module keeps action-related imports discoverable without pulling every
+ //! helper from `actions` root exports.
+-#![allow(unused_imports)]
+-
+ pub use super::builders::{
+-    ChatModelInfo, ChatPromptInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo,
+-    NotesInfo,
++    ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
++    NoteSwitcherNoteInfo, NotesInfo,
++};
++pub use super::command_bar::{
++    CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
+ };
+ pub use super::dialog::ActionsDialog;
+ pub use super::types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
+-    SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ pub use super::window::{
+     close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
+     resize_actions_window, WindowPosition,
+ };
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn test_prelude_exports_include_public_actions_types_for_consumers() {
++        fn assert_type_available<T: 'static>() {
++            let _ = std::any::TypeId::of::<T>();
++        }
++
++        assert_type_available::<Action>();
++        assert_type_available::<ActionCallback>();
++        assert_type_available::<ActionCategory>();
++        assert_type_available::<ActionsDialog>();
++        assert_type_available::<ActionsDialogConfig>();
++        assert_type_available::<AnchorPosition>();
++        assert_type_available::<ChatModelInfo>();
++        assert_type_available::<ChatPromptInfo>();
++        assert_type_available::<ClipboardEntryInfo>();
++        assert_type_available::<CloseCallback>();
++        assert_type_available::<CommandBar>();
++        assert_type_available::<CommandBarActionCallback>();
++        assert_type_available::<CommandBarConfig>();
++        assert_type_available::<NewChatModelInfo>();
++        assert_type_available::<NewChatPresetInfo>();
++        assert_type_available::<NoteSwitcherNoteInfo>();
++        assert_type_available::<NotesInfo>();
++        assert_type_available::<ScriptInfo>();
++        assert_type_available::<SearchPosition>();
++        assert_type_available::<SectionStyle>();
++        assert_type_available::<WindowPosition>();
++        let _ = Option::<&dyn CommandBarHost>::None;
++    }
++}
+
+
+thinking
+**Confirming formatting and scope of changes**
+exec
+/bin/zsh -lc 'cargo fmt -- src/actions/mod.rs src/actions/prelude.rs src/actions/builders.rs' in /Users/johnlindquist/dev/script-kit-gpui exited 1 in 119ms:
+Error writing files: failed to resolve mod `tests`: file for module found at both "/Users/johnlindquist/dev/script-kit-gpui/src/protocol/message/tests.rs" and "/Users/johnlindquist/dev/script-kit-gpui/src/protocol/message/tests/mod.rs"
+file update:
+diff --git a/src/actions/builders.rs b/src/actions/builders.rs
+index b263292552118682059ea3366b86365db9042991..2c12acf9ec97f8b4af3b9d1a54bfb51c51d54b7d
+--- a/src/actions/builders.rs
++++ b/src/actions/builders.rs
+@@ -2,6 +2,12 @@
+ //!
+ //! Factory functions for creating context-specific action lists.
+ 
++// Re-export action types into the builders module namespace so
++// submodules can import them as `super::types::*`.
++pub(super) mod types {
++    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
++}
++
+ mod chat;
+ mod clipboard;
+ mod file_path;
+@@ -23,9 +29,7 @@
+ pub use chat::{get_ai_command_bar_actions, get_chat_context_actions};
+ pub use clipboard::get_clipboard_history_context_actions;
+ pub use file_path::{get_file_context_actions, get_path_context_actions};
+-pub use notes::{
+-    get_new_chat_actions, get_note_switcher_actions, get_notes_command_bar_actions,
+-};
++pub use notes::{get_new_chat_actions, get_note_switcher_actions, get_notes_command_bar_actions};
+ pub use script_context::{get_global_actions, get_script_context_actions};
+ pub use scriptlet::get_scriptlet_context_actions_with_custom;
+ 
+diff --git a/src/actions/mod.rs b/src/actions/mod.rs
+index 2a5f14b924cd3c748d30704ad97416401f9963f3..9ed8f95fc74e3d37e1b0c82172604eb1ab88961a
+--- a/src/actions/mod.rs
++++ b/src/actions/mod.rs
+@@ -14,7 +14,6 @@
+ //! - `dialog`: ActionsDialog struct and implementation
+ //! - `window`: Separate vibrancy window for actions panel
+ 
+-#[path = "builders_rewire.rs"]
+ mod builders;
+ mod command_bar;
+ mod constants;
+@@ -27,32 +26,25 @@
+ // - ActionsDialog: the main dialog component
+ // - Window functions for separate vibrancy window
+ 
+-pub use builders::to_deeplink_name;
+-#[allow(unused_imports)]
+-pub use builders::ClipboardEntryInfo;
++pub use builders::{
++    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
++    get_notes_command_bar_actions,
++};
+ #[allow(unused_imports)]
+ pub(crate) use builders::{
+     get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
+ };
+-// Chat prompt info types for ActionsDialog::with_chat
+-pub use builders::{ChatModelInfo, ChatPromptInfo};
++pub use builders::{
++    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
++    NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
++};
++pub use command_bar::{
++    is_command_bar_open, CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
++};
+ pub use dialog::ActionsDialog;
+-pub use types::ScriptInfo;
+-
+-// Public API for AI window integration (re-exported but may appear unused until integration)
+-#[allow(unused_imports)]
+-pub use builders::get_ai_command_bar_actions;
+-#[allow(unused_imports)]
+-pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
+-// Public API for Notes window integration
+-#[allow(unused_imports)]
+-pub use builders::{get_notes_command_bar_actions, NotesInfo};
+-// Public API for Notes note switcher (Cmd+P) dialog
+-#[allow(unused_imports)]
+-pub use builders::{get_note_switcher_actions, NoteSwitcherNoteInfo};
+-#[allow(unused_imports)]
+ pub use types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ 
+ // Window functions for separate vibrancy window
+@@ -61,10 +53,6 @@
+     resize_actions_window, WindowPosition,
+ };
+ // get_actions_window_handle available but not re-exported (use window:: directly if needed)
+-
+-// CommandBar - high-level reusable component for command palette functionality
+-#[allow(unused_imports)]
+-pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, CommandBarHost};
+ 
+ pub mod prelude;
+ 
+diff --git a/src/actions/prelude.rs b/src/actions/prelude.rs
+index a21f5e852ac05b70af5fa8fd7099c6ecbe506a0c..f70f98a002cd7a9e5415b80b8e8b61b2dc9ed2b8
+--- a/src/actions/prelude.rs
++++ b/src/actions/prelude.rs
+@@ -2,18 +2,54 @@
+ //!
+ //! This module keeps action-related imports discoverable without pulling every
+ //! helper from `actions` root exports.
+-#![allow(unused_imports)]
+-
+ pub use super::builders::{
+-    ChatModelInfo, ChatPromptInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo,
+-    NotesInfo,
++    ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
++    NoteSwitcherNoteInfo, NotesInfo,
++};
++pub use super::command_bar::{
++    CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
+ };
+ pub use super::dialog::ActionsDialog;
+ pub use super::types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
+-    SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ pub use super::window::{
+     close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
+     resize_actions_window, WindowPosition,
+ };
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn test_prelude_exports_include_public_actions_types_for_consumers() {
++        fn assert_type_available<T: 'static>() {
++            let _ = std::any::TypeId::of::<T>();
++        }
++
++        assert_type_available::<Action>();
++        assert_type_available::<ActionCallback>();
++        assert_type_available::<ActionCategory>();
++        assert_type_available::<ActionsDialog>();
++        assert_type_available::<ActionsDialogConfig>();
++        assert_type_available::<AnchorPosition>();
++        assert_type_available::<ChatModelInfo>();
++        assert_type_available::<ChatPromptInfo>();
++        assert_type_available::<ClipboardEntryInfo>();
++        assert_type_available::<CloseCallback>();
++        assert_type_available::<CommandBar>();
++        assert_type_available::<CommandBarActionCallback>();
++        assert_type_available::<CommandBarConfig>();
++        assert_type_available::<NewChatModelInfo>();
++        assert_type_available::<NewChatPresetInfo>();
++        assert_type_available::<NoteSwitcherNoteInfo>();
++        assert_type_available::<NotesInfo>();
++        assert_type_available::<ScriptInfo>();
++        assert_type_available::<SearchPosition>();
++        assert_type_available::<SectionStyle>();
++        assert_type_available::<WindowPosition>();
++        let _ = Option::<&dyn CommandBarHost>::None;
++    }
++}
+
+
+thinking
+**Assessing verification and commit blockers**
+exec
+/bin/zsh -lc 'rg -n "builders_rewire" src/actions src | head' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+
+file update:
+diff --git a/src/actions/builders.rs b/src/actions/builders.rs
+index b263292552118682059ea3366b86365db9042991..2c12acf9ec97f8b4af3b9d1a54bfb51c51d54b7d
+--- a/src/actions/builders.rs
++++ b/src/actions/builders.rs
+@@ -2,6 +2,12 @@
+ //!
+ //! Factory functions for creating context-specific action lists.
+ 
++// Re-export action types into the builders module namespace so
++// submodules can import them as `super::types::*`.
++pub(super) mod types {
++    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
++}
++
+ mod chat;
+ mod clipboard;
+ mod file_path;
+@@ -23,9 +29,7 @@
+ pub use chat::{get_ai_command_bar_actions, get_chat_context_actions};
+ pub use clipboard::get_clipboard_history_context_actions;
+ pub use file_path::{get_file_context_actions, get_path_context_actions};
+-pub use notes::{
+-    get_new_chat_actions, get_note_switcher_actions, get_notes_command_bar_actions,
+-};
++pub use notes::{get_new_chat_actions, get_note_switcher_actions, get_notes_command_bar_actions};
+ pub use script_context::{get_global_actions, get_script_context_actions};
+ pub use scriptlet::get_scriptlet_context_actions_with_custom;
+ 
+diff --git a/src/actions/mod.rs b/src/actions/mod.rs
+index 2a5f14b924cd3c748d30704ad97416401f9963f3..9ed8f95fc74e3d37e1b0c82172604eb1ab88961a
+--- a/src/actions/mod.rs
++++ b/src/actions/mod.rs
+@@ -14,7 +14,6 @@
+ //! - `dialog`: ActionsDialog struct and implementation
+ //! - `window`: Separate vibrancy window for actions panel
+ 
+-#[path = "builders_rewire.rs"]
+ mod builders;
+ mod command_bar;
+ mod constants;
+@@ -27,32 +26,25 @@
+ // - ActionsDialog: the main dialog component
+ // - Window functions for separate vibrancy window
+ 
+-pub use builders::to_deeplink_name;
+-#[allow(unused_imports)]
+-pub use builders::ClipboardEntryInfo;
++pub use builders::{
++    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
++    get_notes_command_bar_actions,
++};
+ #[allow(unused_imports)]
+ pub(crate) use builders::{
+     get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
+ };
+-// Chat prompt info types for ActionsDialog::with_chat
+-pub use builders::{ChatModelInfo, ChatPromptInfo};
++pub use builders::{
++    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
++    NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
++};
++pub use command_bar::{
++    is_command_bar_open, CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
++};
+ pub use dialog::ActionsDialog;
+-pub use types::ScriptInfo;
+-
+-// Public API for AI window integration (re-exported but may appear unused until integration)
+-#[allow(unused_imports)]
+-pub use builders::get_ai_command_bar_actions;
+-#[allow(unused_imports)]
+-pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
+-// Public API for Notes window integration
+-#[allow(unused_imports)]
+-pub use builders::{get_notes_command_bar_actions, NotesInfo};
+-// Public API for Notes note switcher (Cmd+P) dialog
+-#[allow(unused_imports)]
+-pub use builders::{get_note_switcher_actions, NoteSwitcherNoteInfo};
+-#[allow(unused_imports)]
+ pub use types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ 
+ // Window functions for separate vibrancy window
+@@ -61,10 +53,6 @@
+     resize_actions_window, WindowPosition,
+ };
+ // get_actions_window_handle available but not re-exported (use window:: directly if needed)
+-
+-// CommandBar - high-level reusable component for command palette functionality
+-#[allow(unused_imports)]
+-pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, CommandBarHost};
+ 
+ pub mod prelude;
+ 
+diff --git a/src/actions/prelude.rs b/src/actions/prelude.rs
+index a21f5e852ac05b70af5fa8fd7099c6ecbe506a0c..f70f98a002cd7a9e5415b80b8e8b61b2dc9ed2b8
+--- a/src/actions/prelude.rs
++++ b/src/actions/prelude.rs
+@@ -2,18 +2,54 @@
+ //!
+ //! This module keeps action-related imports discoverable without pulling every
+ //! helper from `actions` root exports.
+-#![allow(unused_imports)]
+-
+ pub use super::builders::{
+-    ChatModelInfo, ChatPromptInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo,
+-    NotesInfo,
++    ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
++    NoteSwitcherNoteInfo, NotesInfo,
++};
++pub use super::command_bar::{
++    CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
+ };
+ pub use super::dialog::ActionsDialog;
+ pub use super::types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
+-    SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ pub use super::window::{
+     close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
+     resize_actions_window, WindowPosition,
+ };
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn test_prelude_exports_include_public_actions_types_for_consumers() {
++        fn assert_type_available<T: 'static>() {
++            let _ = std::any::TypeId::of::<T>();
++        }
++
++        assert_type_available::<Action>();
++        assert_type_available::<ActionCallback>();
++        assert_type_available::<ActionCategory>();
++        assert_type_available::<ActionsDialog>();
++        assert_type_available::<ActionsDialogConfig>();
++        assert_type_available::<AnchorPosition>();
++        assert_type_available::<ChatModelInfo>();
++        assert_type_available::<ChatPromptInfo>();
++        assert_type_available::<ClipboardEntryInfo>();
++        assert_type_available::<CloseCallback>();
++        assert_type_available::<CommandBar>();
++        assert_type_available::<CommandBarActionCallback>();
++        assert_type_available::<CommandBarConfig>();
++        assert_type_available::<NewChatModelInfo>();
++        assert_type_available::<NewChatPresetInfo>();
++        assert_type_available::<NoteSwitcherNoteInfo>();
++        assert_type_available::<NotesInfo>();
++        assert_type_available::<ScriptInfo>();
++        assert_type_available::<SearchPosition>();
++        assert_type_available::<SectionStyle>();
++        assert_type_available::<WindowPosition>();
++        let _ = Option::<&dyn CommandBarHost>::None;
++    }
++}
+
+
+thinking
+**Confirming build status and updates**
+codex
+I’m finalizing this unit now: releasing claims and setting swarm status with verification blockers (current tree has unrelated compile failures, so full check/clippy can’t pass from this branch state).
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts update --id codex-fix-exports-prelude --status done --notes "updated actions export surface + prelude type coverage test; check/clippy blocked by unrelated clipboard/protocol test-tree compile failures" && ~/.claude/bin/swarm.ts release --id codex-fix-exports-prelude src/actions/mod.rs src/actions/prelude.rs src/actions/builders.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+Updated: codex-fix-exports-prelude
+Released for codex-fix-exports-prelude: src/actions/mod.rs, src/actions/prelude.rs, src/actions/builders.rs
+file update:
+diff --git a/src/actions/builders.rs b/src/actions/builders.rs
+index b263292552118682059ea3366b86365db9042991..2c12acf9ec97f8b4af3b9d1a54bfb51c51d54b7d
+--- a/src/actions/builders.rs
++++ b/src/actions/builders.rs
+@@ -2,6 +2,12 @@
+ //!
+ //! Factory functions for creating context-specific action lists.
+ 
++// Re-export action types into the builders module namespace so
++// submodules can import them as `super::types::*`.
++pub(super) mod types {
++    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
++}
++
+ mod chat;
+ mod clipboard;
+ mod file_path;
+@@ -23,9 +29,7 @@
+ pub use chat::{get_ai_command_bar_actions, get_chat_context_actions};
+ pub use clipboard::get_clipboard_history_context_actions;
+ pub use file_path::{get_file_context_actions, get_path_context_actions};
+-pub use notes::{
+-    get_new_chat_actions, get_note_switcher_actions, get_notes_command_bar_actions,
+-};
++pub use notes::{get_new_chat_actions, get_note_switcher_actions, get_notes_command_bar_actions};
+ pub use script_context::{get_global_actions, get_script_context_actions};
+ pub use scriptlet::get_scriptlet_context_actions_with_custom;
+ 
+diff --git a/src/actions/mod.rs b/src/actions/mod.rs
+index 2a5f14b924cd3c748d30704ad97416401f9963f3..9ed8f95fc74e3d37e1b0c82172604eb1ab88961a
+--- a/src/actions/mod.rs
++++ b/src/actions/mod.rs
+@@ -14,7 +14,6 @@
+ //! - `dialog`: ActionsDialog struct and implementation
+ //! - `window`: Separate vibrancy window for actions panel
+ 
+-#[path = "builders_rewire.rs"]
+ mod builders;
+ mod command_bar;
+ mod constants;
+@@ -27,32 +26,25 @@
+ // - ActionsDialog: the main dialog component
+ // - Window functions for separate vibrancy window
+ 
+-pub use builders::to_deeplink_name;
+-#[allow(unused_imports)]
+-pub use builders::ClipboardEntryInfo;
++pub use builders::{
++    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
++    get_notes_command_bar_actions,
++};
+ #[allow(unused_imports)]
+ pub(crate) use builders::{
+     get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
+ };
+-// Chat prompt info types for ActionsDialog::with_chat
+-pub use builders::{ChatModelInfo, ChatPromptInfo};
++pub use builders::{
++    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
++    NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
++};
++pub use command_bar::{
++    is_command_bar_open, CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
++};
+ pub use dialog::ActionsDialog;
+-pub use types::ScriptInfo;
+-
+-// Public API for AI window integration (re-exported but may appear unused until integration)
+-#[allow(unused_imports)]
+-pub use builders::get_ai_command_bar_actions;
+-#[allow(unused_imports)]
+-pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
+-// Public API for Notes window integration
+-#[allow(unused_imports)]
+-pub use builders::{get_notes_command_bar_actions, NotesInfo};
+-// Public API for Notes note switcher (Cmd+P) dialog
+-#[allow(unused_imports)]
+-pub use builders::{get_note_switcher_actions, NoteSwitcherNoteInfo};
+-#[allow(unused_imports)]
+ pub use types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ 
+ // Window functions for separate vibrancy window
+@@ -61,10 +53,6 @@
+     resize_actions_window, WindowPosition,
+ };
+ // get_actions_window_handle available but not re-exported (use window:: directly if needed)
+-
+-// CommandBar - high-level reusable component for command palette functionality
+-#[allow(unused_imports)]
+-pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, CommandBarHost};
+ 
+ pub mod prelude;
+ 
+diff --git a/src/actions/prelude.rs b/src/actions/prelude.rs
+index a21f5e852ac05b70af5fa8fd7099c6ecbe506a0c..f70f98a002cd7a9e5415b80b8e8b61b2dc9ed2b8
+--- a/src/actions/prelude.rs
++++ b/src/actions/prelude.rs
+@@ -2,18 +2,54 @@
+ //!
+ //! This module keeps action-related imports discoverable without pulling every
+ //! helper from `actions` root exports.
+-#![allow(unused_imports)]
+-
+ pub use super::builders::{
+-    ChatModelInfo, ChatPromptInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo,
+-    NotesInfo,
++    ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
++    NoteSwitcherNoteInfo, NotesInfo,
++};
++pub use super::command_bar::{
++    CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
+ };
+ pub use super::dialog::ActionsDialog;
+ pub use super::types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
+-    SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ pub use super::window::{
+     close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
+     resize_actions_window, WindowPosition,
+ };
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn test_prelude_exports_include_public_actions_types_for_consumers() {
++        fn assert_type_available<T: 'static>() {
++            let _ = std::any::TypeId::of::<T>();
++        }
++
++        assert_type_available::<Action>();
++        assert_type_available::<ActionCallback>();
++        assert_type_available::<ActionCategory>();
++        assert_type_available::<ActionsDialog>();
++        assert_type_available::<ActionsDialogConfig>();
++        assert_type_available::<AnchorPosition>();
++        assert_type_available::<ChatModelInfo>();
++        assert_type_available::<ChatPromptInfo>();
++        assert_type_available::<ClipboardEntryInfo>();
++        assert_type_available::<CloseCallback>();
++        assert_type_available::<CommandBar>();
++        assert_type_available::<CommandBarActionCallback>();
++        assert_type_available::<CommandBarConfig>();
++        assert_type_available::<NewChatModelInfo>();
++        assert_type_available::<NewChatPresetInfo>();
++        assert_type_available::<NoteSwitcherNoteInfo>();
++        assert_type_available::<NotesInfo>();
++        assert_type_available::<ScriptInfo>();
++        assert_type_available::<SearchPosition>();
++        assert_type_available::<SectionStyle>();
++        assert_type_available::<WindowPosition>();
++        let _ = Option::<&dyn CommandBarHost>::None;
++    }
++}
+
+
+thinking
+**Investigating compile errors from module switch**
+exec
+/bin/zsh -lc "sed -n '1,220p' src/actions/builders_tests.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,240p' src/actions/builders_tests/part_01.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+include!("builders_tests/part_01.rs");
+include!("builders_tests/part_02.rs");
+include!("builders_tests/part_03.rs");
+include!("builders_tests/part_04.rs");
+ succeeded in 51ms:
+// Tests for action builder functions.
+//
+// Validates that built-in action builders produce correct actions with
+// expected IDs, titles, shortcuts, and conditional behavior across
+// multiple contexts: file search, path prompt, clipboard history,
+// chat prompt, notes command bar, and AI command bar.
+
+use super::*;
+use crate::clipboard_history::ContentType;
+use crate::file_search::{FileInfo, FileType};
+use crate::prompts::PathInfo;
+use std::collections::HashSet;
+
+// ============================================================
+// Helper: extract action IDs from a Vec<Action>
+// ============================================================
+
+fn action_ids(actions: &[Action]) -> Vec<&str> {
+    actions.iter().map(|a| a.id.as_str()).collect()
+}
+file update:
+diff --git a/src/actions/builders.rs b/src/actions/builders.rs
+index b263292552118682059ea3366b86365db9042991..2c12acf9ec97f8b4af3b9d1a54bfb51c51d54b7d
+--- a/src/actions/builders.rs
++++ b/src/actions/builders.rs
+@@ -2,6 +2,12 @@
+ //!
+ //! Factory functions for creating context-specific action lists.
+ 
++// Re-export action types into the builders module namespace so
++// submodules can import them as `super::types::*`.
++pub(super) mod types {
++    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
++}
++
+ mod chat;
+ mod clipboard;
+ mod file_path;
+@@ -23,9 +29,7 @@
+ pub use chat::{get_ai_command_bar_actions, get_chat_context_actions};
+ pub use clipboard::get_clipboard_history_context_actions;
+ pub use file_path::{get_file_context_actions, get_path_context_actions};
+-pub use notes::{
+-    get_new_chat_actions, get_note_switcher_actions, get_notes_command_bar_actions,
+-};
++pub use notes::{get_new_chat_actions, get_note_switcher_actions, get_notes_command_bar_actions};
+ pub use script_context::{get_global_actions, get_script_context_actions};
+ pub use scriptlet::get_scriptlet_context_actions_with_custom;
+ 
+diff --git a/src/actions/mod.rs b/src/actions/mod.rs
+index 2a5f14b924cd3c748d30704ad97416401f9963f3..9ed8f95fc74e3d37e1b0c82172604eb1ab88961a
+--- a/src/actions/mod.rs
++++ b/src/actions/mod.rs
+@@ -14,7 +14,6 @@
+ //! - `dialog`: ActionsDialog struct and implementation
+ //! - `window`: Separate vibrancy window for actions panel
+ 
+-#[path = "builders_rewire.rs"]
+ mod builders;
+ mod command_bar;
+ mod constants;
+@@ -27,32 +26,25 @@
+ // - ActionsDialog: the main dialog component
+ // - Window functions for separate vibrancy window
+ 
+-pub use builders::to_deeplink_name;
+-#[allow(unused_imports)]
+-pub use builders::ClipboardEntryInfo;
++pub use builders::{
++    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
++    get_notes_command_bar_actions,
++};
+ #[allow(unused_imports)]
+ pub(crate) use builders::{
+     get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
+ };
+-// Chat prompt info types for ActionsDialog::with_chat
+-pub use builders::{ChatModelInfo, ChatPromptInfo};
++pub use builders::{
++    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
++    NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
++};
++pub use command_bar::{
++    is_command_bar_open, CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
++};
+ pub use dialog::ActionsDialog;
+-pub use types::ScriptInfo;
+-
+-// Public API for AI window integration (re-exported but may appear unused until integration)
+-#[allow(unused_imports)]
+-pub use builders::get_ai_command_bar_actions;
+-#[allow(unused_imports)]
+-pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
+-// Public API for Notes window integration
+-#[allow(unused_imports)]
+-pub use builders::{get_notes_command_bar_actions, NotesInfo};
+-// Public API for Notes note switcher (Cmd+P) dialog
+-#[allow(unused_imports)]
+-pub use builders::{get_note_switcher_actions, NoteSwitcherNoteInfo};
+-#[allow(unused_imports)]
+ pub use types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ 
+ // Window functions for separate vibrancy window
+@@ -61,10 +53,6 @@
+     resize_actions_window, WindowPosition,
+ };
+ // get_actions_window_handle available but not re-exported (use window:: directly if needed)
+-
+-// CommandBar - high-level reusable component for command palette functionality
+-#[allow(unused_imports)]
+-pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, CommandBarHost};
+ 
+ pub mod prelude;
+ 
+diff --git a/src/actions/prelude.rs b/src/actions/prelude.rs
+index a21f5e852ac05b70af5fa8fd7099c6ecbe506a0c..f70f98a002cd7a9e5415b80b8e8b61b2dc9ed2b8
+--- a/src/actions/prelude.rs
++++ b/src/actions/prelude.rs
+@@ -2,18 +2,54 @@
+ //!
+ //! This module keeps action-related imports discoverable without pulling every
+ //! helper from `actions` root exports.
+-#![allow(unused_imports)]
+-
+ pub use super::builders::{
+-    ChatModelInfo, ChatPromptInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo,
+-    NotesInfo,
++    ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
++    NoteSwitcherNoteInfo, NotesInfo,
++};
++pub use super::command_bar::{
++    CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
+ };
+ pub use super::dialog::ActionsDialog;
+ pub use super::types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
+-    SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ pub use super::window::{
+     close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
+     resize_actions_window, WindowPosition,
+ };
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn test_prelude_exports_include_public_actions_types_for_consumers() {
++        fn assert_type_available<T: 'static>() {
++            let _ = std::any::TypeId::of::<T>();
++        }
++
++        assert_type_available::<Action>();
++        assert_type_available::<ActionCallback>();
++        assert_type_available::<ActionCategory>();
++        assert_type_available::<ActionsDialog>();
++        assert_type_available::<ActionsDialogConfig>();
++        assert_type_available::<AnchorPosition>();
++        assert_type_available::<ChatModelInfo>();
++        assert_type_available::<ChatPromptInfo>();
++        assert_type_available::<ClipboardEntryInfo>();
++        assert_type_available::<CloseCallback>();
++        assert_type_available::<CommandBar>();
++        assert_type_available::<CommandBarActionCallback>();
++        assert_type_available::<CommandBarConfig>();
++        assert_type_available::<NewChatModelInfo>();
++        assert_type_available::<NewChatPresetInfo>();
++        assert_type_available::<NoteSwitcherNoteInfo>();
++        assert_type_available::<NotesInfo>();
++        assert_type_available::<ScriptInfo>();
++        assert_type_available::<SearchPosition>();
++        assert_type_available::<SectionStyle>();
++        assert_type_available::<WindowPosition>();
++        let _ = Option::<&dyn CommandBarHost>::None;
++    }
++}
+
+
+thinking
+**Confirming compile issue analysis and commit caution**
+exec
+/bin/zsh -lc "nl -ba src/actions/mod.rs | sed -n '1,180p'" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "nl -ba src/actions/builders.rs | sed -n '1,120p'" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "nl -ba src/actions/prelude.rs | sed -n '1,220p'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+     1	//! Actions Dialog Module
+     2	//!
+     3	//! Provides a searchable action menu as a compact overlay popup for quick access
+     4	//! to script management and global actions (edit, create, settings, quit, etc.)
+     5	//!
+     6	//! The dialog can be rendered in two ways:
+     7	//! 1. As an inline overlay within the main window (legacy)
+     8	//! 2. As a separate floating window with its own vibrancy blur (preferred)
+     9	//!
+    10	//! ## Module Structure
+    11	//! - `types`: Core types (Action, ActionCategory, ScriptInfo)
+    12	//! - `builders`: Factory functions for creating action lists
+    13	//! - `constants`: Popup dimensions and styling constants
+    14	//! - `dialog`: ActionsDialog struct and implementation
+    15	//! - `window`: Separate vibrancy window for actions panel
+    16	
+    17	mod builders;
+    18	mod command_bar;
+    19	mod constants;
+    20	mod dialog;
+ succeeded in 51ms:
+     1	//! Action builders
+     2	//!
+     3	//! Factory functions for creating context-specific action lists.
+     4	
+     5	// Re-export action types into the builders module namespace so
+     6	// submodules can import them as `super::types::*`.
+     7	pub(super) mod types {
+     8	    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
+     9	}
+    10	
+    11	mod chat;
+    12	mod clipboard;
+    13	mod file_path;
+    14	mod notes;
+    15	mod script_context;
+    16	mod scriptlet;
+    17	mod shared;
+    18	
+    19	pub use chat::{ChatModelInfo, ChatPromptInfo};
+    20	pub use clipboard::ClipboardEntryInfo;
+ succeeded in 51ms:
+     1	//! Curated actions API surface for consumers that prefer explicit imports.
+     2	//!
+     3	//! This module keeps action-related imports discoverable without pulling every
+     4	//! helper from `actions` root exports.
+     5	pub use super::builders::{
+     6	    ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
+     7	    NoteSwitcherNoteInfo, NotesInfo,
+     8	};
+     9	pub use super::command_bar::{
+    10	    CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
+    11	};
+    12	pub use super::dialog::ActionsDialog;
+    13	pub use super::types::{
+    14	    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
+    15	    ScriptInfo, SearchPosition, SectionStyle,
+    16	};
+    17	pub use super::window::{
+    18	    close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
+    19	    resize_actions_window, WindowPosition,
+    20	};
+file update:
+diff --git a/src/actions/builders.rs b/src/actions/builders.rs
+index b263292552118682059ea3366b86365db9042991..2c12acf9ec97f8b4af3b9d1a54bfb51c51d54b7d
+--- a/src/actions/builders.rs
++++ b/src/actions/builders.rs
+@@ -2,6 +2,12 @@
+ //!
+ //! Factory functions for creating context-specific action lists.
+ 
++// Re-export action types into the builders module namespace so
++// submodules can import them as `super::types::*`.
++pub(super) mod types {
++    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
++}
++
+ mod chat;
+ mod clipboard;
+ mod file_path;
+@@ -23,9 +29,7 @@
+ pub use chat::{get_ai_command_bar_actions, get_chat_context_actions};
+ pub use clipboard::get_clipboard_history_context_actions;
+ pub use file_path::{get_file_context_actions, get_path_context_actions};
+-pub use notes::{
+-    get_new_chat_actions, get_note_switcher_actions, get_notes_command_bar_actions,
+-};
++pub use notes::{get_new_chat_actions, get_note_switcher_actions, get_notes_command_bar_actions};
+ pub use script_context::{get_global_actions, get_script_context_actions};
+ pub use scriptlet::get_scriptlet_context_actions_with_custom;
+ 
+diff --git a/src/actions/mod.rs b/src/actions/mod.rs
+index 2a5f14b924cd3c748d30704ad97416401f9963f3..9ed8f95fc74e3d37e1b0c82172604eb1ab88961a
+--- a/src/actions/mod.rs
++++ b/src/actions/mod.rs
+@@ -14,7 +14,6 @@
+ //! - `dialog`: ActionsDialog struct and implementation
+ //! - `window`: Separate vibrancy window for actions panel
+ 
+-#[path = "builders_rewire.rs"]
+ mod builders;
+ mod command_bar;
+ mod constants;
+@@ -27,32 +26,25 @@
+ // - ActionsDialog: the main dialog component
+ // - Window functions for separate vibrancy window
+ 
+-pub use builders::to_deeplink_name;
+-#[allow(unused_imports)]
+-pub use builders::ClipboardEntryInfo;
++pub use builders::{
++    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
++    get_notes_command_bar_actions,
++};
+ #[allow(unused_imports)]
+ pub(crate) use builders::{
+     get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
+ };
+-// Chat prompt info types for ActionsDialog::with_chat
+-pub use builders::{ChatModelInfo, ChatPromptInfo};
++pub use builders::{
++    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
++    NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
++};
++pub use command_bar::{
++    is_command_bar_open, CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
++};
+ pub use dialog::ActionsDialog;
+-pub use types::ScriptInfo;
+-
+-// Public API for AI window integration (re-exported but may appear unused until integration)
+-#[allow(unused_imports)]
+-pub use builders::get_ai_command_bar_actions;
+-#[allow(unused_imports)]
+-pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
+-// Public API for Notes window integration
+-#[allow(unused_imports)]
+-pub use builders::{get_notes_command_bar_actions, NotesInfo};
+-// Public API for Notes note switcher (Cmd+P) dialog
+-#[allow(unused_imports)]
+-pub use builders::{get_note_switcher_actions, NoteSwitcherNoteInfo};
+-#[allow(unused_imports)]
+ pub use types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ 
+ // Window functions for separate vibrancy window
+@@ -61,10 +53,6 @@
+     resize_actions_window, WindowPosition,
+ };
+ // get_actions_window_handle available but not re-exported (use window:: directly if needed)
+-
+-// CommandBar - high-level reusable component for command palette functionality
+-#[allow(unused_imports)]
+-pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, CommandBarHost};
+ 
+ pub mod prelude;
+ 
+diff --git a/src/actions/prelude.rs b/src/actions/prelude.rs
+index a21f5e852ac05b70af5fa8fd7099c6ecbe506a0c..f70f98a002cd7a9e5415b80b8e8b61b2dc9ed2b8
+--- a/src/actions/prelude.rs
++++ b/src/actions/prelude.rs
+@@ -2,18 +2,54 @@
+ //!
+ //! This module keeps action-related imports discoverable without pulling every
+ //! helper from `actions` root exports.
+-#![allow(unused_imports)]
+-
+ pub use super::builders::{
+-    ChatModelInfo, ChatPromptInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo,
+-    NotesInfo,
++    ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
++    NoteSwitcherNoteInfo, NotesInfo,
++};
++pub use super::command_bar::{
++    CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
+ };
+ pub use super::dialog::ActionsDialog;
+ pub use super::types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
+-    SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ pub use super::window::{
+     close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
+     resize_actions_window, WindowPosition,
+ };
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn test_prelude_exports_include_public_actions_types_for_consumers() {
++        fn assert_type_available<T: 'static>() {
++            let _ = std::any::TypeId::of::<T>();
++        }
++
++        assert_type_available::<Action>();
++        assert_type_available::<ActionCallback>();
++        assert_type_available::<ActionCategory>();
++        assert_type_available::<ActionsDialog>();
++        assert_type_available::<ActionsDialogConfig>();
++        assert_type_available::<AnchorPosition>();
++        assert_type_available::<ChatModelInfo>();
++        assert_type_available::<ChatPromptInfo>();
++        assert_type_available::<ClipboardEntryInfo>();
++        assert_type_available::<CloseCallback>();
++        assert_type_available::<CommandBar>();
++        assert_type_available::<CommandBarActionCallback>();
++        assert_type_available::<CommandBarConfig>();
++        assert_type_available::<NewChatModelInfo>();
++        assert_type_available::<NewChatPresetInfo>();
++        assert_type_available::<NoteSwitcherNoteInfo>();
++        assert_type_available::<NotesInfo>();
++        assert_type_available::<ScriptInfo>();
++        assert_type_available::<SearchPosition>();
++        assert_type_available::<SectionStyle>();
++        assert_type_available::<WindowPosition>();
++        let _ = Option::<&dyn CommandBarHost>::None;
++    }
++}
+
+
+thinking
+**Summarizing changes with test notes and risks**
+codex
+Implemented the export consistency fix across the requested actions files.
+
+Changed files:
+- `src/actions/mod.rs`:17
+  - Switched from `#[path = "builders_rewire.rs"] mod builders;` to `mod builders;`
+  - Consolidated/reordered public re-exports
+  - Added missing public callback type exports: `ActionCallback`, `CloseCallback`, `CommandBarActionCallback`
+  - Kept internal builder access as `pub(crate)` (`get_global_actions`, etc.)
+- `src/actions/builders.rs`:5
+  - Added `pub(super) mod types` re-export shim so builder submodules can consistently import `super::types::*`
+- `src/actions/prelude.rs`:5
+  - Expanded prelude type exports to include:
+    - `ClipboardEntryInfo`
+    - `CommandBar`, `CommandBarConfig`, `CommandBarHost`, `CommandBarActionCallback`
+    - `ActionCallback`, `CloseCallback`
+  - Added regression test `test_prelude_exports_include_public_actions_types_for_consumers` to enforce prelude type coverage
+
+How to test:
+1. `cargo check -p script-kit-gpui`
+2. `cargo clippy -p script-kit-gpui --all-targets -- -D warnings`
+
+Verification results:
+- Both commands were run and currently fail due unrelated in-progress tree issues outside this task’s scope (examples: duplicate `tests` module files under `src/protocol/message` and `src/designs/core`, clipboard enum exhaustiveness/missing fields across `src/clipboard_history/*`, and other pre-existing warning-as-error failures).
+
+Risks / known gaps:
+- Full gate is blocked by unrelated parallel-agent changes, so I could not get a clean global check/clippy pass from current branch state.
+- `src/actions/builders_rewire.rs` is now unused but intentionally left untouched to stay within scoped, non-destructive changes.
+
+Commits:
+- None (verification gate is currently blocked by unrelated compile/lint failures).
+file update:
+diff --git a/src/actions/builders.rs b/src/actions/builders.rs
+index b263292552118682059ea3366b86365db9042991..2c12acf9ec97f8b4af3b9d1a54bfb51c51d54b7d
+--- a/src/actions/builders.rs
++++ b/src/actions/builders.rs
+@@ -2,6 +2,12 @@
+ //!
+ //! Factory functions for creating context-specific action lists.
+ 
++// Re-export action types into the builders module namespace so
++// submodules can import them as `super::types::*`.
++pub(super) mod types {
++    pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
++}
++
+ mod chat;
+ mod clipboard;
+ mod file_path;
+@@ -23,9 +29,7 @@
+ pub use chat::{get_ai_command_bar_actions, get_chat_context_actions};
+ pub use clipboard::get_clipboard_history_context_actions;
+ pub use file_path::{get_file_context_actions, get_path_context_actions};
+-pub use notes::{
+-    get_new_chat_actions, get_note_switcher_actions, get_notes_command_bar_actions,
+-};
++pub use notes::{get_new_chat_actions, get_note_switcher_actions, get_notes_command_bar_actions};
+ pub use script_context::{get_global_actions, get_script_context_actions};
+ pub use scriptlet::get_scriptlet_context_actions_with_custom;
+ 
+diff --git a/src/actions/mod.rs b/src/actions/mod.rs
+index 2a5f14b924cd3c748d30704ad97416401f9963f3..9ed8f95fc74e3d37e1b0c82172604eb1ab88961a
+--- a/src/actions/mod.rs
++++ b/src/actions/mod.rs
+@@ -14,7 +14,6 @@
+ //! - `dialog`: ActionsDialog struct and implementation
+ //! - `window`: Separate vibrancy window for actions panel
+ 
+-#[path = "builders_rewire.rs"]
+ mod builders;
+ mod command_bar;
+ mod constants;
+@@ -27,32 +26,25 @@
+ // - ActionsDialog: the main dialog component
+ // - Window functions for separate vibrancy window
+ 
+-pub use builders::to_deeplink_name;
+-#[allow(unused_imports)]
+-pub use builders::ClipboardEntryInfo;
++pub use builders::{
++    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
++    get_notes_command_bar_actions,
++};
+ #[allow(unused_imports)]
+ pub(crate) use builders::{
+     get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
+ };
+-// Chat prompt info types for ActionsDialog::with_chat
+-pub use builders::{ChatModelInfo, ChatPromptInfo};
++pub use builders::{
++    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
++    NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
++};
++pub use command_bar::{
++    is_command_bar_open, CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
++};
+ pub use dialog::ActionsDialog;
+-pub use types::ScriptInfo;
+-
+-// Public API for AI window integration (re-exported but may appear unused until integration)
+-#[allow(unused_imports)]
+-pub use builders::get_ai_command_bar_actions;
+-#[allow(unused_imports)]
+-pub use builders::{get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo};
+-// Public API for Notes window integration
+-#[allow(unused_imports)]
+-pub use builders::{get_notes_command_bar_actions, NotesInfo};
+-// Public API for Notes note switcher (Cmd+P) dialog
+-#[allow(unused_imports)]
+-pub use builders::{get_note_switcher_actions, NoteSwitcherNoteInfo};
+-#[allow(unused_imports)]
+ pub use types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ 
+ // Window functions for separate vibrancy window
+@@ -61,10 +53,6 @@
+     resize_actions_window, WindowPosition,
+ };
+ // get_actions_window_handle available but not re-exported (use window:: directly if needed)
+-
+-// CommandBar - high-level reusable component for command palette functionality
+-#[allow(unused_imports)]
+-pub use command_bar::{is_command_bar_open, CommandBar, CommandBarConfig, CommandBarHost};
+ 
+ pub mod prelude;
+ 
+diff --git a/src/actions/prelude.rs b/src/actions/prelude.rs
+index a21f5e852ac05b70af5fa8fd7099c6ecbe506a0c..f70f98a002cd7a9e5415b80b8e8b61b2dc9ed2b8
+--- a/src/actions/prelude.rs
++++ b/src/actions/prelude.rs
+@@ -2,18 +2,54 @@
+ //!
+ //! This module keeps action-related imports discoverable without pulling every
+ //! helper from `actions` root exports.
+-#![allow(unused_imports)]
+-
+ pub use super::builders::{
+-    ChatModelInfo, ChatPromptInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo,
+-    NotesInfo,
++    ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
++    NoteSwitcherNoteInfo, NotesInfo,
++};
++pub use super::command_bar::{
++    CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
+ };
+ pub use super::dialog::ActionsDialog;
+ pub use super::types::{
+-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
+-    SectionStyle,
++    Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
++    ScriptInfo, SearchPosition, SectionStyle,
+ };
+ pub use super::window::{
+     close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
+     resize_actions_window, WindowPosition,
+ };
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn test_prelude_exports_include_public_actions_types_for_consumers() {
++        fn assert_type_available<T: 'static>() {
++            let _ = std::any::TypeId::of::<T>();
++        }
++
++        assert_type_available::<Action>();
++        assert_type_available::<ActionCallback>();
++        assert_type_available::<ActionCategory>();
++        assert_type_available::<ActionsDialog>();
++        assert_type_available::<ActionsDialogConfig>();
++        assert_type_available::<AnchorPosition>();
++        assert_type_available::<ChatModelInfo>();
++        assert_type_available::<ChatPromptInfo>();
++        assert_type_available::<ClipboardEntryInfo>();
++        assert_type_available::<CloseCallback>();
++        assert_type_available::<CommandBar>();
++        assert_type_available::<CommandBarActionCallback>();
++        assert_type_available::<CommandBarConfig>();
++        assert_type_available::<NewChatModelInfo>();
++        assert_type_available::<NewChatPresetInfo>();
++        assert_type_available::<NoteSwitcherNoteInfo>();
++        assert_type_available::<NotesInfo>();
++        assert_type_available::<ScriptInfo>();
++        assert_type_available::<SearchPosition>();
++        assert_type_available::<SectionStyle>();
++        assert_type_available::<WindowPosition>();
++        let _ = Option::<&dyn CommandBarHost>::None;
++    }
++}
+
+tokens used
+168,316
+Implemented the export consistency fix across the requested actions files.
+
+Changed files:
+- `src/actions/mod.rs`:17
+  - Switched from `#[path = "builders_rewire.rs"] mod builders;` to `mod builders;`
+  - Consolidated/reordered public re-exports
+  - Added missing public callback type exports: `ActionCallback`, `CloseCallback`, `CommandBarActionCallback`
+  - Kept internal builder access as `pub(crate)` (`get_global_actions`, etc.)
+- `src/actions/builders.rs`:5
+  - Added `pub(super) mod types` re-export shim so builder submodules can consistently import `super::types::*`
+- `src/actions/prelude.rs`:5
+  - Expanded prelude type exports to include:
+    - `ClipboardEntryInfo`
+    - `CommandBar`, `CommandBarConfig`, `CommandBarHost`, `CommandBarActionCallback`
+    - `ActionCallback`, `CloseCallback`
+  - Added regression test `test_prelude_exports_include_public_actions_types_for_consumers` to enforce prelude type coverage
+
+How to test:
+1. `cargo check -p script-kit-gpui`
+2. `cargo clippy -p script-kit-gpui --all-targets -- -D warnings`
+
+Verification results:
+- Both commands were run and currently fail due unrelated in-progress tree issues outside this task’s scope (examples: duplicate `tests` module files under `src/protocol/message` and `src/designs/core`, clipboard enum exhaustiveness/missing fields across `src/clipboard_history/*`, and other pre-existing warning-as-error failures).
+
+Risks / known gaps:
+- Full gate is blocked by unrelated parallel-agent changes, so I could not get a clean global check/clippy pass from current branch state.
+- `src/actions/builders_rewire.rs` is now unused but intentionally left untouched to stay within scoped, non-destructive changes.
+
+Commits:
+- None (verification gate is currently blocked by unrelated compile/lint failures).
+
+
+==== exit @ 2026-02-08T00:49:58.532Z code=0 status=done ====

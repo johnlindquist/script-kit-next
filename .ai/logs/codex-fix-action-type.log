@@ -1,0 +1,2378 @@
+==== spawn @ 2026-02-08T00:01:32.280Z ====
+cmd: codex "exec" "--cd" "/Users/johnlindquist/dev/script-kit-gpui" "--model" "gpt-5.3-codex" "-c" "model_reasoning_effort=\"xhigh\"" "-c" "model_auto_compact_token_limit=120000" "-c" "developer_instructions=\"You are Codex implementer agent \\\"codex-fix-action-type\\\".\\n\\n## Coordination\\nThis repo runs parallel agents in ONE working tree. Before editing any file, you MUST claim it.\\nCommands (run via shell):\\n  - View roster: ~/.claude/bin/swarm.ts status\\n  - Claim files (blocks until free): ~/.claude/bin/swarm.ts claim --wait --id codex-fix-action-type path/to/file\\n  - Release: ~/.claude/bin/swarm.ts release --id codex-fix-action-type path/to/file\\n  - Update status/notes: ~/.claude/bin/swarm.ts update --id codex-fix-action-type --status in_progress --notes \\\"...\\\"\\nRules:\\n  - Never edit a file you haven't claimed.\\n  - Keep claims tight (claim only what you're actively changing).\\n  - If blocked, set status=blocked and say what you're waiting on.\\n  - When finished, set status=done and release claims.\\n\\n## Development practices (this code is maintained by AI agents)\\n  - Log state transitions with enough context to diagnose failures from logs alone.\\n  - Structured errors: include what was attempted, what failed, and current state.\\n  - Name things for grepability — unique identifiers agents can find on the first search.\\n  - Every behavior change gets a test. Untested code is invisible to the next agent.\\n  - Test names describe the scenario: test_X_does_Y_when_Z.\\n  - Keep functions small and single-purpose. 500-line functions burn agent context.\\n  - Use types to encode constraints (enums > strings for errors).\\n\\n## CRITICAL: Parallel-safe verification\\n  - Other agents are modifying other files RIGHT NOW. Full test suites WILL show their failures.\\n  - ONLY run tests that cover YOUR changed files. Scope every test/check command:\\n    Rust: cargo test -p your-crate -- module::test_name | JS: npx jest your/file.test.ts\\n  - Do NOT run: cargo test (unscoped), cargo check (whole workspace), npm test (unscoped).\\n  - If a scoped test fails, it's YOUR bug — fix it. If tests outside your scope fail, ignore them.\\n\\n## Git commit discipline\\n  - NEVER commit unverified work. Run tests/lints/type-checks FIRST. If it fails, fix it before committing.\\n  - A commit is a declaration: \\\"this works and here's the proof.\\\"\\n  - Commit FREQUENTLY — after each meaningful unit of VERIFIED work, not just at the end.\\n  - A \\\"unit\\\" = one logical change that passes verification (new function, bug fix, refactor, test added).\\n  - NEVER batch an entire task into one giant commit. Small commits are searchable; big ones aren't.\\n  - Commit message format:\\n      Line 1: <type>(<scope>): <what changed> (imperative, max 72 chars)\\n      Line 3+: WHY this change was made, WHAT was verified, and HOW to test it.\\n    Types: feat, fix, refactor, test, docs, chore\\n    Example:\\n      feat(auth): add refresh token rotation\\n      \\n      Tokens now rotate on each refresh call to prevent replay attacks.\\n      The old token is invalidated immediately on rotation.\\n      \\n      Verified: cargo test --lib -- auth::refresh (4 tests pass)\\n      Verified: manual smoke test via curl — token rotates, old token returns 401\\n  - The \\\"Verified:\\\" lines are REQUIRED. Future agents will read git log to understand\\n    what was tested and how to re-verify. This is the most valuable part of the message.\\n  - In your final message, list all commits you made with their hashes.\\n\\n## Time budget\\nYou have approximately 10 minutes. If your task is too broad to complete in time:\\n(1) Commit any verified progress.\\n(2) Run: ~/.claude/bin/swarm.ts update --id YOUR_ID --status needs_split --notes 'suggest: 1) sub-task-desc scope:files 2) sub-task-desc scope:files'.\\n(3) Exit cleanly. The dispatcher will read your suggestions and spawn narrower workers.\"" "--output-last-message" "/Users/johnlindquist/dev/script-kit-gpui/.ai/logs/codex-fix-action-type.final.md" "--yolo" "You are agent codex-fix-action-type.\n\nCurrent parallel-agent roster (read this first):\n```\nSWARM SNAPSHOT @ 2026-02-08T00:01:32.277Z\n- codex-fix-action-type [starting] scope=src/actions/types/action_model.rs,src/actions/builders/notes.rs task=MINOR FIX: (1) Add PartialEq derive to Action struct in src/actions/types/action_model.rs for better test ergonomics. (…\n- codex-fix-window-logging [in_progress] scope=src/actions/window/part_02.rs,src/actions/window/part_03.rs task=MINOR FIX: Several window-operation failures silently ignored in src/actions/window/part_02.rs:204,248,279. Add debug/w…\n  claims: src/actions/window/part_02.rs, src/actions/window/part_03.rs\n  notes: claiming window action files for logging + empty height fix\n```\n\nYour assignment:\n- Task: MINOR FIX: (1) Add PartialEq derive to Action struct in src/actions/types/action_model.rs for better test ergonomics. (2) Remove or feature-gate unused ActionCategory variants that are never constructed. (3) Add new chat preset descriptions (notes.rs:192 - preset actions have description: None). After fix, run cargo check && cargo clippy --all-targets -- -D warnings\n- Scope: src/actions/types/action_model.rs,src/actions/builders/notes.rs\n\nOperating constraints:\n- Single working tree (no worktrees, no patches).\n- You MUST claim files before editing (~/.claude/bin/swarm.ts claim --wait ...).\n\nDeliverables:\n- Make the code changes required by the task.\n- Run the most relevant tests/linters.\n- In your FINAL message, include: changed files, how to test, and any risks/known gaps."
+
+OpenAI Codex v0.98.0 (research preview)
+--------
+workdir: /Users/johnlindquist/dev/script-kit-gpui
+model: gpt-5.3-codex
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: xhigh
+reasoning summaries: auto
+session id: 019c3a8d-b8a8-7a21-b17e-592ecf5c4914
+--------
+user
+You are agent codex-fix-action-type.
+
+Current parallel-agent roster (read this first):
+```
+SWARM SNAPSHOT @ 2026-02-08T00:01:32.277Z
+- codex-fix-action-type [starting] scope=src/actions/types/action_model.rs,src/actions/builders/notes.rs task=MINOR FIX: (1) Add PartialEq derive to Action struct in src/actions/types/action_model.rs for better test ergonomics. (…
+- codex-fix-window-logging [in_progress] scope=src/actions/window/part_02.rs,src/actions/window/part_03.rs task=MINOR FIX: Several window-operation failures silently ignored in src/actions/window/part_02.rs:204,248,279. Add debug/w…
+  claims: src/actions/window/part_02.rs, src/actions/window/part_03.rs
+  notes: claiming window action files for logging + empty height fix
+```
+
+Your assignment:
+- Task: MINOR FIX: (1) Add PartialEq derive to Action struct in src/actions/types/action_model.rs for better test ergonomics. (2) Remove or feature-gate unused ActionCategory variants that are never constructed. (3) Add new chat preset descriptions (notes.rs:192 - preset actions have description: None). After fix, run cargo check && cargo clippy --all-targets -- -D warnings
+- Scope: src/actions/types/action_model.rs,src/actions/builders/notes.rs
+
+Operating constraints:
+- Single working tree (no worktrees, no patches).
+- You MUST claim files before editing (~/.claude/bin/swarm.ts claim --wait ...).
+
+Deliverables:
+- Make the code changes required by the task.
+- Run the most relevant tests/linters.
+- In your FINAL message, include: changed files, how to test, and any risks/known gaps.
+warning: Under-development features enabled: responses_websockets. Under-development features are incomplete and may behave unpredictably. To suppress this warning, set `suppress_unstable_features_warning = true` in /Users/johnlindquist/.codex/config.toml.
+mcp: deepwiki starting
+mcp: deepwiki ready
+mcp startup: ready: deepwiki
+
+thinking
+**Clarifying testing and claiming strategy**
+codex
+I’m implementing the three scoped fixes in `src/actions/types/action_model.rs` and `src/actions/builders/notes.rs`, then I’ll run scoped Rust checks/lint for verification. I’ll start by syncing swarm status and claiming those two files before making edits.
+
+thinking
+**Planning sequential commands**
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts status' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+Repo: /Users/johnlindquist/dev/script-kit-gpui
+Updated: 2026-02-08T00:01:45.359Z
+
+Active agents (2):
+codex-fix-action-type [in_progress] codex/gpt-5.3-codex/exec
+  task: MINOR FIX: (1) Add PartialEq derive to Action struct in src/actions/types/action_model.rs for better test ergonomics. (…
+  scope: src/actions/types/action_model.rs,src/actions/builders/notes.rs
+  claims: (none)
+  notes: spawned codex (exec)
+
+codex-fix-window-logging [in_progress] codex/gpt-5.3-codex/exec
+  task: MINOR FIX: Several window-operation failures silently ignored in src/actions/window/part_02.rs:204,248,279. Add debug/w…
+  scope: src/actions/window/part_02.rs,src/actions/window/part_03.rs
+  claims(2): src/actions/window/part_02.rs, src/actions/window/part_03.rs
+  notes: claiming window action files for logging + empty height fix
+
+Inactive agents (222):
+- codex-accessibility [done] done. exit=0. final=.ai/logs/codex-accessibility.final.md. See final message file.
+- codex-action-labels [failed] failed. exit=1. final=.ai/logs/codex-action-labels.final.md.
+- codex-actions-audit [failed] failed. exit=1. final=.ai/logs/codex-actions-audit.final.md. See final message file.
+
+thinking
+**Planning simultaneous claim update**
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts update --id codex-fix-action-type --status in_progress --notes "claiming action model + notes builder for minor fixes" && ~/.claude/bin/swarm.ts claim --wait --id codex-fix-action-type src/actions/types/action_model.rs src/actions/builders/notes.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+Updated: codex-fix-action-type
+Claimed for codex-fix-action-type: src/actions/types/action_model.rs, src/actions/builders/notes.rs
+
+thinking
+**Inspecting action-related code**
+codex
+I’ve claimed both target files and I’m now inspecting `Action`/`ActionCategory` definitions and the notes preset builder to make only the requested changes.
+
+thinking
+**Considering parallel file reads**
+exec
+/bin/zsh -lc "sed -n '1,260p' src/actions/types/action_model.rs" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "sed -n '1,320p' src/actions/builders/notes.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+
+/// Represents a single action item in the actions menu.
+///
+/// Actions are created by builder functions in `builders.rs` or converted from
+/// SDK-provided `ProtocolAction` messages. Each action has a unique identifier,
+/// display title, and category for grouping.
+///
+/// # Action ID Convention
+///
+/// - Built-in actions: snake_case IDs (`edit_script`, `copy_path`, etc.)
+/// - SDK actions: Use the `name` field from ProtocolAction as-is
+/// - Scriptlet actions: Prefixed with `scriptlet_action:` followed by command
+///
+/// # Routing via has_action
+///
+/// The `has_action` field determines how actions are executed:
+/// - `false` (default for built-ins): Handle locally in Rust via `handle_action()`
+/// - `true` (SDK actions): Send `ActionTriggered` message to script for handling
+///
+/// Note: The routing logic in `handle_action()` may also read from the original
+ succeeded in 51ms:
+use super::types::{Action, ActionCategory};
+use crate::designs::icon_variations::IconName;
+
+/// Information about a model for the new chat dropdown
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct NewChatModelInfo {
+    pub model_id: String,
+    pub display_name: String,
+    pub provider: String,
+    pub provider_display_name: String,
+}
+
+/// Information about a preset for the new chat dropdown
+#[derive(Debug, Clone)]
+pub struct NewChatPresetInfo {
+    pub id: String,
+    pub name: String,
+    pub icon: IconName,
+}
+
+thinking
+**Planning to retrieve remaining file content**
+exec
+/bin/zsh -lc "sed -n '320,520p' src/actions/builders/notes.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+            .with_icon(IconName::Settings),
+        );
+    }
+
+    actions
+}
+
+fn new_chat_model_identifier(model: &NewChatModelInfo) -> String {
+    format!("{}::{}", model.provider, model.model_id)
+}
+
+/// Information about a note for the note switcher dialog
+#[derive(Debug, Clone)]
+pub struct NoteSwitcherNoteInfo {
+    pub id: String,
+    pub title: String,
+    pub char_count: usize,
+    pub is_current: bool,
+    pub is_pinned: bool,
+    pub preview: String,
+
+thinking
+**Searching for unused enum variants**
+codex
+I found the key spots; next I’m checking `ActionCategory` usages repo-wide to remove only variants that are truly never constructed and avoid breaking any call sites.
+exec
+/bin/zsh -lc 'rg --line-number --no-heading "ActionCategory::" src | head -n 200' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+src/actions/dialog_builtin_action_validation_tests_12/tests_part_03.rs:72:            Action::new("x", "X", None, ActionCategory::ScriptContext).with_icon(IconName::Copy);
+src/actions/dialog_builtin_action_validation_tests_12/tests_part_03.rs:80:            Action::new("x", "X", None, ActionCategory::ScriptContext).with_section("Test");
+src/actions/dialog_builtin_action_validation_tests_12/tests_part_03.rs:87:        let action = Action::new("x", "X", None, ActionCategory::ScriptContext)
+src/actions/dialog_builtin_action_validation_tests_12/tests_part_03.rs:96:        let action = Action::new("x", "X", None, ActionCategory::ScriptContext)
+src/actions/dialog_builtin_action_validation_tests_12/tests_part_03.rs:105:        let action = Action::new("x", "X", None, ActionCategory::ScriptContext)
+src/actions/dialog_builtin_action_validation_tests_8/tests_part_03.rs:79:        let action = Action::new("id", "Edit Script", None, ActionCategory::ScriptContext);
+src/actions/dialog_builtin_action_validation_tests_8/tests_part_03.rs:86:        let action = Action::new("id", "The Editor", None, ActionCategory::ScriptContext);
+src/actions/dialog_builtin_action_validation_tests_8/tests_part_03.rs:96:        let action = Action::new("id", "Edit Script", None, ActionCategory::ScriptContext);
+src/actions/dialog_builtin_action_validation_tests_8/tests_part_03.rs:107:            ActionCategory::ScriptContext,
+src/actions/dialog_builtin_action_validation_tests_8/tests_part_03.rs:128:            Action::new("id", "Open File", None, ActionCategory::ScriptContext).with_shortcut("⌘E");
+src/actions/dialog_builtin_action_validation_tests_8/tests_part_03.rs:140:            ActionCategory::ScriptContext,
+src/actions/dialog_builtin_action_validation_tests_8/tests_part_03.rs:149:        let action = Action::new("id", "Edit Script", None, ActionCategory::ScriptContext);
+src/actions/dialog_builtin_action_validation_tests_8/tests_part_03.rs:156:        let action = Action::new("id", "Edit Script", None, ActionCategory::ScriptContext);
+src/actions/dialog_builtin_action_validation_tests_12/tests_part_02.rs:233:            ActionCategory::ScriptContext,
+src/actions/dialog_builtin_action_validation_tests_12/tests_part_02.rs:242:            Action::new("edit", "Edit", None, ActionCategory::ScriptContext).with_shortcut("edit");
+src/actions/dialog_builtin_action_validation_tests_12/tests_part_02.rs:253:            ActionCategory::ScriptContext,
+src/actions/dialog_builtin_action_validation_tests_12/tests_part_02.rs:265:            ActionCategory::ScriptContext,
+src/actions/dialog_builtin_action_validation_tests_12/tests_part_02.rs:272:        let action = Action::new("x", "Anything", None, ActionCategory::ScriptContext);
+src/actions/dialog_builtin_action_validation_tests_12/tests_part_02.rs:288:            Action::new("a", "A", None, ActionCategory::ScriptContext).with_section("Alpha"),
+src/actions/dialog_builtin_action_validation_tests_12/tests_part_02.rs:289:            Action::new("b", "B", None, ActionCategory::ScriptContext).with_section("Beta"),
+
+thinking
+**Searching for variant usages**
+exec
+/bin/zsh -lc 'rg --line-number --no-heading "ActionCategory::(ScriptOps|GlobalOps|Terminal)" src' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+src/app_impl/actions_toggle.rs:323:                        ActionCategory::Terminal,
+src/actions/types/tests.rs:86:            Action::new("test", "Test Action", None, ActionCategory::GlobalOps).with_shortcut("⌘T");
+src/actions/dialog_behavior_tests/part_02.rs:385:    assert_ne!(ActionCategory::ScriptContext, ActionCategory::GlobalOps);
+src/actions/dialog_behavior_tests/part_02.rs:386:    assert_ne!(ActionCategory::ScriptOps, ActionCategory::Terminal);
+src/actions/dialog_builtin_action_validation_tests_10/tests_part_03.rs:233:        assert_eq!(ActionCategory::ScriptOps, ActionCategory::ScriptOps);
+src/actions/dialog_builtin_action_validation_tests_10/tests_part_03.rs:234:        assert_eq!(ActionCategory::GlobalOps, ActionCategory::GlobalOps);
+src/actions/dialog_builtin_action_validation_tests_10/tests_part_03.rs:235:        assert_eq!(ActionCategory::Terminal, ActionCategory::Terminal);
+src/actions/dialog_builtin_action_validation_tests_10/tests_part_03.rs:240:        assert_ne!(ActionCategory::ScriptContext, ActionCategory::ScriptOps);
+src/actions/dialog_builtin_action_validation_tests_10/tests_part_03.rs:241:        assert_ne!(ActionCategory::ScriptContext, ActionCategory::GlobalOps);
+src/actions/dialog_builtin_action_validation_tests_10/tests_part_03.rs:242:        assert_ne!(ActionCategory::ScriptContext, ActionCategory::Terminal);
+src/actions/dialog_builtin_action_validation_tests_10/tests_part_03.rs:247:        assert_ne!(ActionCategory::ScriptOps, ActionCategory::GlobalOps);
+src/actions/dialog_builtin_action_validation_tests_10/tests_part_03.rs:252:        assert_ne!(ActionCategory::Terminal, ActionCategory::GlobalOps);
+src/actions/dialog_builtin_action_validation_tests_45/part_02.rs:43:        .any(|a| a.category == ActionCategory::ScriptOps));
+src/actions/dialog_builtin_action_validation_tests_45/part_02.rs:57:        .any(|a| a.category == ActionCategory::GlobalOps));
+src/actions/dialog_builtin_action_validation_tests_45/part_02.rs:254:        .any(|a| a.category == ActionCategory::GlobalOps));
+src/actions/dialog_builtin_action_validation_tests_11/part_04.rs:365:    assert_ne!(ActionCategory::ScriptContext, ActionCategory::ScriptOps);
+src/actions/dialog_builtin_action_validation_tests_11/part_04.rs:366:    assert_ne!(ActionCategory::GlobalOps, ActionCategory::Terminal);
+src/actions/tests/dialog_builtin_validation/dialog_builtin_action_validation_tests_45/part_02.rs:43:        .any(|a| a.category == ActionCategory::ScriptOps));
+src/actions/tests/dialog_builtin_validation/dialog_builtin_action_validation_tests_45/part_02.rs:57:        .any(|a| a.category == ActionCategory::GlobalOps));
+src/actions/tests/dialog_builtin_validation/dialog_builtin_action_validation_tests_45/part_02.rs:254:        .any(|a| a.category == ActionCategory::GlobalOps));
+
+thinking
+**Assessing conditional gating for variants**
+exec
+/bin/zsh -lc 'rg --line-number --no-heading "ActionCategory::(ScriptOps|GlobalOps)"' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 2.18s:
+expert-bundles/actions-panel-review.md:253:            ActionCategory::ScriptOps,
+expert-bundles/actions-panel-review.md:260:            ActionCategory::GlobalOps,
+expert-bundles/actions-panel-review.md:267:            ActionCategory::GlobalOps,
+expert-bundles/actions-panel-review.md:274:            ActionCategory::GlobalOps,
+expert-bundles/actions-panel-review.md:961:        let action = Action::new("test", "Test Action", None, ActionCategory::GlobalOps);
+expert-bundles/actions-panel-review.md:971:            Action::new("test", "Test Action", None, ActionCategory::GlobalOps).with_shortcut("⌘T");
+expert-bundles/command-bar-refactor.md:3743:            Action::new("test", "Test Action", None, ActionCategory::GlobalOps).with_shortcut("⌘T");
+
+thinking
+**Finalizing preset descriptions and gating variants**
+codex
+I confirmed `ScriptOps`/`GlobalOps` are only used in tests, while `Terminal` is constructed in runtime code. I’m now applying minimal edits: derive `PartialEq` on `Action`, feature-gate only the two unused variants for tests, and add preset descriptions plus a focused test in `notes.rs`.
+
+thinking
+**Planning enum patch and preset descriptions**
+exec
+/bin/zsh -lc 'rg --line-number --no-heading "NewChatPresetInfo" src' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+src/actions/dialog_builtin_action_validation_tests_12/tests_part_03.rs:350:            &[NewChatPresetInfo {
+src/actions/dialog_builtin_action_validation_tests_12/tests_part_03.rs:390:            &[NewChatPresetInfo {
+src/actions/dialog_builtin_action_validation_tests_40/tests_part_03.rs:389:        let presets = vec![NewChatPresetInfo {
+src/actions/dialog_builtin_action_validation_tests_40/tests_part_03.rs:410:        let presets = vec![NewChatPresetInfo {
+src/actions/dialog_builtin_action_validation_tests_40/tests_part_03.rs:421:        let presets = vec![NewChatPresetInfo {
+src/actions/dialog_builtin_action_validation_tests_40/tests_part_03.rs:432:        let presets = vec![NewChatPresetInfo {
+src/actions/dialog_builtin_action_validation_tests_40/tests_part_04.rs:3:        let presets = vec![NewChatPresetInfo {
+src/actions/dialog_builtin_action_validation_tests_32/part_01.rs:11:    ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
+src/actions/dialog_random_action_window_tests/part_01.rs:12:    ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
+src/actions/dialog_random_action_window_tests/part_02.rs:241:    let presets = vec![NewChatPresetInfo {
+src/actions/dialog_random_action_window_tests/part_02.rs:274:    let presets = vec![NewChatPresetInfo {
+src/actions/dialog_builtin_action_validation_tests_32/part_02.rs:368:    let presets = vec![NewChatPresetInfo {
+src/actions/dialog_builtin_action_validation_tests_13/tests_part_04.rs:23:        let presets = vec![NewChatPresetInfo {
+src/actions/dialog_builtin_action_validation_tests_13/tests_part_04.rs:60:        let presets = vec![NewChatPresetInfo {
+src/actions/dialog_builtin_action_validation_tests_35/part_01.rs:11:    ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
+src/actions/dialog_builtin_action_validation_tests_35/part_03.rs:4:    let presets = vec![NewChatPresetInfo {
+src/actions/dialog_builtin_action_validation_tests_14/tests_part_04.rs:109:        let presets = vec![NewChatPresetInfo {
+src/actions/dialog_builtin_action_validation_tests_14/tests_part_04.rs:138:        let presets = vec![NewChatPresetInfo {
+src/actions/dialog_window_tests/part_01.rs:20:    ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
+src/actions/dialog_builtin_action_validation_tests_22/part_01.rs:10:    NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
+
+thinking
+**Planning description generation helper**
+exec
+/bin/zsh -lc "rg --line-number --no-heading \"preset.*description|description.*preset|preset_.*None|None,\\s*ActionCategory::ScriptContext\" src/actions | head -n 200" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+src/actions/dialog_builtin_action_validation_tests_32/part_03.rs:14:    let action = Action::new("test", "Test Action", None, ActionCategory::ScriptContext);
+src/actions/dialog_builtin_action_validation_tests_32/part_03.rs:40:    let action = Action::new("test", "Test Action", None, ActionCategory::ScriptContext);
+src/actions/dialog_builtin_action_validation_tests_32/part_03.rs:94:        Action::new("a", "A", None, ActionCategory::ScriptContext).with_section("Sec1"),
+src/actions/dialog_builtin_action_validation_tests_32/part_03.rs:95:        Action::new("b", "B", None, ActionCategory::ScriptContext).with_section("Sec1"),
+src/actions/dialog_builtin_action_validation_tests_32/part_03.rs:107:        Action::new("a", "A", None, ActionCategory::ScriptContext).with_section("Sec1"),
+src/actions/dialog_builtin_action_validation_tests_32/part_03.rs:108:        Action::new("b", "B", None, ActionCategory::ScriptContext).with_section("Sec2"),
+src/actions/dialog_builtin_action_validation_tests_32/part_03.rs:120:        Action::new("a", "A", None, ActionCategory::ScriptContext).with_section("S1"),
+src/actions/dialog_builtin_action_validation_tests_32/part_03.rs:121:        Action::new("b", "B", None, ActionCategory::ScriptContext).with_section("S2"),
+src/actions/dialog_builtin_action_validation_tests_32/part_03.rs:333:    let action = Action::new("id", "Hello World", None, ActionCategory::ScriptContext);
+src/actions/dialog_builtin_action_validation_tests_32/part_03.rs:350:    let action = Action::new("id", "T", None, ActionCategory::ScriptContext);
+src/actions/dialog_builtin_action_validation_tests_32/part_03.rs:356:    let action = Action::new("id", "T", None, ActionCategory::ScriptContext).with_shortcut("⌘⇧C");
+src/actions/dialog_builtin_action_validation_tests_35/part_04.rs:76:    let action = Action::new("id", "Hello World", None, ActionCategory::ScriptContext);
+src/actions/dialog_builtin_action_validation_tests_35/part_04.rs:93:    let action = Action::new("id", "T", None, ActionCategory::ScriptContext).with_shortcut("⌘⇧C");
+src/actions/dialog_builtin_action_validation_tests_35/part_04.rs:99:    let action = Action::new("id", "T", None, ActionCategory::ScriptContext);
+src/actions/dialog_builtin_action_validation_tests_35/part_03.rs:159:        Action::new("a", "Alpha", None, ActionCategory::ScriptContext),
+src/actions/dialog_builtin_action_validation_tests_35/part_03.rs:160:        Action::new("b", "Beta", None, ActionCategory::ScriptContext),
+src/actions/dialog_builtin_action_validation_tests_35/part_03.rs:170:    let mut a1 = Action::new("a", "Alpha", None, ActionCategory::ScriptContext);
+src/actions/dialog_builtin_action_validation_tests_35/part_03.rs:172:    let a2 = Action::new("b", "Beta", None, ActionCategory::ScriptContext);
+src/actions/dialog_builtin_action_validation_tests_35/part_03.rs:183:    let mut a1 = Action::new("a", "Alpha", None, ActionCategory::ScriptContext);
+src/actions/dialog_builtin_action_validation_tests_35/part_03.rs:185:    let mut a2 = Action::new("b", "Beta", None, ActionCategory::ScriptContext);
+
+thinking
+**Assessing test and derive impacts**
+exec
+/bin/zsh -lc "rg --line-number --no-heading \"enum IconName|struct IconName|derive\\(.*IconName\" src/designs -g '*.rs'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+src/designs/icon_variations/part_01.rs:55:pub enum IconName {
+
+thinking
+**Identifying view derivation point**
+exec
+/bin/zsh -lc "sed -n '1,120p' src/designs/icon_variations/part_01.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+use std::sync::Arc;
+
+/// Categories of icons based on their use case
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IconCategory {
+    /// File type indicators (file, folder, code)
+    Files,
+    /// Navigation and UI actions (plus, trash, copy)
+    Actions,
+    /// Indicators and status (check, star, bolt)
+    Status,
+    /// Directional arrows and chevrons
+    Arrows,
+    /// Media controls (play, stop)
+    Media,
+}
+
+impl IconCategory {
+    /// Get the display name
+    pub fn name(&self) -> &'static str {
+
+thinking
+**Preparing patch application**
+file update
+M /Users/johnlindquist/dev/script-kit-gpui/src/actions/types/action_model.rs
+@@ -43,3 +43,3 @@
+ /// ```
+-#[derive(Debug, Clone)]
++#[derive(Debug, Clone, PartialEq)]
+ pub struct Action {
+@@ -161,10 +161,8 @@
+ 
+-    /// Script management operations (reserved for future use).
+-    /// Intended for: Create Script, Delete Script, Duplicate Script
+-    #[allow(dead_code)]
++    /// Script management operations (test-only reserved category).
++    #[cfg(test)]
+     ScriptOps,
+ 
+-    /// Application-wide actions (reserved for future use).
+-    /// Intended for: Open Settings, Quit App, Check for Updates
+-    #[allow(dead_code)]
++    /// Application-wide actions (test-only reserved category).
++    #[cfg(test)]
+     GlobalOps,
+@@ -231,2 +229 @@
+ }
+-
+apply_patch(auto_approved=true) exited 0 in 14ms:
+Success. Updated the following files:
+M src/actions/types/action_model.rs
+file update:
+diff --git a/src/actions/types/action_model.rs b/src/actions/types/action_model.rs
+index b3f336ca56d895a910978f56c2d217fad596260c..e28aebd0f0873a054fcb67281804fca91285433d
+--- a/src/actions/types/action_model.rs
++++ b/src/actions/types/action_model.rs
+@@ -41,7 +41,7 @@
+ /// action.has_action = true;
+ /// action.value = Some("copy-to-clipboard".to_string());
+ /// ```
+-#[derive(Debug, Clone)]
++#[derive(Debug, Clone, PartialEq)]
+ pub struct Action {
+     /// Unique identifier for action routing.
+     /// Built-in IDs use snake_case (e.g., `edit_script`, `copy_path`).
+@@ -159,14 +159,12 @@
+     /// Examples: Run, Edit, Copy Path, Configure Shortcut, Reset Ranking
+     ScriptContext,
+ 
+-    /// Script management operations (reserved for future use).
+-    /// Intended for: Create Script, Delete Script, Duplicate Script
+-    #[allow(dead_code)]
++    /// Script management operations (test-only reserved category).
++    #[cfg(test)]
+     ScriptOps,
+ 
+-    /// Application-wide actions (reserved for future use).
+-    /// Intended for: Open Settings, Quit App, Check for Updates
+-    #[allow(dead_code)]
++    /// Application-wide actions (test-only reserved category).
++    #[cfg(test)]
+     GlobalOps,
+ 
+     /// Terminal actions (Clear, Copy, Paste, Scroll, etc.)
+@@ -229,4 +227,3 @@
+         self
+     }
+ }
+-
+
+file update:
+diff --git a/src/actions/types/action_model.rs b/src/actions/types/action_model.rs
+index b3f336ca56d895a910978f56c2d217fad596260c..e28aebd0f0873a054fcb67281804fca91285433d
+--- a/src/actions/types/action_model.rs
++++ b/src/actions/types/action_model.rs
+@@ -41,7 +41,7 @@
+ /// action.has_action = true;
+ /// action.value = Some("copy-to-clipboard".to_string());
+ /// ```
+-#[derive(Debug, Clone)]
++#[derive(Debug, Clone, PartialEq)]
+ pub struct Action {
+     /// Unique identifier for action routing.
+     /// Built-in IDs use snake_case (e.g., `edit_script`, `copy_path`).
+@@ -159,14 +159,12 @@
+     /// Examples: Run, Edit, Copy Path, Configure Shortcut, Reset Ranking
+     ScriptContext,
+ 
+-    /// Script management operations (reserved for future use).
+-    /// Intended for: Create Script, Delete Script, Duplicate Script
+-    #[allow(dead_code)]
++    /// Script management operations (test-only reserved category).
++    #[cfg(test)]
+     ScriptOps,
+ 
+-    /// Application-wide actions (reserved for future use).
+-    /// Intended for: Open Settings, Quit App, Check for Updates
+-    #[allow(dead_code)]
++    /// Application-wide actions (test-only reserved category).
++    #[cfg(test)]
+     GlobalOps,
+ 
+     /// Terminal actions (Clear, Copy, Paste, Scroll, etc.)
+@@ -229,4 +227,3 @@
+         self
+     }
+ }
+-
+
+
+thinking
+**Adding preset description with tests**
+file update
+M /Users/johnlindquist/dev/script-kit-gpui/src/actions/builders/notes.rs
+@@ -302,3 +302,3 @@
+                 &preset.name,
+-                None,
++                Some(new_chat_preset_description(preset)),
+                 ActionCategory::ScriptContext,
+@@ -330,2 +330,6 @@
+ 
++fn new_chat_preset_description(preset: &NewChatPresetInfo) -> String {
++    format!("Use {} preset", preset.name)
++}
++
+ /// Information about a note for the note switcher dialog
+apply_patch(auto_approved=true) exited 0 in 15ms:
+Success. Updated the following files:
+M src/actions/builders/notes.rs
+file update:
+diff --git a/src/actions/builders/notes.rs b/src/actions/builders/notes.rs
+index 71cfc3228b285e76bda28b04a0005c71b209668b..5a9466b11f26d4f5843fa84866cbbdd9c240bff8
+--- a/src/actions/builders/notes.rs
++++ b/src/actions/builders/notes.rs
+@@ -300,7 +300,7 @@
+             Action::new(
+                 format!("preset_{}", preset.id),
+                 &preset.name,
+-                None,
++                Some(new_chat_preset_description(preset)),
+                 ActionCategory::ScriptContext,
+             )
+             .with_section("Presets")
+@@ -328,6 +328,10 @@
+     format!("{}::{}", model.provider, model.model_id)
+ }
+ 
++fn new_chat_preset_description(preset: &NewChatPresetInfo) -> String {
++    format!("Use {} preset", preset.name)
++}
++
+ /// Information about a note for the note switcher dialog
+ #[derive(Debug, Clone)]
+ pub struct NoteSwitcherNoteInfo {
+diff --git a/src/actions/types/action_model.rs b/src/actions/types/action_model.rs
+index b3f336ca56d895a910978f56c2d217fad596260c..e28aebd0f0873a054fcb67281804fca91285433d
+--- a/src/actions/types/action_model.rs
++++ b/src/actions/types/action_model.rs
+@@ -41,7 +41,7 @@
+ /// action.has_action = true;
+ /// action.value = Some("copy-to-clipboard".to_string());
+ /// ```
+-#[derive(Debug, Clone)]
++#[derive(Debug, Clone, PartialEq)]
+ pub struct Action {
+     /// Unique identifier for action routing.
+     /// Built-in IDs use snake_case (e.g., `edit_script`, `copy_path`).
+@@ -159,14 +159,12 @@
+     /// Examples: Run, Edit, Copy Path, Configure Shortcut, Reset Ranking
+     ScriptContext,
+ 
+-    /// Script management operations (reserved for future use).
+-    /// Intended for: Create Script, Delete Script, Duplicate Script
+-    #[allow(dead_code)]
++    /// Script management operations (test-only reserved category).
++    #[cfg(test)]
+     ScriptOps,
+ 
+-    /// Application-wide actions (reserved for future use).
+-    /// Intended for: Open Settings, Quit App, Check for Updates
+-    #[allow(dead_code)]
++    /// Application-wide actions (test-only reserved category).
++    #[cfg(test)]
+     GlobalOps,
+ 
+     /// Terminal actions (Clear, Copy, Paste, Scroll, etc.)
+@@ -229,4 +227,3 @@
+         self
+     }
+ }
+-
+
+file update:
+diff --git a/src/actions/builders/notes.rs b/src/actions/builders/notes.rs
+index 71cfc3228b285e76bda28b04a0005c71b209668b..5a9466b11f26d4f5843fa84866cbbdd9c240bff8
+--- a/src/actions/builders/notes.rs
++++ b/src/actions/builders/notes.rs
+@@ -300,7 +300,7 @@
+             Action::new(
+                 format!("preset_{}", preset.id),
+                 &preset.name,
+-                None,
++                Some(new_chat_preset_description(preset)),
+                 ActionCategory::ScriptContext,
+             )
+             .with_section("Presets")
+@@ -328,6 +328,10 @@
+     format!("{}::{}", model.provider, model.model_id)
+ }
+ 
++fn new_chat_preset_description(preset: &NewChatPresetInfo) -> String {
++    format!("Use {} preset", preset.name)
++}
++
+ /// Information about a note for the note switcher dialog
+ #[derive(Debug, Clone)]
+ pub struct NoteSwitcherNoteInfo {
+diff --git a/src/actions/types/action_model.rs b/src/actions/types/action_model.rs
+index b3f336ca56d895a910978f56c2d217fad596260c..e28aebd0f0873a054fcb67281804fca91285433d
+--- a/src/actions/types/action_model.rs
++++ b/src/actions/types/action_model.rs
+@@ -41,7 +41,7 @@
+ /// action.has_action = true;
+ /// action.value = Some("copy-to-clipboard".to_string());
+ /// ```
+-#[derive(Debug, Clone)]
++#[derive(Debug, Clone, PartialEq)]
+ pub struct Action {
+     /// Unique identifier for action routing.
+     /// Built-in IDs use snake_case (e.g., `edit_script`, `copy_path`).
+@@ -159,14 +159,12 @@
+     /// Examples: Run, Edit, Copy Path, Configure Shortcut, Reset Ranking
+     ScriptContext,
+ 
+-    /// Script management operations (reserved for future use).
+-    /// Intended for: Create Script, Delete Script, Duplicate Script
+-    #[allow(dead_code)]
++    /// Script management operations (test-only reserved category).
++    #[cfg(test)]
+     ScriptOps,
+ 
+-    /// Application-wide actions (reserved for future use).
+-    /// Intended for: Open Settings, Quit App, Check for Updates
+-    #[allow(dead_code)]
++    /// Application-wide actions (test-only reserved category).
++    #[cfg(test)]
+     GlobalOps,
+ 
+     /// Terminal actions (Clear, Copy, Paste, Scroll, etc.)
+@@ -229,4 +227,3 @@
+         self
+     }
+ }
+-
+
+
+thinking
+**Locating tests module end**
+exec
+/bin/zsh -lc "sed -n '140,300p' src/actions/builders/notes.rs" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⇧⌘E")
+            .with_icon(IconName::ArrowRight)
+            .with_section("Export"),
+        );
+    }
+
+    if !info.auto_sizing_enabled {
+        actions.push(
+            Action::new(
+                "enable_auto_sizing",
+                "Enable Auto-Sizing",
+                Some("Window grows/shrinks with content".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘A")
+            .with_icon(IconName::Settings)
+            .with_section("Settings"),
+        );
+file update:
+diff --git a/src/actions/builders/notes.rs b/src/actions/builders/notes.rs
+index 71cfc3228b285e76bda28b04a0005c71b209668b..5a9466b11f26d4f5843fa84866cbbdd9c240bff8
+--- a/src/actions/builders/notes.rs
++++ b/src/actions/builders/notes.rs
+@@ -300,7 +300,7 @@
+             Action::new(
+                 format!("preset_{}", preset.id),
+                 &preset.name,
+-                None,
++                Some(new_chat_preset_description(preset)),
+                 ActionCategory::ScriptContext,
+             )
+             .with_section("Presets")
+@@ -328,6 +328,10 @@
+     format!("{}::{}", model.provider, model.model_id)
+ }
+ 
++fn new_chat_preset_description(preset: &NewChatPresetInfo) -> String {
++    format!("Use {} preset", preset.name)
++}
++
+ /// Information about a note for the note switcher dialog
+ #[derive(Debug, Clone)]
+ pub struct NoteSwitcherNoteInfo {
+diff --git a/src/actions/types/action_model.rs b/src/actions/types/action_model.rs
+index b3f336ca56d895a910978f56c2d217fad596260c..e28aebd0f0873a054fcb67281804fca91285433d
+--- a/src/actions/types/action_model.rs
++++ b/src/actions/types/action_model.rs
+@@ -41,7 +41,7 @@
+ /// action.has_action = true;
+ /// action.value = Some("copy-to-clipboard".to_string());
+ /// ```
+-#[derive(Debug, Clone)]
++#[derive(Debug, Clone, PartialEq)]
+ pub struct Action {
+     /// Unique identifier for action routing.
+     /// Built-in IDs use snake_case (e.g., `edit_script`, `copy_path`).
+@@ -159,14 +159,12 @@
+     /// Examples: Run, Edit, Copy Path, Configure Shortcut, Reset Ranking
+     ScriptContext,
+ 
+-    /// Script management operations (reserved for future use).
+-    /// Intended for: Create Script, Delete Script, Duplicate Script
+-    #[allow(dead_code)]
++    /// Script management operations (test-only reserved category).
++    #[cfg(test)]
+     ScriptOps,
+ 
+-    /// Application-wide actions (reserved for future use).
+-    /// Intended for: Open Settings, Quit App, Check for Updates
+-    #[allow(dead_code)]
++    /// Application-wide actions (test-only reserved category).
++    #[cfg(test)]
+     GlobalOps,
+ 
+     /// Terminal actions (Clear, Copy, Paste, Scroll, etc.)
+@@ -229,4 +227,3 @@
+         self
+     }
+ }
+-
+
+
+thinking
+**Planning test insertion point**
+file update
+M /Users/johnlindquist/dev/script-kit-gpui/src/actions/builders/notes.rs
+@@ -273,2 +273,22 @@
+     }
++
++    #[test]
++    fn test_get_new_chat_actions_includes_descriptions_for_presets() {
++        let presets = vec![NewChatPresetInfo {
++            id: "focused-writing".to_string(),
++            name: "Focused Writing".to_string(),
++            icon: IconName::Pencil,
++        }];
++
++        let actions = get_new_chat_actions(&[], &presets, &[]);
++        let preset_action = actions
++            .iter()
++            .find(|action| action.id == "preset_focused-writing")
++            .expect("missing preset action");
++
++        assert_eq!(
++            preset_action.description.as_deref(),
++            Some("Use Focused Writing preset")
++        );
++    }
+ }
+apply_patch(auto_approved=true) exited 0 in 16ms:
+Success. Updated the following files:
+M src/actions/builders/notes.rs
+file update:
+diff --git a/src/actions/builders/notes.rs b/src/actions/builders/notes.rs
+index 71cfc3228b285e76bda28b04a0005c71b209668b..e3c28696763c741f6d8dbe852bddb7335373dd50
+--- a/src/actions/builders/notes.rs
++++ b/src/actions/builders/notes.rs
+@@ -271,6 +271,26 @@
+         );
+         assert_eq!(ids_a, ids_b);
+     }
++
++    #[test]
++    fn test_get_new_chat_actions_includes_descriptions_for_presets() {
++        let presets = vec![NewChatPresetInfo {
++            id: "focused-writing".to_string(),
++            name: "Focused Writing".to_string(),
++            icon: IconName::Pencil,
++        }];
++
++        let actions = get_new_chat_actions(&[], &presets, &[]);
++        let preset_action = actions
++            .iter()
++            .find(|action| action.id == "preset_focused-writing")
++            .expect("missing preset action");
++
++        assert_eq!(
++            preset_action.description.as_deref(),
++            Some("Use Focused Writing preset")
++        );
++    }
+ }
+ 
+ /// Build actions for the AI new chat dropdown.
+@@ -300,7 +320,7 @@
+             Action::new(
+                 format!("preset_{}", preset.id),
+                 &preset.name,
+-                None,
++                Some(new_chat_preset_description(preset)),
+                 ActionCategory::ScriptContext,
+             )
+             .with_section("Presets")
+@@ -328,6 +348,10 @@
+     format!("{}::{}", model.provider, model.model_id)
+ }
+ 
++fn new_chat_preset_description(preset: &NewChatPresetInfo) -> String {
++    format!("Use {} preset", preset.name)
++}
++
+ /// Information about a note for the note switcher dialog
+ #[derive(Debug, Clone)]
+ pub struct NoteSwitcherNoteInfo {
+diff --git a/src/actions/types/action_model.rs b/src/actions/types/action_model.rs
+index b3f336ca56d895a910978f56c2d217fad596260c..e28aebd0f0873a054fcb67281804fca91285433d
+--- a/src/actions/types/action_model.rs
++++ b/src/actions/types/action_model.rs
+@@ -41,7 +41,7 @@
+ /// action.has_action = true;
+ /// action.value = Some("copy-to-clipboard".to_string());
+ /// ```
+-#[derive(Debug, Clone)]
++#[derive(Debug, Clone, PartialEq)]
+ pub struct Action {
+     /// Unique identifier for action routing.
+     /// Built-in IDs use snake_case (e.g., `edit_script`, `copy_path`).
+@@ -159,14 +159,12 @@
+     /// Examples: Run, Edit, Copy Path, Configure Shortcut, Reset Ranking
+     ScriptContext,
+ 
+-    /// Script management operations (reserved for future use).
+-    /// Intended for: Create Script, Delete Script, Duplicate Script
+-    #[allow(dead_code)]
++    /// Script management operations (test-only reserved category).
++    #[cfg(test)]
+     ScriptOps,
+ 
+-    /// Application-wide actions (reserved for future use).
+-    /// Intended for: Open Settings, Quit App, Check for Updates
+-    #[allow(dead_code)]
++    /// Application-wide actions (test-only reserved category).
++    #[cfg(test)]
+     GlobalOps,
+ 
+     /// Terminal actions (Clear, Copy, Paste, Scroll, etc.)
+@@ -229,4 +227,3 @@
+         self
+     }
+ }
+-
+
+file update:
+diff --git a/src/actions/builders/notes.rs b/src/actions/builders/notes.rs
+index 71cfc3228b285e76bda28b04a0005c71b209668b..e3c28696763c741f6d8dbe852bddb7335373dd50
+--- a/src/actions/builders/notes.rs
++++ b/src/actions/builders/notes.rs
+@@ -271,6 +271,26 @@
+         );
+         assert_eq!(ids_a, ids_b);
+     }
++
++    #[test]
++    fn test_get_new_chat_actions_includes_descriptions_for_presets() {
++        let presets = vec![NewChatPresetInfo {
++            id: "focused-writing".to_string(),
++            name: "Focused Writing".to_string(),
++            icon: IconName::Pencil,
++        }];
++
++        let actions = get_new_chat_actions(&[], &presets, &[]);
++        let preset_action = actions
++            .iter()
++            .find(|action| action.id == "preset_focused-writing")
++            .expect("missing preset action");
++
++        assert_eq!(
++            preset_action.description.as_deref(),
++            Some("Use Focused Writing preset")
++        );
++    }
+ }
+ 
+ /// Build actions for the AI new chat dropdown.
+@@ -300,7 +320,7 @@
+             Action::new(
+                 format!("preset_{}", preset.id),
+                 &preset.name,
+-                None,
++                Some(new_chat_preset_description(preset)),
+                 ActionCategory::ScriptContext,
+             )
+             .with_section("Presets")
+@@ -328,6 +348,10 @@
+     format!("{}::{}", model.provider, model.model_id)
+ }
+ 
++fn new_chat_preset_description(preset: &NewChatPresetInfo) -> String {
++    format!("Use {} preset", preset.name)
++}
++
+ /// Information about a note for the note switcher dialog
+ #[derive(Debug, Clone)]
+ pub struct NoteSwitcherNoteInfo {
+diff --git a/src/actions/types/action_model.rs b/src/actions/types/action_model.rs
+index b3f336ca56d895a910978f56c2d217fad596260c..e28aebd0f0873a054fcb67281804fca91285433d
+--- a/src/actions/types/action_model.rs
++++ b/src/actions/types/action_model.rs
+@@ -41,7 +41,7 @@
+ /// action.has_action = true;
+ /// action.value = Some("copy-to-clipboard".to_string());
+ /// ```
+-#[derive(Debug, Clone)]
++#[derive(Debug, Clone, PartialEq)]
+ pub struct Action {
+     /// Unique identifier for action routing.
+     /// Built-in IDs use snake_case (e.g., `edit_script`, `copy_path`).
+@@ -159,14 +159,12 @@
+     /// Examples: Run, Edit, Copy Path, Configure Shortcut, Reset Ranking
+     ScriptContext,
+ 
+-    /// Script management operations (reserved for future use).
+-    /// Intended for: Create Script, Delete Script, Duplicate Script
+-    #[allow(dead_code)]
++    /// Script management operations (test-only reserved category).
++    #[cfg(test)]
+     ScriptOps,
+ 
+-    /// Application-wide actions (reserved for future use).
+-    /// Intended for: Open Settings, Quit App, Check for Updates
+-    #[allow(dead_code)]
++    /// Application-wide actions (test-only reserved category).
++    #[cfg(test)]
+     GlobalOps,
+ 
+     /// Terminal actions (Clear, Copy, Paste, Scroll, etc.)
+@@ -229,4 +227,3 @@
+         self
+     }
+ }
+-
+
+
+thinking
+**Planning targeted testing and linting**
+codex
+The code edits are in place. I’m now running targeted verification for these changes first (new/affected tests), then scoped `cargo check` and `cargo clippy` for the crate.
+
+thinking
+**Planning targeted test execution**
+exec
+/bin/zsh -lc 'cargo test -p script-kit-gpui --lib test_get_new_chat_actions_includes_descriptions_for_presets' in /Users/johnlindquist/dev/script-kit-gpui exited 101 in 18.39s:
+   Compiling script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+error[E0761]: file for module `tests` found at both "src/protocol/message/tests.rs" and "src/protocol/message/tests/mod.rs"
+  --> src/protocol/message/mod.rs:87:1
+   |
+87 | mod tests;
+   | ^^^^^^^^^^
+   |
+   = help: delete or rename one of them to remove the ambiguity
+
+error[E0761]: file for module `tests` found at both "src/designs/core/tests.rs" and "src/designs/core/tests/mod.rs"
+ --> src/designs/core/part_04.rs:2:1
+  |
+2 | mod tests;
+  | ^^^^^^^^^^
+  |
+  = help: delete or rename one of them to remove the ambiguity
+
+error[E0412]: cannot find type `Action` in this scope
+   --> src/actions/builders_tests/part_01.rs:18:26
+    |
+file update:
+diff --git a/src/actions/builders/notes.rs b/src/actions/builders/notes.rs
+index 71cfc3228b285e76bda28b04a0005c71b209668b..e3c28696763c741f6d8dbe852bddb7335373dd50
+--- a/src/actions/builders/notes.rs
++++ b/src/actions/builders/notes.rs
+@@ -271,6 +271,26 @@
+         );
+         assert_eq!(ids_a, ids_b);
+     }
++
++    #[test]
++    fn test_get_new_chat_actions_includes_descriptions_for_presets() {
++        let presets = vec![NewChatPresetInfo {
++            id: "focused-writing".to_string(),
++            name: "Focused Writing".to_string(),
++            icon: IconName::Pencil,
++        }];
++
++        let actions = get_new_chat_actions(&[], &presets, &[]);
++        let preset_action = actions
++            .iter()
++            .find(|action| action.id == "preset_focused-writing")
++            .expect("missing preset action");
++
++        assert_eq!(
++            preset_action.description.as_deref(),
++            Some("Use Focused Writing preset")
++        );
++    }
+ }
+ 
+ /// Build actions for the AI new chat dropdown.
+@@ -300,7 +320,7 @@
+             Action::new(
+                 format!("preset_{}", preset.id),
+                 &preset.name,
+-                None,
++                Some(new_chat_preset_description(preset)),
+                 ActionCategory::ScriptContext,
+             )
+             .with_section("Presets")
+@@ -328,6 +348,10 @@
+     format!("{}::{}", model.provider, model.model_id)
+ }
+ 
++fn new_chat_preset_description(preset: &NewChatPresetInfo) -> String {
++    format!("Use {} preset", preset.name)
++}
++
+ /// Information about a note for the note switcher dialog
+ #[derive(Debug, Clone)]
+ pub struct NoteSwitcherNoteInfo {
+diff --git a/src/actions/types/action_model.rs b/src/actions/types/action_model.rs
+index b3f336ca56d895a910978f56c2d217fad596260c..e28aebd0f0873a054fcb67281804fca91285433d
+--- a/src/actions/types/action_model.rs
++++ b/src/actions/types/action_model.rs
+@@ -41,7 +41,7 @@
+ /// action.has_action = true;
+ /// action.value = Some("copy-to-clipboard".to_string());
+ /// ```
+-#[derive(Debug, Clone)]
++#[derive(Debug, Clone, PartialEq)]
+ pub struct Action {
+     /// Unique identifier for action routing.
+     /// Built-in IDs use snake_case (e.g., `edit_script`, `copy_path`).
+@@ -159,14 +159,12 @@
+     /// Examples: Run, Edit, Copy Path, Configure Shortcut, Reset Ranking
+     ScriptContext,
+ 
+-    /// Script management operations (reserved for future use).
+-    /// Intended for: Create Script, Delete Script, Duplicate Script
+-    #[allow(dead_code)]
++    /// Script management operations (test-only reserved category).
++    #[cfg(test)]
+     ScriptOps,
+ 
+-    /// Application-wide actions (reserved for future use).
+-    /// Intended for: Open Settings, Quit App, Check for Updates
+-    #[allow(dead_code)]
++    /// Application-wide actions (test-only reserved category).
++    #[cfg(test)]
+     GlobalOps,
+ 
+     /// Terminal actions (Clear, Copy, Paste, Scroll, etc.)
+@@ -229,4 +227,3 @@
+         self
+     }
+ }
+-
+
+
+thinking
+**Running partial checks despite baseline errors**
+codex
+Targeted test execution is blocked by pre-existing compile failures outside this scope (module duplication and clipboard/type errors). I’m continuing with the requested `cargo check` and `cargo clippy` commands so we still capture current verification status for this branch.
+
+thinking
+**Detecting build issues**
+exec
+/bin/zsh -lc 'cargo check -p script-kit-gpui' in /Users/johnlindquist/dev/script-kit-gpui exited 101 in 9.47s:
+    Checking script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+warning: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:32:16
+   |
+32 | pub(super) use inline::*;
+   |                ^^^^^^^^^
+   |
+note: the most public imported item is `pub(self)`
+  --> src/prompts/div/mod.rs:32:16
+   |
+32 | pub(super) use inline::*;
+   |                ^^^^^^^^^
+   = help: reduce the glob import's visibility or increase visibility of imported items
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:34:16
+   |
+34 | pub(super) use render_html::*;
+   |                ^^^^^^^^^^^^^^
+file update:
+diff --git a/src/actions/builders/notes.rs b/src/actions/builders/notes.rs
+index 71cfc3228b285e76bda28b04a0005c71b209668b..e3c28696763c741f6d8dbe852bddb7335373dd50
+--- a/src/actions/builders/notes.rs
++++ b/src/actions/builders/notes.rs
+@@ -271,6 +271,26 @@
+         );
+         assert_eq!(ids_a, ids_b);
+     }
++
++    #[test]
++    fn test_get_new_chat_actions_includes_descriptions_for_presets() {
++        let presets = vec![NewChatPresetInfo {
++            id: "focused-writing".to_string(),
++            name: "Focused Writing".to_string(),
++            icon: IconName::Pencil,
++        }];
++
++        let actions = get_new_chat_actions(&[], &presets, &[]);
++        let preset_action = actions
++            .iter()
++            .find(|action| action.id == "preset_focused-writing")
++            .expect("missing preset action");
++
++        assert_eq!(
++            preset_action.description.as_deref(),
++            Some("Use Focused Writing preset")
++        );
++    }
+ }
+ 
+ /// Build actions for the AI new chat dropdown.
+@@ -300,7 +320,7 @@
+             Action::new(
+                 format!("preset_{}", preset.id),
+                 &preset.name,
+-                None,
++                Some(new_chat_preset_description(preset)),
+                 ActionCategory::ScriptContext,
+             )
+             .with_section("Presets")
+@@ -328,6 +348,10 @@
+     format!("{}::{}", model.provider, model.model_id)
+ }
+ 
++fn new_chat_preset_description(preset: &NewChatPresetInfo) -> String {
++    format!("Use {} preset", preset.name)
++}
++
+ /// Information about a note for the note switcher dialog
+ #[derive(Debug, Clone)]
+ pub struct NoteSwitcherNoteInfo {
+diff --git a/src/actions/types/action_model.rs b/src/actions/types/action_model.rs
+index b3f336ca56d895a910978f56c2d217fad596260c..e28aebd0f0873a054fcb67281804fca91285433d
+--- a/src/actions/types/action_model.rs
++++ b/src/actions/types/action_model.rs
+@@ -41,7 +41,7 @@
+ /// action.has_action = true;
+ /// action.value = Some("copy-to-clipboard".to_string());
+ /// ```
+-#[derive(Debug, Clone)]
++#[derive(Debug, Clone, PartialEq)]
+ pub struct Action {
+     /// Unique identifier for action routing.
+     /// Built-in IDs use snake_case (e.g., `edit_script`, `copy_path`).
+@@ -159,14 +159,12 @@
+     /// Examples: Run, Edit, Copy Path, Configure Shortcut, Reset Ranking
+     ScriptContext,
+ 
+-    /// Script management operations (reserved for future use).
+-    /// Intended for: Create Script, Delete Script, Duplicate Script
+-    #[allow(dead_code)]
++    /// Script management operations (test-only reserved category).
++    #[cfg(test)]
+     ScriptOps,
+ 
+-    /// Application-wide actions (reserved for future use).
+-    /// Intended for: Open Settings, Quit App, Check for Updates
+-    #[allow(dead_code)]
++    /// Application-wide actions (test-only reserved category).
++    #[cfg(test)]
+     GlobalOps,
+ 
+     /// Terminal actions (Clear, Copy, Paste, Scroll, etc.)
+@@ -229,4 +227,3 @@
+         self
+     }
+ }
+-
+
+
+thinking
+**Running comprehensive lint checks**
+exec
+/bin/zsh -lc 'cargo clippy -p script-kit-gpui --all-targets -- -D warnings' in /Users/johnlindquist/dev/script-kit-gpui exited 101 in 18.12s:
+    Checking script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+error[E0761]: file for module `tests` found at both "src/protocol/message/tests.rs" and "src/protocol/message/tests/mod.rs"
+  --> src/protocol/message/mod.rs:87:1
+   |
+87 | mod tests;
+   | ^^^^^^^^^^
+   |
+   = help: delete or rename one of them to remove the ambiguity
+
+error[E0761]: file for module `tests` found at both "src/designs/core/tests.rs" and "src/designs/core/tests/mod.rs"
+ --> src/designs/core/part_04.rs:2:1
+  |
+2 | mod tests;
+  | ^^^^^^^^^^
+  |
+  = help: delete or rename one of them to remove the ambiguity
+
+error: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:32:16
+   |
+file update:
+diff --git a/src/actions/builders/notes.rs b/src/actions/builders/notes.rs
+index 71cfc3228b285e76bda28b04a0005c71b209668b..e3c28696763c741f6d8dbe852bddb7335373dd50
+--- a/src/actions/builders/notes.rs
++++ b/src/actions/builders/notes.rs
+@@ -271,6 +271,26 @@
+         );
+         assert_eq!(ids_a, ids_b);
+     }
++
++    #[test]
++    fn test_get_new_chat_actions_includes_descriptions_for_presets() {
++        let presets = vec![NewChatPresetInfo {
++            id: "focused-writing".to_string(),
++            name: "Focused Writing".to_string(),
++            icon: IconName::Pencil,
++        }];
++
++        let actions = get_new_chat_actions(&[], &presets, &[]);
++        let preset_action = actions
++            .iter()
++            .find(|action| action.id == "preset_focused-writing")
++            .expect("missing preset action");
++
++        assert_eq!(
++            preset_action.description.as_deref(),
++            Some("Use Focused Writing preset")
++        );
++    }
+ }
+ 
+ /// Build actions for the AI new chat dropdown.
+@@ -300,7 +320,7 @@
+             Action::new(
+                 format!("preset_{}", preset.id),
+                 &preset.name,
+-                None,
++                Some(new_chat_preset_description(preset)),
+                 ActionCategory::ScriptContext,
+             )
+             .with_section("Presets")
+@@ -328,6 +348,10 @@
+     format!("{}::{}", model.provider, model.model_id)
+ }
+ 
++fn new_chat_preset_description(preset: &NewChatPresetInfo) -> String {
++    format!("Use {} preset", preset.name)
++}
++
+ /// Information about a note for the note switcher dialog
+ #[derive(Debug, Clone)]
+ pub struct NoteSwitcherNoteInfo {
+diff --git a/src/actions/types/action_model.rs b/src/actions/types/action_model.rs
+index b3f336ca56d895a910978f56c2d217fad596260c..e28aebd0f0873a054fcb67281804fca91285433d
+--- a/src/actions/types/action_model.rs
++++ b/src/actions/types/action_model.rs
+@@ -41,7 +41,7 @@
+ /// action.has_action = true;
+ /// action.value = Some("copy-to-clipboard".to_string());
+ /// ```
+-#[derive(Debug, Clone)]
++#[derive(Debug, Clone, PartialEq)]
+ pub struct Action {
+     /// Unique identifier for action routing.
+     /// Built-in IDs use snake_case (e.g., `edit_script`, `copy_path`).
+@@ -159,14 +159,12 @@
+     /// Examples: Run, Edit, Copy Path, Configure Shortcut, Reset Ranking
+     ScriptContext,
+ 
+-    /// Script management operations (reserved for future use).
+-    /// Intended for: Create Script, Delete Script, Duplicate Script
+-    #[allow(dead_code)]
++    /// Script management operations (test-only reserved category).
++    #[cfg(test)]
+     ScriptOps,
+ 
+-    /// Application-wide actions (reserved for future use).
+-    /// Intended for: Open Settings, Quit App, Check for Updates
+-    #[allow(dead_code)]
++    /// Application-wide actions (test-only reserved category).
++    #[cfg(test)]
+     GlobalOps,
+ 
+     /// Terminal actions (Clear, Copy, Paste, Scroll, etc.)
+@@ -229,4 +227,3 @@
+         self
+     }
+ }
+-
+
+
+thinking
+**Confirming code formatting**
+codex
+Verification commands completed and both failed due existing unrelated workspace issues; I’m now reviewing the exact diffs in the two claimed files and preparing a concise handoff with what changed and what remains blocked by the current branch state.
+
+thinking
+**Confirming git diff approach**
+exec
+/bin/zsh -lc 'git diff -- src/actions/types/action_model.rs src/actions/builders/notes.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+diff --git a/src/actions/builders/notes.rs b/src/actions/builders/notes.rs
+index 12a4478..e3c2869 100644
+--- a/src/actions/builders/notes.rs
++++ b/src/actions/builders/notes.rs
+@@ -99,8 +99,8 @@ pub fn get_notes_command_bar_actions(info: &NotesInfo) -> Vec<Action> {
+         actions.push(
+             Action::new(
+                 "copy_note_as",
+-                "Copy Note As...",
+-                Some("Copy note in a chosen format".to_string()),
++                "Copy Note as Markdown",
++                Some("Copy note as Markdown".to_string()),
+                 ActionCategory::ScriptContext,
+             )
+             .with_shortcut("⇧⌘C")
+@@ -115,7 +115,7 @@ pub fn get_notes_command_bar_actions(info: &NotesInfo) -> Vec<Action> {
+                 Some("Copy a deeplink to the note".to_string()),
+                 ActionCategory::ScriptContext,
+             )
+-            .with_shortcut("⇧⌘D")
+file update:
+diff --git a/src/actions/builders/notes.rs b/src/actions/builders/notes.rs
+index 71cfc3228b285e76bda28b04a0005c71b209668b..e3c28696763c741f6d8dbe852bddb7335373dd50
+--- a/src/actions/builders/notes.rs
++++ b/src/actions/builders/notes.rs
+@@ -271,6 +271,26 @@
+         );
+         assert_eq!(ids_a, ids_b);
+     }
++
++    #[test]
++    fn test_get_new_chat_actions_includes_descriptions_for_presets() {
++        let presets = vec![NewChatPresetInfo {
++            id: "focused-writing".to_string(),
++            name: "Focused Writing".to_string(),
++            icon: IconName::Pencil,
++        }];
++
++        let actions = get_new_chat_actions(&[], &presets, &[]);
++        let preset_action = actions
++            .iter()
++            .find(|action| action.id == "preset_focused-writing")
++            .expect("missing preset action");
++
++        assert_eq!(
++            preset_action.description.as_deref(),
++            Some("Use Focused Writing preset")
++        );
++    }
+ }
+ 
+ /// Build actions for the AI new chat dropdown.
+@@ -300,7 +320,7 @@
+             Action::new(
+                 format!("preset_{}", preset.id),
+                 &preset.name,
+-                None,
++                Some(new_chat_preset_description(preset)),
+                 ActionCategory::ScriptContext,
+             )
+             .with_section("Presets")
+@@ -328,6 +348,10 @@
+     format!("{}::{}", model.provider, model.model_id)
+ }
+ 
++fn new_chat_preset_description(preset: &NewChatPresetInfo) -> String {
++    format!("Use {} preset", preset.name)
++}
++
+ /// Information about a note for the note switcher dialog
+ #[derive(Debug, Clone)]
+ pub struct NoteSwitcherNoteInfo {
+diff --git a/src/actions/types/action_model.rs b/src/actions/types/action_model.rs
+index b3f336ca56d895a910978f56c2d217fad596260c..e28aebd0f0873a054fcb67281804fca91285433d
+--- a/src/actions/types/action_model.rs
++++ b/src/actions/types/action_model.rs
+@@ -41,7 +41,7 @@
+ /// action.has_action = true;
+ /// action.value = Some("copy-to-clipboard".to_string());
+ /// ```
+-#[derive(Debug, Clone)]
++#[derive(Debug, Clone, PartialEq)]
+ pub struct Action {
+     /// Unique identifier for action routing.
+     /// Built-in IDs use snake_case (e.g., `edit_script`, `copy_path`).
+@@ -159,14 +159,12 @@
+     /// Examples: Run, Edit, Copy Path, Configure Shortcut, Reset Ranking
+     ScriptContext,
+ 
+-    /// Script management operations (reserved for future use).
+-    /// Intended for: Create Script, Delete Script, Duplicate Script
+-    #[allow(dead_code)]
++    /// Script management operations (test-only reserved category).
++    #[cfg(test)]
+     ScriptOps,
+ 
+-    /// Application-wide actions (reserved for future use).
+-    /// Intended for: Open Settings, Quit App, Check for Updates
+-    #[allow(dead_code)]
++    /// Application-wide actions (test-only reserved category).
++    #[cfg(test)]
+     GlobalOps,
+ 
+     /// Terminal actions (Clear, Copy, Paste, Scroll, etc.)
+@@ -229,4 +227,3 @@
+         self
+     }
+ }
+-
+
+
+thinking
+**Analyzing unexpected local modifications**
+exec
+/bin/zsh -lc 'git status --short' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+ M .ai/logs/codex-audit-act-description-quality-v2.final.md
+ M .ai/logs/codex-audit-act-execution-builtin.final.md
+ M .ai/logs/codex-audit-act-execution-scripts.final.md
+ M .ai/logs/codex-audit-act-keyboard-nav.final.md
+ M .ai/logs/codex-audit-act-section-grouping.final.md
+ M .ai/logs/codex-audit-act-theme-dialog-render.final.md
+ M .ai/roster.json
+ M src/actions/builders/file_path.rs
+ M src/actions/builders/notes.rs
+ M src/actions/builders/shared.rs
+ M src/actions/command_bar/part_01.rs
+ M src/actions/command_bar/part_02.rs
+ M src/actions/constants.rs
+ M src/actions/dialog/part_01.rs
+ M src/actions/dialog/part_02/part_01.rs
+ M src/actions/dialog/part_04/body_part_02.rs
+ M src/actions/dialog/part_04/body_part_03.rs
+ M src/actions/dialog/part_05.rs
+ M src/actions/dialog_part_04_rewire.rs
+ M src/actions/types/action_model.rs
+file update:
+diff --git a/src/actions/builders/notes.rs b/src/actions/builders/notes.rs
+index 71cfc3228b285e76bda28b04a0005c71b209668b..e3c28696763c741f6d8dbe852bddb7335373dd50
+--- a/src/actions/builders/notes.rs
++++ b/src/actions/builders/notes.rs
+@@ -271,6 +271,26 @@
+         );
+         assert_eq!(ids_a, ids_b);
+     }
++
++    #[test]
++    fn test_get_new_chat_actions_includes_descriptions_for_presets() {
++        let presets = vec![NewChatPresetInfo {
++            id: "focused-writing".to_string(),
++            name: "Focused Writing".to_string(),
++            icon: IconName::Pencil,
++        }];
++
++        let actions = get_new_chat_actions(&[], &presets, &[]);
++        let preset_action = actions
++            .iter()
++            .find(|action| action.id == "preset_focused-writing")
++            .expect("missing preset action");
++
++        assert_eq!(
++            preset_action.description.as_deref(),
++            Some("Use Focused Writing preset")
++        );
++    }
+ }
+ 
+ /// Build actions for the AI new chat dropdown.
+@@ -300,7 +320,7 @@
+             Action::new(
+                 format!("preset_{}", preset.id),
+                 &preset.name,
+-                None,
++                Some(new_chat_preset_description(preset)),
+                 ActionCategory::ScriptContext,
+             )
+             .with_section("Presets")
+@@ -328,6 +348,10 @@
+     format!("{}::{}", model.provider, model.model_id)
+ }
+ 
++fn new_chat_preset_description(preset: &NewChatPresetInfo) -> String {
++    format!("Use {} preset", preset.name)
++}
++
+ /// Information about a note for the note switcher dialog
+ #[derive(Debug, Clone)]
+ pub struct NoteSwitcherNoteInfo {
+diff --git a/src/actions/types/action_model.rs b/src/actions/types/action_model.rs
+index b3f336ca56d895a910978f56c2d217fad596260c..e28aebd0f0873a054fcb67281804fca91285433d
+--- a/src/actions/types/action_model.rs
++++ b/src/actions/types/action_model.rs
+@@ -41,7 +41,7 @@
+ /// action.has_action = true;
+ /// action.value = Some("copy-to-clipboard".to_string());
+ /// ```
+-#[derive(Debug, Clone)]
++#[derive(Debug, Clone, PartialEq)]
+ pub struct Action {
+     /// Unique identifier for action routing.
+     /// Built-in IDs use snake_case (e.g., `edit_script`, `copy_path`).
+@@ -159,14 +159,12 @@
+     /// Examples: Run, Edit, Copy Path, Configure Shortcut, Reset Ranking
+     ScriptContext,
+ 
+-    /// Script management operations (reserved for future use).
+-    /// Intended for: Create Script, Delete Script, Duplicate Script
+-    #[allow(dead_code)]
++    /// Script management operations (test-only reserved category).
++    #[cfg(test)]
+     ScriptOps,
+ 
+-    /// Application-wide actions (reserved for future use).
+-    /// Intended for: Open Settings, Quit App, Check for Updates
+-    #[allow(dead_code)]
++    /// Application-wide actions (test-only reserved category).
++    #[cfg(test)]
+     GlobalOps,
+ 
+     /// Terminal actions (Clear, Copy, Paste, Scroll, etc.)
+@@ -229,4 +227,3 @@
+         self
+     }
+ }
+-
+
+
+thinking
+**Verifying precise file modifications**
+codex
+I’m confirming final line-level state in the two scoped files so I can report precise file references and avoid conflating pre-existing dirty-tree edits with the new task changes.
+
+thinking
+**Planning parallel NL runs**
+exec
+/bin/zsh -lc "nl -ba src/actions/types/action_model.rs | sed -n '35,210p'" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "nl -ba src/actions/builders/notes.rs | sed -n '250,390p'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+   250	        let model_b = NewChatModelInfo {
+   251	            model_id: "claude-3-5-sonnet".to_string(),
+   252	            display_name: "Claude 3.5 Sonnet".to_string(),
+   253	            provider: "anthropic".to_string(),
+   254	            provider_display_name: "Anthropic".to_string(),
+   255	        };
+   256	
+   257	        let actions_a = get_new_chat_actions(&[], &[], &[model_a.clone(), model_b.clone()]);
+   258	        let actions_b = get_new_chat_actions(&[], &[], &[model_b, model_a]);
+   259	
+   260	        let mut ids_a: Vec<String> = actions_a.into_iter().map(|action| action.id).collect();
+   261	        let mut ids_b: Vec<String> = actions_b.into_iter().map(|action| action.id).collect();
+   262	        ids_a.sort();
+   263	        ids_b.sort();
+   264	
+   265	        assert_eq!(
+   266	            ids_a,
+   267	            vec![
+   268	                "model_anthropic::claude-3-5-sonnet".to_string(),
+   269	                "model_openai::gpt-4o".to_string(),
+ succeeded in 51ms:
+    35	/// let mut action = Action::new(
+    36	///     "scriptlet_action:copy-to-clipboard",
+    37	///     "Copy to Clipboard",
+    38	///     None,
+    39	///     ActionCategory::ScriptContext,
+    40	/// );
+    41	/// action.has_action = true;
+    42	/// action.value = Some("copy-to-clipboard".to_string());
+    43	/// ```
+    44	#[derive(Debug, Clone, PartialEq)]
+    45	pub struct Action {
+    46	    /// Unique identifier for action routing.
+    47	    /// Built-in IDs use snake_case (e.g., `edit_script`, `copy_path`).
+    48	    /// SDK action IDs match the ProtocolAction name.
+    49	    pub id: String,
+    50	
+    51	    /// Display title shown in the actions menu
+    52	    pub title: String,
+    53	
+    54	    /// Optional description shown below the title
+file update:
+diff --git a/src/actions/builders/notes.rs b/src/actions/builders/notes.rs
+index 71cfc3228b285e76bda28b04a0005c71b209668b..e3c28696763c741f6d8dbe852bddb7335373dd50
+--- a/src/actions/builders/notes.rs
++++ b/src/actions/builders/notes.rs
+@@ -271,6 +271,26 @@
+         );
+         assert_eq!(ids_a, ids_b);
+     }
++
++    #[test]
++    fn test_get_new_chat_actions_includes_descriptions_for_presets() {
++        let presets = vec![NewChatPresetInfo {
++            id: "focused-writing".to_string(),
++            name: "Focused Writing".to_string(),
++            icon: IconName::Pencil,
++        }];
++
++        let actions = get_new_chat_actions(&[], &presets, &[]);
++        let preset_action = actions
++            .iter()
++            .find(|action| action.id == "preset_focused-writing")
++            .expect("missing preset action");
++
++        assert_eq!(
++            preset_action.description.as_deref(),
++            Some("Use Focused Writing preset")
++        );
++    }
+ }
+ 
+ /// Build actions for the AI new chat dropdown.
+@@ -300,7 +320,7 @@
+             Action::new(
+                 format!("preset_{}", preset.id),
+                 &preset.name,
+-                None,
++                Some(new_chat_preset_description(preset)),
+                 ActionCategory::ScriptContext,
+             )
+             .with_section("Presets")
+@@ -328,6 +348,10 @@
+     format!("{}::{}", model.provider, model.model_id)
+ }
+ 
++fn new_chat_preset_description(preset: &NewChatPresetInfo) -> String {
++    format!("Use {} preset", preset.name)
++}
++
+ /// Information about a note for the note switcher dialog
+ #[derive(Debug, Clone)]
+ pub struct NoteSwitcherNoteInfo {
+diff --git a/src/actions/types/action_model.rs b/src/actions/types/action_model.rs
+index b3f336ca56d895a910978f56c2d217fad596260c..e28aebd0f0873a054fcb67281804fca91285433d
+--- a/src/actions/types/action_model.rs
++++ b/src/actions/types/action_model.rs
+@@ -41,7 +41,7 @@
+ /// action.has_action = true;
+ /// action.value = Some("copy-to-clipboard".to_string());
+ /// ```
+-#[derive(Debug, Clone)]
++#[derive(Debug, Clone, PartialEq)]
+ pub struct Action {
+     /// Unique identifier for action routing.
+     /// Built-in IDs use snake_case (e.g., `edit_script`, `copy_path`).
+@@ -159,14 +159,12 @@
+     /// Examples: Run, Edit, Copy Path, Configure Shortcut, Reset Ranking
+     ScriptContext,
+ 
+-    /// Script management operations (reserved for future use).
+-    /// Intended for: Create Script, Delete Script, Duplicate Script
+-    #[allow(dead_code)]
++    /// Script management operations (test-only reserved category).
++    #[cfg(test)]
+     ScriptOps,
+ 
+-    /// Application-wide actions (reserved for future use).
+-    /// Intended for: Open Settings, Quit App, Check for Updates
+-    #[allow(dead_code)]
++    /// Application-wide actions (test-only reserved category).
++    #[cfg(test)]
+     GlobalOps,
+ 
+     /// Terminal actions (Clear, Copy, Paste, Scroll, etc.)
+@@ -229,4 +227,3 @@
+         self
+     }
+ }
+-
+
+
+thinking
+**Updating documentation comments**
+file update
+M /Users/johnlindquist/dev/script-kit-gpui/src/actions/types/action_model.rs
+@@ -150,7 +150,7 @@
+ /// - `ScriptContext`: Actions specific to the currently focused script/item
+-/// - `ScriptOps`: Script management operations (reserved for future use)
+-/// - `GlobalOps`: Application-wide actions like Settings, Quit (reserved)
++/// - `ScriptOps`: Script management operations (test-only legacy category)
++/// - `GlobalOps`: Application-wide actions (test-only legacy category)
+ ///
+ /// Currently, most actions are `ScriptContext` since they operate on the
+-/// focused list item. The other categories are reserved for future expansion.
++/// focused list item. Test-only categories remain for compatibility coverage.
+ #[derive(Debug, Clone, PartialEq)]
+apply_patch(auto_approved=true) exited 0 in 17ms:
+Success. Updated the following files:
+M src/actions/types/action_model.rs
+file update:
+diff --git a/src/actions/builders/notes.rs b/src/actions/builders/notes.rs
+index 71cfc3228b285e76bda28b04a0005c71b209668b..e3c28696763c741f6d8dbe852bddb7335373dd50
+--- a/src/actions/builders/notes.rs
++++ b/src/actions/builders/notes.rs
+@@ -271,6 +271,26 @@
+         );
+         assert_eq!(ids_a, ids_b);
+     }
++
++    #[test]
++    fn test_get_new_chat_actions_includes_descriptions_for_presets() {
++        let presets = vec![NewChatPresetInfo {
++            id: "focused-writing".to_string(),
++            name: "Focused Writing".to_string(),
++            icon: IconName::Pencil,
++        }];
++
++        let actions = get_new_chat_actions(&[], &presets, &[]);
++        let preset_action = actions
++            .iter()
++            .find(|action| action.id == "preset_focused-writing")
++            .expect("missing preset action");
++
++        assert_eq!(
++            preset_action.description.as_deref(),
++            Some("Use Focused Writing preset")
++        );
++    }
+ }
+ 
+ /// Build actions for the AI new chat dropdown.
+@@ -300,7 +320,7 @@
+             Action::new(
+                 format!("preset_{}", preset.id),
+                 &preset.name,
+-                None,
++                Some(new_chat_preset_description(preset)),
+                 ActionCategory::ScriptContext,
+             )
+             .with_section("Presets")
+@@ -328,6 +348,10 @@
+     format!("{}::{}", model.provider, model.model_id)
+ }
+ 
++fn new_chat_preset_description(preset: &NewChatPresetInfo) -> String {
++    format!("Use {} preset", preset.name)
++}
++
+ /// Information about a note for the note switcher dialog
+ #[derive(Debug, Clone)]
+ pub struct NoteSwitcherNoteInfo {
+diff --git a/src/actions/types/action_model.rs b/src/actions/types/action_model.rs
+index b3f336ca56d895a910978f56c2d217fad596260c..36157d280dae01da62643eb3a3baf3245e4d8bbd
+--- a/src/actions/types/action_model.rs
++++ b/src/actions/types/action_model.rs
+@@ -41,7 +41,7 @@
+ /// action.has_action = true;
+ /// action.value = Some("copy-to-clipboard".to_string());
+ /// ```
+-#[derive(Debug, Clone)]
++#[derive(Debug, Clone, PartialEq)]
+ pub struct Action {
+     /// Unique identifier for action routing.
+     /// Built-in IDs use snake_case (e.g., `edit_script`, `copy_path`).
+@@ -148,25 +148,23 @@
+ ///
+ /// Actions are organized by category to help users find relevant options:
+ /// - `ScriptContext`: Actions specific to the currently focused script/item
+-/// - `ScriptOps`: Script management operations (reserved for future use)
+-/// - `GlobalOps`: Application-wide actions like Settings, Quit (reserved)
++/// - `ScriptOps`: Script management operations (test-only legacy category)
++/// - `GlobalOps`: Application-wide actions (test-only legacy category)
+ ///
+ /// Currently, most actions are `ScriptContext` since they operate on the
+-/// focused list item. The other categories are reserved for future expansion.
++/// focused list item. Test-only categories remain for compatibility coverage.
+ #[derive(Debug, Clone, PartialEq)]
+ pub enum ActionCategory {
+     /// Actions specific to the currently focused script/item.
+     /// Examples: Run, Edit, Copy Path, Configure Shortcut, Reset Ranking
+     ScriptContext,
+ 
+-    /// Script management operations (reserved for future use).
+-    /// Intended for: Create Script, Delete Script, Duplicate Script
+-    #[allow(dead_code)]
++    /// Script management operations (test-only reserved category).
++    #[cfg(test)]
+     ScriptOps,
+ 
+-    /// Application-wide actions (reserved for future use).
+-    /// Intended for: Open Settings, Quit App, Check for Updates
+-    #[allow(dead_code)]
++    /// Application-wide actions (test-only reserved category).
++    #[cfg(test)]
+     GlobalOps,
+ 
+     /// Terminal actions (Clear, Copy, Paste, Scroll, etc.)
+@@ -229,4 +227,3 @@
+         self
+     }
+ }
+-
+
+file update:
+diff --git a/src/actions/builders/notes.rs b/src/actions/builders/notes.rs
+index 71cfc3228b285e76bda28b04a0005c71b209668b..e3c28696763c741f6d8dbe852bddb7335373dd50
+--- a/src/actions/builders/notes.rs
++++ b/src/actions/builders/notes.rs
+@@ -271,6 +271,26 @@
+         );
+         assert_eq!(ids_a, ids_b);
+     }
++
++    #[test]
++    fn test_get_new_chat_actions_includes_descriptions_for_presets() {
++        let presets = vec![NewChatPresetInfo {
++            id: "focused-writing".to_string(),
++            name: "Focused Writing".to_string(),
++            icon: IconName::Pencil,
++        }];
++
++        let actions = get_new_chat_actions(&[], &presets, &[]);
++        let preset_action = actions
++            .iter()
++            .find(|action| action.id == "preset_focused-writing")
++            .expect("missing preset action");
++
++        assert_eq!(
++            preset_action.description.as_deref(),
++            Some("Use Focused Writing preset")
++        );
++    }
+ }
+ 
+ /// Build actions for the AI new chat dropdown.
+@@ -300,7 +320,7 @@
+             Action::new(
+                 format!("preset_{}", preset.id),
+                 &preset.name,
+-                None,
++                Some(new_chat_preset_description(preset)),
+                 ActionCategory::ScriptContext,
+             )
+             .with_section("Presets")
+@@ -328,6 +348,10 @@
+     format!("{}::{}", model.provider, model.model_id)
+ }
+ 
++fn new_chat_preset_description(preset: &NewChatPresetInfo) -> String {
++    format!("Use {} preset", preset.name)
++}
++
+ /// Information about a note for the note switcher dialog
+ #[derive(Debug, Clone)]
+ pub struct NoteSwitcherNoteInfo {
+diff --git a/src/actions/types/action_model.rs b/src/actions/types/action_model.rs
+index b3f336ca56d895a910978f56c2d217fad596260c..36157d280dae01da62643eb3a3baf3245e4d8bbd
+--- a/src/actions/types/action_model.rs
++++ b/src/actions/types/action_model.rs
+@@ -41,7 +41,7 @@
+ /// action.has_action = true;
+ /// action.value = Some("copy-to-clipboard".to_string());
+ /// ```
+-#[derive(Debug, Clone)]
++#[derive(Debug, Clone, PartialEq)]
+ pub struct Action {
+     /// Unique identifier for action routing.
+     /// Built-in IDs use snake_case (e.g., `edit_script`, `copy_path`).
+@@ -148,25 +148,23 @@
+ ///
+ /// Actions are organized by category to help users find relevant options:
+ /// - `ScriptContext`: Actions specific to the currently focused script/item
+-/// - `ScriptOps`: Script management operations (reserved for future use)
+-/// - `GlobalOps`: Application-wide actions like Settings, Quit (reserved)
++/// - `ScriptOps`: Script management operations (test-only legacy category)
++/// - `GlobalOps`: Application-wide actions (test-only legacy category)
+ ///
+ /// Currently, most actions are `ScriptContext` since they operate on the
+-/// focused list item. The other categories are reserved for future expansion.
++/// focused list item. Test-only categories remain for compatibility coverage.
+ #[derive(Debug, Clone, PartialEq)]
+ pub enum ActionCategory {
+     /// Actions specific to the currently focused script/item.
+     /// Examples: Run, Edit, Copy Path, Configure Shortcut, Reset Ranking
+     ScriptContext,
+ 
+-    /// Script management operations (reserved for future use).
+-    /// Intended for: Create Script, Delete Script, Duplicate Script
+-    #[allow(dead_code)]
++    /// Script management operations (test-only reserved category).
++    #[cfg(test)]
+     ScriptOps,
+ 
+-    /// Application-wide actions (reserved for future use).
+-    /// Intended for: Open Settings, Quit App, Check for Updates
+-    #[allow(dead_code)]
++    /// Application-wide actions (test-only reserved category).
++    #[cfg(test)]
+     GlobalOps,
+ 
+     /// Terminal actions (Clear, Copy, Paste, Scroll, etc.)
+@@ -229,4 +227,3 @@
+         self
+     }
+ }
+-
+
+
+thinking
+**Applying rustfmt to changed files**
+exec
+/bin/zsh -lc 'rustfmt src/actions/types/action_model.rs src/actions/builders/notes.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+
+file update:
+diff --git a/src/actions/builders/notes.rs b/src/actions/builders/notes.rs
+index 71cfc3228b285e76bda28b04a0005c71b209668b..e3c28696763c741f6d8dbe852bddb7335373dd50
+--- a/src/actions/builders/notes.rs
++++ b/src/actions/builders/notes.rs
+@@ -271,6 +271,26 @@
+         );
+         assert_eq!(ids_a, ids_b);
+     }
++
++    #[test]
++    fn test_get_new_chat_actions_includes_descriptions_for_presets() {
++        let presets = vec![NewChatPresetInfo {
++            id: "focused-writing".to_string(),
++            name: "Focused Writing".to_string(),
++            icon: IconName::Pencil,
++        }];
++
++        let actions = get_new_chat_actions(&[], &presets, &[]);
++        let preset_action = actions
++            .iter()
++            .find(|action| action.id == "preset_focused-writing")
++            .expect("missing preset action");
++
++        assert_eq!(
++            preset_action.description.as_deref(),
++            Some("Use Focused Writing preset")
++        );
++    }
+ }
+ 
+ /// Build actions for the AI new chat dropdown.
+@@ -300,7 +320,7 @@
+             Action::new(
+                 format!("preset_{}", preset.id),
+                 &preset.name,
+-                None,
++                Some(new_chat_preset_description(preset)),
+                 ActionCategory::ScriptContext,
+             )
+             .with_section("Presets")
+@@ -328,6 +348,10 @@
+     format!("{}::{}", model.provider, model.model_id)
+ }
+ 
++fn new_chat_preset_description(preset: &NewChatPresetInfo) -> String {
++    format!("Use {} preset", preset.name)
++}
++
+ /// Information about a note for the note switcher dialog
+ #[derive(Debug, Clone)]
+ pub struct NoteSwitcherNoteInfo {
+diff --git a/src/actions/types/action_model.rs b/src/actions/types/action_model.rs
+index b3f336ca56d895a910978f56c2d217fad596260c..c0ccdd8a983444aa7b950f3f3d4250bfbcad32fe
+--- a/src/actions/types/action_model.rs
++++ b/src/actions/types/action_model.rs
+@@ -1,4 +1,3 @@
+-
+ /// Represents a single action item in the actions menu.
+ ///
+ /// Actions are created by builder functions in `builders.rs` or converted from
+@@ -41,7 +40,7 @@
+ /// action.has_action = true;
+ /// action.value = Some("copy-to-clipboard".to_string());
+ /// ```
+-#[derive(Debug, Clone)]
++#[derive(Debug, Clone, PartialEq)]
+ pub struct Action {
+     /// Unique identifier for action routing.
+     /// Built-in IDs use snake_case (e.g., `edit_script`, `copy_path`).
+@@ -148,25 +147,23 @@
+ ///
+ /// Actions are organized by category to help users find relevant options:
+ /// - `ScriptContext`: Actions specific to the currently focused script/item
+-/// - `ScriptOps`: Script management operations (reserved for future use)
+-/// - `GlobalOps`: Application-wide actions like Settings, Quit (reserved)
++/// - `ScriptOps`: Script management operations (test-only legacy category)
++/// - `GlobalOps`: Application-wide actions (test-only legacy category)
+ ///
+ /// Currently, most actions are `ScriptContext` since they operate on the
+-/// focused list item. The other categories are reserved for future expansion.
++/// focused list item. Test-only categories remain for compatibility coverage.
+ #[derive(Debug, Clone, PartialEq)]
+ pub enum ActionCategory {
+     /// Actions specific to the currently focused script/item.
+     /// Examples: Run, Edit, Copy Path, Configure Shortcut, Reset Ranking
+     ScriptContext,
+ 
+-    /// Script management operations (reserved for future use).
+-    /// Intended for: Create Script, Delete Script, Duplicate Script
+-    #[allow(dead_code)]
++    /// Script management operations (test-only reserved category).
++    #[cfg(test)]
+     ScriptOps,
+ 
+-    /// Application-wide actions (reserved for future use).
+-    /// Intended for: Open Settings, Quit App, Check for Updates
+-    #[allow(dead_code)]
++    /// Application-wide actions (test-only reserved category).
++    #[cfg(test)]
+     GlobalOps,
+ 
+     /// Terminal actions (Clear, Copy, Paste, Scroll, etc.)
+@@ -229,4 +226,3 @@
+         self
+     }
+ }
+-
+
+
+thinking
+**Planning targeted code check**
+codex
+I made a small documentation alignment edit in `action_model.rs` and formatted both files; I’m rerunning `cargo check` once more to confirm no new failures were introduced by the final state.
+exec
+/bin/zsh -lc 'cargo check -p script-kit-gpui' in /Users/johnlindquist/dev/script-kit-gpui exited 101 in 9.56s:
+    Checking script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+warning: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:32:16
+   |
+32 | pub(super) use inline::*;
+   |                ^^^^^^^^^
+   |
+note: the most public imported item is `pub(self)`
+  --> src/prompts/div/mod.rs:32:16
+   |
+32 | pub(super) use inline::*;
+   |                ^^^^^^^^^
+   = help: reduce the glob import's visibility or increase visibility of imported items
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:34:16
+   |
+34 | pub(super) use render_html::*;
+   |                ^^^^^^^^^^^^^^
+file update:
+diff --git a/src/actions/builders/notes.rs b/src/actions/builders/notes.rs
+index 71cfc3228b285e76bda28b04a0005c71b209668b..e3c28696763c741f6d8dbe852bddb7335373dd50
+--- a/src/actions/builders/notes.rs
++++ b/src/actions/builders/notes.rs
+@@ -271,6 +271,26 @@
+         );
+         assert_eq!(ids_a, ids_b);
+     }
++
++    #[test]
++    fn test_get_new_chat_actions_includes_descriptions_for_presets() {
++        let presets = vec![NewChatPresetInfo {
++            id: "focused-writing".to_string(),
++            name: "Focused Writing".to_string(),
++            icon: IconName::Pencil,
++        }];
++
++        let actions = get_new_chat_actions(&[], &presets, &[]);
++        let preset_action = actions
++            .iter()
++            .find(|action| action.id == "preset_focused-writing")
++            .expect("missing preset action");
++
++        assert_eq!(
++            preset_action.description.as_deref(),
++            Some("Use Focused Writing preset")
++        );
++    }
+ }
+ 
+ /// Build actions for the AI new chat dropdown.
+@@ -300,7 +320,7 @@
+             Action::new(
+                 format!("preset_{}", preset.id),
+                 &preset.name,
+-                None,
++                Some(new_chat_preset_description(preset)),
+                 ActionCategory::ScriptContext,
+             )
+             .with_section("Presets")
+@@ -328,6 +348,10 @@
+     format!("{}::{}", model.provider, model.model_id)
+ }
+ 
++fn new_chat_preset_description(preset: &NewChatPresetInfo) -> String {
++    format!("Use {} preset", preset.name)
++}
++
+ /// Information about a note for the note switcher dialog
+ #[derive(Debug, Clone)]
+ pub struct NoteSwitcherNoteInfo {
+diff --git a/src/actions/types/action_model.rs b/src/actions/types/action_model.rs
+index b3f336ca56d895a910978f56c2d217fad596260c..c0ccdd8a983444aa7b950f3f3d4250bfbcad32fe
+--- a/src/actions/types/action_model.rs
++++ b/src/actions/types/action_model.rs
+@@ -1,4 +1,3 @@
+-
+ /// Represents a single action item in the actions menu.
+ ///
+ /// Actions are created by builder functions in `builders.rs` or converted from
+@@ -41,7 +40,7 @@
+ /// action.has_action = true;
+ /// action.value = Some("copy-to-clipboard".to_string());
+ /// ```
+-#[derive(Debug, Clone)]
++#[derive(Debug, Clone, PartialEq)]
+ pub struct Action {
+     /// Unique identifier for action routing.
+     /// Built-in IDs use snake_case (e.g., `edit_script`, `copy_path`).
+@@ -148,25 +147,23 @@
+ ///
+ /// Actions are organized by category to help users find relevant options:
+ /// - `ScriptContext`: Actions specific to the currently focused script/item
+-/// - `ScriptOps`: Script management operations (reserved for future use)
+-/// - `GlobalOps`: Application-wide actions like Settings, Quit (reserved)
++/// - `ScriptOps`: Script management operations (test-only legacy category)
++/// - `GlobalOps`: Application-wide actions (test-only legacy category)
+ ///
+ /// Currently, most actions are `ScriptContext` since they operate on the
+-/// focused list item. The other categories are reserved for future expansion.
++/// focused list item. Test-only categories remain for compatibility coverage.
+ #[derive(Debug, Clone, PartialEq)]
+ pub enum ActionCategory {
+     /// Actions specific to the currently focused script/item.
+     /// Examples: Run, Edit, Copy Path, Configure Shortcut, Reset Ranking
+     ScriptContext,
+ 
+-    /// Script management operations (reserved for future use).
+-    /// Intended for: Create Script, Delete Script, Duplicate Script
+-    #[allow(dead_code)]
++    /// Script management operations (test-only reserved category).
++    #[cfg(test)]
+     ScriptOps,
+ 
+-    /// Application-wide actions (reserved for future use).
+-    /// Intended for: Open Settings, Quit App, Check for Updates
+-    #[allow(dead_code)]
++    /// Application-wide actions (test-only reserved category).
++    #[cfg(test)]
+     GlobalOps,
+ 
+     /// Terminal actions (Clear, Copy, Paste, Scroll, etc.)
+@@ -229,4 +226,3 @@
+         self
+     }
+ }
+-
+
+
+thinking
+**Confirming clippy results and capturing line references**
+🌐 Searching the web...
+🌐 Searched: time: {"utc_offset":"+00:00"}
+
+thinking
+**Listing key line numbers**
+codex
+I’m done with the scoped edits and verification attempts. Next I’ll mark this agent `done` in swarm and release both file claims before sending the final change/test/risk summary.
+
+thinking
+**Running update and release**
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts update --id codex-fix-action-type --status done --notes "Added PartialEq on Action, test-gated unused ActionCategory variants, and added new chat preset descriptions + test in notes builder. Verification blocked by pre-existing workspace compile/lint errors outside scope." && ~/.claude/bin/swarm.ts release --id codex-fix-action-type src/actions/types/action_model.rs src/actions/builders/notes.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+Updated: codex-fix-action-type
+Released for codex-fix-action-type: src/actions/types/action_model.rs, src/actions/builders/notes.rs
+file update:
+diff --git a/src/actions/builders/notes.rs b/src/actions/builders/notes.rs
+index 71cfc3228b285e76bda28b04a0005c71b209668b..e3c28696763c741f6d8dbe852bddb7335373dd50
+--- a/src/actions/builders/notes.rs
++++ b/src/actions/builders/notes.rs
+@@ -271,6 +271,26 @@
+         );
+         assert_eq!(ids_a, ids_b);
+     }
++
++    #[test]
++    fn test_get_new_chat_actions_includes_descriptions_for_presets() {
++        let presets = vec![NewChatPresetInfo {
++            id: "focused-writing".to_string(),
++            name: "Focused Writing".to_string(),
++            icon: IconName::Pencil,
++        }];
++
++        let actions = get_new_chat_actions(&[], &presets, &[]);
++        let preset_action = actions
++            .iter()
++            .find(|action| action.id == "preset_focused-writing")
++            .expect("missing preset action");
++
++        assert_eq!(
++            preset_action.description.as_deref(),
++            Some("Use Focused Writing preset")
++        );
++    }
+ }
+ 
+ /// Build actions for the AI new chat dropdown.
+@@ -300,7 +320,7 @@
+             Action::new(
+                 format!("preset_{}", preset.id),
+                 &preset.name,
+-                None,
++                Some(new_chat_preset_description(preset)),
+                 ActionCategory::ScriptContext,
+             )
+             .with_section("Presets")
+@@ -328,6 +348,10 @@
+     format!("{}::{}", model.provider, model.model_id)
+ }
+ 
++fn new_chat_preset_description(preset: &NewChatPresetInfo) -> String {
++    format!("Use {} preset", preset.name)
++}
++
+ /// Information about a note for the note switcher dialog
+ #[derive(Debug, Clone)]
+ pub struct NoteSwitcherNoteInfo {
+diff --git a/src/actions/types/action_model.rs b/src/actions/types/action_model.rs
+index b3f336ca56d895a910978f56c2d217fad596260c..c0ccdd8a983444aa7b950f3f3d4250bfbcad32fe
+--- a/src/actions/types/action_model.rs
++++ b/src/actions/types/action_model.rs
+@@ -1,4 +1,3 @@
+-
+ /// Represents a single action item in the actions menu.
+ ///
+ /// Actions are created by builder functions in `builders.rs` or converted from
+@@ -41,7 +40,7 @@
+ /// action.has_action = true;
+ /// action.value = Some("copy-to-clipboard".to_string());
+ /// ```
+-#[derive(Debug, Clone)]
++#[derive(Debug, Clone, PartialEq)]
+ pub struct Action {
+     /// Unique identifier for action routing.
+     /// Built-in IDs use snake_case (e.g., `edit_script`, `copy_path`).
+@@ -148,25 +147,23 @@
+ ///
+ /// Actions are organized by category to help users find relevant options:
+ /// - `ScriptContext`: Actions specific to the currently focused script/item
+-/// - `ScriptOps`: Script management operations (reserved for future use)
+-/// - `GlobalOps`: Application-wide actions like Settings, Quit (reserved)
++/// - `ScriptOps`: Script management operations (test-only legacy category)
++/// - `GlobalOps`: Application-wide actions (test-only legacy category)
+ ///
+ /// Currently, most actions are `ScriptContext` since they operate on the
+-/// focused list item. The other categories are reserved for future expansion.
++/// focused list item. Test-only categories remain for compatibility coverage.
+ #[derive(Debug, Clone, PartialEq)]
+ pub enum ActionCategory {
+     /// Actions specific to the currently focused script/item.
+     /// Examples: Run, Edit, Copy Path, Configure Shortcut, Reset Ranking
+     ScriptContext,
+ 
+-    /// Script management operations (reserved for future use).
+-    /// Intended for: Create Script, Delete Script, Duplicate Script
+-    #[allow(dead_code)]
++    /// Script management operations (test-only reserved category).
++    #[cfg(test)]
+     ScriptOps,
+ 
+-    /// Application-wide actions (reserved for future use).
+-    /// Intended for: Open Settings, Quit App, Check for Updates
+-    #[allow(dead_code)]
++    /// Application-wide actions (test-only reserved category).
++    #[cfg(test)]
+     GlobalOps,
+ 
+     /// Terminal actions (Clear, Copy, Paste, Scroll, etc.)
+@@ -229,4 +226,3 @@
+         self
+     }
+ }
+-
+
+
+thinking
+**Summarizing final response content**
+codex
+Implemented the assigned scoped fixes in the two requested files.
+
+**Changed files**
+- `src/actions/types/action_model.rs:44`
+  - Added `PartialEq` derive to `Action`.
+- `src/actions/types/action_model.rs:157`
+  - Feature-gated unused `ActionCategory` variants with `#[cfg(test)]`:
+  - `ScriptOps` at `src/actions/types/action_model.rs:164`
+  - `GlobalOps` at `src/actions/types/action_model.rs:168`
+  - Kept `Terminal` unchanged for runtime usage.
+- `src/actions/builders/notes.rs:323`
+  - Preset actions now include descriptions via `Some(new_chat_preset_description(preset))` instead of `None`.
+- `src/actions/builders/notes.rs:351`
+  - Added `new_chat_preset_description()` helper (`"Use {name} preset"`).
+- `src/actions/builders/notes.rs:276`
+  - Added test `test_get_new_chat_actions_includes_descriptions_for_presets`.
+
+**Verification run**
+- Ran: `cargo check -p script-kit-gpui`
+  - Failed due pre-existing unrelated errors (e.g. missing `ClipboardEntry` fields and non-exhaustive `ContentType` matches in `src/clipboard_history/*`).
+- Ran: `cargo clippy -p script-kit-gpui --all-targets -- -D warnings`
+  - Failed due pre-existing unrelated workspace issues (including duplicate test module files and broad existing warnings/errors outside scoped files).
+- Attempted targeted test run for the new preset-description test, but compilation is currently blocked by unrelated existing errors.
+
+**How to test (once workspace compiles cleanly)**
+1. `cargo test -p script-kit-gpui --lib test_get_new_chat_actions_includes_descriptions_for_presets`
+2. `cargo check -p script-kit-gpui`
+3. `cargo clippy -p script-kit-gpui --all-targets -- -D warnings`
+
+**Risks / known gaps**
+- Full verification is blocked by existing non-scope compile/lint failures in other modules.
+- There are existing tests in other files that previously asserted preset descriptions were `None`; once those suites are runnable, they may need updates to align with the new preset-description behavior.
+file update:
+diff --git a/src/actions/builders/notes.rs b/src/actions/builders/notes.rs
+index 71cfc3228b285e76bda28b04a0005c71b209668b..e3c28696763c741f6d8dbe852bddb7335373dd50
+--- a/src/actions/builders/notes.rs
++++ b/src/actions/builders/notes.rs
+@@ -271,6 +271,26 @@
+         );
+         assert_eq!(ids_a, ids_b);
+     }
++
++    #[test]
++    fn test_get_new_chat_actions_includes_descriptions_for_presets() {
++        let presets = vec![NewChatPresetInfo {
++            id: "focused-writing".to_string(),
++            name: "Focused Writing".to_string(),
++            icon: IconName::Pencil,
++        }];
++
++        let actions = get_new_chat_actions(&[], &presets, &[]);
++        let preset_action = actions
++            .iter()
++            .find(|action| action.id == "preset_focused-writing")
++            .expect("missing preset action");
++
++        assert_eq!(
++            preset_action.description.as_deref(),
++            Some("Use Focused Writing preset")
++        );
++    }
+ }
+ 
+ /// Build actions for the AI new chat dropdown.
+@@ -300,7 +320,7 @@
+             Action::new(
+                 format!("preset_{}", preset.id),
+                 &preset.name,
+-                None,
++                Some(new_chat_preset_description(preset)),
+                 ActionCategory::ScriptContext,
+             )
+             .with_section("Presets")
+@@ -328,6 +348,10 @@
+     format!("{}::{}", model.provider, model.model_id)
+ }
+ 
++fn new_chat_preset_description(preset: &NewChatPresetInfo) -> String {
++    format!("Use {} preset", preset.name)
++}
++
+ /// Information about a note for the note switcher dialog
+ #[derive(Debug, Clone)]
+ pub struct NoteSwitcherNoteInfo {
+diff --git a/src/actions/types/action_model.rs b/src/actions/types/action_model.rs
+index b3f336ca56d895a910978f56c2d217fad596260c..c0ccdd8a983444aa7b950f3f3d4250bfbcad32fe
+--- a/src/actions/types/action_model.rs
++++ b/src/actions/types/action_model.rs
+@@ -1,4 +1,3 @@
+-
+ /// Represents a single action item in the actions menu.
+ ///
+ /// Actions are created by builder functions in `builders.rs` or converted from
+@@ -41,7 +40,7 @@
+ /// action.has_action = true;
+ /// action.value = Some("copy-to-clipboard".to_string());
+ /// ```
+-#[derive(Debug, Clone)]
++#[derive(Debug, Clone, PartialEq)]
+ pub struct Action {
+     /// Unique identifier for action routing.
+     /// Built-in IDs use snake_case (e.g., `edit_script`, `copy_path`).
+@@ -148,25 +147,23 @@
+ ///
+ /// Actions are organized by category to help users find relevant options:
+ /// - `ScriptContext`: Actions specific to the currently focused script/item
+-/// - `ScriptOps`: Script management operations (reserved for future use)
+-/// - `GlobalOps`: Application-wide actions like Settings, Quit (reserved)
++/// - `ScriptOps`: Script management operations (test-only legacy category)
++/// - `GlobalOps`: Application-wide actions (test-only legacy category)
+ ///
+ /// Currently, most actions are `ScriptContext` since they operate on the
+-/// focused list item. The other categories are reserved for future expansion.
++/// focused list item. Test-only categories remain for compatibility coverage.
+ #[derive(Debug, Clone, PartialEq)]
+ pub enum ActionCategory {
+     /// Actions specific to the currently focused script/item.
+     /// Examples: Run, Edit, Copy Path, Configure Shortcut, Reset Ranking
+     ScriptContext,
+ 
+-    /// Script management operations (reserved for future use).
+-    /// Intended for: Create Script, Delete Script, Duplicate Script
+-    #[allow(dead_code)]
++    /// Script management operations (test-only reserved category).
++    #[cfg(test)]
+     ScriptOps,
+ 
+-    /// Application-wide actions (reserved for future use).
+-    /// Intended for: Open Settings, Quit App, Check for Updates
+-    #[allow(dead_code)]
++    /// Application-wide actions (test-only reserved category).
++    #[cfg(test)]
+     GlobalOps,
+ 
+     /// Terminal actions (Clear, Copy, Paste, Scroll, etc.)
+@@ -229,4 +226,3 @@
+         self
+     }
+ }
+-
+
+tokens used
+88,455
+Implemented the assigned scoped fixes in the two requested files.
+
+**Changed files**
+- `src/actions/types/action_model.rs:44`
+  - Added `PartialEq` derive to `Action`.
+- `src/actions/types/action_model.rs:157`
+  - Feature-gated unused `ActionCategory` variants with `#[cfg(test)]`:
+  - `ScriptOps` at `src/actions/types/action_model.rs:164`
+  - `GlobalOps` at `src/actions/types/action_model.rs:168`
+  - Kept `Terminal` unchanged for runtime usage.
+- `src/actions/builders/notes.rs:323`
+  - Preset actions now include descriptions via `Some(new_chat_preset_description(preset))` instead of `None`.
+- `src/actions/builders/notes.rs:351`
+  - Added `new_chat_preset_description()` helper (`"Use {name} preset"`).
+- `src/actions/builders/notes.rs:276`
+  - Added test `test_get_new_chat_actions_includes_descriptions_for_presets`.
+
+**Verification run**
+- Ran: `cargo check -p script-kit-gpui`
+  - Failed due pre-existing unrelated errors (e.g. missing `ClipboardEntry` fields and non-exhaustive `ContentType` matches in `src/clipboard_history/*`).
+- Ran: `cargo clippy -p script-kit-gpui --all-targets -- -D warnings`
+  - Failed due pre-existing unrelated workspace issues (including duplicate test module files and broad existing warnings/errors outside scoped files).
+- Attempted targeted test run for the new preset-description test, but compilation is currently blocked by unrelated existing errors.
+
+**How to test (once workspace compiles cleanly)**
+1. `cargo test -p script-kit-gpui --lib test_get_new_chat_actions_includes_descriptions_for_presets`
+2. `cargo check -p script-kit-gpui`
+3. `cargo clippy -p script-kit-gpui --all-targets -- -D warnings`
+
+**Risks / known gaps**
+- Full verification is blocked by existing non-scope compile/lint failures in other modules.
+- There are existing tests in other files that previously asserted preset descriptions were `None`; once those suites are runnable, they may need updates to align with the new preset-description behavior.
+
+
+==== exit @ 2026-02-08T00:05:17.071Z code=0 status=done ====

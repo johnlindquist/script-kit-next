@@ -1,0 +1,3156 @@
+==== spawn @ 2026-02-08T05:56:53.691Z ====
+cmd: codex "exec" "--cd" "/Users/johnlindquist/dev/script-kit-gpui" "--model" "gpt-5.3-codex" "-c" "model_reasoning_effort=\"xhigh\"" "-c" "model_auto_compact_token_limit=120000" "-c" "developer_instructions=\"You are Codex implementer agent \\\"codex-sdk-prompt-update\\\".\\n\\n## Coordination\\nThis repo runs parallel agents in ONE working tree. Before editing any file, you MUST claim it.\\nCommands (run via shell):\\n  - View roster: ~/.claude/bin/swarm.ts status\\n  - Claim files (blocks until free): ~/.claude/bin/swarm.ts claim --wait --id codex-sdk-prompt-update path/to/file\\n  - Release: ~/.claude/bin/swarm.ts release --id codex-sdk-prompt-update path/to/file\\n  - Update status/notes: ~/.claude/bin/swarm.ts update --id codex-sdk-prompt-update --status in_progress --notes \\\"...\\\"\\nRules:\\n  - Never edit a file you haven't claimed.\\n  - Keep claims tight (claim only what you're actively changing).\\n  - If blocked, set status=blocked and say what you're waiting on.\\n  - When finished, set status=done and release claims.\\n\\n## Development practices (this code is maintained by AI agents)\\n  - Log state transitions with enough context to diagnose failures from logs alone.\\n  - Structured errors: include what was attempted, what failed, and current state.\\n  - Name things for grepability — unique identifiers agents can find on the first search.\\n  - Every behavior change gets a test. Untested code is invisible to the next agent.\\n  - Test names describe the scenario: test_X_does_Y_when_Z.\\n  - Keep functions small and single-purpose. 500-line functions burn agent context.\\n  - Use types to encode constraints (enums > strings for errors).\\n\\n## CRITICAL: Parallel-safe verification\\n  - Other agents are modifying other files RIGHT NOW. Full test suites WILL show their failures.\\n  - ONLY run tests that cover YOUR changed files. Scope every test/check command:\\n    Rust: cargo test -p your-crate -- module::test_name | JS: npx jest your/file.test.ts\\n  - Do NOT run: cargo test (unscoped), cargo check (whole workspace), npm test (unscoped).\\n  - If a scoped test fails, it's YOUR bug — fix it. If tests outside your scope fail, ignore them.\\n\\n## Git commit discipline\\n  - NEVER commit unverified work. Run tests/lints/type-checks FIRST. If it fails, fix it before committing.\\n  - A commit is a declaration: \\\"this works and here's the proof.\\\"\\n  - Commit FREQUENTLY — after each meaningful unit of VERIFIED work, not just at the end.\\n  - A \\\"unit\\\" = one logical change that passes verification (new function, bug fix, refactor, test added).\\n  - NEVER batch an entire task into one giant commit. Small commits are searchable; big ones aren't.\\n  - Commit message format:\\n      Line 1: <type>(<scope>): <what changed> (imperative, max 72 chars)\\n      Line 3+: WHY this change was made, WHAT was verified, and HOW to test it.\\n    Types: feat, fix, refactor, test, docs, chore\\n    Example:\\n      feat(auth): add refresh token rotation\\n      \\n      Tokens now rotate on each refresh call to prevent replay attacks.\\n      The old token is invalidated immediately on rotation.\\n      \\n      Verified: cargo test --lib -- auth::refresh (4 tests pass)\\n      Verified: manual smoke test via curl — token rotates, old token returns 401\\n  - The \\\"Verified:\\\" lines are REQUIRED. Future agents will read git log to understand\\n    what was tested and how to re-verify. This is the most valuable part of the message.\\n  - In your final message, list all commits you made with their hashes.\\n\\n## Time budget\\nYou have approximately 10 minutes. If your task is too broad to complete in time:\\n(1) Commit any verified progress.\\n(2) Run: ~/.claude/bin/swarm.ts update --id YOUR_ID --status needs_split --notes 'suggest: 1) sub-task-desc scope:files 2) sub-task-desc scope:files'.\\n(3) Exit cleanly. The dispatcher will read your suggestions and spawn narrower workers.\"" "--output-last-message" "/Users/johnlindquist/dev/script-kit-gpui/.ai/logs/codex-sdk-prompt-update.final.md" "--yolo" "You are agent codex-sdk-prompt-update.\n\nCurrent parallel-agent roster (read this first):\n```\nSWARM SNAPSHOT @ 2026-02-08T05:56:53.689Z\n- codex-sdk-prompt-update [starting] scope=src/ai/script_generation.rs,src/app_impl/prompt_ai.rs,~/.scriptkit/kit/*/scripts/*.ts task=The AI script generation system prompt is outdated — it references '@johnlindquist/kit' but the new SDK uses 'import \"@…\n```\n\nYour assignment:\n- Task: The AI script generation system prompt is outdated — it references '@johnlindquist/kit' but the new SDK uses 'import \"@scriptkit/sdk\"'. Study the REAL scripts in ~/.scriptkit/kit/*/scripts/*.ts to understand the CURRENT Script Kit patterns: what imports they use, what APIs they call (arg, div, editor, etc.), what metadata comments they have. Then update the system prompt in src/ai/script_generation.rs (the AI_SCRIPT_GENERATION_SYSTEM_PROMPT constant) to reflect the ACTUAL modern patterns. Also update the enforce_script_kit_conventions() function and has_kit_import() to use '@scriptkit/sdk' instead of '@johnlindquist/kit'. Update the prompt in src/app_impl/prompt_ai.rs too if there's a duplicate system prompt there (AI_SCRIPT_GENERATION_SYSTEM_PROMPT or similar). Fix all tests that reference the old import. Run cargo check to verify.\n- Scope: src/ai/script_generation.rs,src/app_impl/prompt_ai.rs,~/.scriptkit/kit/*/scripts/*.ts\n\nOperating constraints:\n- Single working tree (no worktrees, no patches).\n- You MUST claim files before editing (~/.claude/bin/swarm.ts claim --wait ...).\n\nDeliverables:\n- Make the code changes required by the task.\n- Run the most relevant tests/linters.\n- In your FINAL message, include: changed files, how to test, and any risks/known gaps."
+
+OpenAI Codex v0.98.0 (research preview)
+--------
+workdir: /Users/johnlindquist/dev/script-kit-gpui
+model: gpt-5.3-codex
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: xhigh
+reasoning summaries: auto
+session id: 019c3bd3-11e2-7f11-8d82-ef51a49adb72
+--------
+user
+You are agent codex-sdk-prompt-update.
+
+Current parallel-agent roster (read this first):
+```
+SWARM SNAPSHOT @ 2026-02-08T05:56:53.689Z
+- codex-sdk-prompt-update [starting] scope=src/ai/script_generation.rs,src/app_impl/prompt_ai.rs,~/.scriptkit/kit/*/scripts/*.ts task=The AI script generation system prompt is outdated — it references '@johnlindquist/kit' but the new SDK uses 'import "@…
+```
+
+Your assignment:
+- Task: The AI script generation system prompt is outdated — it references '@johnlindquist/kit' but the new SDK uses 'import "@scriptkit/sdk"'. Study the REAL scripts in ~/.scriptkit/kit/*/scripts/*.ts to understand the CURRENT Script Kit patterns: what imports they use, what APIs they call (arg, div, editor, etc.), what metadata comments they have. Then update the system prompt in src/ai/script_generation.rs (the AI_SCRIPT_GENERATION_SYSTEM_PROMPT constant) to reflect the ACTUAL modern patterns. Also update the enforce_script_kit_conventions() function and has_kit_import() to use '@scriptkit/sdk' instead of '@johnlindquist/kit'. Update the prompt in src/app_impl/prompt_ai.rs too if there's a duplicate system prompt there (AI_SCRIPT_GENERATION_SYSTEM_PROMPT or similar). Fix all tests that reference the old import. Run cargo check to verify.
+- Scope: src/ai/script_generation.rs,src/app_impl/prompt_ai.rs,~/.scriptkit/kit/*/scripts/*.ts
+
+Operating constraints:
+- Single working tree (no worktrees, no patches).
+- You MUST claim files before editing (~/.claude/bin/swarm.ts claim --wait ...).
+
+Deliverables:
+- Make the code changes required by the task.
+- Run the most relevant tests/linters.
+- In your FINAL message, include: changed files, how to test, and any risks/known gaps.
+warning: Under-development features enabled: responses_websockets. Under-development features are incomplete and may behave unpredictably. To suppress this warning, set `suppress_unstable_features_warning = true` in /Users/johnlindquist/.codex/config.toml.
+mcp: deepwiki starting
+mcp: deepwiki ready
+mcp startup: ready: deepwiki
+
+thinking
+**Starting with initial commentary**
+codex
+I’m updating the Script Kit prompt/import conventions to `@scriptkit/sdk` and aligning them with real scripts under `~/.scriptkit/kit/*/scripts/*.ts`. I’ll first inspect current prompts/tests and sample scripts, then claim and edit only the needed files and run scoped verification.
+
+thinking
+**Planning parallel status and skill read**
+exec
+/bin/zsh -lc 'cat /Users/johnlindquist/.claude/skills/script-kit-architecture/SKILL.md' in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc '~/.claude/bin/swarm.ts status' in /Users/johnlindquist/dev/script-kit-gpui exited 1 in 51ms:
+cat: /Users/johnlindquist/.claude/skills/script-kit-architecture/SKILL.md: No such file or directory
+ succeeded in 51ms:
+Repo: /Users/johnlindquist/dev/script-kit-gpui
+Updated: 2026-02-08T05:57:13.521Z
+
+Active agents (1):
+codex-sdk-prompt-update [in_progress] codex/gpt-5.3-codex/exec
+  task: The AI script generation system prompt is outdated — it references '@johnlindquist/kit' but the new SDK uses 'import "@…
+  scope: src/ai/script_generation.rs,src/app_impl/prompt_ai.rs,~/.scriptkit/kit/*/scripts/*.ts
+  claims: (none)
+  notes: spawned codex (exec)
+
+Inactive agents (267):
+- codex-accessibility [done] done. exit=0. final=.ai/logs/codex-accessibility.final.md. See final message file.
+- codex-action-labels [failed] failed. exit=1. final=.ai/logs/codex-action-labels.final.md.
+- codex-actions-audit [failed] failed. exit=1. final=.ai/logs/codex-actions-audit.final.md. See final message file.
+- codex-actions-consistency [failed] failed. exit=1. final=.ai/logs/codex-actions-consistency.final.md.
+- codex-actions-dialog [done] done. exit=0. final=.ai/logs/codex-actions-dialog.final.md. See final message file.
+- codex-actions-feedback [failed] failed. exit=1. final=.ai/logs/codex-actions-feedback.final.md.
+- codex-actions-feedback-v2 [done] done. exit=0. final=.ai/logs/codex-actions-feedback-v2.final.md. See final message file.
+- codex-actions-ux [done] done. exit=0. final=.ai/logs/codex-actions-ux.final.md. See final message file.
+- codex-agents-md [done] done. exit=0. final=.ai/logs/codex-agents-md.final.md. See final message file.
+
+thinking
+**Planning skill path handling**
+codex
+I checked the agent roster and attempted to load the `script-kit-architecture` skill; the listed path wasn’t available, so I’m proceeding with direct code inspection. Next I’m scanning for `@johnlindquist/kit` references and sampling real `~/.scriptkit/kit/*/scripts/*.ts` usage patterns.
+
+thinking
+**Gathering script usage patterns**
+exec
+/bin/zsh -lc 'rg -n "@johnlindquist/kit|@scriptkit/sdk|AI_SCRIPT_GENERATION_SYSTEM_PROMPT|has_kit_import|enforce_script_kit_conventions" src/ai/script_generation.rs src/app_impl/prompt_ai.rs' in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc 'rg -n "@scriptkit/sdk|@johnlindquist/kit|''^//'"\\s*Name:|"'^//'"\\s*Description:|\\barg\\(|\\bdiv\\(|\\beditor\\(|\\bmd\\(|\\bmenu\\(\" ~/.scriptkit/kit --glob '*/scripts/*.ts'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+src/ai/script_generation.rs:14:pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
+src/ai/script_generation.rs:22:2) Include: import "@scriptkit/sdk";
+src/ai/script_generation.rs:63:        ProviderMessage::system(AI_SCRIPT_GENERATION_SYSTEM_PROMPT),
+src/ai/script_generation.rs:119:    let finalized = enforce_script_kit_conventions(&extracted, normalized_prompt, &slug);
+src/ai/script_generation.rs:354:fn has_kit_import(script: &str) -> bool {
+src/ai/script_generation.rs:355:    script.contains("import \"@scriptkit/sdk\"")
+src/ai/script_generation.rs:356:        || script.contains("import '@scriptkit/sdk'")
+src/ai/script_generation.rs:359:fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
+src/ai/script_generation.rs:380:    if !has_kit_import(trimmed_script) {
+src/ai/script_generation.rs:381:        prefix_lines.push("import \"@scriptkit/sdk\";".to_string());
+src/ai/script_generation.rs:484:    fn test_enforce_script_kit_conventions_adds_missing_metadata_and_import() {
+src/ai/script_generation.rs:486:        let output = enforce_script_kit_conventions(script, "Ask for user name", "ask-user-name");
+src/ai/script_generation.rs:490:        assert!(output.contains("import \"@scriptkit/sdk\";"));
+src/ai/script_generation.rs:495:    fn test_enforce_script_kit_conventions_keeps_existing_metadata_and_import() {
+src/ai/script_generation.rs:498:import "@scriptkit/sdk";
+src/ai/script_generation.rs:502:        let output = enforce_script_kit_conventions(script, "ignored", "ignored");
+src/ai/script_generation.rs:515:            output.matches("import \"@scriptkit/sdk\";").count(),
+src/ai/script_generation.rs:540:        assert!(source.contains("import \"@scriptkit/sdk\";"));
+src/app_impl/prompt_ai.rs:29:const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You are ScriptKitScriptGenerator.
+src/app_impl/prompt_ai.rs:35:- Include: import "@scriptkit/sdk";
+ exited 1 in 51ms:
+
+
+thinking
+**Investigating directory contents and command failures**
+exec
+/bin/zsh -lc 'ls -1 ~/.scriptkit/kit' in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "rg --files ~/.scriptkit/kit | rg '/scripts/.*\\.(ts|js)"'$'"' | head -n 80" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+1password
+AGENTS.md
+CLAUDE.md
+ai-text-tools
+cleanshot
+config.ts
+config.ts.bak
+examples
+main
+package.json
+quicklinks
+theme.json
+tsconfig.json
+window-management
+ succeeded in 51ms:
+/Users/johnlindquist/.scriptkit/kit/main/scripts/an-arg-with-3-choices-1.ts
+/Users/johnlindquist/.scriptkit/kit/main/scripts/a-simple-test.ts
+/Users/johnlindquist/.scriptkit/kit/main/scripts/a-script-that-takes-a-simple-note-in-my-home-dir.ts
+/Users/johnlindquist/.scriptkit/kit/main/scripts/an-arg-with-3-choices.ts
+/Users/johnlindquist/.scriptkit/kit/main/scripts/testing-again.ts
+/Users/johnlindquist/.scriptkit/kit/main/scripts/an-arg-with-3-choices-2.ts
+/Users/johnlindquist/.scriptkit/kit/main/scripts/testing.ts
+/Users/johnlindquist/.scriptkit/kit/main/scripts/untitled.ts
+/Users/johnlindquist/.scriptkit/kit/main/scripts/a-simple-hello-world-notification.ts
+/Users/johnlindquist/.scriptkit/kit/main/scripts/just-testing.ts
+
+thinking
+**Inspecting scripts with samples**
+codex
+I found the local Script Kit script set under `~/.scriptkit/kit/main/scripts/*.ts`; I’m now reading those files directly to extract real metadata/import/API patterns before updating prompts.
+exec
+/bin/zsh -lc 'for f in ~/.scriptkit/kit/main/scripts/*.ts; do echo "===== $f ====="; sed -n '"'1,160p' \""'$f"; done' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+===== /Users/johnlindquist/.scriptkit/kit/main/scripts/a-script-that-takes-a-simple-note-in-my-home-dir.ts =====
+// Name: Quick Note
+// Description: Take a simple note and save it to your home directory
+
+import "@scriptkit/sdk";
+
+const note = await editor({
+  placeholder: "Write your note...",
+  hint: "Enter your note and press cmd+s to save"
+});
+
+if (note) {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const filename = `note-${timestamp}.txt`;
+  const filePath = home(filename);
+  
+  await writeFile(filePath, note);
+  
+  await div(md(`✅ Note saved to:\n\n\`${filePath}\``));
+}
+
+thinking
+**Planning prompt update with modern patterns**
+exec
+/bin/zsh -lc "nl -ba src/ai/script_generation.rs | sed -n '260,620p'" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "nl -ba src/ai/script_generation.rs | sed -n '1,260p'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 52ms:
+   260	        let language = header
+   261	            .trim()
+   262	            .split(|c: char| c.is_whitespace() || c == '{')
+   263	            .next()
+   264	            .unwrap_or("")
+   265	            .to_ascii_lowercase();
+   266	        let code = body.trim();
+   267	
+   268	        if !code.is_empty() {
+   269	            match preferred_languages {
+   270	                Some(preferred) => {
+   271	                    if preferred.iter().any(|candidate| *candidate == language) {
+   272	                        return Some(code.to_string());
+   273	                    }
+   274	                }
+   275	                None => return Some(code.to_string()),
+   276	            }
+   277	        }
+   278	
+   279	        remaining = &after_start[end + 3..];
+ succeeded in 52ms:
+     1	use anyhow::{Context, Result};
+     2	use std::fs::{self, OpenOptions};
+     3	use std::io::{ErrorKind, Write};
+     4	use std::path::{Path, PathBuf};
+     5	use std::sync::Arc;
+     6	
+     7	use super::config::ModelInfo;
+     8	use super::providers::{AiProvider, ProviderMessage, ProviderRegistry};
+     9	
+    10	const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
+    11	const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
+    12	const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
+    13	
+    14	pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
+    15	
+    16	Return ONLY TypeScript source code for one Script Kit script. Do not include explanations.
+    17	
+    18	Required output conventions:
+    19	1) Include metadata comments at the top:
+    20	   // Name: <clear title>
+
+thinking
+**Inspecting prompt file for outdated code**
+exec
+/bin/zsh -lc "nl -ba src/app_impl/prompt_ai.rs | sed -n '1,260p'" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "nl -ba src/app_impl/prompt_ai.rs | sed -n '740,880p'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+     1	use super::*;
+     2	use anyhow::{anyhow, Context as AnyhowContext, Result};
+     3	
+     4	#[derive(Debug, Clone, Copy)]
+     5	enum AiScriptGenerationStage {
+     6	    SelectModel,
+     7	    ResolveProvider,
+     8	    RequestCompletion,
+     9	    ExtractScript,
+    10	    CreateScriptFile,
+    11	    WriteScriptFile,
+    12	    OpenEditor,
+    13	}
+    14	
+    15	impl AiScriptGenerationStage {
+    16	    fn as_str(self) -> &'static str {
+    17	        match self {
+    18	            Self::SelectModel => "select_model",
+    19	            Self::ResolveProvider => "resolve_provider",
+    20	            Self::RequestCompletion => "request_completion",
+ succeeded in 52ms:
+   740	            });
+   741	        })
+   742	        .detach();
+   743	    }
+   744	
+   745	    /// Rebuild the cached provider registry in a background thread.
+   746	    /// Called after config changes (API key saved, Claude Code enabled, etc.)
+   747	    pub fn rebuild_provider_registry_async(&mut self, cx: &mut Context<Self>) {
+   748	        self.cached_provider_registry = None;
+   749	        let config_clone = self.config.clone();
+   750	        let (tx, rx) = async_channel::bounded::<crate::ai::ProviderRegistry>(1);
+   751	
+   752	        std::thread::spawn(move || {
+   753	            let registry =
+   754	                crate::ai::ProviderRegistry::from_environment_with_config(Some(&config_clone));
+   755	            if tx.send_blocking(registry).is_err() {
+   756	                logging::log(
+   757	                    "APP",
+   758	                    "Provider registry rebuild result dropped: receiver unavailable",
+   759	                );
+
+thinking
+**Assessing import references and prompt consistency**
+exec
+/bin/zsh -lc 'rg -n "@johnlindquist/kit" src' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+src/setup/part_002.rs:161:- Reference old Script Kit v1 patterns (Electron, Kit SDK, @johnlindquist/kit)
+src/schema_parser/part_002.rs:268:import "@johnlindquist/kit"
+
+thinking
+**Restricting changes to scope**
+exec
+/bin/zsh -lc 'rg -n "has_kit_import|enforce_script_kit_conventions|@scriptkit/sdk|@johnlindquist/kit" src/app_impl/prompt_ai.rs src/ai/script_generation.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+src/app_impl/prompt_ai.rs:35:- Include: import "@scriptkit/sdk";
+src/app_impl/prompt_ai.rs:801:import "@scriptkit/sdk";
+src/app_impl/prompt_ai.rs:812:        let response = "// Name: Plain\nimport \"@scriptkit/sdk\";";
+src/app_impl/prompt_ai.rs:815:        assert_eq!(extracted, "// Name: Plain\nimport \"@scriptkit/sdk\";\n");
+src/ai/script_generation.rs:22:2) Include: import "@scriptkit/sdk";
+src/ai/script_generation.rs:119:    let finalized = enforce_script_kit_conventions(&extracted, normalized_prompt, &slug);
+src/ai/script_generation.rs:354:fn has_kit_import(script: &str) -> bool {
+src/ai/script_generation.rs:355:    script.contains("import \"@scriptkit/sdk\"")
+src/ai/script_generation.rs:356:        || script.contains("import '@scriptkit/sdk'")
+src/ai/script_generation.rs:359:fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
+src/ai/script_generation.rs:380:    if !has_kit_import(trimmed_script) {
+src/ai/script_generation.rs:381:        prefix_lines.push("import \"@scriptkit/sdk\";".to_string());
+src/ai/script_generation.rs:484:    fn test_enforce_script_kit_conventions_adds_missing_metadata_and_import() {
+src/ai/script_generation.rs:486:        let output = enforce_script_kit_conventions(script, "Ask for user name", "ask-user-name");
+src/ai/script_generation.rs:490:        assert!(output.contains("import \"@scriptkit/sdk\";"));
+src/ai/script_generation.rs:495:    fn test_enforce_script_kit_conventions_keeps_existing_metadata_and_import() {
+src/ai/script_generation.rs:498:import "@scriptkit/sdk";
+src/ai/script_generation.rs:502:        let output = enforce_script_kit_conventions(script, "ignored", "ignored");
+src/ai/script_generation.rs:515:            output.matches("import \"@scriptkit/sdk\";").count(),
+src/ai/script_generation.rs:540:        assert!(source.contains("import \"@scriptkit/sdk\";"));
+
+thinking
+**Planning file claims and status update**
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts update --id codex-sdk-prompt-update --status in_progress --notes "Analyzing current Script Kit script patterns and preparing prompt/convention updates to @scriptkit/sdk"' in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc '~/.claude/bin/swarm.ts claim --wait --id codex-sdk-prompt-update src/ai/script_generation.rs src/app_impl/prompt_ai.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+Updated: codex-sdk-prompt-update
+ succeeded in 51ms:
+Claimed for codex-sdk-prompt-update: src/ai/script_generation.rs, src/app_impl/prompt_ai.rs
+
+thinking
+**Planning prompt and import updates**
+codex
+I’ve gathered the real script patterns: current scripts use `import "@scriptkit/sdk"` (top-level, single import), `// Name` + `// Description` comments, and APIs like `arg`, `div`, `editor`, `notify`, `md`, `home`, and `writeFile`. I’m now updating both system prompts to codify those conventions and tightening `has_kit_import()`/`enforce_script_kit_conventions()` plus tests so only `@scriptkit/sdk` is recognized.
+
+thinking
+**Planning multi-file patch**
+file update
+M /Users/johnlindquist/dev/script-kit-gpui/src/ai/script_generation.rs
+@@ -12,8 +12,12 @@
+ const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
++const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
++const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+ 
+-pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
++pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str =
++    r#"You write production-ready Script Kit TypeScript scripts.
+ 
+-Return ONLY TypeScript source code for one Script Kit script. Do not include explanations.
++Return ONLY TypeScript source code for one Script Kit script.
++Do not return markdown fences or explanations.
+ 
+-Required output conventions:
++Follow modern Script Kit conventions:
+ 1) Include metadata comments at the top:
+@@ -21,6 +25,8 @@
+    // Description: <one-line summary>
+-2) Include: import "@scriptkit/sdk";
+-3) Use await arg() for user input when useful.
+-4) Use await div() for display output when useful.
+-5) Keep the script runnable as-is with sensible defaults and light error handling."#;
++2) Include exactly one SDK import near the top:
++   import "@scriptkit/sdk";
++3) Use top-level await with Script Kit APIs directly when useful:
++   arg(), div(), editor(), notify(), md()
++4) For file tasks, prefer Script Kit helpers like home() and writeFile().
++5) Keep the script runnable as-is with sensible defaults and practical error handling."#;
+ 
+@@ -354,4 +360,8 @@
+ fn has_kit_import(script: &str) -> bool {
+-    script.contains("import \"@scriptkit/sdk\"")
+-        || script.contains("import '@scriptkit/sdk'")
++    script.lines().any(|line| {
++        let trimmed = line.trim();
++        trimmed.starts_with("import")
++            && trimmed.contains(SCRIPT_KIT_SDK_IMPORT_MODULE)
++            && (trimmed.contains('\"') || trimmed.contains('\''))
++    })
+ }
+@@ -380,3 +390,3 @@
+     if !has_kit_import(trimmed_script) {
+-        prefix_lines.push("import \"@scriptkit/sdk\";".to_string());
++        prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
+     }
+@@ -521,2 +531,19 @@
+     #[test]
++    fn test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import() {
++        assert!(has_kit_import("import \"@scriptkit/sdk\";"));
++        assert!(has_kit_import("import '@scriptkit/sdk'"));
++        assert!(!has_kit_import("import \"@johnlindquist/kit\";"));
++    }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_uses_modern_sdk_conventions() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("arg()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("div()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("editor()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("notify()"));
++    }
++
++    #[test]
+     fn test_write_generated_script_in_dir_appends_numeric_suffix_for_collisions() {
+apply_patch(auto_approved=true) exited 0 in 12ms:
+Success. Updated the following files:
+M src/ai/script_generation.rs
+file update:
+diff --git a/src/ai/script_generation.rs b/src/ai/script_generation.rs
+index 299a39ec49fca6ad8fe56ffc03d0c35c7ae4a810..f29715b032570028241789219179c413e5c5ed83
+--- a/src/ai/script_generation.rs
++++ b/src/ai/script_generation.rs
+@@ -10,19 +10,25 @@
+ const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
+ const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
+ const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
++const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
++const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+ 
+-pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
++pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str =
++    r#"You write production-ready Script Kit TypeScript scripts.
+ 
+-Return ONLY TypeScript source code for one Script Kit script. Do not include explanations.
++Return ONLY TypeScript source code for one Script Kit script.
++Do not return markdown fences or explanations.
+ 
+-Required output conventions:
++Follow modern Script Kit conventions:
+ 1) Include metadata comments at the top:
+    // Name: <clear title>
+    // Description: <one-line summary>
+-2) Include: import "@scriptkit/sdk";
+-3) Use await arg() for user input when useful.
+-4) Use await div() for display output when useful.
+-5) Keep the script runnable as-is with sensible defaults and light error handling."#;
++2) Include exactly one SDK import near the top:
++   import "@scriptkit/sdk";
++3) Use top-level await with Script Kit APIs directly when useful:
++   arg(), div(), editor(), notify(), md()
++4) For file tasks, prefer Script Kit helpers like home() and writeFile().
++5) Keep the script runnable as-is with sensible defaults and practical error handling."#;
+ 
+ #[derive(Debug, Clone)]
+ pub struct GeneratedScriptOutput {
+@@ -352,8 +358,12 @@
+ }
+ 
+ fn has_kit_import(script: &str) -> bool {
+-    script.contains("import \"@scriptkit/sdk\"")
+-        || script.contains("import '@scriptkit/sdk'")
++    script.lines().any(|line| {
++        let trimmed = line.trim();
++        trimmed.starts_with("import")
++            && trimmed.contains(SCRIPT_KIT_SDK_IMPORT_MODULE)
++            && (trimmed.contains('\"') || trimmed.contains('\''))
++    })
+ }
+ 
+ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
+@@ -378,7 +388,7 @@
+     }
+ 
+     if !has_kit_import(trimmed_script) {
+-        prefix_lines.push("import \"@scriptkit/sdk\";".to_string());
++        prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
+     }
+ 
+     let mut output = String::new();
+@@ -519,6 +529,23 @@
+     }
+ 
+     #[test]
++    fn test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import() {
++        assert!(has_kit_import("import \"@scriptkit/sdk\";"));
++        assert!(has_kit_import("import '@scriptkit/sdk'"));
++        assert!(!has_kit_import("import \"@johnlindquist/kit\";"));
++    }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_uses_modern_sdk_conventions() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("arg()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("div()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("editor()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("notify()"));
++    }
++
++    #[test]
+     fn test_write_generated_script_in_dir_appends_numeric_suffix_for_collisions() {
+         let temp_dir = tempdir().unwrap();
+         let first = write_generated_script_in_dir(temp_dir.path(), "my-script", "a").unwrap();
+
+file update:
+diff --git a/src/ai/script_generation.rs b/src/ai/script_generation.rs
+index 299a39ec49fca6ad8fe56ffc03d0c35c7ae4a810..f29715b032570028241789219179c413e5c5ed83
+--- a/src/ai/script_generation.rs
++++ b/src/ai/script_generation.rs
+@@ -10,19 +10,25 @@
+ const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
+ const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
+ const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
++const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
++const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+ 
+-pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
++pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str =
++    r#"You write production-ready Script Kit TypeScript scripts.
+ 
+-Return ONLY TypeScript source code for one Script Kit script. Do not include explanations.
++Return ONLY TypeScript source code for one Script Kit script.
++Do not return markdown fences or explanations.
+ 
+-Required output conventions:
++Follow modern Script Kit conventions:
+ 1) Include metadata comments at the top:
+    // Name: <clear title>
+    // Description: <one-line summary>
+-2) Include: import "@scriptkit/sdk";
+-3) Use await arg() for user input when useful.
+-4) Use await div() for display output when useful.
+-5) Keep the script runnable as-is with sensible defaults and light error handling."#;
++2) Include exactly one SDK import near the top:
++   import "@scriptkit/sdk";
++3) Use top-level await with Script Kit APIs directly when useful:
++   arg(), div(), editor(), notify(), md()
++4) For file tasks, prefer Script Kit helpers like home() and writeFile().
++5) Keep the script runnable as-is with sensible defaults and practical error handling."#;
+ 
+ #[derive(Debug, Clone)]
+ pub struct GeneratedScriptOutput {
+@@ -352,8 +358,12 @@
+ }
+ 
+ fn has_kit_import(script: &str) -> bool {
+-    script.contains("import \"@scriptkit/sdk\"")
+-        || script.contains("import '@scriptkit/sdk'")
++    script.lines().any(|line| {
++        let trimmed = line.trim();
++        trimmed.starts_with("import")
++            && trimmed.contains(SCRIPT_KIT_SDK_IMPORT_MODULE)
++            && (trimmed.contains('\"') || trimmed.contains('\''))
++    })
+ }
+ 
+ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
+@@ -378,7 +388,7 @@
+     }
+ 
+     if !has_kit_import(trimmed_script) {
+-        prefix_lines.push("import \"@scriptkit/sdk\";".to_string());
++        prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
+     }
+ 
+     let mut output = String::new();
+@@ -519,6 +529,23 @@
+     }
+ 
+     #[test]
++    fn test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import() {
++        assert!(has_kit_import("import \"@scriptkit/sdk\";"));
++        assert!(has_kit_import("import '@scriptkit/sdk'"));
++        assert!(!has_kit_import("import \"@johnlindquist/kit\";"));
++    }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_uses_modern_sdk_conventions() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("arg()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("div()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("editor()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("notify()"));
++    }
++
++    #[test]
+     fn test_write_generated_script_in_dir_appends_numeric_suffix_for_collisions() {
+         let temp_dir = tempdir().unwrap();
+         let first = write_generated_script_in_dir(temp_dir.path(), "my-script", "a").unwrap();
+
+
+thinking
+**Patching prompt constant and adding test**
+file update
+M /Users/johnlindquist/dev/script-kit-gpui/src/app_impl/prompt_ai.rs
+@@ -34,6 +34,8 @@
+   // Description: <short summary>
+-- Include: import "@scriptkit/sdk";
+-- Use idiomatic Script Kit APIs (for example await arg(), await div(), await editor()) when useful.
+-- Prefer clear async/await flow and practical defaults.
+-- Return a full runnable script with no extra explanation."#;
++- Include exactly one SDK import near the top:
++  import "@scriptkit/sdk";
++- Use top-level await with Script Kit APIs directly when useful:
++  arg(), div(), editor(), notify(), md()
++- For file tasks, prefer Script Kit helpers like home() and writeFile().
++- Return a full runnable script with practical defaults and no extra explanation."#;
+ 
+@@ -822,2 +824,8 @@
+     }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_references_scriptkit_sdk_not_legacy_kit() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++    }
+ }
+apply_patch(auto_approved=true) exited 0 in 17ms:
+Success. Updated the following files:
+M src/app_impl/prompt_ai.rs
+file update:
+diff --git a/src/ai/script_generation.rs b/src/ai/script_generation.rs
+index 299a39ec49fca6ad8fe56ffc03d0c35c7ae4a810..f29715b032570028241789219179c413e5c5ed83
+--- a/src/ai/script_generation.rs
++++ b/src/ai/script_generation.rs
+@@ -10,19 +10,25 @@
+ const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
+ const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
+ const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
++const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
++const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+ 
+-pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
++pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str =
++    r#"You write production-ready Script Kit TypeScript scripts.
+ 
+-Return ONLY TypeScript source code for one Script Kit script. Do not include explanations.
++Return ONLY TypeScript source code for one Script Kit script.
++Do not return markdown fences or explanations.
+ 
+-Required output conventions:
++Follow modern Script Kit conventions:
+ 1) Include metadata comments at the top:
+    // Name: <clear title>
+    // Description: <one-line summary>
+-2) Include: import "@scriptkit/sdk";
+-3) Use await arg() for user input when useful.
+-4) Use await div() for display output when useful.
+-5) Keep the script runnable as-is with sensible defaults and light error handling."#;
++2) Include exactly one SDK import near the top:
++   import "@scriptkit/sdk";
++3) Use top-level await with Script Kit APIs directly when useful:
++   arg(), div(), editor(), notify(), md()
++4) For file tasks, prefer Script Kit helpers like home() and writeFile().
++5) Keep the script runnable as-is with sensible defaults and practical error handling."#;
+ 
+ #[derive(Debug, Clone)]
+ pub struct GeneratedScriptOutput {
+@@ -352,8 +358,12 @@
+ }
+ 
+ fn has_kit_import(script: &str) -> bool {
+-    script.contains("import \"@scriptkit/sdk\"")
+-        || script.contains("import '@scriptkit/sdk'")
++    script.lines().any(|line| {
++        let trimmed = line.trim();
++        trimmed.starts_with("import")
++            && trimmed.contains(SCRIPT_KIT_SDK_IMPORT_MODULE)
++            && (trimmed.contains('\"') || trimmed.contains('\''))
++    })
+ }
+ 
+ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
+@@ -378,7 +388,7 @@
+     }
+ 
+     if !has_kit_import(trimmed_script) {
+-        prefix_lines.push("import \"@scriptkit/sdk\";".to_string());
++        prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
+     }
+ 
+     let mut output = String::new();
+@@ -519,6 +529,23 @@
+     }
+ 
+     #[test]
++    fn test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import() {
++        assert!(has_kit_import("import \"@scriptkit/sdk\";"));
++        assert!(has_kit_import("import '@scriptkit/sdk'"));
++        assert!(!has_kit_import("import \"@johnlindquist/kit\";"));
++    }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_uses_modern_sdk_conventions() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("arg()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("div()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("editor()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("notify()"));
++    }
++
++    #[test]
+     fn test_write_generated_script_in_dir_appends_numeric_suffix_for_collisions() {
+         let temp_dir = tempdir().unwrap();
+         let first = write_generated_script_in_dir(temp_dir.path(), "my-script", "a").unwrap();
+diff --git a/src/app_impl/prompt_ai.rs b/src/app_impl/prompt_ai.rs
+index 7f8acfae4036d0f77ae1eca73994c8d188bfb44e..c8266b6cb798ec62e6e7e9a8a59005512e44b72f
+--- a/src/app_impl/prompt_ai.rs
++++ b/src/app_impl/prompt_ai.rs
+@@ -32,10 +32,12 @@
+ - Include metadata comments at the top:
+   // Name: <script name>
+   // Description: <short summary>
+-- Include: import "@scriptkit/sdk";
+-- Use idiomatic Script Kit APIs (for example await arg(), await div(), await editor()) when useful.
+-- Prefer clear async/await flow and practical defaults.
+-- Return a full runnable script with no extra explanation."#;
++- Include exactly one SDK import near the top:
++  import "@scriptkit/sdk";
++- Use top-level await with Script Kit APIs directly when useful:
++  arg(), div(), editor(), notify(), md()
++- For file tasks, prefer Script Kit helpers like home() and writeFile().
++- Return a full runnable script with practical defaults and no extra explanation."#;
+ 
+ fn build_ai_script_generation_user_prompt(description: &str) -> String {
+     format!(
+@@ -820,4 +822,10 @@
+         let name = derive_script_name_from_description("@@@ !!!");
+         assert_eq!(name, "ai-generated-script");
+     }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_references_scriptkit_sdk_not_legacy_kit() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++    }
+ }
+
+file update:
+diff --git a/src/ai/script_generation.rs b/src/ai/script_generation.rs
+index 299a39ec49fca6ad8fe56ffc03d0c35c7ae4a810..f29715b032570028241789219179c413e5c5ed83
+--- a/src/ai/script_generation.rs
++++ b/src/ai/script_generation.rs
+@@ -10,19 +10,25 @@
+ const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
+ const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
+ const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
++const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
++const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+ 
+-pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
++pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str =
++    r#"You write production-ready Script Kit TypeScript scripts.
+ 
+-Return ONLY TypeScript source code for one Script Kit script. Do not include explanations.
++Return ONLY TypeScript source code for one Script Kit script.
++Do not return markdown fences or explanations.
+ 
+-Required output conventions:
++Follow modern Script Kit conventions:
+ 1) Include metadata comments at the top:
+    // Name: <clear title>
+    // Description: <one-line summary>
+-2) Include: import "@scriptkit/sdk";
+-3) Use await arg() for user input when useful.
+-4) Use await div() for display output when useful.
+-5) Keep the script runnable as-is with sensible defaults and light error handling."#;
++2) Include exactly one SDK import near the top:
++   import "@scriptkit/sdk";
++3) Use top-level await with Script Kit APIs directly when useful:
++   arg(), div(), editor(), notify(), md()
++4) For file tasks, prefer Script Kit helpers like home() and writeFile().
++5) Keep the script runnable as-is with sensible defaults and practical error handling."#;
+ 
+ #[derive(Debug, Clone)]
+ pub struct GeneratedScriptOutput {
+@@ -352,8 +358,12 @@
+ }
+ 
+ fn has_kit_import(script: &str) -> bool {
+-    script.contains("import \"@scriptkit/sdk\"")
+-        || script.contains("import '@scriptkit/sdk'")
++    script.lines().any(|line| {
++        let trimmed = line.trim();
++        trimmed.starts_with("import")
++            && trimmed.contains(SCRIPT_KIT_SDK_IMPORT_MODULE)
++            && (trimmed.contains('\"') || trimmed.contains('\''))
++    })
+ }
+ 
+ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
+@@ -378,7 +388,7 @@
+     }
+ 
+     if !has_kit_import(trimmed_script) {
+-        prefix_lines.push("import \"@scriptkit/sdk\";".to_string());
++        prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
+     }
+ 
+     let mut output = String::new();
+@@ -519,6 +529,23 @@
+     }
+ 
+     #[test]
++    fn test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import() {
++        assert!(has_kit_import("import \"@scriptkit/sdk\";"));
++        assert!(has_kit_import("import '@scriptkit/sdk'"));
++        assert!(!has_kit_import("import \"@johnlindquist/kit\";"));
++    }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_uses_modern_sdk_conventions() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("arg()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("div()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("editor()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("notify()"));
++    }
++
++    #[test]
+     fn test_write_generated_script_in_dir_appends_numeric_suffix_for_collisions() {
+         let temp_dir = tempdir().unwrap();
+         let first = write_generated_script_in_dir(temp_dir.path(), "my-script", "a").unwrap();
+diff --git a/src/app_impl/prompt_ai.rs b/src/app_impl/prompt_ai.rs
+index 7f8acfae4036d0f77ae1eca73994c8d188bfb44e..c8266b6cb798ec62e6e7e9a8a59005512e44b72f
+--- a/src/app_impl/prompt_ai.rs
++++ b/src/app_impl/prompt_ai.rs
+@@ -32,10 +32,12 @@
+ - Include metadata comments at the top:
+   // Name: <script name>
+   // Description: <short summary>
+-- Include: import "@scriptkit/sdk";
+-- Use idiomatic Script Kit APIs (for example await arg(), await div(), await editor()) when useful.
+-- Prefer clear async/await flow and practical defaults.
+-- Return a full runnable script with no extra explanation."#;
++- Include exactly one SDK import near the top:
++  import "@scriptkit/sdk";
++- Use top-level await with Script Kit APIs directly when useful:
++  arg(), div(), editor(), notify(), md()
++- For file tasks, prefer Script Kit helpers like home() and writeFile().
++- Return a full runnable script with practical defaults and no extra explanation."#;
+ 
+ fn build_ai_script_generation_user_prompt(description: &str) -> String {
+     format!(
+@@ -820,4 +822,10 @@
+         let name = derive_script_name_from_description("@@@ !!!");
+         assert_eq!(name, "ai-generated-script");
+     }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_references_scriptkit_sdk_not_legacy_kit() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++    }
+ }
+
+
+thinking
+**Checking code formatting**
+codex
+I’ve applied prompt/convention updates in both Rust files, including explicit modern SDK/API guidance and tests that guard against reintroducing `@johnlindquist/kit`. Next I’ll run scoped tests for these modules and a scoped `cargo check` to verify compilation.
+
+thinking
+**Identifying crate name for tests**
+exec
+/bin/zsh -lc 'rg -n "''^name'"\\s*=\\s*\\\"\" Cargo.toml" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+2:name = "script-kit-gpui"
+8:name = "script_kit_gpui"
+12:name = "script-kit-gpui"
+17:name = "smoke-test"
+22:name = "storybook"
+177:name = "Script Kit"
+file update:
+diff --git a/src/ai/script_generation.rs b/src/ai/script_generation.rs
+index 299a39ec49fca6ad8fe56ffc03d0c35c7ae4a810..f29715b032570028241789219179c413e5c5ed83
+--- a/src/ai/script_generation.rs
++++ b/src/ai/script_generation.rs
+@@ -10,19 +10,25 @@
+ const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
+ const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
+ const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
++const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
++const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+ 
+-pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
++pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str =
++    r#"You write production-ready Script Kit TypeScript scripts.
+ 
+-Return ONLY TypeScript source code for one Script Kit script. Do not include explanations.
++Return ONLY TypeScript source code for one Script Kit script.
++Do not return markdown fences or explanations.
+ 
+-Required output conventions:
++Follow modern Script Kit conventions:
+ 1) Include metadata comments at the top:
+    // Name: <clear title>
+    // Description: <one-line summary>
+-2) Include: import "@scriptkit/sdk";
+-3) Use await arg() for user input when useful.
+-4) Use await div() for display output when useful.
+-5) Keep the script runnable as-is with sensible defaults and light error handling."#;
++2) Include exactly one SDK import near the top:
++   import "@scriptkit/sdk";
++3) Use top-level await with Script Kit APIs directly when useful:
++   arg(), div(), editor(), notify(), md()
++4) For file tasks, prefer Script Kit helpers like home() and writeFile().
++5) Keep the script runnable as-is with sensible defaults and practical error handling."#;
+ 
+ #[derive(Debug, Clone)]
+ pub struct GeneratedScriptOutput {
+@@ -352,8 +358,12 @@
+ }
+ 
+ fn has_kit_import(script: &str) -> bool {
+-    script.contains("import \"@scriptkit/sdk\"")
+-        || script.contains("import '@scriptkit/sdk'")
++    script.lines().any(|line| {
++        let trimmed = line.trim();
++        trimmed.starts_with("import")
++            && trimmed.contains(SCRIPT_KIT_SDK_IMPORT_MODULE)
++            && (trimmed.contains('\"') || trimmed.contains('\''))
++    })
+ }
+ 
+ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
+@@ -378,7 +388,7 @@
+     }
+ 
+     if !has_kit_import(trimmed_script) {
+-        prefix_lines.push("import \"@scriptkit/sdk\";".to_string());
++        prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
+     }
+ 
+     let mut output = String::new();
+@@ -519,6 +529,23 @@
+     }
+ 
+     #[test]
++    fn test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import() {
++        assert!(has_kit_import("import \"@scriptkit/sdk\";"));
++        assert!(has_kit_import("import '@scriptkit/sdk'"));
++        assert!(!has_kit_import("import \"@johnlindquist/kit\";"));
++    }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_uses_modern_sdk_conventions() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("arg()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("div()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("editor()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("notify()"));
++    }
++
++    #[test]
+     fn test_write_generated_script_in_dir_appends_numeric_suffix_for_collisions() {
+         let temp_dir = tempdir().unwrap();
+         let first = write_generated_script_in_dir(temp_dir.path(), "my-script", "a").unwrap();
+diff --git a/src/app_impl/prompt_ai.rs b/src/app_impl/prompt_ai.rs
+index 7f8acfae4036d0f77ae1eca73994c8d188bfb44e..c8266b6cb798ec62e6e7e9a8a59005512e44b72f
+--- a/src/app_impl/prompt_ai.rs
++++ b/src/app_impl/prompt_ai.rs
+@@ -32,10 +32,12 @@
+ - Include metadata comments at the top:
+   // Name: <script name>
+   // Description: <short summary>
+-- Include: import "@scriptkit/sdk";
+-- Use idiomatic Script Kit APIs (for example await arg(), await div(), await editor()) when useful.
+-- Prefer clear async/await flow and practical defaults.
+-- Return a full runnable script with no extra explanation."#;
++- Include exactly one SDK import near the top:
++  import "@scriptkit/sdk";
++- Use top-level await with Script Kit APIs directly when useful:
++  arg(), div(), editor(), notify(), md()
++- For file tasks, prefer Script Kit helpers like home() and writeFile().
++- Return a full runnable script with practical defaults and no extra explanation."#;
+ 
+ fn build_ai_script_generation_user_prompt(description: &str) -> String {
+     format!(
+@@ -820,4 +822,10 @@
+         let name = derive_script_name_from_description("@@@ !!!");
+         assert_eq!(name, "ai-generated-script");
+     }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_references_scriptkit_sdk_not_legacy_kit() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++    }
+ }
+
+
+thinking
+**Planning scoped cargo tests and checks**
+exec
+/bin/zsh -lc 'cargo test -p script-kit-gpui ai::script_generation::tests' in /Users/johnlindquist/dev/script-kit-gpuifile update:
+diff --git a/src/ai/script_generation.rs b/src/ai/script_generation.rs
+index 299a39ec49fca6ad8fe56ffc03d0c35c7ae4a810..f29715b032570028241789219179c413e5c5ed83
+--- a/src/ai/script_generation.rs
++++ b/src/ai/script_generation.rs
+@@ -10,19 +10,25 @@
+ const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
+ const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
+ const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
++const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
++const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+ 
+-pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
++pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str =
++    r#"You write production-ready Script Kit TypeScript scripts.
+ 
+-Return ONLY TypeScript source code for one Script Kit script. Do not include explanations.
++Return ONLY TypeScript source code for one Script Kit script.
++Do not return markdown fences or explanations.
+ 
+-Required output conventions:
++Follow modern Script Kit conventions:
+ 1) Include metadata comments at the top:
+    // Name: <clear title>
+    // Description: <one-line summary>
+-2) Include: import "@scriptkit/sdk";
+-3) Use await arg() for user input when useful.
+-4) Use await div() for display output when useful.
+-5) Keep the script runnable as-is with sensible defaults and light error handling."#;
++2) Include exactly one SDK import near the top:
++   import "@scriptkit/sdk";
++3) Use top-level await with Script Kit APIs directly when useful:
++   arg(), div(), editor(), notify(), md()
++4) For file tasks, prefer Script Kit helpers like home() and writeFile().
++5) Keep the script runnable as-is with sensible defaults and practical error handling."#;
+ 
+ #[derive(Debug, Clone)]
+ pub struct GeneratedScriptOutput {
+@@ -352,8 +358,12 @@
+ }
+ 
+ fn has_kit_import(script: &str) -> bool {
+-    script.contains("import \"@scriptkit/sdk\"")
+-        || script.contains("import '@scriptkit/sdk'")
++    script.lines().any(|line| {
++        let trimmed = line.trim();
++        trimmed.starts_with("import")
++            && trimmed.contains(SCRIPT_KIT_SDK_IMPORT_MODULE)
++            && (trimmed.contains('\"') || trimmed.contains('\''))
++    })
+ }
+ 
+ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
+@@ -378,7 +388,7 @@
+     }
+ 
+     if !has_kit_import(trimmed_script) {
+-        prefix_lines.push("import \"@scriptkit/sdk\";".to_string());
++        prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
+     }
+ 
+     let mut output = String::new();
+@@ -519,6 +529,23 @@
+     }
+ 
+     #[test]
++    fn test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import() {
++        assert!(has_kit_import("import \"@scriptkit/sdk\";"));
++        assert!(has_kit_import("import '@scriptkit/sdk'"));
++        assert!(!has_kit_import("import \"@johnlindquist/kit\";"));
++    }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_uses_modern_sdk_conventions() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("arg()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("div()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("editor()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("notify()"));
++    }
++
++    #[test]
+     fn test_write_generated_script_in_dir_appends_numeric_suffix_for_collisions() {
+         let temp_dir = tempdir().unwrap();
+         let first = write_generated_script_in_dir(temp_dir.path(), "my-script", "a").unwrap();
+diff --git a/src/app_impl/prompt_ai.rs b/src/app_impl/prompt_ai.rs
+index 7f8acfae4036d0f77ae1eca73994c8d188bfb44e..c8266b6cb798ec62e6e7e9a8a59005512e44b72f
+--- a/src/app_impl/prompt_ai.rs
++++ b/src/app_impl/prompt_ai.rs
+@@ -32,10 +32,12 @@
+ - Include metadata comments at the top:
+   // Name: <script name>
+   // Description: <short summary>
+-- Include: import "@scriptkit/sdk";
+-- Use idiomatic Script Kit APIs (for example await arg(), await div(), await editor()) when useful.
+-- Prefer clear async/await flow and practical defaults.
+-- Return a full runnable script with no extra explanation."#;
++- Include exactly one SDK import near the top:
++  import "@scriptkit/sdk";
++- Use top-level await with Script Kit APIs directly when useful:
++  arg(), div(), editor(), notify(), md()
++- For file tasks, prefer Script Kit helpers like home() and writeFile().
++- Return a full runnable script with practical defaults and no extra explanation."#;
+ 
+ fn build_ai_script_generation_user_prompt(description: &str) -> String {
+     format!(
+@@ -820,4 +822,10 @@
+         let name = derive_script_name_from_description("@@@ !!!");
+         assert_eq!(name, "ai-generated-script");
+     }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_references_scriptkit_sdk_not_legacy_kit() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++    }
+ }
+
+
+thinking
+**Monitoring process status**
+file update:
+diff --git a/src/ai/script_generation.rs b/src/ai/script_generation.rs
+index 299a39ec49fca6ad8fe56ffc03d0c35c7ae4a810..f29715b032570028241789219179c413e5c5ed83
+--- a/src/ai/script_generation.rs
++++ b/src/ai/script_generation.rs
+@@ -10,19 +10,25 @@
+ const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
+ const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
+ const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
++const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
++const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+ 
+-pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
++pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str =
++    r#"You write production-ready Script Kit TypeScript scripts.
+ 
+-Return ONLY TypeScript source code for one Script Kit script. Do not include explanations.
++Return ONLY TypeScript source code for one Script Kit script.
++Do not return markdown fences or explanations.
+ 
+-Required output conventions:
++Follow modern Script Kit conventions:
+ 1) Include metadata comments at the top:
+    // Name: <clear title>
+    // Description: <one-line summary>
+-2) Include: import "@scriptkit/sdk";
+-3) Use await arg() for user input when useful.
+-4) Use await div() for display output when useful.
+-5) Keep the script runnable as-is with sensible defaults and light error handling."#;
++2) Include exactly one SDK import near the top:
++   import "@scriptkit/sdk";
++3) Use top-level await with Script Kit APIs directly when useful:
++   arg(), div(), editor(), notify(), md()
++4) For file tasks, prefer Script Kit helpers like home() and writeFile().
++5) Keep the script runnable as-is with sensible defaults and practical error handling."#;
+ 
+ #[derive(Debug, Clone)]
+ pub struct GeneratedScriptOutput {
+@@ -352,8 +358,12 @@
+ }
+ 
+ fn has_kit_import(script: &str) -> bool {
+-    script.contains("import \"@scriptkit/sdk\"")
+-        || script.contains("import '@scriptkit/sdk'")
++    script.lines().any(|line| {
++        let trimmed = line.trim();
++        trimmed.starts_with("import")
++            && trimmed.contains(SCRIPT_KIT_SDK_IMPORT_MODULE)
++            && (trimmed.contains('\"') || trimmed.contains('\''))
++    })
+ }
+ 
+ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
+@@ -378,7 +388,7 @@
+     }
+ 
+     if !has_kit_import(trimmed_script) {
+-        prefix_lines.push("import \"@scriptkit/sdk\";".to_string());
++        prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
+     }
+ 
+     let mut output = String::new();
+@@ -519,6 +529,23 @@
+     }
+ 
+     #[test]
++    fn test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import() {
++        assert!(has_kit_import("import \"@scriptkit/sdk\";"));
++        assert!(has_kit_import("import '@scriptkit/sdk'"));
++        assert!(!has_kit_import("import \"@johnlindquist/kit\";"));
++    }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_uses_modern_sdk_conventions() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("arg()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("div()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("editor()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("notify()"));
++    }
++
++    #[test]
+     fn test_write_generated_script_in_dir_appends_numeric_suffix_for_collisions() {
+         let temp_dir = tempdir().unwrap();
+         let first = write_generated_script_in_dir(temp_dir.path(), "my-script", "a").unwrap();
+diff --git a/src/app_impl/prompt_ai.rs b/src/app_impl/prompt_ai.rs
+index 7f8acfae4036d0f77ae1eca73994c8d188bfb44e..c8266b6cb798ec62e6e7e9a8a59005512e44b72f
+--- a/src/app_impl/prompt_ai.rs
++++ b/src/app_impl/prompt_ai.rs
+@@ -32,10 +32,12 @@
+ - Include metadata comments at the top:
+   // Name: <script name>
+   // Description: <short summary>
+-- Include: import "@scriptkit/sdk";
+-- Use idiomatic Script Kit APIs (for example await arg(), await div(), await editor()) when useful.
+-- Prefer clear async/await flow and practical defaults.
+-- Return a full runnable script with no extra explanation."#;
++- Include exactly one SDK import near the top:
++  import "@scriptkit/sdk";
++- Use top-level await with Script Kit APIs directly when useful:
++  arg(), div(), editor(), notify(), md()
++- For file tasks, prefer Script Kit helpers like home() and writeFile().
++- Return a full runnable script with practical defaults and no extra explanation."#;
+ 
+ fn build_ai_script_generation_user_prompt(description: &str) -> String {
+     format!(
+@@ -820,4 +822,10 @@
+         let name = derive_script_name_from_description("@@@ !!!");
+         assert_eq!(name, "ai-generated-script");
+     }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_references_scriptkit_sdk_not_legacy_kit() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++    }
+ }
+
+
+thinking
+**Checking command completion**
+file update:
+diff --git a/src/ai/script_generation.rs b/src/ai/script_generation.rs
+index 299a39ec49fca6ad8fe56ffc03d0c35c7ae4a810..f29715b032570028241789219179c413e5c5ed83
+--- a/src/ai/script_generation.rs
++++ b/src/ai/script_generation.rs
+@@ -10,19 +10,25 @@
+ const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
+ const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
+ const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
++const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
++const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+ 
+-pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
++pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str =
++    r#"You write production-ready Script Kit TypeScript scripts.
+ 
+-Return ONLY TypeScript source code for one Script Kit script. Do not include explanations.
++Return ONLY TypeScript source code for one Script Kit script.
++Do not return markdown fences or explanations.
+ 
+-Required output conventions:
++Follow modern Script Kit conventions:
+ 1) Include metadata comments at the top:
+    // Name: <clear title>
+    // Description: <one-line summary>
+-2) Include: import "@scriptkit/sdk";
+-3) Use await arg() for user input when useful.
+-4) Use await div() for display output when useful.
+-5) Keep the script runnable as-is with sensible defaults and light error handling."#;
++2) Include exactly one SDK import near the top:
++   import "@scriptkit/sdk";
++3) Use top-level await with Script Kit APIs directly when useful:
++   arg(), div(), editor(), notify(), md()
++4) For file tasks, prefer Script Kit helpers like home() and writeFile().
++5) Keep the script runnable as-is with sensible defaults and practical error handling."#;
+ 
+ #[derive(Debug, Clone)]
+ pub struct GeneratedScriptOutput {
+@@ -352,8 +358,12 @@
+ }
+ 
+ fn has_kit_import(script: &str) -> bool {
+-    script.contains("import \"@scriptkit/sdk\"")
+-        || script.contains("import '@scriptkit/sdk'")
++    script.lines().any(|line| {
++        let trimmed = line.trim();
++        trimmed.starts_with("import")
++            && trimmed.contains(SCRIPT_KIT_SDK_IMPORT_MODULE)
++            && (trimmed.contains('\"') || trimmed.contains('\''))
++    })
+ }
+ 
+ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
+@@ -378,7 +388,7 @@
+     }
+ 
+     if !has_kit_import(trimmed_script) {
+-        prefix_lines.push("import \"@scriptkit/sdk\";".to_string());
++        prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
+     }
+ 
+     let mut output = String::new();
+@@ -519,6 +529,23 @@
+     }
+ 
+     #[test]
++    fn test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import() {
++        assert!(has_kit_import("import \"@scriptkit/sdk\";"));
++        assert!(has_kit_import("import '@scriptkit/sdk'"));
++        assert!(!has_kit_import("import \"@johnlindquist/kit\";"));
++    }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_uses_modern_sdk_conventions() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("arg()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("div()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("editor()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("notify()"));
++    }
++
++    #[test]
+     fn test_write_generated_script_in_dir_appends_numeric_suffix_for_collisions() {
+         let temp_dir = tempdir().unwrap();
+         let first = write_generated_script_in_dir(temp_dir.path(), "my-script", "a").unwrap();
+diff --git a/src/app_impl/prompt_ai.rs b/src/app_impl/prompt_ai.rs
+index 7f8acfae4036d0f77ae1eca73994c8d188bfb44e..c8266b6cb798ec62e6e7e9a8a59005512e44b72f
+--- a/src/app_impl/prompt_ai.rs
++++ b/src/app_impl/prompt_ai.rs
+@@ -32,10 +32,12 @@
+ - Include metadata comments at the top:
+   // Name: <script name>
+   // Description: <short summary>
+-- Include: import "@scriptkit/sdk";
+-- Use idiomatic Script Kit APIs (for example await arg(), await div(), await editor()) when useful.
+-- Prefer clear async/await flow and practical defaults.
+-- Return a full runnable script with no extra explanation."#;
++- Include exactly one SDK import near the top:
++  import "@scriptkit/sdk";
++- Use top-level await with Script Kit APIs directly when useful:
++  arg(), div(), editor(), notify(), md()
++- For file tasks, prefer Script Kit helpers like home() and writeFile().
++- Return a full runnable script with practical defaults and no extra explanation."#;
+ 
+ fn build_ai_script_generation_user_prompt(description: &str) -> String {
+     format!(
+@@ -820,4 +822,10 @@
+         let name = derive_script_name_from_description("@@@ !!!");
+         assert_eq!(name, "ai-generated-script");
+     }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_references_scriptkit_sdk_not_legacy_kit() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++    }
+ }
+
+codex
+The targeted test command is blocked by unrelated compile failures in other modules currently being edited by parallel agents (`actions`, duplicate test module paths). I’m switching to even narrower, direct test filters for only the updated modules and will still provide a scoped `cargo check` result.
+
+thinking
+**Adding session completion polling**
+file update:
+diff --git a/src/ai/script_generation.rs b/src/ai/script_generation.rs
+index 299a39ec49fca6ad8fe56ffc03d0c35c7ae4a810..f29715b032570028241789219179c413e5c5ed83
+--- a/src/ai/script_generation.rs
++++ b/src/ai/script_generation.rs
+@@ -10,19 +10,25 @@
+ const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
+ const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
+ const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
++const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
++const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+ 
+-pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
++pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str =
++    r#"You write production-ready Script Kit TypeScript scripts.
+ 
+-Return ONLY TypeScript source code for one Script Kit script. Do not include explanations.
++Return ONLY TypeScript source code for one Script Kit script.
++Do not return markdown fences or explanations.
+ 
+-Required output conventions:
++Follow modern Script Kit conventions:
+ 1) Include metadata comments at the top:
+    // Name: <clear title>
+    // Description: <one-line summary>
+-2) Include: import "@scriptkit/sdk";
+-3) Use await arg() for user input when useful.
+-4) Use await div() for display output when useful.
+-5) Keep the script runnable as-is with sensible defaults and light error handling."#;
++2) Include exactly one SDK import near the top:
++   import "@scriptkit/sdk";
++3) Use top-level await with Script Kit APIs directly when useful:
++   arg(), div(), editor(), notify(), md()
++4) For file tasks, prefer Script Kit helpers like home() and writeFile().
++5) Keep the script runnable as-is with sensible defaults and practical error handling."#;
+ 
+ #[derive(Debug, Clone)]
+ pub struct GeneratedScriptOutput {
+@@ -352,8 +358,12 @@
+ }
+ 
+ fn has_kit_import(script: &str) -> bool {
+-    script.contains("import \"@scriptkit/sdk\"")
+-        || script.contains("import '@scriptkit/sdk'")
++    script.lines().any(|line| {
++        let trimmed = line.trim();
++        trimmed.starts_with("import")
++            && trimmed.contains(SCRIPT_KIT_SDK_IMPORT_MODULE)
++            && (trimmed.contains('\"') || trimmed.contains('\''))
++    })
+ }
+ 
+ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
+@@ -378,7 +388,7 @@
+     }
+ 
+     if !has_kit_import(trimmed_script) {
+-        prefix_lines.push("import \"@scriptkit/sdk\";".to_string());
++        prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
+     }
+ 
+     let mut output = String::new();
+@@ -519,6 +529,23 @@
+     }
+ 
+     #[test]
++    fn test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import() {
++        assert!(has_kit_import("import \"@scriptkit/sdk\";"));
++        assert!(has_kit_import("import '@scriptkit/sdk'"));
++        assert!(!has_kit_import("import \"@johnlindquist/kit\";"));
++    }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_uses_modern_sdk_conventions() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("arg()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("div()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("editor()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("notify()"));
++    }
++
++    #[test]
+     fn test_write_generated_script_in_dir_appends_numeric_suffix_for_collisions() {
+         let temp_dir = tempdir().unwrap();
+         let first = write_generated_script_in_dir(temp_dir.path(), "my-script", "a").unwrap();
+diff --git a/src/app_impl/prompt_ai.rs b/src/app_impl/prompt_ai.rs
+index 7f8acfae4036d0f77ae1eca73994c8d188bfb44e..c8266b6cb798ec62e6e7e9a8a59005512e44b72f
+--- a/src/app_impl/prompt_ai.rs
++++ b/src/app_impl/prompt_ai.rs
+@@ -32,10 +32,12 @@
+ - Include metadata comments at the top:
+   // Name: <script name>
+   // Description: <short summary>
+-- Include: import "@scriptkit/sdk";
+-- Use idiomatic Script Kit APIs (for example await arg(), await div(), await editor()) when useful.
+-- Prefer clear async/await flow and practical defaults.
+-- Return a full runnable script with no extra explanation."#;
++- Include exactly one SDK import near the top:
++  import "@scriptkit/sdk";
++- Use top-level await with Script Kit APIs directly when useful:
++  arg(), div(), editor(), notify(), md()
++- For file tasks, prefer Script Kit helpers like home() and writeFile().
++- Return a full runnable script with practical defaults and no extra explanation."#;
+ 
+ fn build_ai_script_generation_user_prompt(description: &str) -> String {
+     format!(
+@@ -820,4 +822,10 @@
+         let name = derive_script_name_from_description("@@@ !!!");
+         assert_eq!(name, "ai-generated-script");
+     }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_references_scriptkit_sdk_not_legacy_kit() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++    }
+ }
+
+ exited 101 in 22.11s:
+    Blocking waiting for file lock on build directory
+warning: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:32:16
+   |
+32 | pub(super) use inline::*;
+   |                ^^^^^^^^^
+   |
+note: the most public imported item is `pub(self)`
+  --> src/prompts/div/mod.rs:32:16
+   |
+32 | pub(super) use inline::*;
+   |                ^^^^^^^^^
+   = help: reduce the glob import's visibility or increase visibility of imported items
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:34:16
+   |
+34 | pub(super) use render_html::*;
+   |                ^^^^^^^^^^^^^^
+
+thinking
+**Planning selective cargo test runs**
+exec
+/bin/zsh -lc 'cargo test -p script-kit-gpui --lib test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import' in /Users/johnlindquist/dev/script-kit-gpuifile update:
+diff --git a/src/ai/script_generation.rs b/src/ai/script_generation.rs
+index 299a39ec49fca6ad8fe56ffc03d0c35c7ae4a810..f29715b032570028241789219179c413e5c5ed83
+--- a/src/ai/script_generation.rs
++++ b/src/ai/script_generation.rs
+@@ -10,19 +10,25 @@
+ const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
+ const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
+ const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
++const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
++const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+ 
+-pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
++pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str =
++    r#"You write production-ready Script Kit TypeScript scripts.
+ 
+-Return ONLY TypeScript source code for one Script Kit script. Do not include explanations.
++Return ONLY TypeScript source code for one Script Kit script.
++Do not return markdown fences or explanations.
+ 
+-Required output conventions:
++Follow modern Script Kit conventions:
+ 1) Include metadata comments at the top:
+    // Name: <clear title>
+    // Description: <one-line summary>
+-2) Include: import "@scriptkit/sdk";
+-3) Use await arg() for user input when useful.
+-4) Use await div() for display output when useful.
+-5) Keep the script runnable as-is with sensible defaults and light error handling."#;
++2) Include exactly one SDK import near the top:
++   import "@scriptkit/sdk";
++3) Use top-level await with Script Kit APIs directly when useful:
++   arg(), div(), editor(), notify(), md()
++4) For file tasks, prefer Script Kit helpers like home() and writeFile().
++5) Keep the script runnable as-is with sensible defaults and practical error handling."#;
+ 
+ #[derive(Debug, Clone)]
+ pub struct GeneratedScriptOutput {
+@@ -352,8 +358,12 @@
+ }
+ 
+ fn has_kit_import(script: &str) -> bool {
+-    script.contains("import \"@scriptkit/sdk\"")
+-        || script.contains("import '@scriptkit/sdk'")
++    script.lines().any(|line| {
++        let trimmed = line.trim();
++        trimmed.starts_with("import")
++            && trimmed.contains(SCRIPT_KIT_SDK_IMPORT_MODULE)
++            && (trimmed.contains('\"') || trimmed.contains('\''))
++    })
+ }
+ 
+ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
+@@ -378,7 +388,7 @@
+     }
+ 
+     if !has_kit_import(trimmed_script) {
+-        prefix_lines.push("import \"@scriptkit/sdk\";".to_string());
++        prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
+     }
+ 
+     let mut output = String::new();
+@@ -519,6 +529,23 @@
+     }
+ 
+     #[test]
++    fn test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import() {
++        assert!(has_kit_import("import \"@scriptkit/sdk\";"));
++        assert!(has_kit_import("import '@scriptkit/sdk'"));
++        assert!(!has_kit_import("import \"@johnlindquist/kit\";"));
++    }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_uses_modern_sdk_conventions() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("arg()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("div()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("editor()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("notify()"));
++    }
++
++    #[test]
+     fn test_write_generated_script_in_dir_appends_numeric_suffix_for_collisions() {
+         let temp_dir = tempdir().unwrap();
+         let first = write_generated_script_in_dir(temp_dir.path(), "my-script", "a").unwrap();
+diff --git a/src/app_impl/prompt_ai.rs b/src/app_impl/prompt_ai.rs
+index 7f8acfae4036d0f77ae1eca73994c8d188bfb44e..c8266b6cb798ec62e6e7e9a8a59005512e44b72f
+--- a/src/app_impl/prompt_ai.rs
++++ b/src/app_impl/prompt_ai.rs
+@@ -32,10 +32,12 @@
+ - Include metadata comments at the top:
+   // Name: <script name>
+   // Description: <short summary>
+-- Include: import "@scriptkit/sdk";
+-- Use idiomatic Script Kit APIs (for example await arg(), await div(), await editor()) when useful.
+-- Prefer clear async/await flow and practical defaults.
+-- Return a full runnable script with no extra explanation."#;
++- Include exactly one SDK import near the top:
++  import "@scriptkit/sdk";
++- Use top-level await with Script Kit APIs directly when useful:
++  arg(), div(), editor(), notify(), md()
++- For file tasks, prefer Script Kit helpers like home() and writeFile().
++- Return a full runnable script with practical defaults and no extra explanation."#;
+ 
+ fn build_ai_script_generation_user_prompt(description: &str) -> String {
+     format!(
+@@ -820,4 +822,10 @@
+         let name = derive_script_name_from_description("@@@ !!!");
+         assert_eq!(name, "ai-generated-script");
+     }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_references_scriptkit_sdk_not_legacy_kit() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++    }
+ }
+
+
+thinking
+**Adding session end polling**
+file update:
+diff --git a/src/ai/script_generation.rs b/src/ai/script_generation.rs
+index 299a39ec49fca6ad8fe56ffc03d0c35c7ae4a810..f29715b032570028241789219179c413e5c5ed83
+--- a/src/ai/script_generation.rs
++++ b/src/ai/script_generation.rs
+@@ -10,19 +10,25 @@
+ const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
+ const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
+ const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
++const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
++const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+ 
+-pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
++pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str =
++    r#"You write production-ready Script Kit TypeScript scripts.
+ 
+-Return ONLY TypeScript source code for one Script Kit script. Do not include explanations.
++Return ONLY TypeScript source code for one Script Kit script.
++Do not return markdown fences or explanations.
+ 
+-Required output conventions:
++Follow modern Script Kit conventions:
+ 1) Include metadata comments at the top:
+    // Name: <clear title>
+    // Description: <one-line summary>
+-2) Include: import "@scriptkit/sdk";
+-3) Use await arg() for user input when useful.
+-4) Use await div() for display output when useful.
+-5) Keep the script runnable as-is with sensible defaults and light error handling."#;
++2) Include exactly one SDK import near the top:
++   import "@scriptkit/sdk";
++3) Use top-level await with Script Kit APIs directly when useful:
++   arg(), div(), editor(), notify(), md()
++4) For file tasks, prefer Script Kit helpers like home() and writeFile().
++5) Keep the script runnable as-is with sensible defaults and practical error handling."#;
+ 
+ #[derive(Debug, Clone)]
+ pub struct GeneratedScriptOutput {
+@@ -352,8 +358,12 @@
+ }
+ 
+ fn has_kit_import(script: &str) -> bool {
+-    script.contains("import \"@scriptkit/sdk\"")
+-        || script.contains("import '@scriptkit/sdk'")
++    script.lines().any(|line| {
++        let trimmed = line.trim();
++        trimmed.starts_with("import")
++            && trimmed.contains(SCRIPT_KIT_SDK_IMPORT_MODULE)
++            && (trimmed.contains('\"') || trimmed.contains('\''))
++    })
+ }
+ 
+ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
+@@ -378,7 +388,7 @@
+     }
+ 
+     if !has_kit_import(trimmed_script) {
+-        prefix_lines.push("import \"@scriptkit/sdk\";".to_string());
++        prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
+     }
+ 
+     let mut output = String::new();
+@@ -519,6 +529,23 @@
+     }
+ 
+     #[test]
++    fn test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import() {
++        assert!(has_kit_import("import \"@scriptkit/sdk\";"));
++        assert!(has_kit_import("import '@scriptkit/sdk'"));
++        assert!(!has_kit_import("import \"@johnlindquist/kit\";"));
++    }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_uses_modern_sdk_conventions() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("arg()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("div()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("editor()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("notify()"));
++    }
++
++    #[test]
+     fn test_write_generated_script_in_dir_appends_numeric_suffix_for_collisions() {
+         let temp_dir = tempdir().unwrap();
+         let first = write_generated_script_in_dir(temp_dir.path(), "my-script", "a").unwrap();
+diff --git a/src/app_impl/prompt_ai.rs b/src/app_impl/prompt_ai.rs
+index 7f8acfae4036d0f77ae1eca73994c8d188bfb44e..c8266b6cb798ec62e6e7e9a8a59005512e44b72f
+--- a/src/app_impl/prompt_ai.rs
++++ b/src/app_impl/prompt_ai.rs
+@@ -32,10 +32,12 @@
+ - Include metadata comments at the top:
+   // Name: <script name>
+   // Description: <short summary>
+-- Include: import "@scriptkit/sdk";
+-- Use idiomatic Script Kit APIs (for example await arg(), await div(), await editor()) when useful.
+-- Prefer clear async/await flow and practical defaults.
+-- Return a full runnable script with no extra explanation."#;
++- Include exactly one SDK import near the top:
++  import "@scriptkit/sdk";
++- Use top-level await with Script Kit APIs directly when useful:
++  arg(), div(), editor(), notify(), md()
++- For file tasks, prefer Script Kit helpers like home() and writeFile().
++- Return a full runnable script with practical defaults and no extra explanation."#;
+ 
+ fn build_ai_script_generation_user_prompt(description: &str) -> String {
+     format!(
+@@ -820,4 +822,10 @@
+         let name = derive_script_name_from_description("@@@ !!!");
+         assert_eq!(name, "ai-generated-script");
+     }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_references_scriptkit_sdk_not_legacy_kit() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++    }
+ }
+
+
+thinking
+**Monitoring process completion**
+file update:
+diff --git a/src/ai/script_generation.rs b/src/ai/script_generation.rs
+index 299a39ec49fca6ad8fe56ffc03d0c35c7ae4a810..f29715b032570028241789219179c413e5c5ed83
+--- a/src/ai/script_generation.rs
++++ b/src/ai/script_generation.rs
+@@ -10,19 +10,25 @@
+ const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
+ const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
+ const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
++const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
++const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+ 
+-pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
++pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str =
++    r#"You write production-ready Script Kit TypeScript scripts.
+ 
+-Return ONLY TypeScript source code for one Script Kit script. Do not include explanations.
++Return ONLY TypeScript source code for one Script Kit script.
++Do not return markdown fences or explanations.
+ 
+-Required output conventions:
++Follow modern Script Kit conventions:
+ 1) Include metadata comments at the top:
+    // Name: <clear title>
+    // Description: <one-line summary>
+-2) Include: import "@scriptkit/sdk";
+-3) Use await arg() for user input when useful.
+-4) Use await div() for display output when useful.
+-5) Keep the script runnable as-is with sensible defaults and light error handling."#;
++2) Include exactly one SDK import near the top:
++   import "@scriptkit/sdk";
++3) Use top-level await with Script Kit APIs directly when useful:
++   arg(), div(), editor(), notify(), md()
++4) For file tasks, prefer Script Kit helpers like home() and writeFile().
++5) Keep the script runnable as-is with sensible defaults and practical error handling."#;
+ 
+ #[derive(Debug, Clone)]
+ pub struct GeneratedScriptOutput {
+@@ -352,8 +358,12 @@
+ }
+ 
+ fn has_kit_import(script: &str) -> bool {
+-    script.contains("import \"@scriptkit/sdk\"")
+-        || script.contains("import '@scriptkit/sdk'")
++    script.lines().any(|line| {
++        let trimmed = line.trim();
++        trimmed.starts_with("import")
++            && trimmed.contains(SCRIPT_KIT_SDK_IMPORT_MODULE)
++            && (trimmed.contains('\"') || trimmed.contains('\''))
++    })
+ }
+ 
+ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
+@@ -378,7 +388,7 @@
+     }
+ 
+     if !has_kit_import(trimmed_script) {
+-        prefix_lines.push("import \"@scriptkit/sdk\";".to_string());
++        prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
+     }
+ 
+     let mut output = String::new();
+@@ -519,6 +529,23 @@
+     }
+ 
+     #[test]
++    fn test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import() {
++        assert!(has_kit_import("import \"@scriptkit/sdk\";"));
++        assert!(has_kit_import("import '@scriptkit/sdk'"));
++        assert!(!has_kit_import("import \"@johnlindquist/kit\";"));
++    }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_uses_modern_sdk_conventions() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("arg()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("div()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("editor()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("notify()"));
++    }
++
++    #[test]
+     fn test_write_generated_script_in_dir_appends_numeric_suffix_for_collisions() {
+         let temp_dir = tempdir().unwrap();
+         let first = write_generated_script_in_dir(temp_dir.path(), "my-script", "a").unwrap();
+diff --git a/src/app_impl/prompt_ai.rs b/src/app_impl/prompt_ai.rs
+index 7f8acfae4036d0f77ae1eca73994c8d188bfb44e..c8266b6cb798ec62e6e7e9a8a59005512e44b72f
+--- a/src/app_impl/prompt_ai.rs
++++ b/src/app_impl/prompt_ai.rs
+@@ -32,10 +32,12 @@
+ - Include metadata comments at the top:
+   // Name: <script name>
+   // Description: <short summary>
+-- Include: import "@scriptkit/sdk";
+-- Use idiomatic Script Kit APIs (for example await arg(), await div(), await editor()) when useful.
+-- Prefer clear async/await flow and practical defaults.
+-- Return a full runnable script with no extra explanation."#;
++- Include exactly one SDK import near the top:
++  import "@scriptkit/sdk";
++- Use top-level await with Script Kit APIs directly when useful:
++  arg(), div(), editor(), notify(), md()
++- For file tasks, prefer Script Kit helpers like home() and writeFile().
++- Return a full runnable script with practical defaults and no extra explanation."#;
+ 
+ fn build_ai_script_generation_user_prompt(description: &str) -> String {
+     format!(
+@@ -820,4 +822,10 @@
+         let name = derive_script_name_from_description("@@@ !!!");
+         assert_eq!(name, "ai-generated-script");
+     }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_references_scriptkit_sdk_not_legacy_kit() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++    }
+ }
+
+file update:
+diff --git a/src/ai/script_generation.rs b/src/ai/script_generation.rs
+index 299a39ec49fca6ad8fe56ffc03d0c35c7ae4a810..f29715b032570028241789219179c413e5c5ed83
+--- a/src/ai/script_generation.rs
++++ b/src/ai/script_generation.rs
+@@ -10,19 +10,25 @@
+ const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
+ const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
+ const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
++const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
++const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+ 
+-pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
++pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str =
++    r#"You write production-ready Script Kit TypeScript scripts.
+ 
+-Return ONLY TypeScript source code for one Script Kit script. Do not include explanations.
++Return ONLY TypeScript source code for one Script Kit script.
++Do not return markdown fences or explanations.
+ 
+-Required output conventions:
++Follow modern Script Kit conventions:
+ 1) Include metadata comments at the top:
+    // Name: <clear title>
+    // Description: <one-line summary>
+-2) Include: import "@scriptkit/sdk";
+-3) Use await arg() for user input when useful.
+-4) Use await div() for display output when useful.
+-5) Keep the script runnable as-is with sensible defaults and light error handling."#;
++2) Include exactly one SDK import near the top:
++   import "@scriptkit/sdk";
++3) Use top-level await with Script Kit APIs directly when useful:
++   arg(), div(), editor(), notify(), md()
++4) For file tasks, prefer Script Kit helpers like home() and writeFile().
++5) Keep the script runnable as-is with sensible defaults and practical error handling."#;
+ 
+ #[derive(Debug, Clone)]
+ pub struct GeneratedScriptOutput {
+@@ -352,8 +358,12 @@
+ }
+ 
+ fn has_kit_import(script: &str) -> bool {
+-    script.contains("import \"@scriptkit/sdk\"")
+-        || script.contains("import '@scriptkit/sdk'")
++    script.lines().any(|line| {
++        let trimmed = line.trim();
++        trimmed.starts_with("import")
++            && trimmed.contains(SCRIPT_KIT_SDK_IMPORT_MODULE)
++            && (trimmed.contains('\"') || trimmed.contains('\''))
++    })
+ }
+ 
+ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
+@@ -378,7 +388,7 @@
+     }
+ 
+     if !has_kit_import(trimmed_script) {
+-        prefix_lines.push("import \"@scriptkit/sdk\";".to_string());
++        prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
+     }
+ 
+     let mut output = String::new();
+@@ -519,6 +529,23 @@
+     }
+ 
+     #[test]
++    fn test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import() {
++        assert!(has_kit_import("import \"@scriptkit/sdk\";"));
++        assert!(has_kit_import("import '@scriptkit/sdk'"));
++        assert!(!has_kit_import("import \"@johnlindquist/kit\";"));
++    }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_uses_modern_sdk_conventions() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("arg()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("div()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("editor()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("notify()"));
++    }
++
++    #[test]
+     fn test_write_generated_script_in_dir_appends_numeric_suffix_for_collisions() {
+         let temp_dir = tempdir().unwrap();
+         let first = write_generated_script_in_dir(temp_dir.path(), "my-script", "a").unwrap();
+diff --git a/src/app_impl/prompt_ai.rs b/src/app_impl/prompt_ai.rs
+index 7f8acfae4036d0f77ae1eca73994c8d188bfb44e..c8266b6cb798ec62e6e7e9a8a59005512e44b72f
+--- a/src/app_impl/prompt_ai.rs
++++ b/src/app_impl/prompt_ai.rs
+@@ -32,10 +32,12 @@
+ - Include metadata comments at the top:
+   // Name: <script name>
+   // Description: <short summary>
+-- Include: import "@scriptkit/sdk";
+-- Use idiomatic Script Kit APIs (for example await arg(), await div(), await editor()) when useful.
+-- Prefer clear async/await flow and practical defaults.
+-- Return a full runnable script with no extra explanation."#;
++- Include exactly one SDK import near the top:
++  import "@scriptkit/sdk";
++- Use top-level await with Script Kit APIs directly when useful:
++  arg(), div(), editor(), notify(), md()
++- For file tasks, prefer Script Kit helpers like home() and writeFile().
++- Return a full runnable script with practical defaults and no extra explanation."#;
+ 
+ fn build_ai_script_generation_user_prompt(description: &str) -> String {
+     format!(
+@@ -820,4 +822,10 @@
+         let name = derive_script_name_from_description("@@@ !!!");
+         assert_eq!(name, "ai-generated-script");
+     }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_references_scriptkit_sdk_not_legacy_kit() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++    }
+ }
+
+ exited 101 in 18.50s:
+   Compiling script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+error[E0761]: file for module `tests` found at both "src/protocol/message/tests.rs" and "src/protocol/message/tests/mod.rs"
+  --> src/protocol/message/mod.rs:87:1
+   |
+87 | mod tests;
+   | ^^^^^^^^^^
+   |
+   = help: delete or rename one of them to remove the ambiguity
+
+error[E0761]: file for module `tests` found at both "src/designs/core/tests.rs" and "src/designs/core/tests/mod.rs"
+ --> src/designs/core/part_04.rs:2:1
+  |
+2 | mod tests;
+  | ^^^^^^^^^^
+  |
+  = help: delete or rename one of them to remove the ambiguity
+
+error[E0412]: cannot find type `Action` in this scope
+   --> src/actions/builders_tests/part_01.rs:18:26
+    |
+
+thinking
+**Evaluating scoped build check**
+codex
+Module-scoped tests cannot run to completion right now because the shared tree has unrelated compile breaks (duplicate `tests` modules and `actions` test compile errors from other active edits). I’m still running `cargo check -p script-kit-gpui --lib` to verify the non-test build for this change set.
+
+thinking
+**Checking Rust library build**
+exec
+/bin/zsh -lc 'cargo check -p script-kit-gpui --lib' in /Users/johnlindquist/dev/script-kit-gpuifile update:
+diff --git a/src/ai/script_generation.rs b/src/ai/script_generation.rs
+index 299a39ec49fca6ad8fe56ffc03d0c35c7ae4a810..f29715b032570028241789219179c413e5c5ed83
+--- a/src/ai/script_generation.rs
++++ b/src/ai/script_generation.rs
+@@ -10,19 +10,25 @@
+ const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
+ const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
+ const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
++const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
++const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+ 
+-pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
++pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str =
++    r#"You write production-ready Script Kit TypeScript scripts.
+ 
+-Return ONLY TypeScript source code for one Script Kit script. Do not include explanations.
++Return ONLY TypeScript source code for one Script Kit script.
++Do not return markdown fences or explanations.
+ 
+-Required output conventions:
++Follow modern Script Kit conventions:
+ 1) Include metadata comments at the top:
+    // Name: <clear title>
+    // Description: <one-line summary>
+-2) Include: import "@scriptkit/sdk";
+-3) Use await arg() for user input when useful.
+-4) Use await div() for display output when useful.
+-5) Keep the script runnable as-is with sensible defaults and light error handling."#;
++2) Include exactly one SDK import near the top:
++   import "@scriptkit/sdk";
++3) Use top-level await with Script Kit APIs directly when useful:
++   arg(), div(), editor(), notify(), md()
++4) For file tasks, prefer Script Kit helpers like home() and writeFile().
++5) Keep the script runnable as-is with sensible defaults and practical error handling."#;
+ 
+ #[derive(Debug, Clone)]
+ pub struct GeneratedScriptOutput {
+@@ -352,8 +358,12 @@
+ }
+ 
+ fn has_kit_import(script: &str) -> bool {
+-    script.contains("import \"@scriptkit/sdk\"")
+-        || script.contains("import '@scriptkit/sdk'")
++    script.lines().any(|line| {
++        let trimmed = line.trim();
++        trimmed.starts_with("import")
++            && trimmed.contains(SCRIPT_KIT_SDK_IMPORT_MODULE)
++            && (trimmed.contains('\"') || trimmed.contains('\''))
++    })
+ }
+ 
+ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
+@@ -378,7 +388,7 @@
+     }
+ 
+     if !has_kit_import(trimmed_script) {
+-        prefix_lines.push("import \"@scriptkit/sdk\";".to_string());
++        prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
+     }
+ 
+     let mut output = String::new();
+@@ -519,6 +529,23 @@
+     }
+ 
+     #[test]
++    fn test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import() {
++        assert!(has_kit_import("import \"@scriptkit/sdk\";"));
++        assert!(has_kit_import("import '@scriptkit/sdk'"));
++        assert!(!has_kit_import("import \"@johnlindquist/kit\";"));
++    }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_uses_modern_sdk_conventions() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("arg()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("div()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("editor()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("notify()"));
++    }
++
++    #[test]
+     fn test_write_generated_script_in_dir_appends_numeric_suffix_for_collisions() {
+         let temp_dir = tempdir().unwrap();
+         let first = write_generated_script_in_dir(temp_dir.path(), "my-script", "a").unwrap();
+diff --git a/src/app_impl/prompt_ai.rs b/src/app_impl/prompt_ai.rs
+index 7f8acfae4036d0f77ae1eca73994c8d188bfb44e..c8266b6cb798ec62e6e7e9a8a59005512e44b72f
+--- a/src/app_impl/prompt_ai.rs
++++ b/src/app_impl/prompt_ai.rs
+@@ -32,10 +32,12 @@
+ - Include metadata comments at the top:
+   // Name: <script name>
+   // Description: <short summary>
+-- Include: import "@scriptkit/sdk";
+-- Use idiomatic Script Kit APIs (for example await arg(), await div(), await editor()) when useful.
+-- Prefer clear async/await flow and practical defaults.
+-- Return a full runnable script with no extra explanation."#;
++- Include exactly one SDK import near the top:
++  import "@scriptkit/sdk";
++- Use top-level await with Script Kit APIs directly when useful:
++  arg(), div(), editor(), notify(), md()
++- For file tasks, prefer Script Kit helpers like home() and writeFile().
++- Return a full runnable script with practical defaults and no extra explanation."#;
+ 
+ fn build_ai_script_generation_user_prompt(description: &str) -> String {
+     format!(
+@@ -820,4 +822,10 @@
+         let name = derive_script_name_from_description("@@@ !!!");
+         assert_eq!(name, "ai-generated-script");
+     }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_references_scriptkit_sdk_not_legacy_kit() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++    }
+ }
+
+file update:
+diff --git a/src/ai/script_generation.rs b/src/ai/script_generation.rs
+index 299a39ec49fca6ad8fe56ffc03d0c35c7ae4a810..f29715b032570028241789219179c413e5c5ed83
+--- a/src/ai/script_generation.rs
++++ b/src/ai/script_generation.rs
+@@ -10,19 +10,25 @@
+ const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
+ const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
+ const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
++const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
++const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+ 
+-pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
++pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str =
++    r#"You write production-ready Script Kit TypeScript scripts.
+ 
+-Return ONLY TypeScript source code for one Script Kit script. Do not include explanations.
++Return ONLY TypeScript source code for one Script Kit script.
++Do not return markdown fences or explanations.
+ 
+-Required output conventions:
++Follow modern Script Kit conventions:
+ 1) Include metadata comments at the top:
+    // Name: <clear title>
+    // Description: <one-line summary>
+-2) Include: import "@scriptkit/sdk";
+-3) Use await arg() for user input when useful.
+-4) Use await div() for display output when useful.
+-5) Keep the script runnable as-is with sensible defaults and light error handling."#;
++2) Include exactly one SDK import near the top:
++   import "@scriptkit/sdk";
++3) Use top-level await with Script Kit APIs directly when useful:
++   arg(), div(), editor(), notify(), md()
++4) For file tasks, prefer Script Kit helpers like home() and writeFile().
++5) Keep the script runnable as-is with sensible defaults and practical error handling."#;
+ 
+ #[derive(Debug, Clone)]
+ pub struct GeneratedScriptOutput {
+@@ -352,8 +358,12 @@
+ }
+ 
+ fn has_kit_import(script: &str) -> bool {
+-    script.contains("import \"@scriptkit/sdk\"")
+-        || script.contains("import '@scriptkit/sdk'")
++    script.lines().any(|line| {
++        let trimmed = line.trim();
++        trimmed.starts_with("import")
++            && trimmed.contains(SCRIPT_KIT_SDK_IMPORT_MODULE)
++            && (trimmed.contains('\"') || trimmed.contains('\''))
++    })
+ }
+ 
+ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
+@@ -378,7 +388,7 @@
+     }
+ 
+     if !has_kit_import(trimmed_script) {
+-        prefix_lines.push("import \"@scriptkit/sdk\";".to_string());
++        prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
+     }
+ 
+     let mut output = String::new();
+@@ -519,6 +529,23 @@
+     }
+ 
+     #[test]
++    fn test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import() {
++        assert!(has_kit_import("import \"@scriptkit/sdk\";"));
++        assert!(has_kit_import("import '@scriptkit/sdk'"));
++        assert!(!has_kit_import("import \"@johnlindquist/kit\";"));
++    }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_uses_modern_sdk_conventions() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("arg()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("div()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("editor()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("notify()"));
++    }
++
++    #[test]
+     fn test_write_generated_script_in_dir_appends_numeric_suffix_for_collisions() {
+         let temp_dir = tempdir().unwrap();
+         let first = write_generated_script_in_dir(temp_dir.path(), "my-script", "a").unwrap();
+diff --git a/src/app_impl/prompt_ai.rs b/src/app_impl/prompt_ai.rs
+index 7f8acfae4036d0f77ae1eca73994c8d188bfb44e..c8266b6cb798ec62e6e7e9a8a59005512e44b72f
+--- a/src/app_impl/prompt_ai.rs
++++ b/src/app_impl/prompt_ai.rs
+@@ -32,10 +32,12 @@
+ - Include metadata comments at the top:
+   // Name: <script name>
+   // Description: <short summary>
+-- Include: import "@scriptkit/sdk";
+-- Use idiomatic Script Kit APIs (for example await arg(), await div(), await editor()) when useful.
+-- Prefer clear async/await flow and practical defaults.
+-- Return a full runnable script with no extra explanation."#;
++- Include exactly one SDK import near the top:
++  import "@scriptkit/sdk";
++- Use top-level await with Script Kit APIs directly when useful:
++  arg(), div(), editor(), notify(), md()
++- For file tasks, prefer Script Kit helpers like home() and writeFile().
++- Return a full runnable script with practical defaults and no extra explanation."#;
+ 
+ fn build_ai_script_generation_user_prompt(description: &str) -> String {
+     format!(
+@@ -820,4 +822,10 @@
+         let name = derive_script_name_from_description("@@@ !!!");
+         assert_eq!(name, "ai-generated-script");
+     }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_references_scriptkit_sdk_not_legacy_kit() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++    }
+ }
+
+ succeeded in 3.63s:
+    Checking script-kit-gpui v0.1.0 (/Users/johnlindquist/dev/script-kit-gpui)
+warning: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:32:16
+   |
+32 | pub(super) use inline::*;
+   |                ^^^^^^^^^
+   |
+note: the most public imported item is `pub(self)`
+  --> src/prompts/div/mod.rs:32:16
+   |
+32 | pub(super) use inline::*;
+   |                ^^^^^^^^^
+   = help: reduce the glob import's visibility or increase visibility of imported items
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: glob import doesn't reexport anything with visibility `pub(in crate::prompts)` because no imported item is public enough
+  --> src/prompts/div/mod.rs:34:16
+   |
+34 | pub(super) use render_html::*;
+   |                ^^^^^^^^^^^^^^
+
+thinking
+**Assessing test run limitations**
+exec
+/bin/zsh -lc 'git diff -- src/ai/script_generation.rs src/app_impl/prompt_ai.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+diff --git a/src/ai/script_generation.rs b/src/ai/script_generation.rs
+index 8338b9c..f29715b 100644
+--- a/src/ai/script_generation.rs
++++ b/src/ai/script_generation.rs
+@@ -10,19 +10,25 @@ use super::providers::{AiProvider, ProviderMessage, ProviderRegistry};
+ const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
+ const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
+ const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
++const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
++const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+ 
+-const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
++pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str =
++    r#"You write production-ready Script Kit TypeScript scripts.
+ 
+-Return ONLY TypeScript source code for one Script Kit script. Do not include explanations.
++Return ONLY TypeScript source code for one Script Kit script.
++Do not return markdown fences or explanations.
+ 
+-Required output conventions:
+file update:
+diff --git a/src/ai/script_generation.rs b/src/ai/script_generation.rs
+index 299a39ec49fca6ad8fe56ffc03d0c35c7ae4a810..f29715b032570028241789219179c413e5c5ed83
+--- a/src/ai/script_generation.rs
++++ b/src/ai/script_generation.rs
+@@ -10,19 +10,25 @@
+ const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
+ const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
+ const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
++const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
++const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+ 
+-pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
++pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str =
++    r#"You write production-ready Script Kit TypeScript scripts.
+ 
+-Return ONLY TypeScript source code for one Script Kit script. Do not include explanations.
++Return ONLY TypeScript source code for one Script Kit script.
++Do not return markdown fences or explanations.
+ 
+-Required output conventions:
++Follow modern Script Kit conventions:
+ 1) Include metadata comments at the top:
+    // Name: <clear title>
+    // Description: <one-line summary>
+-2) Include: import "@scriptkit/sdk";
+-3) Use await arg() for user input when useful.
+-4) Use await div() for display output when useful.
+-5) Keep the script runnable as-is with sensible defaults and light error handling."#;
++2) Include exactly one SDK import near the top:
++   import "@scriptkit/sdk";
++3) Use top-level await with Script Kit APIs directly when useful:
++   arg(), div(), editor(), notify(), md()
++4) For file tasks, prefer Script Kit helpers like home() and writeFile().
++5) Keep the script runnable as-is with sensible defaults and practical error handling."#;
+ 
+ #[derive(Debug, Clone)]
+ pub struct GeneratedScriptOutput {
+@@ -352,8 +358,12 @@
+ }
+ 
+ fn has_kit_import(script: &str) -> bool {
+-    script.contains("import \"@scriptkit/sdk\"")
+-        || script.contains("import '@scriptkit/sdk'")
++    script.lines().any(|line| {
++        let trimmed = line.trim();
++        trimmed.starts_with("import")
++            && trimmed.contains(SCRIPT_KIT_SDK_IMPORT_MODULE)
++            && (trimmed.contains('\"') || trimmed.contains('\''))
++    })
+ }
+ 
+ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
+@@ -378,7 +388,7 @@
+     }
+ 
+     if !has_kit_import(trimmed_script) {
+-        prefix_lines.push("import \"@scriptkit/sdk\";".to_string());
++        prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
+     }
+ 
+     let mut output = String::new();
+@@ -519,6 +529,23 @@
+     }
+ 
+     #[test]
++    fn test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import() {
++        assert!(has_kit_import("import \"@scriptkit/sdk\";"));
++        assert!(has_kit_import("import '@scriptkit/sdk'"));
++        assert!(!has_kit_import("import \"@johnlindquist/kit\";"));
++    }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_uses_modern_sdk_conventions() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("arg()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("div()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("editor()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("notify()"));
++    }
++
++    #[test]
+     fn test_write_generated_script_in_dir_appends_numeric_suffix_for_collisions() {
+         let temp_dir = tempdir().unwrap();
+         let first = write_generated_script_in_dir(temp_dir.path(), "my-script", "a").unwrap();
+diff --git a/src/app_impl/prompt_ai.rs b/src/app_impl/prompt_ai.rs
+index 7f8acfae4036d0f77ae1eca73994c8d188bfb44e..c8266b6cb798ec62e6e7e9a8a59005512e44b72f
+--- a/src/app_impl/prompt_ai.rs
++++ b/src/app_impl/prompt_ai.rs
+@@ -32,10 +32,12 @@
+ - Include metadata comments at the top:
+   // Name: <script name>
+   // Description: <short summary>
+-- Include: import "@scriptkit/sdk";
+-- Use idiomatic Script Kit APIs (for example await arg(), await div(), await editor()) when useful.
+-- Prefer clear async/await flow and practical defaults.
+-- Return a full runnable script with no extra explanation."#;
++- Include exactly one SDK import near the top:
++  import "@scriptkit/sdk";
++- Use top-level await with Script Kit APIs directly when useful:
++  arg(), div(), editor(), notify(), md()
++- For file tasks, prefer Script Kit helpers like home() and writeFile().
++- Return a full runnable script with practical defaults and no extra explanation."#;
+ 
+ fn build_ai_script_generation_user_prompt(description: &str) -> String {
+     format!(
+@@ -820,4 +822,10 @@
+         let name = derive_script_name_from_description("@@@ !!!");
+         assert_eq!(name, "ai-generated-script");
+     }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_references_scriptkit_sdk_not_legacy_kit() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++    }
+ }
+
+
+thinking
+**Noticing unexpected pre-existing changes**
+exec
+/bin/zsh -lc "nl -ba src/ai/script_generation.rs | sed -n '1,90p'" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "nl -ba src/ai/script_generation.rs | sed -n '340,560p'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+     1	use anyhow::{Context, Result};
+     2	use std::fs::{self, OpenOptions};
+     3	use std::io::{ErrorKind, Write};
+     4	use std::path::{Path, PathBuf};
+     5	use std::sync::Arc;
+     6	
+     7	use super::config::ModelInfo;
+     8	use super::providers::{AiProvider, ProviderMessage, ProviderRegistry};
+     9	
+    10	const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
+    11	const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
+    12	const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
+    13	const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
+    14	const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+    15	
+    16	pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str =
+    17	    r#"You write production-ready Script Kit TypeScript scripts.
+    18	
+    19	Return ONLY TypeScript source code for one Script Kit script.
+    20	Do not return markdown fences or explanations.
+ succeeded in 51ms:
+   340	                None => String::new(),
+   341	            }
+   342	        })
+   343	        .collect::<Vec<_>>()
+   344	        .join(" ")
+   345	}
+   346	
+   347	fn description_from_prompt(prompt: &str) -> String {
+   348	    let normalized = prompt.split_whitespace().collect::<Vec<_>>().join(" ");
+   349	    if normalized.is_empty() {
+   350	        return "AI-generated Script Kit script".to_string();
+   351	    }
+   352	
+   353	    let mut shortened = normalized;
+   354	    if shortened.chars().count() > 110 {
+   355	        shortened = format!("{}...", shortened.chars().take(107).collect::<String>());
+   356	    }
+   357	    shortened
+   358	}
+   359	
+file update:
+diff --git a/src/ai/script_generation.rs b/src/ai/script_generation.rs
+index 299a39ec49fca6ad8fe56ffc03d0c35c7ae4a810..f29715b032570028241789219179c413e5c5ed83
+--- a/src/ai/script_generation.rs
++++ b/src/ai/script_generation.rs
+@@ -10,19 +10,25 @@
+ const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
+ const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
+ const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
++const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
++const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+ 
+-pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
++pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str =
++    r#"You write production-ready Script Kit TypeScript scripts.
+ 
+-Return ONLY TypeScript source code for one Script Kit script. Do not include explanations.
++Return ONLY TypeScript source code for one Script Kit script.
++Do not return markdown fences or explanations.
+ 
+-Required output conventions:
++Follow modern Script Kit conventions:
+ 1) Include metadata comments at the top:
+    // Name: <clear title>
+    // Description: <one-line summary>
+-2) Include: import "@scriptkit/sdk";
+-3) Use await arg() for user input when useful.
+-4) Use await div() for display output when useful.
+-5) Keep the script runnable as-is with sensible defaults and light error handling."#;
++2) Include exactly one SDK import near the top:
++   import "@scriptkit/sdk";
++3) Use top-level await with Script Kit APIs directly when useful:
++   arg(), div(), editor(), notify(), md()
++4) For file tasks, prefer Script Kit helpers like home() and writeFile().
++5) Keep the script runnable as-is with sensible defaults and practical error handling."#;
+ 
+ #[derive(Debug, Clone)]
+ pub struct GeneratedScriptOutput {
+@@ -352,8 +358,12 @@
+ }
+ 
+ fn has_kit_import(script: &str) -> bool {
+-    script.contains("import \"@scriptkit/sdk\"")
+-        || script.contains("import '@scriptkit/sdk'")
++    script.lines().any(|line| {
++        let trimmed = line.trim();
++        trimmed.starts_with("import")
++            && trimmed.contains(SCRIPT_KIT_SDK_IMPORT_MODULE)
++            && (trimmed.contains('\"') || trimmed.contains('\''))
++    })
+ }
+ 
+ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
+@@ -378,7 +388,7 @@
+     }
+ 
+     if !has_kit_import(trimmed_script) {
+-        prefix_lines.push("import \"@scriptkit/sdk\";".to_string());
++        prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
+     }
+ 
+     let mut output = String::new();
+@@ -519,6 +529,23 @@
+     }
+ 
+     #[test]
++    fn test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import() {
++        assert!(has_kit_import("import \"@scriptkit/sdk\";"));
++        assert!(has_kit_import("import '@scriptkit/sdk'"));
++        assert!(!has_kit_import("import \"@johnlindquist/kit\";"));
++    }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_uses_modern_sdk_conventions() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("arg()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("div()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("editor()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("notify()"));
++    }
++
++    #[test]
+     fn test_write_generated_script_in_dir_appends_numeric_suffix_for_collisions() {
+         let temp_dir = tempdir().unwrap();
+         let first = write_generated_script_in_dir(temp_dir.path(), "my-script", "a").unwrap();
+diff --git a/src/app_impl/prompt_ai.rs b/src/app_impl/prompt_ai.rs
+index 7f8acfae4036d0f77ae1eca73994c8d188bfb44e..c8266b6cb798ec62e6e7e9a8a59005512e44b72f
+--- a/src/app_impl/prompt_ai.rs
++++ b/src/app_impl/prompt_ai.rs
+@@ -32,10 +32,12 @@
+ - Include metadata comments at the top:
+   // Name: <script name>
+   // Description: <short summary>
+-- Include: import "@scriptkit/sdk";
+-- Use idiomatic Script Kit APIs (for example await arg(), await div(), await editor()) when useful.
+-- Prefer clear async/await flow and practical defaults.
+-- Return a full runnable script with no extra explanation."#;
++- Include exactly one SDK import near the top:
++  import "@scriptkit/sdk";
++- Use top-level await with Script Kit APIs directly when useful:
++  arg(), div(), editor(), notify(), md()
++- For file tasks, prefer Script Kit helpers like home() and writeFile().
++- Return a full runnable script with practical defaults and no extra explanation."#;
+ 
+ fn build_ai_script_generation_user_prompt(description: &str) -> String {
+     format!(
+@@ -820,4 +822,10 @@
+         let name = derive_script_name_from_description("@@@ !!!");
+         assert_eq!(name, "ai-generated-script");
+     }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_references_scriptkit_sdk_not_legacy_kit() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++    }
+ }
+
+
+thinking
+**Reviewing view rest tests and prompt_ai**
+exec
+/bin/zsh -lc "nl -ba src/app_impl/prompt_ai.rs | sed -n '24,70p'" in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc "nl -ba src/app_impl/prompt_ai.rs | sed -n '806,850p'" in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+    24	            Self::OpenEditor => "open_editor",
+    25	        }
+    26	    }
+    27	}
+    28	
+    29	const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You are ScriptKitScriptGenerator.
+    30	Generate a complete Script Kit TypeScript script and return code only.
+    31	Requirements:
+    32	- Include metadata comments at the top:
+    33	  // Name: <script name>
+    34	  // Description: <short summary>
+    35	- Include exactly one SDK import near the top:
+    36	  import "@scriptkit/sdk";
+    37	- Use top-level await with Script Kit APIs directly when useful:
+    38	  arg(), div(), editor(), notify(), md()
+    39	- For file tasks, prefer Script Kit helpers like home() and writeFile().
+    40	- Return a full runnable script with practical defaults and no extra explanation."#;
+    41	
+    42	fn build_ai_script_generation_user_prompt(description: &str) -> String {
+    43	    format!(
+ succeeded in 51ms:
+   806	        let extracted =
+   807	            extract_generated_script_source(response).expect("script should be extracted");
+   808	        assert!(extracted.contains("// Name: Weather"));
+   809	        assert!(!extracted.contains("```"));
+   810	    }
+   811	
+   812	    #[test]
+   813	    fn test_extract_generated_script_source_falls_back_to_plain_text() {
+   814	        let response = "// Name: Plain\nimport \"@scriptkit/sdk\";";
+   815	        let extracted =
+   816	            extract_generated_script_source(response).expect("script should be extracted");
+   817	        assert_eq!(extracted, "// Name: Plain\nimport \"@scriptkit/sdk\";\n");
+   818	    }
+   819	
+   820	    #[test]
+   821	    fn test_derive_script_name_from_description_uses_fallback_for_symbols() {
+   822	        let name = derive_script_name_from_description("@@@ !!!");
+   823	        assert_eq!(name, "ai-generated-script");
+   824	    }
+   825	
+file update:
+diff --git a/src/ai/script_generation.rs b/src/ai/script_generation.rs
+index 299a39ec49fca6ad8fe56ffc03d0c35c7ae4a810..f29715b032570028241789219179c413e5c5ed83
+--- a/src/ai/script_generation.rs
++++ b/src/ai/script_generation.rs
+@@ -10,19 +10,25 @@
+ const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
+ const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
+ const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
++const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
++const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+ 
+-pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
++pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str =
++    r#"You write production-ready Script Kit TypeScript scripts.
+ 
+-Return ONLY TypeScript source code for one Script Kit script. Do not include explanations.
++Return ONLY TypeScript source code for one Script Kit script.
++Do not return markdown fences or explanations.
+ 
+-Required output conventions:
++Follow modern Script Kit conventions:
+ 1) Include metadata comments at the top:
+    // Name: <clear title>
+    // Description: <one-line summary>
+-2) Include: import "@scriptkit/sdk";
+-3) Use await arg() for user input when useful.
+-4) Use await div() for display output when useful.
+-5) Keep the script runnable as-is with sensible defaults and light error handling."#;
++2) Include exactly one SDK import near the top:
++   import "@scriptkit/sdk";
++3) Use top-level await with Script Kit APIs directly when useful:
++   arg(), div(), editor(), notify(), md()
++4) For file tasks, prefer Script Kit helpers like home() and writeFile().
++5) Keep the script runnable as-is with sensible defaults and practical error handling."#;
+ 
+ #[derive(Debug, Clone)]
+ pub struct GeneratedScriptOutput {
+@@ -352,8 +358,12 @@
+ }
+ 
+ fn has_kit_import(script: &str) -> bool {
+-    script.contains("import \"@scriptkit/sdk\"")
+-        || script.contains("import '@scriptkit/sdk'")
++    script.lines().any(|line| {
++        let trimmed = line.trim();
++        trimmed.starts_with("import")
++            && trimmed.contains(SCRIPT_KIT_SDK_IMPORT_MODULE)
++            && (trimmed.contains('\"') || trimmed.contains('\''))
++    })
+ }
+ 
+ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
+@@ -378,7 +388,7 @@
+     }
+ 
+     if !has_kit_import(trimmed_script) {
+-        prefix_lines.push("import \"@scriptkit/sdk\";".to_string());
++        prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
+     }
+ 
+     let mut output = String::new();
+@@ -519,6 +529,23 @@
+     }
+ 
+     #[test]
++    fn test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import() {
++        assert!(has_kit_import("import \"@scriptkit/sdk\";"));
++        assert!(has_kit_import("import '@scriptkit/sdk'"));
++        assert!(!has_kit_import("import \"@johnlindquist/kit\";"));
++    }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_uses_modern_sdk_conventions() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("arg()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("div()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("editor()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("notify()"));
++    }
++
++    #[test]
+     fn test_write_generated_script_in_dir_appends_numeric_suffix_for_collisions() {
+         let temp_dir = tempdir().unwrap();
+         let first = write_generated_script_in_dir(temp_dir.path(), "my-script", "a").unwrap();
+diff --git a/src/app_impl/prompt_ai.rs b/src/app_impl/prompt_ai.rs
+index 7f8acfae4036d0f77ae1eca73994c8d188bfb44e..c8266b6cb798ec62e6e7e9a8a59005512e44b72f
+--- a/src/app_impl/prompt_ai.rs
++++ b/src/app_impl/prompt_ai.rs
+@@ -32,10 +32,12 @@
+ - Include metadata comments at the top:
+   // Name: <script name>
+   // Description: <short summary>
+-- Include: import "@scriptkit/sdk";
+-- Use idiomatic Script Kit APIs (for example await arg(), await div(), await editor()) when useful.
+-- Prefer clear async/await flow and practical defaults.
+-- Return a full runnable script with no extra explanation."#;
++- Include exactly one SDK import near the top:
++  import "@scriptkit/sdk";
++- Use top-level await with Script Kit APIs directly when useful:
++  arg(), div(), editor(), notify(), md()
++- For file tasks, prefer Script Kit helpers like home() and writeFile().
++- Return a full runnable script with practical defaults and no extra explanation."#;
+ 
+ fn build_ai_script_generation_user_prompt(description: &str) -> String {
+     format!(
+@@ -820,4 +822,10 @@
+         let name = derive_script_name_from_description("@@@ !!!");
+         assert_eq!(name, "ai-generated-script");
+     }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_references_scriptkit_sdk_not_legacy_kit() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++    }
+ }
+
+
+thinking
+**Verifying imports and updating status**
+exec
+/bin/zsh -lc '~/.claude/bin/swarm.ts update --id codex-sdk-prompt-update --status done --notes "Updated AI script generation prompts to modern @scriptkit/sdk conventions and adjusted import enforcement/tests; cargo check -p script-kit-gpui --lib passed; scoped tests blocked by unrelated shared-tree compile errors."' in /Users/johnlindquist/dev/script-kit-gpuiexec
+/bin/zsh -lc '~/.claude/bin/swarm.ts release --id codex-sdk-prompt-update src/ai/script_generation.rs src/app_impl/prompt_ai.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 50ms:
+Updated: codex-sdk-prompt-update
+ succeeded in 52ms:
+Released for codex-sdk-prompt-update: src/ai/script_generation.rs, src/app_impl/prompt_ai.rs
+file update:
+diff --git a/src/ai/script_generation.rs b/src/ai/script_generation.rs
+index 299a39ec49fca6ad8fe56ffc03d0c35c7ae4a810..f29715b032570028241789219179c413e5c5ed83
+--- a/src/ai/script_generation.rs
++++ b/src/ai/script_generation.rs
+@@ -10,19 +10,25 @@
+ const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
+ const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
+ const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
++const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
++const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+ 
+-pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
++pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str =
++    r#"You write production-ready Script Kit TypeScript scripts.
+ 
+-Return ONLY TypeScript source code for one Script Kit script. Do not include explanations.
++Return ONLY TypeScript source code for one Script Kit script.
++Do not return markdown fences or explanations.
+ 
+-Required output conventions:
++Follow modern Script Kit conventions:
+ 1) Include metadata comments at the top:
+    // Name: <clear title>
+    // Description: <one-line summary>
+-2) Include: import "@scriptkit/sdk";
+-3) Use await arg() for user input when useful.
+-4) Use await div() for display output when useful.
+-5) Keep the script runnable as-is with sensible defaults and light error handling."#;
++2) Include exactly one SDK import near the top:
++   import "@scriptkit/sdk";
++3) Use top-level await with Script Kit APIs directly when useful:
++   arg(), div(), editor(), notify(), md()
++4) For file tasks, prefer Script Kit helpers like home() and writeFile().
++5) Keep the script runnable as-is with sensible defaults and practical error handling."#;
+ 
+ #[derive(Debug, Clone)]
+ pub struct GeneratedScriptOutput {
+@@ -352,8 +358,12 @@
+ }
+ 
+ fn has_kit_import(script: &str) -> bool {
+-    script.contains("import \"@scriptkit/sdk\"")
+-        || script.contains("import '@scriptkit/sdk'")
++    script.lines().any(|line| {
++        let trimmed = line.trim();
++        trimmed.starts_with("import")
++            && trimmed.contains(SCRIPT_KIT_SDK_IMPORT_MODULE)
++            && (trimmed.contains('\"') || trimmed.contains('\''))
++    })
+ }
+ 
+ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
+@@ -378,7 +388,7 @@
+     }
+ 
+     if !has_kit_import(trimmed_script) {
+-        prefix_lines.push("import \"@scriptkit/sdk\";".to_string());
++        prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
+     }
+ 
+     let mut output = String::new();
+@@ -519,6 +529,23 @@
+     }
+ 
+     #[test]
++    fn test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import() {
++        assert!(has_kit_import("import \"@scriptkit/sdk\";"));
++        assert!(has_kit_import("import '@scriptkit/sdk'"));
++        assert!(!has_kit_import("import \"@johnlindquist/kit\";"));
++    }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_uses_modern_sdk_conventions() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("arg()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("div()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("editor()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("notify()"));
++    }
++
++    #[test]
+     fn test_write_generated_script_in_dir_appends_numeric_suffix_for_collisions() {
+         let temp_dir = tempdir().unwrap();
+         let first = write_generated_script_in_dir(temp_dir.path(), "my-script", "a").unwrap();
+diff --git a/src/app_impl/prompt_ai.rs b/src/app_impl/prompt_ai.rs
+index 7f8acfae4036d0f77ae1eca73994c8d188bfb44e..c8266b6cb798ec62e6e7e9a8a59005512e44b72f
+--- a/src/app_impl/prompt_ai.rs
++++ b/src/app_impl/prompt_ai.rs
+@@ -32,10 +32,12 @@
+ - Include metadata comments at the top:
+   // Name: <script name>
+   // Description: <short summary>
+-- Include: import "@scriptkit/sdk";
+-- Use idiomatic Script Kit APIs (for example await arg(), await div(), await editor()) when useful.
+-- Prefer clear async/await flow and practical defaults.
+-- Return a full runnable script with no extra explanation."#;
++- Include exactly one SDK import near the top:
++  import "@scriptkit/sdk";
++- Use top-level await with Script Kit APIs directly when useful:
++  arg(), div(), editor(), notify(), md()
++- For file tasks, prefer Script Kit helpers like home() and writeFile().
++- Return a full runnable script with practical defaults and no extra explanation."#;
+ 
+ fn build_ai_script_generation_user_prompt(description: &str) -> String {
+     format!(
+@@ -820,4 +822,10 @@
+         let name = derive_script_name_from_description("@@@ !!!");
+         assert_eq!(name, "ai-generated-script");
+     }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_references_scriptkit_sdk_not_legacy_kit() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++    }
+ }
+
+
+thinking
+**Checking limited git status**
+exec
+/bin/zsh -lc 'git status --short src/ai/script_generation.rs src/app_impl/prompt_ai.rs' in /Users/johnlindquist/dev/script-kit-gpui succeeded in 51ms:
+ M src/ai/script_generation.rs
+ M src/app_impl/prompt_ai.rs
+file update:
+diff --git a/src/ai/script_generation.rs b/src/ai/script_generation.rs
+index 299a39ec49fca6ad8fe56ffc03d0c35c7ae4a810..f29715b032570028241789219179c413e5c5ed83
+--- a/src/ai/script_generation.rs
++++ b/src/ai/script_generation.rs
+@@ -10,19 +10,25 @@
+ const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
+ const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
+ const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
++const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
++const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+ 
+-pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
++pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str =
++    r#"You write production-ready Script Kit TypeScript scripts.
+ 
+-Return ONLY TypeScript source code for one Script Kit script. Do not include explanations.
++Return ONLY TypeScript source code for one Script Kit script.
++Do not return markdown fences or explanations.
+ 
+-Required output conventions:
++Follow modern Script Kit conventions:
+ 1) Include metadata comments at the top:
+    // Name: <clear title>
+    // Description: <one-line summary>
+-2) Include: import "@scriptkit/sdk";
+-3) Use await arg() for user input when useful.
+-4) Use await div() for display output when useful.
+-5) Keep the script runnable as-is with sensible defaults and light error handling."#;
++2) Include exactly one SDK import near the top:
++   import "@scriptkit/sdk";
++3) Use top-level await with Script Kit APIs directly when useful:
++   arg(), div(), editor(), notify(), md()
++4) For file tasks, prefer Script Kit helpers like home() and writeFile().
++5) Keep the script runnable as-is with sensible defaults and practical error handling."#;
+ 
+ #[derive(Debug, Clone)]
+ pub struct GeneratedScriptOutput {
+@@ -352,8 +358,12 @@
+ }
+ 
+ fn has_kit_import(script: &str) -> bool {
+-    script.contains("import \"@scriptkit/sdk\"")
+-        || script.contains("import '@scriptkit/sdk'")
++    script.lines().any(|line| {
++        let trimmed = line.trim();
++        trimmed.starts_with("import")
++            && trimmed.contains(SCRIPT_KIT_SDK_IMPORT_MODULE)
++            && (trimmed.contains('\"') || trimmed.contains('\''))
++    })
+ }
+ 
+ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
+@@ -378,7 +388,7 @@
+     }
+ 
+     if !has_kit_import(trimmed_script) {
+-        prefix_lines.push("import \"@scriptkit/sdk\";".to_string());
++        prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
+     }
+ 
+     let mut output = String::new();
+@@ -519,6 +529,23 @@
+     }
+ 
+     #[test]
++    fn test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import() {
++        assert!(has_kit_import("import \"@scriptkit/sdk\";"));
++        assert!(has_kit_import("import '@scriptkit/sdk'"));
++        assert!(!has_kit_import("import \"@johnlindquist/kit\";"));
++    }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_uses_modern_sdk_conventions() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("arg()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("div()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("editor()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("notify()"));
++    }
++
++    #[test]
+     fn test_write_generated_script_in_dir_appends_numeric_suffix_for_collisions() {
+         let temp_dir = tempdir().unwrap();
+         let first = write_generated_script_in_dir(temp_dir.path(), "my-script", "a").unwrap();
+diff --git a/src/app_impl/prompt_ai.rs b/src/app_impl/prompt_ai.rs
+index 7f8acfae4036d0f77ae1eca73994c8d188bfb44e..c8266b6cb798ec62e6e7e9a8a59005512e44b72f
+--- a/src/app_impl/prompt_ai.rs
++++ b/src/app_impl/prompt_ai.rs
+@@ -32,10 +32,12 @@
+ - Include metadata comments at the top:
+   // Name: <script name>
+   // Description: <short summary>
+-- Include: import "@scriptkit/sdk";
+-- Use idiomatic Script Kit APIs (for example await arg(), await div(), await editor()) when useful.
+-- Prefer clear async/await flow and practical defaults.
+-- Return a full runnable script with no extra explanation."#;
++- Include exactly one SDK import near the top:
++  import "@scriptkit/sdk";
++- Use top-level await with Script Kit APIs directly when useful:
++  arg(), div(), editor(), notify(), md()
++- For file tasks, prefer Script Kit helpers like home() and writeFile().
++- Return a full runnable script with practical defaults and no extra explanation."#;
+ 
+ fn build_ai_script_generation_user_prompt(description: &str) -> String {
+     format!(
+@@ -820,4 +822,10 @@
+         let name = derive_script_name_from_description("@@@ !!!");
+         assert_eq!(name, "ai-generated-script");
+     }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_references_scriptkit_sdk_not_legacy_kit() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++    }
+ }
+
+
+thinking
+**Summarizing final response content**
+codex
+Updated the AI script-generation prompts and import enforcement to match current Script Kit SDK usage and patterns observed in `~/.scriptkit/kit/main/scripts/*.ts`.
+
+**Changed files**
+- `src/ai/script_generation.rs:16`  
+  Updated `AI_SCRIPT_GENERATION_SYSTEM_PROMPT` to modern conventions (`import "@scriptkit/sdk";`, top-level `await`, `arg/div/editor/notify/md`, `home/writeFile`, metadata comments).
+- `src/ai/script_generation.rs:360`  
+  Updated `has_kit_import()` to recognize only `@scriptkit/sdk` imports.
+- `src/ai/script_generation.rs:390`  
+  Updated `enforce_script_kit_conventions()` to insert `import "@scriptkit/sdk";` via constant.
+- `src/ai/script_generation.rs:531`  
+  Added tests to assert modern import handling and prompt content (and reject legacy `@johnlindquist/kit`).
+- `src/app_impl/prompt_ai.rs:29`  
+  Updated duplicate script-generation system prompt to match modern SDK/API patterns.
+- `src/app_impl/prompt_ai.rs:826`  
+  Added prompt test asserting `@scriptkit/sdk` and no legacy import string.
+
+**How to test**
+1. `cargo check -p script-kit-gpui --lib`
+2. After the shared tree stabilizes, run targeted tests:
+   - `cargo test -p script-kit-gpui --lib test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import`
+   - `cargo test -p script-kit-gpui --lib test_ai_script_generation_system_prompt_uses_modern_sdk_conventions`
+   - `cargo test -p script-kit-gpui --lib test_ai_script_generation_system_prompt_references_scriptkit_sdk_not_legacy_kit`
+
+**Verification run**
+- Passed: `cargo check -p script-kit-gpui --lib`
+- Blocked: `cargo test -p script-kit-gpui --lib ...` due unrelated concurrent-tree errors (e.g. duplicate test module files in `src/protocol/message` and `src/designs/core`, plus unrelated `actions` test compile errors).
+
+**Risks / known gaps**
+- Unit tests for these changes could not be executed end-to-end because of unrelated compile breaks from other active agent changes in the shared working tree.
+file update:
+diff --git a/src/ai/script_generation.rs b/src/ai/script_generation.rs
+index 299a39ec49fca6ad8fe56ffc03d0c35c7ae4a810..f29715b032570028241789219179c413e5c5ed83
+--- a/src/ai/script_generation.rs
++++ b/src/ai/script_generation.rs
+@@ -10,19 +10,25 @@
+ const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
+ const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
+ const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
++const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
++const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+ 
+-pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit scripts.
++pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str =
++    r#"You write production-ready Script Kit TypeScript scripts.
+ 
+-Return ONLY TypeScript source code for one Script Kit script. Do not include explanations.
++Return ONLY TypeScript source code for one Script Kit script.
++Do not return markdown fences or explanations.
+ 
+-Required output conventions:
++Follow modern Script Kit conventions:
+ 1) Include metadata comments at the top:
+    // Name: <clear title>
+    // Description: <one-line summary>
+-2) Include: import "@scriptkit/sdk";
+-3) Use await arg() for user input when useful.
+-4) Use await div() for display output when useful.
+-5) Keep the script runnable as-is with sensible defaults and light error handling."#;
++2) Include exactly one SDK import near the top:
++   import "@scriptkit/sdk";
++3) Use top-level await with Script Kit APIs directly when useful:
++   arg(), div(), editor(), notify(), md()
++4) For file tasks, prefer Script Kit helpers like home() and writeFile().
++5) Keep the script runnable as-is with sensible defaults and practical error handling."#;
+ 
+ #[derive(Debug, Clone)]
+ pub struct GeneratedScriptOutput {
+@@ -352,8 +358,12 @@
+ }
+ 
+ fn has_kit_import(script: &str) -> bool {
+-    script.contains("import \"@scriptkit/sdk\"")
+-        || script.contains("import '@scriptkit/sdk'")
++    script.lines().any(|line| {
++        let trimmed = line.trim();
++        trimmed.starts_with("import")
++            && trimmed.contains(SCRIPT_KIT_SDK_IMPORT_MODULE)
++            && (trimmed.contains('\"') || trimmed.contains('\''))
++    })
+ }
+ 
+ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
+@@ -378,7 +388,7 @@
+     }
+ 
+     if !has_kit_import(trimmed_script) {
+-        prefix_lines.push("import \"@scriptkit/sdk\";".to_string());
++        prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
+     }
+ 
+     let mut output = String::new();
+@@ -519,6 +529,23 @@
+     }
+ 
+     #[test]
++    fn test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import() {
++        assert!(has_kit_import("import \"@scriptkit/sdk\";"));
++        assert!(has_kit_import("import '@scriptkit/sdk'"));
++        assert!(!has_kit_import("import \"@johnlindquist/kit\";"));
++    }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_uses_modern_sdk_conventions() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("arg()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("div()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("editor()"));
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("notify()"));
++    }
++
++    #[test]
+     fn test_write_generated_script_in_dir_appends_numeric_suffix_for_collisions() {
+         let temp_dir = tempdir().unwrap();
+         let first = write_generated_script_in_dir(temp_dir.path(), "my-script", "a").unwrap();
+diff --git a/src/app_impl/prompt_ai.rs b/src/app_impl/prompt_ai.rs
+index 7f8acfae4036d0f77ae1eca73994c8d188bfb44e..c8266b6cb798ec62e6e7e9a8a59005512e44b72f
+--- a/src/app_impl/prompt_ai.rs
++++ b/src/app_impl/prompt_ai.rs
+@@ -32,10 +32,12 @@
+ - Include metadata comments at the top:
+   // Name: <script name>
+   // Description: <short summary>
+-- Include: import "@scriptkit/sdk";
+-- Use idiomatic Script Kit APIs (for example await arg(), await div(), await editor()) when useful.
+-- Prefer clear async/await flow and practical defaults.
+-- Return a full runnable script with no extra explanation."#;
++- Include exactly one SDK import near the top:
++  import "@scriptkit/sdk";
++- Use top-level await with Script Kit APIs directly when useful:
++  arg(), div(), editor(), notify(), md()
++- For file tasks, prefer Script Kit helpers like home() and writeFile().
++- Return a full runnable script with practical defaults and no extra explanation."#;
+ 
+ fn build_ai_script_generation_user_prompt(description: &str) -> String {
+     format!(
+@@ -820,4 +822,10 @@
+         let name = derive_script_name_from_description("@@@ !!!");
+         assert_eq!(name, "ai-generated-script");
+     }
++
++    #[test]
++    fn test_ai_script_generation_system_prompt_references_scriptkit_sdk_not_legacy_kit() {
++        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
++        assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
++    }
+ }
+
+tokens used
+92,112
+Updated the AI script-generation prompts and import enforcement to match current Script Kit SDK usage and patterns observed in `~/.scriptkit/kit/main/scripts/*.ts`.
+
+**Changed files**
+- `src/ai/script_generation.rs:16`  
+  Updated `AI_SCRIPT_GENERATION_SYSTEM_PROMPT` to modern conventions (`import "@scriptkit/sdk";`, top-level `await`, `arg/div/editor/notify/md`, `home/writeFile`, metadata comments).
+- `src/ai/script_generation.rs:360`  
+  Updated `has_kit_import()` to recognize only `@scriptkit/sdk` imports.
+- `src/ai/script_generation.rs:390`  
+  Updated `enforce_script_kit_conventions()` to insert `import "@scriptkit/sdk";` via constant.
+- `src/ai/script_generation.rs:531`  
+  Added tests to assert modern import handling and prompt content (and reject legacy `@johnlindquist/kit`).
+- `src/app_impl/prompt_ai.rs:29`  
+  Updated duplicate script-generation system prompt to match modern SDK/API patterns.
+- `src/app_impl/prompt_ai.rs:826`  
+  Added prompt test asserting `@scriptkit/sdk` and no legacy import string.
+
+**How to test**
+1. `cargo check -p script-kit-gpui --lib`
+2. After the shared tree stabilizes, run targeted tests:
+   - `cargo test -p script-kit-gpui --lib test_has_kit_import_accepts_scriptkit_sdk_and_rejects_legacy_kit_import`
+   - `cargo test -p script-kit-gpui --lib test_ai_script_generation_system_prompt_uses_modern_sdk_conventions`
+   - `cargo test -p script-kit-gpui --lib test_ai_script_generation_system_prompt_references_scriptkit_sdk_not_legacy_kit`
+
+**Verification run**
+- Passed: `cargo check -p script-kit-gpui --lib`
+- Blocked: `cargo test -p script-kit-gpui --lib ...` due unrelated concurrent-tree errors (e.g. duplicate test module files in `src/protocol/message` and `src/designs/core`, plus unrelated `actions` test compile errors).
+
+**Risks / known gaps**
+- Unit tests for these changes could not be executed end-to-end because of unrelated compile breaks from other active agent changes in the shared working tree.
+
+
+==== exit @ 2026-02-08T06:00:33.556Z code=0 status=done ====
