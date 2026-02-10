@@ -10,6 +10,110 @@ fn favorites_loaded_message(count: usize) -> String {
     }
 }
 
+#[cfg(target_os = "macos")]
+fn applescript_escape(text: &str) -> String {
+    text.replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t")
+}
+
+#[cfg(target_os = "macos")]
+fn applescript_list_literal(values: &[String]) -> String {
+    let escaped_values = values
+        .iter()
+        .map(|value| format!("\"{}\"", applescript_escape(value)))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("{{{}}}", escaped_values)
+}
+
+#[cfg(target_os = "macos")]
+fn run_osascript(script: &str) -> Result<String, String> {
+    let output = std::process::Command::new("osascript")
+        .arg("-e")
+        .arg(script)
+        .output()
+        .map_err(|error| {
+            format!(
+                "failed to spawn osascript for builtin picker flow: {}",
+                error
+            )
+        })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(format!(
+            "osascript exited with status {} for builtin picker flow: {}",
+            output.status,
+            stderr
+        ));
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+#[cfg(target_os = "macos")]
+fn choose_from_list(prompt: &str, ok_button: &str, values: &[String]) -> Result<Option<String>, String> {
+    if values.is_empty() {
+        return Ok(None);
+    }
+
+    let list_literal = applescript_list_literal(values);
+    let script = format!(
+        r#"set selectedItem to choose from list {list_literal} with prompt "{prompt}" OK button name "{ok_button}" cancel button name "Cancel" without multiple selections allowed
+if selectedItem is false then
+    return ""
+end if
+return item 1 of selectedItem"#,
+        list_literal = list_literal,
+        prompt = applescript_escape(prompt),
+        ok_button = applescript_escape(ok_button),
+    );
+
+    let selected = run_osascript(&script)?;
+    if selected.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(selected))
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn prompt_for_text(prompt: &str, default_value: &str, ok_button: &str) -> Result<Option<String>, String> {
+    let script = format!(
+        r#"try
+set dialogResult to display dialog "{prompt}" default answer "{default_value}" buttons {{"Cancel", "{ok_button}"}} default button "{ok_button}"
+return text returned of dialogResult
+on error number -128
+return ""
+end try"#,
+        prompt = applescript_escape(prompt),
+        default_value = applescript_escape(default_value),
+        ok_button = applescript_escape(ok_button),
+    );
+
+    let value = run_osascript(&script)?;
+    if value.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(value))
+    }
+}
+
+fn emoji_picker_label(emoji: &script_kit_gpui::emoji::Emoji) -> String {
+    format!("{}  {}", emoji.emoji, emoji.name)
+}
+
+fn quicklink_picker_label(quicklink: &script_kit_gpui::quicklinks::Quicklink) -> String {
+    format!(
+        "{}  {}",
+        applescript_escape(&quicklink.name),
+        applescript_escape(&quicklink.url_template)
+    )
+}
+
 impl ScriptListApp {
     fn system_action_feedback_message(
         &self,
@@ -26,6 +130,15 @@ impl ScriptListApp {
     }
 
     fn execute_builtin(&mut self, entry: &builtins::BuiltInEntry, cx: &mut Context<Self>) {
+        self.execute_builtin_with_query(entry, None, cx);
+    }
+
+    fn execute_builtin_with_query(
+        &mut self,
+        entry: &builtins::BuiltInEntry,
+        query_override: Option<&str>,
+        cx: &mut Context<Self>,
+    ) {
         logging::log(
             "EXEC",
             &format!("Executing built-in: {} (id: {})", entry.name, entry.id),
@@ -365,16 +478,270 @@ impl ScriptListApp {
                     cx.notify();
                 }
             }
-            builtins::BuiltInFeature::Quicklinks => {
-                logging::log("EXEC", "Opening Quicklinks");
-                self.toast_manager.push(
-                    components::toast::Toast::info(
-                        "Quicklinks management is coming soon.",
-                        &self.theme,
-                    )
-                    .duration_ms(Some(3000)),
+            builtins::BuiltInFeature::EmojiPicker => {
+                logging::log(
+                    "EXEC",
+                    "correlation_id=builtin-emoji-picker-start action=show-emoji-list",
                 );
-                cx.notify();
+
+                #[cfg(target_os = "macos")]
+                {
+                    let emoji_labels: Vec<String> = script_kit_gpui::emoji::EMOJIS
+                        .iter()
+                        .map(emoji_picker_label)
+                        .collect();
+
+                    match choose_from_list("Select an emoji to copy", "Copy", &emoji_labels) {
+                        Ok(Some(selected_label)) => {
+                            if let Some(index) =
+                                emoji_labels.iter().position(|label| label == &selected_label)
+                            {
+                                let selected_emoji = script_kit_gpui::emoji::EMOJIS[index].emoji;
+                                let clipboard_item =
+                                    gpui::ClipboardItem::new_string(selected_emoji.to_string());
+                                cx.write_to_clipboard(clipboard_item);
+                                logging::log(
+                                    "EXEC",
+                                    &format!(
+                                        "correlation_id=builtin-emoji-picker-success emoji=\"{}\"",
+                                        selected_emoji
+                                    ),
+                                );
+                                self.show_hud(
+                                    format!("Copied {} to clipboard", selected_emoji),
+                                    Some(1600),
+                                    cx,
+                                );
+                                self.close_and_reset_window(cx);
+                            } else {
+                                logging::log(
+                                    "ERROR",
+                                    &format!(
+                                        "correlation_id=builtin-emoji-picker-missing-selection selected_label=\"{}\"",
+                                        selected_label
+                                    ),
+                                );
+                                self.toast_manager.push(
+                                    components::toast::Toast::error(
+                                        "Selected emoji could not be resolved.",
+                                        &self.theme,
+                                    )
+                                    .duration_ms(Some(3500)),
+                                );
+                                cx.notify();
+                            }
+                        }
+                        Ok(None) => {
+                            logging::log(
+                                "EXEC",
+                                "correlation_id=builtin-emoji-picker-cancelled",
+                            );
+                        }
+                        Err(error) => {
+                            logging::log(
+                                "ERROR",
+                                &format!(
+                                    "correlation_id=builtin-emoji-picker-error attempted=list-emojis error={}",
+                                    error
+                                ),
+                            );
+                            self.toast_manager.push(
+                                components::toast::Toast::error(
+                                    format!("Failed to open Emoji Picker: {}", error),
+                                    &self.theme,
+                                )
+                                .duration_ms(Some(5000)),
+                            );
+                            cx.notify();
+                        }
+                    }
+                }
+                #[cfg(not(target_os = "macos"))]
+                {
+                    logging::log(
+                        "WARN",
+                        "correlation_id=builtin-emoji-picker-unsupported platform=non-macos",
+                    );
+                    self.toast_manager.push(
+                        components::toast::Toast::warning(
+                            "Emoji Picker currently requires macOS.",
+                            &self.theme,
+                        )
+                        .duration_ms(Some(3000)),
+                    );
+                    cx.notify();
+                }
+            }
+            builtins::BuiltInFeature::Quicklinks => {
+                logging::log(
+                    "EXEC",
+                    "correlation_id=builtin-quicklinks-start action=show-quicklinks-list",
+                );
+
+                #[cfg(target_os = "macos")]
+                {
+                    let quicklinks = script_kit_gpui::quicklinks::load_quicklinks();
+                    if quicklinks.is_empty() {
+                        self.toast_manager.push(
+                            components::toast::Toast::info(
+                                "No quicklinks found. Add quicklinks to ~/.scriptkit/quicklinks.json",
+                                &self.theme,
+                            )
+                            .duration_ms(Some(3500)),
+                        );
+                        cx.notify();
+                        return;
+                    }
+
+                    let quicklink_labels: Vec<String> =
+                        quicklinks.iter().map(quicklink_picker_label).collect();
+                    let default_query = self.filter_text.trim().to_string();
+
+                    match choose_from_list("Select a quicklink to open", "Open", &quicklink_labels) {
+                        Ok(Some(selected_label)) => {
+                            if let Some(index) = quicklink_labels
+                                .iter()
+                                .position(|label| label == &selected_label)
+                            {
+                                let selected_quicklink = &quicklinks[index];
+                                let query = if script_kit_gpui::quicklinks::has_query_placeholder(
+                                    &selected_quicklink.url_template,
+                                ) {
+                                    match prompt_for_text(
+                                        "Enter quicklink query",
+                                        &default_query,
+                                        "Open",
+                                    ) {
+                                        Ok(Some(value)) => value,
+                                        Ok(None) => {
+                                            logging::log(
+                                                "EXEC",
+                                                &format!(
+                                                    "correlation_id=builtin-quicklinks-cancelled id={}",
+                                                    selected_quicklink.id
+                                                ),
+                                            );
+                                            return;
+                                        }
+                                        Err(error) => {
+                                            logging::log(
+                                                "ERROR",
+                                                &format!(
+                                                    "correlation_id=builtin-quicklinks-query-error id={} attempted=prompt-query error={}",
+                                                    selected_quicklink.id, error
+                                                ),
+                                            );
+                                            self.toast_manager.push(
+                                                components::toast::Toast::error(
+                                                    format!(
+                                                        "Failed to get quicklink query: {}",
+                                                        error
+                                                    ),
+                                                    &self.theme,
+                                                )
+                                                .duration_ms(Some(5000)),
+                                            );
+                                            cx.notify();
+                                            return;
+                                        }
+                                    }
+                                } else {
+                                    String::new()
+                                };
+
+                                let expanded_url = script_kit_gpui::quicklinks::expand_url(
+                                    &selected_quicklink.url_template,
+                                    query.trim(),
+                                );
+                                match open::that(&expanded_url) {
+                                    Ok(_) => {
+                                        logging::log(
+                                            "EXEC",
+                                            &format!(
+                                                "correlation_id=builtin-quicklinks-opened id={} url={}",
+                                                selected_quicklink.id, expanded_url
+                                            ),
+                                        );
+                                        self.show_hud(
+                                            format!("Opened {}", selected_quicklink.name),
+                                            Some(1700),
+                                            cx,
+                                        );
+                                        self.close_and_reset_window(cx);
+                                    }
+                                    Err(error) => {
+                                        logging::log(
+                                            "ERROR",
+                                            &format!(
+                                                "correlation_id=builtin-quicklinks-open-failed id={} url={} error={}",
+                                                selected_quicklink.id, expanded_url, error
+                                            ),
+                                        );
+                                        self.toast_manager.push(
+                                            components::toast::Toast::error(
+                                                format!("Failed to open quicklink: {}", error),
+                                                &self.theme,
+                                            )
+                                            .duration_ms(Some(5000)),
+                                        );
+                                        cx.notify();
+                                    }
+                                }
+                            } else {
+                                logging::log(
+                                    "ERROR",
+                                    &format!(
+                                        "correlation_id=builtin-quicklinks-missing-selection selected_label=\"{}\"",
+                                        selected_label
+                                    ),
+                                );
+                                self.toast_manager.push(
+                                    components::toast::Toast::error(
+                                        "Selected quicklink could not be resolved.",
+                                        &self.theme,
+                                    )
+                                    .duration_ms(Some(3500)),
+                                );
+                                cx.notify();
+                            }
+                        }
+                        Ok(None) => {
+                            logging::log("EXEC", "correlation_id=builtin-quicklinks-cancelled");
+                        }
+                        Err(error) => {
+                            logging::log(
+                                "ERROR",
+                                &format!(
+                                    "correlation_id=builtin-quicklinks-list-error attempted=list-quicklinks error={}",
+                                    error
+                                ),
+                            );
+                            self.toast_manager.push(
+                                components::toast::Toast::error(
+                                    format!("Failed to open Quicklinks: {}", error),
+                                    &self.theme,
+                                )
+                                .duration_ms(Some(5000)),
+                            );
+                            cx.notify();
+                        }
+                    }
+                }
+                #[cfg(not(target_os = "macos"))]
+                {
+                    logging::log(
+                        "WARN",
+                        "correlation_id=builtin-quicklinks-unsupported platform=non-macos",
+                    );
+                    self.toast_manager.push(
+                        components::toast::Toast::warning(
+                            "Quicklinks currently requires macOS.",
+                            &self.theme,
+                        )
+                        .duration_ms(Some(3000)),
+                    );
+                    cx.notify();
+                }
             }
             builtins::BuiltInFeature::MenuBarAction(action) => {
                 logging::log(
@@ -599,34 +966,13 @@ impl ScriptListApp {
 
                 use builtins::AiCommandType;
 
-                // Capture prompt text before reset for Shift+Tab/script-generation flows.
-                let script_generation_prompt = if matches!(cmd_type, AiCommandType::GenerateScript)
-                {
-                    Some(self.filter_text.trim().to_string())
-                } else {
-                    None
-                };
-
-                if matches!(cmd_type, AiCommandType::GenerateScript)
-                    && script_generation_prompt
-                        .as_ref()
-                        .is_some_and(|prompt| prompt.is_empty())
-                {
-                    self.toast_manager.push(
-                        components::toast::Toast::warning(
-                            "Type a prompt first, then run Generate Script with AI.",
-                            &self.theme,
-                        )
-                        .duration_ms(Some(3500)),
-                    );
-                    cx.notify();
-                    return;
+                let is_generate_script = matches!(cmd_type, AiCommandType::GenerateScript);
+                if !is_generate_script {
+                    // Most AI commands open a separate AI window.
+                    script_kit_gpui::set_main_window_visible(false);
+                    self.reset_to_script_list(cx);
+                    platform::hide_main_window();
                 }
-
-                // All AI commands: reset state, hide main window
-                script_kit_gpui::set_main_window_visible(false);
-                self.reset_to_script_list(cx);
-                platform::hide_main_window();
 
                 match cmd_type {
                     AiCommandType::OpenAi | AiCommandType::NewConversation => {
@@ -694,129 +1040,8 @@ impl ScriptListApp {
                     }
 
                     AiCommandType::GenerateScript => {
-                        let Some(prompt_description) = script_generation_prompt.clone() else {
-                            logging::log(
-                                "AI_SCRIPT_GEN",
-                                "state=failed attempted=capture_prompt failure=missing_prompt",
-                            );
-                            self.toast_manager.push(
-                                components::toast::Toast::error(
-                                    "No prompt available for AI script generation",
-                                    &self.theme,
-                                )
-                                .duration_ms(Some(5000)),
-                            );
-                            cx.notify();
-                            return;
-                        };
-
-                        let config = self.config.clone();
-                        let (tx, rx) = async_channel::bounded::<
-                            std::result::Result<ai::GeneratedScriptOutput, String>,
-                        >(1);
-
-                        logging::log(
-                            "AI_SCRIPT_GEN",
-                            &format!(
-                                "state=queued attempted=builtin_generate_script prompt_len={}",
-                                prompt_description.len()
-                            ),
-                        );
-
-                        std::thread::spawn(move || {
-                            let generation_result =
-                                ai::generate_script_from_prompt(&prompt_description, Some(&config))
-                                    .map_err(|error| error.to_string());
-
-                            if tx.send_blocking(generation_result).is_err() {
-                                logging::log(
-                                    "AI_SCRIPT_GEN",
-                                    "state=aborted attempted=send_result failure=result_channel_closed",
-                                );
-                            }
-                        });
-
-                        cx.spawn(async move |this, cx| {
-                            let Ok(result) = rx.recv().await else {
-                                logging::log(
-                                    "AI_SCRIPT_GEN",
-                                    "state=aborted attempted=recv_result failure=result_channel_closed",
-                                );
-                                return;
-                            };
-
-                            let _ = cx.update(|cx| {
-                                this.update(cx, |app, cx| match result {
-                                    Ok(generated) => {
-                                        let script_name = generated
-                                            .path
-                                            .file_name()
-                                            .and_then(|name| name.to_str())
-                                            .unwrap_or("generated script");
-
-                                        if let Err(error) =
-                                            script_creation::open_in_editor(&generated.path, &app.config)
-                                        {
-                                            logging::log(
-                                                "AI_SCRIPT_GEN",
-                                                &format!(
-                                                    "state=failed attempted=open_editor path={} error={}",
-                                                    generated.path.display(),
-                                                    error
-                                                ),
-                                            );
-                                            app.toast_manager.push(
-                                                components::toast::Toast::error(
-                                                    format!(
-                                                        "Generated {}, but failed to open editor: {}",
-                                                        script_name, error
-                                                    ),
-                                                    &app.theme,
-                                                )
-                                                .duration_ms(Some(7000)),
-                                            );
-                                            cx.notify();
-                                        } else {
-                                            logging::log(
-                                                "AI_SCRIPT_GEN",
-                                                &format!(
-                                                    "state=completed attempted=builtin_generate_script path={} model_id={} provider_id={}",
-                                                    generated.path.display(),
-                                                    generated.model_id,
-                                                    generated.provider_id
-                                                ),
-                                            );
-                                            app.toast_manager.push(
-                                                components::toast::Toast::success(
-                                                    format!("Generated and opened {}", script_name),
-                                                    &app.theme,
-                                                )
-                                                .duration_ms(Some(3500)),
-                                            );
-                                            app.close_and_reset_window(cx);
-                                        }
-                                    }
-                                    Err(error) => {
-                                        logging::log(
-                                            "AI_SCRIPT_GEN",
-                                            &format!(
-                                                "state=failed attempted=builtin_generate_script error={}",
-                                                error
-                                            ),
-                                        );
-                                        app.toast_manager.push(
-                                            components::toast::Toast::error(
-                                                format!("Failed to generate script: {}", error),
-                                                &app.theme,
-                                            )
-                                            .duration_ms(Some(7000)),
-                                        );
-                                        cx.notify();
-                                    }
-                                })
-                            });
-                        })
-                        .detach();
+                        let query = query_override.unwrap_or(&self.filter_text).to_string();
+                        self.dispatch_ai_script_generation_from_query(query, cx);
                     }
 
                     AiCommandType::SendScreenToAi => {
@@ -1446,7 +1671,11 @@ impl ScriptListApp {
 
 #[cfg(test)]
 mod builtin_execution_ai_feedback_tests {
-    use super::{ai_open_failure_message, favorites_loaded_message};
+    use super::{
+        ai_open_failure_message, emoji_picker_label, favorites_loaded_message, quicklink_picker_label,
+    };
+    use script_kit_gpui::emoji::{Emoji, EmojiCategory};
+    use script_kit_gpui::quicklinks::Quicklink;
 
     #[test]
     fn test_ai_open_failure_message_includes_error_details() {
@@ -1464,5 +1693,32 @@ mod builtin_execution_ai_feedback_tests {
     #[test]
     fn test_favorites_loaded_message_uses_plural_for_many() {
         assert_eq!(favorites_loaded_message(3), "Loaded 3 favorites");
+    }
+
+    #[test]
+    fn test_emoji_picker_label_includes_emoji_and_name() {
+        let emoji = Emoji {
+            emoji: "🚀",
+            name: "rocket",
+            keywords: &["launch", "ship"],
+            category: EmojiCategory::TravelPlaces,
+        };
+
+        assert_eq!(emoji_picker_label(&emoji), "🚀  rocket");
+    }
+
+    #[test]
+    fn test_quicklink_picker_label_includes_name_and_url_template() {
+        let quicklink = Quicklink {
+            id: "ql-1".to_string(),
+            name: "Docs".to_string(),
+            url_template: "https://docs.rs".to_string(),
+            icon: None,
+        };
+
+        assert_eq!(
+            quicklink_picker_label(&quicklink),
+            "Docs  https://docs.rs"
+        );
     }
 }

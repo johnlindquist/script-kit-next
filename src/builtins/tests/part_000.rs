@@ -64,6 +64,24 @@
         assert!(ai_chat.keywords.contains(&"claude".to_string()));
         assert!(ai_chat.keywords.contains(&"gpt".to_string()));
 
+        // Check Emoji Picker entry
+        let emoji_picker = entries.iter().find(|e| e.id == "builtin-emoji-picker");
+        assert!(emoji_picker.is_some());
+        let emoji_picker = emoji_picker.unwrap();
+        assert_eq!(emoji_picker.name, "Emoji Picker");
+        assert_eq!(emoji_picker.feature, BuiltInFeature::EmojiPicker);
+        assert!(emoji_picker.keywords.contains(&"emoji".to_string()));
+        assert!(emoji_picker.keywords.contains(&"picker".to_string()));
+
+        // Check Quicklinks entry
+        let quicklinks = entries.iter().find(|e| e.id == "builtin-quicklinks");
+        assert!(quicklinks.is_some());
+        let quicklinks = quicklinks.unwrap();
+        assert_eq!(quicklinks.name, "Quicklinks");
+        assert_eq!(quicklinks.feature, BuiltInFeature::Quicklinks);
+        assert!(quicklinks.keywords.contains(&"quicklinks".to_string()));
+        assert!(quicklinks.keywords.contains(&"url".to_string()));
+
         // Note: App Launcher built-in removed - apps now appear directly in main search
     }
     #[test]
@@ -160,6 +178,8 @@
         assert_eq!(BuiltInFeature::DesignGallery, BuiltInFeature::DesignGallery);
         assert_eq!(BuiltInFeature::AiChat, BuiltInFeature::AiChat);
         assert_eq!(BuiltInFeature::Favorites, BuiltInFeature::Favorites);
+        assert_eq!(BuiltInFeature::EmojiPicker, BuiltInFeature::EmojiPicker);
+        assert_eq!(BuiltInFeature::Quicklinks, BuiltInFeature::Quicklinks);
         assert_ne!(
             BuiltInFeature::ClipboardHistory,
             BuiltInFeature::AppLauncher
@@ -176,6 +196,9 @@
         assert_ne!(BuiltInFeature::AiChat, BuiltInFeature::ClipboardHistory);
         assert_ne!(BuiltInFeature::AiChat, BuiltInFeature::DesignGallery);
         assert_ne!(BuiltInFeature::Favorites, BuiltInFeature::ClipboardHistory);
+        assert_ne!(BuiltInFeature::EmojiPicker, BuiltInFeature::ClipboardHistory);
+        assert_ne!(BuiltInFeature::Quicklinks, BuiltInFeature::ClipboardHistory);
+        assert_ne!(BuiltInFeature::EmojiPicker, BuiltInFeature::Quicklinks);
 
         // Test App variant
         assert_eq!(

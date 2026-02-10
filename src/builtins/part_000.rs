@@ -161,6 +161,7 @@ pub enum UtilityCommandType {
 }
 /// Kit Store command types for browsing and managing kits
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(clippy::enum_variant_names)]
 pub enum KitStoreCommandType {
     BrowseKits,
     InstalledKits,
@@ -208,6 +209,8 @@ pub enum BuiltInFeature {
     AiChat,
     /// Notes window for quick notes and scratchpad
     Notes,
+    /// Emoji picker for selecting and copying emojis
+    EmojiPicker,
     /// Quick links manager and URL launcher
     Quicklinks,
     /// Menu bar action from the frontmost application

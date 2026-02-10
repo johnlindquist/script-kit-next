@@ -49,6 +49,23 @@
     ));
     debug!("Added AI Chat built-in entry");
 
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-favorites",
+        "Favorites",
+        "Open your starred scripts and shortcuts",
+        vec![
+            "favorites",
+            "favorite",
+            "starred",
+            "star",
+            "pinned",
+            "saved",
+        ],
+        BuiltInFeature::Favorites,
+        "⭐",
+    ));
+    debug!("Added Favorites built-in entry");
+
     // Notes is always available
     entries.push(BuiltInEntry::new_with_icon(
         "builtin-notes",
@@ -68,6 +85,41 @@
         "📝",
     ));
     debug!("Added Notes built-in entry");
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-emoji-picker",
+        "Emoji Picker",
+        "Pick an emoji from the built-in list and copy it to the clipboard",
+        vec![
+            "emoji",
+            "picker",
+            "symbols",
+            "unicode",
+            "copy",
+            "clipboard",
+        ],
+        BuiltInFeature::EmojiPicker,
+        "😀",
+    ));
+    debug!("Added Emoji Picker built-in entry");
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-quicklinks",
+        "Quicklinks",
+        "Manage quick links and open URLs with optional {query} expansion",
+        vec![
+            "quicklinks",
+            "quicklink",
+            "link",
+            "url",
+            "bookmark",
+            "open",
+            "search",
+        ],
+        BuiltInFeature::Quicklinks,
+        "🔗",
+    ));
+    debug!("Added Quicklinks built-in entry");
 
     // Design Gallery is only available in debug builds (developer tool)
     #[cfg(debug_assertions)]
