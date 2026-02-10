@@ -366,6 +366,8 @@ impl PromptFooter {
             )
             .child(
                 div()
+                    .flex()
+                    .items_center()
                     .px(px(6.0))
                     .py(px(1.0))
                     .rounded(px(4.0))
