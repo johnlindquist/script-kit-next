@@ -51,7 +51,7 @@ const PROMPT_FOOTER_BUTTON_FONT_DELTA_PX: f32 = 2.0;
 /// Minimum footer button font size.
 const PROMPT_FOOTER_BUTTON_FONT_MIN_PX: f32 = 10.0;
 /// Footer horizontal padding.
-const PROMPT_FOOTER_PADDING_X_PX: f32 = 12.0;
+const PROMPT_FOOTER_PADDING_X_PX: f32 = 14.0;
 /// Optical bottom padding to align footer content vertically.
 const PROMPT_FOOTER_PADDING_BOTTOM_PX: f32 = 2.0;
 /// Footer logo icon size.
@@ -155,12 +155,17 @@ fn is_footer_button_activation_key(key: &str) -> bool {
     )
 }
 
-fn footer_button_hover_rgba(colors: PromptFooterColors) -> u32 {
+pub fn footer_button_hover_rgba(colors: PromptFooterColors) -> u32 {
     (colors.background << 8) | (PROMPT_FOOTER_BUTTON_HOVER_OPACITY as u32)
 }
 
-fn footer_button_active_rgba(colors: PromptFooterColors) -> u32 {
+pub fn footer_button_active_rgba(colors: PromptFooterColors) -> u32 {
     (colors.background << 8) | (PROMPT_FOOTER_BUTTON_ACTIVE_OPACITY as u32)
+}
+
+pub fn footer_button_font_size_px(theme: &Theme) -> f32 {
+    (theme.get_fonts().ui_size - PROMPT_FOOTER_BUTTON_FONT_DELTA_PX)
+        .max(PROMPT_FOOTER_BUTTON_FONT_MIN_PX)
 }
 
 /// Configuration for PromptFooter display
@@ -334,13 +339,14 @@ impl PromptFooter {
         on_click: Option<Rc<FooterClickCallback>>,
     ) -> impl IntoElement {
         let theme = crate::theme::get_cached_theme();
-        let button_font_size = (theme.get_fonts().ui_size - PROMPT_FOOTER_BUTTON_FONT_DELTA_PX)
-            .max(PROMPT_FOOTER_BUTTON_FONT_MIN_PX);
+        let button_font_size = footer_button_font_size_px(&theme);
         let has_click_handler = on_click.is_some();
         let is_clickable = is_footer_button_clickable(has_click_handler, disabled);
         let on_click_for_key = on_click.clone();
         let hover_bg = rgba(footer_button_hover_rgba(self.colors));
         let active_bg = rgba(footer_button_active_rgba(self.colors));
+        let shortcut_bg = self.colors.border.rgba8(0x20);
+        let shortcut_border = self.colors.border.rgba8(0x40);
 
         let mut button = div()
             .id(ElementId::Name(id.into()))
@@ -360,7 +366,14 @@ impl PromptFooter {
             )
             .child(
                 div()
+                    .px(px(6.0))
+                    .py(px(1.0))
+                    .rounded(px(4.0))
+                    .bg(shortcut_bg)
+                    .border_1()
+                    .border_color(shortcut_border)
                     .text_size(px(button_font_size))
+                    .font_family(crate::list_item::FONT_MONO)
                     .text_color(self.colors.text_muted.to_rgb())
                     .child(shortcut),
             );
@@ -678,7 +691,7 @@ mod tests {
         assert_eq!(PROMPT_FOOTER_BUTTON_ACTIVE_OPACITY, 0x3a);
         assert_eq!(PROMPT_FOOTER_BUTTON_FONT_DELTA_PX, 2.0);
         assert_eq!(PROMPT_FOOTER_BUTTON_FONT_MIN_PX, 10.0);
-        assert_eq!(PROMPT_FOOTER_PADDING_X_PX, 12.0);
+        assert_eq!(PROMPT_FOOTER_PADDING_X_PX, 14.0);
         assert_eq!(PROMPT_FOOTER_PADDING_BOTTOM_PX, 2.0);
         assert_eq!(PROMPT_FOOTER_LOGO_SIZE_PX, 16.0);
         assert_eq!(PROMPT_FOOTER_LOGO_NUDGE_X_PX, 2.0);
