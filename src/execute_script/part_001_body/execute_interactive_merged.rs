@@ -363,7 +363,10 @@
                                                             // For images, send a placeholder with metadata
                                                             format!("[image:{}]", e.id)
                                                         }
-                                                        clipboard_history::ContentType::Text => {
+                                                        clipboard_history::ContentType::Text
+                                                        | clipboard_history::ContentType::Link
+                                                        | clipboard_history::ContentType::File
+                                                        | clipboard_history::ContentType::Color => {
                                                             // Truncate very long text entries
                                                             truncate_clipboard_history_preview(
                                                                 &e.content,
@@ -374,7 +377,10 @@
                                                         entry_id: e.id,
                                                         content,
                                                         content_type: match e.content_type {
-                                                            clipboard_history::ContentType::Text => protocol::ClipboardEntryType::Text,
+                                                            clipboard_history::ContentType::Text
+                                                            | clipboard_history::ContentType::Link
+                                                            | clipboard_history::ContentType::File
+                                                            | clipboard_history::ContentType::Color => protocol::ClipboardEntryType::Text,
                                                             clipboard_history::ContentType::Image => protocol::ClipboardEntryType::Image,
                                                         },
                                                         timestamp: chrono::DateTime::from_timestamp(e.timestamp, 0)

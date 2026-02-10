@@ -38,7 +38,10 @@ impl ScriptListApp {
             Some(entry) => {
                 // Header with content type
                 let content_type_label = match entry.content_type {
-                    clipboard_history::ContentType::Text => "Text",
+                    clipboard_history::ContentType::Text
+                    | clipboard_history::ContentType::Link
+                    | clipboard_history::ContentType::File
+                    | clipboard_history::ContentType::Color => "Text",
                     clipboard_history::ContentType::Image => "Image",
                 };
 
@@ -115,7 +118,10 @@ impl ScriptListApp {
                 );
 
                 match entry.content_type {
-                    clipboard_history::ContentType::Text => {
+                    clipboard_history::ContentType::Text
+                    | clipboard_history::ContentType::Link
+                    | clipboard_history::ContentType::File
+                    | clipboard_history::ContentType::Color => {
                         // Fetch full content on-demand for preview
                         let content = clipboard_history::get_entry_content(&entry.id)
                             .unwrap_or_else(|| entry.text_preview.clone());

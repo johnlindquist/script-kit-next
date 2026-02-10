@@ -6,8 +6,7 @@
 mod detection;
 
 pub use detection::{
-    detect_input_type, is_code_snippet, is_directory_path, is_file_path, is_math_expression,
-    is_url, InputType,
+    detect_input_type, is_directory_path, is_file_path, is_math_expression, is_url, InputType,
 };
 
 #[cfg(test)]

@@ -43,6 +43,14 @@ pub fn expand_url(url_template: &str, query: &str) -> String {
     url_template.replace(QUERY_PLACEHOLDER, query)
 }
 
+pub fn has_query_placeholder(url_template: &str) -> bool {
+    url_template.contains(QUERY_PLACEHOLDER)
+}
+
+pub fn update_quicklink(id: &str, name: &str, url_template: &str) -> bool {
+    update_quicklink_from_path(id, name, url_template, &quicklinks_path())
+}
+
 fn quicklinks_path() -> PathBuf {
     dirs::home_dir()
         .map(|home| home.join(".scriptkit").join(QUICKLINKS_FILE))
@@ -75,11 +83,22 @@ fn delete_quicklink_from_path(id: &str, path: &Path) {
     let _ = save_quicklinks_to_path(&links, path);
 }
 
+fn update_quicklink_from_path(id: &str, name: &str, url_template: &str, path: &Path) -> bool {
+    let mut links = load_quicklinks_from_path(path);
+    if let Some(link) = links.iter_mut().find(|link| link.id == id) {
+        link.name = name.trim().to_string();
+        link.url_template = url_template.trim().to_string();
+        return save_quicklinks_to_path(&links, path).is_ok();
+    }
+
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        create_quicklink, delete_quicklink_from_path, expand_url, load_quicklinks_from_path,
-        save_quicklinks_to_path, Quicklink,
+        create_quicklink, delete_quicklink_from_path, expand_url, has_query_placeholder,
+        load_quicklinks_from_path, save_quicklinks_to_path, update_quicklink_from_path, Quicklink,
     };
 
     #[test]
@@ -102,6 +121,16 @@ mod tests {
     fn test_expand_url_returns_original_when_placeholder_missing() {
         let expanded = expand_url("https://example.com", "ignored");
         assert_eq!(expanded, "https://example.com");
+    }
+
+    #[test]
+    fn test_has_query_placeholder_returns_true_when_template_contains_placeholder() {
+        assert!(has_query_placeholder("https://example.com?q={query}"));
+    }
+
+    #[test]
+    fn test_has_query_placeholder_returns_false_when_template_missing_placeholder() {
+        assert!(!has_query_placeholder("https://example.com"));
     }
 
     #[test]
@@ -173,5 +202,51 @@ mod tests {
         let loaded = load_quicklinks_from_path(&path);
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded[0].id, "keep");
+    }
+
+    #[test]
+    fn test_update_quicklink_from_path_updates_name_and_url_template() {
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let path = dir.path().join("quicklinks.json");
+        let links = vec![Quicklink {
+            id: "target".to_string(),
+            name: "Old".to_string(),
+            url_template: "https://old.example.com".to_string(),
+            icon: None,
+        }];
+
+        save_quicklinks_to_path(&links, &path).expect("seed quicklinks");
+        let updated = update_quicklink_from_path(
+            "target",
+            " New Name ",
+            " https://new.example.com?q={query} ",
+            &path,
+        );
+
+        assert!(updated);
+        let loaded = load_quicklinks_from_path(&path);
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].name, "New Name");
+        assert_eq!(loaded[0].url_template, "https://new.example.com?q={query}");
+    }
+
+    #[test]
+    fn test_update_quicklink_from_path_returns_false_when_id_not_found() {
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let path = dir.path().join("quicklinks.json");
+        let links = vec![Quicklink {
+            id: "target".to_string(),
+            name: "Keep".to_string(),
+            url_template: "https://example.com".to_string(),
+            icon: None,
+        }];
+
+        save_quicklinks_to_path(&links, &path).expect("seed quicklinks");
+        let updated =
+            update_quicklink_from_path("missing", "Name", "https://updated.example.com", &path);
+
+        assert!(!updated);
+        let loaded = load_quicklinks_from_path(&path);
+        assert_eq!(loaded, links);
     }
 }

@@ -90,10 +90,12 @@ pub fn fuzzy_search_apps(apps: &[AppInfo], query: &str) -> Vec<AppMatch> {
     }
 
     // Sort by score (highest first), then by name for ties
-    matches.sort_by(|(a_idx, a_score), (b_idx, b_score)| match b_score.cmp(a_score) {
-        Ordering::Equal => apps[*a_idx].name.cmp(&apps[*b_idx].name),
-        other => other,
-    });
+    matches.sort_by(
+        |(a_idx, a_score), (b_idx, b_score)| match b_score.cmp(a_score) {
+            Ordering::Equal => apps[*a_idx].name.cmp(&apps[*b_idx].name),
+            other => other,
+        },
+    );
 
     matches
         .into_iter()
