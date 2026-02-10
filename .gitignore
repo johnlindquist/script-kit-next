@@ -36,6 +36,12 @@ node_modules/
 *.db
 *.db-*
 
+# Codex audit build artifacts
+target-codex-*/
+
+# External repos / proof-of-concept clones
+gpui-vibrancy-poc/
+
 # Secrets (should never be committed)
 .env
 .env.*
