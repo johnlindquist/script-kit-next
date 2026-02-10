@@ -136,6 +136,32 @@ fn execute_fallback_action(
                     logging::log("FALLBACK", &format!("SearchFiles: {}", query));
                     app.open_file_search(query, cx);
                 }
+
+                FallbackResult::ExecuteBuiltin { builtin_id } => {
+                    logging::log(
+                        "FALLBACK",
+                        &format!("ExecuteBuiltin: builtin_id='{}'", builtin_id),
+                    );
+
+                    let builtin_entry = app
+                        .builtin_entries
+                        .iter()
+                        .find(|entry| entry.id == builtin_id)
+                        .cloned();
+
+                    let Some(entry) = builtin_entry else {
+                        logging::log(
+                            "FALLBACK",
+                            &format!(
+                                "state=failed attempted=execute_builtin_fallback reason=builtin_not_found builtin_id={}",
+                                builtin_id
+                            ),
+                        );
+                        return;
+                    };
+
+                    app.execute_builtin_with_query(&entry, Some(input), cx);
+                }
             }
         }
         Err(e) => {

@@ -81,6 +81,8 @@ pub enum FallbackAction {
     OpenFile,
     /// Search files using the input as query
     SearchFiles,
+    /// Execute a Script Kit built-in command by ID
+    ExecuteBuiltin { builtin_id: String },
 }
 
 /// A built-in fallback command
@@ -189,6 +191,10 @@ impl BuiltinFallback {
             FallbackAction::SearchFiles => Ok(FallbackResult::SearchFiles {
                 query: input.to_string(),
             }),
+
+            FallbackAction::ExecuteBuiltin { builtin_id } => Ok(FallbackResult::ExecuteBuiltin {
+                builtin_id: builtin_id.clone(),
+            }),
         }
     }
 
@@ -211,6 +217,9 @@ impl BuiltinFallback {
             FallbackAction::Calculate => format!("Calculate {}", truncated),
             FallbackAction::OpenFile => format!("Open {}", truncated),
             FallbackAction::SearchFiles => format!("Search files for '{}'", truncated),
+            FallbackAction::ExecuteBuiltin { .. } => {
+                format!("Run command with '{}'", truncated)
+            }
         }
     }
 }
@@ -232,6 +241,8 @@ pub enum FallbackResult {
     OpenFile { path: String },
     /// Search files with the given query
     SearchFiles { query: String },
+    /// Execute a Script Kit built-in command
+    ExecuteBuiltin { builtin_id: String },
 }
 
 /// Get all built-in fallback commands
@@ -239,6 +250,19 @@ pub enum FallbackResult {
 /// Returns a vector of all default fallbacks in priority order
 pub fn get_builtin_fallbacks() -> Vec<BuiltinFallback> {
     vec![
+        // Generate Script with AI - top fallback when no script matches
+        BuiltinFallback {
+            id: "builtin-generate-script-with-ai",
+            name: "Generate Script with AI",
+            description: "Generate a Script Kit script from this text",
+            icon: "sparkles",
+            action: FallbackAction::ExecuteBuiltin {
+                builtin_id: "builtin-generate-script-with-ai".to_string(),
+            },
+            condition: FallbackCondition::Always,
+            enabled: true,
+            priority: 0,
+        },
         // Search Files - high priority, always available
         BuiltinFallback {
             id: "search-files",
@@ -374,7 +398,7 @@ mod tests {
     #[test]
     fn test_get_builtin_fallbacks_count() {
         let fallbacks = get_builtin_fallbacks();
-        assert_eq!(fallbacks.len(), 10, "Should have 10 built-in fallbacks");
+        assert_eq!(fallbacks.len(), 11, "Should have 11 built-in fallbacks");
     }
 
     #[test]
@@ -419,6 +443,7 @@ mod tests {
 
         // Should include all "Always" fallbacks
         let ids: Vec<&str> = fallbacks.iter().map(|f| f.id).collect();
+        assert!(ids.contains(&"builtin-generate-script-with-ai"));
         assert!(ids.contains(&"search-files"));
         assert!(ids.contains(&"run-in-terminal"));
         assert!(ids.contains(&"add-to-notes"));
@@ -531,6 +556,23 @@ mod tests {
                 assert!(url.contains("hello%20world"));
             }
             _ => panic!("Expected OpenUrl result"),
+        }
+    }
+
+    #[test]
+    fn test_execute_generate_script_with_ai_returns_execute_builtin() {
+        let fallbacks = get_builtin_fallbacks();
+        let generate_script = fallbacks
+            .iter()
+            .find(|f| f.id == "builtin-generate-script-with-ai")
+            .expect("generate-script fallback should exist");
+
+        let result = generate_script.execute("build a git helper").unwrap();
+        match result {
+            FallbackResult::ExecuteBuiltin { builtin_id } => {
+                assert_eq!(builtin_id, "builtin-generate-script-with-ai")
+            }
+            _ => panic!("Expected ExecuteBuiltin result"),
         }
     }
 
@@ -655,7 +697,7 @@ mod tests {
     fn test_search_files_priority() {
         let fallbacks = get_applicable_fallbacks("test");
 
-        // search-files (priority 5) should come first among "Always" fallbacks
+        // search-files (priority 5) should come before run-in-terminal (priority 20)
         let search_files_pos = fallbacks.iter().position(|f| f.id == "search-files");
         let run_terminal_pos = fallbacks.iter().position(|f| f.id == "run-in-terminal");
 
@@ -665,5 +707,17 @@ mod tests {
             search_files_pos.unwrap() < run_terminal_pos.unwrap(),
             "search-files should come before run-in-terminal"
         );
+    }
+
+    #[test]
+    fn test_generate_script_with_ai_is_top_fallback_priority() {
+        let fallbacks = get_applicable_fallbacks("build a weather app");
+
+        let first = fallbacks
+            .first()
+            .expect("applicable fallback list should not be empty");
+
+        assert_eq!(first.id, "builtin-generate-script-with-ai");
+        assert_eq!(first.priority, 0);
     }
 }

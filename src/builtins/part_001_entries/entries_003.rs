@@ -146,6 +146,59 @@
     ));
 
     // =========================================================================
+    // Kit Store Commands
+    // =========================================================================
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-browse-kit-store",
+        "Browse Kit Store",
+        "Browse available kits from the Kit Store",
+        vec![
+            "kit",
+            "store",
+            "browse",
+            "search",
+            "discover",
+            "extensions",
+        ],
+        BuiltInFeature::KitStoreCommand(KitStoreCommandType::BrowseKits),
+        "search",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-manage-installed-kits",
+        "Manage Installed Kits",
+        "View and manage kits already installed from the Kit Store",
+        vec![
+            "kit",
+            "store",
+            "installed",
+            "manage",
+            "extensions",
+            "packages",
+        ],
+        BuiltInFeature::KitStoreCommand(KitStoreCommandType::InstalledKits),
+        "package",
+    ));
+
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin-update-all-kits",
+        "Update All Kits",
+        "Update every installed kit to the latest version",
+        vec![
+            "kit",
+            "store",
+            "update",
+            "upgrade",
+            "refresh",
+            "all",
+            "extensions",
+        ],
+        BuiltInFeature::KitStoreCommand(KitStoreCommandType::UpdateAllKits),
+        "refresh-cw",
+    ));
+
+    // =========================================================================
     // File Search (Directory Navigation)
     // =========================================================================
 
