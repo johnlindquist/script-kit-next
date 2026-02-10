@@ -27,9 +27,115 @@ impl ScriptListApp {
 
             match crate::file_search::reveal_in_finder(&path_str) {
                 Ok(_) => logging::log("UI", &format!("Revealed in {}: {}", file_manager, path_str)),
-                Err(e) => logging::log("ERROR", &format!("Failed to reveal in {}: {}", file_manager, e)),
+                Err(e) => logging::log(
+                    "ERROR",
+                    &format!("Failed to reveal in {}: {}", file_manager, e),
+                ),
             }
         });
+    }
+
+    /// Reveal a path and return completion back to the UI thread for HUD feedback.
+    fn reveal_in_finder_with_feedback_async(
+        &self,
+        path: &std::path::Path,
+    ) -> async_channel::Receiver<Result<(), String>> {
+        let path_str = path.to_string_lossy().to_string();
+        let (result_tx, result_rx) = async_channel::bounded::<Result<(), String>>(1);
+
+        std::thread::spawn(move || {
+            let file_manager = if cfg!(target_os = "macos") {
+                "Finder"
+            } else if cfg!(target_os = "windows") {
+                "Explorer"
+            } else {
+                "File Manager"
+            };
+
+            logging::log(
+                "UI",
+                &format!(
+                    "ACTION_REVEAL_IN_FINDER_START file_manager='{}' path='{}'",
+                    file_manager, path_str
+                ),
+            );
+
+            let reveal_result = match crate::file_search::reveal_in_finder(&path_str) {
+                Ok(()) => {
+                    logging::log(
+                        "UI",
+                        &format!(
+                            "ACTION_REVEAL_IN_FINDER_SUCCESS file_manager='{}' path='{}'",
+                            file_manager, path_str
+                        ),
+                    );
+                    Ok(())
+                }
+                Err(error) => {
+                    logging::log(
+                        "ERROR",
+                        &format!(
+                            "ACTION_REVEAL_IN_FINDER_FAILED attempted='reveal_in_finder' path='{}' file_manager='{}' error='{}'",
+                            path_str, file_manager, error
+                        ),
+                    );
+                    Err(format!("Failed to reveal in {}: {}", file_manager, error))
+                }
+            };
+
+            let _ = result_tx.send_blocking(reveal_result);
+        });
+
+        result_rx
+    }
+
+    /// Launch the configured editor and return completion back to the UI thread for HUD feedback.
+    fn launch_editor_with_feedback_async(
+        &self,
+        path: &std::path::Path,
+    ) -> async_channel::Receiver<Result<(), String>> {
+        let editor = self.config.get_editor();
+        let path_str = path.to_string_lossy().to_string();
+        let (result_tx, result_rx) = async_channel::bounded::<Result<(), String>>(1);
+
+        std::thread::spawn(move || {
+            use std::process::Command;
+
+            logging::log(
+                "UI",
+                &format!(
+                    "ACTION_EDITOR_LAUNCH_START editor='{}' path='{}'",
+                    editor, path_str
+                ),
+            );
+
+            let launch_result = match Command::new(&editor).arg(&path_str).spawn() {
+                Ok(_) => {
+                    logging::log(
+                        "UI",
+                        &format!(
+                            "ACTION_EDITOR_LAUNCH_SUCCESS editor='{}' path='{}'",
+                            editor, path_str
+                        ),
+                    );
+                    Ok(())
+                }
+                Err(error) => {
+                    logging::log(
+                        "ERROR",
+                        &format!(
+                            "ACTION_EDITOR_LAUNCH_FAILED attempted='{} {}' path='{}' error='{}'",
+                            editor, path_str, path_str, error
+                        ),
+                    );
+                    Err(format!("Failed to open in {}: {}", editor, error))
+                }
+            };
+
+            let _ = result_tx.send_blocking(launch_result);
+        });
+
+        result_rx
     }
 
     /// Copy text to clipboard using pbcopy on macOS.
@@ -131,6 +237,12 @@ impl ScriptListApp {
     fn handle_action(&mut self, action_id: String, cx: &mut Context<Self>) {
         logging::log("UI", &format!("Action selected: {}", action_id));
 
+        let action_id = action_id
+            .strip_prefix("clip:")
+            .or_else(|| action_id.strip_prefix("file:"))
+            .or_else(|| action_id.strip_prefix("chat:"))
+            .unwrap_or(action_id.as_str());
+
         let should_transition_to_script_list =
             should_transition_to_script_list_after_action(&self.current_view);
 
@@ -140,7 +252,7 @@ impl ScriptListApp {
             None
         };
 
-        match action_id.as_str() {
+        match action_id {
             "clipboard_pin" | "clipboard_unpin" => {
                 let Some(entry) = selected_clipboard_entry else {
                     self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
@@ -197,7 +309,7 @@ impl ScriptListApp {
                                 .map(|(_, entry)| entry.id.clone());
                         }
 
-                        if let Some(message) = clipboard_pin_action_success_hud(&action_id) {
+                        if let Some(message) = clipboard_pin_action_success_hud(action_id) {
                             self.show_hud(message.to_string(), Some(1500), cx);
                         }
                         cx.notify();
@@ -233,7 +345,10 @@ impl ScriptListApp {
                 );
 
                 let share_result = match entry.content_type {
-                    clipboard_history::ContentType::Text => {
+                    clipboard_history::ContentType::Text
+                    | clipboard_history::ContentType::Link
+                    | clipboard_history::ContentType::File
+                    | clipboard_history::ContentType::Color => {
                         crate::platform::show_share_sheet(crate::platform::ShareSheetItem::Text(
                             content,
                         ));
@@ -311,7 +426,10 @@ impl ScriptListApp {
                 );
 
                 match entry.content_type {
-                    clipboard_history::ContentType::Text => {
+                    clipboard_history::ContentType::Text
+                    | clipboard_history::ContentType::Link
+                    | clipboard_history::ContentType::File
+                    | clipboard_history::ContentType::Color => {
                         if let Err(e) = ai::open_ai_window(cx) {
                             logging::log("ERROR", &format!("Failed to open AI window: {}", e));
                             self.show_hud("Failed to open AI window".to_string(), Some(2000), cx);
@@ -423,7 +541,7 @@ impl ScriptListApp {
             self.transition_to_script_list_after_action(cx);
         }
 
-        match action_id.as_str() {
+        match action_id {
             "create_script" => {
                 logging::log("UI", "Create script action - opening scripts folder");
                 let scripts_dir = shellexpand::tilde("~/.scriptkit/scripts").to_string();
@@ -471,9 +589,24 @@ impl ScriptListApp {
                 };
 
                 if let Some(path) = path_opt {
-                    self.reveal_in_finder(&path);
-                    self.show_hud("Opened in Finder".to_string(), Some(1500), cx);
-                    self.hide_main_and_reset(cx);
+                    let reveal_result_rx = self.reveal_in_finder_with_feedback_async(&path);
+                    cx.spawn(async move |this, cx| {
+                        let Ok(reveal_result) = reveal_result_rx.recv().await else {
+                            return;
+                        };
+
+                        this.update(cx, |this, cx| match reveal_result {
+                            Ok(()) => {
+                                this.show_hud("Opened in Finder".to_string(), Some(1500), cx);
+                                this.hide_main_and_reset(cx);
+                            }
+                            Err(message) => {
+                                this.show_hud(message, Some(2500), cx);
+                            }
+                        })
+                        .ok();
+                    })
+                    .detach();
                 } else {
                     self.show_hud(
                         "Cannot reveal this item type in Finder".to_string(),
@@ -515,7 +648,7 @@ impl ScriptListApp {
                     path_opt
                 } else {
                     self.show_hud(
-                        selection_required_message_for_action(&action_id).to_string(),
+                        selection_required_message_for_action(action_id).to_string(),
                         Some(2000),
                         cx,
                     );
@@ -612,7 +745,7 @@ impl ScriptListApp {
                     self.hide_main_and_reset(cx);
                 } else {
                     self.show_hud(
-                        selection_required_message_for_action(&action_id).to_string(),
+                        selection_required_message_for_action(action_id).to_string(),
                         Some(2000),
                         cx,
                     );
@@ -679,7 +812,7 @@ impl ScriptListApp {
                     }
                 } else {
                     self.show_hud(
-                        selection_required_message_for_action(&action_id).to_string(),
+                        selection_required_message_for_action(action_id).to_string(),
                         Some(2000),
                         cx,
                     );
@@ -747,14 +880,13 @@ impl ScriptListApp {
                     self.hide_main_and_reset(cx);
                 } else {
                     self.show_hud(
-                        selection_required_message_for_action(&action_id).to_string(),
+                        selection_required_message_for_action(action_id).to_string(),
                         Some(2000),
                         cx,
                     );
                 }
             }
             // Alias actions: add_alias, update_alias open the alias input
-
             "add_alias" | "update_alias" => {
                 logging::log("UI", &format!("{} action", action_id));
                 if let Some(result) = self.get_selected_result() {
@@ -796,7 +928,7 @@ impl ScriptListApp {
                     self.show_alias_input(command_id, command_name, cx);
                 } else {
                     self.show_hud(
-                        selection_required_message_for_action(&action_id).to_string(),
+                        selection_required_message_for_action(action_id).to_string(),
                         Some(2000),
                         cx,
                     );
@@ -864,7 +996,7 @@ impl ScriptListApp {
                     self.hide_main_and_reset(cx);
                 } else {
                     self.show_hud(
-                        selection_required_message_for_action(&action_id).to_string(),
+                        selection_required_message_for_action(action_id).to_string(),
                         Some(2000),
                         cx,
                     );
@@ -884,8 +1016,23 @@ impl ScriptListApp {
                     };
 
                     if let Some(path) = path_opt {
-                        self.edit_script(&path);
-                        self.hide_main_and_reset(cx);
+                        let editor_launch_rx = self.launch_editor_with_feedback_async(&path);
+                        cx.spawn(async move |this, cx| {
+                            let Ok(launch_result) = editor_launch_rx.recv().await else {
+                                return;
+                            };
+
+                            this.update(cx, |this, cx| match launch_result {
+                                Ok(()) => {
+                                    this.hide_main_and_reset(cx);
+                                }
+                                Err(message) => {
+                                    this.show_hud(message, Some(3000), cx);
+                                }
+                            })
+                            .ok();
+                        })
+                        .detach();
                     } else {
                         self.show_hud("Cannot edit this item type".to_string(), Some(2000), cx);
                     }
@@ -1096,12 +1243,11 @@ impl ScriptListApp {
                 self.file_search_actions_path = None;
             }
             // File search specific actions
-
             "open_file" | "open_directory" | "quick_look" | "open_with" | "show_info" => {
                 if let Some(path) = self.file_search_actions_path.clone() {
                     logging::log("UI", &format!("File action '{}': {}", action_id, path));
 
-                    let result = match action_id.as_str() {
+                    let result = match action_id {
                         "open_file" | "open_directory" => crate::file_search::open_file(&path),
                         "quick_look" => crate::file_search::quick_look(&path),
                         "open_with" => crate::file_search::open_with(&path),
@@ -1111,7 +1257,7 @@ impl ScriptListApp {
 
                     match result {
                         Ok(()) => {
-                            if let Some(message) = file_search_action_success_hud(&action_id) {
+                            if let Some(message) = file_search_action_success_hud(action_id) {
                                 self.show_hud(message.to_string(), Some(1500), cx);
                             }
                             self.file_search_actions_path = None;
@@ -1127,7 +1273,7 @@ impl ScriptListApp {
                                     action_id, path, e
                                 ),
                             );
-                            let prefix = file_search_action_error_hud_prefix(&action_id)
+                            let prefix = file_search_action_error_hud_prefix(action_id)
                                 .unwrap_or("Action failed");
                             self.show_hud(format!("{}: {}", prefix, e), Some(3000), cx);
                             self.file_search_actions_path = None;
@@ -1178,6 +1324,8 @@ impl ScriptListApp {
                     timestamp: entry.timestamp,
                     pinned: entry.pinned,
                     ocr_text: entry.ocr_text.clone(),
+                    source_app_name: None,
+                    source_app_bundle_id: None,
                 };
 
                 let temp_path = match clipboard_history::save_entry_to_temp_file(&full_entry) {
@@ -1424,7 +1572,6 @@ impl ScriptListApp {
                 }
             }
             // Clipboard delete actions
-
             "clipboard_delete_multiple" => {
                 let filter_text = match &self.current_view {
                     AppView::ClipboardHistoryView { filter, .. } => filter.trim().to_string(),
@@ -1784,7 +1931,10 @@ impl ScriptListApp {
 
                 // Determine filename and content based on type
                 let (file_content, extension) = match entry.content_type {
-                    clipboard_history::ContentType::Text => (content.into_bytes(), "txt"),
+                    clipboard_history::ContentType::Text
+                    | clipboard_history::ContentType::Link
+                    | clipboard_history::ContentType::File
+                    | clipboard_history::ContentType::Color => (content.into_bytes(), "txt"),
                     clipboard_history::ContentType::Image => {
                         let Some(png_bytes) = clipboard_history::content_to_png_bytes(&content)
                         else {
@@ -1932,8 +2082,23 @@ impl ScriptListApp {
                             // Extract just the path without the anchor (e.g., "/path/to/file.md#slug" -> "/path/to/file.md")
                             let path_str = file_path.split('#').next().unwrap_or(file_path);
                             let path = std::path::PathBuf::from(path_str);
-                            self.edit_script(&path);
-                            self.hide_main_and_reset(cx);
+                            let editor_launch_rx = self.launch_editor_with_feedback_async(&path);
+                            cx.spawn(async move |this, cx| {
+                                let Ok(launch_result) = editor_launch_rx.recv().await else {
+                                    return;
+                                };
+
+                                this.update(cx, |this, cx| match launch_result {
+                                    Ok(()) => {
+                                        this.hide_main_and_reset(cx);
+                                    }
+                                    Err(message) => {
+                                        this.show_hud(message, Some(3000), cx);
+                                    }
+                                })
+                                .ok();
+                            })
+                            .detach();
                         } else {
                             self.show_hud(
                                 "Scriptlet has no source file path".to_string(),
@@ -1950,7 +2115,7 @@ impl ScriptListApp {
                     }
                 } else {
                     self.show_hud(
-                        selection_required_message_for_action(&action_id).to_string(),
+                        selection_required_message_for_action(action_id).to_string(),
                         Some(2000),
                         cx,
                     );
@@ -1964,9 +2129,28 @@ impl ScriptListApp {
                             // Extract just the path without the anchor
                             let path_str = file_path.split('#').next().unwrap_or(file_path);
                             let path = std::path::Path::new(path_str);
-                            self.reveal_in_finder(path);
-                            self.show_hud("Opened in Finder".to_string(), Some(1500), cx);
-                            self.hide_main_and_reset(cx);
+                            let reveal_result_rx = self.reveal_in_finder_with_feedback_async(path);
+                            cx.spawn(async move |this, cx| {
+                                let Ok(reveal_result) = reveal_result_rx.recv().await else {
+                                    return;
+                                };
+
+                                this.update(cx, |this, cx| match reveal_result {
+                                    Ok(()) => {
+                                        this.show_hud(
+                                            "Opened in Finder".to_string(),
+                                            Some(1500),
+                                            cx,
+                                        );
+                                        this.hide_main_and_reset(cx);
+                                    }
+                                    Err(message) => {
+                                        this.show_hud(message, Some(2500), cx);
+                                    }
+                                })
+                                .ok();
+                            })
+                            .detach();
                         } else {
                             self.show_hud(
                                 "Scriptlet has no source file path".to_string(),
@@ -1983,7 +2167,7 @@ impl ScriptListApp {
                     }
                 } else {
                     self.show_hud(
-                        selection_required_message_for_action(&action_id).to_string(),
+                        selection_required_message_for_action(action_id).to_string(),
                         Some(2000),
                         cx,
                     );
@@ -2073,7 +2257,7 @@ impl ScriptListApp {
                     }
                 } else {
                     self.show_hud(
-                        selection_required_message_for_action(&action_id).to_string(),
+                        selection_required_message_for_action(action_id).to_string(),
                         Some(2000),
                         cx,
                     );
@@ -2187,7 +2371,7 @@ impl ScriptListApp {
                     }
                 } else {
                     self.show_hud(
-                        selection_required_message_for_action(&action_id).to_string(),
+                        selection_required_message_for_action(action_id).to_string(),
                         Some(2000),
                         cx,
                     );
@@ -2233,7 +2417,7 @@ impl ScriptListApp {
                     }
                 } else {
                     self.show_hud(
-                        selection_required_message_for_action(&action_id).to_string(),
+                        selection_required_message_for_action(action_id).to_string(),
                         Some(2000),
                         cx,
                     );
@@ -2414,7 +2598,7 @@ impl ScriptListApp {
 
             _ => {
                 // Handle SDK actions using shared helper
-                self.trigger_sdk_action_internal(&action_id);
+                self.trigger_sdk_action_internal(action_id);
             }
         }
 

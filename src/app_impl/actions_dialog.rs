@@ -220,6 +220,26 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let overlay_depth_before_on_close = self.focus_coordinator.overlay_depth();
+        let on_close_callback = self
+            .actions_dialog
+            .as_ref()
+            .and_then(|dialog| dialog.read(cx).on_close.clone());
+
+        if let Some(on_close) = on_close_callback {
+            logging::log(
+                "ACTIONS",
+                &format!(
+                    "ACTIONS_CLOSE_POPUP invoking on_close callback (host={:?}, overlay_depth_before={})",
+                    host, overlay_depth_before_on_close
+                ),
+            );
+            on_close(cx);
+        }
+
+        let overlay_depth_after_on_close = self.focus_coordinator.overlay_depth();
+        let callback_restored_focus = overlay_depth_after_on_close < overlay_depth_before_on_close;
+
         self.show_actions_popup = false;
         self.actions_dialog = None;
 
@@ -236,10 +256,11 @@ impl ScriptListApp {
             .detach();
         }
 
-        // Use coordinator to pop overlay and restore previous focus
-        // The coordinator's stack tracks where we came from, so no need
-        // to manually switch on host type anymore.
-        self.pop_focus_overlay(cx);
+        // Use coordinator to pop overlay and restore previous focus.
+        // Skip pop when the dialog callback already restored focus to avoid double-pop.
+        if !callback_restored_focus {
+            self.pop_focus_overlay(cx);
+        }
 
         // Apply restored focus immediately rather than deferring to next render.
         // pop_focus_overlay sets pending_focus to the saved target (e.g. ChatPrompt).
@@ -257,4 +278,31 @@ impl ScriptListApp {
         );
     }
 
+}
+
+#[cfg(test)]
+mod close_actions_popup_regression_tests {
+    use std::fs;
+
+    #[test]
+    fn test_close_actions_popup_invokes_on_close_before_clearing_dialog_state() {
+        let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
+            .expect("Failed to read src/app_impl/actions_dialog.rs");
+        let close_fn_start = source
+            .find("pub(crate) fn close_actions_popup")
+            .expect("close_actions_popup function not found");
+        let close_fn = &source[close_fn_start..];
+
+        let on_close_pos = close_fn
+            .find("on_close(cx);")
+            .expect("close_actions_popup must invoke on_close callback");
+        let clear_dialog_pos = close_fn
+            .find("self.actions_dialog = None;")
+            .expect("close_actions_popup must clear actions_dialog state");
+
+        assert!(
+            on_close_pos < clear_dialog_pos,
+            "close_actions_popup must invoke on_close before clearing actions_dialog state"
+        );
+    }
 }

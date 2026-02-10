@@ -4,6 +4,8 @@ impl ScriptListApp {
     pub fn execute_chat_action(&mut self, action_id: &str, cx: &mut Context<Self>) {
         logging::log("ACTIONS", &format!("execute_chat_action: {}", action_id));
 
+        let action_id = action_id.strip_prefix("chat:").unwrap_or(action_id);
+
         // Handle model selection (action_id starts with "select_model_")
         if let Some(model_id) = action_id.strip_prefix("select_model_") {
             let mut selected_model_name: Option<String> = None;
@@ -135,5 +137,4 @@ impl ScriptListApp {
             }
         }
     }
-
 }

@@ -166,12 +166,14 @@ mod app_actions_tests {
     use super::{
         clipboard_pin_action_success_hud, extract_scriptlet_source_path,
         file_search_action_error_hud_prefix, file_search_action_success_hud,
+        script_removal_target_from_result, select_clipboard_entry_meta,
         selection_required_message_for_action, should_transition_to_script_list_after_action,
-        script_removal_target_from_result, select_clipboard_entry_meta, ScriptRemovalTarget,
+        ScriptRemovalTarget,
     };
-    use crate::AppView;
     use crate::clipboard_history::{ClipboardEntryMeta, ContentType};
     use crate::scripts;
+    use crate::AppView;
+    use std::fs;
     use std::path::PathBuf;
     use std::sync::Arc;
 
@@ -187,6 +189,14 @@ mod app_actions_tests {
             byte_size: 0,
             ocr_text: None,
         }
+    }
+
+    fn read(path: &str) -> String {
+        fs::read_to_string(path).unwrap_or_else(|_| panic!("Failed to read {path}"))
+    }
+
+    fn count_occurrences(haystack: &str, needle: &str) -> usize {
+        haystack.match_indices(needle).count()
     }
 
     #[test]
@@ -362,6 +372,56 @@ mod app_actions_tests {
                 name: "Open GitHub".to_string(),
                 item_kind: "scriptlet",
             })
+        );
+    }
+
+    #[test]
+    fn test_edit_actions_show_error_feedback_when_editor_launch_fails() {
+        let content = read("src/app_actions/handle_action.rs");
+
+        assert!(
+            content.contains("fn launch_editor_with_feedback_async"),
+            "Expected async editor launch helper to exist"
+        );
+
+        let usage_count =
+            count_occurrences(&content, "self.launch_editor_with_feedback_async(&path)");
+        assert!(
+            usage_count >= 2,
+            "Expected edit_script and edit_scriptlet to use async editor launch feedback (found {usage_count} usages)"
+        );
+
+        assert!(
+            content.contains("this.show_hud(message, Some(3000), cx);"),
+            "Expected async editor launch failure to surface a HUD error message"
+        );
+    }
+
+    #[test]
+    fn test_reveal_actions_show_success_hud_after_async_completion() {
+        let content = read("src/app_actions/handle_action.rs");
+
+        assert!(
+            content.contains("fn reveal_in_finder_with_feedback_async"),
+            "Expected async reveal helper to exist"
+        );
+
+        let usage_count =
+            count_occurrences(&content, "self.reveal_in_finder_with_feedback_async(&path)")
+                + count_occurrences(&content, "self.reveal_in_finder_with_feedback_async(path)");
+        assert!(
+            usage_count >= 2,
+            "Expected reveal actions to use async reveal feedback helper (found {usage_count} usages)"
+        );
+
+        assert!(
+            content.contains("let Ok(reveal_result) = reveal_result_rx.recv().await else {"),
+            "Expected reveal actions to await reveal completion before showing HUD"
+        );
+
+        assert!(
+            content.contains("this.show_hud(\"Opened in Finder\".to_string(), Some(1500), cx);"),
+            "Expected reveal success HUD to be emitted from async completion callback"
         );
     }
 }

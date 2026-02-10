@@ -1,5 +1,40 @@
 use super::*;
 
+const NO_MAIN_WINDOW_BUILTINS: &[&str] = &[
+    "builtin-ai-chat",
+    "builtin-open-ai",
+    "builtin-notes",
+    "builtin-open-notes",
+    "builtin-new-note",
+    "builtin-search-notes",
+    "builtin-quick-capture",
+    "builtin-new-conversation",
+];
+
+fn builtin_needs_main_window_for_command_id(identifier: &str) -> bool {
+    !NO_MAIN_WINDOW_BUILTINS.contains(&identifier)
+}
+
+#[cfg(test)]
+mod builtin_command_window_visibility_tests {
+    use super::builtin_needs_main_window_for_command_id;
+
+    #[test]
+    fn test_builtin_needs_main_window_false_for_open_ai_and_open_notes() {
+        assert!(!builtin_needs_main_window_for_command_id("builtin-open-ai"));
+        assert!(!builtin_needs_main_window_for_command_id(
+            "builtin-open-notes"
+        ));
+    }
+
+    #[test]
+    fn test_builtin_needs_main_window_true_for_unlisted_builtin() {
+        assert!(builtin_needs_main_window_for_command_id(
+            "builtin-refresh-scripts"
+        ));
+    }
+}
+
 impl ScriptListApp {
     pub(crate) fn execute_scriptlet(&mut self, scriptlet: &scripts::Scriptlet, cx: &mut Context<Self>) {
         logging::log(
@@ -313,16 +348,6 @@ impl ScriptListApp {
             &format!("Executing by command ID or path: {}", command_id),
         );
 
-        // Builtins that open their own windows and don't need main window
-        const NO_MAIN_WINDOW_BUILTINS: &[&str] = &[
-            "builtin-ai-chat",
-            "builtin-notes",
-            "builtin-new-note",
-            "builtin-search-notes",
-            "builtin-quick-capture",
-            "builtin-new-conversation",
-        ];
-
         // Parse command ID format: "type/identifier"
         if let Some((cmd_type, identifier)) = command_id.split_once('/') {
             match cmd_type {
@@ -352,7 +377,8 @@ impl ScriptListApp {
                         logging::log("EXEC", &format!("Executing builtin: {}", identifier));
                         self.execute_builtin(entry, cx);
                         // Check if this builtin opens its own window
-                        let needs_main_window = !NO_MAIN_WINDOW_BUILTINS.contains(&identifier);
+                        let needs_main_window =
+                            builtin_needs_main_window_for_command_id(identifier);
                         logging::log(
                             "EXEC",
                             &format!(
