@@ -50,8 +50,10 @@ fn render_element(element: &HtmlElement, ctx: RenderContext) -> Div {
             .child(render_inline_content(children, &ctx)),
 
         HtmlElement::Bold(children) => {
-            let mut style = DivInlineStyle::default();
-            style.bold = true;
+            let style = DivInlineStyle {
+                bold: true,
+                ..Default::default()
+            };
             let mut segments = Vec::new();
             append_inline_segments(children, &style, &mut segments);
             div()
@@ -60,8 +62,10 @@ fn render_element(element: &HtmlElement, ctx: RenderContext) -> Div {
         }
 
         HtmlElement::Italic(children) => {
-            let mut style = DivInlineStyle::default();
-            style.italic = true;
+            let style = DivInlineStyle {
+                italic: true,
+                ..Default::default()
+            };
             let mut segments = Vec::new();
             append_inline_segments(children, &style, &mut segments);
             div()
@@ -199,8 +203,10 @@ fn render_element(element: &HtmlElement, ctx: RenderContext) -> Div {
         HtmlElement::HorizontalRule => div().w_full().h(px(1.0)).my(px(12.0)).bg(rgb(ctx.hr_color)),
 
         HtmlElement::Link { href, children } => {
-            let mut style = DivInlineStyle::default();
-            style.link_href = Some(href.clone());
+            let style = DivInlineStyle {
+                link_href: Some(href.clone()),
+                ..Default::default()
+            };
             let mut segments = Vec::new();
             append_inline_segments(children, &style, &mut segments);
             div()

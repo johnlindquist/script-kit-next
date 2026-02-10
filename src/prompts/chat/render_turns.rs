@@ -108,6 +108,11 @@ impl ChatPrompt {
         }
         // AI response (only show if no error, or show partial if stream interrupted)
         else if let Some(ref response) = turn.assistant_response {
+            let markdown_response = super::types::assistant_response_markdown_source(
+                self.script_generation_mode,
+                response,
+            );
+
             // Use markdown rendering for assistant responses
             if turn.streaming && response.is_empty() {
                 // Empty streaming state
@@ -120,7 +125,7 @@ impl ChatPrompt {
                         .w_full()
                         .min_w_0()
                         .overflow_x_hidden()
-                        .child(render_markdown(response, colors))
+                        .child(render_markdown(markdown_response.as_ref(), colors))
                         .child(
                             div()
                                 .text_sm()
@@ -135,7 +140,7 @@ impl ChatPrompt {
                         .w_full()
                         .min_w_0()
                         .overflow_x_hidden()
-                        .child(render_markdown(response, colors)),
+                        .child(render_markdown(markdown_response.as_ref(), colors)),
                 );
             }
         }

@@ -129,6 +129,92 @@ impl ChatPrompt {
         self.clear_messages(cx);
     }
 
+    pub(super) fn handle_script_generation_action(
+        &mut self,
+        action: ScriptGenerationAction,
+        cx: &mut Context<Self>,
+    ) {
+        let Some((prompt_description, raw_response)) = self.latest_script_generation_draft() else {
+            self.set_script_generation_status(true, "No generated script to save yet.", cx);
+            return;
+        };
+
+        logging::log(
+            "CHAT_SCRIPT_GEN",
+            &format!(
+                "state=save_requested action={:?} prompt_len={} response_len={}",
+                action,
+                prompt_description.len(),
+                raw_response.len()
+            ),
+        );
+
+        let script_path = match crate::ai::script_generation::save_generated_script_from_response(
+            &prompt_description,
+            &raw_response,
+        ) {
+            Ok(path) => path,
+            Err(error) => {
+                self.set_script_generation_status(
+                    true,
+                    format!("Failed to save script: {}", error),
+                    cx,
+                );
+                return;
+            }
+        };
+
+        let script_name = script_path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "generated script".to_string());
+
+        if action.should_run_after_save() {
+            self.set_script_generation_status(false, format!("Running {}...", script_name), cx);
+            if let Some(ref callback) = self.on_run_script {
+                callback(script_path.clone(), cx);
+                self.set_script_generation_status(
+                    false,
+                    format!("Saved and running {}", script_name),
+                    cx,
+                );
+                logging::log(
+                    "CHAT_SCRIPT_GEN",
+                    &format!(
+                        "state=run_dispatched action={:?} path={}",
+                        action,
+                        script_path.display()
+                    ),
+                );
+            } else {
+                self.set_script_generation_status(
+                    true,
+                    format!("Saved {} but run action is unavailable", script_name),
+                    cx,
+                );
+                logging::log(
+                    "CHAT_SCRIPT_GEN",
+                    &format!(
+                        "state=run_dispatch_failed action={:?} path={} reason=missing_callback",
+                        action,
+                        script_path.display()
+                    ),
+                );
+            }
+            return;
+        }
+
+        self.set_script_generation_status(false, format!("Saved {}", script_name), cx);
+        logging::log(
+            "CHAT_SCRIPT_GEN",
+            &format!(
+                "state=saved_only action={:?} path={}",
+                action,
+                script_path.display()
+            ),
+        );
+    }
+
     // ============================================
     // Actions Menu Methods
     // ============================================

@@ -1,28 +1,253 @@
 use super::*;
 
 impl ChatPrompt {
-    fn render_footer(&self, _cx: &mut Context<Self>) -> impl IntoElement {
-        // Use standard PromptFooter colors from theme
+    fn render_footer_button(
+        &self,
+        id: &'static str,
+        label: &'static str,
+        shortcut: Option<&'static str>,
+        accent_color: u32,
+        muted_color: u32,
+    ) -> AnyElement {
+        div()
+            .id(id)
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(6.0))
+            .px(px(8.0))
+            .py(px(2.0))
+            .rounded(px(4.0))
+            .cursor_default()
+            .child(div().text_xs().text_color(rgb(accent_color)).child(label))
+            .when_some(shortcut, |d, shortcut| {
+                d.child(div().text_xs().text_color(rgb(muted_color)).child(shortcut))
+            })
+            .into_any_element()
+    }
+
+    fn render_script_generation_footer_button(
+        &self,
+        id: &'static str,
+        label: &'static str,
+        shortcut: Option<&'static str>,
+        action: ScriptGenerationAction,
+        footer_colors: PromptFooterColors,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let button_font_size =
+            crate::components::prompt_footer::footer_button_font_size_px(&self.theme);
+        let hover_bg = rgba(crate::components::prompt_footer::footer_button_hover_rgba(
+            footer_colors,
+        ));
+        let active_bg = rgba(crate::components::prompt_footer::footer_button_active_rgba(
+            footer_colors,
+        ));
+
+        div()
+            .id(id)
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(6.0))
+            .px(px(8.0))
+            .py(px(2.0))
+            .rounded(px(4.0))
+            .cursor_pointer()
+            .hover(move |d| d.bg(hover_bg))
+            .active(move |d| d.bg(active_bg))
+            .child(
+                div()
+                    .text_size(px(button_font_size))
+                    .text_color(rgb(footer_colors.accent))
+                    .child(label),
+            )
+            .when_some(shortcut, |d, shortcut| {
+                d.child(
+                    div()
+                        .text_size(px(button_font_size))
+                        .text_color(rgb(footer_colors.text_muted))
+                        .child(shortcut),
+                )
+            })
+            .on_click(cx.listener(move |this, _event, _window, cx| {
+                this.handle_script_generation_action(action, cx);
+            }))
+            .into_any_element()
+    }
+
+    fn render_footer(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let footer_colors = PromptFooterColors::from_theme(&self.theme);
+        let footer_bg = rgba(crate::components::prompt_footer::footer_surface_rgba(
+            footer_colors,
+        ));
+        let model_text = self.model.clone().unwrap_or_else(|| "Select Model".into());
+        let footer_height = crate::window_resize::layout::FOOTER_HEIGHT;
+        let divider = || {
+            div()
+                .w(px(1.0))
+                .h(px(16.0))
+                .mx(px(4.0))
+                .bg(rgba((footer_colors.border << 8) | 0x40))
+                .into_any_element()
+        };
+
+        let mut left_side = div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(8.0))
+            .flex_1()
+            .min_w(px(0.0))
+            .overflow_hidden()
+            .child(
+                svg()
+                    .external_path(crate::utils::get_logo_path())
+                    .size(px(16.0))
+                    .ml(px(2.0))
+                    .text_color(rgb(footer_colors.accent)),
+            )
+            .child(
+                div()
+                    .max_w(px(420.0))
+                    .overflow_hidden()
+                    .text_ellipsis()
+                    .whitespace_nowrap()
+                    .text_xs()
+                    .text_color(rgb(footer_colors.accent))
+                    .child(model_text),
+            );
+
+        if self.script_generation_mode {
+            if let Some(script_actions) = self.render_script_generation_footer_actions(cx) {
+                left_side = left_side.child(divider()).child(script_actions);
+            }
+        }
+
+        let mut right_side = div().flex().flex_row().items_center().min_w(px(0.));
+        let primary_button = if self.script_generation_mode {
+            self.render_script_generation_footer_button(
+                "chat-footer-primary-button",
+                "Save and Run",
+                Some("⌘↵"),
+                ScriptGenerationAction::SaveAndRun,
+                footer_colors,
+                cx,
+            )
+        } else {
+            self.render_footer_button(
+                "chat-footer-primary-button",
+                "Continue in Chat",
+                Some("⌘↵"),
+                footer_colors.accent,
+                footer_colors.text_muted,
+            )
+        };
+
+        right_side = right_side
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(footer_colors.text_muted))
+                    .child("Shift+Enter newline"),
+            )
+            .child(divider())
+            .child(primary_button)
+            .child(divider())
+            .child(self.render_footer_button(
+                "chat-footer-secondary-button",
+                "Actions",
+                Some("⌘K"),
+                footer_colors.accent,
+                footer_colors.text_muted,
+            ));
+
+        div()
+            .id("chat-footer")
+            .w_full()
+            .h(px(footer_height))
+            .min_h(px(footer_height))
+            .max_h(px(footer_height))
+            .flex_shrink_0()
+            .overflow_hidden()
+            .px(px(12.0))
+            .pt(px(0.0))
+            .pb(px(2.0))
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_between()
+            .border_t_1()
+            .border_color(rgba((footer_colors.border << 8) | 0x50))
+            .bg(footer_bg)
+            .child(left_side)
+            .child(right_side)
+    }
+
+    fn render_script_generation_footer_actions(
+        &self,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        let show_actions = self.should_show_script_generation_actions();
+        let status_message = self.script_generation_status.clone();
+
+        if !show_actions && status_message.is_none() {
+            return None;
+        }
+
+        let theme_colors = &self.theme.colors;
         let footer_colors = PromptFooterColors::from_theme(&self.theme);
 
-        // Build model display text (show model name if available)
-        let model_text = self.model.clone().unwrap_or_else(|| "Select Model".into());
+        let mut action_container = div()
+            .id("chat-script-generation-footer-actions")
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(2.0))
+            .min_w(px(0.0));
 
-        // Configure footer with chat-specific labels
-        let footer_config = PromptFooterConfig::new()
-            .primary_label("Continue in Chat")
-            .primary_shortcut("⌘↵")
-            .secondary_label("Actions")
-            .secondary_shortcut("⌘K")
-            .show_logo(true)
-            .show_secondary(true)
-            .helper_text(model_text) // Show model name next to logo
-            .info_label("Shift+Enter newline");
+        if show_actions {
+            action_container = action_container
+                .child(self.render_script_generation_footer_button(
+                    "chat-script-generation-save",
+                    "Save",
+                    None,
+                    ScriptGenerationAction::Save,
+                    footer_colors,
+                    cx,
+                ))
+                .child(self.render_script_generation_footer_button(
+                    "chat-script-generation-run",
+                    "Run",
+                    None,
+                    ScriptGenerationAction::Run,
+                    footer_colors,
+                    cx,
+                ));
+        }
 
-        // Note: Click handlers are not wired up here because PromptFooter uses
-        // RenderOnce with static callbacks. The keyboard shortcuts (⌘↵ and ⌘K)
-        // handle the actual functionality via the parent's key handler.
-        PromptFooter::new(footer_config, footer_colors)
+        if let Some(status) = status_message {
+            let status_color = if self.script_generation_status_is_error {
+                theme_colors.ui.error
+            } else {
+                theme_colors.ui.success
+            };
+
+            action_container = action_container.child(
+                div()
+                    .id("chat-script-generation-status")
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_color(rgb(status_color))
+                    .max_w(px(180.0))
+                    .overflow_hidden()
+                    .text_ellipsis()
+                    .whitespace_nowrap()
+                    .child(status),
+            );
+        }
+
+        Some(action_container.into_any_element())
     }
 }
 
@@ -148,7 +373,16 @@ impl Render for ChatPrompt {
                     }
                 }
                 ChatInputKeyAction::ToggleActions => this.toggle_actions_menu(cx),
-                ChatInputKeyAction::ContinueInChat => this.handle_continue_in_chat(cx),
+                ChatInputKeyAction::ContinueInChat => {
+                    if this.script_generation_mode {
+                        this.handle_script_generation_action(
+                            ScriptGenerationAction::SaveAndRun,
+                            cx,
+                        );
+                    } else {
+                        this.handle_continue_in_chat(cx);
+                    }
+                }
                 ChatInputKeyAction::Submit => this.handle_submit(cx),
                 ChatInputKeyAction::InsertNewline => {
                     this.input.insert_char('\n');
@@ -387,7 +621,7 @@ impl Render for ChatPrompt {
             .child(input_area)
             // Scrollable message area
             .child(messages_content)
-            // Footer with model selector, Continue in Chat, and Actions
+            // Footer with model selector and footer actions
             .child(self.render_footer(cx))
             // Note: Actions menu is now handled by parent via on_show_actions callback
             // The parent opens the standard ActionsDialog window

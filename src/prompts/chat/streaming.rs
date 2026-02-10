@@ -11,6 +11,7 @@ impl ChatPrompt {
         }
         logging::log("CHAT", &format!("User submitted: {}", text));
         self.input.clear();
+        self.clear_script_generation_status();
 
         // If built-in AI mode is enabled, handle the AI call directly
         if self.has_builtin_ai() {
@@ -110,6 +111,10 @@ impl ChatPrompt {
 
         // Build messages for the API call (convert our messages to provider format)
         let mut api_messages: Vec<ProviderMessage> = Vec::new();
+
+        if let Some(system_prompt) = self.builtin_system_prompt.clone() {
+            api_messages.push(ProviderMessage::system(system_prompt));
+        }
 
         // If slash command detected, prepend system context
         if let Some(ref ctx) = system_context {
@@ -234,19 +239,19 @@ impl ChatPrompt {
         };
 
         // Build messages for the API call (convert our messages to provider format)
-        let api_messages: Vec<ProviderMessage> = self
-            .messages
-            .iter()
-            .map(|m| {
-                if m.is_user() {
-                    ProviderMessage::user(m.get_content())
-                } else if matches!(m.role, Some(crate::protocol::ChatMessageRole::System)) {
-                    ProviderMessage::system(m.get_content())
-                } else {
-                    ProviderMessage::assistant(m.get_content())
-                }
-            })
-            .collect();
+        let mut api_messages: Vec<ProviderMessage> = Vec::new();
+        if let Some(system_prompt) = self.builtin_system_prompt.clone() {
+            api_messages.push(ProviderMessage::system(system_prompt));
+        }
+        api_messages.extend(self.messages.iter().map(|m| {
+            if m.is_user() {
+                ProviderMessage::user(m.get_content())
+            } else if matches!(m.role, Some(crate::protocol::ChatMessageRole::System)) {
+                ProviderMessage::system(m.get_content())
+            } else {
+                ProviderMessage::assistant(m.get_content())
+            }
+        }));
 
         // Set streaming state
         self.builtin_is_streaming = true;
@@ -390,6 +395,7 @@ impl ChatPrompt {
                                 }
                                 chat.mark_conversation_turns_dirty();
                                 chat.ensure_conversation_turns_cache();
+                                chat.scroll_turns_to_bottom();
                                 cx.notify();
                                 return true; // break
                             }
@@ -453,6 +459,7 @@ impl ChatPrompt {
                                 }
                                 chat.mark_conversation_turns_dirty();
                                 chat.ensure_conversation_turns_cache();
+                                chat.scroll_turns_to_bottom();
                                 cx.notify();
                                 return true; // break
                             }

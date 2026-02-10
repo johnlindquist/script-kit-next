@@ -1,4 +1,5 @@
 use super::*;
+use std::borrow::Cow;
 /// Available AI models for the chat
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChatModel {
@@ -59,6 +60,10 @@ pub type ChatClaudeCodeCallback = Arc<dyn Fn() + Send + Sync>;
 /// Callback type for showing actions menu: (prompt_id) -> triggers ActionsDialog
 pub type ChatShowActionsCallback = Arc<dyn Fn(String) + Send + Sync>;
 
+/// Callback type for running a saved generated script path in the parent app.
+pub type RunScriptCallback =
+    Arc<dyn Fn(std::path::PathBuf, &mut gpui::Context<super::prompt::ChatPrompt>) + Send + Sync>;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SetupCardAction {
     None,
@@ -115,6 +120,49 @@ pub(crate) fn resolve_setup_card_key(
     }
 
     (current_index, SetupCardAction::None, false)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ScriptGenerationAction {
+    Save,
+    Run,
+    SaveAndRun,
+}
+
+impl ScriptGenerationAction {
+    pub(crate) fn should_run_after_save(self) -> bool {
+        matches!(self, Self::Run | Self::SaveAndRun)
+    }
+}
+
+pub(crate) fn should_show_script_generation_actions(
+    script_generation_mode: bool,
+    is_streaming: bool,
+    has_draft: bool,
+) -> bool {
+    script_generation_mode && !is_streaming && has_draft
+}
+
+/// Normalize assistant content for markdown rendering in script-generation mode.
+///
+/// Script generation prompts ask models to return raw TypeScript without markdown
+/// fences. Wrap that raw code in a fenced block so the chat renderer can apply
+/// code-block styling while preserving non-script chat behavior.
+pub(crate) fn assistant_response_markdown_source<'a>(
+    script_generation_mode: bool,
+    response: &'a str,
+) -> Cow<'a, str> {
+    if !script_generation_mode {
+        return Cow::Borrowed(response);
+    }
+
+    let trimmed = response.trim();
+    if trimmed.is_empty() || response.contains("```") {
+        return Cow::Borrowed(response);
+    }
+
+    let code_body = response.trim_end_matches('\n');
+    Cow::Owned(format!("```typescript\n{}\n```", code_body))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

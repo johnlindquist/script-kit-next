@@ -19,6 +19,8 @@ pub struct SelectPrompt {
     pub filtered_choices: Vec<usize>,
     /// Currently focused index in filtered list
     pub focused_index: usize,
+    /// Currently hovered index in filtered list
+    pub hovered_index: Option<usize>,
     /// Filter text
     pub filter_text: String,
     /// Whether multiple selection is allowed
@@ -68,6 +70,7 @@ impl SelectPrompt {
             selected: HashSet::new(),
             filtered_choices,
             focused_index: 0,
+            hovered_index: None,
             filter_text: String::new(),
             multiple,
             focus_handle,
@@ -84,6 +87,7 @@ impl SelectPrompt {
         if trimmed_filter.is_empty() {
             self.filtered_choices = (0..self.choices.len()).collect();
             self.focused_index = 0;
+            self.hovered_index = None;
             return;
         }
 
@@ -109,6 +113,7 @@ impl SelectPrompt {
 
         self.filtered_choices = scored_matches.into_iter().map(|(idx, _)| idx).collect();
         self.focused_index = 0;
+        self.hovered_index = None;
     }
 
     /// Set the filter text programmatically
@@ -168,6 +173,7 @@ impl SelectPrompt {
     pub(super) fn move_up(&mut self, cx: &mut Context<Self>) {
         if self.focused_index > 0 {
             self.focused_index -= 1;
+            self.hovered_index = None;
             self.list_scroll_handle
                 .scroll_to_item(self.focused_index, ScrollStrategy::Nearest);
             cx.notify();
@@ -178,6 +184,7 @@ impl SelectPrompt {
     pub(super) fn move_down(&mut self, cx: &mut Context<Self>) {
         if self.focused_index < self.filtered_choices.len().saturating_sub(1) {
             self.focused_index += 1;
+            self.hovered_index = None;
             self.list_scroll_handle
                 .scroll_to_item(self.focused_index, ScrollStrategy::Nearest);
             cx.notify();

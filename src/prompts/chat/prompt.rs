@@ -27,6 +27,7 @@ pub struct ChatPrompt {
     pub(super) provider_registry: Option<ProviderRegistry>,
     pub(super) available_models: Vec<ModelInfo>,
     pub(super) selected_model: Option<ModelInfo>,
+    pub(super) builtin_system_prompt: Option<String>,
     pub(super) builtin_streaming_content: String,
     pub(super) builtin_is_streaming: bool,
     // Word-buffered reveal: full accumulated content from provider and reveal watermark
@@ -48,6 +49,10 @@ pub struct ChatPrompt {
     pub(super) loading_providers: bool,
     // Setup mode: when true, shows API key configuration card instead of chat
     pub(super) needs_setup: bool,
+    // Script generation mode: enables post-response Save/Run actions
+    pub(super) script_generation_mode: bool,
+    pub(super) script_generation_status: Option<String>,
+    pub(super) script_generation_status_is_error: bool,
     // Setup card keyboard focus (0 = Configure Vercel, 1 = Claude Code)
     pub(super) setup_focus_index: usize,
     pub(super) on_configure: Option<ChatConfigureCallback>,
@@ -55,6 +60,8 @@ pub struct ChatPrompt {
     pub(super) on_claude_code: Option<ChatClaudeCodeCallback>,
     // Callback for showing actions dialog (handled by parent)
     pub(super) on_show_actions: Option<ChatShowActionsCallback>,
+    // Callback for running a saved generated script via parent app pipeline
+    pub(super) on_run_script: Option<RunScriptCallback>,
     // Stable UUID for Claude Code CLI session continuity within this prompt's lifetime.
     // Generated once at construction so all messages share the same session.
     pub(super) cli_session_id: String,
@@ -109,6 +116,7 @@ impl ChatPrompt {
             provider_registry: None,
             available_models: Vec::new(),
             selected_model: None,
+            builtin_system_prompt: None,
             builtin_streaming_content: String::new(),
             builtin_is_streaming: false,
             builtin_accumulated_content: String::new(),
@@ -121,10 +129,14 @@ impl ChatPrompt {
             cursor_blink_started: false,
             loading_providers: false,
             needs_setup: false,
+            script_generation_mode: false,
+            script_generation_status: None,
+            script_generation_status_is_error: false,
             setup_focus_index: 0,
             on_configure: None,
             on_claude_code: None,
             on_show_actions: None,
+            on_run_script: None,
             cli_session_id: uuid::Uuid::new_v4().to_string(),
             pending_image: None,
             pending_image_render: None,
@@ -135,6 +147,15 @@ impl ChatPrompt {
     /// Set the callback for showing actions dialog
     pub fn set_on_show_actions(&mut self, callback: ChatShowActionsCallback) {
         self.on_show_actions = Some(callback);
+    }
+
+    /// Set the callback for running a generated script path in the parent app.
+    pub fn with_run_script_callback(
+        mut self,
+        callback: impl Fn(std::path::PathBuf, &mut Context<Self>) + Send + Sync + 'static,
+    ) -> Self {
+        self.on_run_script = Some(Arc::new(callback));
+        self
     }
 
     /// Start the cursor blink timer
@@ -307,6 +328,18 @@ impl ChatPrompt {
         self
     }
 
+    /// Set a fixed system prompt used for built-in AI submissions.
+    pub fn with_builtin_system_prompt(mut self, prompt: impl Into<String>) -> Self {
+        self.builtin_system_prompt = Some(prompt.into());
+        self
+    }
+
+    /// Enable script generation mode, which shows Save/Run actions after responses complete.
+    pub fn with_script_generation_mode(mut self, enabled: bool) -> Self {
+        self.script_generation_mode = enabled;
+        self
+    }
+
     /// Set pending_submit flag - when true, auto-submit input on first render
     /// Used for Tab from main menu to immediately send the query to AI
     pub fn with_pending_submit(mut self, submit: bool) -> Self {
@@ -438,5 +471,55 @@ impl ChatPrompt {
     /// Check if built-in AI mode is enabled
     pub fn has_builtin_ai(&self) -> bool {
         self.provider_registry.is_some()
+    }
+
+    pub(super) fn clear_script_generation_status(&mut self) {
+        self.script_generation_status = None;
+        self.script_generation_status_is_error = false;
+    }
+
+    pub(super) fn set_script_generation_status(
+        &mut self,
+        is_error: bool,
+        message: impl Into<String>,
+        cx: &mut Context<Self>,
+    ) {
+        self.script_generation_status = Some(message.into());
+        self.script_generation_status_is_error = is_error;
+        cx.notify();
+    }
+
+    pub(super) fn latest_script_generation_draft(&self) -> Option<(String, String)> {
+        if !self.script_generation_mode {
+            return None;
+        }
+
+        for (index, message) in self.messages.iter().enumerate().rev() {
+            if message.is_user() || message.streaming || message.error.is_some() {
+                continue;
+            }
+
+            let script_source = message.get_content().trim();
+            if script_source.is_empty() {
+                continue;
+            }
+
+            if let Some(user_message) = self.messages[..index].iter().rev().find(|m| m.is_user()) {
+                let prompt_description = user_message.get_content().trim();
+                if !prompt_description.is_empty() {
+                    return Some((prompt_description.to_string(), script_source.to_string()));
+                }
+            }
+        }
+
+        None
+    }
+
+    pub(super) fn should_show_script_generation_actions(&self) -> bool {
+        should_show_script_generation_actions(
+            self.script_generation_mode,
+            self.is_streaming(),
+            self.latest_script_generation_draft().is_some(),
+        )
     }
 }

@@ -129,6 +129,7 @@ pub(super) fn build_markdown_elements(
     elements
 }
 
+#[allow(clippy::too_many_arguments)]
 fn append_list_items(
     elements: &mut Vec<AnyElement>,
     ordered: bool,

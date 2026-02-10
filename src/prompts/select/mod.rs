@@ -7,8 +7,8 @@
 //! - Submit selected items
 
 use gpui::{
-    div, prelude::*, px, rgb, uniform_list, AnyElement, Context, FocusHandle, Focusable, Render,
-    ScrollStrategy, SharedString, UniformListScrollHandle, Window,
+    div, prelude::*, px, rgb, rgba, uniform_list, AnyElement, Context, FocusHandle, Focusable,
+    Render, ScrollStrategy, SharedString, UniformListScrollHandle, Window,
 };
 use std::collections::HashSet;
 use std::ops::Range;
@@ -19,7 +19,7 @@ use crate::components::{
     UnifiedListItemColors,
 };
 use crate::designs::{get_tokens, DesignColors, DesignVariant};
-use crate::list_item::LIST_ITEM_HEIGHT;
+use crate::list_item::{IconKind, LIST_ITEM_HEIGHT};
 use crate::logging;
 use crate::panel::PROMPT_INPUT_FIELD_HEIGHT;
 use crate::protocol::{generate_semantic_id, Choice};
@@ -37,5 +37,5 @@ mod tests;
 mod types;
 
 pub use prompt::SelectPrompt;
-pub(super) use search::*;
-pub(super) use types::*;
+use search::*;
+use types::*;

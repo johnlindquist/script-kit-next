@@ -28,7 +28,7 @@ pub struct TemplatePrompt {
 }
 
 #[derive(Debug)]
-struct TemplatePlaceholderMatch {
+pub(super) struct TemplatePlaceholderMatch {
     start: usize,
     end: usize,
     name: String,
