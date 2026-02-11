@@ -815,5 +815,4 @@ echo "Hello World"
         assert!(result.errors[0].contains("metadata"));
         assert!(result.errors[1].contains("schema"));
     }
-
 }

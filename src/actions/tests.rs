@@ -220,13 +220,6 @@ mod dialog_builtin_action_validation_tests_46;
 mod tests;
 
 #[cfg(test)]
-include!("tests/dialog.rs");
-#[cfg(test)]
-include!("tests/window.rs");
-#[cfg(test)]
-include!("tests/dialog_builtin_validation.rs");
-
-#[cfg(test)]
 #[path = "tests/builders.rs"]
 mod builders_tests;
 
