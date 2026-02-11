@@ -22,6 +22,10 @@ use super::types::{ClipboardEntry, ClipboardEntryMeta, ContentType};
 /// Global database connection (thread-safe)
 static DB_CONNECTION: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
 
+fn parse_optional_dimension(value: Option<i64>) -> Option<u32> {
+    value.and_then(|v| u32::try_from(v).ok())
+}
+
 /// Compute SHA-256 hash of content for fast dedup lookups
 pub fn compute_content_hash(content: &str) -> String {
     let mut hasher = Sha256::new();
@@ -552,8 +556,8 @@ pub fn get_clipboard_history_meta(limit: usize, offset: usize) -> Vec<ClipboardE
                 timestamp: row.get(2)?,
                 pinned: row.get::<_, i64>(3)? != 0,
                 text_preview: row.get::<_, Option<String>>(4)?.unwrap_or_default(),
-                image_width: row.get::<_, Option<i64>>(5)?.map(|v| v as u32),
-                image_height: row.get::<_, Option<i64>>(6)?.map(|v| v as u32),
+                image_width: parse_optional_dimension(row.get::<_, Option<i64>>(5)?),
+                image_height: parse_optional_dimension(row.get::<_, Option<i64>>(6)?),
                 byte_size: row.get::<_, Option<i64>>(7)?.unwrap_or(0) as usize,
                 ocr_text: row.get(8)?,
             })
@@ -963,5 +967,19 @@ mod tests {
         // This test verifies the pragma is in the code by checking the connection setup
         // The actual behavior is tested by integration tests
         assert!(expected_pragma.contains("busy_timeout"));
+    }
+
+    #[test]
+    fn test_parse_optional_dimension_accepts_valid_value() {
+        assert_eq!(parse_optional_dimension(Some(1920)), Some(1920));
+    }
+
+    #[test]
+    fn test_parse_optional_dimension_rejects_negative_and_overflow() {
+        assert_eq!(parse_optional_dimension(Some(-1)), None);
+        assert_eq!(
+            parse_optional_dimension(Some(i64::from(u32::MAX) + 1)),
+            None
+        );
     }
 }

@@ -92,14 +92,21 @@ pub fn get_meta_impl(conn: &Connection, limit: usize, offset: usize) -> Vec<Clip
     };
 
     stmt.query_map(params![limit as i64, offset as i64], |row| {
+        let image_width = row
+            .get::<_, Option<i64>>(5)?
+            .and_then(|v| u32::try_from(v).ok());
+        let image_height = row
+            .get::<_, Option<i64>>(6)?
+            .and_then(|v| u32::try_from(v).ok());
+
         Ok(ClipboardEntryMeta {
             id: row.get(0)?,
             content_type: ContentType::from_str(&row.get::<_, String>(1)?),
             timestamp: row.get(2)?,
             pinned: row.get::<_, i64>(3)? != 0,
             text_preview: row.get::<_, Option<String>>(4)?.unwrap_or_default(),
-            image_width: row.get::<_, Option<i64>>(5)?.map(|v| v as u32),
-            image_height: row.get::<_, Option<i64>>(6)?.map(|v| v as u32),
+            image_width,
+            image_height,
             byte_size: row.get::<_, Option<i64>>(7)?.unwrap_or(0) as usize,
             ocr_text: row.get(8)?,
         })
@@ -244,4 +251,52 @@ pub fn checkpoint_impl(conn: &Connection) -> Result<()> {
         .context("WAL checkpoint failed")?;
     debug!("WAL checkpoint completed");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::get_meta_impl;
+    use rusqlite::{params, Connection};
+
+    #[test]
+    fn test_get_meta_impl_drops_invalid_image_dimensions() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        conn.execute(
+            "CREATE TABLE history (
+                id TEXT PRIMARY KEY,
+                content_type TEXT NOT NULL,
+                timestamp INTEGER NOT NULL,
+                pinned INTEGER NOT NULL,
+                text_preview TEXT,
+                image_width INTEGER,
+                image_height INTEGER,
+                byte_size INTEGER,
+                ocr_text TEXT
+            )",
+            [],
+        )
+        .expect("create history table");
+
+        conn.execute(
+            "INSERT INTO history (id, content_type, timestamp, pinned, text_preview, image_width, image_height, byte_size, ocr_text)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                "entry-1",
+                "image",
+                1_i64,
+                0_i64,
+                "[Image]",
+                i64::from(u32::MAX) + 1,
+                -1_i64,
+                128_i64,
+                Option::<String>::None
+            ],
+        )
+        .expect("insert row");
+
+        let entries = get_meta_impl(&conn, 10, 0);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].image_width, None);
+        assert_eq!(entries[0].image_height, None);
+    }
 }
