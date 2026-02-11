@@ -20,6 +20,8 @@ impl PathPrompt {
             &format!("PathPrompt::new starting at: {}", current_path),
         );
 
+        let path_prefix = Self::format_path_prefix(&current_path);
+
         // Load entries from current path
         let entries = Self::load_entries(&current_path);
         let filtered_entries = entries.clone();
@@ -29,6 +31,7 @@ impl PathPrompt {
             start_path,
             hint,
             current_path,
+            path_prefix,
             filter_text: String::new(),
             selected_index: 0,
             entries,
@@ -44,6 +47,10 @@ impl PathPrompt {
             actions_search_text: Arc::new(Mutex::new(String::new())),
             cursor_visible: true,
         }
+    }
+
+    fn format_path_prefix(path: &str) -> String {
+        format!("{}/", path.trim_end_matches('/'))
     }
 
     /// Set the callback for showing actions dialog
@@ -167,6 +174,7 @@ impl PathPrompt {
     /// Navigate into a directory
     pub fn navigate_to(&mut self, path: &str, cx: &mut Context<Self>) {
         self.current_path = path.to_string();
+        self.path_prefix = Self::format_path_prefix(path);
         self.entries = Self::load_entries(path);
         self.filter_text.clear();
         self.filtered_entries = self.entries.clone();

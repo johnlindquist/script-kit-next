@@ -32,12 +32,12 @@ pub enum WindowVibrancy {
 
 impl WindowVibrancy {
     /// Check if this vibrancy setting enables the blur effect
-    pub fn is_blurred(&self) -> bool {
+    pub const fn is_blurred(self) -> bool {
         matches!(self, WindowVibrancy::Blurred)
     }
 
     /// Check if this vibrancy setting is fully opaque
-    pub fn is_opaque(&self) -> bool {
+    pub const fn is_opaque(self) -> bool {
         matches!(self, WindowVibrancy::Opaque)
     }
 }

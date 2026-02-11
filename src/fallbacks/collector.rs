@@ -52,7 +52,10 @@ impl FallbackItem {
     /// Get the priority for sorting (lower = higher in list)
     pub fn priority(&self) -> u32 {
         match self {
-            FallbackItem::Builtin(b) => b.priority as u32,
+            FallbackItem::Builtin(b) => {
+                let builtin_priority: usize = usize::from(b.priority);
+                builtin_priority.try_into().unwrap_or(u32::MAX)
+            }
             // User script fallbacks have priority 50 (between conditional 10-12 and always 20-31)
             FallbackItem::Script(_) => 50,
         }
@@ -92,10 +95,11 @@ impl FallbackItem {
 /// # Returns
 /// A sorted vector of `FallbackItem`s
 pub fn collect_fallbacks(input: &str, scripts: &[Arc<Script>]) -> Vec<FallbackItem> {
-    let mut fallbacks = Vec::new();
+    let builtins = get_applicable_fallbacks(input);
+    let mut fallbacks = Vec::with_capacity(builtins.len() + scripts.len());
 
     // 1. Add applicable built-in fallbacks (already filtered by input type)
-    for builtin in get_applicable_fallbacks(input) {
+    for builtin in builtins {
         fallbacks.push(FallbackItem::Builtin(builtin));
     }
 
@@ -110,7 +114,11 @@ pub fn collect_fallbacks(input: &str, scripts: &[Arc<Script>]) -> Vec<FallbackIt
     }
 
     // 3. Sort by priority (lower = higher in list)
-    fallbacks.sort_by_key(|f| f.priority());
+    fallbacks.sort_by(|a, b| {
+        a.priority()
+            .cmp(&b.priority())
+            .then_with(|| a.label().cmp(b.label()))
+    });
 
     fallbacks
 }
@@ -234,6 +242,23 @@ mod tests {
         let mut sorted_priorities = priorities.clone();
         sorted_priorities.sort();
         assert_eq!(priorities, sorted_priorities);
+    }
+
+    #[test]
+    fn test_collect_fallbacks_sorts_equal_priority_by_label() {
+        let scripts = vec![
+            make_fallback_script("z-search", Some("Z Search {input}")),
+            make_fallback_script("a-search", Some("A Search {input}")),
+        ];
+
+        let fallbacks = collect_fallbacks("query", &scripts);
+        let script_labels: Vec<&str> = fallbacks
+            .iter()
+            .filter(|f| f.is_script())
+            .map(|f| f.label())
+            .collect();
+
+        assert_eq!(script_labels, vec!["A Search query", "Z Search query"]);
     }
 
     #[test]
