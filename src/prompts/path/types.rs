@@ -57,6 +57,8 @@ pub struct PathPrompt {
     pub hint: Option<String>,
     /// Current directory being browsed
     pub current_path: String,
+    /// Cached "{current_path}/" prefix for header rendering
+    pub path_prefix: String,
     /// Filter text for narrowing down results
     pub filter_text: String,
     /// Currently selected index in the list

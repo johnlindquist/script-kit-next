@@ -15,15 +15,23 @@ impl Render for PathPrompt {
              event: &gpui::KeyDownEvent,
              _window: &mut Window,
              cx: &mut Context<Self>| {
-                let key_str = event.keystroke.key.to_lowercase();
+                let key = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
 
                 // Check if actions dialog is showing - if so, don't handle most keys
                 // The ActionsDialog has its own key handler and will handle them
-                let actions_showing = this.actions_showing.lock().map(|g| *g).unwrap_or(false);
+                let actions_showing = match this.actions_showing.lock() {
+                    Ok(guard) => *guard,
+                    Err(poison) => {
+                        tracing::error!(
+                            "path_prompt_actions_showing_mutex_poisoned_in_key_handler"
+                        );
+                        *poison.into_inner()
+                    }
+                };
 
                 // Cmd+K always toggles actions (whether showing or not)
-                if has_cmd && key_str == "k" {
+                if has_cmd && key.eq_ignore_ascii_case("k") {
                     this.toggle_actions(cx);
                     return;
                 }
@@ -35,27 +43,29 @@ impl Render for PathPrompt {
                     return;
                 }
 
-                match key_str.as_str() {
-                    "up" | "arrowup" => this.move_up(cx),
-                    "down" | "arrowdown" => this.move_down(cx),
-                    "left" | "arrowleft" => this.navigate_to_parent(cx),
-                    "right" | "arrowright" => this.navigate_into_selected(cx),
-                    "tab" => {
+                match key {
+                    "up" | "Up" | "ArrowUp" | "arrowup" => this.move_up(cx),
+                    "down" | "Down" | "ArrowDown" | "arrowdown" => this.move_down(cx),
+                    "left" | "Left" | "ArrowLeft" | "arrowleft" => this.navigate_to_parent(cx),
+                    "right" | "Right" | "ArrowRight" | "arrowright" => {
+                        this.navigate_into_selected(cx)
+                    }
+                    "tab" | "Tab" => {
                         if event.keystroke.modifiers.shift {
                             this.navigate_to_parent(cx);
                         } else {
                             this.navigate_into_selected(cx);
                         }
                     }
-                    "enter" | "return" => this.handle_enter(cx),
-                    "escape" | "esc" => {
+                    "enter" | "Enter" | "return" | "Return" => this.handle_enter(cx),
+                    "escape" | "Escape" | "esc" | "Esc" => {
                         logging::log(
                             "PROMPTS",
                             "PathPrompt: Escape key pressed - calling submit_cancel()",
                         );
                         this.submit_cancel();
                     }
-                    "backspace" => this.handle_backspace(cx),
+                    "backspace" | "Backspace" => this.handle_backspace(cx),
                     _ => {
                         if let Some(ref key_char) = event.keystroke.key_char {
                             if let Some(ch) = key_char.chars().next() {
@@ -124,7 +134,13 @@ impl Render for PathPrompt {
         let handle_actions = cx.entity().downgrade();
 
         // Check if actions are currently showing (for CLS-free toggle)
-        let show_actions = self.actions_showing.lock().map(|g| *g).unwrap_or(false);
+        let show_actions = match self.actions_showing.lock() {
+            Ok(guard) => *guard,
+            Err(poison) => {
+                tracing::error!("path_prompt_actions_showing_mutex_poisoned_in_render");
+                *poison.into_inner()
+            }
+        };
 
         // Get actions search text from shared state
         let actions_search_text = self
@@ -134,7 +150,7 @@ impl Render for PathPrompt {
             .unwrap_or_default();
 
         // Create path prefix for display in search input
-        let path_prefix = format!("{}/", self.current_path.trim_end_matches('/'));
+        let path_prefix = self.path_prefix.clone();
 
         // Create header colors and config using shared components - always use theme
         let header_colors = PromptHeaderColors::from_theme(&self.theme);
