@@ -1,4 +1,5 @@
 use super::*;
+use crate::components::{FocusablePrompt, FocusablePromptInterceptedKey};
 
 impl Focusable for DivPrompt {
     fn focus_handle(&self, _cx: &gpui::App) -> FocusHandle {
@@ -7,27 +8,10 @@ impl Focusable for DivPrompt {
 }
 
 impl Render for DivPrompt {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Get design tokens for the current design variant
         let tokens = get_tokens(self.design_variant);
         let colors = tokens.colors();
-
-        let handle_key = cx.listener(
-            move |this: &mut Self,
-                  event: &gpui::KeyDownEvent,
-                  _window: &mut Window,
-                  cx: &mut Context<Self>| {
-                let modifiers = &event.keystroke.modifiers;
-                if modifiers.platform || modifiers.control || modifiers.alt {
-                    return;
-                }
-
-                if is_div_submit_key(event.keystroke.key.as_str()) {
-                    this.submit();
-                    cx.stop_propagation();
-                }
-            },
-        );
 
         // Parse HTML into elements
         let elements = parse_html(&self.html);
@@ -133,7 +117,7 @@ impl Render for DivPrompt {
 
         // Main container - fills entire window height with no bottom gap
         // Use relative positioning to overlay scrollbar
-        div()
+        let container = div()
             .id(gpui::ElementId::Name("window:div".into()))
             .relative()
             .flex()
@@ -143,9 +127,38 @@ impl Render for DivPrompt {
             .min_h(px(0.)) // Allow proper flex behavior
             .when_some(container_bg, |d, bg| d.bg(bg)) // Only apply bg when available
             .p(px(container_padding))
+            .child(content_container);
+
+        FocusablePrompt::new(container)
             .key_context("div_prompt")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
-            .child(content_container)
+            .focus_handle(self.focus_handle.clone())
+            .build(
+                window,
+                cx,
+                |this, intercepted_key, event, _window, _cx| match intercepted_key {
+                    FocusablePromptInterceptedKey::Escape => {
+                        let modifiers = &event.keystroke.modifiers;
+                        if modifiers.platform || modifiers.control || modifiers.alt {
+                            return false;
+                        }
+                        this.submit();
+                        true
+                    }
+                    FocusablePromptInterceptedKey::CmdW | FocusablePromptInterceptedKey::CmdK => {
+                        false
+                    }
+                },
+                |this, event, _window, cx| {
+                    let modifiers = &event.keystroke.modifiers;
+                    if modifiers.platform || modifiers.control || modifiers.alt {
+                        return;
+                    }
+
+                    if is_div_submit_key(event.keystroke.key.as_str()) {
+                        this.submit();
+                        cx.stop_propagation();
+                    }
+                },
+            )
     }
 }

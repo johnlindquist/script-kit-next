@@ -8,6 +8,7 @@
 use gpui::{div, prelude::*, px, rgb, rgba, Context, FocusHandle, Focusable, Render, Window};
 use std::sync::Arc;
 
+use crate::components::{FocusablePrompt, FocusablePromptInterceptedKey};
 use crate::designs::{get_tokens, DesignVariant};
 use crate::logging;
 use crate::theme;
@@ -116,25 +117,10 @@ impl Focusable for DropPrompt {
 }
 
 impl Render for DropPrompt {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let tokens = get_tokens(self.design_variant);
         let colors = tokens.colors();
         let spacing = tokens.spacing();
-
-        let handle_key = cx.listener(
-            |this: &mut Self,
-             event: &gpui::KeyDownEvent,
-             _window: &mut Window,
-             _cx: &mut Context<Self>| {
-                let key_str = event.keystroke.key.as_str();
-
-                match key_str {
-                    "enter" | "Enter" | "return" | "Return" => this.submit(),
-                    "escape" | "Escape" | "esc" | "Esc" => this.submit_cancel(),
-                    _ => {}
-                }
-            },
-        );
 
         // VIBRANCY: Use foundation helper - returns None when vibrancy enabled (let Root handle bg)
         let vibrancy_bg = get_vibrancy_background(&self.theme);
@@ -173,7 +159,7 @@ impl Render for DropPrompt {
             rgb(self.theme.colors.background.search_box)
         };
 
-        div()
+        let container = div()
             .id(gpui::ElementId::Name("window:drop".into()))
             .flex()
             .flex_col()
@@ -182,9 +168,6 @@ impl Render for DropPrompt {
             .when_some(vibrancy_bg, |d, bg| d.bg(bg)) // Only apply bg when vibrancy disabled
             .text_color(text_color)
             .p(px(spacing.padding_lg))
-            .key_context("drop_prompt")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
             .child(
                 // Drop zone
                 div()
@@ -220,6 +203,29 @@ impl Render for DropPrompt {
                         .text_sm()
                         .child(format!("{} file(s) dropped", self.dropped_files.len())),
                 )
-            })
+            });
+
+        FocusablePrompt::new(container)
+            .key_context("drop_prompt")
+            .focus_handle(self.focus_handle.clone())
+            .build(
+                window,
+                cx,
+                |this, intercepted_key, _event, _window, _cx| match intercepted_key {
+                    FocusablePromptInterceptedKey::Escape => {
+                        this.submit_cancel();
+                        true
+                    }
+                    _ => false,
+                },
+                |this, event, _window, _cx| {
+                    let key_str = event.keystroke.key.as_str();
+                    if key_str.eq_ignore_ascii_case("enter")
+                        || key_str.eq_ignore_ascii_case("return")
+                    {
+                        this.submit();
+                    }
+                },
+            )
     }
 }

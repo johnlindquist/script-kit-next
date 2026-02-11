@@ -1,4 +1,5 @@
 use super::*;
+use crate::components::{FocusablePrompt, FocusablePromptInterceptedKey};
 
 const ROW_FOCUSED_BG_ALPHA: u32 = 0x3A;
 const ROW_HOVER_BG_ALPHA: u32 = 0x26;
@@ -94,60 +95,10 @@ impl Focusable for SelectPrompt {
 }
 
 impl Render for SelectPrompt {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let tokens = get_tokens(self.design_variant);
         let colors = tokens.colors();
         let spacing = tokens.spacing();
-
-        let handle_key = cx.listener(
-            |this: &mut Self,
-             event: &gpui::KeyDownEvent,
-             _window: &mut Window,
-             cx: &mut Context<Self>| {
-                let key_str = event.keystroke.key.as_str();
-                let has_ctrl = event.keystroke.modifiers.platform; // Cmd on macOS, Ctrl on others
-                let is_up =
-                    key_str.eq_ignore_ascii_case("up") || key_str.eq_ignore_ascii_case("arrowup");
-                let is_down = key_str.eq_ignore_ascii_case("down")
-                    || key_str.eq_ignore_ascii_case("arrowdown");
-                let is_space = key_str.eq_ignore_ascii_case("space") || key_str == " ";
-                let is_enter =
-                    key_str.eq_ignore_ascii_case("enter") || key_str.eq_ignore_ascii_case("return");
-                let is_escape =
-                    key_str.eq_ignore_ascii_case("escape") || key_str.eq_ignore_ascii_case("esc");
-                let is_backspace = key_str.eq_ignore_ascii_case("backspace");
-
-                // Handle Ctrl/Cmd+A for select all
-                if has_ctrl && key_str.eq_ignore_ascii_case("a") {
-                    this.toggle_select_all_filtered(cx);
-                    return;
-                }
-
-                if is_up {
-                    this.move_up(cx);
-                } else if is_down {
-                    this.move_down(cx);
-                } else if is_space {
-                    if has_ctrl {
-                        this.toggle_selection(cx);
-                    } else {
-                        this.handle_char(' ', cx);
-                    }
-                } else if is_enter {
-                    this.submit();
-                } else if is_escape {
-                    this.submit_cancel();
-                } else if is_backspace {
-                    this.handle_backspace(cx);
-                } else if let Some(ref key_char) = event.keystroke.key_char {
-                    if let Some(ch) = key_char.chars().next() {
-                        if should_append_to_filter(ch) {
-                            this.handle_char(ch, cx);
-                        }
-                    }
-                }
-            },
-        );
 
         // VIBRANCY: Optional background override when a vibrancy surface is available.
         let vibrancy_bg = get_vibrancy_background(&self.theme);
@@ -381,7 +332,7 @@ impl Render for SelectPrompt {
             .px(px(8.0))
             .child(choices_content);
 
-        div()
+        let container = div()
             .id(gpui::ElementId::Name("window:select".into()))
             .flex()
             .flex_col()
@@ -394,11 +345,63 @@ impl Render for SelectPrompt {
             .border_1()
             .border_color(rgba((border_color_hex << 8) | 0x40))
             .text_color(text_color)
-            .key_context("select_prompt")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
             .child(input_container)
-            .child(choices_container)
+            .child(choices_container);
+
+        FocusablePrompt::new(container)
+            .key_context("select_prompt")
+            .focus_handle(self.focus_handle.clone())
+            .build(
+                window,
+                cx,
+                |this, intercepted_key, _event, _window, _cx| match intercepted_key {
+                    FocusablePromptInterceptedKey::Escape => {
+                        this.submit_cancel();
+                        true
+                    }
+                    _ => false,
+                },
+                |this, event, _window, cx| {
+                    let key_str = event.keystroke.key.as_str();
+                    let has_ctrl = event.keystroke.modifiers.platform; // Cmd on macOS, Ctrl on others
+                    let is_up = key_str.eq_ignore_ascii_case("up")
+                        || key_str.eq_ignore_ascii_case("arrowup");
+                    let is_down = key_str.eq_ignore_ascii_case("down")
+                        || key_str.eq_ignore_ascii_case("arrowdown");
+                    let is_space = key_str.eq_ignore_ascii_case("space") || key_str == " ";
+                    let is_enter = key_str.eq_ignore_ascii_case("enter")
+                        || key_str.eq_ignore_ascii_case("return");
+                    let is_backspace = key_str.eq_ignore_ascii_case("backspace");
+
+                    // Handle Ctrl/Cmd+A for select all
+                    if has_ctrl && key_str.eq_ignore_ascii_case("a") {
+                        this.toggle_select_all_filtered(cx);
+                        return;
+                    }
+
+                    if is_up {
+                        this.move_up(cx);
+                    } else if is_down {
+                        this.move_down(cx);
+                    } else if is_space {
+                        if has_ctrl {
+                            this.toggle_selection(cx);
+                        } else {
+                            this.handle_char(' ', cx);
+                        }
+                    } else if is_enter {
+                        this.submit();
+                    } else if is_backspace {
+                        this.handle_backspace(cx);
+                    } else if let Some(ref key_char) = event.keystroke.key_char {
+                        if let Some(ch) = key_char.chars().next() {
+                            if should_append_to_filter(ch) {
+                                this.handle_char(ch, cx);
+                            }
+                        }
+                    }
+                },
+            )
     }
 }
 
