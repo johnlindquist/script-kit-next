@@ -1,4 +1,5 @@
 use super::*;
+use crate::components::{FocusablePrompt, FocusablePromptInterceptedKey};
 
 impl Focusable for EnvPrompt {
     fn focus_handle(&self, _cx: &gpui::App) -> FocusHandle {
@@ -7,52 +8,10 @@ impl Focusable for EnvPrompt {
 }
 
 impl Render for EnvPrompt {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let tokens = get_tokens(self.design_variant);
         let design_colors = tokens.colors();
         let design_typography = tokens.typography();
-
-        let handle_key = cx.listener(
-            |this: &mut Self,
-             event: &gpui::KeyDownEvent,
-             _window: &mut Window,
-             cx: &mut Context<Self>| {
-                let key = event.keystroke.key.as_str();
-                let modifiers = &event.keystroke.modifiers;
-
-                // Handle submit/cancel first
-                match env_key_action(key) {
-                    Some(EnvKeyAction::Submit) => {
-                        this.submit();
-                        return;
-                    }
-                    Some(EnvKeyAction::Cancel) => {
-                        this.submit_cancel();
-                        return;
-                    }
-                    None => {}
-                }
-
-                // Delegate all other keys to TextInputState
-                let key_char = event.keystroke.key_char.as_deref();
-                let previous_text = this.input.text().to_string();
-                let handled = this.input.handle_key(
-                    key,
-                    key_char,
-                    modifiers.platform, // On macOS, platform = Cmd key
-                    modifiers.alt,
-                    modifiers.shift,
-                    cx,
-                );
-
-                if handled {
-                    if this.validation_error.is_some() && previous_text != this.input.text() {
-                        this.validation_error = None;
-                    }
-                    cx.notify();
-                }
-            },
-        );
 
         // Use design tokens for consistent styling
         let text_primary = design_colors.text_primary;
@@ -77,7 +36,7 @@ impl Render for EnvPrompt {
         let running_status = env_running_status(&self.key);
 
         // Full-window centered layout for API key input
-        div()
+        let container = div()
             .id(gpui::ElementId::Name("window:env".into()))
             .flex()
             .flex_col()
@@ -85,9 +44,6 @@ impl Render for EnvPrompt {
             .h_full()
             .text_color(rgb(text_primary))
             .font_family(design_typography.font_family)
-            .key_context("env_prompt")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
             // Main content area - centered vertically
             .child(
                 div()
@@ -352,6 +308,49 @@ impl Render for EnvPrompt {
                             });
                         }
                     }))
-            })
+            });
+
+        FocusablePrompt::new(container)
+            .key_context("env_prompt")
+            .focus_handle(self.focus_handle.clone())
+            .build(
+                window,
+                cx,
+                |this, intercepted_key, _event, _window, _cx| match intercepted_key {
+                    FocusablePromptInterceptedKey::Escape => {
+                        this.submit_cancel();
+                        true
+                    }
+                    _ => false,
+                },
+                |this, event, _window, cx| {
+                    let key = event.keystroke.key.as_str();
+                    let modifiers = &event.keystroke.modifiers;
+
+                    if matches!(env_key_action(key), Some(EnvKeyAction::Submit)) {
+                        this.submit();
+                        return;
+                    }
+
+                    // Delegate all other keys to TextInputState
+                    let key_char = event.keystroke.key_char.as_deref();
+                    let previous_text = this.input.text().to_string();
+                    let handled = this.input.handle_key(
+                        key,
+                        key_char,
+                        modifiers.platform, // On macOS, platform = Cmd key
+                        modifiers.alt,
+                        modifiers.shift,
+                        cx,
+                    );
+
+                    if handled {
+                        if this.validation_error.is_some() && previous_text != this.input.text() {
+                            this.validation_error = None;
+                        }
+                        cx.notify();
+                    }
+                },
+            )
     }
 }

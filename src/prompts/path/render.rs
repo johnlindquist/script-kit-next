@@ -1,4 +1,5 @@
 use super::*;
+use crate::components::{FocusablePrompt, FocusablePromptInterceptedKey};
 
 impl Focusable for PathPrompt {
     fn focus_handle(&self, _cx: &gpui::App) -> FocusHandle {
@@ -9,76 +10,7 @@ impl Focusable for PathPrompt {
 impl EventEmitter<PathPromptEvent> for PathPrompt {}
 
 impl Render for PathPrompt {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let handle_key = cx.listener(
-            |this: &mut Self,
-             event: &gpui::KeyDownEvent,
-             _window: &mut Window,
-             cx: &mut Context<Self>| {
-                let key = event.keystroke.key.as_str();
-                let has_cmd = event.keystroke.modifiers.platform;
-
-                // Check if actions dialog is showing - if so, don't handle most keys
-                // The ActionsDialog has its own key handler and will handle them
-                let actions_showing = match this.actions_showing.lock() {
-                    Ok(guard) => *guard,
-                    Err(poison) => {
-                        tracing::error!(
-                            "path_prompt_actions_showing_mutex_poisoned_in_key_handler"
-                        );
-                        *poison.into_inner()
-                    }
-                };
-
-                // Cmd+K always toggles actions (whether showing or not)
-                if has_cmd && key.eq_ignore_ascii_case("k") {
-                    this.toggle_actions(cx);
-                    return;
-                }
-
-                // When actions are showing, let the ActionsDialog handle all other keys
-                // The ActionsDialog is focused and has its own on_key_down handler
-                if actions_showing {
-                    // Don't handle any other keys - let them bubble to ActionsDialog
-                    return;
-                }
-
-                match key {
-                    "up" | "Up" | "ArrowUp" | "arrowup" => this.move_up(cx),
-                    "down" | "Down" | "ArrowDown" | "arrowdown" => this.move_down(cx),
-                    "left" | "Left" | "ArrowLeft" | "arrowleft" => this.navigate_to_parent(cx),
-                    "right" | "Right" | "ArrowRight" | "arrowright" => {
-                        this.navigate_into_selected(cx)
-                    }
-                    "tab" | "Tab" => {
-                        if event.keystroke.modifiers.shift {
-                            this.navigate_to_parent(cx);
-                        } else {
-                            this.navigate_into_selected(cx);
-                        }
-                    }
-                    "enter" | "Enter" | "return" | "Return" => this.handle_enter(cx),
-                    "escape" | "Escape" | "esc" | "Esc" => {
-                        logging::log(
-                            "PROMPTS",
-                            "PathPrompt: Escape key pressed - calling submit_cancel()",
-                        );
-                        this.submit_cancel();
-                    }
-                    "backspace" | "Backspace" => this.handle_backspace(cx),
-                    _ => {
-                        if let Some(ref key_char) = event.keystroke.key_char {
-                            if let Some(ch) = key_char.chars().next() {
-                                if !ch.is_control() {
-                                    this.handle_char(ch, cx);
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-        );
-
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Use ListItemColors for consistent theming - always use theme
         let list_colors = ListItemColors::from_theme(&self.theme);
 
@@ -200,19 +132,96 @@ impl Render for PathPrompt {
             .show_divider(true)
             .hint(hint_text);
 
-        // Build the final container with the outer wrapper for key handling and focus
-        div()
+        let container = div()
             .id(gpui::ElementId::Name("window:path".into()))
             .w_full()
             .h_full()
-            .key_context("path_prompt")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
             .child(
                 PromptContainer::new(container_colors)
                     .config(container_config)
                     .header(header)
                     .content(list),
+            );
+
+        FocusablePrompt::new(container)
+            .key_context("path_prompt")
+            .focus_handle(self.focus_handle.clone())
+            .build(
+                window,
+                cx,
+                |this, intercepted_key, _event, _window, cx| match intercepted_key {
+                    FocusablePromptInterceptedKey::Escape => {
+                        let actions_showing = match this.actions_showing.lock() {
+                            Ok(guard) => *guard,
+                            Err(poison) => {
+                                tracing::error!(
+                                    "path_prompt_actions_showing_mutex_poisoned_in_app_key_handler"
+                                );
+                                *poison.into_inner()
+                            }
+                        };
+
+                        if actions_showing {
+                            return false;
+                        }
+
+                        logging::log(
+                            "PROMPTS",
+                            "PathPrompt: Escape key pressed - calling submit_cancel()",
+                        );
+                        this.submit_cancel();
+                        true
+                    }
+                    FocusablePromptInterceptedKey::CmdK => {
+                        this.toggle_actions(cx);
+                        true
+                    }
+                    FocusablePromptInterceptedKey::CmdW => false,
+                },
+                |this, event, _window, cx| {
+                    let key = event.keystroke.key.as_str();
+
+                    // When actions are showing, let the ActionsDialog handle keys in parent routing.
+                    let actions_showing = match this.actions_showing.lock() {
+                        Ok(guard) => *guard,
+                        Err(poison) => {
+                            tracing::error!(
+                                "path_prompt_actions_showing_mutex_poisoned_in_entity_key_handler"
+                            );
+                            *poison.into_inner()
+                        }
+                    };
+                    if actions_showing {
+                        return;
+                    }
+
+                    match key {
+                        "up" | "Up" | "ArrowUp" | "arrowup" => this.move_up(cx),
+                        "down" | "Down" | "ArrowDown" | "arrowdown" => this.move_down(cx),
+                        "left" | "Left" | "ArrowLeft" | "arrowleft" => this.navigate_to_parent(cx),
+                        "right" | "Right" | "ArrowRight" | "arrowright" => {
+                            this.navigate_into_selected(cx)
+                        }
+                        "tab" | "Tab" => {
+                            if event.keystroke.modifiers.shift {
+                                this.navigate_to_parent(cx);
+                            } else {
+                                this.navigate_into_selected(cx);
+                            }
+                        }
+                        "enter" | "Enter" | "return" | "Return" => this.handle_enter(cx),
+                        "backspace" | "Backspace" => this.handle_backspace(cx),
+                        _ => {
+                            if let Some(ref key_char) = event.keystroke.key_char {
+                                if let Some(ch) = key_char.chars().next() {
+                                    if !ch.is_control() {
+                                        this.handle_char(ch, cx);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
             )
     }
 }

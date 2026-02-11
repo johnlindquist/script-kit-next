@@ -1,4 +1,5 @@
 use super::*;
+use crate::components::{FocusablePrompt, FocusablePromptInterceptedKey};
 
 impl Focusable for TemplatePrompt {
     fn focus_handle(&self, _cx: &gpui::App) -> FocusHandle {
@@ -7,41 +8,10 @@ impl Focusable for TemplatePrompt {
 }
 
 impl Render for TemplatePrompt {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let tokens = get_tokens(self.design_variant);
         let colors = tokens.colors();
         let spacing = tokens.spacing();
-
-        let handle_key = cx.listener(
-            |this: &mut Self,
-             event: &gpui::KeyDownEvent,
-             _window: &mut Window,
-             cx: &mut Context<Self>| {
-                let key_str = event.keystroke.key.as_str();
-
-                match key_str {
-                    "tab" | "Tab" => {
-                        if event.keystroke.modifiers.shift {
-                            this.prev_input(cx);
-                        } else {
-                            this.next_input(cx);
-                        }
-                    }
-                    "enter" | "Enter" | "return" | "Return" => this.submit(cx),
-                    "escape" | "Escape" | "esc" | "Esc" => this.submit_cancel(),
-                    "backspace" | "Backspace" => this.handle_backspace(cx),
-                    _ => {
-                        if let Some(ref key_char) = event.keystroke.key_char {
-                            if let Some(ch) = key_char.chars().next() {
-                                if !ch.is_control() {
-                                    this.handle_char(ch, cx);
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-        );
 
         // VIBRANCY: Use foundation helper - returns None when vibrancy enabled (let Root handle bg)
         let vibrancy_bg = get_vibrancy_background(&self.theme);
@@ -74,10 +44,7 @@ impl Render for TemplatePrompt {
             .h_full()
             .when_some(vibrancy_bg, |d, bg| d.bg(bg)) // Only apply bg when vibrancy disabled
             .text_color(text_color)
-            .p(px(spacing.padding_lg))
-            .key_context("template_prompt")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key);
+            .p(px(spacing.padding_lg));
 
         // Preview section with live template
         container = container
@@ -233,6 +200,43 @@ impl Render for TemplatePrompt {
                 .child("Tab: next field | Shift+Tab: previous | Enter: submit | Escape: cancel"),
         );
 
-        container
+        FocusablePrompt::new(container)
+            .key_context("template_prompt")
+            .focus_handle(self.focus_handle.clone())
+            .build(
+                window,
+                cx,
+                |this, intercepted_key, _event, _window, _cx| match intercepted_key {
+                    FocusablePromptInterceptedKey::Escape => {
+                        this.submit_cancel();
+                        true
+                    }
+                    _ => false,
+                },
+                |this, event, _window, cx| {
+                    let key_str = event.keystroke.key.as_str();
+
+                    match key_str {
+                        "tab" | "Tab" => {
+                            if event.keystroke.modifiers.shift {
+                                this.prev_input(cx);
+                            } else {
+                                this.next_input(cx);
+                            }
+                        }
+                        "enter" | "Enter" | "return" | "Return" => this.submit(cx),
+                        "backspace" | "Backspace" => this.handle_backspace(cx),
+                        _ => {
+                            if let Some(ref key_char) = event.keystroke.key_char {
+                                if let Some(ch) = key_char.chars().next() {
+                                    if !ch.is_control() {
+                                        this.handle_char(ch, cx);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+            )
     }
 }
