@@ -1,17 +1,17 @@
 #[allow(unused_imports, dead_code)]
-#[path = "../dialog_builtin_action_validation_tests/part_01.rs"]
+#[path = "../dialog_builtin_action_validation_tests.rs"]
 mod dialog_builtin_action_validation_tests;
 
 #[allow(unused_imports, dead_code)]
-#[path = "../dialog_builtin_action_validation_tests_2/part_01.rs"]
+#[path = "../dialog_builtin_action_validation_tests_2.rs"]
 mod dialog_builtin_action_validation_tests_2;
 
 #[allow(unused_imports, dead_code)]
-#[path = "../dialog_builtin_action_validation_tests_3/part_01.rs"]
+#[path = "../dialog_builtin_action_validation_tests_3.rs"]
 mod dialog_builtin_action_validation_tests_3;
 
 #[allow(unused_imports, dead_code)]
-#[path = "../dialog_builtin_action_validation_tests_4/part_01.rs"]
+#[path = "../dialog_builtin_action_validation_tests_4.rs"]
 mod dialog_builtin_action_validation_tests_4;
 
 #[allow(unused_imports, dead_code)]
@@ -79,59 +79,59 @@ mod dialog_builtin_action_validation_tests_19;
 mod dialog_builtin_action_validation_tests_20;
 
 #[allow(unused_imports, dead_code)]
-#[path = "../dialog_builtin_action_validation_tests_21/part_01.rs"]
+#[path = "../dialog_builtin_action_validation_tests_21.rs"]
 mod dialog_builtin_action_validation_tests_21;
 
 #[allow(unused_imports, dead_code)]
-#[path = "../dialog_builtin_action_validation_tests_22/part_01.rs"]
+#[path = "../dialog_builtin_action_validation_tests_22.rs"]
 mod dialog_builtin_action_validation_tests_22;
 
 #[allow(unused_imports, dead_code)]
-#[path = "../dialog_builtin_action_validation_tests_23/part_01.rs"]
+#[path = "../dialog_builtin_action_validation_tests_23.rs"]
 mod dialog_builtin_action_validation_tests_23;
 
 #[allow(unused_imports, dead_code)]
-#[path = "../dialog_builtin_action_validation_tests_24/part_01.rs"]
+#[path = "../dialog_builtin_action_validation_tests_24.rs"]
 mod dialog_builtin_action_validation_tests_24;
 
 #[allow(unused_imports, dead_code)]
-#[path = "../dialog_builtin_action_validation_tests_26/part_01.rs"]
+#[path = "../dialog_builtin_action_validation_tests_26.rs"]
 mod dialog_builtin_action_validation_tests_26;
 
 #[allow(unused_imports, dead_code)]
-#[path = "../dialog_builtin_action_validation_tests_27/part_01.rs"]
+#[path = "../dialog_builtin_action_validation_tests_27.rs"]
 mod dialog_builtin_action_validation_tests_27;
 
 #[allow(unused_imports, dead_code)]
-#[path = "../dialog_builtin_action_validation_tests_28/part_01.rs"]
+#[path = "../dialog_builtin_action_validation_tests_28.rs"]
 mod dialog_builtin_action_validation_tests_28;
 
 #[allow(unused_imports, dead_code)]
-#[path = "../dialog_builtin_action_validation_tests_29/part_01.rs"]
+#[path = "../dialog_builtin_action_validation_tests_29.rs"]
 mod dialog_builtin_action_validation_tests_29;
 
 #[allow(unused_imports, dead_code)]
-#[path = "../dialog_builtin_action_validation_tests_30/part_01.rs"]
+#[path = "../dialog_builtin_action_validation_tests_30.rs"]
 mod dialog_builtin_action_validation_tests_30;
 
 #[allow(unused_imports, dead_code)]
-#[path = "../dialog_builtin_action_validation_tests_32/part_01.rs"]
+#[path = "../dialog_builtin_action_validation_tests_32.rs"]
 mod dialog_builtin_action_validation_tests_32;
 
 #[allow(unused_imports, dead_code)]
-#[path = "../dialog_builtin_action_validation_tests_33/part_01.rs"]
+#[path = "../dialog_builtin_action_validation_tests_33.rs"]
 mod dialog_builtin_action_validation_tests_33;
 
 #[allow(unused_imports, dead_code)]
-#[path = "../dialog_builtin_action_validation_tests_34/part_01.rs"]
+#[path = "../dialog_builtin_action_validation_tests_34.rs"]
 mod dialog_builtin_action_validation_tests_34;
 
 #[allow(unused_imports, dead_code)]
-#[path = "../dialog_builtin_action_validation_tests_35/part_01.rs"]
+#[path = "../dialog_builtin_action_validation_tests_35.rs"]
 mod dialog_builtin_action_validation_tests_35;
 
 #[allow(unused_imports, dead_code)]
-#[path = "../dialog_builtin_action_validation_tests_36/part_01.rs"]
+#[path = "../dialog_builtin_action_validation_tests_36.rs"]
 mod dialog_builtin_action_validation_tests_36;
 
 #[allow(unused_imports, dead_code)]
@@ -151,13 +151,13 @@ mod dialog_builtin_action_validation_tests_40;
 mod dialog_builtin_action_validation_tests_41;
 
 #[allow(unused_imports, dead_code)]
-#[path = "../dialog_builtin_action_validation_tests_44/part_01.rs"]
+#[path = "../dialog_builtin_action_validation_tests_44.rs"]
 mod dialog_builtin_action_validation_tests_44;
 
 #[allow(unused_imports, dead_code)]
-#[path = "../dialog_builtin_action_validation_tests_45/part_01.rs"]
+#[path = "../dialog_builtin_action_validation_tests_45.rs"]
 mod dialog_builtin_action_validation_tests_45;
 
 #[allow(unused_imports, dead_code)]
-#[path = "../dialog_builtin_action_validation_tests_46/part_01.rs"]
+#[path = "../dialog_builtin_action_validation_tests_46.rs"]
 mod dialog_builtin_action_validation_tests_46;
