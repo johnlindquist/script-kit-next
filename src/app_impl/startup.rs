@@ -554,9 +554,8 @@ impl ScriptListApp {
         let tab_interceptor = cx.intercept_keystrokes({
             let app_entity = app_entity_for_tab;
             move |event, window, cx| {
-                let key = event.keystroke.key.to_lowercase();
-                let is_tab_key = matches!(event.keystroke.key.as_str(), "tab" | "Tab")
-                    || matches!(key.as_str(), "tab");
+                let key = event.keystroke.key.as_str();
+                let is_tab_key = key.eq_ignore_ascii_case("tab");
                 let has_shift = event.keystroke.modifiers.shift;
                 // Check for Tab key (no cmd/alt/ctrl modifiers, but shift is allowed)
                 if is_tab_key
@@ -572,7 +571,7 @@ impl ScriptListApp {
                                 "KEY",
                                 &format!("Tab intercepted, confirm_open={}", confirm_open),
                             );
-                            if confirm_open && crate::confirm::dispatch_confirm_key(&key, cx) {
+                            if confirm_open && crate::confirm::dispatch_confirm_key(key, cx) {
                                 cx.stop_propagation();
                                 return;
                             }
@@ -755,9 +754,11 @@ impl ScriptListApp {
         let arrow_interceptor = cx.intercept_keystrokes({
             let app_entity = app_entity_for_arrows;
             move |event, _window, cx| {
-                let key = event.keystroke.key.to_lowercase();
+                let key = event.keystroke.key.as_str();
+                let is_up = crate::ui_foundation::is_key_up(key);
+                let is_down = crate::ui_foundation::is_key_down(key);
                 // Check for Up/Down arrow keys (no modifiers except shift for selection)
-                if (key == "up" || key == "arrowup" || key == "down" || key == "arrowdown")
+                if (is_up || is_down)
                     && !event.keystroke.modifiers.platform
                     && !event.keystroke.modifiers.alt
                     && !event.keystroke.modifiers.control
@@ -766,7 +767,7 @@ impl ScriptListApp {
                         app.update(cx, |this, cx| {
                             // FIRST: If confirm dialog is open, route all arrow keys to it
                             if crate::confirm::is_confirm_window_open()
-                                && crate::confirm::dispatch_confirm_key(&key, cx)
+                                && crate::confirm::dispatch_confirm_key(key, cx)
                             {
                                 cx.stop_propagation();
                                 return;
@@ -777,9 +778,9 @@ impl ScriptListApp {
                             // arrows to the dialog, not just the few views with explicit cases below.
                             if this.show_actions_popup {
                                 if let Some(ref dialog) = this.actions_dialog {
-                                    if key == "up" || key == "arrowup" {
+                                    if is_up {
                                         dialog.update(cx, |d, cx| d.move_up(cx));
-                                    } else if key == "down" || key == "arrowdown" {
+                                    } else if is_down {
                                         dialog.update(cx, |d, cx| d.move_down(cx));
                                     }
                                     crate::actions::notify_actions_window(cx);
@@ -797,9 +798,9 @@ impl ScriptListApp {
                                     // CRITICAL: If actions popup is open, route to actions dialog instead
                                     if this.show_actions_popup {
                                         if let Some(ref dialog) = this.actions_dialog {
-                                            if key == "up" || key == "arrowup" {
+                                            if is_up {
                                                 dialog.update(cx, |d, cx| d.move_up(cx));
-                                            } else if key == "down" || key == "arrowdown" {
+                                            } else if is_down {
                                                 dialog.update(cx, |d, cx| d.move_down(cx));
                                             }
                                             // Notify the actions window to re-render
@@ -831,16 +832,14 @@ impl ScriptListApp {
                                         this.cached_file_results.len()
                                     };
 
-                                    if (key == "up" || key == "arrowup") && *selected_index > 0 {
+                                    if is_up && *selected_index > 0 {
                                         *selected_index -= 1;
                                         this.file_search_scroll_handle.scroll_to_item(
                                             *selected_index,
                                             gpui::ScrollStrategy::Nearest,
                                         );
                                         cx.notify();
-                                    } else if (key == "down" || key == "arrowdown")
-                                        && *selected_index + 1 < filtered_len
-                                    {
+                                    } else if is_down && *selected_index + 1 < filtered_len {
                                         *selected_index += 1;
                                         this.file_search_scroll_handle.scroll_to_item(
                                             *selected_index,
@@ -858,9 +857,9 @@ impl ScriptListApp {
                                     // CRITICAL: If actions popup is open, route to actions dialog instead
                                     if this.show_actions_popup {
                                         if let Some(ref dialog) = this.actions_dialog {
-                                            if key == "up" || key == "arrowup" {
+                                            if is_up {
                                                 dialog.update(cx, |d, cx| d.move_up(cx));
-                                            } else if key == "down" || key == "arrowdown" {
+                                            } else if is_down {
                                                 dialog.update(cx, |d, cx| d.move_down(cx));
                                             }
                                             // Notify the actions window to re-render
@@ -885,15 +884,13 @@ impl ScriptListApp {
                                             .collect()
                                     };
                                     let filtered_len = filtered_entries.len();
-                                    if (key == "up" || key == "arrowup") && *selected_index > 0 {
+                                    if is_up && *selected_index > 0 {
                                         *selected_index -= 1;
                                         this.clipboard_list_scroll_handle.scroll_to_item(
                                             *selected_index,
                                             gpui::ScrollStrategy::Nearest,
                                         );
-                                    } else if (key == "down" || key == "arrowdown")
-                                        && *selected_index + 1 < filtered_len
-                                    {
+                                    } else if is_down && *selected_index + 1 < filtered_len {
                                         *selected_index += 1;
                                         this.clipboard_list_scroll_handle.scroll_to_item(
                                             *selected_index,
@@ -912,12 +909,10 @@ impl ScriptListApp {
                                 } => {
                                     // Filter apps to get correct count
                                     let filtered_len = this.apps.len();
-                                    if (key == "up" || key == "arrowup") && *selected_index > 0 {
+                                    if is_up && *selected_index > 0 {
                                         *selected_index -= 1;
                                         cx.notify();
-                                    } else if (key == "down" || key == "arrowdown")
-                                        && *selected_index + 1 < filtered_len
-                                    {
+                                    } else if is_down && *selected_index + 1 < filtered_len {
                                         *selected_index += 1;
                                         cx.notify();
                                     }
@@ -928,16 +923,14 @@ impl ScriptListApp {
                                     filter: _,
                                 } => {
                                     let filtered_len = this.cached_windows.len();
-                                    if (key == "up" || key == "arrowup") && *selected_index > 0 {
+                                    if is_up && *selected_index > 0 {
                                         *selected_index -= 1;
                                         this.window_list_scroll_handle.scroll_to_item(
                                             *selected_index,
                                             gpui::ScrollStrategy::Nearest,
                                         );
                                         cx.notify();
-                                    } else if (key == "down" || key == "arrowdown")
-                                        && *selected_index + 1 < filtered_len
-                                    {
+                                    } else if is_down && *selected_index + 1 < filtered_len {
                                         *selected_index += 1;
                                         this.window_list_scroll_handle.scroll_to_item(
                                             *selected_index,
@@ -951,9 +944,9 @@ impl ScriptListApp {
                                     // CRITICAL: If actions popup is open, route to actions dialog instead
                                     if this.show_actions_popup {
                                         if let Some(ref dialog) = this.actions_dialog {
-                                            if key == "up" || key == "arrowup" {
+                                            if is_up {
                                                 dialog.update(cx, |d, cx| d.move_up(cx));
-                                            } else if key == "down" || key == "arrowdown" {
+                                            } else if is_down {
                                                 dialog.update(cx, |d, cx| d.move_down(cx));
                                             }
                                             // Notify the actions window to re-render
@@ -964,7 +957,7 @@ impl ScriptListApp {
                                     }
 
                                     // Main menu: handle list navigation + input history
-                                    if key == "up" || key == "arrowup" {
+                                    if is_up {
                                         // Input history: only when filter empty AND at top of list
                                         if this.filter_text.is_empty() && this.selected_index == 0 {
                                             if let Some(text) = this.input_history.navigate_up() {
@@ -995,7 +988,7 @@ impl ScriptListApp {
                                         }
                                         // Normal up navigation - use move_selection_up to skip section headers
                                         this.move_selection_up(cx);
-                                    } else if key == "down" || key == "arrowdown" {
+                                    } else if is_down {
                                         // Down during history navigation returns to newer entries
                                         if this.input_history.current_index().is_some() {
                                             if let Some(text) = this.input_history.navigate_down() {
@@ -1070,18 +1063,18 @@ impl ScriptListApp {
                     return;
                 }
 
-                let key = event.keystroke.key.to_lowercase();
+                let key = event.keystroke.key.as_str();
                 let has_platform_mod = event.keystroke.modifiers.platform; // Cmd on macOS
 
                 // Home key or Cmd+Up → jump to first item
                 // End key or Cmd+Down → jump to last item
-                let is_home =
-                    key == "home" || (has_platform_mod && (key == "up" || key == "arrowup"));
-                let is_end =
-                    key == "end" || (has_platform_mod && (key == "down" || key == "arrowdown"));
+                let is_home = key.eq_ignore_ascii_case("home")
+                    || (has_platform_mod && crate::ui_foundation::is_key_up(key));
+                let is_end = key.eq_ignore_ascii_case("end")
+                    || (has_platform_mod && crate::ui_foundation::is_key_down(key));
                 // Page Up/Down → move by ~10 selectable items
-                let is_page_up = key == "pageup";
-                let is_page_down = key == "pagedown";
+                let is_page_up = key.eq_ignore_ascii_case("pageup");
+                let is_page_down = key.eq_ignore_ascii_case("pagedown");
 
                 if !is_home && !is_end && !is_page_up && !is_page_down {
                     return;
@@ -1129,7 +1122,7 @@ impl ScriptListApp {
                     return; // Let the secondary window handle its own keystrokes
                 }
 
-                let key = event.keystroke.key.to_lowercase();
+                let key = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
                 let has_shift = event.keystroke.modifiers.shift;
                 let key_char = event.keystroke.key_char.as_deref();
@@ -1139,9 +1132,9 @@ impl ScriptListApp {
                         // FIRST: If confirm dialog is open, route Enter/Escape to it
                         // NOTE: Tab is handled by the dedicated Tab interceptor above, so
                         // we exclude it here to avoid double-dispatching toggle_focus()
-                        if key != "tab"
+                        if !key.eq_ignore_ascii_case("tab")
                             && crate::confirm::is_confirm_window_open()
-                            && crate::confirm::dispatch_confirm_key(&key, cx)
+                            && crate::confirm::dispatch_confirm_key(key, cx)
                         {
                             cx.stop_propagation();
                             return;
@@ -1150,7 +1143,7 @@ impl ScriptListApp {
                         // Handle Cmd+K to toggle actions popup (works in ScriptList, FileSearchView, ArgPrompt)
                         // This MUST be intercepted here because the Input component has focus and
                         // normal on_key_down handlers won't receive the event
-                        if has_cmd && key == "k" && !has_shift {
+                        if has_cmd && key.eq_ignore_ascii_case("k") && !has_shift {
                             match &mut this.current_view {
                                 AppView::ScriptList => {
                                     // Toggle actions for the main script list
@@ -1241,7 +1234,7 @@ impl ScriptListApp {
                         }
 
                         // Handle Cmd+Shift+K for add_shortcut in ScriptList
-                        if has_cmd && key == "k" && has_shift
+                        if has_cmd && key.eq_ignore_ascii_case("k") && has_shift
                             && matches!(this.current_view, AppView::ScriptList)
                         {
                             logging::log("KEY", "Interceptor: Cmd+Shift+K -> add_shortcut (ScriptList)");
@@ -1257,7 +1250,10 @@ impl ScriptListApp {
 
                         if window_tweaker_enabled {
                             // Handle Cmd+- to decrease light theme opacity
-                            if has_cmd && !has_shift && (key == "-" || key == "minus") {
+                            if has_cmd
+                                && !has_shift
+                                && (key == "-" || key.eq_ignore_ascii_case("minus"))
+                            {
                                 logging::log("KEY", &format!("Interceptor: Cmd+- (key={}) -> decrease light opacity", key));
                                 this.adjust_light_opacity(-0.05, cx);
                                 cx.stop_propagation();
@@ -1265,7 +1261,11 @@ impl ScriptListApp {
                             }
 
                             // Handle Cmd+= (or Cmd+Shift+=) to increase light theme opacity
-                            if has_cmd && (key == "=" || key == "equal" || key == "plus") {
+                            if has_cmd
+                                && (key == "="
+                                    || key.eq_ignore_ascii_case("equal")
+                                    || key.eq_ignore_ascii_case("plus"))
+                            {
                                 logging::log("KEY", &format!("Interceptor: Cmd+= (key={}) -> increase light opacity", key));
                                 this.adjust_light_opacity(0.05, cx);
                                 cx.stop_propagation();
@@ -1273,7 +1273,7 @@ impl ScriptListApp {
                             }
 
                             // Handle Cmd+M to cycle vibrancy material (blur effect)
-                            if has_cmd && !has_shift && key == "m" {
+                            if has_cmd && !has_shift && key.eq_ignore_ascii_case("m") {
                                 logging::log("KEY", "Interceptor: Cmd+M -> cycle vibrancy material");
                                 let description = platform::cycle_vibrancy_material();
                                 this.toast_manager.push(components::toast::Toast::info(
@@ -1286,7 +1286,7 @@ impl ScriptListApp {
                             }
 
                             // Handle Cmd+Shift+A to cycle vibrancy appearance (VibrantLight, VibrantDark, etc.)
-                            if has_cmd && has_shift && key == "a" {
+                            if has_cmd && has_shift && key.eq_ignore_ascii_case("a") {
                                 logging::log("KEY", "Interceptor: Cmd+Shift+A -> cycle vibrancy appearance");
                                 let description = platform::cycle_appearance();
                                 this.toast_manager.push(components::toast::Toast::info(
@@ -1303,10 +1303,8 @@ impl ScriptListApp {
                         if !matches!(this.current_view, AppView::FileSearchView { .. }) {
                             // Arrow keys are handled by arrow_interceptor to avoid double-processing
                             // (which can skip 2 items per keypress when both interceptors handle arrows).
-                            if key == "up"
-                                || key == "arrowup"
-                                || key == "down"
-                                || key == "arrowdown"
+                            if crate::ui_foundation::is_key_up(key)
+                                || crate::ui_foundation::is_key_down(key)
                             {
                                 return;
                             }
@@ -1329,7 +1327,7 @@ impl ScriptListApp {
 
                             if let Some(host) = host {
                                 match this.route_key_to_actions_dialog(
-                                    &key,
+                                    key,
                                     key_char,
                                     &event.keystroke.modifiers,
                                     host,
@@ -1370,14 +1368,14 @@ impl ScriptListApp {
                         }
 
                         // Handle Escape to close actions popup
-                        if key == "escape" {
+                        if crate::ui_foundation::is_key_escape(key) {
                             this.close_actions_popup(ActionsDialogHost::FileSearch, window, cx);
                             cx.stop_propagation();
                             return;
                         }
 
                         // Handle Enter to submit selected action
-                        if key == "enter" {
+                        if crate::ui_foundation::is_key_enter(key) {
                             if let Some(ref dialog) = this.actions_dialog {
                                 let action_id = dialog.read(cx).get_selected_action_id();
                                 let should_close = dialog.read(cx).selected_action_should_close();
@@ -1410,7 +1408,7 @@ impl ScriptListApp {
                         }
 
                         // Handle Backspace for actions search
-                        if key == "backspace" {
+                        if key.eq_ignore_ascii_case("backspace") {
                             if let Some(ref dialog) = this.actions_dialog {
                                 dialog.update(cx, |d, cx| d.handle_backspace(cx));
                                 crate::actions::notify_actions_window(cx);

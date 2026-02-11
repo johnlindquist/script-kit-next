@@ -17,19 +17,19 @@ impl Render for TemplatePrompt {
              event: &gpui::KeyDownEvent,
              _window: &mut Window,
              cx: &mut Context<Self>| {
-                let key_str = event.keystroke.key.to_lowercase();
+                let key_str = event.keystroke.key.as_str();
 
-                match key_str.as_str() {
-                    "tab" => {
+                match key_str {
+                    "tab" | "Tab" => {
                         if event.keystroke.modifiers.shift {
                             this.prev_input(cx);
                         } else {
                             this.next_input(cx);
                         }
                     }
-                    "enter" | "return" => this.submit(cx),
-                    "escape" | "esc" => this.submit_cancel(),
-                    "backspace" => this.handle_backspace(cx),
+                    "enter" | "Enter" | "return" | "Return" => this.submit(cx),
+                    "escape" | "Escape" | "esc" | "Esc" => this.submit_cancel(),
+                    "backspace" | "Backspace" => this.handle_backspace(cx),
                     _ => {
                         if let Some(ref key_char) = event.keystroke.key_char {
                             if let Some(ch) = key_char.chars().next() {

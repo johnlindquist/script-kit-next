@@ -13,19 +13,19 @@ impl ScriptListApp {
             return false;
         }
 
-        let key_str = event.keystroke.key.to_lowercase();
+        let key_str = event.keystroke.key.as_str();
         let has_cmd = event.keystroke.modifiers.platform;
         let has_shift = event.keystroke.modifiers.shift;
 
         // Cmd+W always closes window
-        if has_cmd && key_str == "w" {
+        if has_cmd && key_str.eq_ignore_ascii_case("w") {
             logging::log("KEY", "Cmd+W - closing window");
             self.close_and_reset_window(cx);
             return true;
         }
 
         // Cmd+Shift+M cycles vibrancy material (for debugging)
-        if has_cmd && has_shift && key_str == "m" {
+        if has_cmd && has_shift && key_str.eq_ignore_ascii_case("m") {
             let result = crate::platform::cycle_vibrancy_material();
             logging::log("KEY", &format!("Cmd+Shift+M - {}", result));
             // Show HUD with the material name
@@ -34,7 +34,7 @@ impl ScriptListApp {
         }
 
         // Cmd+Shift+P toggles pin mode (window stays open on blur)
-        if has_cmd && has_shift && key_str == "p" {
+        if has_cmd && has_shift && key_str.eq_ignore_ascii_case("p") {
             self.is_pinned = !self.is_pinned;
             let status = if self.is_pinned {
                 "📌 Window Pinned"
@@ -49,7 +49,7 @@ impl ScriptListApp {
 
         // ESC closes dismissable prompts (when actions popup is not showing)
         if is_dismissable
-            && crate::ui_foundation::is_key_escape(key_str.as_str())
+            && crate::ui_foundation::is_key_escape(key_str)
             && !self.show_actions_popup
         {
             logging::log("KEY", "ESC in dismissable prompt - closing window");

@@ -4,9 +4,11 @@
         let arrow_interceptor = cx.intercept_keystrokes({
             let app_entity = app_entity_for_arrows;
             move |event, _window, cx| {
-                let key = event.keystroke.key.to_lowercase();
+                let key = event.keystroke.key.as_str();
+                let is_up = crate::ui_foundation::is_key_up(key);
+                let is_down = crate::ui_foundation::is_key_down(key);
                 // Check for Up/Down arrow keys (no modifiers except shift for selection)
-                if (key == "up" || key == "arrowup" || key == "down" || key == "arrowdown")
+                if (is_up || is_down)
                     && !event.keystroke.modifiers.platform
                     && !event.keystroke.modifiers.alt
                     && !event.keystroke.modifiers.control
@@ -15,7 +17,7 @@
                         app.update(cx, |this, cx| {
                             // FIRST: If confirm dialog is open, route all arrow keys to it
                             if crate::confirm::is_confirm_window_open()
-                                && crate::confirm::dispatch_confirm_key(&key, cx)
+                                && crate::confirm::dispatch_confirm_key(key, cx)
                             {
                                 cx.stop_propagation();
                                 return;
@@ -26,9 +28,9 @@
                             // arrows to the dialog, not just the few views with explicit cases below.
                             if this.show_actions_popup {
                                 if let Some(ref dialog) = this.actions_dialog {
-                                    if key == "up" || key == "arrowup" {
+                                    if is_up {
                                         dialog.update(cx, |d, cx| d.move_up(cx));
-                                    } else if key == "down" || key == "arrowdown" {
+                                    } else if is_down {
                                         dialog.update(cx, |d, cx| d.move_down(cx));
                                     }
                                     crate::actions::notify_actions_window(cx);
@@ -46,9 +48,9 @@
                                     // CRITICAL: If actions popup is open, route to actions dialog instead
                                     if this.show_actions_popup {
                                         if let Some(ref dialog) = this.actions_dialog {
-                                            if key == "up" || key == "arrowup" {
+                                            if is_up {
                                                 dialog.update(cx, |d, cx| d.move_up(cx));
-                                            } else if key == "down" || key == "arrowdown" {
+                                            } else if is_down {
                                                 dialog.update(cx, |d, cx| d.move_down(cx));
                                             }
                                             // Notify the actions window to re-render
@@ -80,16 +82,14 @@
                                         this.cached_file_results.len()
                                     };
 
-                                    if (key == "up" || key == "arrowup") && *selected_index > 0 {
+                                    if is_up && *selected_index > 0 {
                                         *selected_index -= 1;
                                         this.file_search_scroll_handle.scroll_to_item(
                                             *selected_index,
                                             gpui::ScrollStrategy::Nearest,
                                         );
                                         cx.notify();
-                                    } else if (key == "down" || key == "arrowdown")
-                                        && *selected_index + 1 < filtered_len
-                                    {
+                                    } else if is_down && *selected_index + 1 < filtered_len {
                                         *selected_index += 1;
                                         this.file_search_scroll_handle.scroll_to_item(
                                             *selected_index,
@@ -107,9 +107,9 @@
                                     // CRITICAL: If actions popup is open, route to actions dialog instead
                                     if this.show_actions_popup {
                                         if let Some(ref dialog) = this.actions_dialog {
-                                            if key == "up" || key == "arrowup" {
+                                            if is_up {
                                                 dialog.update(cx, |d, cx| d.move_up(cx));
-                                            } else if key == "down" || key == "arrowdown" {
+                                            } else if is_down {
                                                 dialog.update(cx, |d, cx| d.move_down(cx));
                                             }
                                             // Notify the actions window to re-render
@@ -134,15 +134,13 @@
                                             .collect()
                                     };
                                     let filtered_len = filtered_entries.len();
-                                    if (key == "up" || key == "arrowup") && *selected_index > 0 {
+                                    if is_up && *selected_index > 0 {
                                         *selected_index -= 1;
                                         this.clipboard_list_scroll_handle.scroll_to_item(
                                             *selected_index,
                                             gpui::ScrollStrategy::Nearest,
                                         );
-                                    } else if (key == "down" || key == "arrowdown")
-                                        && *selected_index + 1 < filtered_len
-                                    {
+                                    } else if is_down && *selected_index + 1 < filtered_len {
                                         *selected_index += 1;
                                         this.clipboard_list_scroll_handle.scroll_to_item(
                                             *selected_index,
@@ -161,12 +159,10 @@
                                 } => {
                                     // Filter apps to get correct count
                                     let filtered_len = this.apps.len();
-                                    if (key == "up" || key == "arrowup") && *selected_index > 0 {
+                                    if is_up && *selected_index > 0 {
                                         *selected_index -= 1;
                                         cx.notify();
-                                    } else if (key == "down" || key == "arrowdown")
-                                        && *selected_index + 1 < filtered_len
-                                    {
+                                    } else if is_down && *selected_index + 1 < filtered_len {
                                         *selected_index += 1;
                                         cx.notify();
                                     }
@@ -177,16 +173,14 @@
                                     filter: _,
                                 } => {
                                     let filtered_len = this.cached_windows.len();
-                                    if (key == "up" || key == "arrowup") && *selected_index > 0 {
+                                    if is_up && *selected_index > 0 {
                                         *selected_index -= 1;
                                         this.window_list_scroll_handle.scroll_to_item(
                                             *selected_index,
                                             gpui::ScrollStrategy::Nearest,
                                         );
                                         cx.notify();
-                                    } else if (key == "down" || key == "arrowdown")
-                                        && *selected_index + 1 < filtered_len
-                                    {
+                                    } else if is_down && *selected_index + 1 < filtered_len {
                                         *selected_index += 1;
                                         this.window_list_scroll_handle.scroll_to_item(
                                             *selected_index,
@@ -200,9 +194,9 @@
                                     // CRITICAL: If actions popup is open, route to actions dialog instead
                                     if this.show_actions_popup {
                                         if let Some(ref dialog) = this.actions_dialog {
-                                            if key == "up" || key == "arrowup" {
+                                            if is_up {
                                                 dialog.update(cx, |d, cx| d.move_up(cx));
-                                            } else if key == "down" || key == "arrowdown" {
+                                            } else if is_down {
                                                 dialog.update(cx, |d, cx| d.move_down(cx));
                                             }
                                             // Notify the actions window to re-render
@@ -213,7 +207,7 @@
                                     }
 
                                     // Main menu: handle list navigation + input history
-                                    if key == "up" || key == "arrowup" {
+                                    if is_up {
                                         // Input history: only when filter empty AND at top of list
                                         if this.filter_text.is_empty() && this.selected_index == 0 {
                                             if let Some(text) = this.input_history.navigate_up() {
@@ -244,7 +238,7 @@
                                         }
                                         // Normal up navigation - use move_selection_up to skip section headers
                                         this.move_selection_up(cx);
-                                    } else if key == "down" || key == "arrowdown" {
+                                    } else if is_down {
                                         // Down during history navigation returns to newer entries
                                         if this.input_history.current_index().is_some() {
                                             if let Some(text) = this.input_history.navigate_down() {
@@ -319,18 +313,18 @@
                     return;
                 }
 
-                let key = event.keystroke.key.to_lowercase();
+                let key = event.keystroke.key.as_str();
                 let has_platform_mod = event.keystroke.modifiers.platform; // Cmd on macOS
 
                 // Home key or Cmd+Up → jump to first item
                 // End key or Cmd+Down → jump to last item
-                let is_home =
-                    key == "home" || (has_platform_mod && (key == "up" || key == "arrowup"));
-                let is_end =
-                    key == "end" || (has_platform_mod && (key == "down" || key == "arrowdown"));
+                let is_home = key.eq_ignore_ascii_case("home")
+                    || (has_platform_mod && crate::ui_foundation::is_key_up(key));
+                let is_end = key.eq_ignore_ascii_case("end")
+                    || (has_platform_mod && crate::ui_foundation::is_key_down(key));
                 // Page Up/Down → move by ~10 selectable items
-                let is_page_up = key == "pageup";
-                let is_page_down = key == "pagedown";
+                let is_page_up = key.eq_ignore_ascii_case("pageup");
+                let is_page_down = key.eq_ignore_ascii_case("pagedown");
 
                 if !is_home && !is_end && !is_page_up && !is_page_down {
                     return;

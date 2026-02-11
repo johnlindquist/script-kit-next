@@ -86,7 +86,8 @@ impl Render for PathPrompt {
         let filtered_count = self.filtered_entries.len();
         let selected_index = self.selected_index;
 
-        // Clone entries for the closure (uniform_list callback doesn't have access to self)
+        // TODO(codex-audit): This Vec snapshot is rebuilt to move data into the list closure.
+        // Consider Arc-backed list data to avoid per-render allocation/copy churn.
         let entries_for_list: Vec<(String, bool)> = self
             .filtered_entries
             .iter()
@@ -143,11 +144,13 @@ impl Render for PathPrompt {
         };
 
         // Get actions search text from shared state
-        let actions_search_text = self
-            .actions_search_text
-            .lock()
-            .map(|g| g.clone())
-            .unwrap_or_default();
+        let actions_search_text = match self.actions_search_text.lock() {
+            Ok(guard) => guard.clone(),
+            Err(poison) => {
+                tracing::error!("path_prompt_actions_search_text_mutex_poisoned_in_render");
+                poison.into_inner().clone()
+            }
+        };
 
         // Create path prefix for display in search input
         let path_prefix = self.path_prefix.clone();

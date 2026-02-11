@@ -127,8 +127,7 @@ impl ScriptListApp {
 
         // Check if keystroke matches any action shortcut in the dialog
         // This allows Cmd+E, Cmd+L, etc. to execute the corresponding action
-        let key_lower = key.to_lowercase();
-        let keystroke_shortcut = shortcuts::keystroke_to_shortcut(&key_lower, modifiers);
+        let keystroke_shortcut = shortcuts::keystroke_to_shortcut(key, modifiers);
 
         // Read dialog actions and look for matching shortcut
         // First pass: find the match (if any) while holding the borrow

@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 fn render_group_header_preview(
     style: &designs::group_header_variations::GroupHeaderStyle,
     typography: &designs::DesignTypography,

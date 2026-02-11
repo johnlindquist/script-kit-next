@@ -53,11 +53,29 @@ impl ScriptListApp {
                 return Err("Webcam frame memory is unavailable".to_string());
             }
 
-            let y_plane = unsafe { std::slice::from_raw_parts(y_plane_ptr, y_stride * height) };
-            let uv_plane =
-                unsafe { std::slice::from_raw_parts(uv_plane_ptr, uv_stride * uv_height) };
+            let y_plane_len = y_stride.checked_mul(height).ok_or_else(|| {
+                format!(
+                    "Webcam Y plane size overflow (stride={} height={})",
+                    y_stride, height
+                )
+            })?;
+            let uv_plane_len = uv_stride.checked_mul(uv_height).ok_or_else(|| {
+                format!(
+                    "Webcam UV plane size overflow (stride={} height={})",
+                    uv_stride, uv_height
+                )
+            })?;
+            let rgb_len = width
+                .checked_mul(height)
+                .and_then(|pixels| pixels.checked_mul(3))
+                .ok_or_else(|| {
+                    format!("Webcam RGB buffer size overflow (width={} height={})", width, height)
+                })?;
 
-            let mut rgb = vec![0u8; width * height * 3];
+            let y_plane = unsafe { std::slice::from_raw_parts(y_plane_ptr, y_plane_len) };
+            let uv_plane = unsafe { std::slice::from_raw_parts(uv_plane_ptr, uv_plane_len) };
+
+            let mut rgb = vec![0u8; rgb_len];
 
             for y in 0..height {
                 let y_row = y * y_stride;
@@ -86,11 +104,15 @@ impl ScriptListApp {
 
             let mut png_data = Vec::new();
             let encoder = image::codecs::png::PngEncoder::new(&mut png_data);
+            let png_width = u32::try_from(width)
+                .map_err(|_| format!("Webcam frame width out of range: {}", width))?;
+            let png_height = u32::try_from(height)
+                .map_err(|_| format!("Webcam frame height out of range: {}", height))?;
             encoder
                 .write_image(
                     &rgb,
-                    width as u32,
-                    height as u32,
+                    png_width,
+                    png_height,
                     image::ColorType::Rgb8.into(),
                 )
                 .map_err(|e| format!("Failed to encode webcam frame: {}", e))?;

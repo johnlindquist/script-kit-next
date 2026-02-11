@@ -311,116 +311,111 @@ impl TextInputState {
         shift: bool,
         cx: &mut Context<T>,
     ) -> bool {
-        let key_lower = key.to_lowercase();
+        // Clipboard
+        if cmd && !alt && key.eq_ignore_ascii_case("c") {
+            self.copy(cx);
+            return true;
+        }
+        if cmd && !alt && key.eq_ignore_ascii_case("x") {
+            self.cut(cx);
+            return true;
+        }
+        if cmd && !alt && key.eq_ignore_ascii_case("v") {
+            self.paste(cx);
+            return true;
+        }
+        if cmd && !alt && key.eq_ignore_ascii_case("a") {
+            self.select_all();
+            return true;
+        }
 
-        match key_lower.as_str() {
-            // Clipboard
-            "c" if cmd && !alt => {
-                self.copy(cx);
-                true
-            }
-            "x" if cmd && !alt => {
-                self.cut(cx);
-                true
-            }
-            "v" if cmd && !alt => {
-                self.paste(cx);
-                true
-            }
-            "a" if cmd && !alt => {
-                self.select_all();
-                true
-            }
-
-            // Navigation
-            "left" | "arrowleft" => {
-                if cmd {
-                    self.move_to_start(shift);
-                } else if alt {
-                    self.move_word_left(shift);
-                } else {
-                    self.move_left(shift);
-                }
-                true
-            }
-            "right" | "arrowright" => {
-                if cmd {
-                    self.move_to_end(shift);
-                } else if alt {
-                    self.move_word_right(shift);
-                } else {
-                    self.move_right(shift);
-                }
-                true
-            }
-            "home" => {
+        // Navigation
+        if key.eq_ignore_ascii_case("left") || key.eq_ignore_ascii_case("arrowleft") {
+            if cmd {
                 self.move_to_start(shift);
-                true
+            } else if alt {
+                self.move_word_left(shift);
+            } else {
+                self.move_left(shift);
             }
-            "end" => {
+            return true;
+        }
+        if key.eq_ignore_ascii_case("right") || key.eq_ignore_ascii_case("arrowright") {
+            if cmd {
                 self.move_to_end(shift);
-                true
+            } else if alt {
+                self.move_word_right(shift);
+            } else {
+                self.move_right(shift);
             }
+            return true;
+        }
+        if key.eq_ignore_ascii_case("home") {
+            self.move_to_start(shift);
+            return true;
+        }
+        if key.eq_ignore_ascii_case("end") {
+            self.move_to_end(shift);
+            return true;
+        }
 
-            // Deletion
-            "backspace" => {
-                if cmd {
-                    // Cmd+Backspace: delete to start of line
-                    let (_, end) = self.selection.range();
+        // Deletion
+        if key.eq_ignore_ascii_case("backspace") {
+            if cmd {
+                // Cmd+Backspace: delete to start of line
+                let (_, end) = self.selection.range();
+                self.selection = TextSelection {
+                    anchor: 0,
+                    cursor: end,
+                };
+                self.delete_selection();
+            } else if alt {
+                // Alt+Backspace: delete word left
+                let start = self.find_word_boundary_left();
+                let end = self.selection.cursor;
+                if start < end {
                     self.selection = TextSelection {
-                        anchor: 0,
+                        anchor: start,
                         cursor: end,
                     };
                     self.delete_selection();
-                } else if alt {
-                    // Alt+Backspace: delete word left
-                    let start = self.find_word_boundary_left();
-                    let end = self.selection.cursor;
-                    if start < end {
-                        self.selection = TextSelection {
-                            anchor: start,
-                            cursor: end,
-                        };
-                        self.delete_selection();
-                    }
-                } else {
-                    self.backspace();
                 }
-                true
+            } else {
+                self.backspace();
             }
-            "delete" => {
-                if alt {
-                    // Alt+Delete: delete word right
-                    let start = self.selection.cursor;
-                    let end = self.find_word_boundary_right();
-                    if start < end {
-                        self.selection = TextSelection {
-                            anchor: start,
-                            cursor: end,
-                        };
-                        self.delete_selection();
-                    }
-                } else {
-                    self.delete();
-                }
-                true
-            }
-
-            // Character input (no cmd modifier)
-            _ if !cmd => {
-                if let Some(key_char) = key_char {
-                    if let Some(ch) = key_char.chars().next() {
-                        if !ch.is_control() {
-                            self.insert_char(ch);
-                            return true;
-                        }
-                    }
-                }
-                false
-            }
-
-            _ => false,
+            return true;
         }
+        if key.eq_ignore_ascii_case("delete") {
+            if alt {
+                // Alt+Delete: delete word right
+                let start = self.selection.cursor;
+                let end = self.find_word_boundary_right();
+                if start < end {
+                    self.selection = TextSelection {
+                        anchor: start,
+                        cursor: end,
+                    };
+                    self.delete_selection();
+                }
+            } else {
+                self.delete();
+            }
+            return true;
+        }
+
+        // Character input (no cmd modifier)
+        if !cmd {
+            if let Some(key_char) = key_char {
+                if let Some(ch) = key_char.chars().next() {
+                    if !ch.is_control() {
+                        self.insert_char(ch);
+                        return true;
+                    }
+                }
+            }
+        }
+
+        false
     }
 
     // === Helper Methods ===

@@ -189,20 +189,17 @@ impl ShortcutRecorder {
         self.shortcut.shift = modifiers.shift;
 
         // Check if this is a modifier-only key press
-        let is_modifier_key = matches!(
-            key.to_lowercase().as_str(),
-            "shift"
-                | "control"
-                | "alt"
-                | "meta"
-                | "command"
-                | "cmd"
-                | "super"
-                | "win"
-                | "ctrl"
-                | "opt"
-                | "option"
-        );
+        let is_modifier_key = key.eq_ignore_ascii_case("shift")
+            || key.eq_ignore_ascii_case("control")
+            || key.eq_ignore_ascii_case("alt")
+            || key.eq_ignore_ascii_case("meta")
+            || key.eq_ignore_ascii_case("command")
+            || key.eq_ignore_ascii_case("cmd")
+            || key.eq_ignore_ascii_case("super")
+            || key.eq_ignore_ascii_case("win")
+            || key.eq_ignore_ascii_case("ctrl")
+            || key.eq_ignore_ascii_case("opt")
+            || key.eq_ignore_ascii_case("option");
 
         if !is_modifier_key && !key.is_empty() {
             if should_finish_recording(key, is_modifier_key, modifiers) {

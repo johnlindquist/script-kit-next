@@ -328,65 +328,62 @@ impl FormTextField {
 
     /// Unified key handler with selection and clipboard support
     pub fn handle_key_event(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
-        let key = event.keystroke.key.to_lowercase();
+        let key = event.keystroke.key.as_str();
         let cmd = event.keystroke.modifiers.platform;
         let shift = event.keystroke.modifiers.shift;
 
-        match (key.as_str(), cmd, shift) {
-            // Select all
-            ("a", true, false) => {
-                self.select_all();
-                cx.notify();
-                return;
-            }
-            // Clipboard
-            ("c", true, false) => {
-                self.copy(cx);
-                return;
-            }
-            ("x", true, false) => {
-                self.cut(cx);
-                cx.notify();
-                return;
-            }
-            ("v", true, false) => {
-                self.paste(cx);
-                cx.notify();
-                return;
-            }
-            // Navigation with optional selection
-            ("left" | "arrowleft", false, s) => {
-                self.move_left(s);
-                cx.notify();
-                return;
-            }
-            ("right" | "arrowright", false, s) => {
-                self.move_right(s);
-                cx.notify();
-                return;
-            }
-            ("home", false, s) => {
-                self.move_home(s);
-                cx.notify();
-                return;
-            }
-            ("end", false, s) => {
-                self.move_end(s);
-                cx.notify();
-                return;
-            }
-            // Editing
-            ("backspace", false, _) => {
-                self.backspace_char();
-                cx.notify();
-                return;
-            }
-            ("delete", false, _) => {
-                self.delete_forward_char();
-                cx.notify();
-                return;
-            }
-            _ => {}
+        // Select all
+        if cmd && !shift && key.eq_ignore_ascii_case("a") {
+            self.select_all();
+            cx.notify();
+            return;
+        }
+        // Clipboard
+        if cmd && !shift && key.eq_ignore_ascii_case("c") {
+            self.copy(cx);
+            return;
+        }
+        if cmd && !shift && key.eq_ignore_ascii_case("x") {
+            self.cut(cx);
+            cx.notify();
+            return;
+        }
+        if cmd && !shift && key.eq_ignore_ascii_case("v") {
+            self.paste(cx);
+            cx.notify();
+            return;
+        }
+        // Navigation with optional selection
+        if !cmd && (key.eq_ignore_ascii_case("left") || key.eq_ignore_ascii_case("arrowleft")) {
+            self.move_left(shift);
+            cx.notify();
+            return;
+        }
+        if !cmd && (key.eq_ignore_ascii_case("right") || key.eq_ignore_ascii_case("arrowright")) {
+            self.move_right(shift);
+            cx.notify();
+            return;
+        }
+        if !cmd && key.eq_ignore_ascii_case("home") {
+            self.move_home(shift);
+            cx.notify();
+            return;
+        }
+        if !cmd && key.eq_ignore_ascii_case("end") {
+            self.move_end(shift);
+            cx.notify();
+            return;
+        }
+        // Editing
+        if !cmd && key.eq_ignore_ascii_case("backspace") {
+            self.backspace_char();
+            cx.notify();
+            return;
+        }
+        if !cmd && key.eq_ignore_ascii_case("delete") {
+            self.delete_forward_char();
+            cx.notify();
+            return;
         }
 
         // Printable character input (ignore when cmd/ctrl held)

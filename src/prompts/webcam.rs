@@ -57,8 +57,26 @@ impl WebcamPrompt {
 
     /// Set the latest CVPixelBuffer from camera (zero-copy)
     pub fn set_pixel_buffer(&mut self, buf: CVPixelBuffer, cx: &mut Context<Self>) {
-        self.frame_width = buf.get_width() as u32;
-        self.frame_height = buf.get_height() as u32;
+        let Ok(frame_width) = u32::try_from(buf.get_width()) else {
+            self.pixel_buffer = None;
+            self.frame_width = 0;
+            self.frame_height = 0;
+            self.set_error("Webcam frame width exceeds supported range".to_string(), cx);
+            return;
+        };
+        let Ok(frame_height) = u32::try_from(buf.get_height()) else {
+            self.pixel_buffer = None;
+            self.frame_width = 0;
+            self.frame_height = 0;
+            self.set_error(
+                "Webcam frame height exceeds supported range".to_string(),
+                cx,
+            );
+            return;
+        };
+
+        self.frame_width = frame_width;
+        self.frame_height = frame_height;
         self.pixel_buffer = Some(buf);
         self.state = WebcamState::Live;
         cx.notify();
