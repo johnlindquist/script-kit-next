@@ -7,6 +7,15 @@
   - `src/components/prompt_header/component.rs`
   - `src/components/prompt_layout_shell.rs`
 
+## Evidence Anchors
+- `src/prompts/path/render.rs:30` list virtualization starts with `uniform_list("path-list", ...)`.
+- `src/prompts/path/render.rs:93` header state derives from `PromptHeaderConfig` with actions-mode toggles.
+- `src/prompts/path/render.rs:131` container uses `PromptContainerConfig::new().show_divider(true).hint(...)`.
+- `src/components/prompt_container.rs:226` footer hint is centered by `render_hint` (`justify_center`).
+- `src/components/prompt_header/component.rs:405` actions buttons/search are overlaid for CLS-free toggling.
+- `src/components/prompt_header/component.rs:449` right-side header actions slot reserves fixed width via `actions_density`.
+- `src/components/prompt_layout_shell.rs:63` fill slot contract enforces `flex_1 + min_h(0) + overflow_hidden`.
+
 ## Current Composition (Observed)
 1. Path prompt uses a `PromptContainer` with `header + divider + flex list + hint footer`.
 2. The list is virtualized via `uniform_list("path-list", filtered_count, ...)` and rendered in a `flex_1` slot.
