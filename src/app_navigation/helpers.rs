@@ -8,12 +8,18 @@ fn page_down_target_index(
     selected_index: usize,
     page_size: usize,
 ) -> usize {
+    if page_size == 0 {
+        return selected_index;
+    }
+
     let Some(last_selectable) = grouped_items
         .iter()
         .rposition(|item| matches!(item, GroupedListItem::Item(_)))
     else {
         return selected_index;
     };
+
+    let selected_index = selected_index.min(last_selectable);
 
     if selected_index >= last_selectable {
         return selected_index;
@@ -49,4 +55,3 @@ fn wheel_scroll_target_index(current_item: usize, item_count: usize, delta_lines
 fn validated_selection_index(grouped_items: &[GroupedListItem], selected_index: usize) -> usize {
     list_item::coerce_selection(grouped_items, selected_index).unwrap_or(0)
 }
-

@@ -63,83 +63,77 @@ impl ScriptListApp {
     /// just like move_selection_up/down. Otherwise, holding arrow keys
     /// can land on headers causing navigation to feel "stuck".
     fn move_selection_by(&mut self, delta: i32, cx: &mut Context<Self>) {
-        // Switch to keyboard mode and clear hover to prevent dual-highlight
-        self.input_mode = InputMode::Keyboard;
-        self.hovered_index = None;
-        self.hide_mouse_cursor(cx);
+        self.enter_keyboard_mode(cx);
 
-        // Get grouped results to check for section headers (cached)
-        let (grouped_items, _) = self.get_grouped_results_cached();
-        // Clone to avoid borrow issues with self mutation below
-        let grouped_items = grouped_items.clone();
+        let selection_update = {
+            let (grouped_items, _) = self.get_grouped_results_cached();
+            let len = grouped_items.len();
 
-        let len = grouped_items.len();
-        if len == 0 {
-            self.selected_index = 0;
-            return;
-        }
+            if len == 0 {
+                None
+            } else {
+                let clamped_index = self.selected_index.min(len.saturating_sub(1));
+                let first_selectable = grouped_items
+                    .iter()
+                    .position(|item| matches!(item, GroupedListItem::Item(_)));
+                let last_selectable = grouped_items
+                    .iter()
+                    .rposition(|item| matches!(item, GroupedListItem::Item(_)));
 
-        // Find bounds for selectable items (non-headers)
-        let first_selectable = grouped_items
-            .iter()
-            .position(|item| matches!(item, GroupedListItem::Item(_)));
-        let last_selectable = grouped_items
-            .iter()
-            .rposition(|item| matches!(item, GroupedListItem::Item(_)));
+                if let (Some(first), Some(last)) = (first_selectable, last_selectable) {
+                    let target =
+                        (clamped_index as i32 + delta).clamp(first as i32, last as i32) as usize;
 
-        // If no selectable items, nothing to do
-        let (first, last) = match (first_selectable, last_selectable) {
-            (Some(f), Some(l)) => (f, l),
-            _ => return,
+                    let new_index = if delta > 0 {
+                        let mut idx = target;
+                        while idx < last
+                            && matches!(
+                                grouped_items.get(idx),
+                                Some(GroupedListItem::SectionHeader(..))
+                            )
+                        {
+                            idx += 1;
+                        }
+                        idx
+                    } else if delta < 0 {
+                        let mut idx = target;
+                        while idx > first
+                            && matches!(
+                                grouped_items.get(idx),
+                                Some(GroupedListItem::SectionHeader(..))
+                            )
+                        {
+                            idx -= 1;
+                        }
+                        idx
+                    } else {
+                        clamped_index
+                    };
+
+                    let resolved_index = if matches!(
+                        grouped_items.get(new_index),
+                        Some(GroupedListItem::SectionHeader(..))
+                    ) {
+                        clamped_index
+                    } else {
+                        new_index
+                    };
+
+                    if resolved_index != clamped_index {
+                        Some((resolved_index, "coalesced_nav"))
+                    } else {
+                        Some((clamped_index, "coalesced_nav_clamp"))
+                    }
+                } else {
+                    Some((clamped_index, "coalesced_nav_clamp"))
+                }
+            }
         };
 
-        // Calculate target index, clamping to valid range
-        let target = (self.selected_index as i32 + delta).clamp(first as i32, last as i32) as usize;
-
-        // If moving down (positive delta), skip headers forward
-        // If moving up (negative delta), skip headers backward
-        let new_index = if delta > 0 {
-            // Moving down - find next non-header at or after target
-            let mut idx = target;
-            while idx <= last {
-                if matches!(grouped_items.get(idx), Some(GroupedListItem::Item(_))) {
-                    break;
-                }
-                idx += 1;
-            }
-            idx.min(last)
-        } else if delta < 0 {
-            // Moving up - find next non-header at or before target
-            let mut idx = target;
-            while idx >= first {
-                if matches!(grouped_items.get(idx), Some(GroupedListItem::Item(_))) {
-                    break;
-                }
-                if idx == 0 {
-                    break;
-                }
-                idx -= 1;
-            }
-            idx.max(first)
+        if let Some((new_index, reason)) = selection_update {
+            self.set_selected_index(new_index, reason, cx);
         } else {
-            // delta == 0, no movement
-            self.selected_index
-        };
-
-        // Final validation: ensure we're not on a header
-        if matches!(
-            grouped_items.get(new_index),
-            Some(GroupedListItem::SectionHeader(..))
-        ) {
-            // Can't find a valid position, stay put
-            return;
-        }
-
-        if new_index != self.selected_index {
-            self.selected_index = new_index;
-            self.scroll_to_selected_if_needed("coalesced_nav");
-            self.trigger_scroll_activity(cx);
-            cx.notify();
+            self.selected_index = 0;
         }
     }
 
@@ -153,18 +147,15 @@ impl ScriptListApp {
     /// * `delta_lines` - Scroll delta in "lines" (positive = scroll content up/view down)
     #[allow(dead_code)]
     pub fn handle_scroll_wheel(&mut self, delta_lines: f32, cx: &mut Context<Self>) {
-        // Get current scroll position from ListState
-        let current_item = self.main_list_state.logical_scroll_top().item_ix;
-
-        // Get grouped results to find valid bounds
-        let (grouped_items, _) = self.get_grouped_results_cached();
-        let grouped_items = grouped_items.clone();
-        let item_count = grouped_items.len();
-
-        // Convert delta to a clamped item index. Rounding acts as lightweight coalescing
-        // so tiny high-frequency deltas do not trigger noisy per-event moves.
-        let new_item = wheel_scroll_target_index(current_item, item_count, delta_lines);
-        let items_to_scroll = (-delta_lines).round() as i32;
+        // Compute wheel movement targets while grouped results are borrowed.
+        let (current_item, new_item, items_to_scroll) = {
+            let current_item = self.main_list_state.logical_scroll_top().item_ix;
+            let (grouped_items, _) = self.get_grouped_results_cached();
+            let item_count = grouped_items.len();
+            let new_item = wheel_scroll_target_index(current_item, item_count, delta_lines);
+            let items_to_scroll = (-delta_lines).round() as i32;
+            (current_item, new_item, items_to_scroll)
+        };
 
         tracing::debug!(
             target: "SCROLL_STATE",
@@ -225,54 +216,75 @@ impl ScriptListApp {
     /// # Returns
     /// `true` if selection was changed, `false` if it was already valid.
     pub fn validate_selection_bounds(&mut self, cx: &mut Context<Self>) -> bool {
-        // Get grouped results to validate against
-        let (grouped_items, _) = self.get_grouped_results_cached();
-        let grouped_items = grouped_items.clone();
-        let item_count = grouped_items.len();
-
-        if item_count == 0 {
-            // Empty list - reset all selection state
-            let changed = self.selected_index != 0
-                || self.hovered_index.is_some()
-                || self.last_scrolled_index.is_some();
-
-            self.selected_index = 0;
-            self.hovered_index = None;
-            self.last_scrolled_index = None;
-
-            // Clear legacy fallback state
-            self.fallback_mode = false;
-            self.cached_fallbacks.clear();
-
-            if changed {
-                cx.notify();
-            }
-            return changed;
+        enum ValidationState {
+            Empty,
+            NonEmpty {
+                valid_idx: usize,
+                has_selectable: bool,
+            },
         }
 
-        // List has items - coerce selection to a valid selectable item
-        self.fallback_mode = false;
-        self.cached_fallbacks.clear();
+        let validation_state = {
+            let (grouped_items, _) = self.get_grouped_results_cached();
+            let item_count = grouped_items.len();
 
-        let valid_idx = validated_selection_index(&grouped_items, self.selected_index);
-        if valid_idx == 0
-            && !grouped_items
-                .iter()
-                .any(|item| matches!(item, GroupedListItem::Item(_)))
-        {
-            // No selectable items (list is all headers) - reset to 0
-            if self.selected_index != 0 {
+            if item_count == 0 {
+                ValidationState::Empty
+            } else {
+                let clamped_index = self.selected_index.min(item_count.saturating_sub(1));
+                ValidationState::NonEmpty {
+                    valid_idx: validated_selection_index(&grouped_items, clamped_index),
+                    has_selectable: grouped_items
+                        .iter()
+                        .any(|item| matches!(item, GroupedListItem::Item(_))),
+                }
+            }
+        };
+
+        match validation_state {
+            ValidationState::Empty => {
+                // Empty list - reset all selection state
+                let changed = self.selected_index != 0
+                    || self.hovered_index.is_some()
+                    || self.last_scrolled_index.is_some();
+
                 self.selected_index = 0;
-                cx.notify();
-                return true;
-            }
-        } else if self.selected_index != valid_idx {
-            self.selected_index = valid_idx;
-            cx.notify();
-            return true;
-        }
+                self.hovered_index = None;
+                self.last_scrolled_index = None;
 
-        false
+                // Clear legacy fallback state
+                self.fallback_mode = false;
+                self.cached_fallbacks.clear();
+
+                if changed {
+                    cx.notify();
+                }
+                changed
+            }
+            ValidationState::NonEmpty {
+                valid_idx,
+                has_selectable,
+            } => {
+                // List has items - coerce selection to a valid selectable item
+                self.fallback_mode = false;
+                self.cached_fallbacks.clear();
+
+                if valid_idx == 0 && !has_selectable {
+                    // No selectable items (list is all headers) - reset to 0
+                    if self.selected_index != 0 {
+                        self.selected_index = 0;
+                        cx.notify();
+                        return true;
+                    }
+                } else if self.selected_index != valid_idx {
+                    self.selected_index = valid_idx;
+                    cx.notify();
+                    return true;
+                }
+
+                false
+            }
+        }
     }
 
     /// Ensure the navigation flush task is running. Spawns a background task

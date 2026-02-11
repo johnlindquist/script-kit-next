@@ -15,6 +15,18 @@ mod tests {
 
         assert_eq!(page_down_target_index(&rows, 1, 10), 4);
         assert_eq!(page_down_target_index(&rows, 4, 10), 4);
+        assert_eq!(page_down_target_index(&rows, usize::MAX, 10), 4);
+    }
+
+    #[test]
+    fn test_move_selection_page_down_noops_when_page_size_is_zero() {
+        let rows = vec![
+            GroupedListItem::SectionHeader("Suggested".to_string(), None),
+            GroupedListItem::Item(0),
+            GroupedListItem::Item(1),
+        ];
+
+        assert_eq!(page_down_target_index(&rows, 1, 0), 1);
     }
 
     #[test]
