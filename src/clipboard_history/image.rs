@@ -12,6 +12,8 @@ use tracing::{debug, warn};
 
 use super::blob_store::{is_blob_content, load_blob, store_blob};
 
+const MAX_RENDER_IMAGE_PIXELS: u64 = 20_000_000;
+
 /// Encode image data as a blob file (PNG stored on disk)
 ///
 /// Format: "blob:{hash}" where hash is SHA-256 of PNG bytes
@@ -44,13 +46,12 @@ pub fn encode_image_as_png(image: &arboard::ImageData) -> Result<String> {
 fn encode_image_to_png_bytes(image: &arboard::ImageData) -> Result<Vec<u8>> {
     use std::io::Cursor;
 
+    let width = u32::try_from(image.width).context("Clipboard image width exceeds u32")?;
+    let height = u32::try_from(image.height).context("Clipboard image height exceeds u32")?;
+
     // Create an RgbaImage from the raw bytes
-    let rgba_image = image::RgbaImage::from_raw(
-        image.width as u32,
-        image.height as u32,
-        image.bytes.to_vec(),
-    )
-    .context("Failed to create RGBA image from clipboard data")?;
+    let rgba_image = image::RgbaImage::from_raw(width, height, image.bytes.to_vec())
+        .context("Failed to create RGBA image from clipboard data")?;
 
     // Encode to PNG in memory
     let mut png_data = Vec::new();
@@ -101,10 +102,12 @@ fn decode_blob_to_image_data(content: &str) -> Option<arboard::ImageData<'static
 
     let img = image::load_from_memory_with_format(&png_bytes, image::ImageFormat::Png).ok()?;
     let rgba = img.to_rgba8();
+    let width: usize = rgba.width().try_into().ok()?;
+    let height: usize = rgba.height().try_into().ok()?;
 
     Some(arboard::ImageData {
-        width: rgba.width() as usize,
-        height: rgba.height() as usize,
+        width,
+        height,
         bytes: rgba.into_raw().into(),
     })
 }
@@ -140,10 +143,12 @@ fn decode_png_to_image_data(content: &str) -> Option<arboard::ImageData<'static>
 
     let img = image::load_from_memory_with_format(&png_bytes, image::ImageFormat::Png).ok()?;
     let rgba = img.to_rgba8();
+    let width: usize = rgba.width().try_into().ok()?;
+    let height: usize = rgba.height().try_into().ok()?;
 
     Some(arboard::ImageData {
-        width: rgba.width() as usize,
-        height: rgba.height() as usize,
+        width,
+        height,
         bytes: rgba.into_raw().into(),
     })
 }
@@ -161,9 +166,9 @@ fn decode_legacy_rgba(content: &str) -> Option<arboard::ImageData<'static>> {
 
     // Validate byte length with overflow-safe math
     // expected = width * height * 4 (RGBA = 4 bytes per pixel)
-    let expected = (width as u64).checked_mul(height as u64)?.checked_mul(4)?;
+    let expected = width.checked_mul(height)?.checked_mul(4)?;
 
-    if bytes.len() != expected as usize {
+    if bytes.len() != expected {
         warn!(
             width,
             height,
@@ -205,8 +210,28 @@ pub fn decode_to_render_image(content: &str) -> Option<Arc<RenderImage>> {
     }
 }
 
+fn ensure_render_image_dimensions_within_limit(content: &str, format: &str) -> Option<(u32, u32)> {
+    let (width, height) = get_image_dimensions(content)?;
+    let pixel_count = u64::from(width).checked_mul(u64::from(height))?;
+
+    if pixel_count > MAX_RENDER_IMAGE_PIXELS {
+        warn!(
+            width,
+            height,
+            pixel_count,
+            max_pixels = MAX_RENDER_IMAGE_PIXELS,
+            format,
+            "Rejecting oversized clipboard image for RenderImage decode"
+        );
+        return None;
+    }
+
+    Some((width, height))
+}
+
 /// Decode blob format to RenderImage
 fn decode_blob_to_render_image(content: &str) -> Option<Arc<RenderImage>> {
+    ensure_render_image_dimensions_within_limit(content, "blob")?;
     let png_bytes = load_blob(content)?;
 
     let img = image::load_from_memory_with_format(&png_bytes, image::ImageFormat::Png).ok()?;
@@ -235,6 +260,7 @@ fn decode_blob_to_render_image(content: &str) -> Option<Arc<RenderImage>> {
 
 /// Decode PNG format to RenderImage
 fn decode_png_to_render_image(content: &str) -> Option<Arc<RenderImage>> {
+    ensure_render_image_dimensions_within_limit(content, "png")?;
     let base64_data = content.strip_prefix("png:")?;
     let png_bytes = BASE64.decode(base64_data).ok()?;
 
@@ -274,7 +300,11 @@ fn decode_rgba_to_render_image(content: &str) -> Option<Arc<RenderImage>> {
     let height: u32 = parts[2].parse().ok()?;
     let mut rgba_bytes = BASE64.decode(parts[3]).ok()?;
 
-    let expected_bytes = (width as usize) * (height as usize) * 4;
+    let expected_bytes: usize = u64::from(width)
+        .checked_mul(u64::from(height))?
+        .checked_mul(4)?
+        .try_into()
+        .ok()?;
     if rgba_bytes.len() != expected_bytes {
         warn!(
             "Clipboard image byte count mismatch: expected {}, got {}",
@@ -317,7 +347,7 @@ pub fn get_image_dimensions(content: &str) -> Option<(u32, u32)> {
         get_png_dimensions(content)
     } else if content.starts_with("rgba:") {
         let parts: Vec<&str> = content.splitn(4, ':').collect();
-        if parts.len() >= 3 {
+        if parts.len() >= 4 {
             let width: u32 = parts[1].parse().ok()?;
             let height: u32 = parts[2].parse().ok()?;
             Some((width, height))
@@ -585,6 +615,12 @@ mod tests {
     }
 
     #[test]
+    fn test_get_image_dimensions_rejects_rgba_without_payload() {
+        let dims = get_image_dimensions("rgba:10:20");
+        assert!(dims.is_none(), "Missing RGBA payload should be rejected");
+    }
+
+    #[test]
     fn test_decode_legacy_rgba_rejects_wrong_byte_count() {
         // Create RGBA string with wrong byte count (too few bytes)
         let bad_data = format!(
@@ -669,6 +705,51 @@ mod tests {
         let bad_png = BASE64.encode(&bad_header);
         assert!(get_png_dimensions_fast(&bad_png).is_none());
     }
+
+    #[test]
+    fn test_decode_to_render_image_rejects_png_above_pixel_limit() {
+        let original = arboard::ImageData {
+            width: 1,
+            height: 1,
+            bytes: vec![255, 0, 0, 255].into(),
+        };
+        let encoded = encode_image_as_png(&original).expect("Should encode PNG");
+        let mut png_bytes = BASE64
+            .decode(
+                encoded
+                    .strip_prefix("png:")
+                    .expect("Should have png prefix"),
+            )
+            .expect("Should decode PNG base64");
+
+        // Overwrite IHDR dimensions to exceed MAX_RENDER_IMAGE_PIXELS.
+        png_bytes[16..20].copy_from_slice(&5000u32.to_be_bytes());
+        png_bytes[20..24].copy_from_slice(&5000u32.to_be_bytes());
+
+        let oversized_png = format!("png:{}", BASE64.encode(&png_bytes));
+        assert_eq!(get_image_dimensions(&oversized_png), Some((5000, 5000)));
+        assert!(
+            decode_to_render_image(&oversized_png).is_none(),
+            "Oversized PNG should be rejected before full decode"
+        );
+    }
+
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    fn test_encode_image_to_png_bytes_rejects_width_over_u32() {
+        let too_wide = usize::try_from(u32::MAX).expect("u32 should fit in usize") + 1;
+        let image = arboard::ImageData {
+            width: too_wide,
+            height: 1,
+            bytes: vec![0, 0, 0, 255].into(),
+        };
+
+        let err = encode_image_to_png_bytes(&image).expect_err("Width over u32 should fail");
+        assert!(
+            err.to_string().contains("width exceeds u32"),
+            "Error should mention width conversion failure"
+        );
+    }
 }
 
 /// Decode clipboard image content to raw RGBA bytes for OCR processing
@@ -750,8 +831,12 @@ fn decode_legacy_rgba_to_bytes(content: &str) -> Option<(u32, u32, Vec<u8>)> {
     let bytes = BASE64.decode(parts[3]).ok()?;
 
     // Validate byte length
-    let expected = (width as u64).checked_mul(height as u64)?.checked_mul(4)?;
-    if bytes.len() != expected as usize {
+    let expected: usize = u64::from(width)
+        .checked_mul(u64::from(height))?
+        .checked_mul(4)?
+        .try_into()
+        .ok()?;
+    if bytes.len() != expected {
         warn!(
             width,
             height,
