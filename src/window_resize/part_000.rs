@@ -11,7 +11,8 @@ use crate::config::{self, LayoutConfig};
 use crate::logging;
 use crate::list_item::LIST_ITEM_HEIGHT;
 use crate::window_manager;
-const RESIZE_ANIMATION_MIN_DELTA_PX: f64 = 1.0;
+const RESIZE_MIN_DELTA_PX: f64 = 1.0;
+const WINDOW_RESIZE_ANIMATE: bool = false;
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct FrameGeometry {
     x: f64,
@@ -145,8 +146,8 @@ fn calculate_resized_frame(
 
     resized
 }
-fn should_animate_resize(current_height: f64, target_height: f64) -> bool {
-    (current_height - target_height).abs() >= RESIZE_ANIMATION_MIN_DELTA_PX
+fn should_apply_resize(current_height: f64, target_height: f64) -> bool {
+    (current_height - target_height).abs() >= RESIZE_MIN_DELTA_PX
 }
 #[cfg(target_os = "macos")]
 fn ns_rect_contains_point(rect: NSRect, x: f64, y: f64) -> bool {
@@ -401,26 +402,24 @@ pub fn resize_first_window_to_height(target_height: Pixels) {
 
         // Skip if height is already correct (within 1px tolerance)
         let current_height = current_frame.size.height;
-        if !should_animate_resize(current_height, height_f64) {
+        if !should_apply_resize(current_height, height_f64) {
             return;
         }
 
-        let animate = false;
-        let correlation_id = format!("anim_resize:{}", uuid::Uuid::new_v4());
+        let correlation_id = format!("resize:{}", uuid::Uuid::new_v4());
 
-        // Log actual resizes at debug level (these are rare events, not hot-path)
+        // Log actual resizes at debug level (these are rare events, not hot-path).
         debug!(
             from_height = current_height,
             to_height = height_f64,
-            animate,
             correlation_id = %correlation_id,
-            "Resizing window"
+            "Resizing window instantly"
         );
         logging::log(
             "RESIZE",
             &format!(
-                "[ANIM_RESIZE_START] correlation_id={} from={:.0} to={:.0} animate={}",
-                correlation_id, current_height, height_f64, animate
+                "[RESIZE_START] correlation_id={} from={:.0} to={:.0} animate={}",
+                correlation_id, current_height, height_f64, WINDOW_RESIZE_ANIMATE
             ),
         );
 
@@ -434,13 +433,18 @@ pub fn resize_first_window_to_height(target_height: Pixels) {
         )
         .to_ns_rect();
 
-        // Apply the new frame with native smooth animation for view-height transitions.
-        let _: () = msg_send![window, setFrame:new_frame display:true animate:animate];
+        // Apply the new frame instantly to avoid any native resize animation.
+        let _: () = msg_send![
+            window,
+            setFrame:new_frame
+            display:true
+            animate:WINDOW_RESIZE_ANIMATE
+        ];
 
         logging::log(
             "RESIZE",
             &format!(
-                "[ANIM_RESIZE_END] correlation_id={} applied_height={:.0}",
+                "[RESIZE_END] correlation_id={} applied_height={:.0}",
                 correlation_id, height_f64
             ),
         );
