@@ -63,6 +63,40 @@ After the gate passes, verify the change actually works:
 - Render wrappers: `render_prompts/other.rs` wraps prompt entities, `prompts/*.rs` are inner components
 - Protocol: bidirectional JSONL over stdin/stdout between bun scripts and Rust app — see `docs/PROTOCOL.md`
 
+## Consistency Rules (Non-Negotiable)
+
+These rules exist because mixed patterns break both human navigation and AI agent effectiveness.
+
+### 1) No `part_*.rs` files
+- Do NOT create or extend `part_000.rs`, `part_001.rs`, etc.
+- Do NOT use `include!("part_*.rs")` for hand-written code.
+- If a module is too large, split into a directory module with named files:
+  - `mod.rs` is a facade that does `mod foo; mod bar;` and `pub use ...;`
+  - Filenames must be semantic (`model.rs`, `render.rs`, `storage.rs`), never numeric.
+
+### 2) Tests have only two homes (pick the right one)
+- Unit tests live next to code: `src/<module>/tests.rs` (referenced via `#[cfg(test)] mod tests;`)
+- Integration tests live in `tests/<feature>/mod.rs` (may have submodules + fixtures)
+- Never create numbered test directories (`*_tests_2`, `*_tests_3`, ...). Use semantic names.
+
+### 3) No unwrap/expect in production code
+- In `src/` (non-test code), `.unwrap()` and `.expect()` are forbidden.
+- Use `?` + `anyhow::Context`, or explicit handling + logs.
+- Tests may use `.expect("useful message")`.
+
+### 4) Logging: one canonical API
+- Use `tracing::{info,warn,error,debug,trace}` for all new/modified code.
+- Do not introduce new `log::info!` / `log::warn!` usage in `src/`.
+- Prefer structured fields over string formatting.
+
+### 5) Module visibility: default private + facade exports
+- Default: private items.
+- Use `pub(crate)` for cross-module internals.
+- Use `pub` only when intentionally part of the crate's public surface.
+- Export intentional API via `pub use` from the module's facade file.
+
+---
+
 ## Session Completion
 
 Work is not done until `git push` succeeds.

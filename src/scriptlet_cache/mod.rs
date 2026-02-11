@@ -1708,5 +1708,4 @@ mod tests {
         // Should panic in debug mode when given a relative path
         let _ = cache.get_scriptlets_ref(&relative_path);
     }
-
 }

@@ -376,10 +376,908 @@ impl BuiltInEntry {
 pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
     let mut entries = Vec::new();
 
-    include!("part_001_entries/entries_000.rs");
-    include!("part_001_entries/entries_001.rs");
-    include!("part_001_entries/entries_002.rs");
-    include!("part_001_entries/entries_003.rs");
+    // --- merged from part_001_entries/entries_000.rs ---
+    {
+        if config.clipboard_history {
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin-clipboard-history",
+                "Clipboard History",
+                "Open clipboard history to view, search, and reuse copied items",
+                vec!["clipboard", "history", "paste", "copy"],
+                BuiltInFeature::ClipboardHistory,
+                "📋",
+            ));
+            debug!("Added Clipboard History built-in entry");
+        }
+
+        // Note: AppLauncher built-in removed - apps now appear directly in main search
+        // The app_launcher config flag is kept for future use (e.g., to disable app search entirely)
+        if config.app_launcher {
+            debug!("app_launcher enabled - apps will appear in main search");
+        }
+
+        if config.window_switcher {
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin-window-switcher",
+                "Window Switcher",
+                "Open window switcher to focus, tile, and manage open windows",
+                vec!["window", "switch", "tile", "focus", "manage", "switcher"],
+                BuiltInFeature::WindowSwitcher,
+                "🪟",
+            ));
+            debug!("Added Window Switcher built-in entry");
+        }
+
+        // AI Chat is always available
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-ai-chat",
+            "AI Chat",
+            "Open AI Chat with Claude, GPT, and other configured assistants",
+            vec![
+                "ai",
+                "chat",
+                "assistant",
+                "claude",
+                "gpt",
+                "openai",
+                "anthropic",
+                "llm",
+            ],
+            BuiltInFeature::AiChat,
+            "🤖",
+        ));
+        debug!("Added AI Chat built-in entry");
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-favorites",
+            "Favorites",
+            "Open your starred scripts and shortcuts",
+            vec![
+                "favorites",
+                "favorite",
+                "starred",
+                "star",
+                "pinned",
+                "saved",
+            ],
+            BuiltInFeature::Favorites,
+            "⭐",
+        ));
+        debug!("Added Favorites built-in entry");
+
+        // Notes is always available
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-notes",
+            "Notes",
+            "Open quick notes and a scratchpad editor",
+            vec![
+                "notes",
+                "note",
+                "scratch",
+                "scratchpad",
+                "memo",
+                "markdown",
+                "write",
+                "text",
+            ],
+            BuiltInFeature::Notes,
+            "📝",
+        ));
+        debug!("Added Notes built-in entry");
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-emoji-picker",
+            "Emoji Picker",
+            "Pick an emoji from the built-in list and copy it to the clipboard",
+            vec!["emoji", "picker", "symbols", "unicode", "copy", "clipboard"],
+            BuiltInFeature::EmojiPicker,
+            "😀",
+        ));
+        debug!("Added Emoji Picker built-in entry");
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-quicklinks",
+            "Quicklinks",
+            "Manage quick links and open URLs with optional {query} expansion",
+            vec![
+                "quicklinks",
+                "quicklink",
+                "link",
+                "url",
+                "bookmark",
+                "open",
+                "search",
+            ],
+            BuiltInFeature::Quicklinks,
+            "🔗",
+        ));
+        debug!("Added Quicklinks built-in entry");
+
+        // Design Gallery is only available in debug builds (developer tool)
+        #[cfg(debug_assertions)]
+        {
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin-design-gallery",
+                "Design Gallery",
+                "Open the design gallery to browse separator styles and icon variations",
+                vec![
+                    "design",
+                    "gallery",
+                    "separator",
+                    "icon",
+                    "style",
+                    "theme",
+                    "variations",
+                ],
+                BuiltInFeature::DesignGallery,
+                "🎨",
+            ));
+            debug!("Added Design Gallery built-in entry");
+
+            // Test Confirmation entry for testing confirmation UI
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin-test-confirmation",
+                "Test Confirmation",
+                "Open the confirmation dialog test tool (dev only)",
+                vec!["test", "confirmation", "dev", "debug"],
+                BuiltInFeature::SystemAction(SystemActionType::TestConfirmation),
+                "🧪",
+            ));
+            debug!("Added Test Confirmation built-in entry");
+        }
+
+        // =========================================================================
+    }
+
+    // --- merged from part_001_entries/entries_001.rs ---
+    {
+        // System Actions
+        // =========================================================================
+
+        // Power management
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-empty-trash",
+            "Empty Trash",
+            "Empty the macOS Trash",
+            vec!["empty", "trash", "delete", "clean"],
+            BuiltInFeature::SystemAction(SystemActionType::EmptyTrash),
+            "🗑️",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-lock-screen",
+            "Lock Screen",
+            "Lock the screen",
+            vec!["lock", "screen", "security"],
+            BuiltInFeature::SystemAction(SystemActionType::LockScreen),
+            "🔒",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-sleep",
+            "Sleep",
+            "Put the system to sleep",
+            vec!["sleep", "suspend", "power"],
+            BuiltInFeature::SystemAction(SystemActionType::Sleep),
+            "😴",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-restart",
+            "Restart",
+            "Restart the system",
+            vec!["restart", "reboot", "power"],
+            BuiltInFeature::SystemAction(SystemActionType::Restart),
+            "🔄",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-shut-down",
+            "Shut Down",
+            "Shut down the system",
+            vec!["shut", "down", "shutdown", "power", "off"],
+            BuiltInFeature::SystemAction(SystemActionType::ShutDown),
+            "⏻",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-log-out",
+            "Log Out",
+            "Log out the current user",
+            vec!["log", "out", "logout", "user"],
+            BuiltInFeature::SystemAction(SystemActionType::LogOut),
+            "🚪",
+        ));
+
+        // UI controls
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-toggle-dark-mode",
+            "Toggle Dark Mode",
+            "Switch between light and dark appearance",
+            vec!["dark", "mode", "light", "appearance", "theme", "toggle"],
+            BuiltInFeature::SystemAction(SystemActionType::ToggleDarkMode),
+            "🌙",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-show-desktop",
+            "Show Desktop",
+            "Hide all windows to reveal the desktop",
+            vec!["show", "desktop", "hide", "windows"],
+            BuiltInFeature::SystemAction(SystemActionType::ShowDesktop),
+            "🖥️",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-mission-control",
+            "Mission Control",
+            "Show all windows and desktops",
+            vec!["mission", "control", "expose", "spaces", "windows"],
+            BuiltInFeature::SystemAction(SystemActionType::MissionControl),
+            "🪟",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-launchpad",
+            "Launchpad",
+            "Open Launchpad to show all applications",
+            vec!["launchpad", "apps", "applications"],
+            BuiltInFeature::SystemAction(SystemActionType::Launchpad),
+            "🚀",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-force-quit",
+            "Force Quit Apps",
+            "Select and force quit running applications",
+            vec![
+                "force",
+                "quit",
+                "kill",
+                "apps",
+                "unresponsive",
+                "terminate",
+                "stop",
+            ],
+            BuiltInFeature::SystemAction(SystemActionType::ForceQuitApps),
+            "⚠️",
+        ));
+
+        // Volume controls (preset levels)
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-volume-0",
+            "Volume 0%",
+            "Set system volume to 0% (mute)",
+            vec!["volume", "mute", "0", "percent", "zero", "off"],
+            BuiltInFeature::SystemAction(SystemActionType::Volume0),
+            "🔇",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-volume-25",
+            "Volume 25%",
+            "Set system volume to 25%",
+            vec!["volume", "25", "percent", "low", "quiet"],
+            BuiltInFeature::SystemAction(SystemActionType::Volume25),
+            "🔈",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-volume-50",
+            "Volume 50%",
+            "Set system volume to 50%",
+            vec!["volume", "50", "percent", "half", "medium"],
+            BuiltInFeature::SystemAction(SystemActionType::Volume50),
+            "🔉",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-volume-75",
+            "Volume 75%",
+            "Set system volume to 75%",
+            vec!["volume", "75", "percent", "high", "loud"],
+            BuiltInFeature::SystemAction(SystemActionType::Volume75),
+            "🔉",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-volume-100",
+            "Volume 100%",
+            "Set system volume to 100% (max)",
+            vec!["volume", "100", "percent", "max", "full"],
+            BuiltInFeature::SystemAction(SystemActionType::Volume100),
+            "🔊",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-volume-mute",
+            "Toggle Mute",
+            "Toggle system audio mute on or off",
+            vec!["mute", "unmute", "volume", "sound", "audio", "toggle"],
+            BuiltInFeature::SystemAction(SystemActionType::VolumeMute),
+            "🔇",
+        ));
+
+        // App control
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-quit-script-kit",
+            "Quit Script Kit",
+            "Quit the Script Kit application",
+            vec!["quit", "exit", "close", "script", "kit", "app"],
+            BuiltInFeature::SystemAction(SystemActionType::QuitScriptKit),
+            "🚪",
+        ));
+
+        // System utilities
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-toggle-dnd",
+            "Toggle Do Not Disturb",
+            "Toggle Focus / Do Not Disturb mode on or off",
+            vec![
+                "do",
+                "not",
+                "disturb",
+                "dnd",
+                "focus",
+                "notifications",
+                "toggle",
+            ],
+            BuiltInFeature::SystemAction(SystemActionType::ToggleDoNotDisturb),
+            "🔕",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-screen-saver",
+            "Start Screen Saver",
+            "Activate the screen saver",
+            vec!["screen", "saver", "screensaver"],
+            BuiltInFeature::SystemAction(SystemActionType::StartScreenSaver),
+            "🖼️",
+        ));
+
+        // System Preferences
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-system-preferences",
+            "Open System Settings",
+            "Open System Settings (System Preferences)",
+            vec!["system", "settings", "preferences", "prefs"],
+            BuiltInFeature::SystemAction(SystemActionType::OpenSystemPreferences),
+            "⚙️",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-privacy-settings",
+            "Privacy & Security Settings",
+            "Open Privacy & Security settings",
+            vec!["privacy", "security", "settings"],
+            BuiltInFeature::SystemAction(SystemActionType::OpenPrivacySettings),
+            "🔐",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-display-settings",
+            "Display Settings",
+            "Open Display settings",
+            vec!["display", "monitor", "screen", "resolution", "settings"],
+            BuiltInFeature::SystemAction(SystemActionType::OpenDisplaySettings),
+            "🖥️",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-sound-settings",
+            "Sound Settings",
+            "Open Sound settings",
+            vec!["sound", "audio", "volume", "settings"],
+            BuiltInFeature::SystemAction(SystemActionType::OpenSoundSettings),
+            "🔊",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-network-settings",
+            "Network Settings",
+            "Open Network settings",
+            vec!["network", "wifi", "ethernet", "internet", "settings"],
+            BuiltInFeature::SystemAction(SystemActionType::OpenNetworkSettings),
+            "📡",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-keyboard-settings",
+            "Keyboard Settings",
+            "Open Keyboard settings",
+            vec!["keyboard", "shortcuts", "input", "settings"],
+            BuiltInFeature::SystemAction(SystemActionType::OpenKeyboardSettings),
+            "⌨️",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-bluetooth-settings",
+            "Bluetooth Settings",
+            "Open Bluetooth settings",
+            vec!["bluetooth", "wireless", "settings"],
+            BuiltInFeature::SystemAction(SystemActionType::OpenBluetoothSettings),
+            "🔵",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-notifications-settings",
+            "Notification Settings",
+            "Open Notifications settings",
+            vec!["notifications", "alerts", "banners", "settings"],
+            BuiltInFeature::SystemAction(SystemActionType::OpenNotificationsSettings),
+            "🔔",
+        ));
+
+        // NOTE: Window Actions removed - now handled by window-management extension
+        // SDK tileWindow() function still works via protocol messages in execute_script.rs
+
+        // =========================================================================
+    }
+
+    // --- merged from part_001_entries/entries_002.rs ---
+    {
+        // Notes Commands
+        // =========================================================================
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-open-notes",
+            "Open Notes",
+            "Open the Notes window",
+            vec!["open", "notes", "window", "note"],
+            BuiltInFeature::NotesCommand(NotesCommandType::OpenNotes),
+            "📝",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-new-note",
+            "New Note",
+            "Create a new note",
+            vec!["new", "note", "create"],
+            BuiltInFeature::NotesCommand(NotesCommandType::NewNote),
+            "📝",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-search-notes",
+            "Search Notes",
+            "Search through your notes",
+            vec!["search", "notes", "find"],
+            BuiltInFeature::NotesCommand(NotesCommandType::SearchNotes),
+            "🔍",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-quick-capture",
+            "Quick Capture",
+            "Capture a new note without opening the full Notes window",
+            vec!["quick", "capture", "note", "fast"],
+            BuiltInFeature::NotesCommand(NotesCommandType::QuickCapture),
+            "⚡",
+        ));
+
+        // =========================================================================
+        // AI Commands
+        // =========================================================================
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-open-ai",
+            "Open AI Chat",
+            "Open the AI Chat window",
+            vec!["open", "ai", "chat", "assistant", "window"],
+            BuiltInFeature::AiCommand(AiCommandType::OpenAi),
+            "🤖",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-new-conversation",
+            "New AI Conversation",
+            "Start a new AI conversation",
+            vec!["new", "conversation", "chat", "ai"],
+            BuiltInFeature::AiCommand(AiCommandType::NewConversation),
+            "💬",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-generate-script-with-ai",
+            "Generate Script with AI",
+            "Generate a Script Kit script from your current prompt text",
+            vec![
+                "generate",
+                "script",
+                "ai",
+                "create",
+                "code",
+                "typescript",
+                "shift",
+                "tab",
+            ],
+            BuiltInFeature::AiCommand(AiCommandType::GenerateScript),
+            "🧠",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-send-screen-to-ai",
+            "Send Screen to AI Chat",
+            "Capture the full screen and send it to AI Chat",
+            vec![
+                "send",
+                "screen",
+                "screenshot",
+                "ai",
+                "chat",
+                "capture",
+                "image",
+            ],
+            BuiltInFeature::AiCommand(AiCommandType::SendScreenToAi),
+            "📸",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-send-window-to-ai",
+            "Send Focused Window to AI Chat",
+            "Capture the focused window and send it to AI Chat",
+            vec![
+                "send",
+                "window",
+                "focused",
+                "ai",
+                "chat",
+                "capture",
+                "screenshot",
+            ],
+            BuiltInFeature::AiCommand(AiCommandType::SendFocusedWindowToAi),
+            "🪟",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-send-selected-text-to-ai",
+            "Send Selected Text to AI Chat",
+            "Send the currently selected text to AI Chat",
+            vec![
+                "send",
+                "selected",
+                "text",
+                "selection",
+                "ai",
+                "chat",
+                "copy",
+            ],
+            BuiltInFeature::AiCommand(AiCommandType::SendSelectedTextToAi),
+            "📝",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-send-browser-tab-to-ai",
+            "Send Focused Browser Tab to AI Chat",
+            "Send the current browser tab URL to AI Chat",
+            vec![
+                "send", "browser", "tab", "url", "safari", "chrome", "ai", "chat", "web",
+            ],
+            BuiltInFeature::AiCommand(AiCommandType::SendBrowserTabToAi),
+            "🌐",
+        ));
+
+        // =========================================================================
+        // Script Commands
+        // =========================================================================
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-new-script",
+            "New Script (Template)",
+            "Create a new Script Kit script from a guided starter template",
+            vec![
+                "new",
+                "script",
+                "create",
+                "template",
+                "starter",
+                "boilerplate",
+                "scaffold",
+                "code",
+            ],
+            BuiltInFeature::ScriptCommand(ScriptCommandType::NewScript),
+            "➕",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-new-extension",
+            "New Scriptlet Bundle",
+            "Create a new extension bundle with YAML frontmatter and scriptlet examples",
+            vec![
+                "new",
+                "scriptlet",
+                "bundle",
+                "extension",
+                "frontmatter",
+                "yaml",
+                "snippet",
+                "create",
+            ],
+            BuiltInFeature::ScriptCommand(ScriptCommandType::NewExtension),
+            "✨",
+        ));
+
+        // =========================================================================
+        // Permission Commands
+        // =========================================================================
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-check-permissions",
+            "Check Permissions",
+            "Run a check for all required macOS permissions",
+            vec!["check", "permissions", "accessibility", "privacy"],
+            BuiltInFeature::PermissionCommand(PermissionCommandType::CheckPermissions),
+            "✅",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-request-accessibility",
+            "Request Accessibility Permission",
+            "Request accessibility permission for Script Kit in System Settings",
+            vec!["request", "accessibility", "permission"],
+            BuiltInFeature::PermissionCommand(PermissionCommandType::RequestAccessibility),
+            "🔑",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-accessibility-settings",
+            "Open Accessibility Settings",
+            "Open Accessibility settings in System Preferences",
+            vec!["accessibility", "settings", "permission", "open"],
+            BuiltInFeature::PermissionCommand(PermissionCommandType::OpenAccessibilitySettings),
+            "♿",
+        ));
+
+        // =========================================================================
+        // Frecency/Suggested Commands
+        // =========================================================================
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-clear-suggested",
+            "Clear Suggested",
+            "Clear all items from Suggested / Recently Used",
+            vec![
+                "clear",
+                "suggested",
+                "recent",
+                "frecency",
+                "reset",
+                "history",
+            ],
+            BuiltInFeature::FrecencyCommand(FrecencyCommandType::ClearSuggested),
+            "🧹",
+        ));
+
+        // =========================================================================
+    }
+
+    // --- merged from part_001_entries/entries_003.rs ---
+    {
+        // Settings Commands
+        // =========================================================================
+
+        // Only show reset if there are custom positions
+        if crate::window_state::has_custom_positions() {
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin-reset-window-positions",
+                "Reset Window Positions",
+                "Restore all windows to default positions",
+                vec![
+                    "reset", "window", "position", "default", "restore", "layout", "location",
+                ],
+                BuiltInFeature::SettingsCommand(SettingsCommandType::ResetWindowPositions),
+                "🔄",
+            ));
+        }
+
+        // API Key Configuration
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-configure-vercel-api",
+            "Configure Vercel AI Gateway",
+            "Open setup for the Vercel AI Gateway API key used by AI Chat",
+            vec![
+                "vercel",
+                "api",
+                "key",
+                "gateway",
+                "ai",
+                "configure",
+                "setup",
+                "config",
+                "settings",
+            ],
+            BuiltInFeature::SettingsCommand(SettingsCommandType::ConfigureVercelApiKey),
+            "🔑",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-configure-openai-api",
+            "Configure OpenAI API Key",
+            "Open setup for the OpenAI API key used by AI Chat",
+            vec![
+                "openai",
+                "api",
+                "key",
+                "gpt",
+                "ai",
+                "configure",
+                "setup",
+                "config",
+                "settings",
+            ],
+            BuiltInFeature::SettingsCommand(SettingsCommandType::ConfigureOpenAiApiKey),
+            "🔑",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-configure-anthropic-api",
+            "Configure Anthropic API Key",
+            "Open setup for the Anthropic API key used by AI Chat",
+            vec![
+                "anthropic",
+                "api",
+                "key",
+                "claude",
+                "ai",
+                "configure",
+                "setup",
+                "config",
+                "settings",
+            ],
+            BuiltInFeature::SettingsCommand(SettingsCommandType::ConfigureAnthropicApiKey),
+            "🔑",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-choose-theme",
+            "Choose Theme",
+            "Open the theme picker and apply a color theme with live preview",
+            vec!["theme", "appearance", "color", "dark", "light", "scheme"],
+            BuiltInFeature::SettingsCommand(SettingsCommandType::ChooseTheme),
+            "🎨",
+        ));
+
+        // =========================================================================
+        // Utility Commands
+        // =========================================================================
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-scratch-pad",
+            "Scratch Pad",
+            "Open a scratch pad editor for notes and code (auto-saves to disk)",
+            vec![
+                "scratch",
+                "pad",
+                "scratchpad",
+                "notes",
+                "editor",
+                "write",
+                "text",
+                "quick",
+                "jot",
+            ],
+            BuiltInFeature::UtilityCommand(UtilityCommandType::ScratchPad),
+            "📝",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-quick-terminal",
+            "Quick Terminal",
+            "Open a quick terminal for running shell commands",
+            vec![
+                "terminal", "term", "shell", "bash", "zsh", "command", "quick", "console", "cli",
+            ],
+            BuiltInFeature::UtilityCommand(UtilityCommandType::QuickTerminal),
+            "💻",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-process-manager",
+            "Process Manager",
+            "Inspect running scripts and copy their process details",
+            vec![
+                "process", "running", "scripts", "jobs", "pid", "inspect", "manage", "kill",
+            ],
+            BuiltInFeature::UtilityCommand(UtilityCommandType::ProcessManager),
+            "activity",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-stop-all-processes",
+            "Stop All Running Scripts",
+            "Terminate every active Script Kit child process",
+            vec![
+                "process",
+                "running",
+                "scripts",
+                "stop",
+                "kill",
+                "terminate",
+                "jobs",
+            ],
+            BuiltInFeature::UtilityCommand(UtilityCommandType::StopAllProcesses),
+            "square-stop",
+        ));
+
+        // =========================================================================
+        // Kit Store Commands
+        // =========================================================================
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-browse-kit-store",
+            "Browse Kit Store",
+            "Browse available kits from the Kit Store",
+            vec!["kit", "store", "browse", "search", "discover", "extensions"],
+            BuiltInFeature::KitStoreCommand(KitStoreCommandType::BrowseKits),
+            "search",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-manage-installed-kits",
+            "Manage Installed Kits",
+            "View and manage kits already installed from the Kit Store",
+            vec![
+                "kit",
+                "store",
+                "installed",
+                "manage",
+                "extensions",
+                "packages",
+            ],
+            BuiltInFeature::KitStoreCommand(KitStoreCommandType::InstalledKits),
+            "package",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-update-all-kits",
+            "Update All Kits",
+            "Update every installed kit to the latest version",
+            vec![
+                "kit",
+                "store",
+                "update",
+                "upgrade",
+                "refresh",
+                "all",
+                "extensions",
+            ],
+            BuiltInFeature::KitStoreCommand(KitStoreCommandType::UpdateAllKits),
+            "refresh-cw",
+        ));
+
+        // =========================================================================
+        // File Search (Directory Navigation)
+        // =========================================================================
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-file-search",
+            "Search Files",
+            "Browse directories, search files, and open results",
+            vec![
+                "file",
+                "search",
+                "find",
+                "directory",
+                "folder",
+                "browse",
+                "navigate",
+                "path",
+                "open",
+                "explorer",
+            ],
+            BuiltInFeature::FileSearch,
+            "folder-search",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-webcam",
+            "Webcam",
+            "Open the webcam prompt and capture a photo",
+            vec!["webcam", "camera", "capture", "photo", "image"],
+            BuiltInFeature::Webcam,
+            "📸",
+        ));
+    }
 
     debug!(count = entries.len(), "Built-in entries loaded");
     entries
@@ -696,7 +1594,10 @@ mod tests {
         assert_ne!(BuiltInFeature::AiChat, BuiltInFeature::ClipboardHistory);
         assert_ne!(BuiltInFeature::AiChat, BuiltInFeature::DesignGallery);
         assert_ne!(BuiltInFeature::Favorites, BuiltInFeature::ClipboardHistory);
-        assert_ne!(BuiltInFeature::EmojiPicker, BuiltInFeature::ClipboardHistory);
+        assert_ne!(
+            BuiltInFeature::EmojiPicker,
+            BuiltInFeature::ClipboardHistory
+        );
         assert_ne!(BuiltInFeature::Quicklinks, BuiltInFeature::ClipboardHistory);
         assert_ne!(BuiltInFeature::EmojiPicker, BuiltInFeature::Quicklinks);
 

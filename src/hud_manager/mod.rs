@@ -9,6 +9,9 @@
 //! - Queued if multiple arrive in sequence
 
 // --- merged from part_000.rs ---
+use crate::components::button::{Button, ButtonColors, ButtonVariant};
+use crate::logging;
+use crate::theme;
 use gpui::{
     div, point, prelude::*, px, rgb, size, App, Context, Pixels, Render, Timer, Window,
     WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowOptions,
@@ -19,9 +22,6 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use crate::components::button::{Button, ButtonColors, ButtonVariant};
-use crate::logging;
-use crate::theme;
 // =============================================================================
 // Theme Integration - HUD colors from theme system
 // =============================================================================
