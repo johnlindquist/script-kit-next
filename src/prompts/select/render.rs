@@ -104,35 +104,45 @@ impl Render for SelectPrompt {
              event: &gpui::KeyDownEvent,
              _window: &mut Window,
              cx: &mut Context<Self>| {
-                let key_str = event.keystroke.key.to_lowercase();
+                let key_str = event.keystroke.key.as_str();
                 let has_ctrl = event.keystroke.modifiers.platform; // Cmd on macOS, Ctrl on others
+                let is_up =
+                    key_str.eq_ignore_ascii_case("up") || key_str.eq_ignore_ascii_case("arrowup");
+                let is_down = key_str.eq_ignore_ascii_case("down")
+                    || key_str.eq_ignore_ascii_case("arrowdown");
+                let is_space = key_str.eq_ignore_ascii_case("space") || key_str == " ";
+                let is_enter =
+                    key_str.eq_ignore_ascii_case("enter") || key_str.eq_ignore_ascii_case("return");
+                let is_escape =
+                    key_str.eq_ignore_ascii_case("escape") || key_str.eq_ignore_ascii_case("esc");
+                let is_backspace = key_str.eq_ignore_ascii_case("backspace");
 
                 // Handle Ctrl/Cmd+A for select all
-                if has_ctrl && key_str == "a" {
+                if has_ctrl && key_str.eq_ignore_ascii_case("a") {
                     this.toggle_select_all_filtered(cx);
                     return;
                 }
 
-                match key_str.as_str() {
-                    "up" | "arrowup" => this.move_up(cx),
-                    "down" | "arrowdown" => this.move_down(cx),
-                    "space" | " " => {
-                        if has_ctrl {
-                            this.toggle_selection(cx);
-                        } else {
-                            this.handle_char(' ', cx);
-                        }
+                if is_up {
+                    this.move_up(cx);
+                } else if is_down {
+                    this.move_down(cx);
+                } else if is_space {
+                    if has_ctrl {
+                        this.toggle_selection(cx);
+                    } else {
+                        this.handle_char(' ', cx);
                     }
-                    "enter" | "return" => this.submit(),
-                    "escape" | "esc" => this.submit_cancel(),
-                    "backspace" => this.handle_backspace(cx),
-                    _ => {
-                        if let Some(ref key_char) = event.keystroke.key_char {
-                            if let Some(ch) = key_char.chars().next() {
-                                if should_append_to_filter(ch) {
-                                    this.handle_char(ch, cx);
-                                }
-                            }
+                } else if is_enter {
+                    this.submit();
+                } else if is_escape {
+                    this.submit_cancel();
+                } else if is_backspace {
+                    this.handle_backspace(cx);
+                } else if let Some(ref key_char) = event.keystroke.key_char {
+                    if let Some(ch) = key_char.chars().next() {
+                        if should_append_to_filter(ch) {
+                            this.handle_char(ch, cx);
                         }
                     }
                 }

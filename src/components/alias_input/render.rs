@@ -141,18 +141,18 @@ impl Render for AliasInput {
             );
 
             // Handle special keys first
-            match key.to_lowercase().as_str() {
-                "escape" | "esc" => {
-                    this.cancel();
-                    cx.notify();
-                    return;
-                }
-                "enter" | "return" if !this.input.text().trim().is_empty() => {
-                    this.save();
-                    cx.notify();
-                    return;
-                }
-                _ => {}
+            if key.eq_ignore_ascii_case("escape") || key.eq_ignore_ascii_case("esc") {
+                this.cancel();
+                cx.notify();
+                return;
+            }
+
+            if (key.eq_ignore_ascii_case("enter") || key.eq_ignore_ascii_case("return"))
+                && !this.input.text().trim().is_empty()
+            {
+                this.save();
+                cx.notify();
+                return;
             }
 
             if is_clear_alias_shortcut(key, command_modifier, this.current_alias.is_some()) {

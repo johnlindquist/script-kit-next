@@ -144,17 +144,16 @@ impl Render for ShortcutRecorder {
             );
 
             // Handle special keys
-            match key.to_lowercase().as_str() {
-                "escape" | "esc" => {
-                    this.handle_escape(cx);
-                }
-                "enter" | "return" if this.shortcut.is_complete() && this.conflict.is_none() => {
-                    this.save();
-                    cx.notify();
-                }
-                _ => {
-                    this.handle_key_down(key, mods, cx);
-                }
+            if key.eq_ignore_ascii_case("escape") || key.eq_ignore_ascii_case("esc") {
+                this.handle_escape(cx);
+            } else if (key.eq_ignore_ascii_case("enter") || key.eq_ignore_ascii_case("return"))
+                && this.shortcut.is_complete()
+                && this.conflict.is_none()
+            {
+                this.save();
+                cx.notify();
+            } else {
+                this.handle_key_down(key, mods, cx);
             }
         });
 

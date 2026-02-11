@@ -219,7 +219,13 @@ impl PathPrompt {
 
     /// Toggle actions dialog - show if hidden, close if showing
     pub fn toggle_actions(&mut self, cx: &mut Context<Self>) {
-        let is_showing = self.actions_showing.lock().map(|g| *g).unwrap_or(false);
+        let is_showing = match self.actions_showing.lock() {
+            Ok(guard) => *guard,
+            Err(poison) => {
+                tracing::error!("path_prompt_actions_showing_mutex_poisoned_in_toggle");
+                *poison.into_inner()
+            }
+        };
 
         if is_showing {
             logging::log(

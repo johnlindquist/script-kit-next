@@ -126,11 +126,11 @@ impl Render for DropPrompt {
              event: &gpui::KeyDownEvent,
              _window: &mut Window,
              _cx: &mut Context<Self>| {
-                let key_str = event.keystroke.key.to_lowercase();
+                let key_str = event.keystroke.key.as_str();
 
-                match key_str.as_str() {
-                    "enter" | "return" => this.submit(),
-                    "escape" | "esc" => this.submit_cancel(),
+                match key_str {
+                    "enter" | "Enter" | "return" | "Return" => this.submit(),
+                    "escape" | "Escape" | "esc" | "Esc" => this.submit_cancel(),
                     _ => {}
                 }
             },

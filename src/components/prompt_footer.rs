@@ -51,7 +51,7 @@ const PROMPT_FOOTER_BUTTON_FONT_DELTA_PX: f32 = 2.0;
 /// Minimum footer button font size.
 const PROMPT_FOOTER_BUTTON_FONT_MIN_PX: f32 = 10.0;
 /// Footer horizontal padding.
-const PROMPT_FOOTER_PADDING_X_PX: f32 = 14.0;
+const PROMPT_FOOTER_PADDING_X_PX: f32 = 12.0;
 /// Optical bottom padding to align footer content vertically.
 const PROMPT_FOOTER_PADDING_BOTTOM_PX: f32 = 2.0;
 /// Footer logo icon size.
@@ -78,6 +78,10 @@ const PROMPT_FOOTER_INFO_FONT_MIN_PX: f32 = 9.0;
 const PROMPT_FOOTER_HELPER_FONT_DELTA_PX: f32 = 2.0;
 /// Minimum helper label font size.
 const PROMPT_FOOTER_HELPER_FONT_MIN_PX: f32 = 10.0;
+/// Script-list footer info label that should not be displayed in the footer.
+const PROMPT_FOOTER_HIDDEN_INFO_LABEL: &str = "Built-in";
+/// Script-list primary action label that should not be displayed in the footer.
+const PROMPT_FOOTER_HIDDEN_PRIMARY_LABEL: &str = "Run Command";
 
 /// Pre-computed colors for PromptFooter rendering
 ///
@@ -155,17 +159,24 @@ fn is_footer_button_activation_key(key: &str) -> bool {
     )
 }
 
-pub fn footer_button_hover_rgba(colors: PromptFooterColors) -> u32 {
+fn footer_button_hover_rgba(colors: PromptFooterColors) -> u32 {
     (colors.background << 8) | (PROMPT_FOOTER_BUTTON_HOVER_OPACITY as u32)
 }
 
-pub fn footer_button_active_rgba(colors: PromptFooterColors) -> u32 {
+fn footer_button_active_rgba(colors: PromptFooterColors) -> u32 {
     (colors.background << 8) | (PROMPT_FOOTER_BUTTON_ACTIVE_OPACITY as u32)
 }
 
-pub fn footer_button_font_size_px(theme: &Theme) -> f32 {
-    (theme.get_fonts().ui_size - PROMPT_FOOTER_BUTTON_FONT_DELTA_PX)
-        .max(PROMPT_FOOTER_BUTTON_FONT_MIN_PX)
+fn should_render_footer_info_label(label: &str) -> bool {
+    !label
+        .trim()
+        .eq_ignore_ascii_case(PROMPT_FOOTER_HIDDEN_INFO_LABEL)
+}
+
+fn should_render_footer_primary_button(label: &str) -> bool {
+    !label
+        .trim()
+        .eq_ignore_ascii_case(PROMPT_FOOTER_HIDDEN_PRIMARY_LABEL)
 }
 
 /// Configuration for PromptFooter display
@@ -339,14 +350,13 @@ impl PromptFooter {
         on_click: Option<Rc<FooterClickCallback>>,
     ) -> impl IntoElement {
         let theme = crate::theme::get_cached_theme();
-        let button_font_size = footer_button_font_size_px(&theme);
+        let button_font_size = (theme.get_fonts().ui_size - PROMPT_FOOTER_BUTTON_FONT_DELTA_PX)
+            .max(PROMPT_FOOTER_BUTTON_FONT_MIN_PX);
         let has_click_handler = on_click.is_some();
         let is_clickable = is_footer_button_clickable(has_click_handler, disabled);
         let on_click_for_key = on_click.clone();
         let hover_bg = rgba(footer_button_hover_rgba(self.colors));
         let active_bg = rgba(footer_button_active_rgba(self.colors));
-        let shortcut_bg = self.colors.border.rgba8(0x20);
-        let shortcut_border = self.colors.border.rgba8(0x40);
 
         let mut button = div()
             .id(ElementId::Name(id.into()))
@@ -355,7 +365,7 @@ impl PromptFooter {
             .items_center()
             .gap(px(6.))
             .px(px(8.))
-            .py(px(2.))
+            .py(px(6.))
             .rounded(px(4.))
             .cursor_default()
             .child(
@@ -366,16 +376,7 @@ impl PromptFooter {
             )
             .child(
                 div()
-                    .flex()
-                    .items_center()
-                    .px(px(6.0))
-                    .py(px(1.0))
-                    .rounded(px(4.0))
-                    .bg(shortcut_bg)
-                    .border_1()
-                    .border_color(shortcut_border)
                     .text_size(px(button_font_size))
-                    .font_family(crate::list_item::FONT_MONO)
                     .text_color(self.colors.text_muted.to_rgb())
                     .child(shortcut),
             );
@@ -438,33 +439,40 @@ impl RenderOnce for PromptFooter {
 
         // Info label (e.g., "typescript", "5 items") - shown before buttons
         if let Some(ref info) = self.config.info_label {
-            right_side = right_side.child(
-                div()
-                    .max_w(px(PROMPT_FOOTER_INFO_TEXT_MAX_WIDTH_PX))
-                    .overflow_hidden()
-                    .text_ellipsis()
-                    .whitespace_nowrap()
-                    .text_size(px(info_font_size))
-                    .text_color(colors.text_muted.to_rgb())
-                    .child(info.clone()),
-            );
+            if should_render_footer_info_label(info) {
+                right_side = right_side.child(
+                    div()
+                        .max_w(px(PROMPT_FOOTER_INFO_TEXT_MAX_WIDTH_PX))
+                        .overflow_hidden()
+                        .text_ellipsis()
+                        .whitespace_nowrap()
+                        .text_size(px(info_font_size))
+                        .text_color(colors.text_muted.to_rgb())
+                        .child(info.clone()),
+                );
+            }
         }
 
         // Build the buttons container
         let mut buttons = hstack().gap(px(PROMPT_FOOTER_BUTTON_GAP_PX)).items_center();
+        let show_primary_button = should_render_footer_primary_button(&self.config.primary_label);
 
         // Primary button
-        buttons = buttons.child(self.render_button(
-            "footer-primary-button",
-            self.config.primary_label.clone(),
-            self.config.primary_shortcut.clone(),
-            self.config.primary_disabled,
-            self.on_primary_click.clone(),
-        ));
+        if show_primary_button {
+            buttons = buttons.child(self.render_button(
+                "footer-primary-button",
+                self.config.primary_label.clone(),
+                self.config.primary_shortcut.clone(),
+                self.config.primary_disabled,
+                self.on_primary_click.clone(),
+            ));
+        }
 
         // Divider + Secondary button (if enabled)
         if self.config.show_secondary {
-            buttons = buttons.child(self.render_divider());
+            if show_primary_button {
+                buttons = buttons.child(self.render_divider());
+            }
             buttons = buttons.child(self.render_button(
                 "footer-secondary-button",
                 self.config.secondary_label.clone(),
@@ -686,6 +694,20 @@ mod tests {
     }
 
     #[test]
+    fn test_should_render_footer_info_label_hides_built_in_label() {
+        assert!(!super::should_render_footer_info_label("Built-in"));
+        assert!(!super::should_render_footer_info_label(" built-in "));
+        assert!(super::should_render_footer_info_label("typescript"));
+    }
+
+    #[test]
+    fn test_should_render_footer_primary_button_hides_run_command_label() {
+        assert!(!super::should_render_footer_primary_button("Run Command"));
+        assert!(!super::should_render_footer_primary_button(" run command "));
+        assert!(super::should_render_footer_primary_button("Run Script"));
+    }
+
+    #[test]
     fn test_prompt_footer_layout_tokens_stay_consistent_when_spacing_is_adjusted() {
         assert_eq!(PROMPT_FOOTER_SECTION_GAP_PX, 8.0);
         assert_eq!(PROMPT_FOOTER_BUTTON_GAP_PX, 4.0);
@@ -693,7 +715,7 @@ mod tests {
         assert_eq!(PROMPT_FOOTER_BUTTON_ACTIVE_OPACITY, 0x3a);
         assert_eq!(PROMPT_FOOTER_BUTTON_FONT_DELTA_PX, 2.0);
         assert_eq!(PROMPT_FOOTER_BUTTON_FONT_MIN_PX, 10.0);
-        assert_eq!(PROMPT_FOOTER_PADDING_X_PX, 14.0);
+        assert_eq!(PROMPT_FOOTER_PADDING_X_PX, 12.0);
         assert_eq!(PROMPT_FOOTER_PADDING_BOTTOM_PX, 2.0);
         assert_eq!(PROMPT_FOOTER_LOGO_SIZE_PX, 16.0);
         assert_eq!(PROMPT_FOOTER_LOGO_NUDGE_X_PX, 2.0);

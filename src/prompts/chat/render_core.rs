@@ -35,14 +35,9 @@ impl ChatPrompt {
         footer_colors: PromptFooterColors,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let button_font_size =
-            crate::components::prompt_footer::footer_button_font_size_px(&self.theme);
-        let hover_bg = rgba(crate::components::prompt_footer::footer_button_hover_rgba(
-            footer_colors,
-        ));
-        let active_bg = rgba(crate::components::prompt_footer::footer_button_active_rgba(
-            footer_colors,
-        ));
+        let button_font_size = (self.theme.get_fonts().ui_size - 2.0).max(10.0);
+        let hover_bg = rgba((footer_colors.background << 8) | 0x26);
+        let active_bg = rgba((footer_colors.background << 8) | 0x3a);
 
         div()
             .id(id)
@@ -498,6 +493,8 @@ impl Render for ChatPrompt {
         let has_turns = !self.conversation_turns_cache.is_empty();
         let messages_content = if has_turns {
             let entity = cx.entity();
+            // TODO(codex-audit): This Vec clone exists to move turns into the list closure.
+            // Consider Arc-backed snapshots to avoid per-render cloning.
             let turns_snapshot = self.conversation_turns_cache.clone();
             let show_scroll_to_latest =
                 self.user_has_scrolled_up && !self.turns_list_is_at_bottom();

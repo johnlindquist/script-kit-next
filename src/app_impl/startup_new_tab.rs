@@ -5,9 +5,8 @@
         let tab_interceptor = cx.intercept_keystrokes({
             let app_entity = app_entity_for_tab;
             move |event, window, cx| {
-                let key = event.keystroke.key.to_lowercase();
-                let is_tab_key = matches!(event.keystroke.key.as_str(), "tab" | "Tab")
-                    || matches!(key.as_str(), "tab");
+                let key = event.keystroke.key.as_str();
+                let is_tab_key = key.eq_ignore_ascii_case("tab");
                 let has_shift = event.keystroke.modifiers.shift;
                 // Check for Tab key (no cmd/alt/ctrl modifiers, but shift is allowed)
                 if is_tab_key
@@ -23,7 +22,7 @@
                                 "KEY",
                                 &format!("Tab intercepted, confirm_open={}", confirm_open),
                             );
-                            if confirm_open && crate::confirm::dispatch_confirm_key(&key, cx) {
+                            if confirm_open && crate::confirm::dispatch_confirm_key(key, cx) {
                                 cx.stop_propagation();
                                 return;
                             }
