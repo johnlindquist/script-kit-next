@@ -173,12 +173,20 @@ mod tests {
     }
 
     #[test]
-    fn test_should_animate_resize_true_when_height_changes() {
-        assert!(should_animate_resize(500.0, 700.0));
+    fn test_should_apply_resize_true_when_height_changes() {
+        assert!(should_apply_resize(500.0, 700.0));
     }
 
     #[test]
-    fn test_should_animate_resize_false_when_height_is_effectively_unchanged() {
-        assert!(!should_animate_resize(500.0, 500.4));
+    fn test_should_apply_resize_false_when_height_is_effectively_unchanged() {
+        assert!(!should_apply_resize(500.0, 500.4));
+    }
+
+    #[test]
+    fn test_window_resize_animation_flag_is_disabled() {
+        assert!(
+            !WINDOW_RESIZE_ANIMATE,
+            "Window resize must stay instant with animation disabled"
+        );
     }
 }

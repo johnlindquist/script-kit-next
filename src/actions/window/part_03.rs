@@ -1,4 +1,6 @@
 
+const ACTIONS_WINDOW_RESIZE_ANIMATE: bool = false;
+
 /// Resize the actions window directly using the window reference
 /// Use this from defer callbacks where we already have access to the window
 pub fn resize_actions_window_direct(
@@ -88,15 +90,18 @@ pub fn resize_actions_window_direct(
                         NSSize::new(frame.size.width, new_height_f32 as f64),
                     );
 
-                    let animate = true;
-                    let _: () =
-                        msg_send![ns_window, setFrame:new_frame display:true animate:animate];
+                    let _: () = msg_send![
+                        ns_window,
+                        setFrame:new_frame
+                        display:true
+                        animate:ACTIONS_WINDOW_RESIZE_ANIMATE
+                    ];
 
                     crate::logging::log(
                         "ACTIONS",
                         &format!(
-                            "Resized actions window (bottom pinned): height {:.0} -> {:.0}, animate={}",
-                            current_height_f32, new_height_f32, animate
+                            "Resized actions window (bottom pinned, instant): height {:.0} -> {:.0}",
+                            current_height_f32, new_height_f32
                         ),
                     );
                     break;
@@ -221,15 +226,18 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
                                 NSSize::new(frame.size.width, new_height_f32 as f64),
                             );
 
-                            let animate = true;
-                            let _: () =
-                                msg_send![ns_window, setFrame:new_frame display:true animate:animate];
+                            let _: () = msg_send![
+                                ns_window,
+                                setFrame:new_frame
+                                display:true
+                                animate:ACTIONS_WINDOW_RESIZE_ANIMATE
+                            ];
 
                             crate::logging::log(
                                 "ACTIONS",
                                 &format!(
-                                    "Resized actions window (bottom pinned): height {:.0} -> {:.0}, animate={}",
-                                    current_height_f32, new_height_f32, animate
+                                    "Resized actions window (bottom pinned, instant): height {:.0} -> {:.0}",
+                                    current_height_f32, new_height_f32
                                 ),
                             );
                             found = true;
@@ -278,6 +286,19 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
                 "Resized actions window: {} items, height={:.0}",
                 num_actions, new_height_f32
             ),
+        );
+    }
+}
+
+#[cfg(test)]
+mod resize_instant_tests {
+    use super::ACTIONS_WINDOW_RESIZE_ANIMATE;
+
+    #[test]
+    fn test_actions_window_resize_animation_flag_is_disabled() {
+        assert!(
+            !ACTIONS_WINDOW_RESIZE_ANIMATE,
+            "Actions window resize must stay instant with animation disabled"
         );
     }
 }
