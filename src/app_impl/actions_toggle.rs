@@ -62,15 +62,22 @@ impl ScriptListApp {
             let app_entity = cx.entity().clone();
             dialog.update(cx, |d, _cx| {
                 d.set_on_close(std::sync::Arc::new(move |cx| {
-                    app_entity.update(cx, |app, cx| {
-                        app.show_actions_popup = false;
-                        app.actions_dialog = None;
-                        // Use coordinator to pop overlay and restore previous focus
-                        app.pop_focus_overlay(cx);
-                        logging::log(
-                            "FOCUS",
-                            "Actions closed via escape, focus restored via coordinator",
-                        );
+                    let app_entity = app_entity.clone();
+                    cx.defer(move |cx| {
+                        app_entity.update(cx, |app, cx| {
+                            if !app.show_actions_popup && app.actions_dialog.is_none() {
+                                return;
+                            }
+
+                            app.show_actions_popup = false;
+                            app.actions_dialog = None;
+                            // Use coordinator to pop overlay and restore previous focus
+                            app.pop_focus_overlay(cx);
+                            logging::log(
+                                "FOCUS",
+                                "Actions closed via escape, focus restored via coordinator",
+                            );
+                        });
                     });
                 }));
             });
@@ -237,14 +244,21 @@ impl ScriptListApp {
             let app_entity = cx.entity().clone();
             dialog.update(cx, |d, _cx| {
                 d.set_on_close(std::sync::Arc::new(move |cx| {
-                    app_entity.update(cx, |app, cx| {
-                        app.show_actions_popup = false;
-                        app.actions_dialog = None;
-                        app.pop_focus_overlay(cx);
-                        logging::log(
-                            "FOCUS",
-                            "Webcam actions closed via escape, focus restored via coordinator",
-                        );
+                    let app_entity = app_entity.clone();
+                    cx.defer(move |cx| {
+                        app_entity.update(cx, |app, cx| {
+                            if !app.show_actions_popup && app.actions_dialog.is_none() {
+                                return;
+                            }
+
+                            app.show_actions_popup = false;
+                            app.actions_dialog = None;
+                            app.pop_focus_overlay(cx);
+                            logging::log(
+                                "FOCUS",
+                                "Webcam actions closed via escape, focus restored via coordinator",
+                            );
+                        });
                     });
                 }));
             });
@@ -427,15 +441,22 @@ impl ScriptListApp {
             let app_entity = cx.entity().clone();
             dialog.update(cx, |d, _cx| {
                 d.set_on_close(std::sync::Arc::new(move |cx| {
-                    app_entity.update(cx, |app, cx| {
-                        app.show_actions_popup = false;
-                        app.actions_dialog = None;
-                        // Use coordinator to pop overlay and restore previous focus
-                        app.pop_focus_overlay(cx);
-                        logging::log(
-                            "FOCUS",
-                            "Chat actions closed via escape, focus restored via coordinator",
-                        );
+                    let app_entity = app_entity.clone();
+                    cx.defer(move |cx| {
+                        app_entity.update(cx, |app, cx| {
+                            if !app.show_actions_popup && app.actions_dialog.is_none() {
+                                return;
+                            }
+
+                            app.show_actions_popup = false;
+                            app.actions_dialog = None;
+                            // Use coordinator to pop overlay and restore previous focus
+                            app.pop_focus_overlay(cx);
+                            logging::log(
+                                "FOCUS",
+                                "Chat actions closed via escape, focus restored via coordinator",
+                            );
+                        });
                     });
                 }));
             });
@@ -484,4 +505,31 @@ impl ScriptListApp {
         cx.notify();
     }
 
+}
+
+#[cfg(test)]
+mod on_close_reentrancy_tests {
+    use std::fs;
+
+    #[test]
+    fn test_actions_toggle_on_close_defers_script_list_app_updates() {
+        let source = fs::read_to_string("src/app_impl/actions_toggle.rs")
+            .expect("Failed to read src/app_impl/actions_toggle.rs");
+
+        let set_on_close_count = source.matches("d.set_on_close(std::sync::Arc::new(move |cx| {").count();
+        let defer_count = source.matches("cx.defer(move |cx| {").count();
+
+        assert_eq!(
+            set_on_close_count, 3,
+            "actions_toggle should define three on_close callbacks"
+        );
+        assert!(
+            defer_count >= 3,
+            "each actions_toggle on_close callback should defer ScriptListApp updates"
+        );
+        assert!(
+            source.contains("if !app.show_actions_popup && app.actions_dialog.is_none()"),
+            "actions_toggle on_close callbacks should guard already-closed popup state"
+        );
+    }
 }
