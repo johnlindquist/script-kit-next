@@ -1,3 +1,22 @@
+/// Module for expanding built-in snippet placeholder tokens that use `{token}` syntax.
+///
+/// Supported built-ins and example output formats:
+/// - `{clipboard}` -> current clipboard text (example: `hello world`)
+/// - `{date}` -> local date in `YYYY-MM-DD` (example: `2026-02-12`)
+/// - `{time}` -> local time in `HH:MM:SS` (example: `14:05:09`)
+/// - `{datetime}` -> local date/time in `YYYY-MM-DD HH:MM:SS`
+///   (example: `2026-02-12 14:05:09`)
+/// - `{uuid}` -> lowercase hexadecimal UUID v4 string
+///   (example: `550e8400-e29b-41d4-a716-446655440000`)
+///
+/// Before/after expansion example:
+/// - Before: `snippet-{date}-{uuid}`
+/// - After: `snippet-2026-02-12-550e8400-e29b-41d4-a716-446655440000`
+///
+/// `{token}` placeholders are fixed built-ins. They are different from template variables
+/// like `${var}` and `{{var}}`, which are resolved from template-provided variable data.
+/// Use `{token}` for these built-ins and `${var}`/`{{var}}` for template variables.
+///
 #[allow(dead_code)]
 use arboard::Clipboard;
 #[allow(dead_code)]
@@ -19,16 +38,16 @@ struct SnippetPlaceholderValues {
 ///
 /// Supported `{token}` values and output formats:
 /// - `{clipboard}`: current clipboard text (or empty string if unavailable)
-/// - `{date}`: local date formatted as `%Y-%m-%d` (example: `2026-02-07`)
-/// - `{time}`: local time formatted as `%H:%M:%S` (example: `23:59:58`)
+/// - `{date}`: local date formatted as `%Y-%m-%d` (example: `2026-02-12`)
+/// - `{time}`: local time formatted as `%H:%M:%S` (example: `14:05:09`)
 /// - `{datetime}`: local date/time formatted as `%Y-%m-%d %H:%M:%S`
-///   (example: `2026-02-07 23:59:58`)
-/// - `{uuid}`: newly generated UUID v4 string
-///   (example: `123e4567-e89b-42d3-a456-426614174000`)
+///   (example: `2026-02-12 14:05:09`)
+/// - `{uuid}`: lowercase hexadecimal UUID v4 string
+///   (example: `550e8400-e29b-41d4-a716-446655440000`)
 ///
 /// Example:
 /// - Before: `Log {datetime} | id={uuid} | clip={clipboard}`
-/// - After: `Log 2026-02-07 23:59:58 | id=123e4567-e89b-42d3-a456-426614174000 | clip=hello`
+/// - After: `Log 2026-02-12 14:05:09 | id=550e8400-e29b-41d4-a716-446655440000 | clip=hello`
 ///
 /// This `{token}` system is separate from template variables like `${var}` and `{{var}}`.
 /// Use `expand_placeholders()` only for the fixed built-ins above; use template-variable

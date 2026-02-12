@@ -12,10 +12,11 @@ icon: beaker
 - `description`: summary text for the bundle.
 - `author`: bundle author/owner.
 - `icon`: Lucide icon name in kebab-case (example: `beaker`) from https://lucide.dev/icons.
-- Scriptlet metadata accepts both formats shown in this file:
+- Scriptlet settings go in a ```metadata``` fenced block before each tool block.
+- `metadata` supports both formats shown in this file:
 - key/value lines (for example `keyword: !short`).
 - JSON objects (for example `{ "keyword": "!json" }`).
-- Common metadata fields include `keyword` (aliases: `expand`, `snippet`), `description`, `alias`, `shortcut`, `icon`, `schedule`, `cron`, and boolean flags (`true`/`false`).
+- Common metadata fields include `keyword` (aliases: `expand`, `snippet`), `description`, `alias`, `shortcut`, `icon`, `schedule`, `cron`, plus `hidden` and `background` booleans (`true`/`false`).
 
 # JSON Metadata Format
 
