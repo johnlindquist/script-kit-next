@@ -253,7 +253,7 @@ use utils::render_path_with_highlights;
 // Global state for hotkey signaling between threads
 static NEEDS_RESET: AtomicBool = AtomicBool::new(false); // Track if window needs reset to script list on next show
 
-pub use script_kit_gpui::{is_main_window_visible, set_main_window_visible};
+pub use script_kit_gpui::{emoji, is_main_window_visible, set_main_window_visible};
 static PANEL_CONFIGURED: AtomicBool = AtomicBool::new(false); // Track if floating panel has been configured (one-time setup on first show)
 static SHUTDOWN_REQUESTED: AtomicBool = AtomicBool::new(false); // Track if shutdown signal received (prevents new script spawns)
 
