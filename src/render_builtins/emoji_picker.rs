@@ -262,13 +262,13 @@ impl ScriptListApp {
                                         Some(
                                             div()
                                                 .id(flat_emoji_index)
-                                                .w(px(36.0))
-                                                .h(px(36.0))
+                                                .flex_1()
+                                                .h(px(44.0))
                                                 .flex()
                                                 .items_center()
                                                 .justify_center()
                                                 .rounded(px(6.0))
-                                                .text_size(px(22.0))
+                                                .text_size(px(26.0))
                                                 .cursor_pointer()
                                                 .when(is_selected, |d| {
                                                     d.border_2().border_color(rgb(selected_border))
