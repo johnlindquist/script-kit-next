@@ -6,23 +6,24 @@ fn app_shell_footer_colors(theme: &crate::theme::Theme) -> PromptFooterColors {
     PromptFooterColors::from_theme(theme)
 }
 
-fn script_list_search_breadcrumb_label(query: &str, max_chars: usize) -> String {
-    let trimmed = query.trim();
-    if trimmed.is_empty() {
-        return String::new();
-    }
+fn script_list_footer_primary_label() -> &'static str {
+    "Run"
+}
 
-    if max_chars == 0 {
-        return "...".to_string();
-    }
-
-    if let Some((cutoff, _)) = trimmed.char_indices().nth(max_chars) {
-        let mut label = String::with_capacity(cutoff + 3);
-        label.push_str(&trimmed[..cutoff]);
-        label.push_str("...");
-        label
+fn script_list_footer_info_label(
+    window_tweaker_enabled: bool,
+    is_dark_mode: bool,
+    opacity_percent: i32,
+    material: &str,
+    appearance: &str,
+) -> Option<String> {
+    if window_tweaker_enabled && !is_dark_mode {
+        Some(format!(
+            "{}% | {} | {} | ⌘-/+ ⌘M ⌘⇧A",
+            opacity_percent, material, appearance
+        ))
     } else {
-        trimmed.to_string()
+        None
     }
 }
 
@@ -885,17 +886,6 @@ impl ScriptListApp {
         // Footer uses theme tokens directly so app-shell chrome stays consistent
         // across design variants (avoids design-token backgrounds like pure white).
         let footer_colors = app_shell_footer_colors(&self.theme);
-        let active_search_query = self.filter_text.trim().to_string();
-        let has_active_search = !active_search_query.is_empty();
-        let search_breadcrumb_label = script_list_search_breadcrumb_label(&active_search_query, 56);
-        let clear_active_search = cx.listener(
-            |this: &mut Self,
-             _event: &gpui::ClickEvent,
-             _window: &mut Window,
-             cx: &mut Context<Self>| {
-                let _ = this.clear_builtin_view_filter(cx);
-            },
-        );
 
         // NOTE: No .bg() here - Root provides vibrancy background for ALL content
         // This ensures main menu, AI chat, and all prompts have consistent styling
@@ -941,14 +931,14 @@ impl ScriptListApp {
                     .px(px(header_padding_x))
                     .py(px(header_padding_y))
                     .flex()
-                    .flex_col()
+                    .flex_row()
+                    .items_center()
                     .gap(px(header_gap))
-                    .child({
+                    .child(
                         div()
+                            .flex_1()
                             .flex()
-                            .flex_row()
                             .items_center()
-                            .gap(px(header_gap))
                             // Search input with cursor and selection support
                             .child(
                                 div().flex_1().flex().flex_row().items_center().child(
@@ -996,75 +986,8 @@ impl ScriptListApp {
                                             .text_color(rgb(text_muted))
                                             .child("Tab"),
                                     ),
-                            )
-                    })
-                    .when(has_active_search, |d| {
-                        d.child(
-                            div()
-                                .w_full()
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .justify_between()
-                                .gap(px(8.0))
-                                .px(px(8.0))
-                                .py(px(4.0))
-                                .rounded(px(6.0))
-                                .bg(rgba((search_box_bg << 8) | 0x70))
-                                .border_1()
-                                .border_color(rgba((color_resolver.border_color() << 8) | 0x80))
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_row()
-                                        .items_center()
-                                        .gap(px(6.0))
-                                        .child(
-                                            div()
-                                                .text_xs()
-                                                .text_color(rgb(text_muted))
-                                                .child("Search:"),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_xs()
-                                                .font_weight(gpui::FontWeight::MEDIUM)
-                                                .text_color(rgb(text_primary))
-                                                .child(search_breadcrumb_label.clone()),
-                                        ),
-                                )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_row()
-                                        .items_center()
-                                        .gap(px(6.0))
-                                        .child(
-                                            div()
-                                                .text_xs()
-                                                .text_color(rgb(text_muted))
-                                                .child("Esc to clear"),
-                                        )
-                                        .child(
-                                            div()
-                                                .id("script-list-search-clear-button")
-                                                .px(px(6.0))
-                                                .py(px(1.0))
-                                                .rounded(px(999.0))
-                                                .bg(rgba((accent_color << 8) | 0x20))
-                                                .text_xs()
-                                                .font_weight(gpui::FontWeight::SEMIBOLD)
-                                                .text_color(rgb(text_muted))
-                                                .cursor_pointer()
-                                                .hover(
-                                                    move |style| style.text_color(rgb(text_primary)),
-                                                )
-                                                .on_click(clear_active_search)
-                                                .child("x"),
-                                        ),
-                                ),
-                        )
-                    })
+                            ),
+                    )
             })
             // Divider between header and list content
             // Use unified resolver for border color and spacing
@@ -1143,37 +1066,24 @@ impl ScriptListApp {
             let handle_run = cx.entity().downgrade();
             let handle_actions = cx.entity().downgrade();
 
-            // Get the selected result for primary label and type indicator
-            let footer_selected =
-                grouped_items
-                    .get(self.selected_index)
-                    .and_then(|item| match item {
-                        GroupedListItem::Item(idx) => flat_results.get(*idx),
-                        GroupedListItem::SectionHeader(..) => None,
-                    });
-            let primary_label = footer_selected
-                .map(|result| result.get_default_action_text())
-                .unwrap_or("Run");
-            let type_label = footer_selected
-                .map(|result| result.type_label())
-                .unwrap_or("");
-
-            // Build footer config with type indicator and optional opacity info
-            let mut footer_config = PromptFooterConfig::default().primary_label(primary_label);
+            // Keep footer action copy stable; do not reflect selected-item type/action text.
+            let mut footer_config =
+                PromptFooterConfig::default().primary_label(script_list_footer_primary_label());
 
             let window_tweaker_enabled = std::env::var("SCRIPT_KIT_WINDOW_TWEAKER")
                 .map(|v| v == "1")
                 .unwrap_or(false);
-            if window_tweaker_enabled && !self.theme.is_dark_mode() {
-                let opacity_percent = (self.theme.get_opacity().main * 100.0).round() as i32;
-                let material = platform::get_current_material_name();
-                let appearance = platform::get_current_appearance_name();
-                footer_config = footer_config.info_label(format!(
-                    "{}% | {} | {} | ⌘-/+ ⌘M ⌘⇧A",
-                    opacity_percent, material, appearance
-                ));
-            } else if !type_label.is_empty() {
-                footer_config = footer_config.info_label(type_label);
+            let opacity_percent = (self.theme.get_opacity().main * 100.0).round() as i32;
+            let material = platform::get_current_material_name();
+            let appearance = platform::get_current_appearance_name();
+            if let Some(info_label) = script_list_footer_info_label(
+                window_tweaker_enabled,
+                self.theme.is_dark_mode(),
+                opacity_percent,
+                &material,
+                &appearance,
+            ) {
+                footer_config = footer_config.info_label(info_label);
             }
             footer_config = footer_config.show_secondary(self.has_actions());
 
@@ -1226,7 +1136,9 @@ impl ScriptListApp {
 
 #[cfg(test)]
 mod render_script_list_footer_tests {
-    use super::{app_shell_footer_colors, script_list_search_breadcrumb_label};
+    use super::{
+        app_shell_footer_colors, script_list_footer_info_label, script_list_footer_primary_label,
+    };
 
     #[test]
     fn test_app_shell_footer_colors_use_theme_accent_tokens() {
@@ -1240,13 +1152,31 @@ mod render_script_list_footer_tests {
     }
 
     #[test]
-    fn test_script_list_search_breadcrumb_label_returns_empty_for_whitespace() {
-        assert_eq!(script_list_search_breadcrumb_label("   ", 32), "");
+    fn test_script_list_footer_primary_label_is_generic_run() {
+        assert_eq!(script_list_footer_primary_label(), "Run");
     }
 
     #[test]
-    fn test_script_list_search_breadcrumb_label_trims_and_truncates_long_queries() {
-        let label = script_list_search_breadcrumb_label("   this is a long query   ", 8);
-        assert_eq!(label, "this is ...");
+    fn test_script_list_footer_info_label_hidden_when_window_tweaker_disabled() {
+        assert_eq!(
+            script_list_footer_info_label(false, false, 75, "acrylic", "light"),
+            None
+        );
+    }
+
+    #[test]
+    fn test_script_list_footer_info_label_hidden_in_dark_mode() {
+        assert_eq!(
+            script_list_footer_info_label(true, true, 75, "acrylic", "dark"),
+            None
+        );
+    }
+
+    #[test]
+    fn test_script_list_footer_info_label_formats_window_tweaker_metadata() {
+        assert_eq!(
+            script_list_footer_info_label(true, false, 75, "acrylic", "light"),
+            Some("75% | acrylic | light | ⌘-/+ ⌘M ⌘⇧A".to_string())
+        );
     }
 }
