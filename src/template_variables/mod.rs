@@ -1,69 +1,70 @@
 //! Template variable substitution and discovery for Script Kit content.
 //!
-//! This module centralizes both:
-//! - Runtime substitution (replace placeholders with values), and
-//! - Variable discovery (extract placeholder names so callers can promote them
-//!   into prompt inputs).
+//! This module centralizes both runtime substitution (replace placeholders
+//! with values) and variable discovery (extract placeholders so callers can
+//! promote them to prompt inputs).
 //!
 //! # Supported Placeholder Syntax
 //!
-//! Both syntaxes are accepted and interchangeable:
-//! - `${var}` (JavaScript/shell-style)
-//! - `{{var}}` (Handlebars/Mustache-style)
+//! Both syntaxes are accepted:
+//! - `${var}` (JavaScript/shell style)
+//! - `{{var}}` (Handlebars/Mustache style)
 //!
 //! # Discovery and Prompt Promotion Rules
 //!
-//! [`extract_variable_names`] returns unique names in first-seen order and
-//! intentionally skips patterns that are not prompt-friendly variables:
-//! - `${...}` entries containing spaces are ignored.
-//! - `${...}` entries containing `(` are ignored.
-//! - `{{...}}` control tokens are ignored: `{{#if ...}}`, `{{/if}}`, and
-//!   `{{else}}`.
+//! [`extract_variable_names`] returns unique variable names in first-seen
+//! order and intentionally skips patterns that are not prompt-friendly:
+//! - `${...}` entries containing spaces
+//! - `${...}` entries containing `(`
+//! - Handlebars control tags: `{{#if ...}}`, `{{/if}}`, and `{{else}}`
 //!
-//! These rules prevent JavaScript expressions (for example
-//! `${await clipboard.readText()}`) and handlebars flow-control markers from
-//! being promoted as user prompt fields.
+//! This prevents expression placeholders (for example
+//! `${await clipboard.readText()}`) and flow-control markers from being
+//! promoted as user-editable prompt fields.
 //!
 //! # Built-in Variables
 //!
 //! Built-ins are filled from local runtime state unless overridden in
 //! [`VariableContext`].
 //!
-//! | Name | Format | Example |
+//! | Name | Format / Source | Example |
 //! | --- | --- | --- |
-//! | `clipboard` | raw clipboard text | `copied text` |
+//! | `clipboard` | Raw clipboard text | `copied text` |
 //! | `date` | `%Y-%m-%d` | `2026-02-12` |
 //! | `time` | `%H:%M:%S` | `07:14:41` |
 //! | `datetime` | `%Y-%m-%d %H:%M:%S` | `2026-02-12 07:14:41` |
 //! | `timestamp` | Unix seconds | `1765235681` |
 //! | `date_short` | `%m/%d/%Y` | `02/12/2026` |
-//! | `date_long` | `%B %d, %Y` | `February 12, 2026` |
+//! | `date_long` | `%B %d %Y` (implemented as `%B %d, %Y`) | `February 12, 2026` |
 //! | `date_iso` | `%Y-%m-%dT%H:%M:%S%z` | `2026-02-12T07:14:41-0800` |
 //! | `time_12h` | `%-I:%M %p` | `7:14 AM` |
 //! | `time_short` | `%H:%M` | `07:14` |
-//! | `year` | numeric year | `2026` |
-//! | `month` | full month name (`%B`) | `February` |
-//! | `month_num` | month number (`1-12`) | `2` |
-//! | `day` | full weekday name (`%A`) | `Thursday` |
-//! | `day_num` | day of month (`1-31`) | `12` |
-//! | `hour` | hour (`0-23`) | `7` |
-//! | `minute` | minute (`0-59`) | `14` |
-//! | `second` | second (`0-59`) | `41` |
-//! | `weekday` | chrono weekday display | `Thu` |
-//!
-//! # Special-case JavaScript Clipboard Expression
-//!
-//! In addition to standard placeholders, the exact string
-//! `${await clipboard.readText()}` is replaced with the resolved `clipboard`
-//! value. This keeps older Script Kit templates compatible.
+//! | `year` | Numeric year | `2026` |
+//! | `month` | `%B` | `February` |
+//! | `month_num` | Numeric month (`1-12`) | `2` |
+//! | `day` | `%A` | `Thursday` |
+//! | `day_num` | Numeric day of month (`1-31`) | `12` |
+//! | `hour` | Numeric hour (`0-23`) | `7` |
+//! | `minute` | Numeric minute (`0-59`) | `14` |
+//! | `second` | Numeric second (`0-59`) | `41` |
+//! | `weekday` | `chrono::Weekday::to_string()` | `Thu` |
 //!
 //! # `VariableContext` Precedence and Built-in Control
 //!
+//! `VariableContext` controls override and disable behavior:
 //! - Custom values always win when a name matches a built-in.
-//! - [`VariableContext::custom_only`] disables all built-ins.
-//! - [`VariableContext::with_builtins(false)`] disables built-ins on an
-//!   existing context while preserving custom variables.
-//! - When built-ins are disabled, unresolved placeholders remain unchanged.
+//! - [`VariableContext::new`] enables built-in evaluation.
+//! - [`VariableContext::custom_only`] disables built-ins from the start.
+//! - [`VariableContext::with_builtins(false)`] disables built-ins while
+//!   preserving custom values already set in the context.
+//! - When built-ins are disabled and no custom value exists, placeholders
+//!   remain unchanged in output.
+//!
+//! # Legacy Compatibility
+//!
+//! In addition to standard placeholders, the exact string
+//! `${await clipboard.readText()}` is replaced with the resolved `clipboard`
+//! value so older Script Kit templates continue to work.
 //!
 
 // --- merged from part_000.rs ---
