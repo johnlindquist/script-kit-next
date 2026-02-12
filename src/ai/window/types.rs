@@ -27,11 +27,25 @@ pub(super) const SIDEBAR_W: gpui::Pixels = px(240.);
 pub(super) const TITLEBAR_H: gpui::Pixels = px(36.);
 
 // -- Message bubble tokens --
-pub(super) const MSG_PX: gpui::Pixels = px(18.);
-pub(super) const MSG_PY: gpui::Pixels = px(14.);
+pub(super) const MSG_PX: gpui::Pixels = SP_9;
+pub(super) const MSG_PY: gpui::Pixels = SP_7;
 pub(super) const MSG_RADIUS: gpui::Pixels = px(10.);
-pub(super) const MSG_GAP: gpui::Pixels = px(18.);
-pub(super) const MSG_GAP_CONTINUATION: gpui::Pixels = px(6.);
+pub(super) const MSG_GAP: gpui::Pixels = SP_9;
+pub(super) const MSG_GAP_CONTINUATION: gpui::Pixels = SP_3;
+
+#[cfg(test)]
+mod message_spacing_tests {
+    use super::*;
+
+    #[test]
+    fn test_message_spacing_constants_preserve_transition_separation_when_using_scale_tokens() {
+        assert_eq!(MSG_PX, SP_9);
+        assert_eq!(MSG_PY, SP_7);
+        assert_eq!(MSG_GAP, SP_9);
+        assert_eq!(MSG_GAP_CONTINUATION, SP_3);
+        assert!(MSG_GAP / MSG_GAP_CONTINUATION > 1.0);
+    }
+}
 
 // -- Semantic opacity levels --
 // Use named constants so the same semantic intent always gets the same value.
