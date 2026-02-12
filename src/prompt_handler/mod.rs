@@ -1012,6 +1012,30 @@ impl ScriptListApp {
                         *selected_index as i32,
                         None,
                     ),
+                    AppView::EmojiPickerView {
+                        filter,
+                        selected_index,
+                        selected_category,
+                    } => {
+                        let filtered_count = crate::emoji::search_emojis(filter)
+                            .into_iter()
+                            .filter(|emoji| {
+                                selected_category
+                                    .map(|category| emoji.category == category)
+                                    .unwrap_or(true)
+                            })
+                            .count();
+                        (
+                            "emojiPicker".to_string(),
+                            Some("emoji-picker".to_string()),
+                            None,
+                            filter.clone(),
+                            filtered_count,
+                            filtered_count,
+                            *selected_index as i32,
+                            None,
+                        )
+                    }
                     AppView::WebcamView { .. } => (
                         "webcam".to_string(),
                         Some("webcam".to_string()),
@@ -1133,6 +1157,7 @@ impl ScriptListApp {
                     AppView::FormPrompt { id, .. } => Some(id.clone()),
                     AppView::TermPrompt { id, .. } => Some(id.clone()),
                     AppView::EditorPrompt { id, .. } => Some(id.clone()),
+                    AppView::EmojiPickerView { .. } => None,
                     _ => None,
                 };
 

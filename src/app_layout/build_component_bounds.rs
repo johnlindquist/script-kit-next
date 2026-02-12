@@ -48,6 +48,7 @@ impl ScriptListApp {
             AppView::QuickTerminalView { .. } => "QuickTerminal",
             AppView::FileSearchView { .. } => "FileSearch",
             AppView::ThemeChooserView { .. } => "ThemeChooser",
+            AppView::EmojiPickerView { .. } => "EmojiPicker",
             AppView::ActionsDialog => "ActionsDialog",
             AppView::WebcamView { .. } => "Webcam",
             AppView::CreationFeedback { .. } => "CreationFeedback",
