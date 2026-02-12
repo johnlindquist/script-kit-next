@@ -5,15 +5,10 @@ author: Script Kit
 icon: graduation-cap
 ---
 
-## Inline Reference
-
-- YAML frontmatter describes the full bundle (`name`, `description`, `author`, `icon`).
-- `icon` values use Lucide icon names in kebab-case (examples: `star`, `graduation-cap`) from https://lucide.dev/icons.
-- Scriptlet metadata goes in a ```metadata``` fenced block before each tool block.
-- `metadata` supports two formats:
-- key/value lines (`keyword: !sig`).
-- JSON objects (`{ "keyword": "!sig", "description": "..." }`).
-- Common metadata fields: `keyword` (aliases: `expand`, `snippet`), `description`, `alias`, `shortcut`, `icon`, `schedule`, `cron`, plus `hidden` and `background` booleans as `true`/`false`.
+> Frontmatter fields define extension metadata: `name`, `description`, `author`, `icon`.
+> Use Lucide icon names in kebab-case for `icon` (for example `graduation-cap`): https://lucide.dev/icons.
+> Each scriptlet uses a `metadata` fenced block before its tool block, in either `key: value` format or JSON.
+> Supported scriptlet metadata fields include `keyword` (also accepted as `expand` or `snippet`), `description`, `alias`, `shortcut`, `icon`, `schedule`, `cron`, `hidden`, and `background`.
 
 # How to Create Your Own Scriptlets
 
