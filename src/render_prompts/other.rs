@@ -194,6 +194,24 @@ impl ScriptListApp {
             .into_any_element()
     }
 
+    fn render_naming_prompt(
+        &mut self,
+        entity: Entity<prompts::NamingPrompt>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let shell_radius = self.other_prompt_shell_radius_lg();
+        let handle_key = cx.listener(Self::other_prompt_shell_handle_key_default);
+
+        let vibrancy_bg = get_vibrancy_background(&self.theme);
+
+        // NamingPrompt entity has its own track_focus and on_key_down in its render method.
+        // We wrap with our own handler to intercept Cmd+W and ESC first.
+        crate::components::prompt_shell_container(shell_radius, vibrancy_bg)
+            .on_key_down(handle_key)
+            .child(crate::components::prompt_shell_content(entity))
+            .into_any_element()
+    }
+
     fn render_webcam_prompt(
         &mut self,
         entity: Entity<prompts::WebcamPrompt>,
@@ -362,6 +380,7 @@ mod other_prompt_render_wrapper_tests {
             "render_drop_prompt",
             "render_template_prompt",
             "render_chat_prompt",
+            "render_naming_prompt",
         ] {
             let body = fn_source(fn_name);
             assert!(

@@ -125,6 +125,13 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
+    /// Showing naming dialog for script/extension creation.
+    /// Non-dismissable — requires explicit submit or cancel.
+    NamingPrompt {
+        #[allow(dead_code)]
+        id: String,
+        entity: Entity<prompts::NamingPrompt>,
+    },
     /// Showing creation feedback with file path and quick actions after script/extension creation.
     /// Requires explicit dismiss (Enter/Escape/button) — non-dismissable by click-outside.
     CreationFeedback {
@@ -182,6 +189,8 @@ enum FocusTarget {
     TermPrompt,
     /// Focus the chat prompt
     ChatPrompt,
+    /// Focus the naming prompt
+    NamingPrompt,
 }
 
 /// Identifies which prompt type is hosting the actions dialog.

@@ -273,6 +273,12 @@ struct ScriptListApp {
     /// Receiver for inline chat Claude Code signals
     /// Checked by timer to trigger Claude Code enablement
     inline_chat_claude_code_receiver: mpsc::Receiver<()>,
+    /// Sender for naming dialog completion signals
+    /// Some(json_payload) = user submitted a name, None = user cancelled
+    naming_submit_sender: mpsc::SyncSender<Option<String>>,
+    /// Receiver for naming dialog completion signals
+    /// Checked in render loop to handle naming dialog submit/cancel
+    naming_submit_receiver: mpsc::Receiver<Option<String>>,
     /// Opacity offset for light theme adjustment
     /// Use Cmd+Shift+[ to decrease and Cmd+Shift+] to increase
     /// Range: -0.5 to +0.5 (added to base opacity values)

@@ -39,10 +39,10 @@ const WINDOWS_RESERVED_FILENAMES: [&str; 22] = [
     "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8",
     "com9", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
 ];
-fn scripts_dir() -> PathBuf {
+pub fn scripts_dir() -> PathBuf {
     PathBuf::from(shellexpand::tilde(SCRIPTS_DIR).as_ref())
 }
-fn extensions_dir() -> PathBuf {
+pub fn extensions_dir() -> PathBuf {
     PathBuf::from(shellexpand::tilde(EXTENSIONS_DIR).as_ref())
 }
 fn validate_sanitized_name(

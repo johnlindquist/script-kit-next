@@ -148,6 +148,7 @@ impl ScriptListApp {
                 Some((ViewType::ScriptList, filtered_count))
             }
             AppView::CreationFeedback { .. } => Some((ViewType::ArgPromptNoChoices, 0)),
+            AppView::NamingPrompt { .. } => Some((ViewType::ArgPromptNoChoices, 0)),
         }
     }
 

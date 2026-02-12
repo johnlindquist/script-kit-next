@@ -80,6 +80,7 @@ impl ScriptListApp {
                 | AppView::QuickTerminalView { .. }
                 | AppView::EnvPrompt { .. }
                 | AppView::WebcamView { .. }
+                | AppView::NamingPrompt { .. }
                 | AppView::CreationFeedback { .. }
         )
     }

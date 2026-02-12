@@ -341,6 +341,13 @@ impl ScriptListApp {
                     self.focused_input = FocusedInput::None;
                 }
             }
+            FocusTarget::NamingPrompt => {
+                if let AppView::NamingPrompt { entity, .. } = &self.current_view {
+                    let fh = entity.read(cx).focus_handle(cx);
+                    window.focus(&fh, cx);
+                    self.focused_input = FocusedInput::None;
+                }
+            }
             FocusTarget::AppRoot => {
                 window.focus(&self.focus_handle, cx);
                 // Don't reset focused_input here - the caller already set it appropriately.

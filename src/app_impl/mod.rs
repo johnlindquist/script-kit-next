@@ -40,6 +40,8 @@ mod shortcuts_hud_grid;
 mod registries_state;
 #[path = "prompt_ai.rs"]
 mod prompt_ai;
+#[path = "naming_dialog.rs"]
+mod naming_dialog;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod app_impl_state_sync_tests;

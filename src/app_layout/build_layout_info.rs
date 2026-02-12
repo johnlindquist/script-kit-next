@@ -32,6 +32,7 @@ impl ScriptListApp {
             AppView::ActionsDialog => "actionsDialog",
             AppView::WebcamView { .. } => "webcam",
             AppView::CreationFeedback { .. } => "creationFeedback",
+            AppView::NamingPrompt { .. } => "namingPrompt",
         };
 
         let mut components = Vec::new();

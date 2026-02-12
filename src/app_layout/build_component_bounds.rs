@@ -51,6 +51,7 @@ impl ScriptListApp {
             AppView::ActionsDialog => "ActionsDialog",
             AppView::WebcamView { .. } => "Webcam",
             AppView::CreationFeedback { .. } => "CreationFeedback",
+            AppView::NamingPrompt { .. } => "NamingPrompt",
         };
 
         // Header bounds (includes padding + input + divider) - common to all views

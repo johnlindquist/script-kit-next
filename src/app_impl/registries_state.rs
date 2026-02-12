@@ -163,6 +163,7 @@ impl ScriptListApp {
             AppView::FileSearchView { .. } => "FileSearchView",
             AppView::ThemeChooserView { .. } => "ThemeChooserView",
             AppView::CreationFeedback { .. } => "CreationFeedback",
+            AppView::NamingPrompt { .. } => "NamingPrompt",
         };
 
         let old_focused_input = self.focused_input;

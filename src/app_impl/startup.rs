@@ -299,6 +299,8 @@ impl ScriptListApp {
         let (inline_chat_configure_tx, inline_chat_configure_rx) = mpsc::sync_channel(4);
         // Create channel for inline chat Claude Code signals (when user wants to enable Claude Code)
         let (inline_chat_claude_code_tx, inline_chat_claude_code_rx) = mpsc::sync_channel(4);
+        // Create channel for naming dialog completion signals
+        let (naming_submit_tx, naming_submit_rx) = mpsc::sync_channel(4);
         let mut app = ScriptListApp {
             scripts,
             scriptlets,
@@ -486,6 +488,9 @@ impl ScriptListApp {
             // Inline chat Claude Code channel - for ChatPrompt Claude Code callback to enable Claude Code
             inline_chat_claude_code_sender: inline_chat_claude_code_tx,
             inline_chat_claude_code_receiver: inline_chat_claude_code_rx,
+            // Naming dialog completion channel - for NamingPrompt callback to signal submit/cancel
+            naming_submit_sender: naming_submit_tx,
+            naming_submit_receiver: naming_submit_rx,
             // Light theme opacity adjustment offset (Cmd+Shift+[/])
             light_opacity_offset: 0.0,
             // Mouse cursor hidden state - hidden while typing, shown on mouse move
