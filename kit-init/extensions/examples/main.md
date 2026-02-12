@@ -5,16 +5,10 @@ author: Script Kit
 icon: book-open
 ---
 
-## Inline Reference
-
-- This YAML frontmatter describes the whole extension bundle:
-- `name`: label shown for the bundle.
-- `description`: short summary shown in menus/search.
-- `author`: attribution for the bundle.
-- `icon`: Lucide icon name in kebab-case (example: `book-open`) from https://lucide.dev/icons.
-- Each scriptlet uses a ```metadata``` fenced block before its tool block.
-- `metadata` supports either `key: value` lines or a JSON object.
-- Common metadata fields: `keyword` (aliases: `expand`, `snippet`), `description`, `alias`, `shortcut`, `icon`, `schedule`, `cron`, plus `hidden` and `background` booleans (`true`/`false`).
+> Frontmatter fields define extension metadata: `name`, `description`, `author`, `icon`.
+> Use Lucide icon names in kebab-case for `icon` (for example `book-open`): https://lucide.dev/icons.
+> Each scriptlet uses a `metadata` fenced block before its tool block, in either `key: value` format or JSON.
+> Supported scriptlet metadata fields include `keyword` (also accepted as `expand` or `snippet`), `description`, `alias`, `shortcut`, `icon`, `schedule`, `cron`, `hidden`, and `background`.
 
 # Getting Started
 

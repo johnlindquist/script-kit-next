@@ -5,18 +5,10 @@ author: Script Kit
 icon: beaker
 ---
 
-## Inline Reference
-
-- Frontmatter fields define the extension bundle:
-- `name`: display name in Script Kit.
-- `description`: summary text for the bundle.
-- `author`: bundle author/owner.
-- `icon`: Lucide icon name in kebab-case (example: `beaker`) from https://lucide.dev/icons.
-- Scriptlet settings go in a ```metadata``` fenced block before each tool block.
-- `metadata` supports both formats shown in this file:
-- key/value lines (for example `keyword: !short`).
-- JSON objects (for example `{ "keyword": "!json" }`).
-- Common metadata fields include `keyword` (aliases: `expand`, `snippet`), `description`, `alias`, `shortcut`, `icon`, `schedule`, `cron`, plus `hidden` and `background` booleans (`true`/`false`).
+> Frontmatter fields define extension metadata: `name`, `description`, `author`, `icon`.
+> Use Lucide icon names in kebab-case for `icon` (for example `beaker`): https://lucide.dev/icons.
+> Each scriptlet uses a `metadata` fenced block before its tool block, in either `key: value` format or JSON.
+> Supported scriptlet metadata fields include `keyword` (also accepted as `expand` or `snippet`), `description`, `alias`, `shortcut`, `icon`, `schedule`, `cron`, `hidden`, and `background`.
 
 # JSON Metadata Format
 
