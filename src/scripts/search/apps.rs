@@ -36,6 +36,7 @@ pub fn fuzzy_search_apps(apps: &[AppInfo], query: &str) -> Vec<AppMatch> {
 
     for (index, app) in apps.iter().enumerate() {
         let mut score = 0i32;
+        let mut has_name_match = false;
 
         // Exact name match boost
         if query_is_ascii && app.name.is_ascii() && is_exact_name_match(&app.name, &query_lower) {
@@ -46,6 +47,7 @@ pub fn fuzzy_search_apps(apps: &[AppInfo], query: &str) -> Vec<AppMatch> {
         // App names can have Unicode (e.g., "日本語アプリ")
         if query_is_ascii && app.name.is_ascii() {
             if let Some(pos) = find_ignore_ascii_case(&app.name, &query_lower) {
+                has_name_match = true;
                 // Bonus for exact substring match at start of name
                 score += if pos == 0 { 100 } else { 75 };
                 // Extra bonus for word-boundary matches
@@ -58,9 +60,17 @@ pub fn fuzzy_search_apps(apps: &[AppInfo], query: &str) -> Vec<AppMatch> {
         // Fuzzy character matching in name using nucleo (handles Unicode)
         if use_nucleo {
             if let Some(nucleo_s) = nucleo.score(&app.name) {
+                has_name_match = true;
                 // Scale nucleo score to match existing weights (~50 for fuzzy match)
                 score += 50 + (nucleo_s / 20) as i32;
             }
+        }
+
+        // Apps are installed software — when the name matches, boost them above
+        // scriptlets/scripts that accumulate extra points from metadata fields
+        // (description, file_path, keyword, alias, group, tool type).
+        if has_name_match {
+            score += 200;
         }
 
         // Score by bundle_id match - lower priority
