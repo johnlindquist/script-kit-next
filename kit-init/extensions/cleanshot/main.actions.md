@@ -4,10 +4,9 @@ Shared actions for CleanShot X screenshot tools.
 
 > Maintainer notes:
 >
-> - If you add YAML frontmatter, use `name`, `description`, `author`, and `icon` (Lucide icon name such as `camera`).
-> - Each `###` heading defines one shared action that can be run from scriptlets in `main.md`.
-> - `{{content}}` is replaced with the selected scriptlet's code fence content before the action runs.
-> - Optional per-action metadata is declared as HTML comments above the action code fence, for example: `<!-- description: Copy URL -->`, `<!-- shortcut: cmd+c -->`, `<!-- keyword: copy -->`.
+> - Each `###` heading defines one shared action available to scriptlets in `main.md`.
+> - `{{content}}` is substituted with the selected scriptlet's code fence content before the action runs.
+> - Optional per-action metadata can be set as HTML comments above the action code fence, for example: `<!-- description: Copy URL -->`, `<!-- shortcut: cmd+c -->`, `<!-- keyword: copy -->`.
 > - The code fence language selects which tool executes the action (`bash`, `open`, `ts`, `applescript`, etc.).
 
 ### Copy URL Scheme

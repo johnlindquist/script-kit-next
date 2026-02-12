@@ -5,16 +5,16 @@ author: Script Kit
 icon: camera
 ---
 
+> Maintainer notes:
+>
+> - YAML frontmatter fields: `name` (display name), `description` (picker summary), `author` (attribution), `icon` (Lucide icon name such as `camera` or `monitor`).
+> - `icon` should use the Lucide icon identifier only (no `lucide-` prefix).
+> - Scriptlet convention: each `##` heading defines one scriptlet command and is followed by its code fence.
+> - The code fence language selects the tool runner (`open`, `bash`, `ts`, `applescript`, etc.).
+
 # CleanShot X
 
 Powerful screenshot and screen recording commands for CleanShot X.
-
-> Maintainer notes:
->
-> - YAML frontmatter fields in this file are: `name` (display name), `description` (picker summary), `author` (attribution), and `icon` (Lucide icon name like `camera` or `monitor`).
-> - Each `##` heading defines one scriptlet command.
-> - Optional per-scriptlet metadata goes in HTML comments directly above the code fence, for example: `<!-- description: Capture a region -->`, `<!-- shortcut: cmd+shift+4 -->`, `<!-- keyword: screenshot -->`.
-> - The code fence language selects the tool runner (`open`, `bash`, `ts`, `applescript`, etc.).
 
 ---
 
