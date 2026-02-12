@@ -5,18 +5,19 @@ author: Script Kit
 icon: graduation-cap
 ---
 
-# How to Create Your Own Scriptlets
-
-This guide explains how to create custom text expansions for Script Kit.
-
 ## Inline Reference
 
 - YAML frontmatter describes the full bundle (`name`, `description`, `author`, `icon`).
 - `icon` values use Lucide icon names in kebab-case (examples: `star`, `graduation-cap`) from https://lucide.dev/icons.
-- Scriptlet metadata supports two formats:
+- Scriptlet metadata goes in a ```metadata``` fenced block before each tool block.
+- `metadata` supports two formats:
 - key/value lines (`keyword: !sig`).
 - JSON objects (`{ "keyword": "!sig", "description": "..." }`).
-- Common metadata fields: `keyword` (aliases: `expand`, `snippet`), `description`, `alias`, `shortcut`, `icon`, `schedule`, `cron`, plus boolean flags as `true`/`false`.
+- Common metadata fields: `keyword` (aliases: `expand`, `snippet`), `description`, `alias`, `shortcut`, `icon`, `schedule`, `cron`, plus `hidden` and `background` booleans as `true`/`false`.
+
+# How to Create Your Own Scriptlets
+
+This guide explains how to create custom text expansions for Script Kit.
 
 ---
 

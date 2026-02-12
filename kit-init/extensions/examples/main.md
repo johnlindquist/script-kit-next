@@ -12,9 +12,9 @@ icon: book-open
 - `description`: short summary shown in menus/search.
 - `author`: attribution for the bundle.
 - `icon`: Lucide icon name in kebab-case (example: `book-open`) from https://lucide.dev/icons.
-- Each scriptlet uses a `metadata` block before its tool block.
-- `metadata` supports either key/value lines or JSON objects.
-- Common metadata fields: `keyword` (aliases: `expand`, `snippet`), `description`, `alias`, `shortcut`, `icon`, `schedule`, `cron`, plus boolean flags written as `true` or `false`.
+- Each scriptlet uses a ```metadata``` fenced block before its tool block.
+- `metadata` supports either `key: value` lines or a JSON object.
+- Common metadata fields: `keyword` (aliases: `expand`, `snippet`), `description`, `alias`, `shortcut`, `icon`, `schedule`, `cron`, plus `hidden` and `background` booleans (`true`/`false`).
 
 # Getting Started
 
