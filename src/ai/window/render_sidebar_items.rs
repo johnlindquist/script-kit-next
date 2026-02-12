@@ -207,28 +207,53 @@ impl AiApp {
                     }),
             )
             .when_some(preview, |d, preview_text| {
-                let clean_preview: String = preview_text
-                    .lines()
-                    .map(|line| line.trim())
-                    .find(|line| {
-                        !line.is_empty()
-                            && !line.starts_with('#')
-                            && !line.starts_with("```")
-                            && !line.chars().all(|c| c == '-' || c == '*' || c == '_')
-                    })
-                    .unwrap_or("")
-                    .chars()
-                    .take(50)
-                    .collect();
+                let (preview_role, preview_snippet) =
+                    self.build_sidebar_preview_identity(chat_id, msg_count, &preview_text);
+                let role_icon = Self::sidebar_preview_sender_icon(preview_role);
+                let role_label = Self::sidebar_preview_sender_label(preview_role);
+                let (role_accent, role_tint, role_label_color) =
+                    Self::sidebar_preview_palette(preview_role, cx);
 
                 d.child(
                     div()
-                        .text_xs()
-                        .text_color(description_color)
-                        .overflow_hidden()
-                        .whitespace_nowrap()
-                        .text_ellipsis()
-                        .child(clean_preview),
+                        .mt(SP_2)
+                        .min_w_0()
+                        .rounded(px(6.))
+                        .border_l_2()
+                        .border_color(role_accent)
+                        .bg(role_tint)
+                        .pl(SP_2)
+                        .pr(SP_2)
+                        .py(SP_1)
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(SP_2)
+                                .child(
+                                    svg()
+                                        .external_path(role_icon.external_path())
+                                        .size(px(9.))
+                                        .text_color(role_label_color),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                        .text_color(role_label_color)
+                                        .child(role_label),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .mt(px(2.))
+                                .text_xs()
+                                .text_color(description_color)
+                                .overflow_hidden()
+                                .whitespace_nowrap()
+                                .text_ellipsis()
+                                .child(preview_snippet),
+                        ),
                 )
             })
             // Bottom row: model badge + message count + source indicator
@@ -296,6 +321,219 @@ impl AiApp {
             )
     }
 
+    fn build_sidebar_preview_identity(
+        &self,
+        chat_id: ChatId,
+        msg_count: usize,
+        preview_text: &str,
+    ) -> (MessageRole, String) {
+        let selected_last_role = if self.selected_chat_id == Some(chat_id) {
+            self.current_messages.last().map(|message| message.role)
+        } else {
+            None
+        };
+
+        let role = Self::resolve_sidebar_preview_role(selected_last_role, msg_count, preview_text);
+        let (_, clean_line) = Self::extract_sidebar_preview_line_and_role(preview_text);
+        let preview_source = if clean_line.is_empty() {
+            Self::fallback_sidebar_preview_line(preview_text)
+        } else {
+            clean_line
+        };
+
+        let mut preview_snippet: String = preview_source.chars().take(50).collect();
+        if preview_snippet.is_empty() {
+            preview_snippet = "...".to_string();
+        }
+
+        (role, preview_snippet)
+    }
+
+    fn resolve_sidebar_preview_role(
+        selected_last_role: Option<MessageRole>,
+        msg_count: usize,
+        preview_text: &str,
+    ) -> MessageRole {
+        let (prefixed_role, _) = Self::extract_sidebar_preview_line_and_role(preview_text);
+
+        selected_last_role
+            .or(prefixed_role)
+            .or_else(|| {
+                if msg_count > 1 && Self::looks_like_assistant_continuation(preview_text) {
+                    Some(MessageRole::Assistant)
+                } else {
+                    None
+                }
+            })
+            .or_else(|| Self::infer_sidebar_preview_role_from_message_count(msg_count))
+            .unwrap_or(MessageRole::Assistant)
+    }
+
+    fn infer_sidebar_preview_role_from_message_count(msg_count: usize) -> Option<MessageRole> {
+        if msg_count == 0 {
+            None
+        } else if msg_count % 2 == 0 {
+            Some(MessageRole::Assistant)
+        } else {
+            Some(MessageRole::User)
+        }
+    }
+
+    fn looks_like_assistant_continuation(preview_text: &str) -> bool {
+        if preview_text
+            .split("\n\n")
+            .filter(|paragraph| !paragraph.trim().is_empty())
+            .count()
+            >= 2
+        {
+            return true;
+        }
+
+        preview_text.lines().map(|line| line.trim()).any(|line| {
+            line.starts_with("```")
+                || line.starts_with('#')
+                || line.starts_with("- ")
+                || line.starts_with("* ")
+                || line.starts_with("1. ")
+                || line.starts_with("2. ")
+                || line.starts_with("3. ")
+        })
+    }
+
+    fn extract_sidebar_preview_line_and_role(preview_text: &str) -> (Option<MessageRole>, String) {
+        let mut prefixed_role = None;
+
+        for raw_line in preview_text.lines() {
+            let line = raw_line.trim();
+            if line.is_empty() {
+                continue;
+            }
+
+            if let Some((role, without_prefix)) = Self::parse_sidebar_preview_prefixed_line(line) {
+                prefixed_role.get_or_insert(role);
+                if Self::is_visible_sidebar_preview_line(without_prefix) {
+                    return (prefixed_role, without_prefix.to_string());
+                }
+                continue;
+            }
+
+            if Self::is_visible_sidebar_preview_line(line) {
+                return (prefixed_role, line.to_string());
+            }
+        }
+
+        (prefixed_role, String::new())
+    }
+
+    fn fallback_sidebar_preview_line(preview_text: &str) -> String {
+        for raw_line in preview_text.lines() {
+            let line = raw_line.trim();
+            if line.is_empty() {
+                continue;
+            }
+
+            if let Some((_role, without_prefix)) = Self::parse_sidebar_preview_prefixed_line(line) {
+                if !without_prefix.is_empty() {
+                    return without_prefix.to_string();
+                }
+                continue;
+            }
+
+            return line.to_string();
+        }
+
+        String::new()
+    }
+
+    fn parse_sidebar_preview_prefixed_line(line: &str) -> Option<(MessageRole, &str)> {
+        let trimmed = line.trim();
+        if let Some((token, remainder)) = trimmed.split_once(':') {
+            if let Some(role) = Self::parse_sidebar_role_token(token) {
+                return Some((role, remainder.trim_start()));
+            }
+        }
+        if let Some((token, remainder)) = trimmed.split_once(" - ") {
+            if let Some(role) = Self::parse_sidebar_role_token(token) {
+                return Some((role, remainder.trim_start()));
+            }
+        }
+
+        None
+    }
+
+    fn parse_sidebar_role_token(token: &str) -> Option<MessageRole> {
+        let normalized = token
+            .trim()
+            .trim_matches(|c: char| {
+                c.is_whitespace()
+                    || c == '*'
+                    || c == '_'
+                    || c == '`'
+                    || c == '['
+                    || c == ']'
+                    || c == '('
+                    || c == ')'
+                    || c == '{'
+                    || c == '}'
+                    || c == '>'
+                    || c == '-'
+            })
+            .to_ascii_lowercase();
+
+        match normalized.as_str() {
+            "you" | "user" => Some(MessageRole::User),
+            "assistant" | "ai" | "bot" => Some(MessageRole::Assistant),
+            "system" | "sys" => Some(MessageRole::System),
+            _ => None,
+        }
+    }
+
+    fn is_visible_sidebar_preview_line(line: &str) -> bool {
+        !line.is_empty()
+            && !line.starts_with('#')
+            && !line.starts_with("```")
+            && !line.chars().all(|c| c == '-' || c == '*' || c == '_')
+    }
+
+    fn sidebar_preview_sender_label(role: MessageRole) -> &'static str {
+        match role {
+            MessageRole::User => "You",
+            MessageRole::Assistant => "Assistant",
+            MessageRole::System => "System",
+        }
+    }
+
+    fn sidebar_preview_sender_icon(role: MessageRole) -> LocalIconName {
+        match role {
+            MessageRole::User => LocalIconName::Terminal,
+            MessageRole::Assistant => LocalIconName::MessageCircle,
+            MessageRole::System => LocalIconName::Settings,
+        }
+    }
+
+    fn sidebar_preview_palette(
+        role: MessageRole,
+        cx: &Context<Self>,
+    ) -> (gpui::Hsla, gpui::Hsla, gpui::Hsla) {
+        match role {
+            MessageRole::User => (
+                cx.theme().accent.opacity(OP_MSG_BORDER),
+                cx.theme().accent.opacity(OP_USER_MSG_BG),
+                cx.theme().accent.opacity(OP_STRONG),
+            ),
+            MessageRole::Assistant => (
+                cx.theme().muted_foreground.opacity(OP_MEDIUM),
+                cx.theme().muted.opacity(OP_ASSISTANT_MSG_BG),
+                cx.theme().muted_foreground.opacity(OP_STRONG),
+            ),
+            MessageRole::System => (
+                cx.theme().muted_foreground.opacity(OP_STRONG),
+                cx.theme().muted.opacity(OP_ASSISTANT_MSG_BG + 0.04),
+                cx.theme().muted_foreground.opacity(OP_NEAR_FULL),
+            ),
+        }
+    }
+
     /// Abbreviate a model ID to a short display label for sidebar badges.
     /// e.g., "claude-3-5-sonnet-20241022" → "Sonnet"
     /// e.g., "gpt-4o-mini" → "GPT-4o Mini"
@@ -334,5 +572,59 @@ impl AiApp {
                 model_id.to_string()
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_sidebar_preview_line_and_role_strips_common_prefixes_when_present() {
+        let (role, preview_line) =
+            AiApp::extract_sidebar_preview_line_and_role("**Assistant**: Here is the summary");
+
+        assert_eq!(role, Some(MessageRole::Assistant));
+        assert_eq!(preview_line, "Here is the summary");
+    }
+
+    #[test]
+    fn test_extract_sidebar_preview_line_and_role_uses_following_line_when_prefix_is_empty() {
+        let (role, preview_line) =
+            AiApp::extract_sidebar_preview_line_and_role("You:\n\nCan you review this?");
+
+        assert_eq!(role, Some(MessageRole::User));
+        assert_eq!(preview_line, "Can you review this?");
+    }
+
+    #[test]
+    fn test_resolve_sidebar_preview_role_uses_selected_last_role_when_available() {
+        let role = AiApp::resolve_sidebar_preview_role(
+            Some(MessageRole::System),
+            2,
+            "Assistant: this should not win",
+        );
+
+        assert_eq!(role, MessageRole::System);
+    }
+
+    #[test]
+    fn test_resolve_sidebar_preview_role_falls_back_to_assistant_for_multiparagraph_continuation() {
+        let role = AiApp::resolve_sidebar_preview_role(
+            None,
+            3,
+            "First paragraph of a long assistant answer.\n\nSecond paragraph continues context.",
+        );
+
+        assert_eq!(role, MessageRole::Assistant);
+    }
+
+    #[test]
+    fn test_resolve_sidebar_preview_role_uses_turn_parity_when_no_other_hints_exist() {
+        let assistant_role = AiApp::resolve_sidebar_preview_role(None, 2, "Looks good.");
+        let user_role = AiApp::resolve_sidebar_preview_role(None, 3, "Can you help?");
+
+        assert_eq!(assistant_role, MessageRole::Assistant);
+        assert_eq!(user_role, MessageRole::User);
     }
 }
