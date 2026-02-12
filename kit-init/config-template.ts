@@ -24,15 +24,28 @@ export default {
   // ===========================================================================
   // REQUIRED: Global Hotkey
   // ===========================================================================
-  // The keyboard shortcut to activate Script Kit from any application.
-  // This is the only required setting.
+  // This keyboard shortcut controls opening the Script Kit launcher from any application.
+  // This is the only required setting in this file.
+  //
+  // HOTKEY EXAMPLES:
+  // - Cmd/Ctrl + ; -> { modifiers: ["meta"], key: "Semicolon" }
+  // - Cmd/Ctrl + K -> { modifiers: ["meta"], key: "KeyK" }
+  // - Cmd/Ctrl + Shift + 1 -> { modifiers: ["meta", "shift"], key: "Digit1" }
 
   hotkey: {
-    // Modifier keys: "meta" (Cmd/Win), "ctrl", "alt" (Option), "shift"
+    // hotkey.modifiers: Ordered list of modifier keys that must be held.
+    // Valid values: ["meta", "ctrl", "alt", "shift"]
+    // - meta: Command on macOS, Windows key on Windows/Linux
+    // - ctrl: Control key
+    // - alt: Option on macOS, Alt on Windows/Linux
+    // - shift: Shift key
+    // Examples: ["meta"], ["meta", "shift"], ["ctrl", "alt"]
     modifiers: ["meta"],
 
-    // Main key (W3C key codes): "KeyA"-"KeyZ", "Digit0"-"Digit9",
-    // "Space", "Enter", "Semicolon", "F1"-"F12"
+    // hotkey.key: Non-modifier key using KeyboardEvent.code-style names.
+    // Common values: "Semicolon", "KeyK", "Digit1", "Space", "Enter"
+    // Other valid patterns include letters ("KeyA"..."KeyZ"), numbers
+    // ("Digit0"..."Digit9"), punctuation keys, and function keys ("F1"..."F12").
     key: "Semicolon", // Cmd+; on Mac, Win+; on Windows
   },
 
