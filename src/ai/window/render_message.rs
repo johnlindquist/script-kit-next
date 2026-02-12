@@ -1,19 +1,67 @@
 use super::*;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum MessageCueTone {
+    Accent,
+    Muted,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct MessageBubbleCue {
+    pub(super) background_tone: MessageCueTone,
+    pub(super) background_opacity: f32,
+    pub(super) border_tone: MessageCueTone,
+    pub(super) border_opacity: f32,
+    pub(super) italic: bool,
+}
+
+pub(super) fn message_bubble_cue(role: MessageRole) -> MessageBubbleCue {
+    match role {
+        MessageRole::User => MessageBubbleCue {
+            background_tone: MessageCueTone::Accent,
+            background_opacity: OP_USER_MSG_BG,
+            border_tone: MessageCueTone::Accent,
+            border_opacity: OP_MSG_BORDER,
+            italic: false,
+        },
+        MessageRole::Assistant => MessageBubbleCue {
+            background_tone: MessageCueTone::Muted,
+            background_opacity: OP_ASSISTANT_MSG_BG,
+            border_tone: MessageCueTone::Muted,
+            border_opacity: OP_MUTED,
+            italic: false,
+        },
+        MessageRole::System => MessageBubbleCue {
+            background_tone: MessageCueTone::Muted,
+            background_opacity: OP_ASSISTANT_MSG_BG,
+            border_tone: MessageCueTone::Muted,
+            border_opacity: OP_MEDIUM,
+            italic: true,
+        },
+    }
+}
+
 impl AiApp {
     pub(super) fn render_message(
         &self,
         message: &Message,
         is_continuation: bool,
+        uses_continuation_spacing_after: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let is_user = message.role == MessageRole::User;
         let is_system = message.role == MessageRole::System;
+        let cue = message_bubble_cue(message.role);
         let colors = theme::PromptColors::from_theme(&crate::theme::get_cached_theme());
 
-        // Differentiated backgrounds: accent-tinted for user, subtle for assistant
-        let user_bg = cx.theme().accent.opacity(0.15);
-        let assistant_bg = cx.theme().muted.opacity(0.15);
+        let bubble_bg = match cue.background_tone {
+            MessageCueTone::Accent => cx.theme().accent.opacity(cue.background_opacity),
+            MessageCueTone::Muted => cx.theme().muted.opacity(cue.background_opacity),
+        };
+        let bubble_border_color = match cue.border_tone {
+            MessageCueTone::Accent => cx.theme().accent.opacity(cue.border_opacity),
+            MessageCueTone::Muted => cx.theme().muted_foreground.opacity(cue.border_opacity),
+        };
 
         // Collect cached thumbnails for this message's images
         let image_thumbnails: Vec<std::sync::Arc<RenderImage>> = message
@@ -71,8 +119,10 @@ impl AiApp {
             .flex()
             .flex_col()
             .w_full()
-            .when(is_continuation, |d| d.mb(MSG_GAP_CONTINUATION))
-            .when(!is_continuation, |d| d.mb(MSG_GAP))
+            .when(uses_continuation_spacing_after, |d| {
+                d.mb(MSG_GAP_CONTINUATION)
+            })
+            .when(!uses_continuation_spacing_after, |d| d.mb(MSG_GAP))
             // Role label row - hidden for continuation messages from same sender
             .when(!is_continuation, |el| {
                 el.child(
@@ -221,18 +271,10 @@ impl AiApp {
                     .px(MSG_PX)
                     .py(MSG_PY)
                     .rounded(MSG_RADIUS)
-                    .when(is_user, |d| {
-                        d.bg(user_bg)
-                            .border_l_2()
-                            .border_color(cx.theme().accent.opacity(OP_MSG_BORDER))
-                    })
-                    .when(is_system, |d| {
-                        d.bg(cx.theme().muted.opacity(OP_ASSISTANT_MSG_BG))
-                            .border_l_2()
-                            .border_color(cx.theme().muted_foreground.opacity(0.2))
-                            .italic()
-                    })
-                    .when(!is_user && !is_system, |d| d.bg(assistant_bg))
+                    .bg(bubble_bg)
+                    .border_l_2()
+                    .border_color(bubble_border_color)
+                    .when(cue.italic, |d| d.italic())
                     .when(has_images, |el| {
                         el.child(
                             div().flex().flex_wrap().gap_2().mb_2().children(
@@ -343,5 +385,23 @@ impl AiApp {
                             })
                     }),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_message_bubble_cue_assigns_persistent_border_to_each_role() {
+        let user_cue = message_bubble_cue(MessageRole::User);
+        let assistant_cue = message_bubble_cue(MessageRole::Assistant);
+        let system_cue = message_bubble_cue(MessageRole::System);
+
+        assert!(user_cue.border_opacity > 0.0);
+        assert!(assistant_cue.border_opacity > 0.0);
+        assert!(system_cue.border_opacity > 0.0);
+        assert!(!assistant_cue.italic);
+        assert!(system_cue.italic);
     }
 }
