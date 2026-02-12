@@ -54,6 +54,7 @@
             list_scroll_handle: UniformListScrollHandle::new(),
             arg_list_scroll_handle: UniformListScrollHandle::new(),
             clipboard_list_scroll_handle: UniformListScrollHandle::new(),
+            emoji_scroll_handle: UniformListScrollHandle::new(),
             window_list_scroll_handle: UniformListScrollHandle::new(),
             design_gallery_scroll_handle: UniformListScrollHandle::new(),
             file_search_scroll_handle: UniformListScrollHandle::new(),

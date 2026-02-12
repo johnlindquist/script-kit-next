@@ -75,6 +75,21 @@ impl ScriptListApp {
                 };
                 Some((ViewType::ScriptList, filtered_count))
             }
+            AppView::EmojiPickerView {
+                filter,
+                selected_category,
+                ..
+            } => {
+                let filtered_count = crate::emoji::search_emojis(filter)
+                    .into_iter()
+                    .filter(|emoji| {
+                        selected_category
+                            .map(|category| emoji.category == category)
+                            .unwrap_or(true)
+                    })
+                    .count();
+                Some((ViewType::ScriptList, filtered_count))
+            }
             AppView::AppLauncherView { filter, .. } => {
                 let apps = &self.apps;
                 let filtered_count = if filter.is_empty() {

@@ -142,6 +142,7 @@ impl Render for ScriptListApp {
             self.current_view,
             AppView::ScriptList
                 | AppView::ClipboardHistoryView { .. }
+                | AppView::EmojiPickerView { .. }
                 | AppView::AppLauncherView { .. }
                 | AppView::WindowSwitcherView { .. }
                 | AppView::DesignGalleryView { .. }
@@ -209,6 +210,13 @@ impl Render for ScriptListApp {
                 selected_index,
             } => self
                 .render_clipboard_history(filter, selected_index, cx)
+                .into_any_element(),
+            AppView::EmojiPickerView {
+                filter,
+                selected_index,
+                selected_category,
+            } => self
+                .render_emoji_picker(filter, selected_index, selected_category, cx)
                 .into_any_element(),
             // P0 FIX: View state only - data comes from self.apps
             AppView::AppLauncherView {

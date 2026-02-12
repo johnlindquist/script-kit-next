@@ -125,6 +125,12 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
+    /// Showing emoji picker grid with category sections
+    EmojiPickerView {
+        filter: String,
+        selected_index: usize,
+        selected_category: Option<crate::emoji::EmojiCategory>,
+    },
     /// Showing naming dialog for script/extension creation.
     /// Non-dismissable — requires explicit submit or cancel.
     NamingPrompt {
@@ -218,6 +224,8 @@ enum ActionsDialogHost {
     FileSearch,
     /// Actions in clipboard history (restore focus to clipboard search input)
     ClipboardHistory,
+    /// Actions in emoji picker (restore focus to emoji search input)
+    EmojiPicker,
     /// Actions in webcam prompt (restore focus to None - webcam has no input)
     WebcamPrompt,
 }

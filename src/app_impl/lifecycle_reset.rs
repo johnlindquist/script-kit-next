@@ -173,6 +173,9 @@ impl ScriptListApp {
             AppView::ClipboardHistoryView { filter, .. } if !filter.is_empty() => {
                 Some("ClipboardHistory filter")
             }
+            AppView::EmojiPickerView { filter, .. } if !filter.is_empty() => {
+                Some("EmojiPicker filter")
+            }
             AppView::AppLauncherView { filter, .. } if !filter.is_empty() => {
                 Some("AppLauncher filter")
             }
@@ -216,6 +219,15 @@ impl ScriptListApp {
             } => {
                 Self::clear_builtin_query_state(filter, selected_index);
                 self.list_scroll_handle
+                    .scroll_to_item(0, ScrollStrategy::Top);
+            }
+            AppView::EmojiPickerView {
+                filter,
+                selected_index,
+                ..
+            } => {
+                Self::clear_builtin_query_state(filter, selected_index);
+                self.emoji_scroll_handle
                     .scroll_to_item(0, ScrollStrategy::Top);
             }
             AppView::WindowSwitcherView {
