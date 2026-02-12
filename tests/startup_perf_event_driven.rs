@@ -63,6 +63,43 @@ fn test_script_list_app_new_uses_event_driven_receive_when_loading_startup_data(
 }
 
 #[test]
+fn test_script_list_arrow_history_navigation_uses_top_of_grouped_items_boundary() {
+    let source = read_script_list_startup_source();
+
+    assert!(
+        source.contains("const HISTORY: &str = \"HISTORY\";"),
+        "ScriptList arrow handler should use a HISTORY log target constant"
+    );
+    assert!(
+        source.contains("let (grouped_items, _) = this.get_grouped_results_cached();"),
+        "Up arrow handler should compute grouped results for top-of-list detection"
+    );
+    assert!(
+        source.contains("crate::list_item::GroupedListItem::Item(_)"),
+        "Up arrow handler should locate the first item row in grouped results"
+    );
+    assert!(
+        source.contains(".map(|position| this.selected_index <= position)")
+            && source.contains(".unwrap_or(true);"),
+        "Up arrow handler should treat missing items as top-of-list"
+    );
+    assert!(
+        source.contains("if in_history || at_top_of_list {")
+            && source.contains("if let Some(text) = this.input_history.navigate_up() {")
+            && source.contains("cx.stop_propagation();")
+            && source.contains("return;"),
+        "Up arrow handler should route to history recall and consume the event when in history or at top"
+    );
+    assert!(
+        source.contains("if this.input_history.current_index().is_some() {")
+            && source.contains("if let Some(text) = this.input_history.navigate_down() {")
+            && source.contains("this.input_history.reset_navigation();")
+            && source.contains("this.queue_filter_compute(String::new(), cx);"),
+        "Down arrow handler should navigate history and clear back to empty when moving past newest"
+    );
+}
+
+#[test]
 fn test_rebuild_provider_registry_async_uses_event_driven_receive_when_refreshing_registry() {
     let source = read_prompt_ai_source();
     let body = function_body(&source, "pub fn rebuild_provider_registry_async");
