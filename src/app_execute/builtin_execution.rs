@@ -10,6 +10,7 @@ fn favorites_loaded_message(count: usize) -> String {
     }
 }
 
+#[cfg(test)]
 fn created_file_path_for_feedback(path: &std::path::Path) -> std::path::PathBuf {
     if path.is_absolute() {
         return path.to_path_buf();
@@ -1293,64 +1294,11 @@ impl ScriptListApp {
 
                 use builtins::ScriptCommandType;
 
-                let (create_result, item_type) = match cmd_type {
-                    ScriptCommandType::NewScript => {
-                        (script_creation::create_new_script("untitled"), "script")
-                    }
-                    ScriptCommandType::NewExtension => {
-                        // Generate a unique name with timestamp
-                        let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
-                        let name = format!("my-extension-{}", timestamp);
-                        (script_creation::create_new_extension(&name), "extension")
-                    }
+                let target = match cmd_type {
+                    ScriptCommandType::NewScript => prompts::NamingTarget::Script,
+                    ScriptCommandType::NewExtension => prompts::NamingTarget::Extension,
                 };
-
-                match create_result {
-                    Ok(path) => {
-                        let created_file_path = created_file_path_for_feedback(&path);
-                        logging::log(
-                            "EXEC",
-                            &format!("Created new {}: {:?}", item_type, created_file_path),
-                        );
-                        if let Err(e) = script_creation::open_in_editor(&path, &self.config) {
-                            logging::log("ERROR", &format!("Failed to open in editor: {}", e));
-                            self.toast_manager.push(
-                                components::toast::Toast::error(
-                                    format!(
-                                        "Created {} but failed to open editor: {}",
-                                        item_type, e
-                                    ),
-                                    &self.theme,
-                                )
-                                .duration_ms(Some(5000)),
-                            );
-                        } else {
-                            self.toast_manager.push(
-                                components::toast::Toast::success(
-                                    format!("New {} created and opened in editor", item_type),
-                                    &self.theme,
-                                )
-                                .duration_ms(Some(3000)),
-                            );
-                        }
-                        self.current_view = AppView::CreationFeedback {
-                            path: created_file_path.clone(),
-                        };
-                        self.opened_from_main_menu = true;
-                        cx.notify();
-                    }
-                    Err(e) => {
-                        logging::log("ERROR", &format!("Failed to create {}: {}", item_type, e));
-                        self.toast_manager.push(
-                            components::toast::Toast::error(
-                                format!("Failed to create {}: {}", item_type, e),
-                                &self.theme,
-                            )
-                            .duration_ms(Some(5000)),
-                        );
-                        cx.notify();
-                    }
-                }
+                self.show_naming_dialog(target, cx);
             }
 
             // =========================================================================

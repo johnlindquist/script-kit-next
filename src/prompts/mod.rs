@@ -24,6 +24,7 @@ pub mod div;
 mod drop;
 pub mod env;
 pub mod markdown;
+pub mod naming;
 mod path;
 pub mod prelude;
 mod select;
@@ -48,6 +49,7 @@ pub use chat::{
 };
 pub use creation_feedback::CreationFeedbackPanel;
 pub use div::{ContainerOptions, ContainerPadding, DivPrompt};
+pub use naming::{NamingPrompt, NamingPromptConfig, NamingSubmitResult, NamingTarget};
 #[cfg(target_os = "macos")]
 pub use webcam::WebcamPrompt;
 #[cfg(not(target_os = "macos"))]

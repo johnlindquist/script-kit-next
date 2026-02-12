@@ -81,6 +81,12 @@ impl Render for ScriptListApp {
             // Enable Claude Code in config.ts
             self.enable_claude_code_in_config(window, cx);
         }
+
+        // Check for naming dialog completion (submit or cancel)
+        if let Ok(payload) = self.naming_submit_receiver.try_recv() {
+            self.handle_naming_dialog_completion(payload, window, cx);
+        }
+
         // Focus-lost auto-dismiss: Close dismissable prompts when the main window loses focus
         // This includes focus loss to other app windows like Notes/AI.
         // When is_pinned is true, the window stays open on blur (only closes via ESC/Cmd+W)
@@ -243,6 +249,9 @@ impl Render for ScriptListApp {
                 ref filter,
                 selected_index,
             } => self.render_theme_chooser(filter, selected_index, cx),
+            AppView::NamingPrompt { entity, .. } => {
+                self.render_naming_prompt(entity, cx).into_any_element()
+            }
             AppView::CreationFeedback { ref path } => {
                 self.render_creation_feedback(path.clone(), cx)
             }
