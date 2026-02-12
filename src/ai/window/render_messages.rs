@@ -1,5 +1,22 @@
 use super::*;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct MessageGroupingState {
+    pub(super) is_continuation: bool,
+    pub(super) uses_continuation_spacing_after: bool,
+}
+
+pub(super) fn message_grouping_state(messages: &[Message], ix: usize) -> MessageGroupingState {
+    let role = messages[ix].role;
+    let is_continuation = ix > 0 && role == messages[ix - 1].role;
+    let uses_continuation_spacing_after = ix + 1 < messages.len() && role == messages[ix + 1].role;
+
+    MessageGroupingState {
+        is_continuation,
+        uses_continuation_spacing_after,
+    }
+}
+
 impl AiApp {
     pub(super) fn sync_messages_list_and_scroll_to_bottom(&mut self) {
         let item_count = self.messages_list_item_count();
@@ -53,11 +70,14 @@ impl AiApp {
                         && !has_error
                         && ix == msg_count - 1
                         && this.current_messages[ix].role == MessageRole::Assistant;
-                    // Compact header when consecutive messages share the same role
-                    let is_continuation = ix > 0
-                        && this.current_messages[ix].role == this.current_messages[ix - 1].role;
+                    let grouping = message_grouping_state(&this.current_messages, ix);
                     let msg_el = this
-                        .render_message(&this.current_messages[ix], is_continuation, cx)
+                        .render_message(
+                            &this.current_messages[ix],
+                            grouping.is_continuation,
+                            grouping.uses_continuation_spacing_after,
+                            cx,
+                        )
                         .into_any_element();
                     if is_last_assistant {
                         div()
@@ -177,5 +197,58 @@ impl AiApp {
                         ),
                 )
             })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_message_grouping_state_decouples_continuation_and_spacing_after() {
+        let chat_id = ChatId::new();
+        let messages = vec![
+            Message::user(chat_id, "u1"),
+            Message::user(chat_id, "u2"),
+            Message::assistant(chat_id, "a1"),
+            Message::assistant(chat_id, "a2"),
+            Message::system(chat_id, "s1"),
+        ];
+
+        assert_eq!(
+            message_grouping_state(&messages, 0),
+            MessageGroupingState {
+                is_continuation: false,
+                uses_continuation_spacing_after: true,
+            }
+        );
+        assert_eq!(
+            message_grouping_state(&messages, 1),
+            MessageGroupingState {
+                is_continuation: true,
+                uses_continuation_spacing_after: false,
+            }
+        );
+        assert_eq!(
+            message_grouping_state(&messages, 2),
+            MessageGroupingState {
+                is_continuation: false,
+                uses_continuation_spacing_after: true,
+            }
+        );
+        assert_eq!(
+            message_grouping_state(&messages, 3),
+            MessageGroupingState {
+                is_continuation: true,
+                uses_continuation_spacing_after: false,
+            }
+        );
+        assert_eq!(
+            message_grouping_state(&messages, 4),
+            MessageGroupingState {
+                is_continuation: false,
+                uses_continuation_spacing_after: false,
+            }
+        );
     }
 }
