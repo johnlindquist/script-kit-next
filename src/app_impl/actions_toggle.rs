@@ -17,6 +17,7 @@ impl ScriptListApp {
             if !self.has_actions() {
                 return;
             }
+            self.resync_filter_input_after_actions_if_needed(window, cx);
             // Open actions as a separate window with vibrancy blur
             self.show_actions_popup = true;
 
@@ -71,6 +72,7 @@ impl ScriptListApp {
 
                             app.show_actions_popup = false;
                             app.actions_dialog = None;
+                            app.mark_filter_resync_after_actions_if_needed();
                             // Use coordinator to pop overlay and restore previous focus
                             app.pop_focus_overlay(cx);
                             logging::log(
@@ -154,6 +156,7 @@ impl ScriptListApp {
             if let Some(sdk_actions) = sdk_actions_opt {
                 logging::log("KEY", &format!("SDK actions count: {}", sdk_actions.len()));
                 if !sdk_actions.is_empty() {
+                    self.resync_filter_input_after_actions_if_needed(window, cx);
                     // Open - push overlay to save arg prompt focus state
                     self.show_actions_popup = true;
                     self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
@@ -212,6 +215,7 @@ impl ScriptListApp {
             // Close — delegate to central close_actions_popup
             self.close_actions_popup(ActionsDialogHost::WebcamPrompt, window, cx);
         } else {
+            self.resync_filter_input_after_actions_if_needed(window, cx);
             // Open actions as a separate window — same pattern as toggle_chat_actions
             self.show_actions_popup = true;
             self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
@@ -253,6 +257,7 @@ impl ScriptListApp {
 
                             app.show_actions_popup = false;
                             app.actions_dialog = None;
+                            app.mark_filter_resync_after_actions_if_needed();
                             app.pop_focus_overlay(cx);
                             logging::log(
                                 "FOCUS",
@@ -319,6 +324,7 @@ impl ScriptListApp {
         if self.show_actions_popup || is_actions_window_open() {
             self.close_actions_popup(ActionsDialogHost::TermPrompt, window, cx);
         } else {
+            self.resync_filter_input_after_actions_if_needed(window, cx);
             // Open - create actions from terminal commands
             self.show_actions_popup = true;
             self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
@@ -412,6 +418,7 @@ impl ScriptListApp {
                 return;
             };
 
+            self.resync_filter_input_after_actions_if_needed(window, cx);
             // Open actions as a separate window with vibrancy blur
             self.show_actions_popup = true;
             // Push overlay to save chat prompt focus state
@@ -450,6 +457,7 @@ impl ScriptListApp {
 
                             app.show_actions_popup = false;
                             app.actions_dialog = None;
+                            app.mark_filter_resync_after_actions_if_needed();
                             // Use coordinator to pop overlay and restore previous focus
                             app.pop_focus_overlay(cx);
                             logging::log(
@@ -504,7 +512,6 @@ impl ScriptListApp {
         }
         cx.notify();
     }
-
 }
 
 #[cfg(test)]
@@ -516,7 +523,9 @@ mod on_close_reentrancy_tests {
         let source = fs::read_to_string("src/app_impl/actions_toggle.rs")
             .expect("Failed to read src/app_impl/actions_toggle.rs");
 
-        let set_on_close_count = source.matches("d.set_on_close(std::sync::Arc::new(move |cx| {").count();
+        let set_on_close_count = source
+            .matches("d.set_on_close(std::sync::Arc::new(move |cx| {")
+            .count();
         let defer_count = source.matches("cx.defer(move |cx| {").count();
 
         assert_eq!(
@@ -530,6 +539,32 @@ mod on_close_reentrancy_tests {
         assert!(
             source.contains("if !app.show_actions_popup && app.actions_dialog.is_none()"),
             "actions_toggle on_close callbacks should guard already-closed popup state"
+        );
+    }
+
+    #[test]
+    fn test_toggle_actions_paths_resync_filter_input_state() {
+        let source = fs::read_to_string("src/app_impl/actions_toggle.rs")
+            .expect("Failed to read src/app_impl/actions_toggle.rs");
+        let impl_source = source
+            .split("\n#[cfg(test)]")
+            .next()
+            .expect("Expected implementation section before tests");
+
+        let pre_open_resync_count = impl_source
+            .matches("self.resync_filter_input_after_actions_if_needed(window, cx);")
+            .count();
+        assert_eq!(
+            pre_open_resync_count, 5,
+            "all toggle_*_actions open paths should resync canonical filter input first"
+        );
+
+        let on_close_mark_count = impl_source
+            .matches("app.mark_filter_resync_after_actions_if_needed();")
+            .count();
+        assert_eq!(
+            on_close_mark_count, 3,
+            "actions window on_close callbacks should mark filter resync for next render"
         );
     }
 }
