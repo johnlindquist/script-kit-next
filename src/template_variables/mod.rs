@@ -6,9 +6,12 @@
 //!
 //! # Supported Placeholder Syntax
 //!
-//! Both syntaxes are accepted:
+//! Both placeholder syntaxes are interchangeable:
 //! - `${var}` (JavaScript/shell style)
 //! - `{{var}}` (Handlebars/Mustache style)
+//!
+//! A variable can be written in either form and resolves through the same
+//! lookup path.
 //!
 //! # Discovery and Prompt Promotion Rules
 //!
@@ -16,7 +19,7 @@
 //! order and intentionally skips patterns that are not prompt-friendly:
 //! - `${...}` entries containing spaces
 //! - `${...}` entries containing `(`
-//! - Handlebars control tags: `{{#if ...}}`, `{{/if}}`, and `{{else}}`
+//! - Handlebars control tokens such as `{{#if ...}}`, `{{/if}}`, and `{{else}}`
 //!
 //! This prevents expression placeholders (for example
 //! `${await clipboard.readText()}`) and flow-control markers from being
@@ -27,7 +30,7 @@
 //! Built-ins are filled from local runtime state unless overridden in
 //! [`VariableContext`].
 //!
-//! | Name | Format / Source | Example |
+//! | Name | Format | Example |
 //! | --- | --- | --- |
 //! | `clipboard` | Raw clipboard text | `copied text` |
 //! | `date` | `%Y-%m-%d` | `2026-02-12` |
@@ -35,7 +38,7 @@
 //! | `datetime` | `%Y-%m-%d %H:%M:%S` | `2026-02-12 07:14:41` |
 //! | `timestamp` | Unix seconds | `1765235681` |
 //! | `date_short` | `%m/%d/%Y` | `02/12/2026` |
-//! | `date_long` | `%B %d %Y` (implemented as `%B %d, %Y`) | `February 12, 2026` |
+//! | `date_long` | `%B %d, %Y` | `February 12, 2026` |
 //! | `date_iso` | `%Y-%m-%dT%H:%M:%S%z` | `2026-02-12T07:14:41-0800` |
 //! | `time_12h` | `%-I:%M %p` | `7:14 AM` |
 //! | `time_short` | `%H:%M` | `07:14` |
@@ -76,12 +79,13 @@ use tracing::{debug, warn};
 // Variable Context
 // ============================================================================
 
-/// Context for variable substitution, allowing custom variable values.
+/// Variable-resolution context used during template substitution.
 ///
 /// Use this when you need to:
 /// - Provide custom variable values (e.g., user inputs)
 /// - Override built-in variables for testing
 /// - Add application-specific variables
+/// - Disable built-in variable evaluation entirely
 ///
 /// Resolution order is:
 /// 1. `custom_vars` (explicit overrides)
@@ -95,7 +99,7 @@ pub struct VariableContext {
     evaluate_builtins: bool,
 }
 impl VariableContext {
-    /// Create a new empty context with built-in evaluation enabled
+    /// Create a new empty context with built-ins enabled.
     pub fn new() -> Self {
         Self {
             custom_vars: HashMap::new(),
@@ -114,27 +118,31 @@ impl VariableContext {
         }
     }
 
-    /// Set a custom variable value
+    /// Set one custom variable value.
+    ///
+    /// This value overrides any built-in with the same name.
     #[allow(dead_code)]
     pub fn set(&mut self, name: &str, value: &str) -> &mut Self {
         self.custom_vars.insert(name.to_string(), value.to_string());
         self
     }
 
-    /// Set multiple custom variables from a HashMap
+    /// Set multiple custom variable values.
+    ///
+    /// Entries in `vars` override existing custom values with the same name.
     #[allow(dead_code)]
     pub fn set_all(&mut self, vars: HashMap<String, String>) -> &mut Self {
         self.custom_vars.extend(vars);
         self
     }
 
-    /// Get a custom variable value
+    /// Get a custom variable value by name.
     #[allow(dead_code)]
     pub fn get(&self, name: &str) -> Option<&String> {
         self.custom_vars.get(name)
     }
 
-    /// Check if built-ins should be evaluated
+    /// Return whether built-in variable evaluation is enabled.
     pub fn should_evaluate_builtins(&self) -> bool {
         self.evaluate_builtins
     }
