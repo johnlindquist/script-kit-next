@@ -1,7 +1,21 @@
 # URL Actions
 
 Shared actions for all Quick Links scriptlets.
-The `{{content}}` variable contains the parent scriptlet's code (the URL for `open` tool).
+The `{{content}}` variable contains the parent scriptlet's code
+(the URL for `open` tool).
+
+<!--
+How companion .actions files work:
+- File name must match the parent bundle base name: `main.md` + `main.actions.md`.
+- Each `###` heading defines one action command.
+- Actions in this file are available from every scriptlet in the parent bundle.
+- `{{content}}` is replaced with the selected parent scriptlet's
+  fenced code content at runtime.
+- Optional action metadata can be set with HTML comments
+  (for example `description` and `shortcut`) when supported.
+-->
+
+## Shared Actions
 
 ### Copy URL
 <!-- shortcut: cmd+c -->
