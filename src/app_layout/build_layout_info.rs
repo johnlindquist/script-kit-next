@@ -31,6 +31,7 @@ impl ScriptListApp {
             AppView::ThemeChooserView { .. } => "themeChooser",
             AppView::ActionsDialog => "actionsDialog",
             AppView::WebcamView { .. } => "webcam",
+            AppView::CreationFeedback { .. } => "creationFeedback",
         };
 
         let mut components = Vec::new();

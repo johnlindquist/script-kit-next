@@ -243,6 +243,9 @@ impl Render for ScriptListApp {
                 ref filter,
                 selected_index,
             } => self.render_theme_chooser(filter, selected_index, cx),
+            AppView::CreationFeedback { ref path } => {
+                self.render_creation_feedback(path.clone(), cx)
+            }
         };
 
         // Wrap content in a container that can have the debug grid overlay

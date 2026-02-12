@@ -1022,6 +1022,16 @@ impl ScriptListApp {
                         -1,
                         None,
                     ),
+                    AppView::CreationFeedback { .. } => (
+                        "creationFeedback".to_string(),
+                        None,
+                        None,
+                        String::new(),
+                        0,
+                        0,
+                        -1,
+                        None,
+                    ),
                 };
 
                 // Focus state: we use focused_input as a proxy since we don't have Window access here.

@@ -162,6 +162,7 @@ impl ScriptListApp {
             AppView::WebcamView { .. } => "WebcamView",
             AppView::FileSearchView { .. } => "FileSearchView",
             AppView::ThemeChooserView { .. } => "ThemeChooserView",
+            AppView::CreationFeedback { .. } => "CreationFeedback",
         };
 
         let old_focused_input = self.focused_input;
