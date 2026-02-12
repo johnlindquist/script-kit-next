@@ -24,13 +24,16 @@ export default {
   // ===========================================================================
   // REQUIRED: Global Hotkey
   // ===========================================================================
-  // This keyboard shortcut controls opening the Script Kit launcher from any application.
-  // If you change only one setting in this file, this is the one to change.
-  // This is the only required setting in this file.
-  //
-  // HOTKEY EXAMPLES:
-  // - { modifiers: ['meta'], key: 'Semicolon' }  // Cmd + ;
-  // - { modifiers: ['ctrl', 'alt'], key: 'Space' }  // Ctrl + Alt + Space
+  // hotkey: Global keyboard shortcut used to open the Script Kit launcher.
+  // hotkey.modifiers: Array of modifier keys to hold.
+  // Valid values: 'meta', 'ctrl', 'alt', 'shift'
+  // hotkey.key: KeyboardEvent.code string for the non-modifier key.
+  // Common key values: 'Semicolon', 'KeyK', 'Digit1', 'Space', 'Enter'
+  // Example hotkey configs:
+  // - { modifiers: ['meta'], key: 'Semicolon' } // Cmd + ;
+  // - { modifiers: ['meta', 'shift'], key: 'KeyK' } // Cmd + Shift + K
+  // - { modifiers: ['ctrl', 'alt'], key: 'Digit1' } // Ctrl + Alt + 1
+  // - { modifiers: ['ctrl', 'alt'], key: 'Space' } // Ctrl + Alt + Space
 
   hotkey: {
     // hotkey.modifiers: Ordered list of modifier keys that must be held.
