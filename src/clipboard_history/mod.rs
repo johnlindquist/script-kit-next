@@ -31,6 +31,7 @@ mod exclusions;
 mod image;
 mod macos_paste;
 mod monitor;
+pub mod ocr;
 mod open_with;
 mod quick_look;
 mod temp_file;
@@ -91,6 +92,10 @@ pub use open_with::{get_apps_for_file, open_file_with_app, AppInfo};
 // Monitor/Init
 #[allow(unused_imports)]
 pub use monitor::{init_clipboard_history, stop_clipboard_monitoring};
+
+// OCR worker
+#[allow(unused_imports)]
+pub use ocr::{enqueue_ocr, start_ocr_worker, stop_ocr_worker};
 
 // Clipboard operations
 pub use clipboard::copy_entry_to_clipboard;
