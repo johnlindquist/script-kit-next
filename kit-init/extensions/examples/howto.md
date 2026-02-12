@@ -9,6 +9,15 @@ icon: graduation-cap
 
 This guide explains how to create custom text expansions for Script Kit.
 
+## Inline Reference
+
+- YAML frontmatter describes the full bundle (`name`, `description`, `author`, `icon`).
+- `icon` values use Lucide icon names in kebab-case (examples: `star`, `graduation-cap`) from https://lucide.dev/icons.
+- Scriptlet metadata supports two formats:
+- key/value lines (`keyword: !sig`).
+- JSON objects (`{ "keyword": "!sig", "description": "..." }`).
+- Common metadata fields: `keyword` (aliases: `expand`, `snippet`), `description`, `alias`, `shortcut`, `icon`, `schedule`, `cron`, plus boolean flags as `true`/`false`.
+
 ---
 
 # File Location
@@ -36,6 +45,8 @@ icon: star
 ```
 
 Available fields: `name`, `description`, `author`, `icon`
+
+`icon` should be a Lucide icon name in kebab-case (for example `star`, `book-open`, `graduation-cap`).
 
 ---
 
@@ -66,6 +77,26 @@ The text to expand
 | `description` | Short description | `Insert email signature` |
 | `shortcut` | Keyboard shortcut | `cmd shift s` |
 | `alias` | Alternative trigger | `sig` |
+| `icon` | Optional per-scriptlet icon | `mail`, `calendar` |
+| `schedule` | Human-friendly schedule shorthand (where supported) | `daily`, `weekday 09:00` |
+| `cron` | Cron expression schedule (where supported) | `0 9 * * 1-5` |
+| `(boolean flags)` | Feature-specific true/false options | `passive: true` |
+
+`metadata` can be either key/value lines or JSON:
+
+```metadata
+keyword: !trigger
+description: Key/value format
+shortcut: cmd shift t
+```
+
+```metadata
+{
+  "keyword": "!json",
+  "description": "JSON format",
+  "alias": "j"
+}
+```
 
 ---
 
