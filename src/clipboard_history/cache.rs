@@ -207,6 +207,26 @@ pub fn update_pin_status_in_cache(id: &str, pinned: bool) {
     update_cache_timestamp();
 }
 
+/// Update OCR text for a single cached entry.
+pub(crate) fn update_ocr_text_in_cache(id: &str, text: String) {
+    if let Ok(mut cache_arc) = get_entry_cache().lock() {
+        let mut cache = (**cache_arc).clone();
+        let mut updated = false;
+
+        if let Some(entry) = cache.iter_mut().find(|e| e.id == id) {
+            entry.ocr_text = Some(text);
+            updated = true;
+        }
+
+        if updated {
+            debug!(id = %id, "Updated OCR text in cache");
+            *cache_arc = Arc::new(cache);
+            drop(cache_arc);
+            update_cache_timestamp();
+        }
+    }
+}
+
 /// Update the cache timestamp (internal helper)
 fn update_cache_timestamp() {
     if let Some(updated) = CACHE_UPDATED.get() {
@@ -318,5 +338,17 @@ mod tests {
         // entry2 should now be first (pinned)
         assert_eq!(cached[0].id, "entry2");
         assert!(cached[0].pinned);
+    }
+
+    #[test]
+    fn test_update_ocr_text_in_cache_sets_text_when_entry_exists() {
+        init_cache_timestamp();
+        invalidate_entry_cache();
+
+        upsert_entry_in_cache(make_meta("ocr-target", 3000, false));
+        update_ocr_text_in_cache("ocr-target", "recognized text".to_string());
+
+        let cached = get_cached_entries(10);
+        assert_eq!(cached[0].ocr_text.as_deref(), Some("recognized text"));
     }
 }
