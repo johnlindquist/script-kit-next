@@ -1,5 +1,45 @@
 use super::*;
 
+pub(crate) const TERM_PROMPT_CLEAR_ACTION_ID: &str = "clear";
+pub(crate) const TERM_PROMPT_CLEAR_SHORTCUT: &str = "⌘K";
+pub(crate) const TERM_PROMPT_ACTIONS_TOGGLE_ACTION_ID: &str = "term_prompt_toggle_actions";
+pub(crate) const TERM_PROMPT_ACTIONS_TOGGLE_SHORTCUT: &str = "⌘⇧K";
+
+fn terminal_actions_for_dialog() -> Vec<crate::actions::Action> {
+    use crate::actions::{Action, ActionCategory};
+
+    let mut actions: Vec<Action> = crate::terminal::get_terminal_commands()
+        .into_iter()
+        .map(|cmd| {
+            let shortcut = if cmd.action.id() == TERM_PROMPT_CLEAR_ACTION_ID {
+                Some(TERM_PROMPT_CLEAR_SHORTCUT.to_string())
+            } else {
+                cmd.shortcut.clone()
+            };
+
+            Action::new(
+                cmd.action.id(),
+                cmd.name.clone(),
+                Some(cmd.description.clone()),
+                ActionCategory::Terminal,
+            )
+            .with_shortcut_opt(shortcut)
+        })
+        .collect();
+
+    actions.push(
+        Action::new(
+            TERM_PROMPT_ACTIONS_TOGGLE_ACTION_ID,
+            "Toggle Actions",
+            Some("Open or close the terminal actions palette"),
+            ActionCategory::Terminal,
+        )
+        .with_shortcut(TERM_PROMPT_ACTIONS_TOGGLE_SHORTCUT),
+    );
+
+    actions
+}
+
 impl ScriptListApp {
     pub(crate) fn toggle_actions(&mut self, cx: &mut Context<Self>, window: &mut Window) {
         let popup_state = self.show_actions_popup;
@@ -307,10 +347,8 @@ impl ScriptListApp {
     #[allow(dead_code)]
     pub fn toggle_terminal_commands(&mut self, cx: &mut Context<Self>, window: &mut Window) {
         use crate::actions::{
-            Action, ActionCategory, ActionsDialog, ActionsDialogConfig, AnchorPosition,
-            SearchPosition, SectionStyle,
+            ActionsDialog, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
         };
-        use crate::terminal::get_terminal_commands;
 
         logging::log(
             "KEY",
@@ -330,21 +368,7 @@ impl ScriptListApp {
             self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
 
             let theme_arc = std::sync::Arc::clone(&self.theme);
-            let terminal_commands = get_terminal_commands();
-
-            // Convert terminal commands to Actions
-            let actions: Vec<Action> = terminal_commands
-                .into_iter()
-                .map(|cmd| {
-                    Action::new(
-                        cmd.action.id(),
-                        cmd.name.clone(),
-                        Some(cmd.description.clone()),
-                        ActionCategory::Terminal,
-                    )
-                    .with_shortcut_opt(cmd.shortcut.clone())
-                })
-                .collect();
+            let actions = terminal_actions_for_dialog();
 
             // Create dialog with terminal-style config
             let config = ActionsDialogConfig {
@@ -565,6 +589,37 @@ mod on_close_reentrancy_tests {
         assert_eq!(
             on_close_mark_count, 3,
             "actions window on_close callbacks should mark filter resync for next render"
+        );
+    }
+}
+
+#[cfg(test)]
+mod terminal_command_shortcut_tests {
+    use super::*;
+
+    #[test]
+    fn test_terminal_actions_for_dialog_shows_cmd_k_for_clear_terminal() {
+        let clear_action = terminal_actions_for_dialog()
+            .into_iter()
+            .find(|action| action.id == TERM_PROMPT_CLEAR_ACTION_ID)
+            .expect("clear action should exist in terminal actions");
+
+        assert_eq!(
+            clear_action.shortcut.as_deref(),
+            Some(TERM_PROMPT_CLEAR_SHORTCUT)
+        );
+    }
+
+    #[test]
+    fn test_terminal_actions_for_dialog_adds_cmd_shift_k_toggle_shortcut() {
+        let toggle_actions = terminal_actions_for_dialog()
+            .into_iter()
+            .find(|action| action.id == TERM_PROMPT_ACTIONS_TOGGLE_ACTION_ID)
+            .expect("toggle actions entry should exist in terminal actions");
+
+        assert_eq!(
+            toggle_actions.shortcut.as_deref(),
+            Some(TERM_PROMPT_ACTIONS_TOGGLE_SHORTCUT)
         );
     }
 }

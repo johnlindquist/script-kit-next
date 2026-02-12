@@ -65,6 +65,16 @@ fn terminal_action_from_id(action_id: &str) -> Option<crate::terminal::TerminalA
     }
 }
 
+#[inline]
+fn is_term_prompt_clear_shortcut(has_cmd: bool, has_shift: bool, key: &str) -> bool {
+    has_cmd && !has_shift && ui_foundation::is_key_k(key)
+}
+
+#[inline]
+fn is_term_prompt_actions_toggle_shortcut(has_cmd: bool, has_shift: bool, key: &str) -> bool {
+    has_cmd && has_shift && ui_foundation::is_key_k(key)
+}
+
 impl ScriptListApp {
     #[inline]
     fn toggle_term_prompt_actions(
@@ -80,7 +90,11 @@ impl ScriptListApp {
     }
 
     #[inline]
-    fn execute_term_prompt_action_by_id(&mut self, action_id: &str, cx: &mut Context<Self>) -> bool {
+    fn execute_term_prompt_action_by_id(
+        &mut self,
+        action_id: &str,
+        cx: &mut Context<Self>,
+    ) -> bool {
         let Some(action) = terminal_action_from_id(action_id) else {
             return false;
         };
@@ -149,6 +163,7 @@ impl ScriptListApp {
 
                 let key = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
+                let has_shift = event.keystroke.modifiers.shift;
                 let is_quick_terminal = matches!(this.current_view, AppView::QuickTerminalView { .. });
 
                 if should_block_escape_for_non_dismissable_term(
@@ -192,13 +207,32 @@ impl ScriptListApp {
 
                 let key_char = event.keystroke.key_char.as_deref();
 
-                // Check for Cmd+K to toggle actions popup (if actions are available)
-                if has_cmd && ui_foundation::is_key_k(key) {
+                // Cmd+K clears terminal output.
+                if is_term_prompt_clear_shortcut(has_cmd, has_shift, key) {
                     let correlation_id = logging::current_correlation_id();
                     logging::log(
                         "KEY",
                         &format!(
-                            "{TERM_PROMPT_KEY_CONTEXT}: Cmd+K toggles actions (mode={actions_mode_for_handler:?}, correlation_id={correlation_id})"
+                            "{TERM_PROMPT_KEY_CONTEXT}: Cmd+K clears terminal (correlation_id={correlation_id})"
+                        ),
+                    );
+                    this.execute_term_prompt_action_by_id(
+                        crate::actions_toggle::TERM_PROMPT_CLEAR_ACTION_ID,
+                        cx,
+                    );
+                    if this.show_actions_popup {
+                        this.close_actions_popup(ActionsDialogHost::TermPrompt, window, cx);
+                    }
+                    return;
+                }
+
+                // Cmd+Shift+K toggles terminal actions.
+                if is_term_prompt_actions_toggle_shortcut(has_cmd, has_shift, key) {
+                    let correlation_id = logging::current_correlation_id();
+                    logging::log(
+                        "KEY",
+                        &format!(
+                            "{TERM_PROMPT_KEY_CONTEXT}: Cmd+Shift+K toggles actions (mode={actions_mode_for_handler:?}, correlation_id={correlation_id})"
                         ),
                     );
                     this.toggle_term_prompt_actions(actions_mode_for_handler, cx, window);
@@ -217,6 +251,11 @@ impl ScriptListApp {
                     cx,
                 ) {
                     ActionsRoute::Execute { action_id } => {
+                        if action_id == crate::actions_toggle::TERM_PROMPT_ACTIONS_TOGGLE_ACTION_ID
+                        {
+                            return;
+                        }
+
                         if this.trigger_action_by_name(&action_id, cx) {
                             return;
                         }
@@ -265,10 +304,11 @@ impl ScriptListApp {
         let footer_colors = PromptFooterColors::from_theme(&self.theme);
 
         // Footer configuration - Terminal uses "Close" as primary action (Cmd+W)
-        // and Actions as secondary (Cmd+K) when actions are available
+        // and Actions as secondary (Cmd+Shift+K) when actions are available
         let footer_config = PromptFooterConfig::new()
             .primary_label("Close")
             .primary_shortcut("⌘W")
+            .secondary_shortcut(crate::actions_toggle::TERM_PROMPT_ACTIONS_TOGGLE_SHORTCUT)
             .show_secondary(true);
 
         // Handlers for footer buttons
@@ -305,7 +345,11 @@ impl ScriptListApp {
                     .on_secondary_click(Box::new(move |_, window, cx| {
                         if let Some(app) = handle_actions.upgrade() {
                             app.update(cx, |this, cx| {
-                                this.toggle_term_prompt_actions(actions_mode_for_footer, cx, window);
+                                this.toggle_term_prompt_actions(
+                                    actions_mode_for_footer,
+                                    cx,
+                                    window,
+                                );
                             });
                         }
                     })),
@@ -362,7 +406,10 @@ mod term_prompt_render_tests {
 
     #[test]
     fn test_term_prompt_actions_mode_uses_sdk_actions_when_present() {
-        assert_eq!(term_prompt_actions_mode(true), TermPromptActionsMode::SdkActions);
+        assert_eq!(
+            term_prompt_actions_mode(true),
+            TermPromptActionsMode::SdkActions
+        );
     }
 
     #[test]
@@ -396,7 +443,10 @@ mod term_prompt_render_tests {
     fn test_terminal_action_from_id_maps_primary_command_palette_actions() {
         use crate::terminal::TerminalAction;
 
-        assert_eq!(terminal_action_from_id("clear"), Some(TerminalAction::Clear));
+        assert_eq!(
+            terminal_action_from_id("clear"),
+            Some(TerminalAction::Clear)
+        );
         assert_eq!(
             terminal_action_from_id("copy_all"),
             Some(TerminalAction::CopyAll),
@@ -410,5 +460,21 @@ mod term_prompt_render_tests {
             Some(TerminalAction::ResetZoom),
         );
         assert_eq!(terminal_action_from_id("unknown"), None);
+    }
+
+    #[test]
+    fn test_term_prompt_clear_shortcut_matches_cmd_k_without_shift() {
+        assert!(is_term_prompt_clear_shortcut(true, false, "k"));
+        assert!(is_term_prompt_clear_shortcut(true, false, "K"));
+        assert!(!is_term_prompt_clear_shortcut(true, true, "k"));
+        assert!(!is_term_prompt_clear_shortcut(false, false, "k"));
+    }
+
+    #[test]
+    fn test_term_prompt_actions_toggle_shortcut_matches_cmd_shift_k() {
+        assert!(is_term_prompt_actions_toggle_shortcut(true, true, "k"));
+        assert!(is_term_prompt_actions_toggle_shortcut(true, true, "K"));
+        assert!(!is_term_prompt_actions_toggle_shortcut(true, false, "k"));
+        assert!(!is_term_prompt_actions_toggle_shortcut(false, true, "k"));
     }
 }
