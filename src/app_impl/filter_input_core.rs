@@ -4,7 +4,8 @@ impl ScriptListApp {
     pub(crate) fn current_view_uses_shared_filter_input(&self) -> bool {
         matches!(
             self.current_view,
-            AppView::ClipboardHistoryView { .. }
+            AppView::ScriptList
+                | AppView::ClipboardHistoryView { .. }
                 | AppView::AppLauncherView { .. }
                 | AppView::WindowSwitcherView { .. }
                 | AppView::DesignGalleryView { .. }
@@ -31,5 +32,32 @@ impl ScriptListApp {
         query.clear();
         *selected_index = 0;
     }
+}
 
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    #[test]
+    fn test_current_view_uses_shared_filter_input_includes_script_list_and_builtin_views() {
+        let source = fs::read_to_string("src/app_impl/filter_input_core.rs")
+            .expect("Failed to read src/app_impl/filter_input_core.rs");
+        let required_views = [
+            "AppView::ScriptList",
+            "AppView::ClipboardHistoryView",
+            "AppView::AppLauncherView",
+            "AppView::WindowSwitcherView",
+            "AppView::DesignGalleryView",
+            "AppView::ThemeChooserView",
+            "AppView::FileSearchView",
+        ];
+
+        for view in required_views {
+            assert!(
+                source.contains(view),
+                "current_view_uses_shared_filter_input must include {}",
+                view
+            );
+        }
+    }
 }

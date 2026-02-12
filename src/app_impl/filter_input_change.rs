@@ -1,26 +1,33 @@
 use super::*;
 
 impl ScriptListApp {
-    pub(crate) fn handle_filter_input_change(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn handle_filter_input_change(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let handler_start = std::time::Instant::now();
 
         if self.suppress_filter_events {
             return;
         }
 
+        let new_text = self.gpui_input_state.read(cx).value().to_string();
+        let shared_filter_view = self.current_view_uses_shared_filter_input();
+
         // Skip filter updates when actions popup is open
         // (text input should go to actions dialog search, not main filter)
         if self.show_actions_popup {
+            if shared_filter_view && new_text != self.filter_text {
+                self.pending_filter_sync = true;
+            }
             return;
         }
 
-        let new_text = self.gpui_input_state.read(cx).value().to_string();
-
-        if self.current_view_uses_shared_filter_input() {
-            // Keep shared input state synchronized with view-scoped query/filter fields.
-            self.filter_text = new_text.clone();
-            self.pending_filter_sync = false;
+        if !shared_filter_view {
+            return;
         }
+        self.pending_filter_sync = false;
 
         // Sync filter to builtin views that use the shared input
         match &mut self.current_view {
@@ -28,6 +35,7 @@ impl ScriptListApp {
                 filter,
                 selected_index,
             } => {
+                self.filter_text = new_text.clone();
                 if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
                     self.clipboard_list_scroll_handle
                         .scroll_to_item(0, ScrollStrategy::Top);
@@ -52,6 +60,7 @@ impl ScriptListApp {
                 filter,
                 selected_index,
             } => {
+                self.filter_text = new_text.clone();
                 if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
                     self.list_scroll_handle
                         .scroll_to_item(0, ScrollStrategy::Top);
@@ -63,6 +72,7 @@ impl ScriptListApp {
                 filter,
                 selected_index,
             } => {
+                self.filter_text = new_text.clone();
                 if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
                     self.window_list_scroll_handle
                         .scroll_to_item(0, ScrollStrategy::Top);
@@ -74,6 +84,7 @@ impl ScriptListApp {
                 filter,
                 selected_index,
             } => {
+                self.filter_text = new_text.clone();
                 if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
                     self.design_gallery_scroll_handle
                         .scroll_to_item(0, ScrollStrategy::Top);
@@ -85,6 +96,7 @@ impl ScriptListApp {
                 filter,
                 selected_index,
             } => {
+                self.filter_text = new_text.clone();
                 if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
                     self.theme_chooser_scroll_handle
                         .scroll_to_item(0, ScrollStrategy::Top);
@@ -96,6 +108,7 @@ impl ScriptListApp {
                 query,
                 selected_index,
             } => {
+                self.filter_text = new_text.clone();
                 if *query != new_text {
                     logging::log(
                         "SEARCH",
@@ -468,5 +481,59 @@ impl ScriptListApp {
             );
         }
     }
+}
 
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    fn read_filter_input_change_source() -> String {
+        fs::read_to_string("src/app_impl/filter_input_change.rs")
+            .expect("Failed to read src/app_impl/filter_input_change.rs")
+    }
+
+    #[test]
+    fn test_handle_filter_input_change_marks_pending_sync_when_actions_popup_suppresses_updates() {
+        let source = read_filter_input_change_source();
+        let popup_guard_pos = source
+            .find("if self.show_actions_popup")
+            .expect("show_actions_popup guard not found");
+        let popup_guard_end = (popup_guard_pos + 260).min(source.len());
+        let popup_guard_section = &source[popup_guard_pos..popup_guard_end];
+
+        assert!(
+            popup_guard_section.contains("new_text != self.filter_text"),
+            "show_actions_popup guard must detect divergence between input text and canonical filter_text"
+        );
+        assert!(
+            popup_guard_section.contains("self.pending_filter_sync = true"),
+            "show_actions_popup guard must queue pending_filter_sync to prevent persistent UI/filter desync"
+        );
+    }
+
+    #[test]
+    fn test_handle_filter_input_change_updates_canonical_filter_text_in_shared_builtin_views() {
+        let source = read_filter_input_change_source();
+        let shared_builtin_views = [
+            "AppView::ClipboardHistoryView",
+            "AppView::AppLauncherView",
+            "AppView::WindowSwitcherView",
+            "AppView::DesignGalleryView",
+            "AppView::ThemeChooserView",
+            "AppView::FileSearchView",
+        ];
+
+        for view in shared_builtin_views {
+            let view_pos = source
+                .find(view)
+                .unwrap_or_else(|| panic!("{} match arm not found", view));
+            let view_end = (view_pos + 260).min(source.len());
+            let view_section = &source[view_pos..view_end];
+            assert!(
+                view_section.contains("self.filter_text = new_text.clone();"),
+                "{} must keep ScriptListApp.filter_text synchronized as canonical query state",
+                view
+            );
+        }
+    }
 }
