@@ -36,14 +36,7 @@ impl ScriptListApp {
 
             if let Some(first) = first_selectable {
                 if clamped_index <= first {
-                    let last_selectable = grouped_items
-                        .iter()
-                        .rposition(|item| matches!(item, GroupedListItem::Item(_)));
-                    if let Some(last) = last_selectable {
-                        (last, "keyboard_up_wrap")
-                    } else {
-                        (clamped_index, "keyboard_up_clamp")
-                    }
+                    (first, "keyboard_up_clamp")
                 } else if clamped_index > 0 {
                     let mut new_index = clamped_index - 1;
                     while new_index > 0 {
@@ -94,14 +87,7 @@ impl ScriptListApp {
 
             if let Some(last) = last_selectable {
                 if clamped_index >= last {
-                    let first_selectable = grouped_items
-                        .iter()
-                        .position(|item| matches!(item, GroupedListItem::Item(_)));
-                    if let Some(first) = first_selectable {
-                        (first, "keyboard_down_wrap")
-                    } else {
-                        (clamped_index, "keyboard_down_clamp")
-                    }
+                    (last, "keyboard_down_clamp")
                 } else if clamped_index < item_count.saturating_sub(1) {
                     let mut new_index = clamped_index + 1;
                     while new_index < item_count.saturating_sub(1) {
