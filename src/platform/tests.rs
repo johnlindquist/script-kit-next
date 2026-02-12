@@ -223,4 +223,60 @@ mod tests {
             );
         }
     }
+
+    // =========================================================================
+    // Path Action Tests
+    // =========================================================================
+
+    #[test]
+    fn test_reveal_in_finder_returns_error_for_missing_path() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create tempdir");
+        let missing_path = temp_dir.path().join("missing-script-path.js");
+
+        let result = reveal_in_finder(&missing_path);
+        let error = result.expect_err("Expected missing path to fail");
+
+        assert!(
+            error.contains("platform_reveal_in_finder_failed"),
+            "Expected structured error id, got: {error}"
+        );
+        assert!(
+            error.contains("canonicalize_path"),
+            "Expected canonicalize stage, got: {error}"
+        );
+    }
+
+    #[test]
+    fn test_open_in_default_app_returns_error_for_missing_path() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create tempdir");
+        let missing_path = temp_dir.path().join("missing-extension-path.ts");
+
+        let result = open_in_default_app(&missing_path);
+        let error = result.expect_err("Expected missing path to fail");
+
+        assert!(
+            error.contains("platform_open_in_default_app_failed"),
+            "Expected structured error id, got: {error}"
+        );
+        assert!(
+            error.contains("canonicalize_path"),
+            "Expected canonicalize stage, got: {error}"
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_copy_text_to_clipboard_returns_main_thread_error_on_test_thread() {
+        let result = copy_text_to_clipboard("script kit clipboard");
+        let error = result.expect_err("Expected AppKit main-thread guard in tests");
+
+        assert!(
+            error.contains("platform_copy_text_to_clipboard_failed"),
+            "Expected structured error id, got: {error}"
+        );
+        assert!(
+            error.contains("main_thread_required"),
+            "Expected main-thread stage, got: {error}"
+        );
+    }
 }
