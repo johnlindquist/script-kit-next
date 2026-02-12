@@ -15,14 +15,24 @@ struct SnippetPlaceholderValues {
     uuid: String,
 }
 
-/// Expands supported snippet placeholders in `text`.
+/// Expands simple built-in snippet placeholder tokens in `text`.
 ///
-/// Supported placeholders:
-/// - `{clipboard}`
-/// - `{date}` as `%Y-%m-%d`
-/// - `{time}` as `%H:%M:%S`
-/// - `{datetime}` as `%Y-%m-%d %H:%M:%S`
-/// - `{uuid}` as a v4 UUID string
+/// Supported `{token}` values and output formats:
+/// - `{clipboard}`: current clipboard text (or empty string if unavailable)
+/// - `{date}`: local date formatted as `%Y-%m-%d` (example: `2026-02-07`)
+/// - `{time}`: local time formatted as `%H:%M:%S` (example: `23:59:58`)
+/// - `{datetime}`: local date/time formatted as `%Y-%m-%d %H:%M:%S`
+///   (example: `2026-02-07 23:59:58`)
+/// - `{uuid}`: newly generated UUID v4 string
+///   (example: `123e4567-e89b-42d3-a456-426614174000`)
+///
+/// Example:
+/// - Before: `Log {datetime} | id={uuid} | clip={clipboard}`
+/// - After: `Log 2026-02-07 23:59:58 | id=123e4567-e89b-42d3-a456-426614174000 | clip=hello`
+///
+/// This `{token}` system is separate from template variables like `${var}` and `{{var}}`.
+/// Use `expand_placeholders()` only for the fixed built-ins above; use template-variable
+/// expansion for named variables provided by template data.
 #[allow(dead_code)]
 pub fn expand_placeholders(text: &str) -> String {
     let now = Local::now();
