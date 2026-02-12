@@ -29,9 +29,8 @@ export default {
   // This is the only required setting in this file.
   //
   // HOTKEY EXAMPLES:
-  // - Cmd + ; -> { modifiers: ['meta'], key: 'Semicolon' }
-  // - Cmd + K -> { modifiers: ['meta'], key: 'KeyK' }
-  // - Ctrl + Alt + Space -> { modifiers: ['ctrl', 'alt'], key: 'Space' }
+  // - { modifiers: ['meta'], key: 'Semicolon' }  // Cmd + ;
+  // - { modifiers: ['ctrl', 'alt'], key: 'Space' }  // Ctrl + Alt + Space
 
   hotkey: {
     // hotkey.modifiers: Ordered list of modifier keys that must be held.
