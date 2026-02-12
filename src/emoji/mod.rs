@@ -6,7 +6,7 @@ pub struct Emoji {
     pub category: EmojiCategory,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EmojiCategory {
     SmileysEmotion,
     PeopleBody,
@@ -17,6 +17,22 @@ pub enum EmojiCategory {
     Objects,
     Symbols,
     Flags,
+}
+
+impl EmojiCategory {
+    pub const fn display_name(self) -> &'static str {
+        match self {
+            EmojiCategory::SmileysEmotion => "Smileys & Emotion",
+            EmojiCategory::PeopleBody => "People & Body",
+            EmojiCategory::AnimalsNature => "Animals & Nature",
+            EmojiCategory::FoodDrink => "Food & Drink",
+            EmojiCategory::TravelPlaces => "Travel & Places",
+            EmojiCategory::Activities => "Activities",
+            EmojiCategory::Objects => "Objects",
+            EmojiCategory::Symbols => "Symbols",
+            EmojiCategory::Flags => "Flags",
+        }
+    }
 }
 
 macro_rules! emoji {
@@ -31,6 +47,18 @@ macro_rules! emoji {
 }
 
 use EmojiCategory::*;
+
+pub const ALL_CATEGORIES: &[EmojiCategory] = &[
+    SmileysEmotion,
+    PeopleBody,
+    AnimalsNature,
+    FoodDrink,
+    TravelPlaces,
+    Activities,
+    Objects,
+    Symbols,
+    Flags,
+];
 
 pub const EMOJIS: &[Emoji] = &[
     emoji!(
@@ -868,7 +896,333 @@ pub const EMOJIS: &[Emoji] = &[
         Objects,
         ["shopping", "cart", "store"]
     ),
+    emoji!(
+        "🥹",
+        "face holding back tears",
+        SmileysEmotion,
+        ["tears", "emotional", "moved"]
+    ),
+    emoji!(
+        "🫠",
+        "melting face",
+        SmileysEmotion,
+        ["melt", "awkward", "heat"]
+    ),
+    emoji!(
+        "🫥",
+        "dotted line face",
+        SmileysEmotion,
+        ["invisible", "faded", "awkward"]
+    ),
+    emoji!(
+        "🫨",
+        "shaking face",
+        SmileysEmotion,
+        ["shaking", "shocked", "vibrating"]
+    ),
+    emoji!(
+        "🤥",
+        "lying face",
+        SmileysEmotion,
+        ["lie", "pinocchio", "dishonest"]
+    ),
+    emoji!(
+        "😮‍💨",
+        "face exhaling",
+        SmileysEmotion,
+        ["exhale", "relief", "sigh"]
+    ),
+    emoji!(
+        "😶‍🌫️",
+        "face in clouds",
+        SmileysEmotion,
+        ["foggy", "confused", "dazed"]
+    ),
+    emoji!(
+        "😵‍💫",
+        "face with spiral eyes",
+        SmileysEmotion,
+        ["spiral", "dizzy", "hypnotized"]
+    ),
+    emoji!(
+        "🫵",
+        "index pointing at the viewer",
+        PeopleBody,
+        ["you", "point", "finger"]
+    ),
+    emoji!(
+        "🫱",
+        "rightwards hand",
+        PeopleBody,
+        ["hand", "right", "reach"]
+    ),
+    emoji!(
+        "🫲",
+        "leftwards hand",
+        PeopleBody,
+        ["hand", "left", "reach"]
+    ),
+    emoji!("🦶", "foot", PeopleBody, ["foot", "body", "kick"]),
+    emoji!("🦵", "leg", PeopleBody, ["leg", "body", "step"]),
+    emoji!(
+        "🦻",
+        "ear with hearing aid",
+        PeopleBody,
+        ["ear", "hearing", "accessibility"]
+    ),
+    emoji!("🫦", "biting lip", PeopleBody, ["lip", "nervous", "flirty"]),
+    emoji!(
+        "🫀",
+        "anatomical heart",
+        PeopleBody,
+        ["heart", "organ", "anatomy"]
+    ),
+    emoji!("🐺", "wolf", AnimalsNature, ["wolf", "wild", "canine"]),
+    emoji!("🐗", "boar", AnimalsNature, ["boar", "wild", "pig"]),
+    emoji!(
+        "🐴",
+        "horse face",
+        AnimalsNature,
+        ["horse", "animal", "farm"]
+    ),
+    emoji!("🦄", "unicorn", AnimalsNature, ["unicorn", "magic", "myth"]),
+    emoji!("🐔", "chicken", AnimalsNature, ["chicken", "bird", "farm"]),
+    emoji!("🐧", "penguin", AnimalsNature, ["penguin", "bird", "cold"]),
+    emoji!("🐦", "bird", AnimalsNature, ["bird", "animal", "tweet"]),
+    emoji!("🐢", "turtle", AnimalsNature, ["turtle", "animal", "slow"]),
+    emoji!(
+        "🐬",
+        "dolphin",
+        AnimalsNature,
+        ["dolphin", "ocean", "smart"]
+    ),
+    emoji!("🍌", "banana", FoodDrink, ["banana", "fruit", "food"]),
+    emoji!("🍇", "grapes", FoodDrink, ["grapes", "fruit", "food"]),
+    emoji!(
+        "🍓",
+        "strawberry",
+        FoodDrink,
+        ["strawberry", "fruit", "sweet"]
+    ),
+    emoji!("🥑", "avocado", FoodDrink, ["avocado", "fruit", "food"]),
+    emoji!("🥓", "bacon", FoodDrink, ["bacon", "meat", "breakfast"]),
+    emoji!("🍗", "poultry leg", FoodDrink, ["chicken", "meat", "food"]),
+    emoji!("🍞", "bread", FoodDrink, ["bread", "food", "baked"]),
+    emoji!("🧀", "cheese wedge", FoodDrink, ["cheese", "dairy", "food"]),
+    emoji!("🍰", "shortcake", FoodDrink, ["cake", "dessert", "sweet"]),
+    emoji!("🥗", "green salad", FoodDrink, ["salad", "healthy", "food"]),
+    emoji!(
+        "🚗",
+        "automobile",
+        TravelPlaces,
+        ["car", "vehicle", "drive"]
+    ),
+    emoji!("🚕", "taxi", TravelPlaces, ["taxi", "cab", "vehicle"]),
+    emoji!(
+        "🚙",
+        "sport utility vehicle",
+        TravelPlaces,
+        ["suv", "car", "vehicle"]
+    ),
+    emoji!("🚌", "bus", TravelPlaces, ["bus", "transit", "vehicle"]),
+    emoji!(
+        "🚎",
+        "trolleybus",
+        TravelPlaces,
+        ["trolley", "bus", "transit"]
+    ),
+    emoji!(
+        "🚓",
+        "police car",
+        TravelPlaces,
+        ["police", "car", "emergency"]
+    ),
+    emoji!(
+        "🚑",
+        "ambulance",
+        TravelPlaces,
+        ["ambulance", "medical", "emergency"]
+    ),
+    emoji!(
+        "🚒",
+        "fire engine",
+        TravelPlaces,
+        ["fire", "truck", "emergency"]
+    ),
+    emoji!(
+        "🚚",
+        "delivery truck",
+        TravelPlaces,
+        ["truck", "delivery", "shipping"]
+    ),
+    emoji!("🚲", "bicycle", TravelPlaces, ["bike", "bicycle", "ride"]),
+    emoji!(
+        "✈️",
+        "airplane",
+        TravelPlaces,
+        ["plane", "travel", "flight"]
+    ),
+    emoji!("🚀", "rocket", TravelPlaces, ["rocket", "space", "launch"]),
+    emoji!(
+        "🚂",
+        "locomotive",
+        TravelPlaces,
+        ["train", "locomotive", "rail"]
+    ),
+    emoji!(
+        "🚉",
+        "railway station",
+        TravelPlaces,
+        ["station", "train", "travel"]
+    ),
+    emoji!("🏠", "house", TravelPlaces, ["house", "home", "building"]),
+    emoji!("🏨", "hotel", TravelPlaces, ["hotel", "building", "travel"]),
+    emoji!(
+        "🗽",
+        "statue of liberty",
+        TravelPlaces,
+        ["landmark", "nyc", "statue"]
+    ),
+    emoji!("⛵", "sailboat", TravelPlaces, ["boat", "sail", "water"]),
+    emoji!(
+        "⚽",
+        "soccer ball",
+        Activities,
+        ["soccer", "football", "sport"]
+    ),
+    emoji!(
+        "🏀",
+        "basketball",
+        Activities,
+        ["basketball", "sport", "ball"]
+    ),
+    emoji!(
+        "🏈",
+        "american football",
+        Activities,
+        ["football", "sport", "nfl"]
+    ),
+    emoji!("⚾", "baseball", Activities, ["baseball", "sport", "ball"]),
+    emoji!("🎾", "tennis", Activities, ["tennis", "sport", "racket"]),
+    emoji!(
+        "🏐",
+        "volleyball",
+        Activities,
+        ["volleyball", "sport", "ball"]
+    ),
+    emoji!(
+        "🏓",
+        "ping pong",
+        Activities,
+        ["pingpong", "table tennis", "sport"]
+    ),
+    emoji!(
+        "🏸",
+        "badminton",
+        Activities,
+        ["badminton", "sport", "racket"]
+    ),
+    emoji!(
+        "🥊",
+        "boxing glove",
+        Activities,
+        ["boxing", "fight", "sport"]
+    ),
+    emoji!(
+        "🎮",
+        "video game",
+        Activities,
+        ["gaming", "controller", "play"]
+    ),
+    emoji!("🎯", "direct hit", Activities, ["target", "dart", "game"]),
+    emoji!("🎲", "game die", Activities, ["dice", "game", "luck"]),
+    emoji!(
+        "🖥️",
+        "desktop computer",
+        Objects,
+        ["desktop", "computer", "monitor"]
+    ),
+    emoji!("🖨️", "printer", Objects, ["printer", "print", "office"]),
+    emoji!(
+        "🕹️",
+        "joystick",
+        Objects,
+        ["joystick", "game", "controller"]
+    ),
+    emoji!("💽", "computer disk", Objects, ["disk", "storage", "data"]),
+    emoji!("📺", "television", Objects, ["tv", "screen", "video"]),
+    emoji!("📚", "books", Objects, ["books", "study", "read"]),
+    emoji!("✏️", "pencil", Objects, ["pencil", "write", "school"]),
+    emoji!("🧰", "toolbox", Objects, ["toolbox", "tools", "repair"]),
+    emoji!("🧲", "magnet", Objects, ["magnet", "science", "metal"]),
+    emoji!("🧪", "test tube", Objects, ["test", "science", "lab"]),
+    emoji!("✨", "sparkles", Symbols, ["sparkle", "shine", "magic"]),
+    emoji!("⭐", "star", Symbols, ["star", "favorite", "rating"]),
+    emoji!("🌟", "glowing star", Symbols, ["star", "glow", "sparkle"]),
+    emoji!("🔔", "bell", Symbols, ["bell", "notification", "alert"]),
+    emoji!("🎵", "musical note", Symbols, ["music", "note", "song"]),
+    emoji!("✅", "check mark button", Symbols, ["check", "done", "yes"]),
+    emoji!("❌", "cross mark", Symbols, ["cross", "no", "cancel"]),
+    emoji!("⚠️", "warning", Symbols, ["warning", "alert", "caution"]),
+    emoji!(
+        "🚫",
+        "prohibited",
+        Symbols,
+        ["prohibited", "no", "forbidden"]
+    ),
+    emoji!(
+        "♻️",
+        "recycling symbol",
+        Symbols,
+        ["recycle", "green", "eco"]
+    ),
+    emoji!("🆗", "OK button", Symbols, ["ok", "button", "agree"]),
+    emoji!(
+        "🇺🇸",
+        "flag: United States",
+        Flags,
+        ["flag", "usa", "america"]
+    ),
+    emoji!("🇨🇦", "flag: Canada", Flags, ["flag", "canada", "country"]),
+    emoji!(
+        "🇬🇧",
+        "flag: United Kingdom",
+        Flags,
+        ["flag", "uk", "britain"]
+    ),
+    emoji!("🇫🇷", "flag: France", Flags, ["flag", "france", "country"]),
+    emoji!("🇩🇪", "flag: Germany", Flags, ["flag", "germany", "country"]),
+    emoji!("🇯🇵", "flag: Japan", Flags, ["flag", "japan", "country"]),
+    emoji!(
+        "🇰🇷",
+        "flag: South Korea",
+        Flags,
+        ["flag", "korea", "country"]
+    ),
+    emoji!("🇮🇳", "flag: India", Flags, ["flag", "india", "country"]),
+    emoji!("🇧🇷", "flag: Brazil", Flags, ["flag", "brazil", "country"]),
+    emoji!(
+        "🇦🇺",
+        "flag: Australia",
+        Flags,
+        ["flag", "australia", "country"]
+    ),
 ];
+
+pub fn emojis_by_category(category: EmojiCategory) -> Vec<&'static Emoji> {
+    EMOJIS
+        .iter()
+        .filter(|emoji| emoji.category == category)
+        .collect()
+}
+
+pub fn grouped_emojis() -> Vec<(EmojiCategory, Vec<&'static Emoji>)> {
+    ALL_CATEGORIES
+        .iter()
+        .copied()
+        .map(|category| (category, emojis_by_category(category)))
+        .collect()
+}
 
 pub fn search_emojis(query: &str) -> Vec<&Emoji> {
     let query = query.trim().to_ascii_lowercase();
@@ -893,8 +1247,83 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_emoji_database_has_200_entries() {
-        assert_eq!(EMOJIS.len(), 200);
+    fn test_emoji_database_has_296_entries() {
+        assert_eq!(EMOJIS.len(), 296);
+    }
+
+    #[test]
+    fn test_emoji_category_display_name_returns_human_readable_labels() {
+        assert_eq!(SmileysEmotion.display_name(), "Smileys & Emotion");
+        assert_eq!(PeopleBody.display_name(), "People & Body");
+        assert_eq!(AnimalsNature.display_name(), "Animals & Nature");
+        assert_eq!(FoodDrink.display_name(), "Food & Drink");
+        assert_eq!(TravelPlaces.display_name(), "Travel & Places");
+        assert_eq!(Activities.display_name(), "Activities");
+        assert_eq!(Objects.display_name(), "Objects");
+        assert_eq!(Symbols.display_name(), "Symbols");
+        assert_eq!(Flags.display_name(), "Flags");
+    }
+
+    #[test]
+    fn test_all_categories_has_expected_display_order() {
+        assert_eq!(
+            ALL_CATEGORIES,
+            &[
+                SmileysEmotion,
+                PeopleBody,
+                AnimalsNature,
+                FoodDrink,
+                TravelPlaces,
+                Activities,
+                Objects,
+                Symbols,
+                Flags
+            ]
+        );
+    }
+
+    #[test]
+    fn test_emojis_by_category_returns_only_requested_category() {
+        let travel_emojis = emojis_by_category(TravelPlaces);
+        assert!(!travel_emojis.is_empty());
+        assert!(travel_emojis
+            .iter()
+            .all(|emoji| emoji.category == TravelPlaces));
+    }
+
+    #[test]
+    fn test_grouped_emojis_returns_all_categories_in_display_order() {
+        let grouped = grouped_emojis();
+        assert_eq!(grouped.len(), ALL_CATEGORIES.len());
+
+        for ((category, emojis), expected_category) in
+            grouped.iter().zip(ALL_CATEGORIES.iter().copied())
+        {
+            assert_eq!(*category, expected_category);
+            assert!(emojis
+                .iter()
+                .all(|emoji| emoji.category == expected_category));
+        }
+    }
+
+    #[test]
+    fn test_grouped_emojis_covers_all_entries() {
+        let grouped = grouped_emojis();
+        let total_grouped_emojis: usize = grouped.iter().map(|(_, emojis)| emojis.len()).sum();
+        assert_eq!(total_grouped_emojis, EMOJIS.len());
+    }
+
+    #[test]
+    fn test_emoji_database_meets_category_targets() {
+        assert!(emojis_by_category(SmileysEmotion).len() >= 50);
+        assert!(emojis_by_category(PeopleBody).len() >= 30);
+        assert!(emojis_by_category(AnimalsNature).len() >= 20);
+        assert!(emojis_by_category(FoodDrink).len() >= 15);
+        assert!(emojis_by_category(TravelPlaces).len() >= 15);
+        assert!(emojis_by_category(Activities).len() >= 10);
+        assert!(emojis_by_category(Objects).len() >= 15);
+        assert!(emojis_by_category(Symbols).len() >= 15);
+        assert!(emojis_by_category(Flags).len() >= 10);
     }
 
     #[test]
