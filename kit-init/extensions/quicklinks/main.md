@@ -4,6 +4,16 @@ description: Quick access to commonly used websites
 author: Script Kit
 icon: link
 ---
+<!--
+Quick Links authoring notes:
+- YAML frontmatter fields:
+  - `name`: Script Kit title for this bundle.
+  - `description`: Summary shown in Script Kit.
+  - `author`: Author label.
+  - `icon`: Lucide icon name (lowercase kebab-case), for example `link` or `book-open`.
+- Each scriptlet is defined by a `##` heading followed by a fenced `open` block.
+- The value inside each `open` fence is opened as a URL or file path.
+-->
 
 # Quick Links
 

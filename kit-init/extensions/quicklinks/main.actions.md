@@ -1,4 +1,13 @@
 # URL Actions
+<!--
+Quick Links actions notes:
+- Each `###` heading defines a shared action available to all scriptlets
+  in `main.md`.
+- `{{content}}` is replaced with the selected parent scriptlet's
+  fenced code content.
+- Actions can include their own metadata comments
+  (for example `description` and `shortcut`).
+-->
 
 Shared actions for all Quick Links scriptlets.
 The `{{content}}` variable contains the parent scriptlet's code
