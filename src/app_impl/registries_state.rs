@@ -154,6 +154,7 @@ impl ScriptListApp {
             AppView::TemplatePrompt { .. } => "TemplatePrompt",
             AppView::ChatPrompt { .. } => "ChatPrompt",
             AppView::ClipboardHistoryView { .. } => "ClipboardHistoryView",
+            AppView::EmojiPickerView { .. } => "EmojiPickerView",
             AppView::AppLauncherView { .. } => "AppLauncherView",
             AppView::WindowSwitcherView { .. } => "WindowSwitcherView",
             AppView::DesignGalleryView { .. } => "DesignGalleryView",

@@ -6,6 +6,7 @@ impl ScriptListApp {
             self.current_view,
             AppView::ScriptList
                 | AppView::ClipboardHistoryView { .. }
+                | AppView::EmojiPickerView { .. }
                 | AppView::AppLauncherView { .. }
                 | AppView::WindowSwitcherView { .. }
                 | AppView::DesignGalleryView { .. }
@@ -45,6 +46,7 @@ mod tests {
         let required_views = [
             "AppView::ScriptList",
             "AppView::ClipboardHistoryView",
+            "AppView::EmojiPickerView",
             "AppView::AppLauncherView",
             "AppView::WindowSwitcherView",
             "AppView::DesignGalleryView",

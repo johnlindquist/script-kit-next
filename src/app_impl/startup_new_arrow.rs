@@ -207,12 +207,26 @@
                                     }
 
                                     // Main menu: handle list navigation + input history
+                                    const HISTORY: &str = "HISTORY";
                                     if is_up {
-                                        // Input history: only when filter empty AND at top of list
-                                        if this.filter_text.is_empty() && this.selected_index == 0 {
+                                        let (grouped_items, _) = this.get_grouped_results_cached();
+                                        let first_item_position = grouped_items.iter().position(
+                                            |item| {
+                                                matches!(
+                                                    item,
+                                                    crate::list_item::GroupedListItem::Item(_)
+                                                )
+                                            },
+                                        );
+                                        let at_top_of_list = first_item_position
+                                            .map(|position| this.selected_index <= position)
+                                            .unwrap_or(true);
+                                        let in_history = this.input_history.current_index().is_some();
+
+                                        if in_history || at_top_of_list {
                                             if let Some(text) = this.input_history.navigate_up() {
                                                 logging::log(
-                                                    "HISTORY",
+                                                    HISTORY,
                                                     &format!("Recalled: {}", text),
                                                 );
                                                 this.filter_text = text.clone();
@@ -232,18 +246,17 @@
                                                 );
                                                 this.queue_filter_compute(text, cx);
                                                 cx.notify();
-                                                cx.stop_propagation();
-                                                return;
                                             }
+                                            cx.stop_propagation();
+                                            return;
                                         }
-                                        // Normal up navigation - use move_selection_up to skip section headers
+
                                         this.move_selection_up(cx);
                                     } else if is_down {
-                                        // Down during history navigation returns to newer entries
                                         if this.input_history.current_index().is_some() {
                                             if let Some(text) = this.input_history.navigate_down() {
                                                 logging::log(
-                                                    "HISTORY",
+                                                    HISTORY,
                                                     &format!("Recalled: {}", text),
                                                 );
                                                 this.filter_text = text.clone();
@@ -263,10 +276,7 @@
                                                 );
                                                 this.queue_filter_compute(text, cx);
                                                 cx.notify();
-                                                cx.stop_propagation();
-                                                return;
                                             } else {
-                                                // Past newest - clear to empty
                                                 this.input_history.reset_navigation();
                                                 this.filter_text.clear();
                                                 this.gpui_input_state.update(
@@ -283,11 +293,11 @@
                                                 );
                                                 this.queue_filter_compute(String::new(), cx);
                                                 cx.notify();
-                                                cx.stop_propagation();
-                                                return;
                                             }
+                                            cx.stop_propagation();
+                                            return;
                                         }
-                                        // Normal down navigation - use move_selection_down to skip section headers
+
                                         this.move_selection_down(cx);
                                     }
                                     cx.stop_propagation();

@@ -342,6 +342,7 @@ impl ScriptListApp {
             list_scroll_handle: UniformListScrollHandle::new(),
             arg_list_scroll_handle: UniformListScrollHandle::new(),
             clipboard_list_scroll_handle: UniformListScrollHandle::new(),
+            emoji_scroll_handle: UniformListScrollHandle::new(),
             window_list_scroll_handle: UniformListScrollHandle::new(),
             design_gallery_scroll_handle: UniformListScrollHandle::new(),
             file_search_scroll_handle: UniformListScrollHandle::new(),
@@ -1330,6 +1331,7 @@ impl ScriptListApp {
                             let host = match &this.current_view {
                                 AppView::ScriptList => Some(ActionsDialogHost::MainList),
                                 AppView::ClipboardHistoryView { .. } => Some(ActionsDialogHost::ClipboardHistory),
+                                AppView::EmojiPickerView { .. } => Some(ActionsDialogHost::EmojiPicker),
                                 AppView::ChatPrompt { .. } => Some(ActionsDialogHost::ChatPrompt),
                                 AppView::ArgPrompt { .. } => Some(ActionsDialogHost::ArgPrompt),
                                 AppView::DivPrompt { .. } => Some(ActionsDialogHost::DivPrompt),

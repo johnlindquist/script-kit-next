@@ -114,6 +114,7 @@ end try"#,
     }
 }
 
+#[cfg(test)]
 fn emoji_picker_label(emoji: &script_kit_gpui::emoji::Emoji) -> String {
     format!("{}  {}", emoji.emoji, emoji.name)
 }
@@ -493,96 +494,20 @@ impl ScriptListApp {
             builtins::BuiltInFeature::EmojiPicker => {
                 logging::log(
                     "EXEC",
-                    "correlation_id=builtin-emoji-picker-start action=show-emoji-list",
+                    "correlation_id=builtin-emoji-picker-start action=show-emoji-grid",
                 );
-
-                #[cfg(target_os = "macos")]
-                {
-                    let emoji_labels: Vec<String> = script_kit_gpui::emoji::EMOJIS
-                        .iter()
-                        .map(emoji_picker_label)
-                        .collect();
-
-                    match choose_from_list("Select an emoji to copy", "Copy", &emoji_labels) {
-                        Ok(Some(selected_label)) => {
-                            if let Some(index) =
-                                emoji_labels.iter().position(|label| label == &selected_label)
-                            {
-                                let selected_emoji = script_kit_gpui::emoji::EMOJIS[index].emoji;
-                                let clipboard_item =
-                                    gpui::ClipboardItem::new_string(selected_emoji.to_string());
-                                cx.write_to_clipboard(clipboard_item);
-                                logging::log(
-                                    "EXEC",
-                                    &format!(
-                                        "correlation_id=builtin-emoji-picker-success emoji=\"{}\"",
-                                        selected_emoji
-                                    ),
-                                );
-                                self.show_hud(
-                                    format!("Copied {} to clipboard", selected_emoji),
-                                    Some(1600),
-                                    cx,
-                                );
-                                self.close_and_reset_window(cx);
-                            } else {
-                                logging::log(
-                                    "ERROR",
-                                    &format!(
-                                        "correlation_id=builtin-emoji-picker-missing-selection selected_label=\"{}\"",
-                                        selected_label
-                                    ),
-                                );
-                                self.toast_manager.push(
-                                    components::toast::Toast::error(
-                                        "Selected emoji could not be resolved.",
-                                        &self.theme,
-                                    )
-                                    .duration_ms(Some(3500)),
-                                );
-                                cx.notify();
-                            }
-                        }
-                        Ok(None) => {
-                            logging::log(
-                                "EXEC",
-                                "correlation_id=builtin-emoji-picker-cancelled",
-                            );
-                        }
-                        Err(error) => {
-                            logging::log(
-                                "ERROR",
-                                &format!(
-                                    "correlation_id=builtin-emoji-picker-error attempted=list-emojis error={}",
-                                    error
-                                ),
-                            );
-                            self.toast_manager.push(
-                                components::toast::Toast::error(
-                                    format!("Failed to open Emoji Picker: {}", error),
-                                    &self.theme,
-                                )
-                                .duration_ms(Some(5000)),
-                            );
-                            cx.notify();
-                        }
-                    }
-                }
-                #[cfg(not(target_os = "macos"))]
-                {
-                    logging::log(
-                        "WARN",
-                        "correlation_id=builtin-emoji-picker-unsupported platform=non-macos",
-                    );
-                    self.toast_manager.push(
-                        components::toast::Toast::warning(
-                            "Emoji Picker currently requires macOS.",
-                            &self.theme,
-                        )
-                        .duration_ms(Some(3000)),
-                    );
-                    cx.notify();
-                }
+                self.filter_text = String::new();
+                self.pending_filter_sync = true;
+                self.pending_placeholder = Some("Search Emoji & Symbols...".to_string());
+                self.current_view = AppView::EmojiPickerView {
+                    filter: String::new(),
+                    selected_index: 0,
+                    selected_category: None,
+                };
+                self.hovered_index = None;
+                self.opened_from_main_menu = true;
+                self.pending_focus = Some(FocusTarget::MainFilter);
+                cx.notify();
             }
             builtins::BuiltInFeature::Quicklinks => {
                 logging::log(

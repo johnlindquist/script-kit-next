@@ -1078,10 +1078,23 @@ impl ActionsDialog {
             &self.filtered_actions,
             self.config.section_style,
         );
-        // Update list state item count
         let old_count = self.list_state.item_count();
         let new_count = self.grouped_items.len();
-        self.list_state.splice(0..old_count, new_count);
+
+        // Workaround for GPUI ListState stale layout: when transitioning
+        // from 0 items back to N items (e.g., type "nice" → 0 results,
+        // then delete all chars → all items restored), splice(0..0, N)
+        // doesn't fully recalculate the list's internal layout heights.
+        // Recreating the ListState forces a clean layout pass.
+        if old_count == 0 && new_count > 0 {
+            self.list_state = ListState::new(
+                new_count,
+                ListAlignment::Top,
+                px(ACTIONS_DIALOG_LIST_OVERDRAW_PX),
+            );
+        } else {
+            self.list_state.splice(0..old_count, new_count);
+        }
     }
 
     fn selected_action_index(&self) -> Option<usize> {
