@@ -270,6 +270,74 @@ impl ScriptListApp {
             )
             .into_any_element()
     }
+
+    pub(crate) fn render_creation_feedback(
+        &mut self,
+        path: std::path::PathBuf,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = self.theme.clone();
+        let entity = cx.entity().downgrade();
+        let entity_dismiss = entity.clone();
+
+        let panel = prompts::CreationFeedbackPanel::new(path, theme)
+            .on_reveal_in_finder(Box::new(move |p, _window, _cx| {
+                if let Err(e) = crate::platform::reveal_in_finder(p) {
+                    tracing::warn!(error = %e, "reveal_in_finder failed");
+                }
+            }))
+            .on_copy_path(Box::new(move |p, _window, cx| {
+                if let Err(e) =
+                    crate::platform::copy_text_to_clipboard(&p.to_string_lossy())
+                {
+                    tracing::warn!(error = %e, "copy_text_to_clipboard failed");
+                } else if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.show_hud("Path copied".to_string(), None, cx);
+                    });
+                }
+            }))
+            .on_open(Box::new(move |p, _window, _cx| {
+                if let Err(e) = crate::platform::open_in_default_app(p) {
+                    tracing::warn!(error = %e, "open_in_default_app failed");
+                }
+            }))
+            .on_dismiss(Box::new(move |_window, cx| {
+                if let Some(app) = entity_dismiss.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.current_view = AppView::ScriptList;
+                        this.request_script_list_main_filter_focus(cx);
+                        cx.notify();
+                    });
+                }
+            }));
+
+        // Handle Enter/Escape to dismiss
+        let handle_key = cx.listener(move |this, event: &gpui::KeyDownEvent, _window, cx| {
+            let key = event.keystroke.key.as_str();
+            if crate::ui_foundation::is_key_escape(key)
+                || key.eq_ignore_ascii_case("enter")
+            {
+                this.current_view = AppView::ScriptList;
+                this.request_script_list_main_filter_focus(cx);
+                cx.notify();
+            }
+        });
+
+        gpui::div()
+            .id("creation-feedback-shell")
+            .key_context("CreationFeedback")
+            .track_focus(&self.focus_handle)
+            .on_key_down(handle_key)
+            .w_full()
+            .h_full()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .child(panel)
+            .into_any_element()
+    }
 }
 
 #[cfg(test)]

@@ -50,6 +50,7 @@ impl ScriptListApp {
             AppView::ThemeChooserView { .. } => "ThemeChooser",
             AppView::ActionsDialog => "ActionsDialog",
             AppView::WebcamView { .. } => "Webcam",
+            AppView::CreationFeedback { .. } => "CreationFeedback",
         };
 
         // Header bounds (includes padding + input + divider) - common to all views

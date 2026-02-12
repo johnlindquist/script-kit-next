@@ -372,7 +372,7 @@ impl AiApp {
     fn infer_sidebar_preview_role_from_message_count(msg_count: usize) -> Option<MessageRole> {
         if msg_count == 0 {
             None
-        } else if msg_count % 2 == 0 {
+        } else if msg_count.is_multiple_of(2) {
             Some(MessageRole::Assistant)
         } else {
             Some(MessageRole::User)

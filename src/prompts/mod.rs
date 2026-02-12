@@ -19,6 +19,7 @@ pub mod base;
 pub mod chat;
 pub mod commands;
 pub mod context;
+mod creation_feedback;
 pub mod div;
 mod drop;
 pub mod env;
@@ -45,6 +46,7 @@ pub use chat::{
     ChatClaudeCodeCallback, ChatConfigureCallback, ChatEscapeCallback, ChatPrompt,
     ChatSubmitCallback,
 };
+pub use creation_feedback::CreationFeedbackPanel;
 pub use div::{ContainerOptions, ContainerPadding, DivPrompt};
 #[cfg(target_os = "macos")]
 pub use webcam::WebcamPrompt;

@@ -125,6 +125,11 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
+    /// Showing creation feedback with file path and quick actions after script/extension creation.
+    /// Requires explicit dismiss (Enter/Escape/button) — non-dismissable by click-outside.
+    CreationFeedback {
+        path: std::path::PathBuf,
+    },
 }
 
 /// Wrapper to hold a script session that can be shared across async boundaries
