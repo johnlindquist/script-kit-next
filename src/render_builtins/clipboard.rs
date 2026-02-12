@@ -48,7 +48,15 @@ impl ScriptListApp {
             self.cached_clipboard_entries
                 .iter()
                 .enumerate()
-                .filter(|(_, e)| e.text_preview.to_lowercase().contains(&filter_lower))
+                .filter(|(_, e)| {
+                    let matches = e.text_preview.to_lowercase().contains(&filter_lower)
+                        || e.ocr_text
+                            .as_deref()
+                            .unwrap_or("")
+                            .to_lowercase()
+                            .contains(&filter_lower);
+                    matches
+                })
                 .collect()
         };
         let filtered_len = filtered_entries.len();
@@ -124,7 +132,15 @@ impl ScriptListApp {
                         this.cached_clipboard_entries
                             .iter()
                             .enumerate()
-                            .filter(|(_, e)| e.text_preview.to_lowercase().contains(&filter_lower))
+                            .filter(|(_, e)| {
+                                let matches = e.text_preview.to_lowercase().contains(&filter_lower)
+                                    || e.ocr_text
+                                        .as_deref()
+                                        .unwrap_or("")
+                                        .to_lowercase()
+                                        .contains(&filter_lower);
+                                matches
+                            })
                             .collect()
                     };
                     let filtered_len = filtered_entries.len();
