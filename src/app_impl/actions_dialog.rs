@@ -205,6 +205,35 @@ impl ScriptListApp {
         result
     }
 
+    fn should_preserve_main_filter_while_actions_open(&self) -> bool {
+        matches!(self.current_view, AppView::ScriptList)
+            || self.current_view_uses_shared_filter_input()
+    }
+
+    pub(crate) fn mark_filter_resync_after_actions_if_needed(&mut self) {
+        if !self.should_preserve_main_filter_while_actions_open() {
+            return;
+        }
+
+        self.pending_filter_sync = true;
+        logging::log(
+            "ACTIONS",
+            &format!(
+                "ACTIONS_FILTER_RESYNC marked pending (show_actions_popup={}, filter_text='{}')",
+                self.show_actions_popup, self.filter_text
+            ),
+        );
+    }
+
+    pub(crate) fn resync_filter_input_after_actions_if_needed(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.mark_filter_resync_after_actions_if_needed();
+        self.sync_filter_input_if_needed(window, cx);
+    }
+
     /// Close the actions popup and restore focus based on host type.
     ///
     /// This centralizes close behavior, ensuring cx.notify() is always called
@@ -241,6 +270,7 @@ impl ScriptListApp {
 
         self.show_actions_popup = false;
         self.actions_dialog = None;
+        self.resync_filter_input_after_actions_if_needed(window, cx);
 
         // Close the separate actions window if open
         // This ensures consistent behavior whether closing via Cmd+K, Escape, backdrop click,
@@ -276,7 +306,6 @@ impl ScriptListApp {
             ),
         );
     }
-
 }
 
 #[cfg(test)]
@@ -302,6 +331,28 @@ mod close_actions_popup_regression_tests {
         assert!(
             on_close_pos < clear_dialog_pos,
             "close_actions_popup must invoke on_close before clearing actions_dialog state"
+        );
+    }
+
+    #[test]
+    fn test_close_actions_popup_resyncs_filter_input_after_clearing_dialog_state() {
+        let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
+            .expect("Failed to read src/app_impl/actions_dialog.rs");
+        let close_fn_start = source
+            .find("pub(crate) fn close_actions_popup")
+            .expect("close_actions_popup function not found");
+        let close_fn = &source[close_fn_start..];
+
+        let clear_dialog_pos = close_fn
+            .find("self.actions_dialog = None;")
+            .expect("close_actions_popup must clear actions_dialog state");
+        let resync_pos = close_fn
+            .find("self.resync_filter_input_after_actions_if_needed(window, cx);")
+            .expect("close_actions_popup must resync canonical filter input state");
+
+        assert!(
+            clear_dialog_pos < resync_pos,
+            "close_actions_popup must resync filter input after clearing actions dialog state"
         );
     }
 }
