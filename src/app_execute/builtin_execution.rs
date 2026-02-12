@@ -10,6 +10,17 @@ fn favorites_loaded_message(count: usize) -> String {
     }
 }
 
+fn created_file_path_for_feedback(path: &std::path::Path) -> std::path::PathBuf {
+    if path.is_absolute() {
+        return path.to_path_buf();
+    }
+
+    match std::env::current_dir() {
+        Ok(current_dir) => current_dir.join(path),
+        Err(_) => path.to_path_buf(),
+    }
+}
+
 #[cfg(target_os = "macos")]
 fn applescript_escape(text: &str) -> String {
     text.replace('\\', "\\\\")
@@ -1296,7 +1307,11 @@ impl ScriptListApp {
 
                 match create_result {
                     Ok(path) => {
-                        logging::log("EXEC", &format!("Created new {}: {:?}", item_type, path));
+                        let created_file_path = created_file_path_for_feedback(&path);
+                        logging::log(
+                            "EXEC",
+                            &format!("Created new {}: {:?}", item_type, created_file_path),
+                        );
                         if let Err(e) = script_creation::open_in_editor(&path, &self.config) {
                             logging::log("ERROR", &format!("Failed to open in editor: {}", e));
                             self.toast_manager.push(
@@ -1318,7 +1333,11 @@ impl ScriptListApp {
                                 .duration_ms(Some(3000)),
                             );
                         }
-                        self.close_and_reset_window(cx);
+                        self.current_view = AppView::CreationFeedback {
+                            path: created_file_path.clone(),
+                        };
+                        self.opened_from_main_menu = true;
+                        cx.notify();
                     }
                     Err(e) => {
                         logging::log("ERROR", &format!("Failed to create {}: {}", item_type, e));
@@ -1672,10 +1691,12 @@ impl ScriptListApp {
 #[cfg(test)]
 mod builtin_execution_ai_feedback_tests {
     use super::{
-        ai_open_failure_message, emoji_picker_label, favorites_loaded_message, quicklink_picker_label,
+        ai_open_failure_message, created_file_path_for_feedback, emoji_picker_label,
+        favorites_loaded_message, quicklink_picker_label,
     };
     use script_kit_gpui::emoji::{Emoji, EmojiCategory};
     use script_kit_gpui::quicklinks::Quicklink;
+    use std::path::PathBuf;
 
     #[test]
     fn test_ai_open_failure_message_includes_error_details() {
@@ -1720,5 +1741,22 @@ mod builtin_execution_ai_feedback_tests {
             quicklink_picker_label(&quicklink),
             "Docs  https://docs.rs"
         );
+    }
+
+    #[test]
+    fn test_created_file_path_for_feedback_returns_same_path_when_already_absolute() {
+        let absolute_path = PathBuf::from("/tmp/new-script.ts");
+        let feedback_path = created_file_path_for_feedback(&absolute_path);
+
+        assert_eq!(feedback_path, absolute_path);
+    }
+
+    #[test]
+    fn test_created_file_path_for_feedback_joins_current_dir_when_relative() {
+        let relative_path = PathBuf::from("new-script.ts");
+        let current_dir = std::env::current_dir().expect("current dir should be available");
+        let feedback_path = created_file_path_for_feedback(&relative_path);
+
+        assert_eq!(feedback_path, current_dir.join(relative_path));
     }
 }
