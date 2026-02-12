@@ -9,6 +9,13 @@ icon: camera
 
 Powerful screenshot and screen recording commands for CleanShot X.
 
+> Maintainer notes:
+>
+> - YAML frontmatter fields in this file are: `name` (display name), `description` (picker summary), `author` (attribution), and `icon` (Lucide icon name like `camera` or `monitor`).
+> - Each `##` heading defines one scriptlet command.
+> - Optional per-scriptlet metadata goes in HTML comments directly above the code fence, for example: `<!-- description: Capture a region -->`, `<!-- shortcut: cmd+shift+4 -->`, `<!-- keyword: screenshot -->`.
+> - The code fence language selects the tool runner (`open`, `bash`, `ts`, `applescript`, etc.).
+
 ---
 
 ## All in One
