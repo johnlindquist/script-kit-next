@@ -15,8 +15,8 @@ Integration tools for [Conductor](https://conductor.build) - run parallel Claude
 >   - `name`: Bundle/category label shown in Script Kit.
 >   - `description`: One-line summary for the bundle.
 >   - `author`: Author label for this extension file.
->   - `icon`: Lucide icon name in lowercase. Use kebab-case for multi-word
->     names (for example `terminal`, `layout-grid`, `book-open`).
+>   - `icon`: Lucide icon slug. Use kebab-case for multi-word names (for
+>     example `terminal`, `layout-grid`, `book-open`).
 >
 > - Scriptlet structure:
 >   - Each `## Scriptlet Name` section becomes one command.
@@ -25,6 +25,7 @@ Integration tools for [Conductor](https://conductor.build) - run parallel Claude
 >
 > - Optional per-scriptlet metadata:
 >   - Add an HTML comment block directly under the `##` heading.
+>   - Metadata can be written in `key: value` lines or as JSON.
 >   - Common fields include `description`, `keyword`, `shortcut`, and `alias`.
 >
 > ````markdown
@@ -35,6 +36,21 @@ Integration tools for [Conductor](https://conductor.build) - run parallel Claude
 > keyword: !cond
 > shortcut: cmd shift c
 > alias: cond
+> -->
+>
+> ```open
+> https://conductor.build
+> ```
+>
+> ## Open Conductor Dashboard (JSON metadata)
+>
+> <!--
+> {
+>   "description": "Open the Conductor dashboard",
+>   "keyword": "!cond",
+>   "shortcut": "cmd shift c",
+>   "alias": "cond"
+> }
 > -->
 >
 > ```open

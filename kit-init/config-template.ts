@@ -25,25 +25,26 @@ export default {
   // REQUIRED: Global Hotkey
   // ===========================================================================
   // This keyboard shortcut controls opening the Script Kit launcher from any application.
+  // If you change only one setting in this file, this is the one to change.
   // This is the only required setting in this file.
   //
   // HOTKEY EXAMPLES:
-  // - Cmd/Ctrl + ; -> { modifiers: ["meta"], key: "Semicolon" }
-  // - Cmd/Ctrl + K -> { modifiers: ["meta"], key: "KeyK" }
-  // - Cmd/Ctrl + Shift + 1 -> { modifiers: ["meta", "shift"], key: "Digit1" }
+  // - Cmd + ; -> { modifiers: ['meta'], key: 'Semicolon' }
+  // - Cmd + K -> { modifiers: ['meta'], key: 'KeyK' }
+  // - Ctrl + Alt + Space -> { modifiers: ['ctrl', 'alt'], key: 'Space' }
 
   hotkey: {
     // hotkey.modifiers: Ordered list of modifier keys that must be held.
-    // Valid values: ["meta", "ctrl", "alt", "shift"]
+    // Allowed values: 'meta', 'ctrl', 'alt', 'shift'
     // - meta: Command on macOS, Windows key on Windows/Linux
     // - ctrl: Control key
     // - alt: Option on macOS, Alt on Windows/Linux
     // - shift: Shift key
-    // Examples: ["meta"], ["meta", "shift"], ["ctrl", "alt"]
+    // Examples: ['meta'], ['meta', 'shift'], ['ctrl', 'alt']
     modifiers: ["meta"],
 
-    // hotkey.key: Non-modifier key using KeyboardEvent.code-style names.
-    // Common values: "Semicolon", "KeyK", "Digit1", "Space", "Enter"
+    // hotkey.key: Non-modifier key using KeyboardEvent.code values.
+    // Common values: 'Semicolon', 'KeyK', 'Digit1', 'Space', 'Enter'
     // Other valid patterns include letters ("KeyA"..."KeyZ"), numbers
     // ("Digit0"..."Digit9"), punctuation keys, and function keys ("F1"..."F12").
     key: "Semicolon", // Cmd+; on Mac, Win+; on Windows
@@ -67,9 +68,9 @@ export default {
   // Content padding for prompts (terminal, editor, etc.)
   // All values in pixels
   // padding: {
-  //   top: 8,
-  //   left: 12,
-  //   right: 12,
+  //   top: 8,    // Inner top spacing
+  //   left: 12,  // Inner left spacing
+  //   right: 12, // Inner right spacing
   // },
 
   // ===========================================================================

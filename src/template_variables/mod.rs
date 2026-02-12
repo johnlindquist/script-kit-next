@@ -1,32 +1,69 @@
-//! Centralized Template Variable Substitution Module
+//! Template variable substitution and discovery for Script Kit content.
 //!
-//! Provides a consistent, well-tested system for variable substitution in templates
-//! across the entire application. Used by:
-//! - Text expansion/snippets (keyword_manager.rs)
-//! - Template prompts (prompts/template.rs)
-//! - Future template features
+//! This module centralizes both:
+//! - Runtime substitution (replace placeholders with values), and
+//! - Variable discovery (extract placeholder names so callers can promote them
+//!   into prompt inputs).
 //!
-//! # Variable Syntax
+//! # Supported Placeholder Syntax
 //!
-//! Supports two interchangeable syntaxes:
-//! - `${variable}` - Dollar-brace syntax (JavaScript/Shell style)
-//! - `{{variable}}` - Double-brace syntax (Handlebars/Mustache style)
+//! Both syntaxes are accepted and interchangeable:
+//! - `${var}` (JavaScript/shell-style)
+//! - `{{var}}` (Handlebars/Mustache-style)
+//!
+//! # Discovery and Prompt Promotion Rules
+//!
+//! [`extract_variable_names`] returns unique names in first-seen order and
+//! intentionally skips patterns that are not prompt-friendly variables:
+//! - `${...}` entries containing spaces are ignored.
+//! - `${...}` entries containing `(` are ignored.
+//! - `{{...}}` control tokens are ignored: `{{#if ...}}`, `{{/if}}`, and
+//!   `{{else}}`.
+//!
+//! These rules prevent JavaScript expressions (for example
+//! `${await clipboard.readText()}`) and handlebars flow-control markers from
+//! being promoted as user prompt fields.
 //!
 //! # Built-in Variables
 //!
-//! | Variable | Description | Example Output |
-//! |----------|-------------|----------------|
-//! | `clipboard` | Current clipboard text | "copied text" |
-//! | `date` | Current date (YYYY-MM-DD) | "2024-01-15" |
-//! | `time` | Current time (HH:MM:SS) | "14:30:45" |
-//! | `datetime` | Date and time | "2024-01-15 14:30:45" |
-//! | `timestamp` | Unix timestamp (seconds) | "1705330245" |
-//! | `date_short` | Short date (MM/DD/YYYY) | "01/15/2024" |
-//! | `date_long` | Long date | "January 15, 2024" |
-//! | `time_12h` | 12-hour time | "2:30 PM" |
-//! | `day` | Day of week | "Monday" |
-//! | `month` | Month name | "January" |
-//! | `year` | Year | "2024" |
+//! Built-ins are filled from local runtime state unless overridden in
+//! [`VariableContext`].
+//!
+//! | Name | Format | Example |
+//! | --- | --- | --- |
+//! | `clipboard` | raw clipboard text | `copied text` |
+//! | `date` | `%Y-%m-%d` | `2026-02-12` |
+//! | `time` | `%H:%M:%S` | `07:14:41` |
+//! | `datetime` | `%Y-%m-%d %H:%M:%S` | `2026-02-12 07:14:41` |
+//! | `timestamp` | Unix seconds | `1765235681` |
+//! | `date_short` | `%m/%d/%Y` | `02/12/2026` |
+//! | `date_long` | `%B %d, %Y` | `February 12, 2026` |
+//! | `date_iso` | `%Y-%m-%dT%H:%M:%S%z` | `2026-02-12T07:14:41-0800` |
+//! | `time_12h` | `%-I:%M %p` | `7:14 AM` |
+//! | `time_short` | `%H:%M` | `07:14` |
+//! | `year` | numeric year | `2026` |
+//! | `month` | full month name (`%B`) | `February` |
+//! | `month_num` | month number (`1-12`) | `2` |
+//! | `day` | full weekday name (`%A`) | `Thursday` |
+//! | `day_num` | day of month (`1-31`) | `12` |
+//! | `hour` | hour (`0-23`) | `7` |
+//! | `minute` | minute (`0-59`) | `14` |
+//! | `second` | second (`0-59`) | `41` |
+//! | `weekday` | chrono weekday display | `Thu` |
+//!
+//! # Special-case JavaScript Clipboard Expression
+//!
+//! In addition to standard placeholders, the exact string
+//! `${await clipboard.readText()}` is replaced with the resolved `clipboard`
+//! value. This keeps older Script Kit templates compatible.
+//!
+//! # `VariableContext` Precedence and Built-in Control
+//!
+//! - Custom values always win when a name matches a built-in.
+//! - [`VariableContext::custom_only`] disables all built-ins.
+//! - [`VariableContext::with_builtins(false)`] disables built-ins on an
+//!   existing context while preserving custom variables.
+//! - When built-ins are disabled, unresolved placeholders remain unchanged.
 //!
 
 // --- merged from part_000.rs ---
@@ -38,12 +75,16 @@ use tracing::{debug, warn};
 // Variable Context
 // ============================================================================
 
-/// Context for variable substitution, allowing custom variable values
+/// Context for variable substitution, allowing custom variable values.
 ///
 /// Use this when you need to:
 /// - Provide custom variable values (e.g., user inputs)
 /// - Override built-in variables for testing
 /// - Add application-specific variables
+///
+/// Resolution order is:
+/// 1. `custom_vars` (explicit overrides)
+/// 2. Built-ins (only when enabled)
 #[derive(Debug, Clone, Default)]
 pub struct VariableContext {
     /// Custom variable values (name -> value)
@@ -61,7 +102,9 @@ impl VariableContext {
         }
     }
 
-    /// Create a context with only custom variables (no built-ins)
+    /// Create a context with only custom variables (no built-ins).
+    ///
+    /// Equivalent behavior to `VariableContext::new().with_builtins(false)`.
     #[allow(dead_code)]
     pub fn custom_only() -> Self {
         Self {
@@ -95,7 +138,10 @@ impl VariableContext {
         self.evaluate_builtins
     }
 
-    /// Enable or disable built-in variable evaluation
+    /// Enable or disable built-in variable evaluation.
+    ///
+    /// Disabling built-ins leaves placeholders unchanged unless a matching
+    /// custom variable is present.
     #[allow(dead_code)]
     pub fn with_builtins(mut self, enabled: bool) -> Self {
         self.evaluate_builtins = enabled;
@@ -106,7 +152,7 @@ impl VariableContext {
 // Main Substitution Functions
 // ============================================================================
 
-/// Substitute template variables in content using default context
+/// Substitute template variables in content using the default context.
 ///
 /// This is the primary function for variable substitution. It handles:
 /// - `${variable}` syntax
@@ -123,10 +169,13 @@ pub fn substitute_variables(content: &str) -> String {
     let ctx = VariableContext::new();
     substitute_variables_with_context(content, &ctx)
 }
-/// Substitute template variables with a custom context
+/// Substitute template variables with a custom context.
 ///
 /// Use this when you need to provide custom variable values or
 /// control which built-ins are evaluated.
+///
+/// Also supports legacy compatibility replacement of the exact expression
+/// `${await clipboard.readText()}` using the resolved `clipboard` value.
 ///
 /// # Arguments
 /// * `content` - The template string with variable placeholders
@@ -190,9 +239,14 @@ pub fn has_variables(content: &str) -> bool {
 
     false
 }
-/// Extract variable names from template content
+/// Extract variable names from template content.
 ///
-/// Returns a list of unique variable names found in the template
+/// Returns a list of unique variable names found in the template.
+///
+/// This helper is used by prompt-building flows to determine which variables
+/// should be surfaced as user inputs. It intentionally excludes:
+/// - `${...}` names containing spaces or `(` (expression-like placeholders)
+/// - `{{...}}` control markers (`#...`, `/...`, and `else`)
 #[allow(dead_code)]
 pub fn extract_variable_names(content: &str) -> Vec<String> {
     let mut names = Vec::new();
@@ -252,7 +306,9 @@ pub fn extract_variable_names(content: &str) -> Vec<String> {
 // Built-in Variable Providers
 // ============================================================================
 
-/// Build the complete map of variable values
+/// Build the complete map of variable values.
+///
+/// Custom variables are inserted first so they take precedence over built-ins.
 fn build_variable_values(ctx: &VariableContext) -> HashMap<String, String> {
     let mut values = HashMap::new();
 
@@ -268,7 +324,9 @@ fn build_variable_values(ctx: &VariableContext) -> HashMap<String, String> {
 
     values
 }
-/// Add all built-in variables to the values map
+/// Add all built-in variables to the values map when absent.
+///
+/// Each key is only inserted if it was not already supplied by custom values.
 fn add_builtin_variables(values: &mut HashMap<String, String>) {
     // Clipboard (only fetch if not already provided)
     if !values.contains_key("clipboard") {
