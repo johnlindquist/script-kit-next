@@ -9,6 +9,20 @@ icon: link
 
 Instantly open your most frequently used websites.
 
+<!--
+How this bundle file works:
+- Bundle YAML frontmatter fields:
+  - name: Bundle title shown in Script Kit.
+  - description: Bundle summary shown in list/details views.
+  - author: Bundle author label.
+  - icon: Lucide icon name (lowercase, kebab-case).
+- Icon examples in this extension format:
+  link, globe, search, star, terminal, camera, layout-grid, book-open.
+- Each `##` heading below is one scriptlet command in the bundle.
+- The fenced code block language selects the tool/runtime.
+- `open` fences open URLs, local files (including file:// paths), apps, or URL schemes.
+-->
+
 ---
 
 ## Google Search

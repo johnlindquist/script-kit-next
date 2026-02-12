@@ -6,6 +6,26 @@ fn app_shell_footer_colors(theme: &crate::theme::Theme) -> PromptFooterColors {
     PromptFooterColors::from_theme(theme)
 }
 
+fn script_list_search_breadcrumb_label(query: &str, max_chars: usize) -> String {
+    let trimmed = query.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    if max_chars == 0 {
+        return "...".to_string();
+    }
+
+    if let Some((cutoff, _)) = trimmed.char_indices().nth(max_chars) {
+        let mut label = String::with_capacity(cutoff + 3);
+        label.push_str(&trimmed[..cutoff]);
+        label.push_str("...");
+        label
+    } else {
+        trimmed.to_string()
+    }
+}
+
 impl ScriptListApp {
     fn render_script_list(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let render_list_start = std::time::Instant::now();
@@ -865,10 +885,20 @@ impl ScriptListApp {
         // Footer uses theme tokens directly so app-shell chrome stays consistent
         // across design variants (avoids design-token backgrounds like pure white).
         let footer_colors = app_shell_footer_colors(&self.theme);
+        let active_search_query = self.filter_text.trim().to_string();
+        let has_active_search = !active_search_query.is_empty();
+        let search_breadcrumb_label = script_list_search_breadcrumb_label(&active_search_query, 56);
+        let clear_active_search = cx.listener(
+            |this: &mut Self,
+             _event: &gpui::ClickEvent,
+             _window: &mut Window,
+             cx: &mut Context<Self>| {
+                let _ = this.clear_builtin_view_filter(cx);
+            },
+        );
 
         // NOTE: No .bg() here - Root provides vibrancy background for ALL content
         // This ensures main menu, AI chat, and all prompts have consistent styling
-
 
         let mut main_div = div()
             .flex()
@@ -911,56 +941,129 @@ impl ScriptListApp {
                     .px(px(header_padding_x))
                     .py(px(header_padding_y))
                     .flex()
-                    .flex_row()
-                    .items_center()
+                    .flex_col()
                     .gap(px(header_gap))
-                    // Search input with cursor and selection support
-                    .child(
-                        div().flex_1().flex().flex_row().items_center().child(
-                            Input::new(&self.gpui_input_state)
-                                .w_full()
-                                .h(px(input_height))
-                                .px(px(0.))
-                                .py(px(0.))
-                                .with_size(Size::Size(px(typography_resolver.font_size_xl())))
-                                .appearance(false)
-                                .bordered(false)
-                                .focus_bordered(false),
-                        ),
-                    )
-                    // "Ask AI [Tab]" keyboard hint - styled as non-clickable to match behavior
                     .child({
-                        let hint_bg = (accent_color << 8) | ALPHA_HOVER_ACCENT;
-                        let tab_bg = (search_box_bg << 8) | ALPHA_TAB_BADGE_BG;
                         div()
-                            .id("ask-ai-button")
                             .flex()
                             .flex_row()
                             .items_center()
-                            .gap(px(ASK_AI_BUTTON_GAP))
-                            .px(px(ASK_AI_BUTTON_PADDING_X))
-                            .py(px(ASK_AI_BUTTON_PADDING_Y))
-                            .rounded(px(ASK_AI_BUTTON_RADIUS))
-                            .bg(rgba(hint_bg))
-                            .cursor_default()
-                            // "Ask AI" text - YELLOW (accent)
+                            .gap(px(header_gap))
+                            // Search input with cursor and selection support
+                            .child(
+                                div().flex_1().flex().flex_row().items_center().child(
+                                    Input::new(&self.gpui_input_state)
+                                        .w_full()
+                                        .h(px(input_height))
+                                        .px(px(0.))
+                                        .py(px(0.))
+                                        .with_size(Size::Size(px(
+                                            typography_resolver.font_size_xl()
+                                        )))
+                                        .appearance(false)
+                                        .bordered(false)
+                                        .focus_bordered(false),
+                                ),
+                            )
+                            // "Ask AI [Tab]" keyboard hint - styled as non-clickable to match behavior
                             .child(
                                 div()
-                                    .text_sm()
-                                    .text_color(rgb(accent_color))
-                                    .child("Ask AI"),
+                                    .id("ask-ai-button")
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap(px(ASK_AI_BUTTON_GAP))
+                                    .px(px(ASK_AI_BUTTON_PADDING_X))
+                                    .py(px(ASK_AI_BUTTON_PADDING_Y))
+                                    .rounded(px(ASK_AI_BUTTON_RADIUS))
+                                    .bg(rgba((accent_color << 8) | ALPHA_HOVER_ACCENT))
+                                    .cursor_default()
+                                    // "Ask AI" text - YELLOW (accent)
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .text_color(rgb(accent_color))
+                                            .child("Ask AI"),
+                                    )
+                                    // "Tab" badge - grey background at ALPHA_TAB_BADGE_BG opacity (no border)
+                                    .child(
+                                        div()
+                                            .px(px(TAB_BADGE_PADDING_X))
+                                            .py(px(TAB_BADGE_PADDING_Y))
+                                            .rounded(px(TAB_BADGE_RADIUS))
+                                            .bg(rgba((search_box_bg << 8) | ALPHA_TAB_BADGE_BG))
+                                            .text_xs()
+                                            .text_color(rgb(text_muted))
+                                            .child("Tab"),
+                                    ),
                             )
-                            // "Tab" badge - grey background at ALPHA_TAB_BADGE_BG opacity (no border)
-                            .child(
-                                div()
-                                    .px(px(TAB_BADGE_PADDING_X))
-                                    .py(px(TAB_BADGE_PADDING_Y))
-                                    .rounded(px(TAB_BADGE_RADIUS))
-                                    .bg(rgba(tab_bg))
-                                    .text_xs()
-                                    .text_color(rgb(text_muted))
-                                    .child("Tab"),
-                            )
+                    })
+                    .when(has_active_search, |d| {
+                        d.child(
+                            div()
+                                .w_full()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .justify_between()
+                                .gap(px(8.0))
+                                .px(px(8.0))
+                                .py(px(4.0))
+                                .rounded(px(6.0))
+                                .bg(rgba((search_box_bg << 8) | 0x70))
+                                .border_1()
+                                .border_color(rgba((color_resolver.border_color() << 8) | 0x80))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_row()
+                                        .items_center()
+                                        .gap(px(6.0))
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(rgb(text_muted))
+                                                .child("Search:"),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .font_weight(gpui::FontWeight::MEDIUM)
+                                                .text_color(rgb(text_primary))
+                                                .child(search_breadcrumb_label.clone()),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_row()
+                                        .items_center()
+                                        .gap(px(6.0))
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(rgb(text_muted))
+                                                .child("Esc to clear"),
+                                        )
+                                        .child(
+                                            div()
+                                                .id("script-list-search-clear-button")
+                                                .px(px(6.0))
+                                                .py(px(1.0))
+                                                .rounded(px(999.0))
+                                                .bg(rgba((accent_color << 8) | 0x20))
+                                                .text_xs()
+                                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                                .text_color(rgb(text_muted))
+                                                .cursor_pointer()
+                                                .hover(
+                                                    move |style| style.text_color(rgb(text_primary)),
+                                                )
+                                                .on_click(clear_active_search)
+                                                .child("x"),
+                                        ),
+                                ),
+                        )
                     })
             })
             // Divider between header and list content
@@ -1118,13 +1221,12 @@ impl ScriptListApp {
         }
 
         main_div.into_any_element()
-
     }
 }
 
 #[cfg(test)]
 mod render_script_list_footer_tests {
-    use super::app_shell_footer_colors;
+    use super::{app_shell_footer_colors, script_list_search_breadcrumb_label};
 
     #[test]
     fn test_app_shell_footer_colors_use_theme_accent_tokens() {
@@ -1135,5 +1237,16 @@ mod render_script_list_footer_tests {
         assert_eq!(colors.background, theme.colors.accent.selected_subtle);
         assert_eq!(colors.border, theme.colors.ui.border);
         assert_eq!(colors.text_muted, theme.colors.text.muted);
+    }
+
+    #[test]
+    fn test_script_list_search_breadcrumb_label_returns_empty_for_whitespace() {
+        assert_eq!(script_list_search_breadcrumb_label("   ", 32), "");
+    }
+
+    #[test]
+    fn test_script_list_search_breadcrumb_label_trims_and_truncates_long_queries() {
+        let label = script_list_search_breadcrumb_label("   this is a long query   ", 8);
+        assert_eq!(label, "this is ...");
     }
 }

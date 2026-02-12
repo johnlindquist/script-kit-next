@@ -1547,22 +1547,17 @@ impl Render for ActionsDialog {
 
         // Render action list using list() for variable-height items
         // Section headers are 22px, action items are 36px
-        let actions_container = if self.grouped_items.is_empty() {
-            // Empty state: fixed height matching one action item row
-            div()
-                .w_full()
-                .h(px(ACTION_ITEM_HEIGHT))
-                .flex()
-                .items_center()
-                .px(px(spacing.item_padding_x))
-                .text_color(dimmed_text)
-                .text_sm()
-                .child(actions_dialog_empty_state_message(&self.search_text))
-                .into_any_element()
-        } else {
+        //
+        // IMPORTANT: Always render the list() component, even when empty.
+        // Switching between a static empty-state div and the list component
+        // causes the GPUI ListState to lose sync with the render tree,
+        // resulting in stale layout when items are restored after filtering
+        // to zero results (e.g., type "nice" then delete all characters).
+        let actions_container = {
             // Clone data needed for the list closure
             let grouped_items_clone = self.grouped_items.clone();
             let design_variant = self.design_variant;
+            let is_empty = self.grouped_items.is_empty();
 
             // Count section headers and items for accurate height calculation
             let mut header_count = 0_usize;
@@ -1581,22 +1576,30 @@ impl Render for ActionsDialog {
             let show_search =
                 !matches!(self.config.search_position, SearchPosition::Hidden) && !self.hide_search;
             let container_height = actions_dialog_scrollbar_viewport_height(
-                total_content_height,
+                if is_empty {
+                    ACTION_ITEM_HEIGHT
+                } else {
+                    total_content_height
+                },
                 show_search,
                 self.context_title.is_some(),
                 self.config.show_footer,
             );
 
             // Estimate visible items based on average item height
-            let avg_item_height = if self.grouped_items.is_empty() {
+            let avg_item_height = if is_empty {
                 ACTION_ITEM_HEIGHT
             } else {
                 total_content_height / self.grouped_items.len() as f32
             };
-            let visible_items = (container_height / avg_item_height)
-                .ceil()
-                .max(1.0)
-                .min(self.grouped_items.len() as f32) as usize;
+            let visible_items = if is_empty {
+                0
+            } else {
+                (container_height / avg_item_height)
+                    .ceil()
+                    .max(1.0)
+                    .min(self.grouped_items.len() as f32) as usize
+            };
 
             // Get scroll offset from list state
             let scroll_offset = self.list_state.logical_scroll_top().item_ix;
@@ -1998,6 +2001,7 @@ impl Render for ActionsDialog {
             // Note: Using flex_1() to fill remaining space in flex column.
             // Do NOT use h_full() here as it can conflict with flex layout
             // and cause the search bar to be pushed off-screen.
+            let empty_message = actions_dialog_empty_state_message(&self.search_text);
             div()
                 .relative()
                 .flex()
@@ -2005,8 +2009,26 @@ impl Render for ActionsDialog {
                 .flex_1()
                 .w_full()
                 .overflow_hidden()
+                // Always render the list to keep ListState in the render tree
                 .child(variable_height_list)
                 .child(scrollbar)
+                // Overlay empty state message when no items match
+                .when(is_empty, |d| {
+                    d.child(
+                        div()
+                            .absolute()
+                            .top_0()
+                            .left_0()
+                            .w_full()
+                            .h(px(ACTION_ITEM_HEIGHT))
+                            .flex()
+                            .items_center()
+                            .px(px(spacing.item_padding_x))
+                            .text_color(dimmed_text)
+                            .text_sm()
+                            .child(empty_message),
+                    )
+                })
                 .into_any_element()
         };
 

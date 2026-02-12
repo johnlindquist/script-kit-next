@@ -5,6 +5,23 @@ author: Script Kit
 icon: sparkles
 ---
 
+<!--
+Template guide:
+- Frontmatter fields:
+  - name: Bundle title shown in Script Kit.
+  - description: One-line summary shown with the bundle.
+  - author: Bundle author label.
+  - icon: Lucide icon name in kebab-case (for example: sparkles, file-text, link).
+- Each ## section below is one runnable command.
+- The ts code fence under each ## section is the command body (executed as TypeScript).
+- Optional per-command metadata lives in an HTML comment
+  directly above that section's code fence.
+  Example metadata fields:
+  - keyword: !rewrite
+  - shortcut: ctrl shift r
+  - description: Rewrite selected text with clearer wording
+-->
+
 # AI Text Tools
 
 Transform selected text using AI with inline chat. Supports follow-up questions.
