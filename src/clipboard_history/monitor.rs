@@ -21,6 +21,7 @@ use super::database::{
     run_wal_checkpoint, trim_oversize_text_entries,
 };
 use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
+use super::ocr;
 use super::should_exclude_clipboard;
 use super::types::ContentType;
 
@@ -107,6 +108,8 @@ pub fn init_clipboard_history() -> Result<()> {
         background_prune_loop(stop_flag_prune);
     });
 
+    let _ = ocr::start_ocr_worker();
+
     info!("Clipboard history initialized");
     Ok(())
 }
@@ -118,6 +121,8 @@ pub fn stop_clipboard_monitoring() {
         stop_flag.store(true, Ordering::Relaxed);
         info!("Clipboard monitoring stopped");
     }
+
+    let _ = ocr::stop_ocr_worker();
 }
 
 /// Background loop that monitors clipboard changes
@@ -281,6 +286,8 @@ fn capture_clipboard_content(
                 Ok(blob_content) => {
                     match add_entry(&blob_content, ContentType::Image) {
                         Ok(entry_id) => {
+                            let _ = ocr::enqueue_ocr(entry_id.clone(), blob_content.clone());
+
                             // Pre-decode the image immediately so it's ready for display
                             if let Some(render_image) = decode_to_render_image(&blob_content) {
                                 cache_image(&entry_id, render_image);

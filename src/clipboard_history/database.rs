@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use super::cache::{
     clear_all_caches, evict_image_cache, refresh_entry_cache, remove_entry_from_cache,
-    update_pin_status_in_cache, upsert_entry_in_cache,
+    update_ocr_text_in_cache, update_pin_status_in_cache, upsert_entry_in_cache,
 };
 use super::config::{get_max_text_content_len, get_retention_days, is_text_over_limit};
 use super::image::get_image_dimensions;
@@ -284,12 +284,18 @@ pub fn add_entry(content: &str, content_type: ContentType) -> Result<String> {
     let content_hash = compute_content_hash(content);
 
     // Check if entry with same hash exists (O(1) dedup via index)
-    // Also fetch pinned status to preserve it in cache update
-    let existing: Option<(String, bool)> = conn
+    // Also fetch pinned/OCR text to preserve it in cache update
+    let existing: Option<(String, bool, Option<String>)> = conn
         .query_row(
-            "SELECT id, pinned FROM history WHERE content_type = ? AND content_hash = ?",
+            "SELECT id, pinned, ocr_text FROM history WHERE content_type = ? AND content_hash = ?",
             params![content_type.as_str(), &content_hash],
-            |row| Ok((row.get(0)?, row.get::<_, i64>(1)? != 0)),
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get::<_, i64>(1)? != 0,
+                    row.get::<_, Option<String>>(2)?,
+                ))
+            },
         )
         .ok();
 
@@ -297,7 +303,7 @@ pub fn add_entry(content: &str, content_type: ContentType) -> Result<String> {
     let (text_preview, image_width, image_height, byte_size) =
         extract_metadata(content, content_type);
 
-    if let Some((existing_id, existing_pinned)) = existing {
+    if let Some((existing_id, existing_pinned, existing_ocr_text)) = existing {
         conn.execute(
             "UPDATE history SET timestamp = ? WHERE id = ?",
             params![timestamp, &existing_id],
@@ -317,7 +323,7 @@ pub fn add_entry(content: &str, content_type: ContentType) -> Result<String> {
             image_width,
             image_height,
             byte_size,
-            ocr_text: None,
+            ocr_text: existing_ocr_text,
         });
 
         return Ok(existing_id);
@@ -798,7 +804,7 @@ pub fn update_ocr_text(id: &str, text: &str) -> Result<()> {
 
     drop(conn);
 
-    refresh_entry_cache();
+    update_ocr_text_in_cache(id, text.to_string());
 
     Ok(())
 }
