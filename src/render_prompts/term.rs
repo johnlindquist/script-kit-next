@@ -356,45 +356,20 @@ impl ScriptListApp {
             )
             // Actions dialog overlay
             .when_some(
-                if self.show_actions_popup {
-                    self.actions_dialog.clone()
-                } else {
-                    None
-                },
-                |d, dialog| {
-                    let backdrop_click = cx.listener(
-                        |this: &mut Self,
-                         _event: &gpui::ClickEvent,
-                         window: &mut Window,
-                         cx: &mut Context<Self>| {
-                            logging::log(
-                                "FOCUS",
-                                "Term actions backdrop clicked - dismissing dialog",
-                            );
-                            this.close_actions_popup(ActionsDialogHost::TermPrompt, window, cx);
-                        },
-                    );
-
-                    d.child(
-                        div()
-                            .absolute()
-                            .inset_0()
-                            .child(
-                                div()
-                                    .id("term-actions-backdrop")
-                                    .absolute()
-                                    .inset_0()
-                                    .on_click(backdrop_click),
-                            )
-                            .child(
-                                div()
-                                    .absolute()
-                                    .top(px(actions_dialog_top))
-                                    .right(px(actions_dialog_right))
-                                    .child(dialog),
-                            ),
-                    )
-                },
+                render_actions_backdrop(
+                    self.show_actions_popup,
+                    self.actions_dialog.clone(),
+                    actions_dialog_top,
+                    actions_dialog_right,
+                    ActionsBackdropConfig {
+                        backdrop_id: "term-actions-backdrop",
+                        close_host: ActionsDialogHost::TermPrompt,
+                        backdrop_log_message: "Term actions backdrop clicked - dismissing dialog",
+                        show_pointer_cursor: false,
+                    },
+                    cx,
+                ),
+                |d, backdrop_overlay| d.child(backdrop_overlay),
             )
             .into_any_element()
     }
@@ -417,6 +392,28 @@ mod term_prompt_render_tests {
         assert_eq!(
             term_prompt_actions_mode(false),
             TermPromptActionsMode::TerminalCommands,
+        );
+    }
+
+    #[test]
+    fn test_term_prompt_actions_backdrop_uses_shared_helper() {
+        const TERM_RENDER_SOURCE: &str = include_str!("term.rs");
+
+        assert!(
+            TERM_RENDER_SOURCE.contains("render_actions_backdrop("),
+            "term render should delegate backdrop overlay creation to shared helper"
+        );
+        assert!(
+            TERM_RENDER_SOURCE.contains("\"term-actions-backdrop\""),
+            "term render should pass its backdrop id to shared helper"
+        );
+        assert!(
+            TERM_RENDER_SOURCE.contains("ActionsDialogHost::TermPrompt"),
+            "term render should preserve actions host routing when helper is used"
+        );
+        assert!(
+            TERM_RENDER_SOURCE.contains("show_pointer_cursor: false"),
+            "term render should keep backdrop cursor pointer disabled"
         );
     }
 

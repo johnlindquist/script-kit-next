@@ -198,46 +198,20 @@ impl ScriptListApp {
             )
             // Actions dialog overlay (when Cmd+K is pressed with SDK actions)
             .when_some(
-                if self.show_actions_popup {
-                    self.actions_dialog.clone()
-                } else {
-                    None
-                },
-                |d, dialog| {
-                    let backdrop_click = cx.listener(
-                        |this: &mut Self,
-                         _event: &gpui::ClickEvent,
-                         window: &mut Window,
-                         cx: &mut Context<Self>| {
-                            logging::log(
-                                "FOCUS",
-                                "Div actions backdrop clicked - dismissing dialog",
-                            );
-                            this.close_actions_popup(ActionsDialogHost::DivPrompt, window, cx);
-                        },
-                    );
-
-                    d.child(
-                        div()
-                            .absolute()
-                            .inset_0()
-                            .child(
-                                div()
-                                    .id("div-actions-backdrop")
-                                    .absolute()
-                                    .inset_0()
-                                    .cursor_pointer()
-                                    .on_click(backdrop_click),
-                            )
-                            .child(
-                                div()
-                                    .absolute()
-                                    .top(px(actions_dialog_top))
-                                    .right(px(actions_dialog_right))
-                                    .child(dialog),
-                            ),
-                    )
-                },
+                render_actions_backdrop(
+                    self.show_actions_popup,
+                    self.actions_dialog.clone(),
+                    actions_dialog_top,
+                    actions_dialog_right,
+                    ActionsBackdropConfig {
+                        backdrop_id: "div-actions-backdrop",
+                        close_host: ActionsDialogHost::DivPrompt,
+                        backdrop_log_message: "Div actions backdrop clicked - dismissing dialog",
+                        show_pointer_cursor: true,
+                    },
+                    cx,
+                ),
+                |d, backdrop_overlay| d.child(backdrop_overlay),
             )
             .into_any_element()
     }
@@ -248,16 +222,22 @@ mod div_prompt_render_backdrop_tests {
     const DIV_RENDER_SOURCE: &str = include_str!("div.rs");
 
     #[test]
-    fn test_div_actions_backdrop_uses_cursor_pointer_when_clickable() {
+    fn test_div_actions_backdrop_uses_shared_helper_with_clickable_cursor() {
         assert!(
-            DIV_RENDER_SOURCE.contains(".id(\"div-actions-backdrop\")"),
-            "div actions backdrop id should remain present for click target wiring"
+            DIV_RENDER_SOURCE.contains("render_actions_backdrop("),
+            "div render should delegate backdrop overlay creation to shared helper"
         );
         assert!(
-            DIV_RENDER_SOURCE.contains(
-                ".cursor_pointer()\n                                    .on_click(backdrop_click)"
-            ),
-            "div actions backdrop should advertise clickability with cursor_pointer"
+            DIV_RENDER_SOURCE.contains("\"div-actions-backdrop\""),
+            "div render should pass its backdrop id to shared helper"
+        );
+        assert!(
+            DIV_RENDER_SOURCE.contains("ActionsDialogHost::DivPrompt"),
+            "div render should preserve actions host routing when helper is used"
+        );
+        assert!(
+            DIV_RENDER_SOURCE.contains("show_pointer_cursor: true"),
+            "div render should keep backdrop cursor pointer enabled"
         );
     }
 }
