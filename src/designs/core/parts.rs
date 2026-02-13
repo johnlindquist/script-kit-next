@@ -553,6 +553,12 @@ pub(crate) fn extension_language_label(extension: &str) -> Option<&'static str> 
     }
 }
 
+fn truncate_str_chars(s: &str, max_chars: usize) -> &str {
+    s.char_indices()
+        .nth(max_chars)
+        .map_or(s, |(index, _)| &s[..index])
+}
+
 /// Auto-generate a fallback description for scripts that have no explicit description.
 /// Priority: schedule expression > cron expression > watch pattern > background > system > filename
 pub(crate) fn auto_description_for_script(script: &crate::scripts::Script) -> Option<String> {
@@ -570,8 +576,8 @@ pub(crate) fn auto_description_for_script(script: &crate::scripts::Script) -> Op
             return Some(format!("Cron: {}", cron));
         }
         if let Some(first_pattern) = meta.watch.first() {
-            let display = if first_pattern.len() > 40 {
-                format!("{}...", &first_pattern[..37])
+            let display = if first_pattern.chars().count() > 40 {
+                format!("{}...", truncate_str_chars(first_pattern, 37))
             } else {
                 first_pattern.clone()
             };
@@ -947,3 +953,19 @@ pub(crate) fn detect_match_reason_for_scriptlet(
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod truncate_str_chars_tests {
+    use super::truncate_str_chars;
+
+    #[test]
+    fn test_truncate_str_chars_returns_original_when_string_is_shorter() {
+        assert_eq!(truncate_str_chars("short", 10), "short");
+    }
+
+    #[test]
+    fn test_truncate_str_chars_truncates_at_char_boundary_when_utf8_input_is_long() {
+        let input = "你好🙂abc";
+        assert_eq!(truncate_str_chars(input, 3), "你好🙂");
+    }
+}

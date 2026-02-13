@@ -1,5 +1,11 @@
 use super::*;
 
+fn truncate_str_chars(s: &str, max_chars: usize) -> &str {
+    s.char_indices()
+        .nth(max_chars)
+        .map_or(s, |(index, _)| &s[..index])
+}
+
 impl ChatPrompt {
     pub(super) fn render_turn(
         &self,
@@ -92,8 +98,8 @@ impl ChatPrompt {
             let detail = error_str.trim();
             if !detail.is_empty() && detail != error_message {
                 // Truncate very long error strings for display
-                let truncated = if detail.len() > 200 {
-                    format!("{}…", &detail[..200])
+                let truncated = if detail.chars().count() > 200 {
+                    format!("{}…", truncate_str_chars(detail, 200))
                 } else {
                     detail.to_string()
                 };
@@ -221,5 +227,21 @@ impl ChatPrompt {
                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(content));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::truncate_str_chars;
+
+    #[test]
+    fn test_truncate_str_chars_returns_original_when_detail_within_limit() {
+        assert_eq!(truncate_str_chars("error", 200), "error");
+    }
+
+    #[test]
+    fn test_truncate_str_chars_truncates_detail_without_breaking_utf8_chars() {
+        let input = "🙂🙂🙂abc";
+        assert_eq!(truncate_str_chars(input, 2), "🙂🙂");
     }
 }
