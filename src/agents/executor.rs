@@ -20,11 +20,27 @@
 
 use std::collections::HashMap;
 use std::io::Write;
+use std::path::{Component, Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
 use anyhow::{Context, Result};
+use tracing::{debug, warn};
 
 use crate::agents::types::{Agent, AgentAvailability, AgentExecutionMode};
+use crate::setup::get_kit_path;
+
+const SAFE_AGENT_ENV_VARS: [&str; 8] = [
+    "PATH",
+    "HOME",
+    "TMPDIR",
+    "USER",
+    "LANG",
+    "TERM",
+    "SHELL",
+    "XDG_RUNTIME_DIR",
+];
+
+const RESERVED_MDFLOW_VARIABLE_KEYS: [&str; 4] = ["quiet", "context", "env", "command"];
 
 /// Check if mdflow CLI is available in PATH
 pub fn is_mdflow_available() -> bool {
@@ -68,6 +84,217 @@ pub fn check_availability(agent: &Agent) -> AgentAvailability {
     }
 }
 
+fn apply_agent_environment_allowlist(
+    cmd: &mut Command,
+    frontmatter_env: Option<&HashMap<String, String>>,
+) {
+    cmd.env_clear();
+
+    for env_key in SAFE_AGENT_ENV_VARS {
+        if let Some(env_value) = std::env::var_os(env_key) {
+            cmd.env(env_key, env_value);
+        }
+    }
+
+    // Frontmatter _env values are applied after the scrubbed baseline, but
+    // protected baseline keys remain immutable to prevent command hijacking.
+    if let Some(env_vars) = frontmatter_env {
+        for (env_key, env_value) in env_vars {
+            if SAFE_AGENT_ENV_VARS
+                .iter()
+                .any(|allowed| allowed.eq_ignore_ascii_case(env_key))
+            {
+                warn!(
+                    key = %env_key,
+                    "agent_env_allowlist_skip_protected_key"
+                );
+                continue;
+            }
+            cmd.env(env_key, env_value);
+        }
+    }
+}
+
+fn has_parent_dir_component(path: &Path) -> bool {
+    path.components()
+        .any(|component| matches!(component, Component::ParentDir))
+}
+
+fn validate_agent_markdown_path(path: &Path) -> Result<PathBuf> {
+    validate_agent_markdown_path_with_kit_root(path, &get_kit_path())
+}
+
+fn validate_agent_markdown_path_with_kit_root(path: &Path, kit_root: &Path) -> Result<PathBuf> {
+    if has_parent_dir_component(path) {
+        warn!(
+            path = %path.display(),
+            "agent_path_validation_failed: reason=parent_dir_segment"
+        );
+        anyhow::bail!(
+            "agent_path_validation_failed: path={} reason=parent_dir_segment",
+            path.display()
+        );
+    }
+
+    let canonical_path = std::fs::canonicalize(path).with_context(|| {
+        format!(
+            "agent_path_validation_failed: path={} reason=canonicalize_error",
+            path.display()
+        )
+    })?;
+
+    let metadata = std::fs::metadata(&canonical_path).with_context(|| {
+        format!(
+            "agent_path_validation_failed: path={} reason=metadata_error",
+            canonical_path.display()
+        )
+    })?;
+    if !metadata.is_file() {
+        anyhow::bail!(
+            "agent_path_validation_failed: path={} reason=not_file",
+            canonical_path.display()
+        );
+    }
+
+    let is_markdown_file = canonical_path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("md"));
+    if !is_markdown_file {
+        anyhow::bail!(
+            "agent_path_validation_failed: path={} reason=invalid_extension",
+            canonical_path.display()
+        );
+    }
+
+    let canonical_kit_root = std::fs::canonicalize(kit_root).with_context(|| {
+        format!(
+            "agent_path_validation_failed: kit_root={} reason=canonicalize_kit_root_error",
+            kit_root.display()
+        )
+    })?;
+    let kit_agents_root = canonical_kit_root.join("kit");
+
+    if !canonical_path.starts_with(&kit_agents_root) {
+        anyhow::bail!(
+            "agent_path_validation_failed: path={} reason=outside_kit_root",
+            canonical_path.display()
+        );
+    }
+
+    let relative_path = canonical_path
+        .strip_prefix(&kit_agents_root)
+        .with_context(|| {
+            format!(
+                "agent_path_validation_failed: path={} reason=strip_prefix_error",
+                canonical_path.display()
+            )
+        })?;
+
+    let mut components = relative_path.components();
+    let kit_name_component = components.next();
+    let agents_dir_component = components.next();
+
+    if !matches!(kit_name_component, Some(Component::Normal(_)))
+        || !matches!(
+            agents_dir_component,
+            Some(Component::Normal(dir)) if dir == "agents"
+        )
+        || components.next().is_none()
+    {
+        anyhow::bail!(
+            "agent_path_validation_failed: path={} reason=outside_agents_dir",
+            canonical_path.display()
+        );
+    }
+
+    Ok(canonical_path)
+}
+
+fn normalize_agent_variable_key(raw_key: &str) -> Result<String> {
+    let key = raw_key.trim();
+    if key.is_empty() {
+        anyhow::bail!("agent_arg_validation_failed: reason=empty_variable_key");
+    }
+
+    let key_without_dashes = key.trim_start_matches('-');
+    let key_without_underscores = key_without_dashes.trim_start_matches('_');
+    if key_without_underscores.is_empty() {
+        anyhow::bail!(
+            "agent_arg_validation_failed: key={} reason=empty_variable_key",
+            raw_key
+        );
+    }
+
+    let normalized = key_without_underscores.to_ascii_lowercase();
+    if RESERVED_MDFLOW_VARIABLE_KEYS.contains(&normalized.as_str()) {
+        warn!(
+            key = %raw_key,
+            "agent_arg_validation_failed: reason=reserved_variable_key"
+        );
+        anyhow::bail!(
+            "agent_arg_validation_failed: key={} reason=reserved_variable_key",
+            raw_key
+        );
+    }
+
+    if key_without_underscores
+        .chars()
+        .any(|character| character.is_control() || character.is_whitespace())
+    {
+        anyhow::bail!(
+            "agent_arg_validation_failed: key={} reason=invalid_variable_key",
+            raw_key
+        );
+    }
+
+    Ok(format!("_{}", key_without_underscores))
+}
+
+fn validate_agent_variable_value(raw_key: &str, value: &str) -> Result<()> {
+    if value
+        .chars()
+        .any(|character| character == '\n' || character == '\r' || character.is_control())
+    {
+        warn!(
+            key = %raw_key,
+            "agent_arg_validation_failed: reason=invalid_variable_value"
+        );
+        anyhow::bail!(
+            "agent_arg_validation_failed: key={} reason=invalid_variable_value",
+            raw_key
+        );
+    }
+
+    Ok(())
+}
+
+fn apply_agent_variable_overrides(
+    cmd: &mut Command,
+    variables: &HashMap<String, String>,
+) -> Result<()> {
+    for (key, value) in variables {
+        let normalized_key = normalize_agent_variable_key(key)?;
+        validate_agent_variable_value(key, value)?;
+        cmd.arg(format!("--{}", normalized_key));
+        cmd.arg(value);
+    }
+
+    Ok(())
+}
+
+fn apply_positional_args(cmd: &mut Command, positional_args: &[String]) {
+    if positional_args.is_empty() {
+        return;
+    }
+
+    // Ensure positional arguments are not parsed as mdflow options.
+    cmd.arg("--");
+    for arg in positional_args {
+        cmd.arg(arg);
+    }
+}
+
 /// Execute an agent
 ///
 /// # Arguments
@@ -93,11 +320,24 @@ pub fn execute_agent(
 ) -> Result<Child> {
     let mdflow_cmd =
         get_mdflow_command().context("mdflow not found. Install with: npm install -g mdflow")?;
+    let canonical_agent_path = validate_agent_markdown_path(&agent.path).with_context(|| {
+        format!(
+            "agent_execution_validation_failed: agent={} path={}",
+            agent.name,
+            agent.path.display()
+        )
+    })?;
+    debug!(
+        agent = %agent.name,
+        mode = ?mode,
+        path = %canonical_agent_path.display(),
+        "agent_execute_start"
+    );
 
     let mut cmd = Command::new(mdflow_cmd);
 
     // Add the agent file path
-    cmd.arg(&agent.path);
+    cmd.arg(&canonical_agent_path);
 
     // Add mode-specific flags
     match mode {
@@ -121,25 +361,14 @@ pub fn execute_agent(
     }
 
     // Add runtime variable overrides
-    for (key, value) in variables {
-        // Variables are passed as --_varname value (underscore prefix)
-        let flag = if key.starts_with('_') {
-            format!("--{}", key)
-        } else {
-            format!("--_{}", key)
-        };
-        cmd.arg(&flag);
-        cmd.arg(value);
-    }
+    apply_agent_variable_overrides(&mut cmd, variables)?;
 
     // Add positional arguments
-    for arg in positional_args {
-        cmd.arg(arg);
-    }
+    apply_positional_args(&mut cmd, positional_args);
 
     // Set working directory to agent file's parent
     // This is important for @./relative imports to work correctly
-    if let Some(parent) = agent.path.parent() {
+    if let Some(parent) = canonical_agent_path.parent() {
         cmd.current_dir(parent);
     }
 
@@ -152,12 +381,7 @@ pub fn execute_agent(
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
 
-    // Apply environment from frontmatter _env if present
-    if let Some(ref env) = agent.frontmatter.env {
-        for (key, value) in env {
-            cmd.env(key, value);
-        }
-    }
+    apply_agent_environment_allowlist(&mut cmd, agent.frontmatter.env.as_ref());
 
     let mut child = cmd
         .spawn()
@@ -183,15 +407,28 @@ pub fn execute_agent(
 pub fn explain_agent(agent: &Agent) -> Result<String> {
     let mdflow_cmd =
         get_mdflow_command().context("mdflow not found. Install with: npm install -g mdflow")?;
+    let canonical_agent_path = validate_agent_markdown_path(&agent.path).with_context(|| {
+        format!(
+            "agent_explain_validation_failed: agent={} path={}",
+            agent.name,
+            agent.path.display()
+        )
+    })?;
+    debug!(
+        agent = %agent.name,
+        path = %canonical_agent_path.display(),
+        "agent_explain_start"
+    );
 
     let mut cmd = Command::new(mdflow_cmd);
     cmd.arg("explain");
-    cmd.arg(&agent.path);
+    cmd.arg(&canonical_agent_path);
 
     // Set working directory
-    if let Some(parent) = agent.path.parent() {
+    if let Some(parent) = canonical_agent_path.parent() {
         cmd.current_dir(parent);
     }
+    apply_agent_environment_allowlist(&mut cmd, agent.frontmatter.env.as_ref());
 
     let output = cmd
         .output()
@@ -211,15 +448,28 @@ pub fn explain_agent(agent: &Agent) -> Result<String> {
 pub fn dry_run_agent(agent: &Agent) -> Result<String> {
     let mdflow_cmd =
         get_mdflow_command().context("mdflow not found. Install with: npm install -g mdflow")?;
+    let canonical_agent_path = validate_agent_markdown_path(&agent.path).with_context(|| {
+        format!(
+            "agent_dry_run_validation_failed: agent={} path={}",
+            agent.name,
+            agent.path.display()
+        )
+    })?;
+    debug!(
+        agent = %agent.name,
+        path = %canonical_agent_path.display(),
+        "agent_dry_run_start"
+    );
 
     let mut cmd = Command::new(mdflow_cmd);
-    cmd.arg(&agent.path);
+    cmd.arg(&canonical_agent_path);
     cmd.arg("--_dry-run");
 
     // Set working directory
-    if let Some(parent) = agent.path.parent() {
+    if let Some(parent) = canonical_agent_path.parent() {
         cmd.current_dir(parent);
     }
+    apply_agent_environment_allowlist(&mut cmd, agent.frontmatter.env.as_ref());
 
     let output = cmd
         .output()
@@ -270,7 +520,11 @@ pub fn get_install_instructions(availability: &AgentAvailability) -> String {
 mod tests {
     use super::*;
     use crate::agents::types::{AgentBackend, AgentFrontmatter};
+    use std::collections::HashMap;
+    use std::fs;
     use std::path::PathBuf;
+    use std::process::Command;
+    use tempfile::TempDir;
 
     fn create_test_agent(backend: AgentBackend) -> Agent {
         Agent {
@@ -350,6 +604,239 @@ mod tests {
         assert!(cmd == "mdflow" || cmd == "md");
         assert_eq!(args.len(), 1);
         assert!(args[0].contains("test.claude.md"));
+    }
+
+    #[test]
+    fn test_apply_agent_environment_allowlist_includes_frontmatter_env() {
+        let mut cmd = Command::new("echo");
+        cmd.env("AGENT_SHOULD_BE_REMOVED", "1");
+
+        let mut frontmatter_env = HashMap::new();
+        frontmatter_env.insert("AGENT_FRONTMATTER_TOKEN".to_string(), "abc123".to_string());
+
+        apply_agent_environment_allowlist(&mut cmd, Some(&frontmatter_env));
+
+        let envs: Vec<(String, Option<std::ffi::OsString>)> = cmd
+            .get_envs()
+            .map(|(key, value)| {
+                (
+                    key.to_string_lossy().to_string(),
+                    value.map(|v| v.to_os_string()),
+                )
+            })
+            .collect();
+
+        assert!(
+            envs.iter().all(|(key, value)| {
+                value.is_none()
+                    || SAFE_AGENT_ENV_VARS
+                        .iter()
+                        .any(|allowed| allowed.eq_ignore_ascii_case(key))
+                    || key == "AGENT_FRONTMATTER_TOKEN"
+            }),
+            "command environment should only contain allowlisted keys plus frontmatter _env"
+        );
+
+        assert!(
+            !envs
+                .iter()
+                .any(|(key, value)| value.is_some() && key == "AGENT_SHOULD_BE_REMOVED"),
+            "non-allowlisted variables should be removed by env_clear()"
+        );
+
+        assert!(
+            envs.iter().any(|(key, value)| {
+                key == "AGENT_FRONTMATTER_TOKEN"
+                    && value
+                        .as_ref()
+                        .is_some_and(|val| val == &std::ffi::OsString::from("abc123"))
+            }),
+            "frontmatter _env should be applied after the allowlist scrub"
+        );
+    }
+
+    #[test]
+    fn test_apply_agent_environment_allowlist_rejects_frontmatter_path_override() {
+        if std::env::var_os("PATH").is_none() {
+            return;
+        }
+
+        let mut cmd = Command::new("echo");
+        let mut frontmatter_env = HashMap::new();
+        frontmatter_env.insert("PATH".to_string(), "/tmp/malicious".to_string());
+
+        apply_agent_environment_allowlist(&mut cmd, Some(&frontmatter_env));
+
+        let path_value = cmd
+            .get_envs()
+            .find_map(|(key, value)| {
+                if key.eq_ignore_ascii_case("PATH") {
+                    value.map(|v| v.to_os_string())
+                } else {
+                    None
+                }
+            })
+            .expect("PATH should remain in allowlisted env");
+
+        assert_ne!(
+            path_value,
+            std::ffi::OsString::from("/tmp/malicious"),
+            "frontmatter PATH override should be ignored"
+        );
+    }
+
+    #[test]
+    fn test_normalize_agent_variable_key_rejects_reserved_mdflow_keys() {
+        assert!(normalize_agent_variable_key("quiet").is_err());
+        assert!(normalize_agent_variable_key("_context").is_err());
+        assert!(normalize_agent_variable_key("--_env").is_err());
+        assert!(normalize_agent_variable_key("COMMAND").is_err());
+    }
+
+    #[test]
+    fn test_normalize_agent_variable_key_prefixes_underscore_for_user_vars() {
+        assert_eq!(
+            normalize_agent_variable_key("feature").expect("feature key should be valid"),
+            "_feature"
+        );
+        assert_eq!(
+            normalize_agent_variable_key("_feature").expect("underscored key should be valid"),
+            "_feature"
+        );
+    }
+
+    #[test]
+    fn test_validate_agent_variable_value_rejects_control_characters() {
+        assert!(validate_agent_variable_value("name", "safe-value").is_ok());
+        assert!(validate_agent_variable_value("name", "line1\nline2").is_err());
+        assert!(validate_agent_variable_value("name", "line1\rline2").is_err());
+        assert!(validate_agent_variable_value("name", "bell\u{0007}").is_err());
+    }
+
+    #[test]
+    fn test_apply_positional_args_inserts_argument_terminator() {
+        let mut cmd = Command::new("mdflow");
+        let args = vec!["--looks-like-flag".to_string(), "value".to_string()];
+        apply_positional_args(&mut cmd, &args);
+
+        let parsed_args: Vec<String> = cmd
+            .get_args()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect();
+        assert_eq!(parsed_args, vec!["--", "--looks-like-flag", "value"]);
+    }
+
+    #[test]
+    fn test_apply_agent_variable_overrides_rejects_reserved_keys() {
+        let mut cmd = Command::new("mdflow");
+        let mut variables = HashMap::new();
+        variables.insert("quiet".to_string(), "true".to_string());
+
+        let error = apply_agent_variable_overrides(&mut cmd, &variables)
+            .expect_err("reserved mdflow key should be rejected");
+        assert!(
+            error.to_string().contains("reason=reserved_variable_key"),
+            "error should include reserved_variable_key reason"
+        );
+    }
+
+    #[test]
+    fn test_apply_agent_variable_overrides_rejects_control_chars_in_values() {
+        let mut cmd = Command::new("mdflow");
+        let mut variables = HashMap::new();
+        variables.insert("feature".to_string(), "bad\nvalue".to_string());
+
+        let error = apply_agent_variable_overrides(&mut cmd, &variables)
+            .expect_err("control characters in values should be rejected");
+        assert!(
+            error.to_string().contains("reason=invalid_variable_value"),
+            "error should include invalid_variable_value reason"
+        );
+    }
+
+    #[test]
+    fn test_apply_agent_variable_overrides_formats_mdflow_args() {
+        let mut cmd = Command::new("mdflow");
+        let mut variables = HashMap::new();
+        variables.insert("feature".to_string(), "safe".to_string());
+
+        apply_agent_variable_overrides(&mut cmd, &variables)
+            .expect("valid variable should be accepted");
+
+        let parsed_args: Vec<String> = cmd
+            .get_args()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect();
+        assert_eq!(parsed_args, vec!["--_feature", "safe"]);
+    }
+
+    #[test]
+    fn test_validate_agent_markdown_path_accepts_file_inside_kit_agents_dir() {
+        let temp_dir = TempDir::new().expect("create temp dir");
+        let kit_root = temp_dir.path().join("scriptkit");
+        let agent_dir = kit_root.join("kit/main/agents");
+        fs::create_dir_all(&agent_dir).expect("create agents directory");
+
+        let agent_file = agent_dir.join("review.claude.md");
+        fs::write(&agent_file, "# test").expect("write agent file");
+
+        let resolved = validate_agent_markdown_path_with_kit_root(&agent_file, &kit_root)
+            .expect("agent under kit agents should be accepted");
+        let expected = fs::canonicalize(&agent_file).expect("canonicalize expected path");
+        assert_eq!(resolved, expected);
+    }
+
+    #[test]
+    fn test_validate_agent_markdown_path_rejects_path_with_parent_segments() {
+        let temp_dir = TempDir::new().expect("create temp dir");
+        let kit_root = temp_dir.path().join("scriptkit");
+        let kit_main = kit_root.join("kit/main");
+        fs::create_dir_all(kit_main.join("agents")).expect("create agents directory");
+        fs::write(kit_main.join("escape.claude.md"), "# test").expect("write outside agent file");
+
+        let path_with_parent = kit_main.join("agents/../escape.claude.md");
+        let error = validate_agent_markdown_path_with_kit_root(&path_with_parent, &kit_root)
+            .expect_err("paths with parent dir segments should be rejected");
+        assert!(
+            error.to_string().contains("reason=parent_dir_segment"),
+            "error should include parent_dir_segment reason"
+        );
+    }
+
+    #[test]
+    fn test_validate_agent_markdown_path_rejects_file_outside_agents_directory() {
+        let temp_dir = TempDir::new().expect("create temp dir");
+        let kit_root = temp_dir.path().join("scriptkit");
+        let script_dir = kit_root.join("kit/main/scripts");
+        fs::create_dir_all(&script_dir).expect("create scripts directory");
+
+        let script_file = script_dir.join("not-agent.md");
+        fs::write(&script_file, "# test").expect("write script file");
+
+        let error = validate_agent_markdown_path_with_kit_root(&script_file, &kit_root)
+            .expect_err("file outside agents dir should be rejected");
+        assert!(
+            error.to_string().contains("reason=outside_agents_dir"),
+            "error should include outside_agents_dir reason"
+        );
+    }
+
+    #[test]
+    fn test_validate_agent_markdown_path_rejects_non_markdown_extension() {
+        let temp_dir = TempDir::new().expect("create temp dir");
+        let kit_root = temp_dir.path().join("scriptkit");
+        let agent_dir = kit_root.join("kit/main/agents");
+        fs::create_dir_all(&agent_dir).expect("create agents directory");
+
+        let binary_file = agent_dir.join("review.claude.txt");
+        fs::write(&binary_file, "test").expect("write non-markdown file");
+
+        let error = validate_agent_markdown_path_with_kit_root(&binary_file, &kit_root)
+            .expect_err("non-markdown file should be rejected");
+        assert!(
+            error.to_string().contains("reason=invalid_extension"),
+            "error should include invalid_extension reason"
+        );
     }
 
     // Note: We can't easily test execute_agent without mdflow installed
