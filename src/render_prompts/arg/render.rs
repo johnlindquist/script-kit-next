@@ -90,19 +90,17 @@ impl ScriptListApp {
         actions: Option<Vec<ProtocolAction>>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let _theme = &self.theme;
+        let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
+        let theme = render_context.theme;
+        let design_colors = render_context.design_colors;
+        let design_spacing = render_context.design_spacing;
+        let design_typography = render_context.design_typography;
+        let design_visual = render_context.design_visual;
+        let actions_dialog_top = render_context.actions_dialog_top;
+        let actions_dialog_right = render_context.actions_dialog_right;
         let _filtered = self.filtered_arg_choices();
         let has_actions = actions.is_some() && !actions.as_ref().unwrap().is_empty();
         let has_choices = !choices.is_empty();
-
-        // Use design tokens for GLOBAL theming - all prompts use current design
-        let tokens = get_tokens(self.current_design);
-        let design_colors = tokens.colors();
-        let design_spacing = tokens.spacing();
-        let design_typography = tokens.typography();
-        let design_visual = tokens.visual();
-        let (actions_dialog_top, actions_dialog_right) =
-            prompt_actions_dialog_offsets(design_spacing.padding_sm, design_visual.border_thin);
 
         // Key handler for arg prompt
         let prompt_id = id.clone();
@@ -251,10 +249,10 @@ impl ScriptListApp {
         let input_is_empty = self.arg_input.is_empty();
 
         // P4: Pre-compute theme values for arg prompt - use theme for consistent styling
-        let arg_list_colors = ListItemColors::from_theme(&self.theme);
-        let text_primary = self.theme.colors.text.primary;
-        let text_muted = self.theme.colors.text.muted;
-        let accent_color = self.theme.colors.accent.selected;
+        let arg_list_colors = ListItemColors::from_theme(theme);
+        let text_primary = theme.colors.text.primary;
+        let text_muted = theme.colors.text.muted;
+        let accent_color = theme.colors.accent.selected;
 
         // P0: Clone data needed for uniform_list closure
         let arg_selected_index = self.arg_selected_index;
@@ -306,7 +304,7 @@ impl ScriptListApp {
         };
 
         // Use design tokens for global theming
-        let opacity = self.theme.get_opacity();
+        let opacity = theme.get_opacity();
         let bg_hex = design_colors.background;
         let _bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
         // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
@@ -411,7 +409,7 @@ impl ScriptListApp {
             })
             // Footer with unified actions
             .child({
-                let footer_colors = PromptFooterColors::from_theme(&self.theme);
+                let footer_colors = PromptFooterColors::from_theme(theme);
                 let helper_status =
                     resolve_arg_helper_status(has_choices, filtered_choices_len, input_is_empty);
                 let helper_text = Some(arg_helper_status_text(helper_status));

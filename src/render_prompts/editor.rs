@@ -55,6 +55,11 @@ impl ScriptListApp {
         entity: Entity<EditorPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
+        let theme = render_context.theme;
+        let design_visual = render_context.design_visual;
+        let actions_dialog_top = render_context.actions_dialog_top;
+        let actions_dialog_right = render_context.actions_dialog_right;
         let has_actions =
             self.sdk_actions.is_some() && !self.sdk_actions.as_ref().unwrap().is_empty();
 
@@ -64,19 +69,12 @@ impl ScriptListApp {
             editor.suppress_keys = show_actions;
         });
 
-        // Use design tokens for GLOBAL theming
-        let tokens = get_tokens(self.current_design);
-        let design_spacing = tokens.spacing();
-        let design_visual = tokens.visual();
-        let (actions_dialog_top, actions_dialog_right) =
-            prompt_actions_dialog_offsets(design_spacing.padding_sm, design_visual.border_thin);
-
         // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
         // Shadows are handled by app_shell
         let _box_shadows = self.create_box_shadows();
 
         // VIBRANCY: Use foundation helper - returns None when vibrancy enabled (let Root handle bg)
-        let vibrancy_bg = get_vibrancy_background(&self.theme);
+        let vibrancy_bg = get_vibrancy_background(theme);
 
         // Use explicit height from layout constants instead of h_full()
         // h_full() doesn't work at the root level because there's no parent to fill
@@ -269,7 +267,7 @@ impl ScriptListApp {
                 let entity_weak = entity_for_footer.downgrade();
                 let prompt_id_for_submit = prompt_id.clone();
 
-                let footer_colors = PromptFooterColors::from_theme(&self.theme);
+                let footer_colors = PromptFooterColors::from_theme(theme);
 
                 // Snippet guidance stays first, with editor submit/actions hints appended.
                 let helper_text = Some(editor_footer_helper_text(snippet_helper_text.as_deref()));

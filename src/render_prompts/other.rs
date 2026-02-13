@@ -11,7 +11,9 @@ mod __render_prompts_other_docs {
 impl ScriptListApp {
     #[inline]
     fn other_prompt_shell_radius_lg(&self) -> f32 {
-        get_tokens(self.current_design).visual().radius_lg
+        PromptRenderContext::new(self.theme.as_ref(), self.current_design)
+            .design_visual
+            .radius_lg
     }
 
     #[inline]
@@ -217,21 +219,20 @@ impl ScriptListApp {
         entity: Entity<prompts::WebcamPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        // Use design tokens for GLOBAL theming (same pattern as DivPrompt)
-        let tokens = get_tokens(self.current_design);
-        let design_colors = tokens.colors();
-        let shell_radius = tokens.visual().radius_lg;
+        let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
+        let theme = render_context.theme;
+        let design_colors = render_context.design_colors;
+        let shell_radius = render_context.design_visual.radius_lg;
         let handle_key = cx.listener(Self::other_prompt_shell_handle_key_webcam);
 
         // VIBRANCY: Use foundation helper - returns None when vibrancy enabled (let Root handle bg)
-        let vibrancy_bg = get_vibrancy_background(&self.theme);
+        let vibrancy_bg = get_vibrancy_background(theme);
 
         // Use explicit height from layout constants
         let content_height = window_resize::layout::STANDARD_HEIGHT;
 
         // Footer colors and handlers for PromptFooter (same shared prompt footer pattern)
-        let footer_colors =
-            prompt_footer_colors_for_prompt(&design_colors, !self.theme.is_dark_mode());
+        let footer_colors = prompt_footer_colors_for_prompt(&design_colors, !theme.is_dark_mode());
 
         // Footer config: Capture Photo as primary action, always show Actions button
         let footer_config = prompt_footer_config_with_status(

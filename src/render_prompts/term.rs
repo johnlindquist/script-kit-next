@@ -117,16 +117,13 @@ impl ScriptListApp {
         entity: Entity<term_prompt::TermPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
+        let theme = render_context.theme;
+        let actions_dialog_top = render_context.actions_dialog_top;
+        let actions_dialog_right = render_context.actions_dialog_right;
         let has_actions =
             self.sdk_actions.is_some() && !self.sdk_actions.as_ref().unwrap().is_empty();
         let actions_mode = term_prompt_actions_mode(has_actions);
-
-        // Use design tokens for shared prompt spacing constants.
-        let tokens = get_tokens(self.current_design);
-        let design_spacing = tokens.spacing();
-        let design_visual = tokens.visual();
-        let (actions_dialog_top, actions_dialog_right) =
-            prompt_actions_dialog_offsets(design_spacing.padding_sm, design_visual.border_thin);
 
         // Sync suppress_keys with actions popup state so terminal ignores keys when popup is open
         let show_actions = self.show_actions_popup;
@@ -139,7 +136,7 @@ impl ScriptListApp {
         let _box_shadows = self.create_box_shadows();
 
         // VIBRANCY: Use foundation helper - returns None when vibrancy enabled (let Root handle bg)
-        let vibrancy_bg = get_vibrancy_background(&self.theme);
+        let vibrancy_bg = get_vibrancy_background(theme);
 
         // Use explicit height from layout constants instead of h_full()
         // h_full() doesn't work at the root level because there's no parent to fill
@@ -301,7 +298,7 @@ impl ScriptListApp {
         );
 
         // Footer colors for the terminal prompt - use theme for consistent styling
-        let footer_colors = PromptFooterColors::from_theme(&self.theme);
+        let footer_colors = PromptFooterColors::from_theme(theme);
 
         // Footer configuration - Terminal uses "Close" as primary action (Cmd+W)
         // and Actions as secondary (Cmd+Shift+K) when actions are available
