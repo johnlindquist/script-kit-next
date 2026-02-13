@@ -97,9 +97,11 @@ pub fn init_notes_db() -> Result<()> {
             VALUES('delete', OLD.rowid, OLD.title, OLD.content);
         END;
 
-        -- Trigger for UPDATE: only sync when title or content changes
-        -- This prevents FTS churn when toggling pin or other metadata changes
-        CREATE TRIGGER notes_au AFTER UPDATE OF title, content ON notes BEGIN
+        -- Trigger for UPDATE: only sync when title or content actually changes
+        -- This prevents FTS churn when UPDATE sets same title/content values
+        CREATE TRIGGER notes_au AFTER UPDATE ON notes
+        WHEN OLD.title <> NEW.title OR OLD.content <> NEW.content
+        BEGIN
             INSERT INTO notes_fts(notes_fts, rowid, title, content)
             VALUES('delete', OLD.rowid, OLD.title, OLD.content);
             INSERT INTO notes_fts(rowid, title, content)
@@ -279,6 +281,7 @@ pub fn search_notes(query: &str) -> Result<Vec<Note>> {
             INNER JOIN notes_fts fts ON n.rowid = fts.rowid
             WHERE notes_fts MATCH ?1 AND n.deleted_at IS NULL
             ORDER BY bm25(notes_fts)
+            LIMIT 200
             "#,
         )?;
 
@@ -339,6 +342,28 @@ pub fn delete_note_permanently(id: NoteId) -> Result<()> {
         .context("Failed to delete note")?;
 
     info!(note_id = %id, "Note permanently deleted");
+    Ok(())
+}
+
+/// Permanently delete all soft-deleted notes in a single batch operation.
+pub fn delete_all_deleted_notes() -> Result<()> {
+    let db = get_db()?;
+    let mut conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+
+    let tx = conn
+        .transaction()
+        .context("Failed to start delete_all_deleted_notes transaction")?;
+
+    let count = tx
+        .execute("DELETE FROM notes WHERE deleted_at IS NOT NULL", [])
+        .context("Failed to delete all soft-deleted notes")?;
+
+    tx.commit()
+        .context("Failed to commit delete_all_deleted_notes transaction")?;
+
+    info!(deleted_count = count, "Deleted all soft-deleted notes");
     Ok(())
 }
 
@@ -425,6 +450,18 @@ fn row_to_note(row: &rusqlite::Row) -> rusqlite::Result<Note> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_test_token(prefix: &str) -> String {
+        let millis = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_millis())
+            .unwrap_or(0);
+        format!(
+            "{prefix}_{millis}_{}",
+            NoteId::new().as_str().replace('-', "")
+        )
+    }
 
     #[test]
     fn test_db_path() {
@@ -460,5 +497,109 @@ mod tests {
                 result.err()
             );
         }
+    }
+
+    #[test]
+    fn test_notes_au_trigger_has_when_guard_for_real_content_changes() {
+        let _ = init_notes_db();
+
+        let db = get_db().expect("notes db should be initialized");
+        let conn = db.lock().expect("notes db lock should succeed");
+
+        let trigger_sql: String = conn
+            .query_row(
+                "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'notes_au'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("notes_au trigger should exist");
+
+        assert!(
+            trigger_sql.contains("WHEN OLD.title <> NEW.title OR OLD.content <> NEW.content"),
+            "notes_au trigger should only fire when title/content differ: {trigger_sql}"
+        );
+    }
+
+    #[test]
+    fn test_search_notes_limits_fts_results_to_200() {
+        let _ = init_notes_db();
+        let token = unique_test_token("search_limit");
+        let now = Utc::now();
+        let mut note_ids = Vec::new();
+
+        for index in 0..220 {
+            let note = Note {
+                id: NoteId::new(),
+                title: format!("{token} title {index}"),
+                content: format!("{token} content {index}"),
+                created_at: now,
+                updated_at: now,
+                deleted_at: None,
+                is_pinned: false,
+                sort_order: index,
+            };
+
+            save_note(&note).expect("failed to save note for search limit test");
+            note_ids.push(note.id);
+        }
+
+        let results = search_notes(&token).expect("search should succeed");
+
+        for id in note_ids {
+            delete_note_permanently(id).expect("cleanup failed for search limit test");
+        }
+
+        assert!(
+            results.len() <= 200,
+            "search should cap FTS results at 200, got {}",
+            results.len()
+        );
+    }
+
+    #[test]
+    fn test_delete_all_deleted_notes_removes_soft_deleted_notes_in_batch() {
+        let _ = init_notes_db();
+        let token = unique_test_token("batch_delete");
+        let now = Utc::now();
+
+        let deleted_note = Note {
+            id: NoteId::new(),
+            title: format!("{token} deleted"),
+            content: format!("{token} deleted content"),
+            created_at: now,
+            updated_at: now,
+            deleted_at: Some(now),
+            is_pinned: false,
+            sort_order: 0,
+        };
+        save_note(&deleted_note).expect("failed to save soft-deleted note");
+
+        let active_note = Note {
+            id: NoteId::new(),
+            title: format!("{token} active"),
+            content: format!("{token} active content"),
+            created_at: now,
+            updated_at: now,
+            deleted_at: None,
+            is_pinned: false,
+            sort_order: 1,
+        };
+        save_note(&active_note).expect("failed to save active note");
+
+        delete_all_deleted_notes().expect("batch delete should succeed");
+
+        let deleted_result = get_note(deleted_note.id).expect("query deleted note should succeed");
+        let active_result = get_note(active_note.id).expect("query active note should succeed");
+
+        delete_note_permanently(active_note.id).expect("cleanup failed for active note");
+
+        assert!(
+            deleted_result.is_none(),
+            "soft-deleted note should be permanently removed by batch delete"
+        );
+        assert!(
+            active_result.is_some(),
+            "active note should not be removed by batch delete"
+        );
     }
 }
