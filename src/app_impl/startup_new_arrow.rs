@@ -335,30 +335,12 @@
                                             (old_idx + 1).min(filtered_len.saturating_sub(1));
                                     }
 
-                                    // Scroll to the row containing the selected emoji
-                                    // Row layout: for each category, 1 header + ceil(n/cols) cell rows
-                                    let mut flat_offset: usize = 0;
-                                    let mut row_offset: usize = 0;
-                                    for cat in crate::emoji::ALL_CATEGORIES.iter().copied() {
-                                        let cat_count =
-                                            ordered.iter().filter(|e| e.category == cat).count();
-                                        if cat_count == 0 {
-                                            continue;
-                                        }
-                                        if flat_offset + cat_count > *selected_index {
-                                            // Selected emoji is in this category
-                                            let idx_in_cat = *selected_index - flat_offset;
-                                            let cell_row = idx_in_cat / cols;
-                                            // +1 for the header row
-                                            row_offset += 1 + cell_row;
-                                            break;
-                                        }
-                                        // 1 header + ceil(cat_count / cols) cell rows
-                                        row_offset += 1 + cat_count.div_ceil(cols);
-                                        flat_offset += cat_count;
-                                    }
+                                    let row = crate::emoji::compute_scroll_row(
+                                        *selected_index,
+                                        &ordered,
+                                    );
                                     this.emoji_scroll_handle.scroll_to_item(
-                                        row_offset,
+                                        row,
                                         gpui::ScrollStrategy::Nearest,
                                     );
 
