@@ -14,14 +14,23 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Local, TimeZone, Utc};
 use croner::Cron;
 use std::collections::HashMap;
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 use tracing::{debug, info, warn};
+
+pub(crate) const SCHEDULED_SCRIPT_MAX_CONCURRENT_RUNS: usize = 4;
+#[allow(dead_code)] // Used by the binary scheduler handler include in src/main.rs.
+pub(crate) const SCHEDULED_SCRIPT_STDERR_CAPTURE_MAX_BYTES: usize = 64 * 1024;
+#[allow(dead_code)] // Used by the binary scheduler handler include in src/main.rs.
+pub(crate) const SCHEDULED_SCRIPT_STDERR_LOG_MAX_BYTES: usize = 4 * 1024;
+
+static SCHEDULED_SCRIPT_ACTIVE_RUNS: AtomicUsize = AtomicUsize::new(0);
 /// Indicates whether the schedule came from a raw cron expression or natural language.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScheduleSource {
@@ -70,6 +79,119 @@ pub struct Scheduler {
     /// One-shot signal to wake the scheduler immediately during stop.
     stop_tx: Option<Sender<()>>,
 }
+
+pub(crate) fn active_scheduled_run_count() -> usize {
+    SCHEDULED_SCRIPT_ACTIVE_RUNS.load(Ordering::SeqCst)
+}
+
+#[allow(dead_code)] // Used by the binary scheduler handler include in src/main.rs.
+pub(crate) fn try_acquire_scheduled_run_slot() -> bool {
+    let mut current = SCHEDULED_SCRIPT_ACTIVE_RUNS.load(Ordering::SeqCst);
+    loop {
+        if current >= SCHEDULED_SCRIPT_MAX_CONCURRENT_RUNS {
+            return false;
+        }
+
+        match SCHEDULED_SCRIPT_ACTIVE_RUNS.compare_exchange(
+            current,
+            current + 1,
+            Ordering::SeqCst,
+            Ordering::SeqCst,
+        ) {
+            Ok(_) => return true,
+            Err(actual) => current = actual,
+        }
+    }
+}
+
+#[allow(dead_code)] // Used by the binary scheduler handler include in src/main.rs.
+pub(crate) fn release_scheduled_run_slot() {
+    let mut current = SCHEDULED_SCRIPT_ACTIVE_RUNS.load(Ordering::SeqCst);
+    loop {
+        if current == 0 {
+            warn!(
+                active_runs = 0usize,
+                "Scheduled run slot release ignored because no runs are active"
+            );
+            return;
+        }
+
+        match SCHEDULED_SCRIPT_ACTIVE_RUNS.compare_exchange(
+            current,
+            current - 1,
+            Ordering::SeqCst,
+            Ordering::SeqCst,
+        ) {
+            Ok(_) => return,
+            Err(actual) => current = actual,
+        }
+    }
+}
+
+#[allow(dead_code)] // Used by scheduler stderr helpers in the binary path.
+fn floor_char_boundary(value: &str, max_bytes: usize) -> usize {
+    if max_bytes >= value.len() {
+        return value.len();
+    }
+
+    let mut idx = max_bytes;
+    while idx > 0 && !value.is_char_boundary(idx) {
+        idx -= 1;
+    }
+    idx
+}
+
+#[allow(dead_code)] // Used by the binary scheduler handler include in src/main.rs.
+pub(crate) fn truncate_scheduler_stderr_for_log(stderr: &str, max_bytes: usize) -> (String, bool) {
+    if stderr.len() <= max_bytes {
+        return (stderr.to_string(), false);
+    }
+
+    let truncate_at = floor_char_boundary(stderr, max_bytes);
+    (stderr[..truncate_at].to_string(), true)
+}
+
+#[allow(dead_code)] // Used by the binary scheduler handler include in src/main.rs.
+pub(crate) fn read_limited_stderr<R: std::io::Read>(
+    stderr: R,
+    capture_limit: usize,
+) -> std::io::Result<(String, bool)> {
+    let mut reader = BufReader::new(stderr);
+    let mut captured = String::new();
+    let mut captured_bytes = 0usize;
+    let mut capture_truncated = false;
+    let mut line = String::new();
+
+    loop {
+        line.clear();
+        let bytes_read = reader.read_line(&mut line)?;
+        if bytes_read == 0 {
+            break;
+        }
+
+        if captured_bytes >= capture_limit {
+            capture_truncated = true;
+            continue;
+        }
+
+        let remaining = capture_limit - captured_bytes;
+        if bytes_read <= remaining {
+            captured.push_str(&line);
+            captured_bytes += bytes_read;
+            continue;
+        }
+
+        let truncate_at = floor_char_boundary(&line, remaining);
+        if truncate_at > 0 {
+            captured.push_str(&line[..truncate_at]);
+            captured_bytes += truncate_at;
+        }
+        capture_truncated = true;
+    }
+
+    Ok((captured, capture_truncated))
+}
+
 impl Scheduler {
     /// Create a new Scheduler.
     ///
@@ -272,12 +394,26 @@ impl Scheduler {
             }
 
             // Send run events and update next_run times
+            let active_runs = active_scheduled_run_count();
+            let mut remaining_dispatches =
+                SCHEDULED_SCRIPT_MAX_CONCURRENT_RUNS.saturating_sub(active_runs);
             for path in scripts_to_run {
+                if remaining_dispatches == 0 {
+                    warn!(
+                        path = %path.display(),
+                        active_runs,
+                        limit = SCHEDULED_SCRIPT_MAX_CONCURRENT_RUNS,
+                        "Skipping scheduled run dispatch because concurrency limit is reached"
+                    );
+                    continue;
+                }
+
                 debug!(path = %path.display(), "Script due to run");
                 if tx.send(SchedulerEvent::RunScript(path.clone())).is_err() {
                     warn!("Failed to send RunScript event, receiver dropped");
                     return;
                 }
+                remaining_dispatches = remaining_dispatches.saturating_sub(1);
             }
 
             // Update next_run times
@@ -383,7 +519,14 @@ where
 mod tests {
     use super::*;
     use chrono::{FixedOffset, TimeZone, Timelike};
+    use std::io::Cursor;
     use std::time::Instant;
+
+    static SCHEDULED_SLOT_TEST_GUARD: Mutex<()> = Mutex::new(());
+
+    fn reset_scheduled_run_slots_for_test() {
+        SCHEDULED_SCRIPT_ACTIVE_RUNS.store(0, Ordering::SeqCst);
+    }
 
     #[test]
     fn test_parse_cron_valid() {
@@ -704,5 +847,65 @@ mod tests {
             elapsed < Duration::from_millis(500),
             "scheduler stop took too long: {elapsed:?}"
         );
+    }
+
+    #[test]
+    fn test_try_acquire_scheduled_run_slot_rejects_when_limit_reached() {
+        let _guard = SCHEDULED_SLOT_TEST_GUARD
+            .lock()
+            .expect("slot test mutex should lock");
+        reset_scheduled_run_slots_for_test();
+
+        for _ in 0..SCHEDULED_SCRIPT_MAX_CONCURRENT_RUNS {
+            assert!(
+                try_acquire_scheduled_run_slot(),
+                "slot acquisition should succeed under limit"
+            );
+        }
+
+        assert!(
+            !try_acquire_scheduled_run_slot(),
+            "slot acquisition should fail once limit is reached"
+        );
+
+        for _ in 0..SCHEDULED_SCRIPT_MAX_CONCURRENT_RUNS {
+            release_scheduled_run_slot();
+        }
+        assert_eq!(
+            active_scheduled_run_count(),
+            0,
+            "all slots should be released"
+        );
+    }
+
+    #[test]
+    fn test_read_limited_stderr_caps_capture_when_output_exceeds_limit() {
+        let mut stderr = "line\n".repeat(20_000);
+        stderr.push_str("final line\n");
+
+        let (captured, truncated) = read_limited_stderr(
+            Cursor::new(stderr.as_bytes()),
+            SCHEDULED_SCRIPT_STDERR_CAPTURE_MAX_BYTES,
+        )
+        .expect("stderr capture should succeed");
+
+        assert!(
+            captured.len() <= SCHEDULED_SCRIPT_STDERR_CAPTURE_MAX_BYTES,
+            "captured stderr exceeded configured cap"
+        );
+        assert!(truncated, "capture should be marked truncated");
+    }
+
+    #[test]
+    fn test_truncate_scheduler_stderr_for_log_preserves_utf8_boundaries() {
+        let stderr = "error: 漢字🙂 repeated";
+        let (truncated, did_truncate) = truncate_scheduler_stderr_for_log(stderr, 10);
+
+        assert!(did_truncate, "stderr should be truncated for small cap");
+        assert!(
+            std::str::from_utf8(truncated.as_bytes()).is_ok(),
+            "truncated stderr should remain valid UTF-8"
+        );
+        assert!(truncated.len() <= 10, "truncated output exceeds byte cap");
     }
 }

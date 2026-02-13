@@ -4,7 +4,8 @@
 //! including both comment-based metadata (// Name:, // Description:) and
 //! typed metadata from `metadata = {...}` declarations.
 
-use std::fs;
+use std::fs::{self, File};
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use tracing::debug;
 
@@ -195,15 +196,122 @@ pub fn extract_schedule_metadata(content: &str) -> ScheduleMetadata {
 
 /// Extract schedule metadata from a script file path
 pub fn extract_schedule_metadata_from_file(path: &PathBuf) -> ScheduleMetadata {
-    match fs::read_to_string(path) {
-        Ok(content) => extract_schedule_metadata(&content),
+    let file = match File::open(path) {
+        Ok(file) => file,
         Err(e) => {
             debug!(
                 error = %e,
                 path = %path.display(),
                 "Could not read script file for schedule metadata extraction"
             );
-            ScheduleMetadata::default()
+            return ScheduleMetadata::default();
         }
+    };
+
+    let reader = BufReader::new(file);
+    let mut metadata = ScheduleMetadata::default();
+
+    for line in reader.lines().take(30) {
+        match line {
+            Ok(line) => {
+                if let Some((key, value)) = parse_metadata_line(&line) {
+                    match key.to_lowercase().as_str() {
+                        "cron" => {
+                            if metadata.cron.is_none() && !value.is_empty() {
+                                metadata.cron = Some(value);
+                            }
+                        }
+                        "schedule" => {
+                            if metadata.schedule.is_none() && !value.is_empty() {
+                                metadata.schedule = Some(value);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            Err(e) => {
+                debug!(
+                    error = %e,
+                    path = %path.display(),
+                    "Could not read line while extracting schedule metadata"
+                );
+                break;
+            }
+        }
+
+        if metadata.cron.is_some() && metadata.schedule.is_some() {
+            break;
+        }
+    }
+
+    metadata
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::io::Write;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn create_temp_script_file(test_name: &str, content: &str) -> PathBuf {
+        let mut path = std::env::temp_dir();
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock should be after unix epoch")
+            .as_nanos();
+        path.push(format!(
+            "script-kit-gpui-metadata-{test_name}-{}-{timestamp}.ts",
+            std::process::id()
+        ));
+
+        let mut file = fs::File::create(&path).expect("temp script file should be created");
+        file.write_all(content.as_bytes())
+            .expect("temp script content should be written");
+        path
+    }
+
+    #[test]
+    fn test_extract_schedule_metadata_from_file_reads_only_first_30_lines() {
+        let mut content = (1..=30)
+            .map(|index| format!("// Note: line {index}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        content.push_str("\n// Cron: */5 * * * *\n");
+
+        let path = create_temp_script_file("first-30-lines-only", &content);
+        let metadata = extract_schedule_metadata_from_file(&path);
+
+        assert!(
+            metadata.cron.is_none(),
+            "cron metadata past line 30 should not be read"
+        );
+        assert!(
+            metadata.schedule.is_none(),
+            "schedule metadata should remain empty when not present in first 30 lines"
+        );
+
+        fs::remove_file(&path).expect("temp script file should be removed");
+    }
+
+    #[test]
+    fn test_extract_schedule_metadata_from_file_parses_metadata_within_first_30_lines() {
+        let content = [
+            "// Name: Scheduled script",
+            "// Cron: 0 9 * * *",
+            "// Schedule: every day at 9am",
+            "console.log('hello')",
+        ]
+        .join("\n");
+
+        let path = create_temp_script_file("within-30-lines", &content);
+        let metadata = extract_schedule_metadata_from_file(&path);
+
+        assert_eq!(metadata.cron.as_deref(), Some("0 9 * * *"));
+        assert_eq!(metadata.schedule.as_deref(), Some("every day at 9am"));
+
+        fs::remove_file(&path).expect("temp script file should be removed");
     }
 }
