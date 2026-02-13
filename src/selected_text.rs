@@ -226,10 +226,10 @@ fn set_via_clipboard_fallback(text: &str) -> Result<()> {
     thread::sleep(Duration::from_millis(10));
 
     // Simulate Cmd+V using Core Graphics (more reliable on macOS than enigo)
-    simulate_paste_with_cg()?;
+    let paste_result = simulate_paste_with_cg();
 
     // Wait for paste to complete
-    thread::sleep(Duration::from_millis(50));
+    thread::sleep(Duration::from_millis(150));
 
     // Restore original clipboard (best effort)
     if let Some(original_text) = original {
@@ -241,6 +241,8 @@ fn set_via_clipboard_fallback(text: &str) -> Result<()> {
             debug!("Restored original clipboard");
         }
     }
+
+    paste_result?;
 
     info!("Set selected text via clipboard fallback");
     Ok(())
@@ -338,7 +340,46 @@ pub fn simulate_paste_with_cg() -> Result<()> {
 // ============================================================================
 // Unit Tests (always run with `cargo test`)
 // ============================================================================
-// None - all tests in this module require system interaction
+#[cfg(test)]
+mod unit_tests {
+    #[test]
+    fn test_set_via_clipboard_fallback_restores_clipboard_after_paste_attempt() {
+        let source = include_str!("selected_text.rs");
+
+        let paste_result_idx = source
+            .find("let paste_result = simulate_paste_with_cg();")
+            .expect("expected set_via_clipboard_fallback to capture paste result");
+        let post_paste_delay_idx = source
+            .find("thread::sleep(Duration::from_millis(150));")
+            .expect("expected 150ms post-paste delay");
+        let restore_idx = source
+            .find("if let Some(original_text) = original {")
+            .expect("expected clipboard restore block");
+        let pre_restore_delay_idx = source
+            .find("thread::sleep(Duration::from_millis(100));")
+            .expect("expected 100ms pre-restore delay");
+        let paste_return_idx = source
+            .find("paste_result?;")
+            .expect("expected paste result to be returned after restore attempt");
+
+        assert!(
+            paste_result_idx < post_paste_delay_idx,
+            "paste should run before post-paste delay"
+        );
+        assert!(
+            post_paste_delay_idx < restore_idx,
+            "restore should occur after post-paste delay"
+        );
+        assert!(
+            restore_idx < paste_return_idx,
+            "paste result should be returned after restore attempt"
+        );
+        assert!(
+            pre_restore_delay_idx > restore_idx,
+            "pre-restore delay should remain inside restore block"
+        );
+    }
+}
 
 // ============================================================================
 // System Tests (require `cargo test --features system-tests`)
