@@ -7,8 +7,12 @@
                 let key = event.keystroke.key.as_str();
                 let is_up = crate::ui_foundation::is_key_up(key);
                 let is_down = crate::ui_foundation::is_key_down(key);
-                // Check for Up/Down arrow keys (no modifiers except shift for selection)
-                if (is_up || is_down)
+                let is_left = crate::ui_foundation::is_key_left(key);
+                let is_right = crate::ui_foundation::is_key_right(key);
+                // Check for arrow keys (no modifiers except shift for selection)
+                // Left/right included for EmojiPickerView grid navigation;
+                // other views fall through to _ => {} so Input handles them normally.
+                if (is_up || is_down || is_left || is_right)
                     && !event.keystroke.modifiers.platform
                     && !event.keystroke.modifiers.alt
                     && !event.keystroke.modifiers.control
@@ -300,6 +304,67 @@
 
                                         this.move_selection_down(cx);
                                     }
+                                    cx.stop_propagation();
+                                }
+                                AppView::EmojiPickerView {
+                                    selected_index,
+                                    filter,
+                                    selected_category,
+                                } => {
+                                    let ordered = crate::emoji::filtered_ordered_emojis(
+                                        filter,
+                                        *selected_category,
+                                    );
+                                    let filtered_len = ordered.len();
+                                    if filtered_len == 0 {
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+
+                                    let cols = crate::emoji::GRID_COLS;
+                                    let old_idx = *selected_index;
+                                    if is_up {
+                                        *selected_index = old_idx.saturating_sub(cols);
+                                    } else if is_down {
+                                        *selected_index =
+                                            (old_idx + cols).min(filtered_len.saturating_sub(1));
+                                    } else if is_left {
+                                        *selected_index = old_idx.saturating_sub(1);
+                                    } else if is_right {
+                                        *selected_index =
+                                            (old_idx + 1).min(filtered_len.saturating_sub(1));
+                                    }
+
+                                    // Scroll to the row containing the selected emoji
+                                    // Row layout: for each category, 1 header + ceil(n/cols) cell rows
+                                    let mut flat_offset: usize = 0;
+                                    let mut row_offset: usize = 0;
+                                    for cat in crate::emoji::ALL_CATEGORIES.iter().copied() {
+                                        let cat_count =
+                                            ordered.iter().filter(|e| e.category == cat).count();
+                                        if cat_count == 0 {
+                                            continue;
+                                        }
+                                        if flat_offset + cat_count > *selected_index {
+                                            // Selected emoji is in this category
+                                            let idx_in_cat = *selected_index - flat_offset;
+                                            let cell_row = idx_in_cat / cols;
+                                            // +1 for the header row
+                                            row_offset += 1 + cell_row;
+                                            break;
+                                        }
+                                        // 1 header + ceil(cat_count / cols) cell rows
+                                        row_offset += 1 + (cat_count + cols - 1) / cols;
+                                        flat_offset += cat_count;
+                                    }
+                                    this.emoji_scroll_handle.scroll_to_item(
+                                        row_offset,
+                                        gpui::ScrollStrategy::Nearest,
+                                    );
+
+                                    this.input_mode = InputMode::Keyboard;
+                                    this.hovered_index = None;
+                                    cx.notify();
                                     cx.stop_propagation();
                                 }
                                 _ => {

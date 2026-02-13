@@ -15,13 +15,9 @@ impl ScriptListApp {
         let text_dimmed = self.theme.colors.text.dimmed;
         let ui_border = self.theme.colors.ui.border;
 
-        let mut filtered_emojis: Vec<crate::emoji::Emoji> = crate::emoji::search_emojis(&filter)
-            .into_iter()
-            .copied()
-            .collect();
-        if let Some(category) = selected_category {
-            filtered_emojis.retain(|emoji| emoji.category == category);
-        }
+        let ordered_emojis =
+            crate::emoji::filtered_ordered_emojis(&filter, selected_category);
+        let cols = crate::emoji::GRID_COLS;
 
         #[derive(Clone)]
         enum EmojiGridRow {
@@ -29,38 +25,34 @@ impl ScriptListApp {
             Cells { start_index: usize, count: usize },
         }
 
-        let mut ordered_emojis: Vec<crate::emoji::Emoji> =
-            Vec::with_capacity(filtered_emojis.len());
         let mut rows: Vec<EmojiGridRow> = Vec::new();
+        {
+            let mut flat_offset = 0;
+            for category in crate::emoji::ALL_CATEGORIES.iter().copied() {
+                let category_count = ordered_emojis[flat_offset..]
+                    .iter()
+                    .take_while(|e| e.category == category)
+                    .count();
 
-        for category in crate::emoji::ALL_CATEGORIES.iter().copied() {
-            let category_emojis: Vec<crate::emoji::Emoji> = filtered_emojis
-                .iter()
-                .copied()
-                .filter(|emoji| emoji.category == category)
-                .collect();
+                if category_count == 0 {
+                    continue;
+                }
 
-            if category_emojis.is_empty() {
-                continue;
-            }
-
-            let category_start_index = ordered_emojis.len();
-            let category_count = category_emojis.len();
-            ordered_emojis.extend(category_emojis);
-
-            rows.push(EmojiGridRow::Header {
-                title: category.display_name().to_string(),
-                count: category_count,
-            });
-
-            let mut row_offset = 0;
-            while row_offset < category_count {
-                let row_count = (category_count - row_offset).min(8);
-                rows.push(EmojiGridRow::Cells {
-                    start_index: category_start_index + row_offset,
-                    count: row_count,
+                rows.push(EmojiGridRow::Header {
+                    title: category.display_name().to_string(),
+                    count: category_count,
                 });
-                row_offset += row_count;
+
+                let mut row_offset = 0;
+                while row_offset < category_count {
+                    let row_count = (category_count - row_offset).min(cols);
+                    rows.push(EmojiGridRow::Cells {
+                        start_index: flat_offset + row_offset,
+                        count: row_count,
+                    });
+                    row_offset += row_count;
+                }
+                flat_offset += category_count;
             }
         }
 
@@ -124,26 +116,8 @@ impl ScriptListApp {
                     selected_category,
                 } = &mut this.current_view
                 {
-                    let mut filtered_emojis: Vec<crate::emoji::Emoji> =
-                        crate::emoji::search_emojis(filter)
-                            .into_iter()
-                            .copied()
-                            .collect();
-                    if let Some(category) = *selected_category {
-                        filtered_emojis.retain(|emoji| emoji.category == category);
-                    }
-
-                    let mut ordered_emojis: Vec<crate::emoji::Emoji> =
-                        Vec::with_capacity(filtered_emojis.len());
-                    for category in crate::emoji::ALL_CATEGORIES.iter().copied() {
-                        ordered_emojis.extend(
-                            filtered_emojis
-                                .iter()
-                                .copied()
-                                .filter(|emoji| emoji.category == category),
-                        );
-                    }
-
+                    let ordered_emojis =
+                        crate::emoji::filtered_ordered_emojis(filter, *selected_category);
                     let filtered_len = ordered_emojis.len();
                     if filtered_len == 0 {
                         *selected_index = 0;
@@ -156,12 +130,13 @@ impl ScriptListApp {
                         *selected_index = filtered_len - 1;
                     }
 
+                    let cols = crate::emoji::GRID_COLS;
                     match key_str.as_str() {
                         "up" | "arrowup" => {
-                            *selected_index = (*selected_index).saturating_sub(8);
+                            *selected_index = (*selected_index).saturating_sub(cols);
                         }
                         "down" | "arrowdown" => {
-                            *selected_index = (*selected_index + 8).min(filtered_len - 1);
+                            *selected_index = (*selected_index + cols).min(filtered_len - 1);
                         }
                         "left" | "arrowleft" => {
                             *selected_index = (*selected_index).saturating_sub(1);
@@ -229,6 +204,7 @@ impl ScriptListApp {
                         .map(|row_index| match rows_for_list.get(row_index) {
                             Some(EmojiGridRow::Header { title, count }) => div()
                                 .id(row_index)
+                                .w_full()
                                 .px(px(design_spacing.padding_lg))
                                 .py(px(4.0))
                                 .text_sm()
@@ -245,9 +221,10 @@ impl ScriptListApp {
 
                                 div()
                                     .id(row_index)
+                                    .w_full()
                                     .flex()
                                     .px(px(design_spacing.padding_lg))
-                                    .gap(px(4.0))
+                                    .gap(px(2.0))
                                     .children((0..row_count).filter_map(move |cell_offset| {
                                         let flat_emoji_index = row_start_index + cell_offset;
                                         let emoji = emojis_for_row.get(flat_emoji_index)?;
@@ -270,10 +247,13 @@ impl ScriptListApp {
                                                 .rounded(px(6.0))
                                                 .text_size(px(26.0))
                                                 .cursor_pointer()
-                                                .when(is_selected, |d| {
-                                                    d.border_2().border_color(rgb(selected_border))
+                                                .border_2()
+                                                .border_color(if is_selected {
+                                                    rgb(selected_border)
+                                                } else {
+                                                    rgba(0x00000000)
                                                 })
-                                                .when(is_hovered, |d| d.bg(hover_bg))
+                                                .when(is_hovered && !is_selected, |d| d.bg(hover_bg))
                                                 .on_click(
                                                     move |_event: &gpui::ClickEvent,
                                                           _window: &mut Window,
@@ -331,6 +311,7 @@ impl ScriptListApp {
                         .collect()
                 },
             )
+            .w_full()
             .h_full()
             .track_scroll(&self.emoji_scroll_handle)
             .into_any_element()
@@ -428,8 +409,8 @@ mod emoji_picker_tests {
             "EmojiGridRow should include Cells variant with start index and count"
         );
         assert!(
-            source.contains("(category_count - row_offset).min(8)"),
-            "emoji grid should chunk category rows to 8 cells per row"
+            source.contains("(category_count - row_offset).min(cols)"),
+            "emoji grid should chunk category rows using shared GRID_COLS constant"
         );
     }
 
