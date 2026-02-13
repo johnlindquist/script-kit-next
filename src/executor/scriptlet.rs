@@ -20,6 +20,22 @@ use super::runner::find_sdk_path;
 #[cfg(target_os = "macos")]
 use crate::selected_text;
 
+const SAFE_SCRIPTLET_ENV_VARS: [&str; 9] = [
+    "PATH", "HOME", "TMPDIR", "TEMP", "TMP", "USER", "LANG", "TERM", "SHELL",
+];
+
+// Scriptlets are untrusted content. Clear inherited environment variables to avoid leaking
+// parent-process secrets (tokens, credentials) and re-add only minimal execution basics.
+fn apply_scriptlet_environment_allowlist(cmd: &mut Command) {
+    cmd.env_clear();
+
+    for env_key in SAFE_SCRIPTLET_ENV_VARS {
+        if let Some(env_value) = std::env::var_os(env_key) {
+            cmd.env(env_key, env_value);
+        }
+    }
+}
+
 /// Options for scriptlet execution
 #[derive(Debug, Clone, Default)]
 pub struct ScriptletExecOptions {
@@ -363,6 +379,54 @@ mod secure_tempfile_tests {
     }
 }
 
+#[cfg(test)]
+mod scriptlet_environment_allowlist_tests {
+    use super::{apply_scriptlet_environment_allowlist, SAFE_SCRIPTLET_ENV_VARS};
+    use std::process::Command;
+
+    #[test]
+    fn test_apply_scriptlet_environment_allowlist_only_includes_safe_keys() {
+        let mut cmd = Command::new("sh");
+        cmd.env("SCRIPTLET_ENV_SHOULD_NOT_LEAK", "secret");
+        apply_scriptlet_environment_allowlist(&mut cmd);
+
+        let allowlist = SAFE_SCRIPTLET_ENV_VARS;
+        let contains_disallowed = cmd.get_envs().any(|(key, value)| {
+            value.is_some()
+                && !allowlist
+                    .iter()
+                    .any(|allowed_key| key.eq_ignore_ascii_case(allowed_key))
+        });
+        let contains_leaked_value = cmd.get_envs().any(|(key, value)| {
+            value.is_some() && key.eq_ignore_ascii_case("SCRIPTLET_ENV_SHOULD_NOT_LEAK")
+        });
+
+        assert!(
+            !contains_disallowed,
+            "command environment should only contain allowlisted keys"
+        );
+        assert!(
+            !contains_leaked_value,
+            "non-allowlisted variables should be removed by env_clear()"
+        );
+    }
+
+    #[test]
+    fn test_apply_scriptlet_environment_allowlist_keeps_path_when_available() {
+        if std::env::var_os("PATH").is_none() {
+            return;
+        }
+
+        let mut cmd = Command::new("sh");
+        apply_scriptlet_environment_allowlist(&mut cmd);
+
+        let has_path = cmd
+            .get_envs()
+            .any(|(key, value)| value.is_some() && key.eq_ignore_ascii_case("PATH"));
+        assert!(has_path, "PATH should remain available when present");
+    }
+}
+
 /// Execute a shell scriptlet (bash, zsh, sh, fish, etc.)
 #[tracing::instrument(skip(content, options), fields(shell = %shell, content_len = content.len()))]
 pub fn execute_shell_scriptlet(
@@ -385,6 +449,7 @@ pub fn execute_shell_scriptlet(
     if let Some(ref cwd) = options.cwd {
         cmd.current_dir(cwd);
     }
+    apply_scriptlet_environment_allowlist(&mut cmd);
 
     let output = cmd.output().map_err(|e| {
         // Provide helpful error message with installation suggestions
@@ -497,6 +562,7 @@ pub fn execute_with_interpreter(
     if let Some(ref cwd) = options.cwd {
         cmd.current_dir(cwd);
     }
+    apply_scriptlet_environment_allowlist(&mut cmd);
 
     let output = cmd
         .output()
@@ -523,6 +589,7 @@ pub fn execute_applescript(
     if let Some(ref cwd) = options.cwd {
         cmd.current_dir(cwd);
     }
+    apply_scriptlet_environment_allowlist(&mut cmd);
 
     let output = cmd
         .output()
@@ -569,6 +636,7 @@ pub fn execute_typescript(
     if let Some(ref cwd) = options.cwd {
         cmd.current_dir(cwd);
     }
+    apply_scriptlet_environment_allowlist(&mut cmd);
 
     let output = cmd
         .output()
@@ -722,8 +790,8 @@ pub fn execute_type(content: &str) -> Result<ScriptletResult, String> {
 
     // Use AppleScript to simulate typing
     let script = format!(
-        r#"tell application "System Events" to keystroke "{}""#,
-        text.replace('\\', "\\\\").replace('"', "\\\"")
+        r#"tell application \"System Events\" to keystroke \"{}\""#,
+        crate::utils::escape_applescript_string(text)
     );
 
     let output = Command::new("osascript")

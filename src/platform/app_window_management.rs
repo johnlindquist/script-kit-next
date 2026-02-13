@@ -407,6 +407,10 @@ pub fn configure_as_floating_panel() {
             "PANEL",
             "Main window: Will NOT appear in Cmd+Tab app switcher (floating utility panel)",
         );
+
+        // Install cursor rect management so the underlying app's cursor
+        // (e.g. Terminal's I-beam) doesn't bleed through our panel.
+        install_cursor_tracking();
     }
 }
 

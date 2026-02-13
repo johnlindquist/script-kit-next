@@ -1,0 +1,9 @@
+/Users/johnlindquist/dev/script-kit-gpui/target-agent-prompt-container/debug/deps/objc2_media_toolbox-4130927b425fe672.d: /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-media-toolbox-0.3.2/src/lib.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-media-toolbox-0.3.2/src/generated/mod.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-media-toolbox-0.3.2/src/generated/MTAudioProcessingTap.rs
+
+/Users/johnlindquist/dev/script-kit-gpui/target-agent-prompt-container/debug/deps/libobjc2_media_toolbox-4130927b425fe672.rlib: /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-media-toolbox-0.3.2/src/lib.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-media-toolbox-0.3.2/src/generated/mod.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-media-toolbox-0.3.2/src/generated/MTAudioProcessingTap.rs
+
+/Users/johnlindquist/dev/script-kit-gpui/target-agent-prompt-container/debug/deps/libobjc2_media_toolbox-4130927b425fe672.rmeta: /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-media-toolbox-0.3.2/src/lib.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-media-toolbox-0.3.2/src/generated/mod.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-media-toolbox-0.3.2/src/generated/MTAudioProcessingTap.rs
+
+/Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-media-toolbox-0.3.2/src/lib.rs:
+/Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-media-toolbox-0.3.2/src/generated/mod.rs:
+/Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-media-toolbox-0.3.2/src/generated/MTAudioProcessingTap.rs:

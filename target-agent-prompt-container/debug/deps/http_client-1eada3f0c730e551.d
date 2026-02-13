@@ -1,0 +1,10 @@
+/Users/johnlindquist/dev/script-kit-gpui/target-agent-prompt-container/debug/deps/http_client-1eada3f0c730e551.d: /Users/johnlindquist/.cargo/git/checkouts/zed-a70e2ad075855582/94faaeb/crates/http_client/src/http_client.rs /Users/johnlindquist/.cargo/git/checkouts/zed-a70e2ad075855582/94faaeb/crates/http_client/src/async_body.rs /Users/johnlindquist/.cargo/git/checkouts/zed-a70e2ad075855582/94faaeb/crates/http_client/src/github.rs /Users/johnlindquist/.cargo/git/checkouts/zed-a70e2ad075855582/94faaeb/crates/http_client/src/github_download.rs
+
+/Users/johnlindquist/dev/script-kit-gpui/target-agent-prompt-container/debug/deps/libhttp_client-1eada3f0c730e551.rlib: /Users/johnlindquist/.cargo/git/checkouts/zed-a70e2ad075855582/94faaeb/crates/http_client/src/http_client.rs /Users/johnlindquist/.cargo/git/checkouts/zed-a70e2ad075855582/94faaeb/crates/http_client/src/async_body.rs /Users/johnlindquist/.cargo/git/checkouts/zed-a70e2ad075855582/94faaeb/crates/http_client/src/github.rs /Users/johnlindquist/.cargo/git/checkouts/zed-a70e2ad075855582/94faaeb/crates/http_client/src/github_download.rs
+
+/Users/johnlindquist/dev/script-kit-gpui/target-agent-prompt-container/debug/deps/libhttp_client-1eada3f0c730e551.rmeta: /Users/johnlindquist/.cargo/git/checkouts/zed-a70e2ad075855582/94faaeb/crates/http_client/src/http_client.rs /Users/johnlindquist/.cargo/git/checkouts/zed-a70e2ad075855582/94faaeb/crates/http_client/src/async_body.rs /Users/johnlindquist/.cargo/git/checkouts/zed-a70e2ad075855582/94faaeb/crates/http_client/src/github.rs /Users/johnlindquist/.cargo/git/checkouts/zed-a70e2ad075855582/94faaeb/crates/http_client/src/github_download.rs
+
+/Users/johnlindquist/.cargo/git/checkouts/zed-a70e2ad075855582/94faaeb/crates/http_client/src/http_client.rs:
+/Users/johnlindquist/.cargo/git/checkouts/zed-a70e2ad075855582/94faaeb/crates/http_client/src/async_body.rs:
+/Users/johnlindquist/.cargo/git/checkouts/zed-a70e2ad075855582/94faaeb/crates/http_client/src/github.rs:
+/Users/johnlindquist/.cargo/git/checkouts/zed-a70e2ad075855582/94faaeb/crates/http_client/src/github_download.rs:

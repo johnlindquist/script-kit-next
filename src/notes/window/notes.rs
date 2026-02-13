@@ -142,19 +142,19 @@ impl NotesApp {
     /// Delete the currently selected note (soft delete)
     pub(super) fn delete_selected_note(&mut self, cx: &mut Context<Self>) {
         if let Some(id) = self.selected_note_id {
-            if let Some(note) = self.notes.iter_mut().find(|n| n.id == id) {
+            if let Some(idx) = self.notes.iter().position(|n| n.id == id) {
+                let mut note = self.notes.remove(idx);
                 note.soft_delete();
 
-                if let Err(e) = storage::save_note(note) {
+                if let Err(e) = storage::save_note(&note) {
                     tracing::error!(error = %e, "Failed to delete note");
                 }
 
                 // Move to deleted notes
-                self.deleted_notes.insert(0, note.clone());
+                self.deleted_notes.insert(0, note);
             }
 
-            // Remove from visible list and select next
-            self.notes.retain(|n| n.id != id);
+            // Select next note
             self.selected_note_id = self.notes.first().map(|n| n.id);
 
             self.show_action_feedback("Deleted · ⌘⇧T trash", false);
@@ -181,19 +181,20 @@ impl NotesApp {
     /// Restore the selected note from trash
     pub(super) fn restore_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(id) = self.selected_note_id {
-            if let Some(note) = self.deleted_notes.iter_mut().find(|n| n.id == id) {
+            if let Some(idx) = self.deleted_notes.iter().position(|n| n.id == id) {
+                let mut note = self.deleted_notes.remove(idx);
                 note.restore();
 
-                if let Err(e) = storage::save_note(note) {
+                if let Err(e) = storage::save_note(&note) {
                     tracing::error!(error = %e, "Failed to restore note");
+                    self.deleted_notes.insert(idx, note);
                     return;
                 }
 
                 // Move back to active notes
-                self.notes.insert(0, note.clone());
+                self.notes.insert(0, note);
             }
 
-            self.deleted_notes.retain(|n| n.id != id);
             self.view_mode = NotesViewMode::AllNotes;
             self.selected_note_id = Some(id);
             self.select_note(id, window, cx);

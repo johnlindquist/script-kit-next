@@ -279,16 +279,16 @@ impl NotesApp {
         if let Some(id) = self.selected_note_id {
             // Update the note in our cache (in-memory only)
             if let Some(note) = self.notes.iter_mut().find(|n| n.id == id) {
-                note.set_content(content_string.clone());
+                note.set_content(content_string);
                 // Mark as dirty - actual save is debounced
                 self.has_unsaved_changes = true;
-            }
 
-            // Auto-resize: adjust window height based on content
-            let new_line_count = content_string.lines().count().max(1);
-            if new_line_count != self.last_line_count {
-                self.last_line_count = new_line_count;
-                self.update_window_height(window, new_line_count, cx);
+                // Auto-resize: adjust window height based on content
+                let new_line_count = note.content.lines().count().max(1);
+                if new_line_count != self.last_line_count {
+                    self.last_line_count = new_line_count;
+                    self.update_window_height(window, new_line_count, cx);
+                }
             }
 
             cx.notify();

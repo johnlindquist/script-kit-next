@@ -358,6 +358,21 @@ impl PromptFooter {
         let hover_bg = rgba(footer_button_hover_rgba(self.colors));
         let active_bg = rgba(footer_button_active_rgba(self.colors));
 
+        // GPUI cursor styles don't inherit to children, so child elements
+        // must also set cursor_pointer when the button is interactive.
+        let mut label_element = div()
+            .text_size(px(button_font_size))
+            .text_color(self.colors.accent.to_rgb())
+            .child(label);
+        let mut shortcut_element = div()
+            .text_size(px(button_font_size))
+            .text_color(self.colors.text_muted.to_rgb())
+            .child(shortcut);
+        if is_clickable {
+            label_element = label_element.cursor_pointer();
+            shortcut_element = shortcut_element.cursor_pointer();
+        }
+
         let mut button = div()
             .id(ElementId::Name(id.into()))
             .flex()
@@ -368,24 +383,17 @@ impl PromptFooter {
             .py(px(6.))
             .rounded(px(4.))
             .cursor_default()
-            .child(
-                div()
-                    .text_size(px(button_font_size))
-                    .text_color(self.colors.accent.to_rgb())
-                    .child(label),
-            )
-            .child(
-                div()
-                    .text_size(px(button_font_size))
-                    .text_color(self.colors.text_muted.to_rgb())
-                    .child(shortcut),
-            );
+            .child(label_element)
+            .child(shortcut_element);
 
         if is_clickable {
             button = button
                 .cursor_pointer()
                 .hover(move |s| s.bg(hover_bg))
-                .active(move |s| s.bg(active_bg));
+                .active(move |s| s.bg(active_bg))
+                .on_mouse_move(|_: &MouseMoveEvent, _window, _cx| {
+                    crate::platform::claim_cursor_pointer();
+                });
         } else if disabled {
             button = button.opacity(0.5).cursor_default();
         }

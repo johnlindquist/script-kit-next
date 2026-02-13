@@ -296,28 +296,61 @@ fn test_merge_shared_actions_mixed() {
 // Integration Tests (filesystem-based)
 // ========================================
 
+fn with_temp_scriptlet_extensions_dir(test_fn: impl FnOnce(&std::path::Path)) {
+    use std::ffi::OsString;
+    use std::sync::{Mutex, OnceLock};
+    use tempfile::TempDir;
+
+    static SK_PATH_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+    struct SkPathGuard {
+        previous: Option<OsString>,
+    }
+
+    impl Drop for SkPathGuard {
+        fn drop(&mut self) {
+            if let Some(previous) = &self.previous {
+                std::env::set_var(crate::setup::SK_PATH_ENV, previous);
+            } else {
+                std::env::remove_var(crate::setup::SK_PATH_ENV);
+            }
+        }
+    }
+
+    let lock = SK_PATH_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("SK_PATH lock poisoned");
+
+    let temp_dir = TempDir::new().expect("create temp dir for scriptlet tests");
+    let extensions_dir = temp_dir.path().join("kit").join("main").join("extensions");
+    std::fs::create_dir_all(&extensions_dir).expect("create extensions directory");
+
+    let previous = std::env::var_os(crate::setup::SK_PATH_ENV);
+    std::env::set_var(crate::setup::SK_PATH_ENV, temp_dir.path());
+    let _guard = SkPathGuard { previous };
+
+    test_fn(&extensions_dir);
+
+    drop(lock);
+}
+
 #[test]
 fn test_shared_actions_loaded_from_companion_file() {
     use std::fs;
-    use tempfile::TempDir;
 
-    // Create temp directory
-    let temp_dir = TempDir::new().unwrap();
-    let temp_path = temp_dir.path();
-
-    // Create main.md with a scriptlet
-    let main_md_path = temp_path.join("main.md");
-    let main_md_content = r#"## Open Google
+    with_temp_scriptlet_extensions_dir(|extensions_dir| {
+        let main_md_path = extensions_dir.join("main.md");
+        let main_md_content = r#"## Open Google
 
 ```open
 https://www.google.com
 ```
 "#;
-    fs::write(&main_md_path, main_md_content).unwrap();
+        fs::write(&main_md_path, main_md_content).unwrap();
 
-    // Create main.actions.md with shared actions
-    let actions_md_path = temp_path.join("main.actions.md");
-    let actions_md_content = r#"### Copy URL
+        let actions_md_path = extensions_dir.join("main.actions.md");
+        let actions_md_content = r#"### Copy URL
 <!-- shortcut: cmd+c -->
 ```bash
 echo "{{content}}" | pbcopy
@@ -328,69 +361,55 @@ echo "{{content}}" | pbcopy
 open -a Safari "{{content}}"
 ```
 "#;
-    fs::write(&actions_md_path, actions_md_content).unwrap();
+        fs::write(&actions_md_path, actions_md_content).unwrap();
 
-    // Parse the main.md file
-    let content = fs::read_to_string(&main_md_path).unwrap();
-    let scriptlets = parse_markdown_as_scriptlets(&content, Some(main_md_path.to_str().unwrap()));
+        let content = fs::read_to_string(&main_md_path).unwrap();
+        let scriptlets =
+            parse_markdown_as_scriptlets(&content, Some(main_md_path.to_str().unwrap()));
 
-    // Should have 1 scriptlet
-    assert_eq!(scriptlets.len(), 1);
+        assert_eq!(scriptlets.len(), 1);
 
-    // The scriptlet should have the shared actions merged
-    let scriptlet = &scriptlets[0];
-    assert_eq!(scriptlet.name, "Open Google");
-    assert_eq!(scriptlet.actions.len(), 2);
+        let scriptlet = &scriptlets[0];
+        assert_eq!(scriptlet.name, "Open Google");
+        assert_eq!(scriptlet.actions.len(), 2);
 
-    // Check the actions are correct
-    assert_eq!(scriptlet.actions[0].name, "Copy URL");
-    assert_eq!(scriptlet.actions[0].shortcut, Some("cmd+c".to_string()));
-    assert!(scriptlet.actions[0].code.contains("pbcopy"));
+        assert_eq!(scriptlet.actions[0].name, "Copy URL");
+        assert_eq!(scriptlet.actions[0].shortcut, Some("cmd+c".to_string()));
+        assert!(scriptlet.actions[0].code.contains("pbcopy"));
 
-    assert_eq!(scriptlet.actions[1].name, "Open in Safari");
-    assert!(scriptlet.actions[1].code.contains("Safari"));
+        assert_eq!(scriptlet.actions[1].name, "Open in Safari");
+        assert!(scriptlet.actions[1].code.contains("Safari"));
+    });
 }
 
 #[test]
 fn test_shared_actions_not_loaded_for_actions_file() {
     use std::fs;
-    use tempfile::TempDir;
 
-    // Create temp directory
-    let temp_dir = TempDir::new().unwrap();
-    let temp_path = temp_dir.path();
-
-    // Create main.actions.md (the actions file itself)
-    let actions_md_path = temp_path.join("main.actions.md");
-    let actions_md_content = r#"### Copy URL
+    with_temp_scriptlet_extensions_dir(|extensions_dir| {
+        let actions_md_path = extensions_dir.join("main.actions.md");
+        let actions_md_content = r#"### Copy URL
 ```bash
 echo "test" | pbcopy
 ```
 "#;
-    fs::write(&actions_md_path, actions_md_content).unwrap();
+        fs::write(&actions_md_path, actions_md_content).unwrap();
 
-    // Parsing the .actions.md file should NOT try to load main.actions.actions.md
-    // (it would be a recursive loop)
-    let content = fs::read_to_string(&actions_md_path).unwrap();
-    let scriptlets =
-        parse_markdown_as_scriptlets(&content, Some(actions_md_path.to_str().unwrap()));
+        let content = fs::read_to_string(&actions_md_path).unwrap();
+        let scriptlets =
+            parse_markdown_as_scriptlets(&content, Some(actions_md_path.to_str().unwrap()));
 
-    // Should have 0 scriptlets (actions files only have H3, not H2)
-    assert_eq!(scriptlets.len(), 0);
+        assert_eq!(scriptlets.len(), 0);
+    });
 }
 
 #[test]
 fn test_inline_actions_take_precedence_over_shared() {
     use std::fs;
-    use tempfile::TempDir;
 
-    // Create temp directory
-    let temp_dir = TempDir::new().unwrap();
-    let temp_path = temp_dir.path();
-
-    // Create main.md with a scriptlet that has an inline action
-    let main_md_path = temp_path.join("main.md");
-    let main_md_content = r#"## My Scriptlet
+    with_temp_scriptlet_extensions_dir(|extensions_dir| {
+        let main_md_path = extensions_dir.join("main.md");
+        let main_md_content = r#"## My Scriptlet
 
 ```bash
 echo "hello"
@@ -402,11 +421,10 @@ echo "hello"
 inline copy code
 ```
 "#;
-    fs::write(&main_md_path, main_md_content).unwrap();
+        fs::write(&main_md_path, main_md_content).unwrap();
 
-    // Create main.actions.md with a shared action of the same name
-    let actions_md_path = temp_path.join("main.actions.md");
-    let actions_md_content = r#"### Copy
+        let actions_md_path = extensions_dir.join("main.actions.md");
+        let actions_md_content = r#"### Copy
 <!-- shortcut: cmd+c -->
 ```bash
 shared copy code
@@ -417,27 +435,96 @@ shared copy code
 rm something
 ```
 "#;
-    fs::write(&actions_md_path, actions_md_content).unwrap();
+        fs::write(&actions_md_path, actions_md_content).unwrap();
 
-    // Parse the main.md file
-    let content = fs::read_to_string(&main_md_path).unwrap();
-    let scriptlets = parse_markdown_as_scriptlets(&content, Some(main_md_path.to_str().unwrap()));
+        let content = fs::read_to_string(&main_md_path).unwrap();
+        let scriptlets =
+            parse_markdown_as_scriptlets(&content, Some(main_md_path.to_str().unwrap()));
 
-    assert_eq!(scriptlets.len(), 1);
-    let scriptlet = &scriptlets[0];
+        assert_eq!(scriptlets.len(), 1);
+        let scriptlet = &scriptlets[0];
 
-    // Should have 2 actions: inline Copy + shared Delete
-    // The shared Copy should be skipped because inline takes precedence
-    assert_eq!(scriptlet.actions.len(), 2);
+        assert_eq!(scriptlet.actions.len(), 2);
+        assert_eq!(scriptlet.actions[0].name, "Copy");
+        assert_eq!(scriptlet.actions[0].code, "inline copy code");
+        assert_eq!(
+            scriptlet.actions[0].shortcut,
+            Some("cmd+shift+c".to_string())
+        );
+        assert_eq!(scriptlet.actions[1].name, "Delete");
+    });
+}
 
-    // First action is inline Copy
-    assert_eq!(scriptlet.actions[0].name, "Copy");
-    assert_eq!(scriptlet.actions[0].code, "inline copy code");
-    assert_eq!(
-        scriptlet.actions[0].shortcut,
-        Some("cmd+shift+c".to_string())
-    ); // inline shortcut
+#[test]
+fn test_parse_markdown_rejects_source_path_with_parent_segments() {
+    use std::fs;
 
-    // Second action is shared Delete
-    assert_eq!(scriptlet.actions[1].name, "Delete");
+    with_temp_scriptlet_extensions_dir(|extensions_dir| {
+        let main_md_path = extensions_dir.join("main.md");
+        let markdown = r#"## Test Script
+
+```bash
+echo "hello"
+```
+"#;
+        fs::write(&main_md_path, markdown).unwrap();
+        let content = fs::read_to_string(&main_md_path).unwrap();
+
+        let traversing_source = format!(
+            "{}/../extensions/main.md",
+            extensions_dir.to_string_lossy()
+        );
+        let scriptlets = parse_markdown_as_scriptlets(&content, Some(&traversing_source));
+
+        assert!(
+            scriptlets.is_empty(),
+            "scriptlets should be rejected when source path includes '..'"
+        );
+    });
+}
+
+#[test]
+fn test_parse_scriptlets_with_validation_reports_size_limit_error() {
+    let oversized_payload =
+        "x".repeat((2 * 1024 * 1024) + 16);
+    let markdown = format!("## Big Script\n```bash\n{}\n```", oversized_payload);
+
+    let result = parse_scriptlets_with_validation(&markdown, None);
+
+    assert!(result.scriptlets.is_empty());
+    assert_eq!(result.errors.len(), 1);
+    assert!(
+        result.errors[0]
+            .error_message
+            .contains("scriptlet_file_size_limit_exceeded")
+    );
+}
+
+#[test]
+fn test_parse_markdown_skips_oversized_shared_actions_file() {
+    use std::fs;
+
+    with_temp_scriptlet_extensions_dir(|extensions_dir| {
+        let main_md_path = extensions_dir.join("main.md");
+        let main_md_content = r#"## Script With Actions
+
+```bash
+echo "run"
+```
+"#;
+        fs::write(&main_md_path, main_md_content).unwrap();
+
+        let oversized_actions = "a".repeat((2 * 1024 * 1024) + 16);
+        fs::write(extensions_dir.join("main.actions.md"), oversized_actions).unwrap();
+
+        let content = fs::read_to_string(&main_md_path).unwrap();
+        let scriptlets =
+            parse_markdown_as_scriptlets(&content, Some(main_md_path.to_str().unwrap()));
+
+        assert_eq!(scriptlets.len(), 1);
+        assert!(
+            scriptlets[0].actions.is_empty(),
+            "oversized companion actions files should be ignored"
+        );
+    });
 }

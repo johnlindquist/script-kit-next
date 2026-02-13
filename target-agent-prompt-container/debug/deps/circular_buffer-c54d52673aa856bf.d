@@ -1,0 +1,10 @@
+/Users/johnlindquist/dev/script-kit-gpui/target-agent-prompt-container/debug/deps/circular_buffer-c54d52673aa856bf.d: /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/circular-buffer-1.2.0/src/lib.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/circular-buffer-1.2.0/src/drain.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/circular-buffer-1.2.0/src/iter.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/circular-buffer-1.2.0/src/io.rs
+
+/Users/johnlindquist/dev/script-kit-gpui/target-agent-prompt-container/debug/deps/libcircular_buffer-c54d52673aa856bf.rlib: /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/circular-buffer-1.2.0/src/lib.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/circular-buffer-1.2.0/src/drain.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/circular-buffer-1.2.0/src/iter.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/circular-buffer-1.2.0/src/io.rs
+
+/Users/johnlindquist/dev/script-kit-gpui/target-agent-prompt-container/debug/deps/libcircular_buffer-c54d52673aa856bf.rmeta: /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/circular-buffer-1.2.0/src/lib.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/circular-buffer-1.2.0/src/drain.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/circular-buffer-1.2.0/src/iter.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/circular-buffer-1.2.0/src/io.rs
+
+/Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/circular-buffer-1.2.0/src/lib.rs:
+/Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/circular-buffer-1.2.0/src/drain.rs:
+/Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/circular-buffer-1.2.0/src/iter.rs:
+/Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/circular-buffer-1.2.0/src/io.rs:

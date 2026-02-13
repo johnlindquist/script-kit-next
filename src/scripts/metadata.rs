@@ -209,43 +209,19 @@ pub fn extract_schedule_metadata_from_file(path: &PathBuf) -> ScheduleMetadata {
     };
 
     let reader = BufReader::new(file);
-    let mut metadata = ScheduleMetadata::default();
-
-    for line in reader.lines().take(30) {
-        match line {
-            Ok(line) => {
-                if let Some((key, value)) = parse_metadata_line(&line) {
-                    match key.to_lowercase().as_str() {
-                        "cron" => {
-                            if metadata.cron.is_none() && !value.is_empty() {
-                                metadata.cron = Some(value);
-                            }
-                        }
-                        "schedule" => {
-                            if metadata.schedule.is_none() && !value.is_empty() {
-                                metadata.schedule = Some(value);
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            Err(e) => {
-                debug!(
-                    error = %e,
-                    path = %path.display(),
-                    "Could not read line while extracting schedule metadata"
-                );
-                break;
-            }
+    let first_30_lines = match reader.lines().take(30).collect::<Result<Vec<_>, _>>() {
+        Ok(lines) => lines.join("\n"),
+        Err(e) => {
+            debug!(
+                error = %e,
+                path = %path.display(),
+                "Could not read line while extracting schedule metadata"
+            );
+            return ScheduleMetadata::default();
         }
+    };
 
-        if metadata.cron.is_some() && metadata.schedule.is_some() {
-            break;
-        }
-    }
-
-    metadata
+    extract_schedule_metadata(&first_30_lines)
 }
 
 #[cfg(test)]

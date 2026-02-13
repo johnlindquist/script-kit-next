@@ -1,0 +1,10 @@
+/Users/johnlindquist/dev/script-kit-gpui/target-agent-prompt-container/debug/deps/notify_types-ec271bd58a0498bb.d: /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/notify-types-1.0.1/src/lib.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/notify-types-1.0.1/src/debouncer_full.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/notify-types-1.0.1/src/debouncer_mini.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/notify-types-1.0.1/src/event.rs
+
+/Users/johnlindquist/dev/script-kit-gpui/target-agent-prompt-container/debug/deps/libnotify_types-ec271bd58a0498bb.rlib: /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/notify-types-1.0.1/src/lib.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/notify-types-1.0.1/src/debouncer_full.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/notify-types-1.0.1/src/debouncer_mini.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/notify-types-1.0.1/src/event.rs
+
+/Users/johnlindquist/dev/script-kit-gpui/target-agent-prompt-container/debug/deps/libnotify_types-ec271bd58a0498bb.rmeta: /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/notify-types-1.0.1/src/lib.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/notify-types-1.0.1/src/debouncer_full.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/notify-types-1.0.1/src/debouncer_mini.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/notify-types-1.0.1/src/event.rs
+
+/Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/notify-types-1.0.1/src/lib.rs:
+/Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/notify-types-1.0.1/src/debouncer_full.rs:
+/Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/notify-types-1.0.1/src/debouncer_mini.rs:
+/Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/notify-types-1.0.1/src/event.rs:

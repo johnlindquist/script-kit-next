@@ -70,11 +70,8 @@ impl NotesApp {
                 });
             }
             NotesSortMode::Alphabetical => {
-                self.notes.sort_by(|a, b| match (a.is_pinned, b.is_pinned) {
-                    (true, false) => std::cmp::Ordering::Less,
-                    (false, true) => std::cmp::Ordering::Greater,
-                    _ => a.title.to_lowercase().cmp(&b.title.to_lowercase()),
-                });
+                self.notes
+                    .sort_by_cached_key(|n| (!n.is_pinned, n.title.to_lowercase()));
             }
         }
         cx.notify();

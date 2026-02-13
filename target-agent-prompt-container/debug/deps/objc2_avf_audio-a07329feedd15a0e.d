@@ -1,0 +1,9 @@
+/Users/johnlindquist/dev/script-kit-gpui/target-agent-prompt-container/debug/deps/objc2_avf_audio-a07329feedd15a0e.d: /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-avf-audio-0.3.2/src/lib.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-avf-audio-0.3.2/src/generated/mod.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-avf-audio-0.3.2/src/generated/AVAudioSessionRoute.rs
+
+/Users/johnlindquist/dev/script-kit-gpui/target-agent-prompt-container/debug/deps/libobjc2_avf_audio-a07329feedd15a0e.rlib: /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-avf-audio-0.3.2/src/lib.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-avf-audio-0.3.2/src/generated/mod.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-avf-audio-0.3.2/src/generated/AVAudioSessionRoute.rs
+
+/Users/johnlindquist/dev/script-kit-gpui/target-agent-prompt-container/debug/deps/libobjc2_avf_audio-a07329feedd15a0e.rmeta: /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-avf-audio-0.3.2/src/lib.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-avf-audio-0.3.2/src/generated/mod.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-avf-audio-0.3.2/src/generated/AVAudioSessionRoute.rs
+
+/Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-avf-audio-0.3.2/src/lib.rs:
+/Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-avf-audio-0.3.2/src/generated/mod.rs:
+/Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-avf-audio-0.3.2/src/generated/AVAudioSessionRoute.rs:

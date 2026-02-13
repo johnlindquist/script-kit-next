@@ -259,15 +259,27 @@ impl RenderOnce for Button {
             }
         };
 
+        // Wrap label text in a div so we can set cursor_pointer on it.
+        // GPUI cursor styles don't inherit to children, so the deepest
+        // element under the mouse determines the cursor.
+        let mut label_element = div().child(label_text);
+        if show_pointer {
+            label_element = label_element.cursor_pointer();
+        }
+
         // Build shortcut element if present - smaller than label, same accent color
         // Use flex + items_center to ensure vertical alignment with the label
         let shortcut_element = if let Some(sc) = shortcut {
-            div()
+            let mut el = div()
                 .flex()
                 .items_center()
                 .text_xs()
                 .ml(px(BUTTON_SHORTCUT_MARGIN_LEFT_PX))
-                .child(sc)
+                .child(sc);
+            if show_pointer {
+                el = el.cursor_pointer();
+            }
+            el
         } else {
             div()
         };
@@ -297,7 +309,7 @@ impl RenderOnce for Button {
             .font_weight(FontWeight::MEDIUM)
             .font_family(crate::list_item::FONT_SYSTEM_UI)
             .cursor_default()
-            .child(label_text)
+            .child(label_element)
             .child(shortcut_element);
 
         if loading {
@@ -316,7 +328,14 @@ impl RenderOnce for Button {
         // Apply hover styles unless disabled
         // Keep text color the same, just add subtle background lift
         if show_pointer {
-            button = button.cursor_pointer().hover(move |s| s.bg(hover_bg));
+            button = button
+                .cursor_pointer()
+                .hover(move |s| s.bg(hover_bg))
+                // Bypass GPUI's cursor system for non-activating popup windows:
+                // directly set NSCursor via platform API on mouse move.
+                .on_mouse_move(|_: &MouseMoveEvent, _window, _cx| {
+                    crate::platform::claim_cursor_pointer();
+                });
         } else if disabled {
             button = button.opacity(0.5).cursor_default();
         } else if loading {

@@ -1,0 +1,10 @@
+/Users/johnlindquist/dev/script-kit-gpui/target-agent-prompt-container/debug/deps/filetime-2c00a56525011a1c.d: /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/filetime-0.2.26/src/lib.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/filetime-0.2.26/src/unix/mod.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/filetime-0.2.26/src/unix/utimes.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/filetime-0.2.26/src/unix/macos.rs
+
+/Users/johnlindquist/dev/script-kit-gpui/target-agent-prompt-container/debug/deps/libfiletime-2c00a56525011a1c.rlib: /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/filetime-0.2.26/src/lib.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/filetime-0.2.26/src/unix/mod.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/filetime-0.2.26/src/unix/utimes.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/filetime-0.2.26/src/unix/macos.rs
+
+/Users/johnlindquist/dev/script-kit-gpui/target-agent-prompt-container/debug/deps/libfiletime-2c00a56525011a1c.rmeta: /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/filetime-0.2.26/src/lib.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/filetime-0.2.26/src/unix/mod.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/filetime-0.2.26/src/unix/utimes.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/filetime-0.2.26/src/unix/macos.rs
+
+/Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/filetime-0.2.26/src/lib.rs:
+/Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/filetime-0.2.26/src/unix/mod.rs:
+/Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/filetime-0.2.26/src/unix/utimes.rs:
+/Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/filetime-0.2.26/src/unix/macos.rs:

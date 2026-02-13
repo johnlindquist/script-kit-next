@@ -4,37 +4,131 @@ pub(crate) const TERM_PROMPT_CLEAR_ACTION_ID: &str = "clear";
 pub(crate) const TERM_PROMPT_CLEAR_SHORTCUT: &str = "⌘K";
 pub(crate) const TERM_PROMPT_ACTIONS_TOGGLE_ACTION_ID: &str = "term_prompt_toggle_actions";
 pub(crate) const TERM_PROMPT_ACTIONS_TOGGLE_SHORTCUT: &str = "⌘⇧K";
+const TERM_PROMPT_SCROLL_TO_BOTTOM_ACTION_ID: &str = "scroll_to_bottom";
+
+fn terminal_action_sort_key(action_id: &str) -> Option<usize> {
+    match action_id {
+        "copy" => Some(0),
+        "copy_all" => Some(1),
+        "copy_last_command" => Some(2),
+        "copy_last_output" => Some(3),
+        "paste" => Some(4),
+        "select_all" => Some(5),
+        "find" => Some(6),
+        "scroll_to_top" => Some(7),
+        TERM_PROMPT_SCROLL_TO_BOTTOM_ACTION_ID => Some(8),
+        TERM_PROMPT_CLEAR_ACTION_ID => Some(9),
+        "reset" => Some(10),
+        _ => None,
+    }
+}
+
+fn terminal_action_section(action_id: &str) -> Option<&'static str> {
+    match action_id {
+        "copy" | "copy_all" | "copy_last_command" | "copy_last_output" | "paste" | "select_all" => {
+            Some("Clipboard")
+        }
+        "find" => Some("Search"),
+        "scroll_to_top" | TERM_PROMPT_SCROLL_TO_BOTTOM_ACTION_ID => Some("Navigation"),
+        TERM_PROMPT_CLEAR_ACTION_ID | "reset" => Some("Session"),
+        _ => None,
+    }
+}
+
+fn terminal_action_icon(action_id: &str) -> Option<crate::designs::icon_variations::IconName> {
+    use crate::designs::icon_variations::IconName;
+
+    match action_id {
+        "copy" | "copy_all" | "copy_last_command" | "copy_last_output" | "paste" | "select_all" => {
+            Some(IconName::Copy)
+        }
+        "find" => Some(IconName::MagnifyingGlass),
+        "scroll_to_top" => Some(IconName::ArrowUp),
+        TERM_PROMPT_SCROLL_TO_BOTTOM_ACTION_ID => Some(IconName::ArrowDown),
+        TERM_PROMPT_CLEAR_ACTION_ID => Some(IconName::Trash),
+        "reset" => Some(IconName::Refresh),
+        _ => None,
+    }
+}
+
+fn terminal_actions_dialog_config() -> crate::actions::ActionsDialogConfig {
+    use crate::actions::{ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle};
+
+    ActionsDialogConfig {
+        search_position: SearchPosition::Top,
+        section_style: SectionStyle::Headers,
+        anchor: AnchorPosition::Top,
+        show_icons: true,
+        show_footer: true,
+    }
+}
 
 fn terminal_actions_for_dialog() -> Vec<crate::actions::Action> {
     use crate::actions::{Action, ActionCategory};
+    use crate::designs::icon_variations::IconName;
 
     let mut actions: Vec<Action> = crate::terminal::get_terminal_commands()
         .into_iter()
-        .map(|cmd| {
-            let shortcut = if cmd.action.id() == TERM_PROMPT_CLEAR_ACTION_ID {
+        .filter_map(|cmd| {
+            let action_id = cmd.action.id();
+            let sort_key = terminal_action_sort_key(action_id)?;
+
+            let shortcut = if action_id == TERM_PROMPT_CLEAR_ACTION_ID {
                 Some(TERM_PROMPT_CLEAR_SHORTCUT.to_string())
             } else {
                 cmd.shortcut.clone()
             };
 
-            Action::new(
-                cmd.action.id(),
+            let mut action = Action::new(
+                action_id,
                 cmd.name.clone(),
                 Some(cmd.description.clone()),
                 ActionCategory::Terminal,
             )
-            .with_shortcut_opt(shortcut)
+            .with_shortcut_opt(shortcut);
+
+            if let Some(section) = terminal_action_section(action_id) {
+                action = action.with_section(section);
+            }
+
+            if let Some(icon) = terminal_action_icon(action_id) {
+                action = action.with_icon(icon);
+            }
+
+            Some((sort_key, action))
         })
+        .map(|(_sort_key, action)| action)
         .collect();
+
+    if !actions
+        .iter()
+        .any(|action| action.id == TERM_PROMPT_SCROLL_TO_BOTTOM_ACTION_ID)
+    {
+        actions.push(
+            Action::new(
+                TERM_PROMPT_SCROLL_TO_BOTTOM_ACTION_ID,
+                "Scroll to Bottom",
+                Some("Jump to the bottom (latest output)".to_string()),
+                ActionCategory::Terminal,
+            )
+            .with_shortcut("⌘↓")
+            .with_section("Navigation")
+            .with_icon(IconName::ArrowDown),
+        );
+    }
+
+    actions
+        .sort_by_key(|action| terminal_action_sort_key(action.id.as_str()).unwrap_or(usize::MAX));
 
     actions.push(
         Action::new(
             TERM_PROMPT_ACTIONS_TOGGLE_ACTION_ID,
             "Toggle Actions",
-            Some("Open or close the terminal actions palette"),
+            Some("Open or close the terminal actions palette".to_string()),
             ActionCategory::Terminal,
         )
-        .with_shortcut(TERM_PROMPT_ACTIONS_TOGGLE_SHORTCUT),
+        .with_shortcut(TERM_PROMPT_ACTIONS_TOGGLE_SHORTCUT)
+        .with_icon(IconName::Settings),
     );
 
     actions
@@ -346,9 +440,7 @@ impl ScriptListApp {
     /// Shows common terminal actions (Clear, Copy, Paste, Scroll, etc.)
     #[allow(dead_code)]
     pub fn toggle_terminal_commands(&mut self, cx: &mut Context<Self>, window: &mut Window) {
-        use crate::actions::{
-            ActionsDialog, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
-        };
+        use crate::actions::ActionsDialog;
 
         logging::log(
             "KEY",
@@ -369,15 +461,7 @@ impl ScriptListApp {
 
             let theme_arc = std::sync::Arc::clone(&self.theme);
             let actions = terminal_actions_for_dialog();
-
-            // Create dialog with terminal-style config
-            let config = ActionsDialogConfig {
-                search_position: SearchPosition::Bottom,
-                section_style: SectionStyle::None,
-                anchor: AnchorPosition::Top,
-                show_icons: false,
-                show_footer: false,
-            };
+            let config = terminal_actions_dialog_config();
 
             let dialog = cx.new(|cx| {
                 let focus_handle = cx.focus_handle();
@@ -388,6 +472,9 @@ impl ScriptListApp {
                     theme_arc,
                     config,
                 )
+            });
+            dialog.update(cx, |d, _cx| {
+                d.set_context_title(Some("Terminal".to_string()));
             });
 
             self.actions_dialog = Some(dialog.clone());
@@ -596,6 +683,9 @@ mod on_close_reentrancy_tests {
 #[cfg(test)]
 mod terminal_command_shortcut_tests {
     use super::*;
+    use crate::actions::{AnchorPosition, SearchPosition, SectionStyle};
+    use crate::designs::icon_variations::IconName;
+    use std::fs;
 
     #[test]
     fn test_terminal_actions_for_dialog_shows_cmd_k_for_clear_terminal() {
@@ -620,6 +710,78 @@ mod terminal_command_shortcut_tests {
         assert_eq!(
             toggle_actions.shortcut.as_deref(),
             Some(TERM_PROMPT_ACTIONS_TOGGLE_SHORTCUT)
+        );
+    }
+
+    #[test]
+    fn test_terminal_actions_for_dialog_groups_sections_and_icons() {
+        let actions = terminal_actions_for_dialog();
+
+        let copy_action = actions
+            .iter()
+            .find(|action| action.id == "copy")
+            .expect("copy action should exist");
+        assert_eq!(copy_action.section.as_deref(), Some("Clipboard"));
+        assert_eq!(copy_action.icon, Some(IconName::Copy));
+
+        let find_action = actions
+            .iter()
+            .find(|action| action.id == "find")
+            .expect("find action should exist");
+        assert_eq!(find_action.section.as_deref(), Some("Search"));
+        assert_eq!(find_action.icon, Some(IconName::MagnifyingGlass));
+
+        let scroll_to_top_action = actions
+            .iter()
+            .find(|action| action.id == "scroll_to_top")
+            .expect("scroll_to_top action should exist");
+        assert_eq!(scroll_to_top_action.section.as_deref(), Some("Navigation"));
+        assert_eq!(scroll_to_top_action.icon, Some(IconName::ArrowUp));
+
+        let scroll_to_bottom_action = actions
+            .iter()
+            .find(|action| action.id == TERM_PROMPT_SCROLL_TO_BOTTOM_ACTION_ID)
+            .expect("scroll_to_bottom action should exist");
+        assert_eq!(
+            scroll_to_bottom_action.section.as_deref(),
+            Some("Navigation")
+        );
+        assert_eq!(scroll_to_bottom_action.icon, Some(IconName::ArrowDown));
+
+        let clear_action = actions
+            .iter()
+            .find(|action| action.id == TERM_PROMPT_CLEAR_ACTION_ID)
+            .expect("clear action should exist");
+        assert_eq!(clear_action.section.as_deref(), Some("Session"));
+        assert_eq!(clear_action.icon, Some(IconName::Trash));
+
+        let reset_action = actions
+            .iter()
+            .find(|action| action.id == "reset")
+            .expect("reset action should exist");
+        assert_eq!(reset_action.section.as_deref(), Some("Session"));
+        assert_eq!(reset_action.icon, Some(IconName::Refresh));
+    }
+
+    #[test]
+    fn test_terminal_actions_dialog_config_enables_visual_features() {
+        let config = terminal_actions_dialog_config();
+
+        assert_eq!(config.search_position, SearchPosition::Top);
+        assert_eq!(config.section_style, SectionStyle::Headers);
+        assert_eq!(config.anchor, AnchorPosition::Top);
+        assert!(config.show_icons);
+        assert!(config.show_footer);
+    }
+
+    #[test]
+    fn test_toggle_terminal_commands_sets_terminal_context_title() {
+        let source = fs::read_to_string("src/app_impl/actions_toggle.rs")
+            .expect("Failed to read src/app_impl/actions_toggle.rs");
+
+        assert!(
+            source.contains("d.set_context_title(Some(\"Terminal\".to_string()));"),
+            "toggle_terminal_commands should set terminal context title"
         );
     }
 }

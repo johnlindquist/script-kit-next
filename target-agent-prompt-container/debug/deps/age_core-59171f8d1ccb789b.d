@@ -1,0 +1,10 @@
+/Users/johnlindquist/dev/script-kit-gpui/target-agent-prompt-container/debug/deps/age_core-59171f8d1ccb789b.d: /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/age-core-0.11.0/src/lib.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/age-core-0.11.0/src/format.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/age-core-0.11.0/src/io.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/age-core-0.11.0/src/primitives.rs
+
+/Users/johnlindquist/dev/script-kit-gpui/target-agent-prompt-container/debug/deps/libage_core-59171f8d1ccb789b.rlib: /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/age-core-0.11.0/src/lib.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/age-core-0.11.0/src/format.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/age-core-0.11.0/src/io.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/age-core-0.11.0/src/primitives.rs
+
+/Users/johnlindquist/dev/script-kit-gpui/target-agent-prompt-container/debug/deps/libage_core-59171f8d1ccb789b.rmeta: /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/age-core-0.11.0/src/lib.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/age-core-0.11.0/src/format.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/age-core-0.11.0/src/io.rs /Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/age-core-0.11.0/src/primitives.rs
+
+/Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/age-core-0.11.0/src/lib.rs:
+/Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/age-core-0.11.0/src/format.rs:
+/Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/age-core-0.11.0/src/io.rs:
+/Users/johnlindquist/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/age-core-0.11.0/src/primitives.rs:
