@@ -6,9 +6,11 @@
 //! - `GenericWatcher` for lifecycle/supervisor/backoff handling
 
 use crate::config;
-use notify::{recommended_watcher, Result as NotifyResult, Watcher};
+use notify::{recommended_watcher, RecursiveMode, Result as NotifyResult, Watcher};
 use parking_lot::Mutex;
+use std::ffi::OsString;
 use std::marker::PhantomData;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::Arc;
@@ -43,6 +45,114 @@ impl Default for GenericWatcherSettings {
             max_notify_errors: config::defaults::DEFAULT_WATCHER_MAX_NOTIFY_ERRORS,
             health_check_interval_ms: config::defaults::DEFAULT_HEALTH_CHECK_INTERVAL_MS,
         }
+    }
+}
+
+/// Shared debounce spec for watchers that observe one file and emit one reload event.
+pub struct SingleFileReloadSpec<E>
+where
+    E: Clone + Send + 'static,
+{
+    label: String,
+    watch_path: PathBuf,
+    target_name: OsString,
+    target_path: PathBuf,
+    debounce: Duration,
+    pending_deadline: Option<Instant>,
+    emit_event: E,
+}
+
+impl<E> SingleFileReloadSpec<E>
+where
+    E: Clone + Send + 'static,
+{
+    pub fn new(
+        label: impl Into<String>,
+        target_path: PathBuf,
+        debounce: Duration,
+        emit_event: E,
+    ) -> Self {
+        let target_name = target_path
+            .file_name()
+            .map(std::ffi::OsStr::to_owned)
+            .unwrap_or_default();
+        let watch_path = target_path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."))
+            .to_path_buf();
+
+        Self {
+            label: label.into(),
+            watch_path,
+            target_name,
+            target_path,
+            debounce,
+            pending_deadline: None,
+            emit_event,
+        }
+    }
+}
+
+impl<E> WatcherSpec<E> for SingleFileReloadSpec<E>
+where
+    E: Clone + Send + 'static,
+{
+    fn label(&self) -> &str {
+        &self.label
+    }
+
+    fn setup(&mut self, watcher: &mut dyn Watcher) -> NotifyResult<()> {
+        watcher.watch(&self.watch_path, RecursiveMode::NonRecursive)?;
+        info!(
+            watcher = %self.label,
+            watch_path = %self.watch_path.display(),
+            target_path = %self.target_path.display(),
+            "Single-file watcher started"
+        );
+        Ok(())
+    }
+
+    fn next_deadline(&self) -> Instant {
+        self.pending_deadline
+            .unwrap_or_else(|| Instant::now() + Duration::from_secs(24 * 60 * 60))
+    }
+
+    fn on_timeout(&mut self) -> Vec<E> {
+        let Some(deadline) = self.pending_deadline else {
+            return Vec::new();
+        };
+
+        if Instant::now() >= deadline {
+            self.pending_deadline = None;
+            debug!(
+                watcher = %self.label,
+                target_path = %self.target_path.display(),
+                "Single-file debounce complete; emitting reload"
+            );
+            vec![self.emit_event.clone()]
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn on_notify(&mut self, event: notify::Event) -> Vec<E> {
+        let touches_target = event.paths.iter().any(|path| {
+            path.file_name()
+                .map(|name| name == self.target_name.as_os_str())
+                .unwrap_or(false)
+        });
+
+        if touches_target && is_relevant_event_kind(&event.kind) {
+            self.pending_deadline = Some(Instant::now() + self.debounce);
+            debug!(
+                watcher = %self.label,
+                target_path = %self.target_path.display(),
+                event_kind = ?event.kind,
+                "Single-file change detected; reset debounce deadline"
+            );
+        }
+
+        Vec::new()
     }
 }
 
@@ -389,6 +499,10 @@ fn next_timeout(next_deadline: Instant, health_check_interval: Duration) -> Dura
         .min(health_check_interval)
 }
 
+fn is_relevant_event_kind(kind: &notify::EventKind) -> bool {
+    !matches!(kind, notify::EventKind::Access(_))
+}
+
 fn emit_events<E, Tx>(sink: &Tx, events: Vec<E>, watcher_label: &str, source: &'static str)
 where
     E: Send + 'static,
@@ -574,5 +688,57 @@ mod tests {
         let mut watcher = GenericWatcher::new(tx, spec, GenericWatcherSettings::default());
 
         watcher.start().expect("setup should run without error");
+    }
+
+    #[test]
+    fn test_single_file_reload_spec_emits_once_after_timeout() {
+        let target_path = PathBuf::from("/tmp/config.ts");
+        let mut spec =
+            SingleFileReloadSpec::new("config", target_path.clone(), Duration::ZERO, 7u8);
+
+        let event = notify::Event {
+            kind: notify::EventKind::Modify(notify::event::ModifyKind::Any),
+            paths: vec![target_path],
+            attrs: Default::default(),
+        };
+
+        assert!(spec.on_notify(event).is_empty());
+        assert_eq!(spec.on_timeout(), vec![7u8]);
+        assert!(spec.on_timeout().is_empty());
+    }
+
+    #[test]
+    fn test_single_file_reload_spec_ignores_non_target_paths() {
+        let mut spec = SingleFileReloadSpec::new(
+            "config",
+            PathBuf::from("/tmp/config.ts"),
+            Duration::from_millis(1),
+            7u8,
+        );
+
+        let event = notify::Event {
+            kind: notify::EventKind::Modify(notify::event::ModifyKind::Any),
+            paths: vec![PathBuf::from("/tmp/other.ts")],
+            attrs: Default::default(),
+        };
+
+        assert!(spec.on_notify(event).is_empty());
+        assert!(spec.on_timeout().is_empty());
+    }
+
+    #[test]
+    fn test_single_file_reload_spec_ignores_access_events() {
+        let target_path = PathBuf::from("/tmp/config.ts");
+        let mut spec =
+            SingleFileReloadSpec::new("config", target_path.clone(), Duration::ZERO, 7u8);
+
+        let event = notify::Event {
+            kind: notify::EventKind::Access(notify::event::AccessKind::Any),
+            paths: vec![target_path],
+            attrs: Default::default(),
+        };
+
+        assert!(spec.on_notify(event).is_empty());
+        assert!(spec.on_timeout().is_empty());
     }
 }
