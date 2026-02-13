@@ -195,6 +195,7 @@ impl ScriptListApp {
             let selected_border = self.theme.colors.accent.selected;
             let click_entity_handle = cx.entity().downgrade();
             let hover_entity_handle = cx.entity().downgrade();
+            let grid_cols = cols;
 
             uniform_list(
                 "emoji-picker-grid",
@@ -225,9 +226,16 @@ impl ScriptListApp {
                                     .flex()
                                     .px(px(design_spacing.padding_lg))
                                     .gap(px(2.0))
-                                    .children((0..row_count).filter_map(move |cell_offset| {
-                                        let flat_emoji_index = row_start_index + cell_offset;
-                                        let emoji = emojis_for_row.get(flat_emoji_index)?;
+                                    .children((0..grid_cols).map(move |col| -> AnyElement {
+                                        if col >= row_count {
+                                            // Invisible spacer to maintain consistent cell width
+                                            return div().flex_1().h(px(44.0)).into_any_element();
+                                        }
+                                        let flat_emoji_index = row_start_index + col;
+                                        let emoji = match emojis_for_row.get(flat_emoji_index) {
+                                            Some(e) => e,
+                                            None => return div().flex_1().h(px(44.0)).into_any_element(),
+                                        };
                                         let is_selected = flat_emoji_index == selected;
                                         let is_hovered = hovered == Some(flat_emoji_index)
                                             && current_input_mode == InputMode::Mouse;
@@ -236,73 +244,72 @@ impl ScriptListApp {
                                         let emoji_value = emoji.emoji.to_string();
                                         let emoji_display = emoji_value.clone();
 
-                                        Some(
-                                            div()
-                                                .id(flat_emoji_index)
-                                                .flex_1()
-                                                .h(px(44.0))
-                                                .flex()
-                                                .items_center()
-                                                .justify_center()
-                                                .rounded(px(6.0))
-                                                .text_size(px(26.0))
-                                                .cursor_pointer()
-                                                .border_2()
-                                                .border_color(if is_selected {
-                                                    rgb(selected_border)
-                                                } else {
-                                                    rgba(0x00000000)
-                                                })
-                                                .when(is_hovered && !is_selected, |d| d.bg(hover_bg))
-                                                .on_click(
-                                                    move |_event: &gpui::ClickEvent,
-                                                          _window: &mut Window,
-                                                          cx: &mut gpui::App| {
-                                                        if let Some(app) = click_entity.upgrade() {
-                                                            let emoji_value = emoji_value.clone();
-                                                            app.update(cx, |this, cx| {
-                                                                cx.write_to_clipboard(
-                                                                    gpui::ClipboardItem::new_string(
-                                                                        emoji_value.clone(),
-                                                                    ),
-                                                                );
-                                                                this.show_hud(
-                                                                    format!("Copied {}", emoji_value),
-                                                                    Some(1200),
-                                                                    cx,
-                                                                );
-                                                                this.close_and_reset_window(cx);
-                                                            });
-                                                        }
-                                                    },
-                                                )
-                                                .on_hover(
-                                                    move |is_hov: &bool,
-                                                          _window: &mut Window,
-                                                          cx: &mut gpui::App| {
-                                                        if let Some(app) = hover_entity.upgrade() {
-                                                            app.update(cx, |this, cx| {
-                                                                if *is_hov {
-                                                                    this.input_mode = InputMode::Mouse;
-                                                                    if this.hovered_index
-                                                                        != Some(flat_emoji_index)
-                                                                    {
-                                                                        this.hovered_index =
-                                                                            Some(flat_emoji_index);
-                                                                        cx.notify();
-                                                                    }
-                                                                } else if this.hovered_index
-                                                                    == Some(flat_emoji_index)
+                                        div()
+                                            .id(flat_emoji_index)
+                                            .flex_1()
+                                            .h(px(44.0))
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .rounded(px(6.0))
+                                            .text_size(px(26.0))
+                                            .cursor_pointer()
+                                            .border_2()
+                                            .border_color(if is_selected {
+                                                rgb(selected_border)
+                                            } else {
+                                                rgba(0x00000000)
+                                            })
+                                            .when(is_hovered && !is_selected, |d| d.bg(hover_bg))
+                                            .on_click(
+                                                move |_event: &gpui::ClickEvent,
+                                                      _window: &mut Window,
+                                                      cx: &mut gpui::App| {
+                                                    if let Some(app) = click_entity.upgrade() {
+                                                        let emoji_value = emoji_value.clone();
+                                                        app.update(cx, |this, cx| {
+                                                            cx.write_to_clipboard(
+                                                                gpui::ClipboardItem::new_string(
+                                                                    emoji_value.clone(),
+                                                                ),
+                                                            );
+                                                            this.show_hud(
+                                                                format!("Copied {}", emoji_value),
+                                                                Some(1200),
+                                                                cx,
+                                                            );
+                                                            this.close_and_reset_window(cx);
+                                                        });
+                                                    }
+                                                },
+                                            )
+                                            .on_hover(
+                                                move |is_hov: &bool,
+                                                      _window: &mut Window,
+                                                      cx: &mut gpui::App| {
+                                                    if let Some(app) = hover_entity.upgrade() {
+                                                        app.update(cx, |this, cx| {
+                                                            if *is_hov {
+                                                                this.input_mode = InputMode::Mouse;
+                                                                if this.hovered_index
+                                                                    != Some(flat_emoji_index)
                                                                 {
-                                                                    this.hovered_index = None;
+                                                                    this.hovered_index =
+                                                                        Some(flat_emoji_index);
                                                                     cx.notify();
                                                                 }
-                                                            });
-                                                        }
-                                                    },
-                                                )
-                                                .child(emoji_display),
-                                        )
+                                                            } else if this.hovered_index
+                                                                == Some(flat_emoji_index)
+                                                            {
+                                                                this.hovered_index = None;
+                                                                cx.notify();
+                                                            }
+                                                        });
+                                                    }
+                                                },
+                                            )
+                                            .child(emoji_display)
+                                            .into_any_element()
                                     }))
                                     .into_any_element()
                             }
