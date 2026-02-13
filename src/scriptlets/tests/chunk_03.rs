@@ -10,7 +10,7 @@ fn test_format_scriptlet_named_inputs() {
 
     let result = format_scriptlet("{{greeting}}, {{name}}!", &inputs, &[], false);
 
-    assert_eq!(result, "Hello, Alice!");
+    assert_eq!(result, "'Hello', 'Alice'!");
 }
 
 #[test]
@@ -22,7 +22,7 @@ fn test_format_scriptlet_positional_unix() {
         false,
     );
 
-    assert_eq!(result, "echo first and second");
+    assert_eq!(result, "echo 'first' and 'second'");
 }
 
 #[test]
@@ -34,7 +34,7 @@ fn test_format_scriptlet_positional_windows() {
         true,
     );
 
-    assert_eq!(result, "echo first and second");
+    assert_eq!(result, "echo \"first\" and \"second\"");
 }
 
 #[test]
@@ -46,7 +46,7 @@ fn test_format_scriptlet_all_args_unix() {
         false,
     );
 
-    assert_eq!(result, r#"echo "one" "two" "three""#);
+    assert_eq!(result, "echo 'one' 'two' 'three'");
 }
 
 #[test]
@@ -73,7 +73,7 @@ fn test_format_scriptlet_combined() {
         false,
     );
 
-    assert_eq!(result, "Result: A and B");
+    assert_eq!(result, "'Result:' 'A' and 'B'");
 }
 
 #[test]
@@ -85,7 +85,143 @@ fn test_format_scriptlet_escape_quotes() {
         false,
     );
 
-    assert_eq!(result, r#"echo "has\"quote""#);
+    assert_eq!(result, "echo 'has\"quote'");
+}
+
+#[test]
+fn test_format_scriptlet_preserves_content_when_named_input_contains_nul() {
+    let mut inputs = HashMap::new();
+    inputs.insert("payload".to_string(), "bad\0value".to_string());
+
+    let result = format_scriptlet("echo {{payload}}", &inputs, &[], false);
+
+    assert_eq!(result, "echo {{payload}}");
+}
+
+#[test]
+fn test_format_scriptlet_preserves_content_when_positional_input_contains_nul() {
+    let result = format_scriptlet(
+        "echo $1",
+        &HashMap::new(),
+        &["bad\0value".to_string()],
+        false,
+    );
+
+    assert_eq!(result, "echo $1");
+}
+
+#[test]
+fn test_escape_value_does_shell_escaping_for_sh_dialect() {
+    let payloads = [
+        ("$(cmd)", "'$(cmd)'"),
+        ("`cmd`", "'`cmd`'"),
+        ("; cmd", "'; cmd'"),
+        ("quote's \"double\"", "'quote'\"'\"'s \"double\"'"),
+    ];
+
+    for (payload, expected) in payloads {
+        let escaped = escape_value(ScriptletDialect::Sh, payload).expect("sh escaping should pass");
+        assert_eq!(escaped, expected);
+    }
+}
+
+#[test]
+fn test_escape_value_does_shell_escaping_for_bash_dialect() {
+    let payloads = [
+        ("$(cmd)", "'$(cmd)'"),
+        ("`cmd`", "'`cmd`'"),
+        ("; cmd", "'; cmd'"),
+        ("quote's \"double\"", "'quote'\"'\"'s \"double\"'"),
+    ];
+
+    for (payload, expected) in payloads {
+        let escaped =
+            escape_value(ScriptletDialect::Bash, payload).expect("bash escaping should pass");
+        assert_eq!(escaped, expected);
+    }
+}
+
+#[test]
+fn test_escape_value_does_shell_escaping_for_zsh_dialect() {
+    let payloads = [
+        ("$(cmd)", "'$(cmd)'"),
+        ("`cmd`", "'`cmd`'"),
+        ("; cmd", "'; cmd'"),
+        ("quote's \"double\"", "'quote'\"'\"'s \"double\"'"),
+    ];
+
+    for (payload, expected) in payloads {
+        let escaped =
+            escape_value(ScriptletDialect::Zsh, payload).expect("zsh escaping should pass");
+        assert_eq!(escaped, expected);
+    }
+}
+
+#[test]
+fn test_escape_value_does_shell_escaping_for_powershell_dialect() {
+    let payloads = [
+        ("$(cmd)", "'$(cmd)'"),
+        ("`cmd`", "'`cmd`'"),
+        ("; cmd", "'; cmd'"),
+        ("quote's \"double\"", "'quote''s \"double\"'"),
+    ];
+
+    for (payload, expected) in payloads {
+        let escaped = escape_value(ScriptletDialect::PowerShell, payload)
+            .expect("powershell escaping should pass");
+        assert_eq!(escaped, expected);
+    }
+}
+
+#[test]
+fn test_escape_value_does_shell_escaping_for_cmd_dialect() {
+    let payloads = [
+        ("$(cmd)", r#""$^(cmd^)""#),
+        ("`cmd`", r#""`cmd`""#),
+        ("; cmd", r#""; cmd""#),
+        ("quote's \"double\"", r#""quote's ^"double^"""#),
+    ];
+
+    for (payload, expected) in payloads {
+        let escaped =
+            escape_value(ScriptletDialect::Cmd, payload).expect("cmd escaping should pass");
+        assert_eq!(escaped, expected);
+    }
+}
+
+#[test]
+fn test_escape_value_rejects_nul_bytes_for_all_dialects() {
+    for dialect in [
+        ScriptletDialect::Sh,
+        ScriptletDialect::Bash,
+        ScriptletDialect::Zsh,
+        ScriptletDialect::PowerShell,
+        ScriptletDialect::Cmd,
+    ] {
+        let error = escape_value(dialect, "bad\0value").expect_err("NUL byte should be rejected");
+        assert!(
+            error
+                .to_string()
+                .contains("scriptlet_escape_value_rejected_nul"),
+            "error should include stable identifier for diagnostics"
+        );
+    }
+}
+
+#[test]
+fn test_format_scriptlet_with_dialect_escapes_named_and_positional_for_powershell() {
+    let mut inputs = HashMap::new();
+    inputs.insert("target".to_string(), "$(cmd)".to_string());
+
+    let result = format_scriptlet_with_dialect(
+        "Write-Output {{target}} $1",
+        &inputs,
+        &["quote's".to_string()],
+        ScriptletDialect::PowerShell,
+    )
+    .expect("powershell formatting should succeed");
+
+    assert_eq!(result, "Write-Output '$(cmd)' 'quote''s'");
 }
 
 // ========================================
@@ -318,4 +454,3 @@ fn test_scriptlet_serialization() {
     assert_eq!(scriptlet.tool, deserialized.tool);
     assert_eq!(scriptlet.scriptlet_content, deserialized.scriptlet_content);
 }
-

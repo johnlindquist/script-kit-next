@@ -18,6 +18,7 @@
 use crate::metadata_parser::TypedMetadata;
 use crate::schema_parser::Schema;
 use crate::scriptlet_metadata::parse_codefence_metadata;
+use anyhow::{bail, Result as AnyhowResult};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -1235,6 +1236,109 @@ fn split_by_headers_with_line_numbers(content: &str) -> Vec<MarkdownSectionWithL
 // Variable Substitution
 // ============================================================================
 
+/// Shell dialect used for scriptlet value escaping.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScriptletDialect {
+    Sh,
+    Bash,
+    Zsh,
+    PowerShell,
+    Cmd,
+}
+
+/// Escape a value for safe interpolation in a shell script for the given dialect.
+///
+/// Rejects NUL bytes for all dialects.
+pub fn escape_value(dialect: ScriptletDialect, value: &str) -> AnyhowResult<String> {
+    if value.contains('\0') {
+        bail!(
+            "scriptlet_escape_value_rejected_nul: dialect={dialect:?}, value_len={}",
+            value.len()
+        );
+    }
+
+    let escaped = match dialect {
+        ScriptletDialect::Sh | ScriptletDialect::Bash | ScriptletDialect::Zsh => {
+            format!("'{}'", value.replace('\'', "'\"'\"'"))
+        }
+        ScriptletDialect::PowerShell => format!("'{}'", value.replace('\'', "''")),
+        ScriptletDialect::Cmd => format!("\"{}\"", escape_cmd_special_chars(value)),
+    };
+
+    Ok(escaped)
+}
+
+fn escape_cmd_special_chars(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+
+    for ch in value.chars() {
+        match ch {
+            '^' | '&' | '|' | '<' | '>' | '(' | ')' | '%' | '!' | '"' => {
+                escaped.push('^');
+                escaped.push(ch);
+            }
+            _ => escaped.push(ch),
+        }
+    }
+
+    escaped
+}
+
+/// Format a scriptlet using explicit shell dialect escaping for interpolated values.
+pub fn format_scriptlet_with_dialect(
+    content: &str,
+    inputs: &HashMap<String, String>,
+    positional_args: &[String],
+    dialect: ScriptletDialect,
+) -> AnyhowResult<String> {
+    let mut result = content.to_string();
+
+    // Replace named inputs {{variableName}}
+    for (name, value) in inputs {
+        let placeholder = format!("{{{{{}}}}}", name);
+        let escaped_value = escape_value(dialect, value)?;
+        result = result.replace(&placeholder, &escaped_value);
+    }
+
+    let uses_windows_placeholders = matches!(dialect, ScriptletDialect::Cmd);
+
+    // Replace positional arguments
+    if uses_windows_placeholders {
+        // Windows style: %1, %2, etc.
+        for (i, arg) in positional_args.iter().enumerate() {
+            let placeholder = format!("%{}", i + 1);
+            let escaped_arg = escape_value(dialect, arg)?;
+            result = result.replace(&placeholder, &escaped_arg);
+        }
+
+        // Replace %* with all args escaped and quoted
+        let all_args = positional_args
+            .iter()
+            .map(|arg| escape_value(dialect, arg))
+            .collect::<AnyhowResult<Vec<_>>>()?
+            .join(" ");
+        result = result.replace("%*", &all_args);
+    } else {
+        // Unix style: $1, $2, etc.
+        for (i, arg) in positional_args.iter().enumerate() {
+            let placeholder = format!("${}", i + 1);
+            let escaped_arg = escape_value(dialect, arg)?;
+            result = result.replace(&placeholder, &escaped_arg);
+        }
+
+        // Replace $@ with all args escaped and quoted
+        let all_args = positional_args
+            .iter()
+            .map(|arg| escape_value(dialect, arg))
+            .collect::<AnyhowResult<Vec<_>>>()?
+            .join(" ");
+        result = result.replace("$@", &all_args);
+    }
+
+    Ok(result)
+}
+
 /// Format a scriptlet by substituting variables
 ///
 /// # Variable Types
@@ -1253,46 +1357,23 @@ pub fn format_scriptlet(
     positional_args: &[String],
     windows: bool,
 ) -> String {
-    let mut result = content.to_string();
-
-    // Replace named inputs {{variableName}}
-    for (name, value) in inputs {
-        let placeholder = format!("{{{{{}}}}}", name);
-        result = result.replace(&placeholder, value);
-    }
-
-    // Replace positional arguments
-    if windows {
-        // Windows style: %1, %2, etc.
-        for (i, arg) in positional_args.iter().enumerate() {
-            let placeholder = format!("%{}", i + 1);
-            result = result.replace(&placeholder, arg);
-        }
-
-        // Replace %* with all args quoted
-        let all_args = positional_args
-            .iter()
-            .map(|a| format!("\"{}\"", a.replace('\"', "\\\"")))
-            .collect::<Vec<_>>()
-            .join(" ");
-        result = result.replace("%*", &all_args);
+    let dialect = if windows {
+        ScriptletDialect::Cmd
     } else {
-        // Unix style: $1, $2, etc.
-        for (i, arg) in positional_args.iter().enumerate() {
-            let placeholder = format!("${}", i + 1);
-            result = result.replace(&placeholder, arg);
+        ScriptletDialect::Sh
+    };
+
+    match format_scriptlet_with_dialect(content, inputs, positional_args, dialect) {
+        Ok(formatted) => formatted,
+        Err(error) => {
+            warn!(
+                ?dialect,
+                error = %error,
+                "scriptlet_format_failed: preserving original content"
+            );
+            content.to_string()
         }
-
-        // Replace $@ with all args quoted
-        let all_args = positional_args
-            .iter()
-            .map(|a| format!("\"{}\"", a.replace('\"', "\\\"")))
-            .collect::<Vec<_>>()
-            .join(" ");
-        result = result.replace("$@", &all_args);
     }
-
-    result
 }
 /// Process conditional blocks in scriptlet content
 ///
@@ -1713,5 +1794,5 @@ pub fn validate_interpreter_tool(tool: &str) -> Result<(), String> {
 // ============================================================================
 
 #[cfg(test)]
-#[path = "../scriptlet_tests.rs"]
+#[path = "tests.rs"]
 mod tests;

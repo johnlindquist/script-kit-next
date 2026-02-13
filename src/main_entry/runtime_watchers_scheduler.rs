@@ -218,6 +218,19 @@
                                 // This spawns it in the background without blocking the scheduler
                                 let path_str = path.to_string_lossy().to_string();
 
+                                if !scheduler::try_acquire_scheduled_run_slot() {
+                                    logging::log(
+                                        "SCHEDULER",
+                                        &format!(
+                                            "Skipping scheduled script (concurrency limit reached: active={}, limit={}): {}",
+                                            scheduler::active_scheduled_run_count(),
+                                            scheduler::SCHEDULED_SCRIPT_MAX_CONCURRENT_RUNS,
+                                            path.display()
+                                        ),
+                                    );
+                                    continue;
+                                }
+
                                 // Use bun to run the script directly (non-interactive for scheduled scripts)
                                 // Find bun path (same logic as executor)
                                 let bun_path = std::env::var("BUN_PATH")
@@ -243,11 +256,11 @@
                                     .arg("--preload")
                                     .arg(format!("{}/.scriptkit/sdk/kit-sdk.ts", std::env::var("HOME").unwrap_or_default()))
                                     .arg(&path_str)
-                                    .stdout(std::process::Stdio::piped())
+                                    .stdout(std::process::Stdio::null())
                                     .stderr(std::process::Stdio::piped())
                                     .spawn()
                                 {
-                                    Ok(child) => {
+                                    Ok(mut child) => {
                                         let pid = child.id();
                                         // Track the process
                                         PROCESS_MANAGER.register_process(pid, &path_str);
@@ -256,27 +269,88 @@
                                         // Wait for completion in a separate thread to not block scheduler
                                         let path_for_log = path_str.clone();
                                         std::thread::spawn(move || {
-                                            match child.wait_with_output() {
-                                                Ok(output) => {
-                                                    // Unregister the process now that it's done
-                                                    PROCESS_MANAGER.unregister_process(pid);
+                                            let mut captured_stderr = String::new();
+                                            let mut capture_was_truncated = false;
 
-                                                    if output.status.success() {
-                                                        logging::log("SCHEDULER", &format!("Scheduled script completed: {}", path_for_log));
+                                            if let Some(stderr) = child.stderr.take() {
+                                                match scheduler::read_limited_stderr(
+                                                    stderr,
+                                                    scheduler::SCHEDULED_SCRIPT_STDERR_CAPTURE_MAX_BYTES,
+                                                ) {
+                                                    Ok((stderr_output, was_truncated)) => {
+                                                        captured_stderr = stderr_output;
+                                                        capture_was_truncated = was_truncated;
+                                                    }
+                                                    Err(e) => {
+                                                        logging::log(
+                                                            "SCHEDULER",
+                                                            &format!(
+                                                                "Failed to read scheduled script stderr stream: {} (pid={}): {}",
+                                                                path_for_log, pid, e
+                                                            ),
+                                                        );
+                                                    }
+                                                }
+                                            }
+
+                                            let wait_result = child.wait();
+
+                                            // Unregister and release slot now that execution has finished
+                                            PROCESS_MANAGER.unregister_process(pid);
+                                            scheduler::release_scheduled_run_slot();
+
+                                            match wait_result {
+                                                Ok(status) => {
+                                                    if status.success() {
+                                                        logging::log(
+                                                            "SCHEDULER",
+                                                            &format!(
+                                                                "Scheduled script completed: {} (pid={})",
+                                                                path_for_log, pid
+                                                            ),
+                                                        );
                                                     } else {
-                                                        let stderr = String::from_utf8_lossy(&output.stderr);
-                                                        logging::log("SCHEDULER", &format!("Scheduled script failed: {} - {}", path_for_log, stderr));
+                                                        let (mut stderr_for_log, log_was_truncated) =
+                                                            scheduler::truncate_scheduler_stderr_for_log(
+                                                                &captured_stderr,
+                                                                scheduler::SCHEDULED_SCRIPT_STDERR_LOG_MAX_BYTES,
+                                                            );
+                                                        if stderr_for_log.trim().is_empty() {
+                                                            stderr_for_log = "<no stderr output>".to_string();
+                                                        }
+                                                        if capture_was_truncated {
+                                                            stderr_for_log.push_str(
+                                                                " [stderr capture truncated at 64KB]",
+                                                            );
+                                                        }
+                                                        if log_was_truncated {
+                                                            stderr_for_log.push_str(
+                                                                " [stderr log truncated at 4KB]",
+                                                            );
+                                                        }
+                                                        logging::log(
+                                                            "SCHEDULER",
+                                                            &format!(
+                                                                "Scheduled script failed: {} (pid={}, status={}): {}",
+                                                                path_for_log, pid, status, stderr_for_log
+                                                            ),
+                                                        );
                                                     }
                                                 }
                                                 Err(e) => {
-                                                    // Unregister on error too
-                                                    PROCESS_MANAGER.unregister_process(pid);
-                                                    logging::log("SCHEDULER", &format!("Scheduled script error: {} - {}", path_for_log, e));
+                                                    logging::log(
+                                                        "SCHEDULER",
+                                                        &format!(
+                                                            "Scheduled script wait error: {} (pid={}): {}",
+                                                            path_for_log, pid, e
+                                                        ),
+                                                    );
                                                 }
                                             }
                                         });
                                     }
                                     Err(e) => {
+                                        scheduler::release_scheduled_run_slot();
                                         logging::log("SCHEDULER", &format!("Failed to spawn scheduled script: {} - {}", path_str, e));
                                     }
                                 }
