@@ -1224,6 +1224,28 @@ pub fn grouped_emojis() -> Vec<(EmojiCategory, Vec<&'static Emoji>)> {
         .collect()
 }
 
+/// Number of columns in the emoji picker grid.
+/// Shared between the renderer and the arrow-key navigation interceptor.
+pub const GRID_COLS: usize = 8;
+
+/// Build the filtered, category-ordered emoji list used by both the renderer
+/// and the arrow-key navigation handler. This ensures selection indices stay
+/// in sync between rendering and navigation.
+pub fn filtered_ordered_emojis(
+    filter: &str,
+    selected_category: Option<EmojiCategory>,
+) -> Vec<Emoji> {
+    let mut filtered: Vec<Emoji> = search_emojis(filter).into_iter().copied().collect();
+    if let Some(cat) = selected_category {
+        filtered.retain(|e| e.category == cat);
+    }
+    let mut ordered: Vec<Emoji> = Vec::with_capacity(filtered.len());
+    for cat in ALL_CATEGORIES.iter().copied() {
+        ordered.extend(filtered.iter().copied().filter(|e| e.category == cat));
+    }
+    ordered
+}
+
 pub fn search_emojis(query: &str) -> Vec<&Emoji> {
     let query = query.trim().to_ascii_lowercase();
     if query.is_empty() {
