@@ -7,6 +7,40 @@ fn prompt_actions_dialog_offsets(padding_sm: f32, border_thin: f32) -> (f32, f32
 }
 
 #[derive(Clone, Copy)]
+struct PromptRenderContext<'a> {
+    theme: &'a crate::theme::Theme,
+    design_colors: crate::designs::DesignColors,
+    design_spacing: crate::designs::DesignSpacing,
+    design_typography: crate::designs::DesignTypography,
+    design_visual: crate::designs::DesignVisual,
+    actions_dialog_top: f32,
+    actions_dialog_right: f32,
+}
+
+impl<'a> PromptRenderContext<'a> {
+    #[inline]
+    fn new(theme: &'a crate::theme::Theme, current_design: DesignVariant) -> Self {
+        let tokens = get_tokens(current_design);
+        let design_colors = tokens.colors();
+        let design_spacing = tokens.spacing();
+        let design_typography = tokens.typography();
+        let design_visual = tokens.visual();
+        let (actions_dialog_top, actions_dialog_right) =
+            prompt_actions_dialog_offsets(design_spacing.padding_sm, design_visual.border_thin);
+
+        Self {
+            theme,
+            design_colors,
+            design_spacing,
+            design_typography,
+            design_visual,
+            actions_dialog_top,
+            actions_dialog_right,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
 struct ActionsBackdropConfig {
     backdrop_id: &'static str,
     close_host: ActionsDialogHost,

@@ -1,7 +1,8 @@
-mod tests {
+mod arg_prompt_render_tests {
     use super::*;
 
     use crate::designs::{get_tokens, DesignColors, DesignVariant};
+    use crate::theme::Theme;
     use crate::protocol::Choice;
 
     fn choice(name: &str, value: &str) -> Choice {
@@ -17,6 +18,27 @@ mod tests {
         let (top, right) = prompt_actions_dialog_offsets(spacing.padding_sm, visual.border_thin);
         assert_eq!(top, 52.0);
         assert_eq!(right, 8.0);
+    }
+
+    #[test]
+    fn test_prompt_render_context_new_extracts_design_tokens_and_offsets() {
+        let theme = Theme::default();
+        let variant = DesignVariant::Default;
+        let tokens = get_tokens(variant);
+
+        let context = PromptRenderContext::new(&theme, variant);
+        let (expected_top, expected_right) = prompt_actions_dialog_offsets(
+            context.design_spacing.padding_sm,
+            context.design_visual.border_thin,
+        );
+
+        assert!(std::ptr::eq(context.theme, &theme));
+        assert_eq!(context.design_colors, tokens.colors());
+        assert_eq!(context.design_spacing, tokens.spacing());
+        assert_eq!(context.design_typography, tokens.typography());
+        assert_eq!(context.design_visual, tokens.visual());
+        assert_eq!(context.actions_dialog_top, expected_top);
+        assert_eq!(context.actions_dialog_right, expected_right);
     }
 
     #[test]
@@ -150,6 +172,34 @@ mod tests {
         assert!(
             !render_source.contains("let text_muted = design_colors.text_muted;"),
             "arg prompt placeholder text should not use design_colors.text_muted"
+        );
+    }
+
+    #[test]
+    fn test_prompt_render_context_constructor_is_used_across_prompt_renderers() {
+        assert!(
+            include_str!("render.rs").contains("PromptRenderContext::new("),
+            "arg prompt render should construct PromptRenderContext"
+        );
+        assert!(
+            include_str!("../div.rs").contains("PromptRenderContext::new("),
+            "div prompt render should construct PromptRenderContext"
+        );
+        assert!(
+            include_str!("../editor.rs").contains("PromptRenderContext::new("),
+            "editor prompt render should construct PromptRenderContext"
+        );
+        assert!(
+            include_str!("../form/render.rs").contains("PromptRenderContext::new("),
+            "form prompt render should construct PromptRenderContext"
+        );
+        assert!(
+            include_str!("../term.rs").contains("PromptRenderContext::new("),
+            "term prompt render should construct PromptRenderContext"
+        );
+        assert!(
+            include_str!("../other.rs").contains("PromptRenderContext::new("),
+            "other prompt render helpers should construct PromptRenderContext"
         );
     }
 }
