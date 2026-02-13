@@ -487,14 +487,22 @@ pub fn dry_run_agent(agent: &Agent) -> Result<String> {
 ///
 /// For interactive agents, we may want to open a system terminal.
 /// This returns the command and arguments to run.
-pub fn build_terminal_command(agent: &Agent) -> (String, Vec<String>) {
-    let mdflow_cmd = get_mdflow_command().unwrap_or("mdflow");
-    let args = vec![agent.path.to_string_lossy().to_string()];
+pub fn build_terminal_command(agent: &Agent) -> Result<(String, Vec<String>)> {
+    let canonical_agent_path = validate_agent_markdown_path(&agent.path).with_context(|| {
+        format!(
+            "agent_terminal_command_validation_failed: agent={} path={}",
+            agent.name,
+            agent.path.display()
+        )
+    })?;
+    let mdflow_cmd =
+        get_mdflow_command().context("mdflow command not found in PATH or kit node_modules")?;
+    let args = vec![canonical_agent_path.to_string_lossy().to_string()];
 
     // For interactive terminal, don't add --_quiet or --raw
     // Let mdflow show its full terminal UX
 
-    (mdflow_cmd.to_string(), args)
+    Ok((mdflow_cmd.to_string(), args))
 }
 
 /// Get install instructions for missing dependencies
@@ -521,10 +529,46 @@ mod tests {
     use super::*;
     use crate::agents::types::{AgentBackend, AgentFrontmatter};
     use std::collections::HashMap;
+    use std::ffi::OsString;
     use std::fs;
     use std::path::PathBuf;
     use std::process::Command;
+    use std::sync::{Mutex, OnceLock};
     use tempfile::TempDir;
+
+    fn with_temp_kit_agents_dir(test_fn: impl FnOnce(&std::path::Path, &std::path::Path)) {
+        static SK_PATH_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+        struct SkPathGuard {
+            previous: Option<OsString>,
+        }
+
+        impl Drop for SkPathGuard {
+            fn drop(&mut self) {
+                if let Some(previous) = &self.previous {
+                    std::env::set_var(crate::setup::SK_PATH_ENV, previous);
+                } else {
+                    std::env::remove_var(crate::setup::SK_PATH_ENV);
+                }
+            }
+        }
+
+        let _lock = SK_PATH_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("SK_PATH lock poisoned");
+
+        let temp_dir = TempDir::new().expect("create temp dir");
+        let kit_root = temp_dir.path().join("scriptkit");
+        let agents_dir = kit_root.join("kit/main/agents");
+        fs::create_dir_all(&agents_dir).expect("create agents directory");
+
+        let previous = std::env::var_os(crate::setup::SK_PATH_ENV);
+        std::env::set_var(crate::setup::SK_PATH_ENV, &kit_root);
+        let _guard = SkPathGuard { previous };
+
+        test_fn(&kit_root, &agents_dir);
+    }
 
     fn create_test_agent(backend: AgentBackend) -> Agent {
         Agent {
@@ -598,12 +642,41 @@ mod tests {
 
     #[test]
     fn test_build_terminal_command() {
-        let agent = create_test_agent(AgentBackend::Claude);
-        let (cmd, args) = build_terminal_command(&agent);
+        with_temp_kit_agents_dir(|_kit_root, agents_dir| {
+            let agent_file = agents_dir.join("test.claude.md");
+            fs::write(&agent_file, "# test").expect("write agent file");
 
-        assert!(cmd == "mdflow" || cmd == "md");
-        assert_eq!(args.len(), 1);
-        assert!(args[0].contains("test.claude.md"));
+            let mut agent = create_test_agent(AgentBackend::Claude);
+            agent.path = agent_file.clone();
+
+            let (cmd, args) = build_terminal_command(&agent)
+                .expect("valid agent path should produce terminal command");
+
+            assert!(cmd == "mdflow" || cmd == "md");
+            assert_eq!(args.len(), 1);
+
+            let expected = fs::canonicalize(&agent_file).expect("canonicalize expected path");
+            assert_eq!(PathBuf::from(&args[0]), expected);
+        });
+    }
+
+    #[test]
+    fn test_build_terminal_command_rejects_path_with_parent_segments() {
+        with_temp_kit_agents_dir(|kit_root, _agents_dir| {
+            let kit_main = kit_root.join("kit/main");
+            fs::write(kit_main.join("escape.claude.md"), "# test")
+                .expect("write outside agent file");
+
+            let mut agent = create_test_agent(AgentBackend::Claude);
+            agent.path = kit_main.join("agents/../escape.claude.md");
+
+            let error = build_terminal_command(&agent)
+                .expect_err("paths with parent dir segments should be rejected");
+            assert!(
+                error.to_string().contains("reason=parent_dir_segment"),
+                "error should include parent_dir_segment reason"
+            );
+        });
     }
 
     #[test]
