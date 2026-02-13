@@ -79,9 +79,21 @@ impl ProcessManager {
         // Ensure parent directory exists
         if let Some(parent) = self.main_pid_path.parent() {
             fs::create_dir_all(parent)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let perms = std::fs::Permissions::from_mode(0o700);
+                fs::set_permissions(parent, perms)?;
+            }
         }
 
         let mut file = File::create(&self.main_pid_path)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let perms = std::fs::Permissions::from_mode(0o600);
+            file.set_permissions(perms)?;
+        }
         write!(file, "{}", pid)?;
 
         logging::log("PROC", &format!("Main PID {} written successfully", pid));
@@ -393,6 +405,12 @@ impl ProcessManager {
             .create(true)
             .truncate(true)
             .open(&self.active_pids_path)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let perms = std::fs::Permissions::from_mode(0o600);
+            file.set_permissions(perms)?;
+        }
 
         file.write_all(json.as_bytes())?;
         Ok(())
