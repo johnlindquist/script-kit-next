@@ -202,4 +202,32 @@ mod arg_prompt_render_tests {
             "other prompt render helpers should construct PromptRenderContext"
         );
     }
+
+    #[test]
+    fn test_key_preamble_helper_is_used_across_prompt_renderers() {
+        assert!(
+            include_str!("helpers.rs").contains("fn key_preamble("),
+            "arg helpers should define key_preamble"
+        );
+        assert!(
+            include_str!("render.rs").contains("key_preamble(this, event, true, false, cx)"),
+            "arg prompt key handler should use key_preamble"
+        );
+        assert!(
+            include_str!("../div.rs").contains("key_preamble(this, event, true, true, cx)"),
+            "div prompt key handler should use key_preamble with propagation stop"
+        );
+        assert!(
+            include_str!("../editor.rs").contains("key_preamble(this, event, false, false, cx)"),
+            "editor prompt key handler should use key_preamble"
+        );
+        assert!(
+            include_str!("../form/render.rs").contains("key_preamble(this, event, true, false, cx)"),
+            "form prompt key handler should use key_preamble"
+        );
+        assert!(
+            include_str!("../term.rs").contains("key_preamble(this, event, false, false, cx)"),
+            "term prompt key handler should use key_preamble"
+        );
+    }
 }
