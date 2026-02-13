@@ -173,10 +173,34 @@ fn extract_frontmatter_fields(raw: HashMap<String, serde_yaml::Value>) -> AgentF
                 fm.interactive = parse_interactive_flag(value);
             }
             "_cwd" => {
-                fm.cwd = value.as_str().map(|s| s.to_string());
+                if let Some(raw_cwd) = value.as_str() {
+                    match sanitize_cwd(raw_cwd) {
+                        Some(cwd) => {
+                            fm.cwd = Some(cwd);
+                        }
+                        None => {
+                            warn!(
+                                cwd = %raw_cwd,
+                                "Rejected invalid _cwd frontmatter value"
+                            );
+                        }
+                    }
+                }
             }
             "_command" | "_c" => {
-                fm.command = value.as_str().map(|s| s.to_string());
+                if let Some(raw_command) = value.as_str() {
+                    match sanitize_command(raw_command) {
+                        Some(command) => {
+                            fm.command = Some(command);
+                        }
+                        None => {
+                            warn!(
+                                command = %raw_command,
+                                "Rejected invalid _command frontmatter value"
+                            );
+                        }
+                    }
+                }
             }
             "_env" => {
                 fm.env = parse_env(value);
@@ -188,6 +212,67 @@ fn extract_frontmatter_fields(raw: HashMap<String, serde_yaml::Value>) -> AgentF
     }
 
     fm
+}
+
+fn contains_nul_byte(value: &str) -> bool {
+    value.contains('\0')
+}
+
+fn contains_control_char(value: &str) -> bool {
+    value.chars().any(|ch| ch.is_control())
+}
+
+fn sanitize_cwd(value: &str) -> Option<String> {
+    if value.is_empty() {
+        return None;
+    }
+    if contains_nul_byte(value) {
+        return None;
+    }
+    if contains_control_char(value) {
+        return None;
+    }
+    let has_parent_component = value
+        .split(['/', '\\'])
+        .filter(|component| !component.is_empty())
+        .any(|component| component.contains(".."));
+    if has_parent_component {
+        return None;
+    }
+    Some(value.to_string())
+}
+
+fn sanitize_command(value: &str) -> Option<String> {
+    if value.is_empty() {
+        return None;
+    }
+    if contains_nul_byte(value) {
+        return None;
+    }
+    if contains_control_char(value) {
+        return None;
+    }
+    Some(value.to_string())
+}
+
+fn is_valid_env_key(value: &str) -> bool {
+    if value.is_empty() {
+        return false;
+    }
+    if contains_nul_byte(value) {
+        return false;
+    }
+    if value.contains('=') {
+        return false;
+    }
+    if contains_control_char(value) {
+        return false;
+    }
+    true
+}
+
+fn is_valid_env_val(value: &str) -> bool {
+    !contains_nul_byte(value)
 }
 
 /// Parse `_inputs` from frontmatter
@@ -285,6 +370,17 @@ fn parse_env(value: &serde_yaml::Value) -> Option<HashMap<String, String>> {
         let mut env = HashMap::new();
         for (key, val) in map {
             if let (Some(k), Some(v)) = (key.as_str(), val.as_str()) {
+                if !is_valid_env_key(k) {
+                    warn!(env_key = %k, "Rejected invalid _env key from frontmatter");
+                    continue;
+                }
+                if !is_valid_env_val(v) {
+                    warn!(
+                        env_key = %k,
+                        "Rejected invalid _env value from frontmatter"
+                    );
+                    continue;
+                }
                 env.insert(k.to_string(), v.to_string());
             }
         }
@@ -687,6 +783,100 @@ Prompt"#;
         let env = fm.env.unwrap();
         assert_eq!(env.get("NODE_ENV"), Some(&"production".to_string()));
         assert_eq!(env.get("DEBUG"), Some(&"true".to_string()));
+    }
+
+    #[test]
+    fn test_sanitize_cwd_returns_none_for_invalid_paths() {
+        assert_eq!(sanitize_cwd(""), None);
+        assert_eq!(sanitize_cwd(".."), None);
+        assert_eq!(sanitize_cwd("../tmp"), None);
+        assert_eq!(sanitize_cwd("foo/../bar"), None);
+        assert_eq!(sanitize_cwd("bad\0path"), None);
+        assert_eq!(sanitize_cwd("bad\npath"), None);
+    }
+
+    #[test]
+    fn test_sanitize_cwd_returns_value_for_valid_path() {
+        assert_eq!(
+            sanitize_cwd("/tmp/project"),
+            Some("/tmp/project".to_string())
+        );
+        assert_eq!(
+            sanitize_cwd("C:\\Users\\workspace"),
+            Some("C:\\Users\\workspace".to_string())
+        );
+    }
+
+    #[test]
+    fn test_sanitize_command_returns_none_for_invalid_commands() {
+        assert_eq!(sanitize_command(""), None);
+        assert_eq!(sanitize_command("echo hi\n"), None);
+        assert_eq!(sanitize_command("echo\0hi"), None);
+    }
+
+    #[test]
+    fn test_sanitize_command_returns_value_for_valid_commands() {
+        assert_eq!(sanitize_command("ollama"), Some("ollama".to_string()));
+        assert_eq!(
+            sanitize_command("node script.js"),
+            Some("node script.js".to_string())
+        );
+    }
+
+    #[test]
+    fn test_is_valid_env_key_rejects_invalid_keys() {
+        assert!(!is_valid_env_key(""));
+        assert!(!is_valid_env_key("BAD=KEY"));
+        assert!(!is_valid_env_key("BAD\nKEY"));
+        assert!(!is_valid_env_key("BAD\0KEY"));
+        assert!(is_valid_env_key("GOOD_KEY"));
+    }
+
+    #[test]
+    fn test_is_valid_env_val_rejects_nul_bytes() {
+        assert!(is_valid_env_val("value"));
+        assert!(!is_valid_env_val("bad\0value"));
+    }
+
+    #[test]
+    fn test_parse_frontmatter_drops_invalid_typed_fields_and_preserves_raw_values() {
+        let content = r#"---
+_cwd: ../tmp
+_command: ""
+_env:
+  GOOD_KEY: "value"
+  BAD=KEY: "nope"
+---
+Prompt"#;
+
+        let fm = parse_frontmatter_ok(content);
+        assert_eq!(fm.cwd, None);
+        assert_eq!(fm.command, None);
+        let env = fm.env.expect("expected valid env entries to remain");
+        assert_eq!(env.len(), 1);
+        assert_eq!(env.get("GOOD_KEY"), Some(&"value".to_string()));
+
+        // Raw frontmatter remains untouched for mdflow handling.
+        assert_eq!(fm.raw.get("_cwd").and_then(|v| v.as_str()), Some("../tmp"));
+        assert_eq!(fm.raw.get("_command").and_then(|v| v.as_str()), Some(""));
+        assert!(fm.raw.contains_key("_env"));
+    }
+
+    #[test]
+    fn test_parse_frontmatter_drops_env_values_with_nul_bytes() {
+        let content = r#"---
+_env:
+  GOOD_KEY: "value"
+  BAD_VALUE: "bad\0value"
+---
+Prompt"#;
+
+        let fm = parse_frontmatter_ok(content);
+        let env = fm.env.expect("expected valid env entries to remain");
+        assert_eq!(env.len(), 1);
+        assert_eq!(env.get("GOOD_KEY"), Some(&"value".to_string()));
+        assert!(!env.contains_key("BAD_VALUE"));
+        assert!(fm.raw.contains_key("_env"));
     }
 
     // === _inputs parsing tests ===
