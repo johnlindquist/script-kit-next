@@ -129,15 +129,12 @@ mod prompt_layout_shell_tests {
             "render_drop_prompt",
             "render_template_prompt",
             "render_chat_prompt",
+            "render_naming_prompt",
         ] {
             let body = fn_source(fn_name);
             assert!(
-                body.contains("prompt_shell_container("),
-                "{fn_name} should use prompt_shell_container"
-            );
-            assert!(
-                body.contains("prompt_shell_content("),
-                "{fn_name} should use prompt_shell_content"
+                body.contains("render_simple_prompt_shell("),
+                "{fn_name} should delegate to render_simple_prompt_shell"
             );
         }
     }

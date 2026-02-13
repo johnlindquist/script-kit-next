@@ -296,14 +296,6 @@ impl ScriptListApp {
             .into_any_element()
         };
 
-        // Use design tokens for global theming
-        let opacity = theme.get_opacity();
-        let bg_hex = design_colors.background;
-        let _bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
-        // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
-        // Shadows are handled by app_shell
-        let _box_shadows = self.create_box_shadows();
-
         // P4: Pre-compute more theme values for the main container using design tokens
         let ui_border = design_colors.border;
 
