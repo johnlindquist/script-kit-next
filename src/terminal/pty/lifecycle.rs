@@ -61,20 +61,14 @@ impl PtyManager {
 
         #[cfg(unix)]
         {
-            command.env("TERM", "xterm-256color");
-            command.env("COLORTERM", "truecolor");
-            command.env("CLICOLOR_FORCE", "1");
-            if let Ok(home) = std::env::var("HOME") {
-                command.env("HOME", home);
-            }
-            if let Ok(user) = std::env::var("USER") {
-                command.env("USER", user);
-            }
-            if let Ok(path) = std::env::var("PATH") {
-                command.env("PATH", path);
-            }
-            if let Ok(shell) = std::env::var("SHELL") {
-                command.env("SHELL", shell);
+            let env_vars = Self::unix_spawn_env_allowlist();
+            debug!(
+                allowlisted_env_count = env_vars.len(),
+                "Scrubbing inherited PTY environment before spawn"
+            );
+            command.env_clear();
+            for (key, value) in env_vars {
+                command.env(key, value);
             }
         }
 
@@ -105,6 +99,23 @@ impl PtyManager {
         })
     }
 
+    #[cfg(unix)]
+    fn unix_spawn_env_allowlist() -> Vec<(&'static str, String)> {
+        let mut env_vars = vec![
+            ("TERM", "xterm-256color".to_string()),
+            ("COLORTERM", "truecolor".to_string()),
+            ("CLICOLOR_FORCE", "1".to_string()),
+        ];
+
+        for key in ["HOME", "USER", "PATH", "SHELL", "TMPDIR", "LANG"] {
+            if let Ok(value) = std::env::var(key) {
+                env_vars.push((key, value));
+            }
+        }
+
+        env_vars
+    }
+
     /// Takes ownership of the PTY reader for use in a background thread.
     ///
     /// After calling this, `read()` will return an error.
@@ -121,6 +132,54 @@ impl PtyManager {
         #[cfg(windows)]
         {
             std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string())
+        }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use std::collections::{HashMap, HashSet};
+
+    use super::PtyManager;
+
+    #[test]
+    fn test_unix_spawn_env_allowlist_contains_expected_keys_when_environment_present() {
+        let env_vars = PtyManager::unix_spawn_env_allowlist();
+        let env_map: HashMap<&str, &str> = env_vars
+            .iter()
+            .map(|(key, value)| (*key, value.as_str()))
+            .collect();
+
+        assert_eq!(env_map.get("TERM"), Some(&"xterm-256color"));
+        assert_eq!(env_map.get("COLORTERM"), Some(&"truecolor"));
+        assert_eq!(env_map.get("CLICOLOR_FORCE"), Some(&"1"));
+
+        let allowed: HashSet<&str> = [
+            "TERM",
+            "COLORTERM",
+            "CLICOLOR_FORCE",
+            "HOME",
+            "USER",
+            "PATH",
+            "SHELL",
+            "TMPDIR",
+            "LANG",
+        ]
+        .into_iter()
+        .collect();
+
+        for key in env_map.keys() {
+            assert!(
+                allowed.contains(key),
+                "found unexpected env key in PTY allowlist: {key}"
+            );
+        }
+
+        for key in ["HOME", "USER", "PATH", "SHELL", "TMPDIR", "LANG"] {
+            match std::env::var(key) {
+                Ok(expected) => assert_eq!(env_map.get(key), Some(&expected.as_str())),
+                Err(_) => assert!(!env_map.contains_key(key)),
+            }
         }
     }
 }
