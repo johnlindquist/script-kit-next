@@ -1,4 +1,42 @@
 impl ScriptListApp {
+    fn navigate_emoji_picker_horizontal(&mut self, delta: isize, cx: &mut Context<Self>) {
+        if let AppView::EmojiPickerView {
+            filter,
+            selected_index,
+            selected_category,
+        } = &mut self.current_view
+        {
+            let ordered_emojis = crate::emoji::filtered_ordered_emojis(filter, *selected_category);
+            let filtered_len = ordered_emojis.len();
+            if filtered_len == 0 {
+                *selected_index = 0;
+                self.hovered_index = None;
+                cx.notify();
+                return;
+            }
+
+            if *selected_index >= filtered_len {
+                *selected_index = filtered_len - 1;
+            }
+
+            if delta < 0 {
+                let step = delta.saturating_neg() as usize;
+                *selected_index = selected_index.saturating_sub(step);
+            } else {
+                let step = delta as usize;
+                *selected_index = selected_index.saturating_add(step).min(filtered_len - 1);
+            }
+
+            let row = crate::emoji::compute_scroll_row(*selected_index, &ordered_emojis);
+            self.emoji_scroll_handle
+                .scroll_to_item(row, gpui::ScrollStrategy::Nearest);
+
+            self.input_mode = InputMode::Keyboard;
+            self.hovered_index = None;
+            cx.notify();
+        }
+    }
+
     fn render_emoji_picker(
         &mut self,
         filter: String,
@@ -131,18 +169,22 @@ impl ScriptListApp {
                     }
 
                     let cols = crate::emoji::GRID_COLS;
-                    match key_str.as_str() {
+                    let navigated = match key_str.as_str() {
                         "up" | "arrowup" => {
                             *selected_index = (*selected_index).saturating_sub(cols);
+                            true
                         }
                         "down" | "arrowdown" => {
                             *selected_index = (*selected_index + cols).min(filtered_len - 1);
+                            true
                         }
                         "left" | "arrowleft" => {
-                            *selected_index = (*selected_index).saturating_sub(1);
+                            this.navigate_emoji_picker_horizontal(-1, cx);
+                            return;
                         }
                         "right" | "arrowright" => {
-                            *selected_index = (*selected_index + 1).min(filtered_len - 1);
+                            this.navigate_emoji_picker_horizontal(1, cx);
+                            return;
                         }
                         "enter" | "return" => {
                             if let Some(emoji) = ordered_emojis.get(*selected_index) {
@@ -163,12 +205,53 @@ impl ScriptListApp {
                             return;
                         }
                         _ => return,
+                    };
+
+                    if navigated {
+                        let row = crate::emoji::compute_scroll_row(
+                            *selected_index,
+                            &ordered_emojis,
+                        );
+                        this.emoji_scroll_handle.scroll_to_item(
+                            row,
+                            gpui::ScrollStrategy::Nearest,
+                        );
                     }
 
                     this.input_mode = InputMode::Keyboard;
                     this.hovered_index = None;
                     cx.notify();
                 }
+            },
+        );
+
+        let handle_move_left_action = cx.listener(
+            |this: &mut Self,
+             _: &gpui_component::input::MoveLeft,
+             _window: &mut Window,
+             cx: &mut Context<Self>| {
+                if this.shortcut_recorder_state.is_some() {
+                    cx.stop_propagation();
+                    return;
+                }
+
+                this.navigate_emoji_picker_horizontal(-1, cx);
+                cx.stop_propagation();
+            },
+        );
+
+        let handle_move_right_action = cx.listener(
+            |this: &mut Self,
+             _: &gpui_component::input::MoveRight,
+             _window: &mut Window,
+             cx: &mut Context<Self>| {
+                if this.shortcut_recorder_state.is_some() {
+                    cx.stop_propagation();
+                    return;
+                }
+
+                this.navigate_emoji_picker_horizontal(1, cx);
+                cx.stop_propagation();
             },
         );
 
@@ -193,6 +276,9 @@ impl ScriptListApp {
             let current_input_mode = self.input_mode;
             let hover_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x30);
             let selected_border = self.theme.colors.accent.selected;
+            // Keep selection visible but subtle in dense emoji rows (~50% outline, ~14% fill).
+            let selected_outline = rgba((selected_border << 8) | 0x80);
+            let selected_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x24);
             let click_entity_handle = cx.entity().downgrade();
             let hover_entity_handle = cx.entity().downgrade();
             let grid_cols = cols;
@@ -254,12 +340,13 @@ impl ScriptListApp {
                                             .rounded(px(6.0))
                                             .text_size(px(26.0))
                                             .cursor_pointer()
-                                            .border_2()
+                                            .border_1()
                                             .border_color(if is_selected {
-                                                rgb(selected_border)
+                                                selected_outline
                                             } else {
                                                 rgba(0x00000000)
                                             })
+                                            .when(is_selected, |d| d.bg(selected_bg))
                                             .when(is_hovered && !is_selected, |d| d.bg(hover_bg))
                                             .on_click(
                                                 move |_event: &gpui::ClickEvent,
@@ -334,6 +421,8 @@ impl ScriptListApp {
             .font_family(design_typography.font_family)
             .key_context("emoji_picker")
             .track_focus(&self.focus_handle)
+            .on_action(handle_move_left_action)
+            .on_action(handle_move_right_action)
             .on_key_down(handle_key)
             .child(
                 div()
@@ -446,6 +535,25 @@ mod emoji_picker_tests {
     }
 
     #[test]
+    fn test_render_emoji_picker_wires_horizontal_input_actions_to_grid_navigation() {
+        let source = read_emoji_picker_source();
+
+        assert!(
+            source.contains("gpui_component::input::MoveLeft"),
+            "emoji picker should listen for MoveLeft action from Input"
+        );
+        assert!(
+            source.contains("gpui_component::input::MoveRight"),
+            "emoji picker should listen for MoveRight action from Input"
+        );
+        assert!(
+            source.contains(".on_action(handle_move_left_action)")
+                && source.contains(".on_action(handle_move_right_action)"),
+            "emoji picker container should register left/right action handlers"
+        );
+    }
+
+    #[test]
     fn test_render_emoji_picker_uses_shared_input_focus_and_scroll_handles() {
         let source = read_emoji_picker_source();
 
@@ -460,6 +568,28 @@ mod emoji_picker_tests {
         assert!(
             source.contains(".track_scroll(&self.emoji_scroll_handle)"),
             "emoji picker grid should track emoji scroll handle"
+        );
+    }
+
+    #[test]
+    fn test_render_emoji_picker_uses_subtle_outline_when_cell_is_selected() {
+        let source = read_emoji_picker_source();
+
+        assert!(
+            source.contains("let selected_outline = rgba((selected_border << 8) | 0x80);"),
+            "selected emoji cell should use a subtle alpha-blended outline color"
+        );
+        assert!(
+            source.contains(".border_1()"),
+            "emoji cells should keep a 1px border for consistent layout"
+        );
+        assert!(
+            source.contains("rgba(0x00000000)"),
+            "unselected emoji cells should keep transparent borders to avoid layout shift"
+        );
+        assert!(
+            source.contains(".when(is_selected, |d| d.bg(selected_bg))"),
+            "selected emoji cell should apply subtle rounded background highlight"
         );
     }
 }
