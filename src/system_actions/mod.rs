@@ -15,6 +15,17 @@
 use std::process::Command;
 use sysinfo::{Pid, ProcessesToUpdate, Signal, System};
 use tracing::{debug, error, info, warn};
+
+const SYSTEM_CMD_ENV_VARS: [&str; 5] = ["PATH", "HOME", "TMPDIR", "USER", "LANG"];
+
+fn scrub_command_env(cmd: &mut Command) {
+    cmd.env_clear();
+    for key in SYSTEM_CMD_ENV_VARS {
+        if let Some(val) = std::env::var_os(key) {
+            cmd.env(key, val);
+        }
+    }
+}
 // ============================================================================
 // Helper Function
 // ============================================================================
@@ -23,9 +34,10 @@ use tracing::{debug, error, info, warn};
 fn run_applescript(script: &str) -> Result<(), String> {
     debug!(script = %script, "Executing AppleScript");
 
-    let output = Command::new("osascript")
-        .arg("-e")
-        .arg(script)
+    let mut cmd = Command::new("osascript");
+    cmd.arg("-e").arg(script);
+    scrub_command_env(&mut cmd);
+    let output = cmd
         .output()
         .map_err(|e| format!("Failed to execute AppleScript: {}", e))?;
 
@@ -43,9 +55,10 @@ fn run_applescript(script: &str) -> Result<(), String> {
 fn run_applescript_with_output(script: &str) -> Result<String, String> {
     debug!(script = %script, "Executing AppleScript with output");
 
-    let output = Command::new("osascript")
-        .arg("-e")
-        .arg(script)
+    let mut cmd = Command::new("osascript");
+    cmd.arg("-e").arg(script);
+    scrub_command_env(&mut cmd);
+    let output = cmd
         .output()
         .map_err(|e| format!("Failed to execute AppleScript: {}", e))?;
 
@@ -391,8 +404,10 @@ pub fn get_running_apps() -> Result<Vec<AppInfo>, String> {
 /// Get the bundle ID from an app path using mdls
 #[allow(dead_code)] // Internal helper used by get_running_apps
 fn get_bundle_id_from_path(app_path: &str) -> Result<String, String> {
-    let output = Command::new("mdls")
-        .args(["-name", "kMDItemCFBundleIdentifier", "-raw", app_path])
+    let mut cmd = Command::new("mdls");
+    cmd.args(["-name", "kMDItemCFBundleIdentifier", "-raw", app_path]);
+    scrub_command_env(&mut cmd);
+    let output = cmd
         .output()
         .map_err(|e| format!("Failed to run mdls: {}", e))?;
 
@@ -611,8 +626,10 @@ fn open_system_settings_url(url_path: &str) -> Result<(), String> {
     let url = format!("x-apple.systempreferences:{}", url_path);
     info!(url = %url, "Opening System Settings via URL scheme");
 
-    let output = Command::new("open")
-        .arg(&url)
+    let mut cmd = Command::new("open");
+    cmd.arg(&url);
+    scrub_command_env(&mut cmd);
+    let output = cmd
         .output()
         .map_err(|e| format!("Failed to open System Settings: {}", e))?;
 
@@ -676,9 +693,10 @@ pub fn open_trackpad_settings() -> Result<(), String> {
 /// Open System Settings (main window)
 pub fn open_system_preferences_main() -> Result<(), String> {
     info!("Opening System Settings");
-    let output = Command::new("open")
-        .arg("-a")
-        .arg("System Settings")
+    let mut cmd = Command::new("open");
+    cmd.arg("-a").arg("System Settings");
+    scrub_command_env(&mut cmd);
+    let output = cmd
         .output()
         .map_err(|e| format!("Failed to open System Settings: {}", e))?;
 
