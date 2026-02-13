@@ -183,6 +183,18 @@ where
     ///
     /// Return events that should be emitted to the output sink.
     fn on_notify(&mut self, event: notify::Event) -> Vec<E>;
+
+    /// Called for each notify event with mutable access to the active watcher.
+    ///
+    /// Specs that need dynamic watch registration can override this. Default behavior
+    /// delegates to `on_notify` for backward compatibility.
+    fn on_notify_with_watcher(
+        &mut self,
+        event: notify::Event,
+        _watcher: &mut dyn Watcher,
+    ) -> Vec<E> {
+        self.on_notify(event)
+    }
 }
 
 /// Unified error type for `EventSink`.
@@ -421,7 +433,7 @@ where
                 }
                 ControlMsg::Notify(Ok(event)) => {
                     consecutive_errors = 0;
-                    let emitted = spec.on_notify(event);
+                    let emitted = spec.on_notify_with_watcher(event, &mut *watcher);
                     emit_events(&out_tx, emitted, watcher_label, "notify");
                 }
             }
