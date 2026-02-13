@@ -156,6 +156,28 @@ fn key_preamble(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+struct SdkActionShortcutMatch {
+    action_name: String,
+    shortcut_key: String,
+}
+
+#[inline]
+fn check_sdk_action_shortcut(
+    action_shortcuts: &std::collections::HashMap<String, String>,
+    key: &str,
+    modifiers: &gpui::Modifiers,
+) -> Option<SdkActionShortcutMatch> {
+    let shortcut_key = shortcuts::keystroke_to_shortcut(key, modifiers);
+    action_shortcuts
+        .get(&shortcut_key)
+        .cloned()
+        .map(|action_name| SdkActionShortcutMatch {
+            action_name,
+            shortcut_key,
+        })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum ArgSubmitOutcome {
     SubmitChoice(String),
     SubmitText(String),

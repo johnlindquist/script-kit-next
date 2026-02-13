@@ -271,17 +271,18 @@ impl ScriptListApp {
 
                 // Check for SDK action shortcuts (only when popup is NOT open)
                 let key_lower = key.to_lowercase();
-                let shortcut_key =
-                    shortcuts::keystroke_to_shortcut(&key_lower, &event.keystroke.modifiers);
-                if let Some(action_name) = this.action_shortcuts.get(&shortcut_key).cloned() {
+                if let Some(matched_shortcut) =
+                    check_sdk_action_shortcut(&this.action_shortcuts, &key_lower, &event.keystroke.modifiers)
+                {
                     let correlation_id = logging::current_correlation_id();
                     logging::log(
                         "KEY",
                         &format!(
-                            "{TERM_PROMPT_KEY_CONTEXT}: SDK action shortcut matched (action={action_name}, shortcut={shortcut_key}, correlation_id={correlation_id})"
+                            "{TERM_PROMPT_KEY_CONTEXT}: SDK action shortcut matched (action={}, shortcut={}, correlation_id={correlation_id})",
+                            matched_shortcut.action_name, matched_shortcut.shortcut_key
                         ),
                     );
-                    this.trigger_action_by_name(&action_name, cx);
+                    this.trigger_action_by_name(&matched_shortcut.action_name, cx);
                 }
                 // Let other keys fall through to the terminal
             },
