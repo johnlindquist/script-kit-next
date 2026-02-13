@@ -73,6 +73,17 @@ mod unix_process {
 /// Embedded SDK content (included at compile time)
 const EMBEDDED_SDK: &str = include_str!("../../scripts/kit-sdk.ts");
 
+const SAFE_SCRIPT_ENV_VARS: &[&str] = &[
+    "PATH",
+    "HOME",
+    "TMPDIR",
+    "USER",
+    "LANG",
+    "TERM",
+    "SHELL",
+    "XDG_RUNTIME_DIR",
+];
+
 /// OnceLock for single-flight SDK extraction
 /// Ensures SDK is extracted exactly once, preventing race conditions
 /// when multiple scripts start simultaneously
@@ -670,6 +681,17 @@ pub fn spawn_script(cmd: &str, args: &[&str], script_path: &str) -> Result<Scrip
     logging::log("EXEC", &format!("spawn_script: {} {:?}", executable, args));
 
     let mut command = Command::new(&executable);
+    command.env_clear();
+    for key in SAFE_SCRIPT_ENV_VARS {
+        if let Some(value) = std::env::var_os(key) {
+            command.env(key, value);
+        }
+    }
+    for (key, value) in std::env::vars() {
+        if key.starts_with("SCRIPT_KIT") {
+            command.env(key, value);
+        }
+    }
     command
         .args(args)
         .stdin(Stdio::piped())
@@ -870,7 +892,20 @@ pub fn run_command(cmd: &str, args: &[&str]) -> Result<String, String> {
 
     logging::log("EXEC", &format!("run_command: {} {:?}", executable, args));
 
-    let output = Command::new(&executable).args(args).output().map_err(|e| {
+    let mut command = Command::new(&executable);
+    command.env_clear();
+    for key in SAFE_SCRIPT_ENV_VARS {
+        if let Some(value) = std::env::var_os(key) {
+            command.env(key, value);
+        }
+    }
+    for (key, value) in std::env::vars() {
+        if key.starts_with("SCRIPT_KIT") {
+            command.env(key, value);
+        }
+    }
+
+    let output = command.args(args).output().map_err(|e| {
         let err = format!("Failed to run '{}': {}", executable, e);
         logging::log("EXEC", &format!("COMMAND ERROR: {}", err));
         err
@@ -920,4 +955,88 @@ pub fn is_javascript(path: &Path) -> bool {
         .and_then(|ext| ext.to_str())
         .map(|ext| ext == "js")
         .unwrap_or(false)
+}
+
+#[cfg(test)]
+#[cfg(unix)]
+mod env_scrub_tests {
+    use super::{run_command, spawn_script};
+    use std::env;
+    use std::ffi::OsString;
+    use std::io::Read;
+    use std::sync::{Mutex, OnceLock};
+
+    fn env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    struct EnvVarGuard {
+        key: &'static str,
+        original: Option<OsString>,
+    }
+
+    impl EnvVarGuard {
+        fn set(key: &'static str, value: &str) -> Self {
+            let original = env::var_os(key);
+            env::set_var(key, value);
+            Self { key, original }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            if let Some(value) = &self.original {
+                env::set_var(self.key, value);
+            } else {
+                env::remove_var(self.key);
+            }
+        }
+    }
+
+    #[test]
+    fn test_run_command_forwards_script_kit_vars_when_env_is_scrubbed() {
+        let _lock = env_lock().lock().expect("env lock should be available");
+        let _script_kit = EnvVarGuard::set("SCRIPT_KIT_ENV_SCRUB_RUN", "forwarded");
+        let _private = EnvVarGuard::set("RUNNER_ENV_SCRUB_RUN_PRIVATE", "blocked");
+
+        let output = run_command(
+            "sh",
+            &[
+                "-c",
+                "printf '%s|%s' \"${SCRIPT_KIT_ENV_SCRUB_RUN:-missing}\" \"${RUNNER_ENV_SCRUB_RUN_PRIVATE:-missing}\"",
+            ],
+        )
+        .expect("run_command should succeed");
+
+        assert_eq!(output, "forwarded|missing");
+    }
+
+    #[test]
+    fn test_spawn_script_forwards_script_kit_vars_when_env_is_scrubbed() {
+        let _lock = env_lock().lock().expect("env lock should be available");
+        let _script_kit = EnvVarGuard::set("SCRIPT_KIT_ENV_SCRUB_SPAWN", "forwarded");
+        let _private = EnvVarGuard::set("RUNNER_ENV_SCRUB_SPAWN_PRIVATE", "blocked");
+
+        let mut session = spawn_script(
+            "sh",
+            &[
+                "-c",
+                "printf '%s|%s' \"${SCRIPT_KIT_ENV_SCRUB_SPAWN:-missing}\" \"${RUNNER_ENV_SCRUB_SPAWN_PRIVATE:-missing}\" >&2",
+            ],
+            "[test:runner_env_scrub_spawn]",
+        )
+        .expect("spawn_script should succeed");
+
+        let exit_code = session.wait().expect("wait should succeed");
+        assert_eq!(exit_code, 0);
+
+        let mut stderr = String::new();
+        let mut stderr_reader = session.stderr.take().expect("stderr should be captured");
+        stderr_reader
+            .read_to_string(&mut stderr)
+            .expect("stderr should be readable");
+
+        assert_eq!(stderr, "forwarded|missing");
+    }
 }
