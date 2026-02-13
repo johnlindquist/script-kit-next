@@ -714,8 +714,11 @@ pub fn execute_open(
     #[cfg(target_os = "windows")]
     let cmd_name = "start";
 
-    let output = Command::new(cmd_name)
-        .arg(target)
+    let mut cmd = Command::new(cmd_name);
+    cmd.arg(target);
+    apply_scriptlet_environment_allowlist(&mut cmd);
+
+    let output = cmd
         .output()
         .map_err(|e| format!("Failed to open '{}': {}", target, e))?;
 
@@ -746,8 +749,11 @@ pub fn execute_edit(
         .map(|p| p.to_string_lossy().into_owned())
         .unwrap_or(editor);
 
-    let output = Command::new(&editor_path)
-        .arg(file_path)
+    let mut cmd = Command::new(&editor_path);
+    cmd.arg(file_path);
+    apply_scriptlet_environment_allowlist(&mut cmd);
+
+    let output = cmd
         .output()
         .map_err(|e| format!("Failed to open editor '{}': {}", editor_path, e))?;
 
@@ -794,9 +800,11 @@ pub fn execute_type(content: &str) -> Result<ScriptletResult, String> {
         crate::utils::escape_applescript_string(text)
     );
 
-    let output = Command::new("osascript")
-        .arg("-e")
-        .arg(&script)
+    let mut cmd = Command::new("osascript");
+    cmd.arg("-e").arg(&script);
+    apply_scriptlet_environment_allowlist(&mut cmd);
+
+    let output = cmd
         .output()
         .map_err(|e| format!("Failed to type text: {}", e))?;
 
@@ -828,9 +836,12 @@ pub fn execute_submit(content: &str) -> Result<ScriptletResult, String> {
     std::thread::sleep(Duration::from_millis(50));
 
     // Then press Enter using AppleScript
-    let output = Command::new("osascript")
-        .arg("-e")
-        .arg(r#"tell application "System Events" to key code 36"#) // 36 is Return key
+    let mut cmd = Command::new("osascript");
+    cmd.arg("-e")
+        .arg(r#"tell application "System Events" to key code 36"#); // 36 is Return key
+    apply_scriptlet_environment_allowlist(&mut cmd);
+
+    let output = cmd
         .output()
         .map_err(|e| format!("Failed to press Enter: {}", e))?;
 
