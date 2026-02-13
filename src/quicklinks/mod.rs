@@ -40,7 +40,16 @@ pub fn delete_quicklink(id: &str) {
 }
 
 pub fn expand_url(url_template: &str, query: &str) -> String {
-    url_template.replace(QUERY_PLACEHOLDER, query)
+    let encoded: String = query
+        .bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect();
+    url_template.replace(QUERY_PLACEHOLDER, &encoded)
 }
 
 pub fn has_query_placeholder(url_template: &str) -> bool {
@@ -114,7 +123,13 @@ mod tests {
     #[test]
     fn test_expand_url_replaces_query_placeholder() {
         let expanded = expand_url("https://example.com/search?q={query}", "rust gpui");
-        assert_eq!(expanded, "https://example.com/search?q=rust gpui");
+        assert_eq!(expanded, "https://example.com/search?q=rust%20gpui");
+    }
+
+    #[test]
+    fn test_expand_url_percent_encodes_special_chars() {
+        let expanded = expand_url("https://example.com?q={query}", "a&b=c#d");
+        assert_eq!(expanded, "https://example.com?q=a%26b%3Dc%23d");
     }
 
     #[test]
