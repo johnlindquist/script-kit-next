@@ -1246,6 +1246,31 @@ pub fn filtered_ordered_emojis(
     ordered
 }
 
+/// Compute the uniform-list row index that contains `selected_index`.
+///
+/// Row layout per category: 1 header row + ceil(count / GRID_COLS) cell rows.
+/// Returns the row suitable for `scroll_handle.scroll_to_item(row, Nearest)`.
+pub fn compute_scroll_row(selected_index: usize, ordered: &[Emoji]) -> usize {
+    let cols = GRID_COLS;
+    let mut flat_offset: usize = 0;
+    let mut row_offset: usize = 0;
+    for cat in ALL_CATEGORIES.iter().copied() {
+        let cat_count = ordered.iter().filter(|e| e.category == cat).count();
+        if cat_count == 0 {
+            continue;
+        }
+        if flat_offset + cat_count > selected_index {
+            let idx_in_cat = selected_index - flat_offset;
+            let cell_row = idx_in_cat / cols;
+            row_offset += 1 + cell_row;
+            return row_offset;
+        }
+        row_offset += 1 + cat_count.div_ceil(cols);
+        flat_offset += cat_count;
+    }
+    row_offset
+}
+
 pub fn search_emojis(query: &str) -> Vec<&Emoji> {
     let query = query.trim().to_ascii_lowercase();
     if query.is_empty() {
