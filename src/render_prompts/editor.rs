@@ -60,18 +60,13 @@ impl ScriptListApp {
         let design_visual = render_context.design_visual;
         let actions_dialog_top = render_context.actions_dialog_top;
         let actions_dialog_right = render_context.actions_dialog_right;
-        let has_actions =
-            self.sdk_actions.is_some() && !self.sdk_actions.as_ref().unwrap().is_empty();
+        let has_actions = self.has_nonempty_sdk_actions();
 
         // Sync suppress_keys with actions popup state so editor ignores keys when popup is open
         let show_actions = self.show_actions_popup;
         entity.update(cx, |editor, _| {
             editor.suppress_keys = show_actions;
         });
-
-        // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
-        // Shadows are handled by app_shell
-        let _box_shadows = self.create_box_shadows();
 
         // VIBRANCY: Use foundation helper - returns None when vibrancy enabled (let Root handle bg)
         let vibrancy_bg = get_vibrancy_background(theme);

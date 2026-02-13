@@ -1,0 +1,6 @@
+[0;36m🔗 Running local pre-commit hook...[0m
+🔍 Checking formatting...
+✓ Formatting OK
+Warning: bd command not found, skipping pre-commit flush
+[1;33m⚠️  Diff too large (260387 lines > 2000 max)[0m
+[1;33m   Set ANTI_SLOP_MAX_LINES to increase limit, or use --no-verify[0m

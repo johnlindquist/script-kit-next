@@ -17,6 +17,11 @@ impl ScriptListApp {
     }
 
     #[inline]
+    fn has_nonempty_sdk_actions(&self) -> bool {
+        self.sdk_actions.as_ref().is_some_and(|a| !a.is_empty())
+    }
+
+    #[inline]
     fn other_prompt_shell_handle_key_default(
         &mut self,
         event: &gpui::KeyDownEvent,
@@ -106,22 +111,28 @@ impl ScriptListApp {
         }
     }
 
+    fn render_simple_prompt_shell(
+        &mut self,
+        entity: impl IntoElement,
+        key_handler: impl Fn(&mut Self, &gpui::KeyDownEvent, &mut Window, &mut Context<Self>) + 'static,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let shell_radius = self.other_prompt_shell_radius_lg();
+        let handle_key = cx.listener(key_handler);
+        let vibrancy_bg = get_vibrancy_background(&self.theme);
+
+        crate::components::prompt_shell_container(shell_radius, vibrancy_bg)
+            .on_key_down(handle_key)
+            .child(crate::components::prompt_shell_content(entity))
+            .into_any_element()
+    }
+
     fn render_select_prompt(
         &mut self,
         entity: Entity<SelectPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let shell_radius = self.other_prompt_shell_radius_lg();
-        let handle_key = cx.listener(Self::other_prompt_shell_handle_key_default);
-
-        let vibrancy_bg = get_vibrancy_background(&self.theme);
-
-        // SelectPrompt entity has its own track_focus and on_key_down in its render method.
-        // We wrap with our own handler to intercept Cmd+W and ESC first.
-        crate::components::prompt_shell_container(shell_radius, vibrancy_bg)
-            .on_key_down(handle_key)
-            .child(crate::components::prompt_shell_content(entity))
-            .into_any_element()
+        self.render_simple_prompt_shell(entity, Self::other_prompt_shell_handle_key_default, cx)
     }
 
     fn render_env_prompt(
@@ -129,17 +140,7 @@ impl ScriptListApp {
         entity: Entity<EnvPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let shell_radius = self.other_prompt_shell_radius_lg();
-        let handle_key = cx.listener(Self::other_prompt_shell_handle_key_default);
-
-        let vibrancy_bg = get_vibrancy_background(&self.theme);
-
-        // EnvPrompt entity has its own track_focus and on_key_down in its render method.
-        // We wrap with our own handler to intercept Cmd+W and ESC first.
-        crate::components::prompt_shell_container(shell_radius, vibrancy_bg)
-            .on_key_down(handle_key)
-            .child(crate::components::prompt_shell_content(entity))
-            .into_any_element()
+        self.render_simple_prompt_shell(entity, Self::other_prompt_shell_handle_key_default, cx)
     }
 
     fn render_drop_prompt(
@@ -147,17 +148,7 @@ impl ScriptListApp {
         entity: Entity<DropPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let shell_radius = self.other_prompt_shell_radius_lg();
-        let handle_key = cx.listener(Self::other_prompt_shell_handle_key_default);
-
-        let vibrancy_bg = get_vibrancy_background(&self.theme);
-
-        // DropPrompt entity has its own track_focus and on_key_down in its render method.
-        // We wrap with our own handler to intercept Cmd+W and ESC first.
-        crate::components::prompt_shell_container(shell_radius, vibrancy_bg)
-            .on_key_down(handle_key)
-            .child(crate::components::prompt_shell_content(entity))
-            .into_any_element()
+        self.render_simple_prompt_shell(entity, Self::other_prompt_shell_handle_key_default, cx)
     }
 
     fn render_template_prompt(
@@ -165,17 +156,7 @@ impl ScriptListApp {
         entity: Entity<TemplatePrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let shell_radius = self.other_prompt_shell_radius_lg();
-        let handle_key = cx.listener(Self::other_prompt_shell_handle_key_default);
-
-        let vibrancy_bg = get_vibrancy_background(&self.theme);
-
-        // TemplatePrompt entity has its own track_focus and on_key_down in its render method.
-        // We wrap with our own handler to intercept Cmd+W and ESC first.
-        crate::components::prompt_shell_container(shell_radius, vibrancy_bg)
-            .on_key_down(handle_key)
-            .child(crate::components::prompt_shell_content(entity))
-            .into_any_element()
+        self.render_simple_prompt_shell(entity, Self::other_prompt_shell_handle_key_default, cx)
     }
 
     fn render_chat_prompt(
@@ -183,17 +164,7 @@ impl ScriptListApp {
         entity: Entity<prompts::ChatPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let shell_radius = self.other_prompt_shell_radius_lg();
-        let handle_key = cx.listener(Self::other_prompt_shell_handle_key_chat);
-
-        let vibrancy_bg = get_vibrancy_background(&self.theme);
-
-        // ChatPrompt entity has its own track_focus and on_key_down in its render method.
-        // We wrap with our own handler to intercept Cmd+K and route actions first.
-        crate::components::prompt_shell_container(shell_radius, vibrancy_bg)
-            .on_key_down(handle_key)
-            .child(crate::components::prompt_shell_content(entity))
-            .into_any_element()
+        self.render_simple_prompt_shell(entity, Self::other_prompt_shell_handle_key_chat, cx)
     }
 
     fn render_naming_prompt(
@@ -201,17 +172,7 @@ impl ScriptListApp {
         entity: Entity<prompts::NamingPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let shell_radius = self.other_prompt_shell_radius_lg();
-        let handle_key = cx.listener(Self::other_prompt_shell_handle_key_default);
-
-        let vibrancy_bg = get_vibrancy_background(&self.theme);
-
-        // NamingPrompt entity has its own track_focus and on_key_down in its render method.
-        // We wrap with our own handler to intercept Cmd+W and ESC first.
-        crate::components::prompt_shell_container(shell_radius, vibrancy_bg)
-            .on_key_down(handle_key)
-            .child(crate::components::prompt_shell_content(entity))
-            .into_any_element()
+        self.render_simple_prompt_shell(entity, Self::other_prompt_shell_handle_key_default, cx)
     }
 
     fn render_webcam_prompt(
@@ -384,6 +345,10 @@ mod other_prompt_render_wrapper_tests {
             "render_naming_prompt",
         ] {
             let body = fn_source(fn_name);
+            assert!(
+                body.contains("render_simple_prompt_shell("),
+                "{fn_name} should delegate to render_simple_prompt_shell"
+            );
             assert!(
                 !body.contains("hex_to_rgba_with_opacity"),
                 "{fn_name} should not compute unused background opacity in the shell wrapper"

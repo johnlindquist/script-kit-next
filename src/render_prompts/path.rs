@@ -182,19 +182,10 @@ impl ScriptListApp {
     ) -> AnyElement {
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
-        let design_colors = tokens.colors();
         let design_spacing = tokens.spacing();
         let design_visual = tokens.visual();
         let (actions_dialog_top, actions_dialog_right) =
             prompt_actions_dialog_offsets(design_spacing.padding_sm, design_visual.border_thin);
-
-        // Use design tokens for global theming
-        let opacity = self.theme.get_opacity();
-        let bg_hex = design_colors.background;
-        let _bg_with_alpha = crate::ui_foundation::hex_to_rgba_with_opacity(bg_hex, opacity.main);
-        // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
-        // Shadows are handled by app_shell
-        let _box_shadows = self.create_box_shadows();
 
         // NOTE: No side-effects in render! Dialog creation and action execution
         // are handled by handle_show_path_actions() and execute_path_action()
