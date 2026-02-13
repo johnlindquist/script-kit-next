@@ -20,6 +20,10 @@ use crate::theme::Theme;
 /// Fixed height for compact list items (less than half of standard 52px)
 pub const COMPACT_ITEM_HEIGHT: f32 = 24.0;
 
+fn truncate_str_chars(s: &str, max_chars: usize) -> &str {
+    s.char_indices().nth(max_chars).map_or(s, |(i, _)| &s[..i])
+}
+
 /// Compact design renderer for maximum information density
 pub struct CompactRenderer {
     theme: std::sync::Arc<Theme>,
@@ -148,8 +152,8 @@ impl RenderOnce for CompactListItem {
         let mut content_text = self.name.to_string();
         if let Some(ref desc) = self.description {
             // Truncate description to keep row compact
-            let truncated = if desc.len() > 40 {
-                format!("{}..", &desc[..38])
+            let truncated = if desc.chars().count() > 40 {
+                format!("{}..", truncate_str_chars(desc, 38))
             } else {
                 desc.clone()
             };
@@ -337,3 +341,16 @@ pub fn render_compact_window_container(
 
 // Note: Tests omitted due to GPUI macro recursion limit issues.
 // COMPACT_ITEM_HEIGHT = 24.0 (less than half of standard 52px)
+#[cfg(test)]
+mod tests {
+    use super::truncate_str_chars;
+
+    #[test]
+    fn test_truncate_str_chars_returns_valid_utf8_boundary_when_description_is_multibyte() {
+        let description = "漢".repeat(60);
+        let truncated = truncate_str_chars(&description, 38);
+
+        assert_eq!(truncated.chars().count(), 38);
+        assert!(std::str::from_utf8(truncated.as_bytes()).is_ok());
+    }
+}

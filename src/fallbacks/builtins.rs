@@ -9,6 +9,10 @@
 
 use crate::scripts::input_detection::{is_file_path, is_math_expression, is_url, InputType};
 
+fn truncate_str_chars(s: &str, max_chars: usize) -> &str {
+    s.char_indices().nth(max_chars).map_or(s, |(i, _)| &s[..i])
+}
+
 /// Simple percent-encoding for URL query strings
 /// Encodes characters that are not unreserved per RFC 3986
 fn percent_encode(input: &str) -> String {
@@ -202,8 +206,8 @@ impl BuiltinFallback {
     ///
     /// Returns a subtitle like "Search Google for 'hello world'"
     pub fn get_subtitle(&self, input: &str) -> String {
-        let truncated = if input.len() > 40 {
-            format!("{}...", &input[..37])
+        let truncated = if input.chars().count() > 40 {
+            format!("{}...", truncate_str_chars(input, 37))
         } else {
             input.to_string()
         };
@@ -668,6 +672,25 @@ mod tests {
         let subtitle = copy.get_subtitle(&long_input);
         assert!(subtitle.contains("..."));
         assert!(subtitle.len() < 60); // Should be truncated
+    }
+
+    #[test]
+    fn test_get_subtitle_does_not_split_utf8_when_input_is_multibyte() {
+        let fallbacks = get_builtin_fallbacks();
+        let copy = fallbacks
+            .iter()
+            .find(|f| f.id == "copy-to-clipboard")
+            .expect("copy-to-clipboard fallback should exist");
+
+        let long_input = "🙂".repeat(50);
+        let subtitle = copy.get_subtitle(&long_input);
+
+        assert!(subtitle.starts_with("Copy '"));
+        assert!(subtitle.ends_with('\''));
+
+        let trimmed = subtitle.trim_start_matches("Copy '").trim_end_matches('\'');
+        assert!(trimmed.ends_with("..."));
+        assert_eq!(trimmed.trim_end_matches("...").chars().count(), 37);
     }
 
     #[test]
