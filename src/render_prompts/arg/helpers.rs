@@ -132,6 +132,29 @@ fn prompt_footer_config_with_status(
     config
 }
 
+#[inline]
+fn key_preamble(
+    app: &mut ScriptListApp,
+    event: &gpui::KeyDownEvent,
+    is_dismissable: bool,
+    stop_propagation_on_global_shortcut: bool,
+    cx: &mut Context<ScriptListApp>,
+) -> bool {
+    // When active, the shortcut recorder owns key handling for the prompt.
+    if app.shortcut_recorder_state.is_some() {
+        return true;
+    }
+
+    if !app.show_actions_popup && app.handle_global_shortcut_with_options(event, is_dismissable, cx) {
+        if stop_propagation_on_global_shortcut {
+            cx.stop_propagation();
+        }
+        return true;
+    }
+
+    false
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ArgSubmitOutcome {
     SubmitChoice(String),

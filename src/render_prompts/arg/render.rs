@@ -113,17 +113,7 @@ impl ScriptListApp {
                 // Hide cursor while typing - automatically shows when mouse moves
                 this.hide_mouse_cursor(cx);
 
-                // If the shortcut recorder is active, don't process any key events.
-                // The recorder has its own key handlers and should receive all key events.
-                if this.shortcut_recorder_state.is_some() {
-                    return;
-                }
-
-                // Global shortcuts (Cmd+W, ESC for dismissable prompts)
-                // Note: Escape when actions popup is open should close the popup, not dismiss prompt
-                if !this.show_actions_popup
-                    && this.handle_global_shortcut_with_options(event, true, cx)
-                {
+                if key_preamble(this, event, true, false, cx) {
                     return;
                 }
 
