@@ -1473,6 +1473,19 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     "file-search" | "filesearch" | "files" | "searchfiles" => {
                                         view.open_file_search(String::new(), ctx);
                                     }
+                                    "emoji" | "emoji-picker" | "emojipicker" => {
+                                        view.filter_text = String::new();
+                                        view.pending_filter_sync = true;
+                                        view.pending_placeholder = Some("Search Emoji & Symbols...".to_string());
+                                        view.current_view = AppView::EmojiPickerView {
+                                            filter: String::new(),
+                                            selected_index: 0,
+                                            selected_category: None,
+                                        };
+                                        view.hovered_index = None;
+                                        view.pending_focus = Some(FocusTarget::MainFilter);
+                                        view.update_window_size_deferred(window, ctx);
+                                    }
                                     _ => {
                                         logging::log("ERROR", &format!("Unknown built-in: '{}'", name));
                                     }
@@ -1821,6 +1834,60 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                 }
                                             });
                                         }
+                                    }
+                                    AppView::EmojiPickerView { filter, selected_index, selected_category } => {
+                                        let filter_clone = filter.clone();
+                                        let cat = *selected_category;
+                                        let old_idx = *selected_index;
+                                        let ordered = crate::emoji::filtered_ordered_emojis(&filter_clone, cat);
+                                        let filtered_len = ordered.len();
+                                        if filtered_len == 0 {
+                                            return;
+                                        }
+                                        let cols = crate::emoji::GRID_COLS;
+                                        let new_idx = match key_lower.as_str() {
+                                            "up" | "arrowup" => old_idx.saturating_sub(cols),
+                                            "down" | "arrowdown" => (old_idx + cols).min(filtered_len.saturating_sub(1)),
+                                            "left" | "arrowleft" => old_idx.saturating_sub(1),
+                                            "right" | "arrowright" => (old_idx + 1).min(filtered_len.saturating_sub(1)),
+                                            "enter" => {
+                                                if let Some(emoji) = ordered.get(old_idx) {
+                                                    ctx.write_to_clipboard(gpui::ClipboardItem::new_string(emoji.emoji.to_string()));
+                                                    view.close_and_reset_window(ctx);
+                                                }
+                                                return;
+                                            }
+                                            "escape" => {
+                                                view.close_and_reset_window(ctx);
+                                                return;
+                                            }
+                                            _ => {
+                                                logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in EmojiPicker", key_lower));
+                                                return;
+                                            }
+                                        };
+                                        // Apply new index
+                                        if let AppView::EmojiPickerView { selected_index, .. } = &mut view.current_view {
+                                            *selected_index = new_idx;
+                                        }
+                                        // Scroll to row containing selected emoji
+                                        let mut flat_offset: usize = 0;
+                                        let mut row_offset: usize = 0;
+                                        for cat in crate::emoji::ALL_CATEGORIES.iter().copied() {
+                                            let cat_count = ordered.iter().filter(|e| e.category == cat).count();
+                                            if cat_count == 0 { continue; }
+                                            if flat_offset + cat_count > new_idx {
+                                                let idx_in_cat = new_idx - flat_offset;
+                                                row_offset += 1 + idx_in_cat / cols;
+                                                break;
+                                            }
+                                            row_offset += 1 + cat_count.div_ceil(cols);
+                                            flat_offset += cat_count;
+                                        }
+                                        view.emoji_scroll_handle.scroll_to_item(row_offset, gpui::ScrollStrategy::Nearest);
+                                        view.input_mode = InputMode::Keyboard;
+                                        view.hovered_index = None;
+                                        ctx.notify();
                                     }
                                     _ => {
                                         logging::log("STDIN", &format!("SimulateKey: View {:?} not supported for key simulation", std::mem::discriminant(&view.current_view)));

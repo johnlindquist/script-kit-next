@@ -354,7 +354,7 @@
                                             break;
                                         }
                                         // 1 header + ceil(cat_count / cols) cell rows
-                                        row_offset += 1 + (cat_count + cols - 1) / cols;
+                                        row_offset += 1 + cat_count.div_ceil(cols);
                                         flat_offset += cat_count;
                                     }
                                     this.emoji_scroll_handle.scroll_to_item(

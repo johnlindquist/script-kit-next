@@ -82,6 +82,7 @@ impl ScriptListApp {
                 | AppView::WebcamView { .. }
                 | AppView::NamingPrompt { .. }
                 | AppView::CreationFeedback { .. }
+                | AppView::EmojiPickerView { .. }
         )
     }
 

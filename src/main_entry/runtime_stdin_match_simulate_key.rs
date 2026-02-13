@@ -341,6 +341,61 @@
                                             });
                                         }
                                     }
+                                    AppView::EmojiPickerView { ref mut selected_index, ref filter, ref selected_category } => {
+                                        let ordered = crate::emoji::filtered_ordered_emojis(filter, *selected_category);
+                                        let filtered_len = ordered.len();
+                                        if filtered_len == 0 {
+                                            return;
+                                        }
+                                        let cols = crate::emoji::GRID_COLS;
+                                        match key_lower.as_str() {
+                                            "up" | "arrowup" => {
+                                                *selected_index = (*selected_index).saturating_sub(cols);
+                                            }
+                                            "down" | "arrowdown" => {
+                                                *selected_index = (*selected_index + cols).min(filtered_len.saturating_sub(1));
+                                            }
+                                            "left" | "arrowleft" => {
+                                                *selected_index = (*selected_index).saturating_sub(1);
+                                            }
+                                            "right" | "arrowright" => {
+                                                *selected_index = (*selected_index + 1).min(filtered_len.saturating_sub(1));
+                                            }
+                                            "enter" => {
+                                                if let Some(emoji) = ordered.get(*selected_index) {
+                                                    ctx.write_to_clipboard(gpui::ClipboardItem::new_string(emoji.emoji.to_string()));
+                                                    view.close_and_reset_window(ctx);
+                                                }
+                                                return;
+                                            }
+                                            "escape" => {
+                                                view.close_and_reset_window(ctx);
+                                                return;
+                                            }
+                                            _ => {
+                                                logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in EmojiPicker", key_lower));
+                                                return;
+                                            }
+                                        }
+                                        // Scroll to row containing selected emoji
+                                        let mut flat_offset: usize = 0;
+                                        let mut row_offset: usize = 0;
+                                        for cat in crate::emoji::ALL_CATEGORIES.iter().copied() {
+                                            let cat_count = ordered.iter().filter(|e| e.category == cat).count();
+                                            if cat_count == 0 { continue; }
+                                            if flat_offset + cat_count > *selected_index {
+                                                let idx_in_cat = *selected_index - flat_offset;
+                                                row_offset += 1 + idx_in_cat / cols;
+                                                break;
+                                            }
+                                            row_offset += 1 + cat_count.div_ceil(cols);
+                                            flat_offset += cat_count;
+                                        }
+                                        view.emoji_scroll_handle.scroll_to_item(row_offset, gpui::ScrollStrategy::Nearest);
+                                        view.input_mode = InputMode::Keyboard;
+                                        view.hovered_index = None;
+                                        ctx.notify();
+                                    }
                                     _ => {
                                         logging::log("STDIN", &format!("SimulateKey: View {:?} not supported for key simulation", std::mem::discriminant(&view.current_view)));
                                     }

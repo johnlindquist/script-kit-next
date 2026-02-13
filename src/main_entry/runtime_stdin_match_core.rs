@@ -191,6 +191,19 @@
                                     "file-search" | "filesearch" | "files" | "searchfiles" => {
                                         view.open_file_search(String::new(), ctx);
                                     }
+                                    "emoji" | "emoji-picker" | "emojipicker" => {
+                                        view.filter_text = String::new();
+                                        view.pending_filter_sync = true;
+                                        view.pending_placeholder = Some("Search Emoji & Symbols...".to_string());
+                                        view.current_view = AppView::EmojiPickerView {
+                                            filter: String::new(),
+                                            selected_index: 0,
+                                            selected_category: None,
+                                        };
+                                        view.hovered_index = None;
+                                        view.pending_focus = Some(FocusTarget::MainFilter);
+                                        view.update_window_size_deferred(window, ctx);
+                                    }
                                     _ => {
                                         logging::log("ERROR", &format!("Unknown built-in: '{}'", name));
                                     }
