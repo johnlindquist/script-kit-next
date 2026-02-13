@@ -170,15 +170,20 @@ impl ScriptListApp {
                     );
                     return;
                 }
-                if let Some(action_name) = this.action_shortcuts.get(&shortcut_key).cloned() {
+                if let Some(matched_shortcut) = check_sdk_action_shortcut(
+                    &this.action_shortcuts,
+                    &key_lower,
+                    &event.keystroke.modifiers,
+                ) {
                     let correlation_id = logging::current_correlation_id();
                     logging::log(
                         "KEY",
                         &format!(
-                            "{EDITOR_PROMPT_KEY_CONTEXT}: SDK action shortcut matched (action={action_name}, shortcut={shortcut_key}, correlation_id={correlation_id})"
+                            "{EDITOR_PROMPT_KEY_CONTEXT}: SDK action shortcut matched (action={}, shortcut={}, correlation_id={correlation_id})",
+                            matched_shortcut.action_name, matched_shortcut.shortcut_key
                         ),
                     );
-                    this.trigger_action_by_name(&action_name, cx);
+                    this.trigger_action_by_name(&matched_shortcut.action_name, cx);
                 }
                 // Let other keys fall through to the editor
             },
@@ -322,12 +327,46 @@ impl ScriptListApp {
 #[cfg(test)]
 mod editor_prompt_tests {
     use super::*;
+    use std::collections::HashMap;
 
     fn cmd_modifiers() -> gpui::Modifiers {
         gpui::Modifiers {
             platform: true,
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn test_check_sdk_action_shortcut_matches_registered_shortcut() {
+        let mut action_shortcuts = HashMap::new();
+        let modifiers = cmd_modifiers();
+        let shortcut_key = shortcuts::keystroke_to_shortcut("k", &modifiers);
+        action_shortcuts.insert(shortcut_key.clone(), "open-actions".to_string());
+
+        let shortcut_match = check_sdk_action_shortcut(&action_shortcuts, "K", &modifiers);
+        assert_eq!(
+            shortcut_match,
+            Some(SdkActionShortcutMatch {
+                action_name: "open-actions".to_string(),
+                shortcut_key,
+            })
+        );
+    }
+
+    #[test]
+    fn test_check_sdk_action_shortcut_returns_none_when_modifiers_do_not_match() {
+        let mut action_shortcuts = HashMap::new();
+        let cmd_modifiers = cmd_modifiers();
+        action_shortcuts.insert(
+            shortcuts::keystroke_to_shortcut("k", &cmd_modifiers),
+            "open-actions".to_string(),
+        );
+
+        let no_modifiers = gpui::Modifiers::default();
+        assert_eq!(
+            check_sdk_action_shortcut(&action_shortcuts, "k", &no_modifiers),
+            None
+        );
     }
 
     #[test]
