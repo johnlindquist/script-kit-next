@@ -3,6 +3,10 @@
 //! This module provides utilities for parsing script errors and generating
 //! helpful suggestions for users.
 
+fn truncate_str_chars(s: &str, max_chars: usize) -> &str {
+    s.char_indices().nth(max_chars).map_or(s, |(i, _)| &s[..i])
+}
+
 /// Parse stderr output to extract stack trace if present
 pub fn parse_stack_trace(stderr: &str) -> Option<String> {
     // Look for common stack trace patterns
@@ -75,8 +79,8 @@ pub fn extract_error_message(stderr: &str) -> String {
     for line in &lines {
         let trimmed = line.trim();
         if !trimmed.is_empty() {
-            return if trimmed.len() > 200 {
-                format!("{}...", &trimmed[..200])
+            return if trimmed.chars().count() > 200 {
+                format!("{}...", truncate_str_chars(trimmed, 200))
             } else {
                 trimmed.to_string()
             };
@@ -362,4 +366,19 @@ pub fn generate_crash_suggestions(crash_info: &CrashInfo) -> Vec<String> {
     }
 
     suggestions
+}
+
+#[cfg(test)]
+mod tests {
+    use super::extract_error_message;
+
+    #[test]
+    fn test_extract_error_message_does_not_split_utf8_when_fallback_line_is_multibyte() {
+        let stderr = format!("{}\n", "🙂".repeat(250));
+        let message = extract_error_message(&stderr);
+
+        assert!(message.ends_with("..."));
+        assert_eq!(message.trim_end_matches("...").chars().count(), 200);
+        assert!(std::str::from_utf8(message.as_bytes()).is_ok());
+    }
 }

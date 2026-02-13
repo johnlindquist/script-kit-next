@@ -8,6 +8,15 @@ fn unhandled_message_warning(message_type: &str) -> String {
         message_type
     )
 }
+
+mod prompt_handler_utf8 {
+    pub(super) fn truncate_str_chars(s: &str, max_chars: usize) -> &str {
+        s.char_indices()
+            .nth(max_chars)
+            .map_or(s, |(i, _)| &s[..i])
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PromptMessageRoute {
     ConfirmWindow,
@@ -2062,8 +2071,8 @@ impl ScriptListApp {
                 // Generate a chat ID (the AI window will create the actual chat)
                 // For now, use a placeholder - the real chat ID is managed by AiApp
                 let generated_chat_id = format!("chat-{}", uuid::Uuid::new_v4());
-                let title = if message.len() > 30 {
-                    format!("{}...", &message[..30])
+                let title = if message.chars().count() > 30 {
+                    format!("{}...", prompt_handler_utf8::truncate_str_chars(&message, 30))
                 } else {
                     message.clone()
                 };
@@ -2163,7 +2172,10 @@ impl ScriptListApp {
 // --- merged from part_002.rs ---
 #[cfg(test)]
 mod prompt_handler_message_tests {
-    use super::{classify_prompt_message_route, unhandled_message_warning, PromptMessageRoute};
+    use super::{
+        classify_prompt_message_route, prompt_handler_utf8, unhandled_message_warning,
+        PromptMessageRoute,
+    };
     use crate::PromptMessage;
 
     #[test]
@@ -2201,5 +2213,14 @@ mod prompt_handler_message_tests {
         assert!(message.contains("'widget'"));
         assert!(message.contains("Update the script to a supported message type"));
         assert!(message.contains("update Script Kit GPUI"));
+    }
+
+    #[test]
+    fn test_truncate_str_chars_returns_valid_utf8_boundary_when_message_is_multibyte() {
+        let message = "🙂".repeat(50);
+        let truncated = prompt_handler_utf8::truncate_str_chars(&message, 30);
+
+        assert_eq!(truncated.chars().count(), 30);
+        assert!(std::str::from_utf8(truncated.as_bytes()).is_ok());
     }
 }
