@@ -1,4 +1,6 @@
 use super::*;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 
 const NO_MAIN_WINDOW_BUILTINS: &[&str] = &[
     "builtin-ai-chat",
@@ -15,9 +17,136 @@ fn builtin_needs_main_window_for_command_id(identifier: &str) -> bool {
     !NO_MAIN_WINDOW_BUILTINS.contains(&identifier)
 }
 
+#[derive(Clone, Copy, Debug)]
+enum InteractiveTempFileMode {
+    Executable,
+    InterpreterFed,
+}
+
+#[cfg(unix)]
+fn interactive_tempfile_unix_mode(mode: InteractiveTempFileMode) -> u32 {
+    match mode {
+        InteractiveTempFileMode::Executable => 0o700,
+        InteractiveTempFileMode::InterpreterFed => 0o600,
+    }
+}
+
+#[cfg(unix)]
+fn apply_interactive_temp_permissions(
+    file: &std::fs::File,
+    mode: InteractiveTempFileMode,
+) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let unix_mode = interactive_tempfile_unix_mode(mode);
+    let mut permissions = file
+        .metadata()
+        .map_err(|error| {
+            format!(
+                "interactive_tempfile_metadata_failed: attempted=read_metadata mode={:o} error={}",
+                unix_mode, error
+            )
+        })?
+        .permissions();
+    permissions.set_mode(unix_mode);
+    file.set_permissions(permissions).map_err(|error| {
+        format!(
+            "interactive_tempfile_permissions_failed: attempted=set_permissions mode={:o} error={}",
+            unix_mode, error
+        )
+    })
+}
+
+fn create_interactive_temp_script(
+    content: &str,
+    suffix: &str,
+    mode: InteractiveTempFileMode,
+) -> Result<PathBuf, String> {
+    let mut temp_file = tempfile::Builder::new()
+        .prefix("scriptlet-")
+        .suffix(suffix)
+        .tempfile()
+        .map_err(|error| {
+            format!(
+                "interactive_tempfile_create_failed: attempted=create_tempfile suffix={} error={}",
+                suffix, error
+            )
+        })?;
+
+    temp_file
+        .as_file_mut()
+        .write_all(content.as_bytes())
+        .map_err(|error| {
+            format!(
+                "interactive_tempfile_write_failed: attempted=write_content suffix={} error={}",
+                suffix, error
+            )
+        })?;
+    temp_file.as_file_mut().flush().map_err(|error| {
+        format!(
+            "interactive_tempfile_flush_failed: attempted=flush_content suffix={} error={}",
+            suffix, error
+        )
+    })?;
+
+    #[cfg(unix)]
+    apply_interactive_temp_permissions(temp_file.as_file(), mode)?;
+
+    let (_persisted_file, path) = temp_file.keep().map_err(|error| {
+        format!(
+            "interactive_tempfile_keep_failed: attempted=persist_tempfile suffix={} error={}",
+            suffix, error
+        )
+    })?;
+
+    Ok(path)
+}
+
+fn validate_terminal_program(program: &str) -> Result<(), String> {
+    let is_safe_program = !program.is_empty()
+        && program
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+
+    if is_safe_program {
+        Ok(())
+    } else {
+        Err(format!(
+            "terminal_program_validation_failed: attempted=build_terminal_command program={} reason=contains_unsafe_characters",
+            program
+        ))
+    }
+}
+
+#[cfg(unix)]
+fn quote_terminal_arg(arg: &str) -> String {
+    let escaped = arg.replace('\'', "'\"'\"'");
+    format!("'{}'", escaped)
+}
+
+#[cfg(windows)]
+fn quote_terminal_arg(arg: &str) -> String {
+    // Cmd-compatible quoting: wrap in double quotes and escape internal quotes.
+    let escaped = arg.replace('"', "\"\"");
+    format!("\"{}\"", escaped)
+}
+
+fn build_terminal_command(program: &str, script_path: &Path) -> Result<String, String> {
+    validate_terminal_program(program)?;
+    let path_str = script_path.to_str().ok_or_else(|| {
+        "terminal_command_build_failed: attempted=convert_path_to_utf8 reason=invalid_utf8"
+            .to_string()
+    })?;
+    Ok(format!("{} {}", program, quote_terminal_arg(path_str)))
+}
+
 #[cfg(test)]
 mod builtin_command_window_visibility_tests {
-    use super::builtin_needs_main_window_for_command_id;
+    use super::{
+        build_terminal_command, builtin_needs_main_window_for_command_id,
+        create_interactive_temp_script, InteractiveTempFileMode,
+    };
+    use std::path::Path;
 
     #[test]
     fn test_builtin_needs_main_window_false_for_open_ai_and_open_notes() {
@@ -33,10 +162,79 @@ mod builtin_command_window_visibility_tests {
             "builtin-refresh-scripts"
         ));
     }
+
+    #[test]
+    fn test_build_terminal_command_quotes_path_when_path_contains_single_quote() {
+        #[cfg(unix)]
+        {
+            let command = build_terminal_command("bash", Path::new("/tmp/it'works.sh"))
+                .expect("valid command");
+            assert_eq!(command, "bash '/tmp/it'\"'\"'works.sh'");
+        }
+    }
+
+    #[test]
+    fn test_build_terminal_command_rejects_unsafe_program_value() {
+        let err = build_terminal_command("bash;rm", Path::new("/tmp/script.sh"))
+            .expect_err("unsafe program should be rejected");
+        assert!(
+            err.contains("terminal_program_validation_failed"),
+            "expected validation error, got: {}",
+            err
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_create_interactive_temp_script_sets_mode_700_when_executable() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = create_interactive_temp_script(
+            "echo secure-tempfiles",
+            ".sh",
+            InteractiveTempFileMode::Executable,
+        )
+        .expect("should create executable temp file");
+
+        let mode = std::fs::metadata(&path)
+            .expect("temp file metadata should exist")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o700, "expected secure executable mode 0o700");
+
+        std::fs::remove_file(&path).expect("test temp file should be removable");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_create_interactive_temp_script_sets_mode_600_when_interpreter_fed() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = create_interactive_temp_script(
+            "console.log('secure-tempfiles')",
+            ".ts",
+            InteractiveTempFileMode::InterpreterFed,
+        )
+        .expect("should create interpreter temp file");
+
+        let mode = std::fs::metadata(&path)
+            .expect("temp file metadata should exist")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o600, "expected secure interpreter mode 0o600");
+
+        std::fs::remove_file(&path).expect("test temp file should be removable");
+    }
 }
 
 impl ScriptListApp {
-    pub(crate) fn execute_scriptlet(&mut self, scriptlet: &scripts::Scriptlet, cx: &mut Context<Self>) {
+    pub(crate) fn execute_scriptlet(
+        &mut self,
+        scriptlet: &scripts::Scriptlet,
+        cx: &mut Context<Self>,
+    ) {
         logging::log(
             "EXEC",
             &format!(
@@ -58,29 +256,28 @@ impl ScriptListApp {
                 ),
             );
 
-            // Write scriptlet content to a temp file
-            let temp_dir = std::env::temp_dir();
-            let temp_file = temp_dir.join(format!(
-                "scriptlet-{}-{}.ts",
-                scriptlet.name.to_lowercase().replace(' ', "-"),
-                std::process::id()
-            ));
-
-            if let Err(e) = std::fs::write(&temp_file, &scriptlet.code) {
-                logging::log(
-                    "ERROR",
-                    &format!("Failed to write temp scriptlet file: {}", e),
-                );
-                self.toast_manager.push(
-                    components::toast::Toast::error(
-                        format!("Failed to write scriptlet: {}", e),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(5000)),
-                );
-                cx.notify();
-                return;
-            }
+            let temp_file = match create_interactive_temp_script(
+                &scriptlet.code,
+                ".ts",
+                InteractiveTempFileMode::InterpreterFed,
+            ) {
+                Ok(path) => path,
+                Err(e) => {
+                    logging::log(
+                        "ERROR",
+                        &format!("Failed to write temp scriptlet file: {}", e),
+                    );
+                    self.toast_manager.push(
+                        components::toast::Toast::error(
+                            format!("Failed to write scriptlet: {}", e),
+                            &self.theme,
+                        )
+                        .duration_ms(Some(5000)),
+                    );
+                    cx.notify();
+                    return;
+                }
+            };
 
             // Create a Script struct and run it interactively
             let script = scripts::Script {
@@ -112,7 +309,6 @@ impl ScriptListApp {
             );
 
             // Write scriptlet code to a temp file and execute it
-            let temp_dir = std::env::temp_dir();
             let extension = match tool.as_str() {
                 "bash" | "zsh" | "sh" => "sh",
                 "fish" => "fish",
@@ -120,33 +316,44 @@ impl ScriptListApp {
                 "cmd" => "bat",
                 _ => "sh",
             };
-            let temp_file = temp_dir.join(format!(
-                "extension-{}-{}.{}",
-                scriptlet.name.to_lowercase().replace(' ', "-"),
-                std::process::id(),
-                extension
-            ));
+            let suffix = format!(".{}", extension);
+            let temp_file = match create_interactive_temp_script(
+                &scriptlet.code,
+                &suffix,
+                InteractiveTempFileMode::Executable,
+            ) {
+                Ok(path) => path,
+                Err(e) => {
+                    logging::log(
+                        "ERROR",
+                        &format!("Failed to write temp extension file: {}", e),
+                    );
+                    self.toast_manager.push(
+                        components::toast::Toast::error(
+                            format!("Failed to write extension: {}", e),
+                            &self.theme,
+                        )
+                        .duration_ms(Some(5000)),
+                    );
+                    cx.notify();
+                    return;
+                }
+            };
 
-            if let Err(e) = std::fs::write(&temp_file, &scriptlet.code) {
-                logging::log(
-                    "ERROR",
-                    &format!("Failed to write temp extension file: {}", e),
-                );
-                self.toast_manager.push(
-                    components::toast::Toast::error(
-                        format!("Failed to write extension: {}", e),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(5000)),
-                );
-                cx.notify();
-                return;
+            match build_terminal_command(&tool, &temp_file) {
+                Ok(shell_command) => self.open_terminal_with_command(shell_command, cx),
+                Err(e) => {
+                    logging::log("ERROR", &format!("Failed to build terminal command: {}", e));
+                    self.toast_manager.push(
+                        components::toast::Toast::error(
+                            format!("Failed to run extension: {}", e),
+                            &self.theme,
+                        )
+                        .duration_ms(Some(5000)),
+                    );
+                    cx.notify();
+                }
             }
-
-            // Build the command to execute the script file
-            let shell_command = format!("{} {}", tool, temp_file.display());
-
-            self.open_terminal_with_command(shell_command, cx);
             return;
         }
 
@@ -444,5 +651,4 @@ impl ScriptListApp {
         self.execute_script_by_path(command_id, cx);
         true
     }
-
 }

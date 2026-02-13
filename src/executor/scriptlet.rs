@@ -6,9 +6,11 @@
 use crate::logging;
 use crate::scriptlets::{format_scriptlet, process_conditionals, Scriptlet, SHELL_TOOLS};
 use std::collections::HashMap;
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::{Duration, Instant};
+use tempfile::NamedTempFile;
 use tracing::{debug, error, info, instrument, warn};
 
 use super::runner::find_executable;
@@ -225,6 +227,142 @@ pub fn build_final_content(
     result
 }
 
+#[derive(Clone, Copy, Debug)]
+enum TempScriptMode {
+    Executable,
+    InterpreterFed,
+}
+
+#[cfg(unix)]
+fn temp_script_unix_mode(mode: TempScriptMode) -> u32 {
+    match mode {
+        TempScriptMode::Executable => 0o700,
+        TempScriptMode::InterpreterFed => 0o600,
+    }
+}
+
+#[cfg(unix)]
+fn apply_secure_temp_permissions(file: &std::fs::File, mode: TempScriptMode) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let unix_mode = temp_script_unix_mode(mode);
+    let mut permissions = file
+        .metadata()
+        .map_err(|error| {
+            format!(
+                "secure_tempfile_metadata_failed: attempted=read_metadata mode={:o} error={}",
+                unix_mode, error
+            )
+        })?
+        .permissions();
+    permissions.set_mode(unix_mode);
+    file.set_permissions(permissions).map_err(|error| {
+        format!(
+            "secure_tempfile_permissions_failed: attempted=set_permissions mode={:o} error={}",
+            unix_mode, error
+        )
+    })
+}
+
+fn create_secure_temp_script(
+    content: &str,
+    suffix: &str,
+    mode: TempScriptMode,
+) -> Result<NamedTempFile, String> {
+    debug!(
+        suffix = %suffix,
+        temp_mode = ?mode,
+        "Creating secure temp script file"
+    );
+
+    let mut temp_file = tempfile::Builder::new()
+        .prefix("scriptlet-")
+        .suffix(suffix)
+        .tempfile()
+        .map_err(|error| {
+            format!(
+                "secure_tempfile_create_failed: attempted=create_tempfile suffix={} error={}",
+                suffix, error
+            )
+        })?;
+
+    temp_file
+        .as_file_mut()
+        .write_all(content.as_bytes())
+        .map_err(|error| {
+            format!(
+                "secure_tempfile_write_failed: attempted=write_content suffix={} error={}",
+                suffix, error
+            )
+        })?;
+    temp_file.as_file_mut().flush().map_err(|error| {
+        format!(
+            "secure_tempfile_flush_failed: attempted=flush_content suffix={} error={}",
+            suffix, error
+        )
+    })?;
+
+    #[cfg(unix)]
+    apply_secure_temp_permissions(temp_file.as_file(), mode)?;
+
+    Ok(temp_file)
+}
+
+#[cfg(all(test, unix))]
+mod secure_tempfile_tests {
+    use super::{create_secure_temp_script, TempScriptMode};
+    use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn test_create_secure_temp_script_sets_mode_700_when_executable() {
+        let temp_file =
+            create_secure_temp_script("echo secure-tempfiles", ".sh", TempScriptMode::Executable)
+                .expect("executable temp script should be created");
+
+        let mode = temp_file
+            .as_file()
+            .metadata()
+            .expect("metadata should be readable")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o700, "executable script mode should be 0o700");
+    }
+
+    #[test]
+    fn test_create_secure_temp_script_sets_mode_600_when_interpreter_fed() {
+        let temp_file = create_secure_temp_script(
+            "print('secure-tempfiles')",
+            ".py",
+            TempScriptMode::InterpreterFed,
+        )
+        .expect("interpreter temp script should be created");
+
+        let mode = temp_file
+            .as_file()
+            .metadata()
+            .expect("metadata should be readable")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o600, "interpreter script mode should be 0o600");
+    }
+
+    #[test]
+    fn test_create_secure_temp_script_generates_unique_paths_on_consecutive_calls() {
+        let first = create_secure_temp_script("echo first", ".sh", TempScriptMode::Executable)
+            .expect("first temp script should be created");
+        let second = create_secure_temp_script("echo second", ".sh", TempScriptMode::Executable)
+            .expect("second temp script should be created");
+
+        assert_ne!(
+            first.path(),
+            second.path(),
+            "secure temp script paths should be random and unique"
+        );
+    }
+}
+
 /// Execute a shell scriptlet (bash, zsh, sh, fish, etc.)
 #[tracing::instrument(skip(content, options), fields(shell = %shell, content_len = content.len()))]
 pub fn execute_shell_scriptlet(
@@ -234,24 +372,7 @@ pub fn execute_shell_scriptlet(
 ) -> Result<ScriptletResult, String> {
     logging::log("EXEC", &format!("Executing shell scriptlet with {}", shell));
 
-    // Create temp file
-    let temp_dir = std::env::temp_dir();
-    let temp_file = temp_dir.join(format!("scriptlet-{}.sh", std::process::id()));
-
-    std::fs::write(&temp_file, content)
-        .map_err(|e| format!("Failed to write temp script: {}", e))?;
-
-    // Make executable on Unix
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = std::fs::metadata(&temp_file)
-            .map_err(|e| format!("Failed to get file metadata: {}", e))?
-            .permissions();
-        perms.set_mode(0o755);
-        std::fs::set_permissions(&temp_file, perms)
-            .map_err(|e| format!("Failed to set executable permission: {}", e))?;
-    }
+    let temp_file = create_secure_temp_script(content, ".sh", TempScriptMode::Executable)?;
 
     // Find the shell executable
     let shell_path = find_executable(shell)
@@ -259,19 +380,13 @@ pub fn execute_shell_scriptlet(
         .unwrap_or_else(|| shell.to_string());
 
     let mut cmd = Command::new(&shell_path);
-    let temp_file_str = temp_file
-        .to_str()
-        .ok_or_else(|| "Temporary file path contains invalid UTF-8".to_string())?;
-    cmd.arg(temp_file_str);
+    cmd.arg(temp_file.path());
 
     if let Some(ref cwd) = options.cwd {
         cmd.current_dir(cwd);
     }
 
     let output = cmd.output().map_err(|e| {
-        // Clean up temp file before returning error
-        let _ = std::fs::remove_file(&temp_file);
-
         // Provide helpful error message with installation suggestions
         let suggestions = shell_not_found_suggestions(shell);
         format!(
@@ -279,9 +394,6 @@ pub fn execute_shell_scriptlet(
             shell, e, suggestions
         )
     })?;
-
-    // Clean up temp file
-    let _ = std::fs::remove_file(&temp_file);
 
     Ok(ScriptletResult {
         exit_code: output.status.code().unwrap_or(-1),
@@ -371,11 +483,8 @@ pub fn execute_with_interpreter(
     );
 
     // Create temp file with appropriate extension
-    let temp_dir = std::env::temp_dir();
-    let temp_file = temp_dir.join(format!("scriptlet-{}.{}", std::process::id(), extension));
-
-    std::fs::write(&temp_file, content)
-        .map_err(|e| format!("Failed to write temp script: {}", e))?;
+    let suffix = format!(".{}", extension);
+    let temp_file = create_secure_temp_script(content, &suffix, TempScriptMode::InterpreterFed)?;
 
     // Find the interpreter
     let interp_path = find_executable(interpreter)
@@ -383,10 +492,7 @@ pub fn execute_with_interpreter(
         .unwrap_or_else(|| interpreter.to_string());
 
     let mut cmd = Command::new(&interp_path);
-    let temp_file_str = temp_file
-        .to_str()
-        .ok_or_else(|| "Temporary file path contains invalid UTF-8".to_string())?;
-    cmd.arg(temp_file_str);
+    cmd.arg(temp_file.path());
 
     if let Some(ref cwd) = options.cwd {
         cmd.current_dir(cwd);
@@ -395,9 +501,6 @@ pub fn execute_with_interpreter(
     let output = cmd
         .output()
         .map_err(|e| format!("Failed to execute {} script: {}", interpreter, e))?;
-
-    // Clean up temp file
-    let _ = std::fs::remove_file(&temp_file);
 
     Ok(ScriptletResult {
         exit_code: output.status.code().unwrap_or(-1),
@@ -441,12 +544,7 @@ pub fn execute_typescript(
 ) -> Result<ScriptletResult, String> {
     logging::log("EXEC", "Executing TypeScript via bun");
 
-    // Create temp file
-    let temp_dir = std::env::temp_dir();
-    let temp_file = temp_dir.join(format!("scriptlet-{}.ts", std::process::id()));
-
-    std::fs::write(&temp_file, content)
-        .map_err(|e| format!("Failed to write temp script: {}", e))?;
+    let temp_file = create_secure_temp_script(content, ".ts", TempScriptMode::InterpreterFed)?;
 
     // Find bun
     let bun_path = find_executable("bun")
@@ -466,10 +564,7 @@ pub fn execute_typescript(
         }
     }
 
-    let temp_file_str = temp_file
-        .to_str()
-        .ok_or_else(|| "Temporary file path contains invalid UTF-8".to_string())?;
-    cmd.arg(temp_file_str);
+    cmd.arg(temp_file.path());
 
     if let Some(ref cwd) = options.cwd {
         cmd.current_dir(cwd);
@@ -478,9 +573,6 @@ pub fn execute_typescript(
     let output = cmd
         .output()
         .map_err(|e| format!("Failed to execute TypeScript: {}", e))?;
-
-    // Clean up temp file
-    let _ = std::fs::remove_file(&temp_file);
 
     Ok(ScriptletResult {
         exit_code: output.status.code().unwrap_or(-1),
