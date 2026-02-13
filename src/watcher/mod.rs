@@ -4,6 +4,10 @@
 //! plus reload event enums consumed by the UI/application loop.
 //! This module depends on `notify`, `config`, and `setup`, and feeds change events into runtime state updates.
 
+mod generic;
+
+pub use generic::{EventSink, EventSinkError, GenericWatcher, GenericWatcherSettings, WatcherSpec};
+
 // --- merged from part_000.rs ---
 use crate::config;
 use notify::{recommended_watcher, RecursiveMode, Result as NotifyResult, Watcher};
