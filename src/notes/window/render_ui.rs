@@ -4,19 +4,7 @@ impl NotesApp {
     /// Render the search input bar (shown when Cmd+F is pressed)
     pub(super) fn render_search(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
-        let has_query = !self.search_query.is_empty();
-        let result_count = if has_query {
-            self.notes
-                .iter()
-                .filter(|n| {
-                    n.content
-                        .to_lowercase()
-                        .contains(&self.search_query.to_lowercase())
-                })
-                .count()
-        } else {
-            self.notes.len()
-        };
+        let result_count = self.notes.len();
 
         div()
             .w_full()

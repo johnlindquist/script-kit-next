@@ -360,9 +360,13 @@ impl Render for ScriptListApp {
                 this.hovered_index = None;
                 this.hide_mouse_cursor(cx);
             }))
-            // Show cursor when mouse moves
+            // Show cursor when mouse moves.
+            // Also apply default arrow cursor to prevent the underlying app's cursor
+            // from bleeding through (popup panels are non-activating, so GPUI's
+            // built-in cursor system doesn't work for them).
             .on_mouse_move(cx.listener(|this, _: &MouseMoveEvent, _window, cx| {
                 this.show_mouse_cursor(cx);
+                crate::platform::apply_default_cursor();
             }))
             // CRITICAL: Apply vibrancy background like POC does
             // This tints the blur effect with the theme color

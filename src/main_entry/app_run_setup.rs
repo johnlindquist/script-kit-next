@@ -1944,21 +1944,8 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         if let AppView::EmojiPickerView { selected_index, .. } = &mut view.current_view {
                                             *selected_index = new_idx;
                                         }
-                                        // Scroll to row containing selected emoji
-                                        let mut flat_offset: usize = 0;
-                                        let mut row_offset: usize = 0;
-                                        for cat in crate::emoji::ALL_CATEGORIES.iter().copied() {
-                                            let cat_count = ordered.iter().filter(|e| e.category == cat).count();
-                                            if cat_count == 0 { continue; }
-                                            if flat_offset + cat_count > new_idx {
-                                                let idx_in_cat = new_idx - flat_offset;
-                                                row_offset += 1 + idx_in_cat / cols;
-                                                break;
-                                            }
-                                            row_offset += 1 + cat_count.div_ceil(cols);
-                                            flat_offset += cat_count;
-                                        }
-                                        view.emoji_scroll_handle.scroll_to_item(row_offset, gpui::ScrollStrategy::Nearest);
+                                        let row = crate::emoji::compute_scroll_row(new_idx, &ordered);
+                                        view.emoji_scroll_handle.scroll_to_item(row, gpui::ScrollStrategy::Nearest);
                                         view.input_mode = InputMode::Keyboard;
                                         view.hovered_index = None;
                                         ctx.notify();

@@ -18,11 +18,11 @@
 use crate::metadata_parser::TypedMetadata;
 use crate::schema_parser::Schema;
 use crate::scriptlet_metadata::parse_codefence_metadata;
-use anyhow::{bail, Result as AnyhowResult};
+use anyhow::{bail, Context, Result as AnyhowResult};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 use tracing::{debug, warn};
 /// Valid tool types that can be used in code fences
 pub const VALID_TOOLS: &[&str] = &[
@@ -55,6 +55,146 @@ pub const VALID_TOOLS: &[&str] = &[
 ];
 /// Shell tools (tools that execute in a shell environment)
 pub const SHELL_TOOLS: &[&str] = &["bash", "zsh", "sh", "fish", "cmd", "powershell", "pwsh"];
+const SCRIPTLET_FILE_SIZE_LIMIT_BYTES: u64 = 2 * 1024 * 1024;
+const ALLOWED_SCRIPTLET_DIR_NAMES: [&str; 2] = ["extensions", "scriptlets"];
+
+fn has_parent_dir_component(path: &Path) -> bool {
+    path.components()
+        .any(|component| matches!(component, Component::ParentDir))
+}
+
+fn runtime_allowed_scriptlet_base_dirs() -> Vec<PathBuf> {
+    let mut allowed_dirs = Vec::new();
+    let kit_root = crate::setup::get_kit_path().join("kit");
+
+    let Ok(kit_entries) = std::fs::read_dir(&kit_root) else {
+        return allowed_dirs;
+    };
+
+    for kit_entry in kit_entries.flatten() {
+        let kit_path = kit_entry.path();
+        if !kit_path.is_dir() {
+            continue;
+        }
+
+        for dir_name in ALLOWED_SCRIPTLET_DIR_NAMES {
+            let candidate = kit_path.join(dir_name);
+            if let Ok(canonical_candidate) = std::fs::canonicalize(&candidate) {
+                allowed_dirs.push(canonical_candidate);
+            }
+        }
+    }
+
+    allowed_dirs.sort();
+    allowed_dirs.dedup();
+    allowed_dirs
+}
+
+fn validate_canonical_scriptlet_path(
+    path: &Path,
+    allowed_base_dirs: &[PathBuf],
+) -> AnyhowResult<PathBuf> {
+    if has_parent_dir_component(path) {
+        bail!(
+            "scriptlet_path_validation_failed: path={} reason=parent_dir_segment",
+            path.display()
+        );
+    }
+
+    let canonical_path = std::fs::canonicalize(path).with_context(|| {
+        format!(
+            "scriptlet_path_validation_failed: path={} reason=canonicalize_error",
+            path.display()
+        )
+    })?;
+
+    if allowed_base_dirs.is_empty() {
+        bail!(
+            "scriptlet_path_validation_failed: path={} reason=no_allowed_base_dirs",
+            canonical_path.display()
+        );
+    }
+
+    if allowed_base_dirs
+        .iter()
+        .any(|base_dir| canonical_path.starts_with(base_dir))
+    {
+        return Ok(canonical_path);
+    }
+
+    bail!(
+        "scriptlet_path_validation_failed: path={} reason=outside_allowed_dirs",
+        canonical_path.display()
+    );
+}
+
+fn validate_runtime_scriptlet_path(path: &Path) -> AnyhowResult<PathBuf> {
+    let allowed_base_dirs = runtime_allowed_scriptlet_base_dirs();
+    validate_canonical_scriptlet_path(path, &allowed_base_dirs)
+}
+
+fn validate_scriptlet_file_size(path: &Path) -> AnyhowResult<()> {
+    let metadata = std::fs::metadata(path).with_context(|| {
+        format!(
+            "scriptlet_file_size_check_failed: path={} reason=metadata_error",
+            path.display()
+        )
+    })?;
+
+    if metadata.len() > SCRIPTLET_FILE_SIZE_LIMIT_BYTES {
+        bail!(
+            "scriptlet_file_size_limit_exceeded: path={} size={} limit={}",
+            path.display(),
+            metadata.len(),
+            SCRIPTLET_FILE_SIZE_LIMIT_BYTES
+        );
+    }
+
+    Ok(())
+}
+
+fn validate_scriptlet_parse_source(
+    content: &str,
+    source_path: Option<&str>,
+) -> AnyhowResult<Option<String>> {
+    if content.len() as u64 > SCRIPTLET_FILE_SIZE_LIMIT_BYTES {
+        bail!(
+            "scriptlet_file_size_limit_exceeded: path=<inline> size={} limit={}",
+            content.len(),
+            SCRIPTLET_FILE_SIZE_LIMIT_BYTES
+        );
+    }
+
+    let Some(path_str) = source_path else {
+        return Ok(None);
+    };
+
+    let path = Path::new(path_str);
+    if has_parent_dir_component(path) {
+        bail!(
+            "scriptlet_path_validation_failed: path={} reason=parent_dir_segment",
+            path.display()
+        );
+    }
+
+    if !path.exists() {
+        return Ok(Some(path_str.to_string()));
+    }
+
+    let canonical_path = validate_runtime_scriptlet_path(path)?;
+    validate_scriptlet_file_size(&canonical_path)?;
+    Ok(Some(canonical_path.to_string_lossy().to_string()))
+}
+
+fn read_scriptlet_file_with_limit(path: &Path) -> AnyhowResult<String> {
+    validate_scriptlet_file_size(path)?;
+    std::fs::read_to_string(path).with_context(|| {
+        format!(
+            "scriptlet_file_read_failed: path={} reason=read_to_string_error",
+            path.display()
+        )
+    })
+}
 // ============================================================================
 // Bundle Frontmatter (YAML at top of markdown files)
 // ============================================================================
@@ -63,6 +203,7 @@ pub const SHELL_TOOLS: &[&str] = &["bash", "zsh", "sh", "fish", "cmd", "powershe
 /// This is parsed from YAML at the top of the file, delimited by `---`
 #[allow(dead_code)] // Public API for future use
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct BundleFrontmatter {
     /// Bundle name
     pub name: Option<String>,
@@ -72,9 +213,6 @@ pub struct BundleFrontmatter {
     pub author: Option<String>,
     /// Default icon for scriptlets in this bundle
     pub icon: Option<String>,
-    /// Any additional fields
-    #[serde(flatten)]
-    pub extra: HashMap<String, serde_yaml::Value>,
 }
 /// Parse YAML frontmatter from the beginning of markdown content
 ///
@@ -109,6 +247,29 @@ pub fn parse_bundle_frontmatter(content: &str) -> Option<BundleFrontmatter> {
         }
     }
 }
+
+#[cfg(test)]
+mod bundle_frontmatter_security_tests {
+    use super::parse_bundle_frontmatter;
+
+    #[test]
+    fn test_parse_bundle_frontmatter_returns_none_when_unknown_fields_present() {
+        let content = r#"---
+name: Security Bundle
+icon: shield
+unexpected_field: should_fail
+---
+# Security Scriptlets
+"#;
+
+        let result = parse_bundle_frontmatter(content);
+        assert!(
+            result.is_none(),
+            "unknown frontmatter fields should be rejected"
+        );
+    }
+}
+
 /// Get a default icon for a tool type
 #[allow(dead_code)] // Public API for future use
 pub fn tool_type_to_icon(tool: &str) -> &'static str {
@@ -763,15 +924,48 @@ pub fn get_actions_file_path(md_path: &std::path::Path) -> std::path::PathBuf {
 /// `/path/to/foo.actions.md` and parses any actions defined there.
 #[allow(dead_code)]
 pub fn load_shared_actions(md_path: &std::path::Path) -> Vec<ScriptletAction> {
-    let actions_path = get_actions_file_path(md_path);
+    let canonical_md_path = match validate_runtime_scriptlet_path(md_path) {
+        Ok(path) => path,
+        Err(error) => {
+            warn!(
+                path = %md_path.display(),
+                error = %error,
+                "scriptlet_shared_actions_rejected_source_path"
+            );
+            return Vec::new();
+        }
+    };
+
+    if let Err(error) = validate_scriptlet_file_size(&canonical_md_path) {
+        warn!(
+            path = %canonical_md_path.display(),
+            error = %error,
+            "scriptlet_shared_actions_rejected_source_file_size"
+        );
+        return Vec::new();
+    }
+
+    let actions_path = get_actions_file_path(&canonical_md_path);
 
     if actions_path.exists() {
-        match std::fs::read_to_string(&actions_path) {
+        let canonical_actions_path = match validate_runtime_scriptlet_path(&actions_path) {
+            Ok(path) => path,
+            Err(error) => {
+                warn!(
+                    path = %actions_path.display(),
+                    error = %error,
+                    "scriptlet_shared_actions_rejected_actions_path"
+                );
+                return Vec::new();
+            }
+        };
+
+        match read_scriptlet_file_with_limit(&canonical_actions_path) {
             Ok(content) => {
                 let actions = parse_actions_file(&content);
                 if !actions.is_empty() {
                     debug!(
-                        path = %actions_path.display(),
+                        path = %canonical_actions_path.display(),
                         count = actions.len(),
                         "Loaded shared actions from companion file"
                     );
@@ -780,7 +974,7 @@ pub fn load_shared_actions(md_path: &std::path::Path) -> Vec<ScriptletAction> {
             }
             Err(e) => {
                 warn!(
-                    path = %actions_path.display(),
+                    path = %canonical_actions_path.display(),
                     error = %e,
                     "Failed to read actions file"
                 );
@@ -820,6 +1014,19 @@ pub fn merge_shared_actions(scriptlet: &mut Scriptlet, shared_actions: &[Scriptl
 /// - HTML comments contain metadata
 /// - Code fences contain the scriptlet code
 pub fn parse_markdown_as_scriptlets(content: &str, source_path: Option<&str>) -> Vec<Scriptlet> {
+    let normalized_source_path = match validate_scriptlet_parse_source(content, source_path) {
+        Ok(path) => path,
+        Err(error) => {
+            warn!(
+                source_path = source_path.unwrap_or("<none>"),
+                error = %error,
+                "scriptlet_parse_rejected_source"
+            );
+            return Vec::new();
+        }
+    };
+    let source_path = normalized_source_path.as_deref();
+
     let mut scriptlets = Vec::new();
     let mut current_group = String::new();
     let mut global_prepend = String::new();
@@ -1012,6 +1219,20 @@ pub fn parse_scriptlets_with_validation(
     source_path: Option<&str>,
 ) -> ScriptletParseResult {
     let mut result = ScriptletParseResult::default();
+
+    let normalized_source_path = match validate_scriptlet_parse_source(content, source_path) {
+        Ok(path) => path,
+        Err(error) => {
+            result.errors.push(ScriptletValidationError::new(
+                source_path.unwrap_or("<unknown>"),
+                None,
+                None,
+                error.to_string(),
+            ));
+            return result;
+        }
+    };
+    let source_path = normalized_source_path.as_deref();
     let file_path = PathBuf::from(source_path.unwrap_or("<unknown>"));
 
     // Parse bundle-level frontmatter

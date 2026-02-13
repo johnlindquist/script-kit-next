@@ -23,19 +23,10 @@ fn created_file_path_for_feedback(path: &std::path::Path) -> std::path::PathBuf 
 }
 
 #[cfg(target_os = "macos")]
-fn applescript_escape(text: &str) -> String {
-    text.replace('\\', "\\\\")
-        .replace('"', "\\\"")
-        .replace('\n', "\\n")
-        .replace('\r', "\\r")
-        .replace('\t', "\\t")
-}
-
-#[cfg(target_os = "macos")]
 fn applescript_list_literal(values: &[String]) -> String {
     let escaped_values = values
         .iter()
-        .map(|value| format!("\"{}\"", applescript_escape(value)))
+        .map(|value| format!("\"{}\"", crate::utils::escape_applescript_string(value)))
         .collect::<Vec<_>>()
         .join(", ");
     format!("{{{}}}", escaped_values)
@@ -80,8 +71,8 @@ if selectedItem is false then
 end if
 return item 1 of selectedItem"#,
         list_literal = list_literal,
-        prompt = applescript_escape(prompt),
-        ok_button = applescript_escape(ok_button),
+        prompt = crate::utils::escape_applescript_string(prompt),
+        ok_button = crate::utils::escape_applescript_string(ok_button),
     );
 
     let selected = run_osascript(&script)?;
@@ -101,9 +92,9 @@ return text returned of dialogResult
 on error number -128
 return ""
 end try"#,
-        prompt = applescript_escape(prompt),
-        default_value = applescript_escape(default_value),
-        ok_button = applescript_escape(ok_button),
+        prompt = crate::utils::escape_applescript_string(prompt),
+        default_value = crate::utils::escape_applescript_string(default_value),
+        ok_button = crate::utils::escape_applescript_string(ok_button),
     );
 
     let value = run_osascript(&script)?;
@@ -122,8 +113,8 @@ fn emoji_picker_label(emoji: &script_kit_gpui::emoji::Emoji) -> String {
 fn quicklink_picker_label(quicklink: &script_kit_gpui::quicklinks::Quicklink) -> String {
     format!(
         "{}  {}",
-        applescript_escape(&quicklink.name),
-        applescript_escape(&quicklink.url_template)
+        crate::utils::escape_applescript_string(&quicklink.name),
+        crate::utils::escape_applescript_string(&quicklink.url_template)
     )
 }
 

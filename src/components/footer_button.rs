@@ -133,6 +133,16 @@ impl RenderOnce for FooterButton {
             label.clone()
         };
 
+        // GPUI cursor styles don't inherit to children, so child elements
+        // must also set cursor_pointer when the button is interactive.
+        let mut label_element = div()
+            .text_size(px(button_font_size))
+            .text_color(accent.to_rgb())
+            .child(label_text);
+        if is_clickable {
+            label_element = label_element.cursor_pointer();
+        }
+
         let mut button = div()
             .id(ElementId::Name(element_id))
             .flex()
@@ -143,15 +153,15 @@ impl RenderOnce for FooterButton {
             .py(px(2.))
             .rounded(px(4.))
             .cursor_default()
-            .child(
-                div()
-                    .text_size(px(button_font_size))
-                    .text_color(accent.to_rgb())
-                    .child(label_text),
-            );
+            .child(label_element);
 
         if is_clickable {
-            button = button.cursor_pointer().hover(move |s| s.bg(rgba(hover_bg)));
+            button = button
+                .cursor_pointer()
+                .hover(move |s| s.bg(rgba(hover_bg)))
+                .on_mouse_move(|_: &MouseMoveEvent, _window, _cx| {
+                    crate::platform::claim_cursor_pointer();
+                });
         } else if disabled {
             button = button.opacity(0.5).cursor_default();
         } else if loading {
@@ -169,12 +179,14 @@ impl RenderOnce for FooterButton {
 
         // Add shortcut if provided
         if let Some(shortcut) = shortcut {
-            button = button.child(
-                div()
-                    .text_size(px(button_font_size))
-                    .text_color(text_muted.to_rgb())
-                    .child(shortcut),
-            );
+            let mut shortcut_element = div()
+                .text_size(px(button_font_size))
+                .text_color(text_muted.to_rgb())
+                .child(shortcut);
+            if is_clickable {
+                shortcut_element = shortcut_element.cursor_pointer();
+            }
+            button = button.child(shortcut_element);
         }
 
         if is_clickable {
