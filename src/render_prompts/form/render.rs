@@ -231,46 +231,20 @@ impl ScriptListApp {
             })
             // Actions dialog overlay
             .when_some(
-                if self.show_actions_popup {
-                    self.actions_dialog.clone()
-                } else {
-                    None
-                },
-                |d, dialog| {
-                    let backdrop_click = cx.listener(
-                        |this: &mut Self,
-                         _event: &gpui::ClickEvent,
-                         window: &mut Window,
-                         cx: &mut Context<Self>| {
-                            logging::log(
-                                "FOCUS",
-                                "Form actions backdrop clicked - dismissing dialog",
-                            );
-                            this.close_actions_popup(ActionsDialogHost::FormPrompt, window, cx);
-                        },
-                    );
-
-                    d.child(
-                        div()
-                            .absolute()
-                            .inset_0()
-                            .child(
-                                div()
-                                    .id("form-actions-backdrop")
-                                    .absolute()
-                                    .inset_0()
-                                    .cursor_pointer()
-                                    .on_click(backdrop_click),
-                            )
-                            .child(
-                                div()
-                                    .absolute()
-                                    .top(px(actions_dialog_top))
-                                    .right(px(actions_dialog_right))
-                                    .child(dialog),
-                            ),
-                    )
-                },
+                render_actions_backdrop(
+                    self.show_actions_popup,
+                    self.actions_dialog.clone(),
+                    actions_dialog_top,
+                    actions_dialog_right,
+                    ActionsBackdropConfig {
+                        backdrop_id: "form-actions-backdrop",
+                        close_host: ActionsDialogHost::FormPrompt,
+                        backdrop_log_message: "Form actions backdrop clicked - dismissing dialog",
+                        show_pointer_cursor: true,
+                    },
+                    cx,
+                ),
+                |d, backdrop_overlay| d.child(backdrop_overlay),
             )
             .into_any_element()
     }
@@ -281,16 +255,22 @@ mod form_prompt_render_backdrop_tests {
     const FORM_RENDER_SOURCE: &str = include_str!("render.rs");
 
     #[test]
-    fn test_form_actions_backdrop_uses_cursor_pointer_when_clickable() {
+    fn test_form_actions_backdrop_uses_shared_helper_with_clickable_cursor() {
         assert!(
-            FORM_RENDER_SOURCE.contains(".id(\"form-actions-backdrop\")"),
-            "form actions backdrop id should remain present for click target wiring"
+            FORM_RENDER_SOURCE.contains("render_actions_backdrop("),
+            "form render should delegate backdrop overlay creation to shared helper"
         );
         assert!(
-            FORM_RENDER_SOURCE.contains(
-                ".cursor_pointer()\n                                    .on_click(backdrop_click)"
-            ),
-            "form actions backdrop should advertise clickability with cursor_pointer"
+            FORM_RENDER_SOURCE.contains("\"form-actions-backdrop\""),
+            "form render should pass its backdrop id to shared helper"
+        );
+        assert!(
+            FORM_RENDER_SOURCE.contains("ActionsDialogHost::FormPrompt"),
+            "form render should preserve actions host routing when helper is used"
+        );
+        assert!(
+            FORM_RENDER_SOURCE.contains("show_pointer_cursor: true"),
+            "form render should keep backdrop cursor pointer enabled"
         );
     }
 }

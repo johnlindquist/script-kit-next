@@ -6,6 +6,60 @@ fn prompt_actions_dialog_offsets(padding_sm: f32, border_thin: f32) -> (f32, f32
     (top, right)
 }
 
+#[derive(Clone, Copy)]
+struct ActionsBackdropConfig {
+    backdrop_id: &'static str,
+    close_host: ActionsDialogHost,
+    backdrop_log_message: &'static str,
+    show_pointer_cursor: bool,
+}
+
+#[inline]
+fn render_actions_backdrop(
+    show_actions_popup: bool,
+    actions_dialog: Option<Entity<ActionsDialog>>,
+    actions_dialog_top: f32,
+    actions_dialog_right: f32,
+    config: ActionsBackdropConfig,
+    cx: &mut Context<ScriptListApp>,
+) -> Option<gpui::Div> {
+    if !show_actions_popup {
+        return None;
+    }
+
+    let dialog = actions_dialog?;
+    let backdrop_click = cx.listener(
+        move |this: &mut ScriptListApp,
+              _event: &gpui::ClickEvent,
+              window: &mut Window,
+              cx: &mut Context<ScriptListApp>| {
+            logging::log("FOCUS", config.backdrop_log_message);
+            this.close_actions_popup(config.close_host, window, cx);
+        },
+    );
+
+    Some(
+        div()
+            .absolute()
+            .inset_0()
+            .child(
+                div()
+                    .id(config.backdrop_id)
+                    .absolute()
+                    .inset_0()
+                    .when(config.show_pointer_cursor, |d| d.cursor_pointer())
+                    .on_click(backdrop_click),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .top(px(actions_dialog_top))
+                    .right(px(actions_dialog_right))
+                    .child(dialog),
+            ),
+    )
+}
+
 #[inline]
 fn running_status_text(context: &str) -> String {
     crate::panel::running_status_message(context)

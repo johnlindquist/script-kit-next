@@ -452,51 +452,21 @@ impl ScriptListApp {
                     }))
             })
             // Actions dialog overlay (when Cmd+K is pressed with SDK actions)
-            // Uses same pattern as main menu: check BOTH show_actions_popup AND actions_dialog
             .when_some(
-                if self.show_actions_popup {
-                    self.actions_dialog.clone()
-                } else {
-                    None
-                },
-                |d, dialog| {
-                    // Create click handler for backdrop to dismiss dialog
-                    let backdrop_click = cx.listener(
-                        |this: &mut Self,
-                         _event: &gpui::ClickEvent,
-                         window: &mut Window,
-                         cx: &mut Context<Self>| {
-                            logging::log(
-                                "FOCUS",
-                                "Arg actions backdrop clicked - dismissing dialog",
-                            );
-                            this.close_actions_popup(ActionsDialogHost::ArgPrompt, window, cx);
-                        },
-                    );
-
-                    d.child(
-                        div()
-                            .absolute()
-                            .inset_0() // Cover entire arg prompt area
-                            // Backdrop layer - captures clicks outside the dialog
-                            .child(
-                                div()
-                                    .id("arg-actions-backdrop")
-                                    .absolute()
-                                    .inset_0()
-                                    .cursor_pointer()
-                                    .on_click(backdrop_click),
-                            )
-                            // Dialog positioned at top-right
-                            .child(
-                                div()
-                                    .absolute()
-                                    .top(px(actions_dialog_top))
-                                    .right(px(actions_dialog_right))
-                                    .child(dialog),
-                            ),
-                    )
-                },
+                render_actions_backdrop(
+                    self.show_actions_popup,
+                    self.actions_dialog.clone(),
+                    actions_dialog_top,
+                    actions_dialog_right,
+                    ActionsBackdropConfig {
+                        backdrop_id: "arg-actions-backdrop",
+                        close_host: ActionsDialogHost::ArgPrompt,
+                        backdrop_log_message: "Arg actions backdrop clicked - dismissing dialog",
+                        show_pointer_cursor: true,
+                    },
+                    cx,
+                ),
+                |d, backdrop_overlay| d.child(backdrop_overlay),
             )
             .into_any_element()
     }
@@ -507,16 +477,22 @@ mod arg_prompt_render_backdrop_tests {
     const ARG_RENDER_SOURCE: &str = include_str!("render.rs");
 
     #[test]
-    fn test_arg_actions_backdrop_uses_cursor_pointer_when_clickable() {
+    fn test_arg_actions_backdrop_uses_shared_helper_with_clickable_cursor() {
         assert!(
-            ARG_RENDER_SOURCE.contains(".id(\"arg-actions-backdrop\")"),
-            "arg actions backdrop id should remain present for click target wiring"
+            ARG_RENDER_SOURCE.contains("render_actions_backdrop("),
+            "arg render should delegate backdrop overlay creation to shared helper"
         );
         assert!(
-            ARG_RENDER_SOURCE.contains(
-                ".cursor_pointer()\n                                    .on_click(backdrop_click)"
-            ),
-            "arg actions backdrop should advertise clickability with cursor_pointer"
+            ARG_RENDER_SOURCE.contains("\"arg-actions-backdrop\""),
+            "arg render should pass its backdrop id to shared helper"
+        );
+        assert!(
+            ARG_RENDER_SOURCE.contains("ActionsDialogHost::ArgPrompt"),
+            "arg render should preserve actions host routing when helper is used"
+        );
+        assert!(
+            ARG_RENDER_SOURCE.contains("show_pointer_cursor: true"),
+            "arg render should keep backdrop cursor pointer enabled"
         );
     }
 }
