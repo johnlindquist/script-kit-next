@@ -73,12 +73,8 @@ impl ScriptListApp {
                 None
             } else {
                 let clamped_index = self.selected_index.min(len.saturating_sub(1));
-                let first_selectable = grouped_items
-                    .iter()
-                    .position(|item| matches!(item, GroupedListItem::Item(_)));
-                let last_selectable = grouped_items
-                    .iter()
-                    .rposition(|item| matches!(item, GroupedListItem::Item(_)));
+                let first_selectable = self.cached_grouped_first_selectable_index;
+                let last_selectable = self.cached_grouped_last_selectable_index;
 
                 if let (Some(first), Some(last)) = (first_selectable, last_selectable) {
                     let target =
@@ -232,11 +228,10 @@ impl ScriptListApp {
                 ValidationState::Empty
             } else {
                 let clamped_index = self.selected_index.min(item_count.saturating_sub(1));
+                let has_selectable = self.cached_grouped_first_selectable_index.is_some();
                 ValidationState::NonEmpty {
                     valid_idx: validated_selection_index(&grouped_items, clamped_index),
-                    has_selectable: grouped_items
-                        .iter()
-                        .any(|item| matches!(item, GroupedListItem::Item(_))),
+                    has_selectable,
                 }
             }
         };
