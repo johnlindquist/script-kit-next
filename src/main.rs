@@ -294,6 +294,7 @@ include!("render_builtins.rs");
 
 // Prompt render methods - split into separate files for maintainability
 // Each file adds render_*_prompt methods to ScriptListApp via impl blocks
+include!("render_prompts/key_handler.rs");
 include!("render_prompts/arg.rs");
 include!("render_prompts/div.rs");
 include!("render_prompts/form.rs");
