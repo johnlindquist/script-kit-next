@@ -4,20 +4,6 @@ use tracing::debug;
 
 use super::types::*;
 
-/// Get the main display bounds
-pub(super) fn get_main_display_bounds() -> Bounds {
-    let main_display = CGDisplay::main();
-    let rect = main_display.bounds();
-    Bounds::from_cg_rect(rect)
-}
-
-/// Get the display bounds for the display containing a point
-pub(super) fn get_display_bounds_at_point(_x: i32, _y: i32) -> Bounds {
-    // For simplicity, we'll use the main display
-    // A more complete implementation would find the display containing the point
-    get_main_display_bounds()
-}
-
 /// Get bounds for all available displays
 pub(super) fn get_all_display_bounds() -> Result<Vec<Bounds>> {
     let mut displays = Vec::new();
