@@ -37,6 +37,28 @@ static STOP_MONITORING: OnceLock<Arc<AtomicBool>> = OnceLock::new();
 /// Guard to ensure init_clipboard_history() is only called once
 static INIT_GUARD: OnceLock<()> = OnceLock::new();
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct LastImageState {
+    hash: u64,
+    blob_key: Option<String>,
+}
+
+impl LastImageState {
+    fn with_blob_key(hash: u64, blob_key: String) -> Self {
+        Self {
+            hash,
+            blob_key: Some(blob_key),
+        }
+    }
+
+    fn without_blob_key(hash: u64) -> Self {
+        Self {
+            hash,
+            blob_key: None,
+        }
+    }
+}
+
 /// Initialize clipboard history: create DB and start monitoring
 ///
 /// This should be called once at application startup. It will:
@@ -141,7 +163,7 @@ fn clipboard_monitor_loop(stop_flag: Arc<AtomicBool>) -> Result<()> {
     // Content-based tracking for deduplication after OS-level change detection
     // These are updated AFTER we read payload to avoid re-processing same content
     let mut last_text_hash: Option<u64> = None;
-    let mut last_image_hash: Option<u64> = None;
+    let mut last_image_state: Option<LastImageState> = None;
 
     let poll_interval = Duration::from_millis(POLL_INTERVAL_MS);
 
@@ -176,7 +198,7 @@ fn clipboard_monitor_loop(stop_flag: Arc<AtomicBool>) -> Result<()> {
 
         if should_check_payload {
             // Clipboard changed (or fallback mode), now read the actual payload
-            capture_clipboard_content(&mut clipboard, &mut last_text_hash, &mut last_image_hash);
+            capture_clipboard_content(&mut clipboard, &mut last_text_hash, &mut last_image_state);
         }
 
         // Sleep for remaining time in poll interval
@@ -204,7 +226,7 @@ fn clipboard_monitor_loop(stop_flag: Arc<AtomicBool>) -> Result<()> {
 fn capture_clipboard_content(
     clipboard: &mut Clipboard,
     last_text_hash: &mut Option<u64>,
-    last_image_hash: &mut Option<u64>,
+    last_image_state: &mut Option<LastImageState>,
 ) {
     let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
     if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
@@ -272,7 +294,7 @@ fn capture_clipboard_content(
     if let Ok(image_data) = clipboard.get_image() {
         let hash = compute_image_hash(&image_data);
 
-        let is_new_content = last_image_hash.is_none_or(|last| last != hash);
+        let is_new_content = !is_same_image_hash(last_image_state, hash);
 
         if is_new_content {
             debug!(
@@ -283,29 +305,34 @@ fn capture_clipboard_content(
 
             // Encode image as blob (PNG file on disk)
             match encode_image_as_blob(&image_data) {
-                Ok(blob_content) => {
-                    match add_entry(&blob_content, ContentType::Image) {
+                Ok(blob_key) => {
+                    match add_entry(&blob_key, ContentType::Image) {
                         Ok(entry_id) => {
-                            let _ = ocr::enqueue_ocr(entry_id.clone(), blob_content.clone());
+                            let _ = ocr::enqueue_ocr(entry_id.clone(), blob_key.clone());
 
                             // Pre-decode the image immediately so it's ready for display
-                            if let Some(render_image) = decode_to_render_image(&blob_content) {
+                            if let Some(render_image) = decode_to_render_image(&blob_key) {
                                 cache_image(&entry_id, render_image);
                                 debug!(entry_id = %entry_id, "Pre-cached new image during monitoring");
                             }
-                            *last_image_hash = Some(hash);
+
+                            *last_image_state = Some(LastImageState::with_blob_key(hash, blob_key));
                         }
                         Err(e) => {
-                            // DON'T update hash on failure - we'll retry on next change
+                            // DON'T update state on DB failure - we'll retry on next change
                             warn!(error = %e, "Failed to add image entry to history (will retry)");
                         }
                     }
                 }
                 Err(e) => {
-                    // Encoding failed (likely corrupt image data), skip but update hash
-                    // to avoid repeated attempts on the same bad image
-                    warn!(error = %e, "Failed to encode image as blob, skipping");
-                    *last_image_hash = Some(hash);
+                    // Encoding failed (likely corrupt image data). Cache hash without blob key
+                    // so we avoid repeated expensive attempts for the same image bytes.
+                    warn!(
+                        error = %e,
+                        image_hash = hash,
+                        "Failed to encode image as blob; caching hash without blob key"
+                    );
+                    *last_image_state = Some(LastImageState::without_blob_key(hash));
                 }
             }
         } else {
@@ -315,18 +342,40 @@ fn capture_clipboard_content(
                 height = image_data.height,
                 "Same image copied again, updating timestamp"
             );
-            if let Ok(blob_content) = encode_image_as_blob(&image_data) {
-                match add_entry(&blob_content, ContentType::Image) {
+            if let Some(blob_key) = cached_blob_key_for_hash(last_image_state, hash) {
+                match add_entry(blob_key, ContentType::Image) {
                     Ok(entry_id) => {
-                        debug!(entry_id = %entry_id, "Updated timestamp for existing image entry");
+                        debug!(
+                            entry_id = %entry_id,
+                            image_hash = hash,
+                            "Updated timestamp for existing image entry using cached blob key"
+                        );
                     }
                     Err(e) => {
                         warn!(error = %e, "Failed to update image entry timestamp");
                     }
                 }
+            } else {
+                debug!(
+                    image_hash = hash,
+                    "Same image copied again but no cached blob key is available; skipping re-encode"
+                );
             }
         }
     }
+}
+
+fn is_same_image_hash(last_image_state: &Option<LastImageState>, hash: u64) -> bool {
+    last_image_state
+        .as_ref()
+        .is_some_and(|state| state.hash == hash)
+}
+
+fn cached_blob_key_for_hash(last_image_state: &Option<LastImageState>, hash: u64) -> Option<&str> {
+    last_image_state
+        .as_ref()
+        .filter(|state| state.hash == hash)
+        .and_then(|state| state.blob_key.as_deref())
 }
 
 fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
@@ -512,5 +561,23 @@ mod tests {
     ) {
         assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
         assert!(!should_skip_clipboard_capture(None));
+    }
+
+    #[test]
+    fn test_is_same_image_hash_returns_true_only_for_matching_hash() {
+        let state = Some(LastImageState::with_blob_key(42, "blob:test".to_string()));
+        assert!(is_same_image_hash(&state, 42));
+        assert!(!is_same_image_hash(&state, 43));
+        assert!(!is_same_image_hash(&None, 42));
+    }
+
+    #[test]
+    fn test_cached_blob_key_for_hash_returns_key_only_when_available_for_same_hash() {
+        let with_blob = Some(LastImageState::with_blob_key(42, "blob:test".to_string()));
+        assert_eq!(cached_blob_key_for_hash(&with_blob, 42), Some("blob:test"));
+        assert_eq!(cached_blob_key_for_hash(&with_blob, 43), None);
+
+        let without_blob = Some(LastImageState::without_blob_key(42));
+        assert_eq!(cached_blob_key_for_hash(&without_blob, 42), None);
     }
 }
