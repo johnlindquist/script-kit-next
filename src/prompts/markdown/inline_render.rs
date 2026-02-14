@@ -1,4 +1,5 @@
 use super::*;
+use crate::list_item::FONT_MONO;
 
 fn style_span(
     text: &str,
@@ -13,7 +14,7 @@ fn style_span(
             .py(px(1.0))
             .bg(rgba((colors.code_bg << 8) | 0x80))
             .rounded(px(3.0))
-            .font_family("Menlo")
+            .font_family(FONT_MONO)
             .text_color(rgb(colors.text_primary))
             .child(text.to_string())
             .into_any_element();
@@ -203,7 +204,7 @@ fn render_code_block(code: &str, lang: Option<&str>, colors: &PromptColors) -> g
             .flex()
             .flex_row()
             .w_full()
-            .font_family("Menlo")
+            .font_family(FONT_MONO)
             .text_sm()
             .min_h(px(16.0));
 

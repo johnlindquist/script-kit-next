@@ -1,4 +1,5 @@
 use super::*;
+use crate::list_item::FONT_MONO;
 
 /// Tracks the last-copied code block ID and the instant it was copied.
 /// Used to show brief "Copied!" feedback on the copy button.
@@ -138,7 +139,7 @@ pub(super) fn build_code_block_element(
             .flex()
             .flex_row()
             .w_full()
-            .font_family("Menlo")
+            .font_family(FONT_MONO)
             .text_sm()
             .min_h(px(16.0));
 

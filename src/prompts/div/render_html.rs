@@ -1,4 +1,5 @@
 use super::*;
+use crate::list_item::FONT_MONO;
 
 /// Render a vector of HtmlElements as a GPUI Div
 pub(super) fn render_elements(elements: &[HtmlElement], ctx: RenderContext) -> Div {
@@ -78,7 +79,7 @@ fn render_element(element: &HtmlElement, ctx: RenderContext) -> Div {
             .py(px(2.0))
             .bg(rgba((ctx.code_bg << 8) | 0x80))
             .rounded(px(4.0))
-            .font_family("Menlo")
+            .font_family(FONT_MONO)
             .text_sm()
             .text_color(rgb(ctx.accent_color))
             .child(code.clone()),
@@ -106,7 +107,7 @@ fn render_element(element: &HtmlElement, ctx: RenderContext) -> Div {
 
             block.child(
                 div()
-                    .font_family("Menlo")
+                    .font_family(FONT_MONO)
                     .text_sm()
                     .text_color(rgb(ctx.text_primary))
                     .child(code.clone()),
