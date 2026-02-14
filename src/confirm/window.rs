@@ -12,6 +12,7 @@
 
 use crate::platform;
 use crate::theme;
+use anyhow::Context as _;
 use gpui::{
     div, prelude::*, px, App, Bounds, Context, DisplayId, Entity, FocusHandle, Focusable, Pixels,
     Point, Render, Size, Window, WindowBounds, WindowHandle, WindowKind, WindowOptions,
@@ -303,16 +304,34 @@ pub fn open_confirm_window(
 
     // Store the handle globally
     let window_storage = CONFIRM_WINDOW.get_or_init(|| Mutex::new(None));
-    if let Ok(mut guard) = window_storage.lock() {
-        *guard = Some(handle);
+    match window_storage.lock() {
+        Ok(mut guard) => {
+            *guard = Some(handle);
+        }
+        Err(error) => {
+            tracing::error!(
+                error = %error,
+                "confirm_window_lock_poisoned_while_storing_handle"
+            );
+        }
     }
 
-    let dialog_entity = dialog_entity_holder.expect("Dialog entity should have been created");
+    let dialog_entity = dialog_entity_holder.context(
+        "confirm window dialog entity should have been created before window open returns",
+    )?;
 
     // Store the dialog entity globally for keyboard event dispatch
     let dialog_storage = CONFIRM_DIALOG.get_or_init(|| Mutex::new(None));
-    if let Ok(mut guard) = dialog_storage.lock() {
-        *guard = Some(dialog_entity.clone());
+    match dialog_storage.lock() {
+        Ok(mut guard) => {
+            *guard = Some(dialog_entity.clone());
+        }
+        Err(error) => {
+            tracing::error!(
+                error = %error,
+                "confirm_window_lock_poisoned_while_storing_dialog"
+            );
+        }
     }
 
     crate::logging::log("CONFIRM", "Confirm popup window opened with vibrancy");
@@ -324,19 +343,35 @@ pub fn open_confirm_window(
 pub fn close_confirm_window(cx: &mut App) {
     // Clear the dialog entity first
     if let Some(dialog_storage) = CONFIRM_DIALOG.get() {
-        if let Ok(mut guard) = dialog_storage.lock() {
-            *guard = None;
+        match dialog_storage.lock() {
+            Ok(mut guard) => {
+                *guard = None;
+            }
+            Err(error) => {
+                tracing::error!(
+                    error = %error,
+                    "confirm_window_lock_poisoned_while_clearing_dialog"
+                );
+            }
         }
     }
 
     // Then close the window
     if let Some(window_storage) = CONFIRM_WINDOW.get() {
-        if let Ok(mut guard) = window_storage.lock() {
-            if let Some(handle) = guard.take() {
-                crate::logging::log("CONFIRM", "Closing confirm popup window");
-                let _ = handle.update(cx, |_root, window, _cx| {
-                    window.remove_window();
-                });
+        match window_storage.lock() {
+            Ok(mut guard) => {
+                if let Some(handle) = guard.take() {
+                    crate::logging::log("CONFIRM", "Closing confirm popup window");
+                    let _ = handle.update(cx, |_root, window, _cx| {
+                        window.remove_window();
+                    });
+                }
+            }
+            Err(error) => {
+                tracing::error!(
+                    error = %error,
+                    "confirm_window_lock_poisoned_while_closing_window"
+                );
             }
         }
     }
