@@ -111,7 +111,7 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
-                if handle_prompt_key_preamble(
+                if handle_prompt_key_preamble_default(
                     this,
                     event,
                     window,
@@ -122,28 +122,8 @@ impl ScriptListApp {
                         stop_propagation_when_handled: false,
                         host: ActionsDialogHost::ArgPrompt,
                     },
-                    |_this, _event, _window, _cx| false,
-                    |key, _key_char, modifiers| {
-                        modifiers.platform && ui_foundation::is_key_k(key) && has_actions_for_handler
-                    },
-                    |this, window, cx| {
-                        logging::log("KEY", "Cmd+K in ArgPrompt - calling toggle_arg_actions");
-                        this.toggle_arg_actions(cx, window);
-                    },
-                    |this, action_id, cx| {
-                        this.trigger_action_by_name(action_id, cx);
-                    },
-                    |_key, _key_char, _modifiers| true,
-                    |this, matched_shortcut, cx| {
-                        logging::log(
-                            "KEY",
-                            &format!(
-                                "SDK action shortcut matched: {}",
-                                matched_shortcut.action_name
-                            ),
-                        );
-                        this.trigger_action_by_name(&matched_shortcut.action_name, cx);
-                    },
+                    has_actions_for_handler,
+                    "ArgPrompt",
                 ) {
                     return;
                 }
