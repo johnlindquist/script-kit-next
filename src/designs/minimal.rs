@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 //! Minimal Design Renderer
 //!
 //! Ultra minimalist design with maximum whitespace and NO visual noise.
@@ -16,7 +15,7 @@
 
 use gpui::*;
 
-use super::{DesignRenderer, DesignVariant};
+use super::DesignVariant;
 use crate::scripts::SearchResult;
 use crate::theme::Theme;
 
@@ -107,34 +106,16 @@ impl MinimalRenderer {
             .hover(|s| s.opacity(0.8))
             .child(name)
     }
+
+    /// Get the design variant represented by this renderer.
+    pub fn variant(&self) -> DesignVariant {
+        DesignVariant::Minimal
+    }
 }
 
 impl Default for MinimalRenderer {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl<App: 'static> DesignRenderer<App> for MinimalRenderer {
-    fn render_script_list(&self, _app: &App, _cx: &mut Context<App>) -> AnyElement {
-        // This is a placeholder implementation
-        // The actual rendering is done via render_minimal_list() helper
-        // which should be called from ScriptListApp with the actual data
-        div()
-            .w_full()
-            .h_full()
-            .flex()
-            .items_center()
-            .justify_center()
-            .font_family(".AppleSystemUIFont")
-            .font_weight(FontWeight::THIN)
-            .text_lg()
-            .child("Minimal design active. Use with ScriptListApp.")
-            .into_any_element()
-    }
-
-    fn variant(&self) -> DesignVariant {
-        DesignVariant::Minimal
     }
 }
 

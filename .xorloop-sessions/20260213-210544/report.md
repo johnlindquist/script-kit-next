@@ -66,3 +66,27 @@ Good news — the analysis reveals the codebase is **already partially optimized
 
 ---
 
+## Iteration 4 — dead code removal (23:43)
+
+**Feature:** FEATURE: Five `startup_new_*.rs` files are dead code extracts from `startup.rs` that are never compiled as Rust modules — they exist only to be read as raw strings by test assertions that pattern-match their text content.
+**Commit:** `8ef9ce36`
+
+
+
+Looking at this analysis, I'll extract the concrete implementation tasks:
+
+---
+
+- `rm-startup-new-files` scope:`src/app_impl/startup_new_*.rs` — Delete 5 dead startup_new_*.rs files (1,484 lines, never compiled)
+- `fix-source-audit-tests` scope:`src/*_tests.rs` — Update fs::read_to_string paths from deleted files to startup.rs
+- `rm-duplicate-test-files` scope:`src/app_impl/*_tests.rs, src/app_impl/tests/` — Delete 4 duplicate test files that have no mod declaration
+- `rm-stale-audit-docs` scope:`docs/audits/**, docs/ai/**` — Replace startup_new_*.rs references with startup.rs in audit docs
+
+
+---
+
+## Summary
+
+**Completed:** Fri Feb 13 23:43:38 MST 2026
+**Iterations:** 4
+**Status:** signal

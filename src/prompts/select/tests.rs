@@ -23,6 +23,79 @@ fn metadata_parses_shortcut_type_and_last_run() {
 }
 
 #[test]
+fn infer_script_from_ts_hash_fragment() {
+    let choice = choice("Demo", "/tmp/demo.ts#section", None);
+    let metadata = ChoiceDisplayMetadata::from_choice(&choice);
+
+    assert_eq!(
+        metadata
+            .item_type
+            .expect("expected .ts# fragment to infer Script"),
+        "Script"
+    );
+}
+
+#[test]
+fn infer_scriptlet_from_md_hash() {
+    let choice = choice("Readme Section", "/tmp/readme.md#foo", None);
+    let metadata = ChoiceDisplayMetadata::from_choice(&choice);
+
+    assert_eq!(
+        metadata
+            .item_type
+            .expect("expected .md# fragment to infer Scriptlet"),
+        "Scriptlet"
+    );
+}
+
+#[test]
+fn infer_extension_from_path() {
+    let choice = choice("My Extension", "/home/user/extensions/my-ext", None);
+    let metadata = ChoiceDisplayMetadata::from_choice(&choice);
+
+    assert_eq!(
+        metadata
+            .item_type
+            .expect("expected /extensions/ path to infer Extension"),
+        "Extension"
+    );
+}
+
+#[test]
+fn infer_agent_from_name() {
+    let choice = choice("My Agent", "/tools/helper", None);
+    let metadata = ChoiceDisplayMetadata::from_choice(&choice);
+
+    assert_eq!(
+        metadata
+            .item_type
+            .expect("expected name containing agent to infer Agent"),
+        "Agent"
+    );
+}
+
+#[test]
+fn infer_script_from_ts_extension() {
+    let choice = choice("Run Task", "/scripts/run.ts", None);
+    let metadata = ChoiceDisplayMetadata::from_choice(&choice);
+
+    assert_eq!(
+        metadata
+            .item_type
+            .expect("expected .ts extension to infer Script"),
+        "Script"
+    );
+}
+
+#[test]
+fn infer_none_no_signals() {
+    let choice = choice("Settings", "settings", None);
+    let metadata = ChoiceDisplayMetadata::from_choice(&choice);
+
+    assert!(metadata.item_type.is_none());
+}
+
+#[test]
 fn score_choice_matches_description_and_value() {
     let choice = choice(
         "Deploy",
