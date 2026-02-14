@@ -1,25 +1,23 @@
 // Platform cursor management for non-activating popup windows.
 //
 // GPUI's built-in cursor system (`reset_cursor_style`) only applies when the window
-// is "active" (`is_window_hovered()` → `is_window_active()`). For non-activating
+// is "active" (`is_window_hovered()` -> `is_window_active()`). For non-activating
 // `PopUp` panels (NSPanel with NonactivatingPanel style), the window is never "active",
 // so GPUI never pushes cursor changes to the OS. This causes the underlying app's
 // cursor to bleed through (e.g. I-beam from a terminal).
 //
 // Two-layer fix:
 //
-// Layer 1 — Cursor rects (macOS window-server level):
-//   `install_cursor_tracking()` adds a `resetCursorRects` override to GPUI's content
-//   view that registers an arrow cursor rect covering the entire view. The window server
-//   uses cursor rects from the frontmost window, so this prevents the underlying app's
-//   cursor rects (e.g. Terminal's I-beam) from bleeding through.
+// Layer 1 — Window-server cursor permission (macOS):
+//   `install_cursor_tracking()` enables the private CoreGraphics connection property
+//   `SetsCursorInBackground`, which tells WindowServer to respect `[NSCursor set]`
+//   from our non-activating panel context.
 //
 // Layer 2 — Mouse-move coordination (GPUI event level):
 //   Interactive elements call `claim_cursor_pointer()` in their `on_mouse_move`.
 //   The root element calls `apply_default_cursor()` last (bubble phase, outer-to-inner).
 //   `apply_default_cursor()` calls `[NSCursor set]` unconditionally on every move
-//   to override whatever the cursor rect set between events. Using `set` instead of
-//   `push`/`pop` avoids stack drift caused by cursor rects calling `[arrowCursor set]`.
+//   to override whatever cursor rects selected between events.
 
 use std::cell::Cell;
 
@@ -28,14 +26,27 @@ thread_local! {
 }
 
 // ============================================================================
-// Layer 1 — Cursor rect installation
+// Layer 1 — Window-server cursor permission
 // ============================================================================
 
-/// Install cursor rect management on the main window's content view.
-///
-/// Adds a `resetCursorRects` method to GPUI's view class (it doesn't have one)
-/// that registers an arrow cursor rect for the entire view. This tells macOS's
-/// window server to use our cursor instead of the underlying window's cursor.
+#[cfg(target_os = "macos")]
+use cocoa::base::YES;
+#[cfg(target_os = "macos")]
+use std::os::raw::c_int;
+
+#[cfg(target_os = "macos")]
+#[link(name = "CoreGraphics", kind = "framework")]
+extern "C" {
+    fn CGSMainConnectionID() -> c_int;
+    fn CGSSetConnectionProperty(
+        cid: c_int,
+        target_cid: c_int,
+        key: cocoa::base::id,
+        value: cocoa::base::id,
+    ) -> c_int;
+}
+
+/// Enable background cursor-setting support for this app's WindowServer connection.
 ///
 /// Safe to call multiple times — uses `Once` to ensure single installation.
 #[cfg(target_os = "macos")]
@@ -44,75 +55,64 @@ pub fn install_cursor_tracking() {
     static INSTALL: Once = Once::new();
 
     INSTALL.call_once(|| {
-        // SAFETY: Main thread (called from configure_as_floating_panel).
-        // All ObjC calls target standard AppKit/runtime APIs with nil-checked pointers.
+        // SAFETY: Main thread call site, ObjC usage with null checks, and direct
+        // CoreGraphics C-API invocation for current process connection only.
         unsafe {
-            let window = match crate::window_manager::get_main_window() {
-                Some(w) => w,
-                None => {
-                    crate::logging::log(
-                        "CURSOR",
-                        "install_cursor_tracking: no main window, skipping",
-                    );
-                    return;
-                }
-            };
-
-            let content_view: id = msg_send![window, contentView];
-            if content_view.is_null() {
+            let connection_id = CGSMainConnectionID();
+            if connection_id == 0 {
                 crate::logging::log(
                     "CURSOR",
-                    "install_cursor_tracking: contentView is nil, skipping",
+                    "install_cursor_tracking: CGSMainConnectionID returned 0",
                 );
                 return;
             }
 
-            // Get the view's actual class (GPUI's GPUIView or similar)
-            let view_class: *const std::ffi::c_void = msg_send![content_view, class];
-            if view_class.is_null() {
+            let key_alloc: id = msg_send![class!(NSString), alloc];
+            if key_alloc.is_null() {
+                crate::logging::log(
+                    "CURSOR",
+                    "install_cursor_tracking: NSString alloc failed",
+                );
                 return;
             }
 
-            // Our resetCursorRects implementation: add arrow cursor rect for entire view
-            extern "C" fn reset_cursor_rects_impl(
-                this: *mut std::ffi::c_void,
-                _cmd: objc::runtime::Sel,
-            ) {
-                unsafe {
-                    let this = this as id;
-                    let bounds: cocoa::foundation::NSRect = msg_send![this, bounds];
-                    let arrow: id = msg_send![class!(NSCursor), arrowCursor];
-                    let _: () = msg_send![this, addCursorRect:bounds cursor:arrow];
-                }
+            let key: id =
+                msg_send![key_alloc, initWithUTF8String: c"SetsCursorInBackground".as_ptr()];
+            if key.is_null() {
+                crate::logging::log(
+                    "CURSOR",
+                    "install_cursor_tracking: NSString initWithUTF8String failed",
+                );
+                return;
             }
 
-            // Add resetCursorRects to the view's class.
-            // class_addMethod returns false if the method already exists (safe no-op).
-            let sel = sel!(resetCursorRects);
-            let types = c"v@:"; // void return, id self, SEL _cmd
-            #[allow(clippy::missing_transmute_annotations)]
-            let imp: objc::runtime::Imp =
-                std::mem::transmute::<_, objc::runtime::Imp>(
-                    reset_cursor_rects_impl
-                        as extern "C" fn(*mut std::ffi::c_void, objc::runtime::Sel),
+            let value: id = msg_send![class!(NSNumber), numberWithBool: YES];
+            if value.is_null() {
+                let _: () = msg_send![key, release];
+                crate::logging::log(
+                    "CURSOR",
+                    "install_cursor_tracking: NSNumber numberWithBool failed",
                 );
-            let added = objc::runtime::class_addMethod(
-                view_class as *mut objc::runtime::Class,
-                sel,
-                imp,
-                types.as_ptr(),
-            );
+                return;
+            }
 
-            // Trigger initial cursor rect evaluation
-            let _: () = msg_send![window, invalidateCursorRectsForView: content_view];
+            let result = CGSSetConnectionProperty(connection_id, connection_id, key, value);
+            let _: () = msg_send![key, release];
 
-            crate::logging::log(
-                "CURSOR",
-                &format!(
-                    "Installed resetCursorRects on content view (added={})",
-                    added
-                ),
-            );
+            if result == 0 {
+                crate::logging::log(
+                    "CURSOR",
+                    "install_cursor_tracking: enabled SetsCursorInBackground",
+                );
+            } else {
+                crate::logging::log(
+                    "CURSOR",
+                    &format!(
+                        "install_cursor_tracking: failed to enable SetsCursorInBackground (status={})",
+                        result
+                    ),
+                );
+            }
         }
     });
 }
