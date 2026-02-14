@@ -19,12 +19,15 @@
 #![allow(non_upper_case_globals)]
 #![allow(dead_code)]
 
+mod types;
+
 // --- merged from part_000.rs ---
 use anyhow::{bail, Context, Result};
 use core_graphics::display::{CGDisplay, CGRect};
 use macos_accessibility_client::accessibility;
 use std::ffi::c_void;
 use tracing::{debug, info, instrument, warn};
+pub use types::*;
 // ============================================================================
 // CoreFoundation FFI bindings
 // ============================================================================
@@ -102,140 +105,6 @@ const kCFNumberSInt32Type: i32 = 3;
 #[link(name = "AppKit", kind = "framework")]
 extern "C" {
     // We'll use objc crate for AppKit access instead of direct FFI
-}
-// ============================================================================
-// Public Types
-// ============================================================================
-
-/// Represents the bounds (position and size) of a window
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Bounds {
-    pub x: i32,
-    pub y: i32,
-    pub width: u32,
-    pub height: u32,
-}
-impl Bounds {
-    /// Create a new Bounds
-    pub fn new(x: i32, y: i32, width: u32, height: u32) -> Self {
-        Self {
-            x,
-            y,
-            width,
-            height,
-        }
-    }
-
-    /// Create bounds from CoreGraphics CGRect
-    fn from_cg_rect(rect: CGRect) -> Self {
-        Self {
-            x: rect.origin.x as i32,
-            y: rect.origin.y as i32,
-            width: rect.size.width as u32,
-            height: rect.size.height as u32,
-        }
-    }
-}
-/// Information about a window
-#[derive(Debug, Clone)]
-pub struct WindowInfo {
-    /// Unique window identifier (process ID << 16 | window index)
-    pub id: u32,
-    /// Application name
-    pub app: String,
-    /// Window title
-    pub title: String,
-    /// Window position and size
-    pub bounds: Bounds,
-    /// Process ID of the owning application
-    pub pid: i32,
-    /// The AXUIElement reference (internal, for operations)
-    #[doc(hidden)]
-    ax_window: Option<usize>, // Store as usize to avoid lifetime issues
-}
-impl WindowInfo {
-    /// Get the internal window reference for operations
-    fn window_ref(&self) -> Option<AXUIElementRef> {
-        self.ax_window.map(|ptr| ptr as AXUIElementRef)
-    }
-}
-/// Tiling positions for windows
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TilePosition {
-    // Half positions
-    /// Left half of the screen
-    LeftHalf,
-    /// Right half of the screen
-    RightHalf,
-    /// Top half of the screen
-    TopHalf,
-    /// Bottom half of the screen
-    BottomHalf,
-
-    // Quadrant positions
-    /// Top-left quadrant
-    TopLeft,
-    /// Top-right quadrant
-    TopRight,
-    /// Bottom-left quadrant
-    BottomLeft,
-    /// Bottom-right quadrant
-    BottomRight,
-
-    // Sixth positions (top/bottom row split into thirds)
-    /// Top-left sixth (left third of top half)
-    TopLeftSixth,
-    /// Top-center sixth (center third of top half)
-    TopCenterSixth,
-    /// Top-right sixth (right third of top half)
-    TopRightSixth,
-    /// Bottom-left sixth (left third of bottom half)
-    BottomLeftSixth,
-    /// Bottom-center sixth (center third of bottom half)
-    BottomCenterSixth,
-    /// Bottom-right sixth (right third of bottom half)
-    BottomRightSixth,
-
-    // Horizontal thirds positions
-    /// Left third of the screen
-    LeftThird,
-    /// Center third of the screen (horizontal)
-    CenterThird,
-    /// Right third of the screen
-    RightThird,
-
-    // Vertical thirds positions
-    /// Top third of the screen
-    TopThird,
-    /// Middle third of the screen (vertical)
-    MiddleThird,
-    /// Bottom third of the screen
-    BottomThird,
-
-    // Horizontal two-thirds positions
-    /// First two-thirds of the screen (left side)
-    FirstTwoThirds,
-    /// Last two-thirds of the screen (right side)
-    LastTwoThirds,
-
-    // Vertical two-thirds positions
-    /// Top two-thirds of the screen
-    TopTwoThirds,
-    /// Bottom two-thirds of the screen
-    BottomTwoThirds,
-
-    // Centered positions
-    /// Centered on screen (60% of screen dimensions)
-    Center,
-    /// Almost maximize (90% with margins)
-    AlmostMaximize,
-
-    /// Fullscreen (covers entire display)
-    Fullscreen,
-    /// Move to the next display (multi-display routing handled elsewhere)
-    NextDisplay,
-    /// Move to the previous display (multi-display routing handled elsewhere)
-    PreviousDisplay,
 }
 // ============================================================================
 // Helper Functions
@@ -632,14 +501,14 @@ pub fn list_windows() -> Result<Vec<WindowInfo>> {
                     let retained_window = cf_retain(ax_window);
                     cache_window(window_id, retained_window as AXUIElementRef);
 
-                    windows.push(WindowInfo {
-                        id: window_id,
-                        app: app_name_str.clone(),
+                    windows.push(WindowInfo::new(
+                        window_id,
+                        app_name_str.clone(),
                         title,
-                        bounds: Bounds::new(x, y, width, height),
+                        Bounds::new(x, y, width, height),
                         pid,
-                        ax_window: Some(retained_window as usize),
-                    });
+                        Some(retained_window as usize),
+                    ));
                 }
 
                 // Release windows_value - AXUIElementCopyAttributeValue returns an owned
@@ -789,14 +658,14 @@ pub fn get_frontmost_window_of_previous_app() -> Result<Option<WindowInfo>> {
             // Cache the window reference for subsequent operations
             cache_window(window_id, ax_window);
 
-            let window_info = WindowInfo {
-                id: window_id,
-                app: app_name.clone(),
-                title: title.clone(),
-                bounds: Bounds::new(x, y, width, height),
-                pid: target_pid,
-                ax_window: Some(window_ref as usize),
-            };
+            let window_info = WindowInfo::new(
+                window_id,
+                app_name.clone(),
+                title.clone(),
+                Bounds::new(x, y, width, height),
+                target_pid,
+                Some(window_ref as usize),
+            );
 
             info!(
                 window_id = window_info.id,
@@ -1584,15 +1453,6 @@ mod tests {
     }
 
     #[test]
-    fn test_bounds_new() {
-        let bounds = Bounds::new(10, 20, 100, 200);
-        assert_eq!(bounds.x, 10);
-        assert_eq!(bounds.y, 20);
-        assert_eq!(bounds.width, 100);
-        assert_eq!(bounds.height, 200);
-    }
-
-    #[test]
     fn test_calculate_tile_bounds_left_half() {
         let display = Bounds::new(0, 25, 1920, 1055);
         let bounds = calculate_tile_bounds(&display, TilePosition::LeftHalf);
@@ -1663,12 +1523,6 @@ mod tests {
 
         assert_eq!(next_display, display);
         assert_eq!(previous_display, display);
-    }
-
-    #[test]
-    fn test_tile_position_equality() {
-        assert_eq!(TilePosition::LeftHalf, TilePosition::LeftHalf);
-        assert_ne!(TilePosition::LeftHalf, TilePosition::RightHalf);
     }
 
     #[test]
