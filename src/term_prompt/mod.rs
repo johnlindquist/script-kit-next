@@ -5,6 +5,7 @@
 
 // --- merged from part_000.rs ---
 use crate::config::Config;
+use crate::list_item::FONT_MONO;
 use crate::prompts::SubmitCallback;
 use crate::terminal::{
     CellAttributes, TerminalAction, TerminalContent, TerminalEvent, TerminalHandle,
@@ -679,7 +680,7 @@ impl TermPrompt {
             .min_h(px(0.)) // Critical for flex children sizing
             .overflow_hidden()
             // No background - let vibrancy show through from parent
-            .font_family("Menlo")
+            .font_family(FONT_MONO)
             .text_size(px(font_size))
             .line_height(px(cell_height)); // Use calculated line height for proper descender room
 

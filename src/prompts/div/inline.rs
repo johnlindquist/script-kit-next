@@ -1,4 +1,5 @@
 use super::*;
+use crate::list_item::FONT_MONO;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(super) struct DivInlineStyle {
@@ -141,7 +142,7 @@ fn render_inline_segment_piece(text: &str, style: &DivInlineStyle, ctx: &RenderC
             .py(px(1.0))
             .bg(rgba((ctx.code_bg << 8) | 0x80))
             .rounded(px(3.0))
-            .font_family("Menlo")
+            .font_family(FONT_MONO)
             .text_xs()
             .text_color(rgb(ctx.accent_color));
     }
