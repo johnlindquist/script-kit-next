@@ -26,6 +26,91 @@ fn classify_prompt_message_route(message: &PromptMessage) -> PromptMessageRoute 
 
 // --- merged from part_001.rs ---
 impl ScriptListApp {
+    pub(crate) fn make_submit_callback(
+        &self,
+        dropped_label: &'static str,
+    ) -> Arc<dyn Fn(String, Option<String>) + Send + Sync> {
+        let response_sender = self.response_sender.clone();
+        Arc::new(move |id, value| {
+            if let Some(ref sender) = response_sender {
+                let response = Message::Submit { id, value };
+                // Use try_send to avoid blocking UI thread
+                match sender.try_send(response) {
+                    Ok(()) => {}
+                    Err(std::sync::mpsc::TrySendError::Full(_)) => {
+                        logging::log(
+                            "WARN",
+                            &format!("Response channel full - {dropped_label} response dropped"),
+                        );
+                    }
+                    Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
+                        logging::log("UI", "Response channel disconnected - script exited");
+                    }
+                }
+            }
+        })
+    }
+
+    pub(crate) fn prepare_window_for_prompt(
+        &self,
+        log_target: &str,
+        prompt_kind: &str,
+        bench_marker: &str,
+    ) {
+        // Clear NEEDS_RESET when receiving a UI prompt from an active script.
+        // This prevents the window from resetting when shown.
+        if NEEDS_RESET.swap(false, Ordering::SeqCst) {
+            logging::log(
+                log_target,
+                &format!("Cleared NEEDS_RESET - script is showing {prompt_kind} UI"),
+            );
+        }
+
+        // Show window if hidden (script may have called hide() for getSelectedText)
+        if !script_kit_gpui::is_main_window_visible() {
+            if !bench_marker.is_empty() {
+                logging::bench_log(bench_marker);
+            }
+            logging::log(
+                log_target,
+                &format!("Window hidden - requesting show for {prompt_kind} UI"),
+            );
+            script_kit_gpui::set_main_window_visible(true);
+            script_kit_gpui::request_show_main_window();
+        }
+    }
+
+    pub(crate) fn set_sdk_actions_and_shortcuts(
+        &mut self,
+        actions: Vec<ProtocolAction>,
+        log_target: &str,
+        log_shortcuts: bool,
+    ) {
+        // Store SDK actions for trigger_action_by_name lookup
+        self.sdk_actions = Some(actions.clone());
+
+        // Register keyboard shortcuts for visible SDK actions only
+        self.action_shortcuts.clear();
+        for action in &actions {
+            if action.is_visible() {
+                if let Some(shortcut) = &action.shortcut {
+                    let normalized = shortcuts::normalize_shortcut(shortcut);
+                    if log_shortcuts {
+                        logging::log(
+                            log_target,
+                            &format!(
+                                "Registering action shortcut: '{}' -> '{}' (normalized: '{}')",
+                                shortcut, action.name, normalized
+                            ),
+                        );
+                    }
+                    self.action_shortcuts
+                        .insert(normalized, action.name.clone());
+                }
+            }
+        }
+    }
+
     /// Handle a prompt message from the script
     #[tracing::instrument(skip(self, cx), fields(msg_type = ?msg))]
     fn handle_prompt_message(&mut self, msg: PromptMessage, cx: &mut Context<Self>) {
@@ -39,18 +124,7 @@ impl ScriptListApp {
                 choices,
                 actions,
             } => {
-                // Clear NEEDS_RESET when receiving a UI prompt from an active script
-                // This prevents the window from resetting when shown (script wants to use UI)
-                if NEEDS_RESET.swap(false, Ordering::SeqCst) {
-                    logging::log("UI", "Cleared NEEDS_RESET - script is showing arg UI");
-                }
-
-                // Show window if hidden (script may have called hide() for getSelectedText)
-                if !script_kit_gpui::is_main_window_visible() {
-                    logging::log("UI", "Window hidden - requesting show for arg UI");
-                    script_kit_gpui::set_main_window_visible(true);
-                    script_kit_gpui::request_show_main_window();
-                }
+                self.prepare_window_for_prompt("UI", "arg", "");
 
                 logging::log(
                     "UI",
@@ -66,23 +140,7 @@ impl ScriptListApp {
                 // If actions were provided, store them in the SDK actions system
                 // so they can be triggered via shortcuts and Cmd+K
                 if let Some(ref action_list) = actions {
-                    // Store SDK actions for trigger_action_by_name lookup
-                    self.sdk_actions = Some(action_list.clone());
-
-                    // Register keyboard shortcuts for SDK actions
-                    // IMPORTANT: Only register shortcuts for visible actions
-                    // Hidden actions should not be triggerable via keyboard shortcuts
-                    self.action_shortcuts.clear();
-                    for action in action_list {
-                        if action.is_visible() {
-                            if let Some(shortcut) = &action.shortcut {
-                                self.action_shortcuts.insert(
-                                    shortcuts::normalize_shortcut(shortcut),
-                                    action.name.clone(),
-                                );
-                            }
-                        }
-                    }
+                    self.set_sdk_actions_and_shortcuts(action_list.clone(), "UI", false);
                 } else {
                     // Clear any previous SDK actions
                     self.sdk_actions = None;
@@ -121,46 +179,13 @@ impl ScriptListApp {
                 container_padding,
                 opacity,
             } => {
-                // Clear NEEDS_RESET when receiving a UI prompt from an active script
-                if NEEDS_RESET.swap(false, Ordering::SeqCst) {
-                    logging::log("UI", "Cleared NEEDS_RESET - script is showing div UI");
-                }
-
-                // Show window if hidden
-                if !script_kit_gpui::is_main_window_visible() {
-                    logging::log("UI", "Window hidden - requesting show for div UI");
-                    script_kit_gpui::set_main_window_visible(true);
-                    script_kit_gpui::request_show_main_window();
-                }
+                self.prepare_window_for_prompt("UI", "div", "");
 
                 logging::log("UI", &format!("Showing div prompt: {}", id));
                 // Store SDK actions for the actions panel (Cmd+K)
                 self.sdk_actions = actions;
 
-                // Create submit callback for div prompt
-                let response_sender = self.response_sender.clone();
-                let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
-                    std::sync::Arc::new(move |id, value| {
-                        if let Some(ref sender) = response_sender {
-                            let response = Message::Submit { id, value };
-                            // Use try_send to avoid blocking UI thread
-                            match sender.try_send(response) {
-                                Ok(()) => {}
-                                Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                                    logging::log(
-                                        "WARN",
-                                        "Response channel full - div response dropped",
-                                    );
-                                }
-                                Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                                    logging::log(
-                                        "UI",
-                                        "Response channel disconnected - script exited",
-                                    );
-                                }
-                            }
-                        }
-                    });
+                let submit_callback = self.make_submit_callback("div");
 
                 // Create focus handle for div prompt
                 let div_focus_handle = cx.focus_handle();
@@ -240,30 +265,7 @@ impl ScriptListApp {
                 // Store SDK actions for the actions panel (Cmd+K)
                 self.sdk_actions = actions;
 
-                // Create submit callback for terminal
-                let response_sender = self.response_sender.clone();
-                let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
-                    std::sync::Arc::new(move |id, value| {
-                        if let Some(ref sender) = response_sender {
-                            let response = Message::Submit { id, value };
-                            // Use try_send to avoid blocking UI thread
-                            match sender.try_send(response) {
-                                Ok(()) => {}
-                                Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                                    logging::log(
-                                        "WARN",
-                                        "Response channel full - terminal response dropped",
-                                    );
-                                }
-                                Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                                    logging::log(
-                                        "UI",
-                                        "Response channel disconnected - script exited",
-                                    );
-                                }
-                            }
-                        }
-                    });
+                let submit_callback = self.make_submit_callback("terminal");
 
                 // Get the target height for terminal view (subtract footer height)
                 let term_height =
@@ -319,30 +321,7 @@ impl ScriptListApp {
                 // Store SDK actions for the actions panel (Cmd+K)
                 self.sdk_actions = actions;
 
-                // Create submit callback for editor
-                let response_sender = self.response_sender.clone();
-                let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
-                    std::sync::Arc::new(move |id, value| {
-                        if let Some(ref sender) = response_sender {
-                            let response = Message::Submit { id, value };
-                            // Use try_send to avoid blocking UI thread
-                            match sender.try_send(response) {
-                                Ok(()) => {}
-                                Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                                    logging::log(
-                                        "WARN",
-                                        "Response channel full - editor response dropped",
-                                    );
-                                }
-                                Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                                    logging::log(
-                                        "UI",
-                                        "Response channel disconnected - script exited",
-                                    );
-                                }
-                            }
-                        }
-                    });
+                let submit_callback = self.make_submit_callback("editor");
 
                 // CRITICAL: Create a SEPARATE focus handle for the editor.
                 // Using the parent's focus handle causes keyboard event routing issues
@@ -1201,7 +1180,7 @@ impl ScriptListApp {
                     ),
                 );
 
-                let response_sender = self.response_sender.clone();
+                let path_submit_callback = self.make_submit_callback("path");
                 let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
                     std::sync::Arc::new(move |id, value| {
                         logging::log(
@@ -1211,25 +1190,7 @@ impl ScriptListApp {
                                 id, value
                             ),
                         );
-                        if let Some(ref sender) = response_sender {
-                            let response = Message::Submit { id, value };
-                            // Use try_send to avoid blocking UI thread
-                            match sender.try_send(response) {
-                                Ok(()) => {}
-                                Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                                    logging::log(
-                                        "WARN",
-                                        "Response channel full - path response dropped",
-                                    );
-                                }
-                                Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                                    logging::log(
-                                        "UI",
-                                        "Response channel disconnected - script exited",
-                                    );
-                                }
-                            }
-                        }
+                        path_submit_callback(id, value);
                     });
 
                 // Clone the path_actions_showing and search_text Arcs for header display
@@ -1306,30 +1267,7 @@ impl ScriptListApp {
                     ),
                 );
 
-                // Create submit callback for env prompt
-                let response_sender = self.response_sender.clone();
-                let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
-                    std::sync::Arc::new(move |id, value| {
-                        if let Some(ref sender) = response_sender {
-                            let response = Message::Submit { id, value };
-                            // Use try_send to avoid blocking UI thread
-                            match sender.try_send(response) {
-                                Ok(()) => {}
-                                Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                                    logging::log(
-                                        "WARN",
-                                        "Response channel full - env response dropped",
-                                    );
-                                }
-                                Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                                    logging::log(
-                                        "UI",
-                                        "Response channel disconnected - script exited",
-                                    );
-                                }
-                            }
-                        }
-                    });
+                let submit_callback = self.make_submit_callback("env");
 
                 // Check if key already exists in secrets (for UX messaging)
                 // Empty values don't count as "existing" - must have actual content
@@ -1387,30 +1325,7 @@ impl ScriptListApp {
                     ),
                 );
 
-                // Create submit callback for drop prompt
-                let response_sender = self.response_sender.clone();
-                let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
-                    std::sync::Arc::new(move |id, value| {
-                        if let Some(ref sender) = response_sender {
-                            let response = Message::Submit { id, value };
-                            // Use try_send to avoid blocking UI thread
-                            match sender.try_send(response) {
-                                Ok(()) => {}
-                                Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                                    logging::log(
-                                        "WARN",
-                                        "Response channel full - drop response dropped",
-                                    );
-                                }
-                                Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                                    logging::log(
-                                        "UI",
-                                        "Response channel disconnected - script exited",
-                                    );
-                                }
-                            }
-                        }
-                    });
+                let submit_callback = self.make_submit_callback("drop");
 
                 // Create DropPrompt entity
                 let focus_handle = self.focus_handle.clone();
@@ -1441,30 +1356,7 @@ impl ScriptListApp {
                     ),
                 );
 
-                // Create submit callback for template prompt
-                let response_sender = self.response_sender.clone();
-                let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
-                    std::sync::Arc::new(move |id, value| {
-                        if let Some(ref sender) = response_sender {
-                            let response = Message::Submit { id, value };
-                            // Use try_send to avoid blocking UI thread
-                            match sender.try_send(response) {
-                                Ok(()) => {}
-                                Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                                    logging::log(
-                                        "WARN",
-                                        "Response channel full - template response dropped",
-                                    );
-                                }
-                                Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                                    logging::log(
-                                        "UI",
-                                        "Response channel disconnected - script exited",
-                                    );
-                                }
-                            }
-                        }
-                    });
+                let submit_callback = self.make_submit_callback("template");
 
                 // Create TemplatePrompt entity
                 let focus_handle = self.focus_handle.clone();
@@ -1508,30 +1400,7 @@ impl ScriptListApp {
                     ),
                 );
 
-                // Create submit callback for select prompt
-                let response_sender = self.response_sender.clone();
-                let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
-                    std::sync::Arc::new(move |id, value| {
-                        if let Some(ref sender) = response_sender {
-                            let response = Message::Submit { id, value };
-                            // Use try_send to avoid blocking UI thread
-                            match sender.try_send(response) {
-                                Ok(()) => {}
-                                Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                                    logging::log(
-                                        "WARN",
-                                        "Response channel full - select response dropped",
-                                    );
-                                }
-                                Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                                    logging::log(
-                                        "UI",
-                                        "Response channel disconnected - script exited",
-                                    );
-                                }
-                            }
-                        }
-                    });
+                let submit_callback = self.make_submit_callback("select");
 
                 // Create SelectPrompt entity
                 let choice_count = choices.len();
@@ -1681,19 +1550,7 @@ impl ScriptListApp {
             } => {
                 logging::bench_log("ShowChat_received");
 
-                // Clear NEEDS_RESET when receiving a UI prompt from an active script
-                // This prevents the window from resetting when shown (script wants to use UI)
-                if NEEDS_RESET.swap(false, Ordering::SeqCst) {
-                    logging::log("CHAT", "Cleared NEEDS_RESET - script is showing chat UI");
-                }
-
-                // Show window if hidden (script may have called hide() for getSelectedText)
-                if !script_kit_gpui::is_main_window_visible() {
-                    logging::bench_log("window_show_requested");
-                    logging::log("CHAT", "Window hidden - requesting show for chat UI");
-                    script_kit_gpui::set_main_window_visible(true);
-                    script_kit_gpui::request_show_main_window();
-                }
+                self.prepare_window_for_prompt("CHAT", "chat", "window_show_requested");
 
                 tracing::info!(
                     id,
@@ -1977,29 +1834,7 @@ impl ScriptListApp {
                     &format!("Received setActions with {} actions", actions.len()),
                 );
 
-                // Store SDK actions for trigger_action_by_name lookup
-                self.sdk_actions = Some(actions.clone());
-
-                // Build action shortcuts map for keyboard handling
-                // IMPORTANT: Only register shortcuts for visible actions
-                // Hidden actions should not be triggerable via keyboard shortcuts
-                self.action_shortcuts.clear();
-                for action in &actions {
-                    if action.is_visible() {
-                        if let Some(ref shortcut) = action.shortcut {
-                            let normalized = shortcuts::normalize_shortcut(shortcut);
-                            logging::log(
-                                "ACTIONS",
-                                &format!(
-                                    "Registering action shortcut: '{}' -> '{}' (normalized: '{}')",
-                                    shortcut, action.name, normalized
-                                ),
-                            );
-                            self.action_shortcuts
-                                .insert(normalized, action.name.clone());
-                        }
-                    }
-                }
+                self.set_sdk_actions_and_shortcuts(actions.clone(), "ACTIONS", true);
 
                 // Update ActionsDialog if it exists and is open
                 if let Some(ref dialog) = self.actions_dialog {
