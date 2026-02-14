@@ -2,6 +2,10 @@
 // This file is included via include!() macro in main.rs
 // Contains: handle_action, trigger_action_by_name
 
+pub(crate) const HUD_SHORT_MS: u64 = 1500;
+pub(crate) const HUD_MEDIUM_MS: u64 = 2000;
+pub(crate) const HUD_LONG_MS: u64 = 3000;
+
 fn select_clipboard_entry_meta<'a>(
     entries: &'a [clipboard_history::ClipboardEntryMeta],
     filter: &str,
@@ -392,7 +396,7 @@ mod app_actions_tests {
         );
 
         assert!(
-            content.contains("this.show_hud(message, Some(3000), cx);"),
+            content.contains("this.show_hud(message, Some(HUD_LONG_MS), cx);"),
             "Expected async editor launch failure to surface a HUD error message"
         );
     }
@@ -420,7 +424,7 @@ mod app_actions_tests {
         );
 
         assert!(
-            content.contains("this.show_hud(\"Opened in Finder\".to_string(), Some(1500), cx);"),
+            content.contains("this.show_hud(\"Opened in Finder\".to_string(), Some(HUD_SHORT_MS), cx);"),
             "Expected reveal success HUD to be emitted from async completion callback"
         );
     }
