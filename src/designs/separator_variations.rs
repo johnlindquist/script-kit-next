@@ -1,5 +1,10 @@
-#[allow(unused_imports)]
-use super::DesignVariant;
+mod category;
+mod config;
+mod style;
 
-mod parts;
-pub use parts::*;
+pub use category::*;
+pub use config::*;
+pub use style::*;
+
+#[cfg(test)]
+mod tests;
