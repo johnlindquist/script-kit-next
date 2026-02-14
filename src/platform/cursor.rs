@@ -17,16 +17,14 @@
 // Layer 2 — Mouse-move coordination (GPUI event level):
 //   Interactive elements call `claim_cursor_pointer()` in their `on_mouse_move`.
 //   The root element calls `apply_default_cursor()` last (bubble phase, outer-to-inner).
-//   `apply_default_cursor()` pushes/pops the pointing-hand cursor on top of the
-//   cursor-rect stack, so buttons get the finger pointer while non-interactive areas
-//   keep the arrow from cursor rects.
+//   `apply_default_cursor()` calls `[NSCursor set]` unconditionally on every move
+//   to override whatever the cursor rect set between events. Using `set` instead of
+//   `push`/`pop` avoids stack drift caused by cursor rects calling `[arrowCursor set]`.
 
 use std::cell::Cell;
 
 thread_local! {
     static CURSOR_CLAIMED: Cell<bool> = const { Cell::new(false) };
-    /// Whether we currently have a pushed cursor on the stack (for pointer).
-    static CURSOR_PUSHED: Cell<bool> = const { Cell::new(false) };
 }
 
 // ============================================================================
@@ -129,19 +127,21 @@ pub fn install_cursor_tracking() {
 // ============================================================================
 
 #[cfg(target_os = "macos")]
-fn push_cursor_pointer() {
-    // SAFETY: [NSCursor pointingHandCursor] is a singleton. push is main-thread safe.
+fn set_cursor_pointer() {
+    // SAFETY: [NSCursor pointingHandCursor] is a singleton. set is main-thread safe.
+    // Using `set` instead of `push` to override cursor rects immediately.
     unsafe {
         let cursor: id = msg_send![class!(NSCursor), pointingHandCursor];
-        let _: () = msg_send![cursor, push];
+        let _: () = msg_send![cursor, set];
     }
 }
 
 #[cfg(target_os = "macos")]
-fn pop_cursor() {
-    // SAFETY: [NSCursor pop] is a class method, main-thread safe.
+fn set_cursor_arrow() {
+    // SAFETY: [NSCursor arrowCursor] is a singleton. set is main-thread safe.
     unsafe {
-        let _: () = msg_send![class!(NSCursor), pop];
+        let cursor: id = msg_send![class!(NSCursor), arrowCursor];
+        let _: () = msg_send![cursor, set];
     }
 }
 
@@ -156,10 +156,9 @@ pub fn claim_cursor_pointer() {
 
 /// Apply the final cursor for this frame.
 ///
-/// If an inner element claimed pointer via [`claim_cursor_pointer`], push the
-/// pointing-hand cursor onto the cursor stack (on top of the cursor-rect arrow).
-/// If no element claimed pointer, pop any previously pushed pointer cursor so
-/// the cursor-rect arrow shows through.
+/// If an inner element claimed pointer via [`claim_cursor_pointer`], set the
+/// pointing-hand cursor. Otherwise set the arrow cursor. Called unconditionally
+/// on every mouse move to override whatever the cursor rect (Layer 1) set.
 ///
 /// Call from the root element's `on_mouse_move` handler. Since the root
 /// fires last in bubble phase, all inner claims are already recorded.
@@ -168,26 +167,20 @@ pub fn apply_default_cursor() {
         let is_claimed = claimed.get();
         claimed.set(false);
 
-        CURSOR_PUSHED.with(|pushed| {
-            #[cfg(target_os = "macos")]
-            {
-                if is_claimed && !pushed.get() {
-                    // Entering a button: push pointer on top of cursor rect's arrow
-                    push_cursor_pointer();
-                    pushed.set(true);
-                } else if !is_claimed && pushed.get() {
-                    // Leaving a button: pop pointer, reveals cursor rect's arrow
-                    pop_cursor();
-                    pushed.set(false);
-                }
-                // is_claimed && pushed: still on a button, cursor already correct
-                // !is_claimed && !pushed: not on a button, cursor rect's arrow is showing
+        #[cfg(target_os = "macos")]
+        {
+            // Call `set` unconditionally on every mouse move to override whatever
+            // the cursor rect (Layer 1) set between events. `set` is immediate
+            // and does not use the push/pop stack, so there is no drift.
+            if is_claimed {
+                set_cursor_pointer();
+            } else {
+                set_cursor_arrow();
             }
-            #[cfg(not(target_os = "macos"))]
-            {
-                let _ = is_claimed;
-                let _ = pushed;
-            }
-        });
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = is_claimed;
+        }
     });
 }
