@@ -49,8 +49,11 @@ fn hex_with_alpha(hex: u32, alpha: u8) -> u32 {
 }
 
 /// Action subtitle text shown in the popup row, if any.
-pub(crate) fn action_subtitle_for_display(action: &Action) -> Option<&str> {
-    action.description.as_deref()
+///
+/// We intentionally suppress subtitle/description rendering to keep action rows
+/// visually focused on title + shortcut + icon.
+pub(crate) fn action_subtitle_for_display(_action: &Action) -> Option<&str> {
+    None
 }
 
 /// Whether an action should render with destructive styling.
@@ -1315,13 +1318,11 @@ impl ActionsDialog {
     }
 
     /// Create box shadow for the overlay popup
+    /// When rendered in a separate vibrancy window, no shadow is needed
+    /// (the window vibrancy provides visual separation)
     pub(super) fn create_popup_shadow() -> Vec<BoxShadow> {
-        vec![BoxShadow {
-            color: gpui::Hsla::from(rgba(0x00000066)),
-            offset: gpui::point(px(0.), px(4.)),
-            blur_radius: px(12.),
-            spread_radius: px(1.),
-        }]
+        // No shadow - vibrancy window provides visual separation
+        vec![]
     }
 
     /// Get colors for the search box based on design variant
@@ -1491,7 +1492,7 @@ impl Render for ActionsDialog {
         // Use border_active opacity for focused state, scaled for visibility
         let opacity = self.theme.get_opacity();
         let focus_border_alpha = ((opacity.border_active * 1.5).min(1.0) * 255.0) as u8;
-        let focus_border_color = rgba(hex_with_alpha(accent_color_hex, focus_border_alpha));
+        let _focus_border_color = rgba(hex_with_alpha(accent_color_hex, focus_border_alpha));
 
         // Raycast-style footer search input: minimal styling, full-width, top separator line
         // No boxed input field - just text on a clean background with a thin top border
@@ -2054,7 +2055,7 @@ impl Render for ActionsDialog {
         };
 
         // Use helper method for container colors
-        let (main_bg, _container_border, container_text) = self.get_container_colors(&colors);
+        let (main_bg, container_border, container_text) = self.get_container_colors(&colors);
 
         // Get search position from config before height calculations
         let search_at_top = matches!(self.config.search_position, SearchPosition::Top);
@@ -2270,7 +2271,7 @@ impl Render for ActionsDialog {
             .rounded(px(visual.radius_lg))
             .shadow(Self::create_popup_shadow())
             .border_1()
-            .border_color(focus_border_color)
+            .border_color(container_border)
             .overflow_hidden()
             .text_color(container_text)
             .key_context("actions_dialog")
@@ -2417,7 +2418,7 @@ mod tests {
     }
 
     #[test]
-    fn test_action_subtitle_for_display_returns_description_when_present() {
+    fn test_action_subtitle_for_display_always_returns_none() {
         let action_with_description = Action::new(
             "copy_path",
             "Copy Path",
@@ -2431,10 +2432,7 @@ mod tests {
             ActionCategory::ScriptContext,
         );
 
-        assert_eq!(
-            action_subtitle_for_display(&action_with_description),
-            Some("Copy the selected path")
-        );
+        assert_eq!(action_subtitle_for_display(&action_with_description), None);
         assert_eq!(
             action_subtitle_for_display(&action_without_description),
             None
