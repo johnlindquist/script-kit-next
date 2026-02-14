@@ -24,28 +24,6 @@ impl NotesApp {
         ))
     }
 
-    /// Get title bar background with vibrancy opacity
-    pub(super) fn get_vibrancy_title_bar_background(_cx: &Context<Self>) -> gpui::Rgba {
-        let sk_theme = crate::theme::get_cached_theme();
-        let opacity = sk_theme.get_opacity();
-        let bg_hex = sk_theme.colors.background.title_bar;
-        rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
-            bg_hex,
-            opacity.title_bar,
-        ))
-    }
-
-    /// Get sidebar/panel background with vibrancy opacity
-    pub(super) fn get_vibrancy_sidebar_background() -> gpui::Rgba {
-        let sk_theme = crate::theme::get_cached_theme();
-        let opacity = sk_theme.get_opacity();
-        let bg_hex = sk_theme.colors.background.title_bar;
-        rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
-            bg_hex,
-            opacity.title_bar,
-        ))
-    }
-
     /// Get modal overlay background (theme-aware)
     ///
     /// For dark mode: black overlay (darkens content behind)

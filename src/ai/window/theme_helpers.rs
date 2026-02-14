@@ -166,30 +166,6 @@ impl AiApp {
         ))
     }
 
-    /// Get sidebar background color with vibrancy opacity
-    pub(super) fn get_vibrancy_sidebar_background() -> gpui::Rgba {
-        let sk_theme = crate::theme::get_cached_theme();
-        let opacity = sk_theme.get_opacity();
-        // Use title_bar background for sidebar (slightly different visual hierarchy)
-        let bg_hex = sk_theme.colors.background.title_bar;
-        // Sidebar uses title_bar opacity (0.65) for slightly more opaque
-        rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
-            bg_hex,
-            opacity.title_bar,
-        ))
-    }
-
-    /// Get title bar background color with vibrancy opacity
-    pub(super) fn get_vibrancy_title_bar_background() -> gpui::Rgba {
-        let sk_theme = crate::theme::get_cached_theme();
-        let opacity = sk_theme.get_opacity();
-        let bg_hex = sk_theme.colors.background.main;
-        rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
-            bg_hex,
-            opacity.title_bar,
-        ))
-    }
-
     /// Get modal overlay background (theme-aware)
     ///
     /// Uses theme background colors for overlay instead of hardcoded black/white.

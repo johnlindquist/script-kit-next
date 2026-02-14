@@ -390,24 +390,6 @@ pub fn prune_old_deleted_notes(days: u32) -> Result<usize> {
     Ok(count)
 }
 
-/// Get total note count (active only)
-pub fn get_note_count() -> Result<usize> {
-    let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
-
-    let count: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM notes WHERE deleted_at IS NULL",
-            [],
-            |row| row.get(0),
-        )
-        .context("Failed to count notes")?;
-
-    Ok(count as usize)
-}
-
 /// Convert a database row to a Note
 fn row_to_note(row: &rusqlite::Row) -> rusqlite::Result<Note> {
     let id_str: String = row.get(0)?;
