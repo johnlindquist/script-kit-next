@@ -30,9 +30,7 @@ impl ScriptListApp {
             let clamped_index = self
                 .selected_index
                 .min(grouped_items.len().saturating_sub(1));
-            let first_selectable = grouped_items
-                .iter()
-                .position(|item| matches!(item, GroupedListItem::Item(_)));
+            let first_selectable = self.cached_grouped_first_selectable_index;
 
             if let Some(first) = first_selectable {
                 if clamped_index <= first {
@@ -81,9 +79,7 @@ impl ScriptListApp {
                 .selected_index
                 .min(grouped_items.len().saturating_sub(1));
             let item_count = grouped_items.len();
-            let last_selectable = grouped_items
-                .iter()
-                .rposition(|item| matches!(item, GroupedListItem::Item(_)));
+            let last_selectable = self.cached_grouped_last_selectable_index;
 
             if let Some(last) = last_selectable {
                 if clamped_index >= last {
@@ -132,9 +128,7 @@ impl ScriptListApp {
             let clamped_index = self
                 .selected_index
                 .min(grouped_items.len().saturating_sub(1));
-            let first_selectable = grouped_items
-                .iter()
-                .position(|item| matches!(item, GroupedListItem::Item(_)));
+            let first_selectable = self.cached_grouped_first_selectable_index;
 
             if let Some(first) = first_selectable {
                 (first, "jump_first")
@@ -160,9 +154,7 @@ impl ScriptListApp {
             let clamped_index = self
                 .selected_index
                 .min(grouped_items.len().saturating_sub(1));
-            let first_selectable = grouped_items
-                .iter()
-                .position(|item| matches!(item, GroupedListItem::Item(_)));
+            let first_selectable = self.cached_grouped_first_selectable_index;
 
             if let Some(first) = first_selectable {
                 if clamped_index <= first {
@@ -209,16 +201,19 @@ impl ScriptListApp {
             let clamped_index = self
                 .selected_index
                 .min(grouped_items.len().saturating_sub(1));
-            let last_selectable = grouped_items
-                .iter()
-                .rposition(|item| matches!(item, GroupedListItem::Item(_)));
+            let last_selectable = self.cached_grouped_last_selectable_index;
 
             if let Some(last) = last_selectable {
                 if clamped_index >= last {
                     (clamped_index, "page_down_clamp")
                 } else {
                     const PAGE_SIZE: usize = 10;
-                    let target = page_down_target_index(&grouped_items, clamped_index, PAGE_SIZE);
+                    let target = page_down_target_index(
+                        &grouped_items,
+                        clamped_index,
+                        PAGE_SIZE,
+                        last_selectable,
+                    );
                     if target != clamped_index {
                         (target, "page_down")
                     } else {
@@ -246,9 +241,7 @@ impl ScriptListApp {
             let clamped_index = self
                 .selected_index
                 .min(grouped_items.len().saturating_sub(1));
-            let last_selectable = grouped_items
-                .iter()
-                .rposition(|item| matches!(item, GroupedListItem::Item(_)));
+            let last_selectable = self.cached_grouped_last_selectable_index;
 
             if let Some(last) = last_selectable {
                 (last, "jump_last")

@@ -13,9 +13,9 @@ mod tests {
             GroupedListItem::Item(2),
         ];
 
-        assert_eq!(page_down_target_index(&rows, 1, 10), 4);
-        assert_eq!(page_down_target_index(&rows, 4, 10), 4);
-        assert_eq!(page_down_target_index(&rows, usize::MAX, 10), 4);
+        assert_eq!(page_down_target_index(&rows, 1, 10, Some(4)), 4);
+        assert_eq!(page_down_target_index(&rows, 4, 10, Some(4)), 4);
+        assert_eq!(page_down_target_index(&rows, usize::MAX, 10, Some(4)), 4);
     }
 
     #[test]
@@ -26,7 +26,7 @@ mod tests {
             GroupedListItem::Item(1),
         ];
 
-        assert_eq!(page_down_target_index(&rows, 1, 0), 1);
+        assert_eq!(page_down_target_index(&rows, 1, 0, Some(2)), 1);
     }
 
     #[test]
