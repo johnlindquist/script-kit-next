@@ -2,6 +2,7 @@
 
 use gpui::*;
 
+use crate::list_item::FONT_MONO;
 use crate::storybook::{
     code_block, story_container, story_divider, story_section, Story, StoryVariant,
 };
@@ -321,7 +322,7 @@ fn render_list_item_with_shortcut(
                 .rounded_sm()
                 .text_xs()
                 .text_color(shortcut_color)
-                .font_family("Menlo")
+                .font_family(FONT_MONO)
                 .child(shortcut.to_string()),
         )
 }
