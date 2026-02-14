@@ -513,6 +513,14 @@ impl IconConfig {
     }
 }
 
+// Legacy compatibility - keep old types for existing code
+pub use IconName as ScriptIcon;
+pub use IconName as ScriptletIcon;
+pub use IconName as BuiltInIcon;
+pub use IconName as AppIcon;
+pub use IconName as WindowIcon;
+pub use IconName as FolderIcon;
+
 /// Legacy function for compatibility
 pub fn total_icon_count() -> usize {
     IconName::count()
