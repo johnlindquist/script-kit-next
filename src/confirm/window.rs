@@ -22,7 +22,9 @@ use std::sync::{Mutex, OnceLock};
 
 use super::constants::{CONFIRM_HEIGHT, CONFIRM_WIDTH};
 use super::dialog::{ConfirmCallback, ConfirmDialog};
-use crate::ui_foundation::{is_key_enter, is_key_escape, is_key_left, is_key_right};
+use crate::ui_foundation::{
+    is_key_enter, is_key_escape, is_key_left, is_key_right, is_key_space, is_key_tab,
+};
 
 /// Global singleton for the confirm window handle
 static CONFIRM_WINDOW: OnceLock<Mutex<Option<WindowHandle<Root>>>> = OnceLock::new();
@@ -41,7 +43,7 @@ enum ConfirmKeyAction {
 
 #[inline]
 fn confirm_key_action(key: &str) -> Option<ConfirmKeyAction> {
-    if is_key_enter(key) || key.eq_ignore_ascii_case("space") || key == " " {
+    if is_key_enter(key) || is_key_space(key) {
         return Some(ConfirmKeyAction::Submit);
     }
 
@@ -49,7 +51,7 @@ fn confirm_key_action(key: &str) -> Option<ConfirmKeyAction> {
         return Some(ConfirmKeyAction::Cancel);
     }
 
-    if key.eq_ignore_ascii_case("tab") {
+    if is_key_tab(key) {
         return Some(ConfirmKeyAction::ToggleFocus);
     }
 
@@ -488,6 +490,10 @@ mod tests {
     fn test_dispatch_confirm_key_toggles_focus_on_tab() {
         assert_eq!(
             confirm_key_action("tab"),
+            Some(ConfirmKeyAction::ToggleFocus)
+        );
+        assert_eq!(
+            confirm_key_action("\t"),
             Some(ConfirmKeyAction::ToggleFocus)
         );
     }
