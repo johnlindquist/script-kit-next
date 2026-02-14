@@ -439,6 +439,14 @@ impl ScriptListApp {
         // Reset input history navigation when user types (they're no longer navigating history)
         self.input_history.reset_navigation();
 
+        let new_calc = crate::calculator::try_build(&new_text);
+        if self.inline_calculator != new_calc {
+            self.inline_calculator = new_calc;
+            self.invalidate_grouped_cache();
+            self.list_scroll_handle
+                .scroll_to_item(0, ScrollStrategy::Top);
+        }
+
         // FIX: Don't reset selected_index here - do it in queue_filter_compute() callback
         // AFTER computed_filter_text is updated. This prevents a race condition where:
         // 1. We set selected_index=0 immediately

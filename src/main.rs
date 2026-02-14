@@ -40,6 +40,7 @@ mod agents;
 mod ai;
 mod aliases;
 mod camera;
+pub mod calculator;
 #[cfg(test)]
 mod clipboard_actions_tests;
 mod components;

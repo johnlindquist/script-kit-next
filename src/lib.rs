@@ -16,6 +16,7 @@ pub mod app_shell;
 
 #[cfg(target_os = "macos")]
 pub mod camera;
+pub mod calculator;
 pub mod components;
 pub mod config;
 

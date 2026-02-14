@@ -18,6 +18,8 @@ struct ScriptListApp {
     selected_index: usize,
     /// Main menu filter text (mirrors gpui-component input state)
     filter_text: String,
+    /// Inline calculator result derived from filter_text when expression is math-like
+    pub inline_calculator: Option<crate::calculator::CalculatorInlineResult>,
     /// gpui-component input state for the main filter
     gpui_input_state: Entity<InputState>,
     gpui_input_focused: bool,

@@ -313,6 +313,7 @@ impl ScriptListApp {
             cached_file_results: Vec::new(),
             selected_index: 0,
             filter_text: String::new(),
+            inline_calculator: None,
             gpui_input_state,
             gpui_input_focused: false,
             gpui_input_subscriptions: vec![gpui_input_subscription],
