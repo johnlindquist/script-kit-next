@@ -571,6 +571,20 @@ pub fn is_key_escape(key: &str) -> bool {
 pub fn is_key_backspace(key: &str) -> bool {
     key.eq_ignore_ascii_case("backspace")
 }
+/// Check if key is Tab.
+///
+/// Uses allocation-free ASCII case-insensitive comparison.
+#[inline]
+pub fn is_key_tab(key: &str) -> bool {
+    key == "\t" || key.eq_ignore_ascii_case("tab")
+}
+/// Check if key is Space.
+///
+/// Uses allocation-free ASCII case-insensitive comparison.
+#[inline]
+pub fn is_key_space(key: &str) -> bool {
+    key == " " || key.eq_ignore_ascii_case("space")
+}
 /// Check if key is the "k" key (for Cmd+K shortcut).
 ///
 /// Uses allocation-free ASCII case-insensitive comparison.
@@ -764,6 +778,26 @@ mod tests {
         assert!(is_key_backspace("BACKSPACE"));
         assert!(!is_key_backspace("delete"));
         assert!(!is_key_backspace("enter"));
+    }
+
+    #[test]
+    fn test_is_key_tab() {
+        assert!(is_key_tab("tab"));
+        assert!(is_key_tab("Tab"));
+        assert!(is_key_tab("TAB"));
+        assert!(is_key_tab("\t"));
+        assert!(!is_key_tab("space"));
+        assert!(!is_key_tab("enter"));
+    }
+
+    #[test]
+    fn test_is_key_space() {
+        assert!(is_key_space("space"));
+        assert!(is_key_space("Space"));
+        assert!(is_key_space("SPACE"));
+        assert!(is_key_space(" "));
+        assert!(!is_key_space("tab"));
+        assert!(!is_key_space("enter"));
     }
 
     #[test]
