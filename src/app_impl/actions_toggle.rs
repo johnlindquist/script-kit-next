@@ -135,6 +135,28 @@ fn terminal_actions_for_dialog() -> Vec<crate::actions::Action> {
 }
 
 impl ScriptListApp {
+    fn make_actions_window_on_close_callback(
+        app_entity: Entity<Self>,
+        log_message: &'static str,
+    ) -> std::sync::Arc<dyn Fn(&mut gpui::App) + Send + Sync> {
+        std::sync::Arc::new(move |cx| {
+            let app_entity = app_entity.clone();
+            cx.defer(move |cx| {
+                app_entity.update(cx, |app, cx| {
+                    if !app.show_actions_popup && app.actions_dialog.is_none() {
+                        return;
+                    }
+
+                    app.show_actions_popup = false;
+                    app.actions_dialog = None;
+                    app.mark_filter_resync_after_actions_if_needed();
+                    app.pop_focus_overlay(cx);
+                    logging::log("FOCUS", log_message);
+                });
+            });
+        })
+    }
+
     pub(crate) fn toggle_actions(&mut self, cx: &mut Context<Self>, window: &mut Window) {
         let popup_state = self.show_actions_popup;
         let window_open = is_actions_window_open();
@@ -196,26 +218,10 @@ impl ScriptListApp {
             // This ensures the same cleanup happens whether closing via Cmd+K toggle or Escape
             let app_entity = cx.entity().clone();
             dialog.update(cx, |d, _cx| {
-                d.set_on_close(std::sync::Arc::new(move |cx| {
-                    let app_entity = app_entity.clone();
-                    cx.defer(move |cx| {
-                        app_entity.update(cx, |app, cx| {
-                            if !app.show_actions_popup && app.actions_dialog.is_none() {
-                                return;
-                            }
-
-                            app.show_actions_popup = false;
-                            app.actions_dialog = None;
-                            app.mark_filter_resync_after_actions_if_needed();
-                            // Use coordinator to pop overlay and restore previous focus
-                            app.pop_focus_overlay(cx);
-                            logging::log(
-                                "FOCUS",
-                                "Actions closed via escape, focus restored via coordinator",
-                            );
-                        });
-                    });
-                }));
+                d.set_on_close(Self::make_actions_window_on_close_callback(
+                    app_entity.clone(),
+                    "Actions closed via escape, focus restored via coordinator",
+                ));
             });
 
             // Get main window bounds and display_id for positioning the actions popup
@@ -381,25 +387,10 @@ impl ScriptListApp {
             // Set up on_close callback — same pattern as toggle_chat_actions
             let app_entity = cx.entity().clone();
             dialog.update(cx, |d, _cx| {
-                d.set_on_close(std::sync::Arc::new(move |cx| {
-                    let app_entity = app_entity.clone();
-                    cx.defer(move |cx| {
-                        app_entity.update(cx, |app, cx| {
-                            if !app.show_actions_popup && app.actions_dialog.is_none() {
-                                return;
-                            }
-
-                            app.show_actions_popup = false;
-                            app.actions_dialog = None;
-                            app.mark_filter_resync_after_actions_if_needed();
-                            app.pop_focus_overlay(cx);
-                            logging::log(
-                                "FOCUS",
-                                "Webcam actions closed via escape, focus restored via coordinator",
-                            );
-                        });
-                    });
-                }));
+                d.set_on_close(Self::make_actions_window_on_close_callback(
+                    app_entity.clone(),
+                    "Webcam actions closed via escape, focus restored via coordinator",
+                ));
             });
 
             // Get main window bounds for positioning
@@ -558,26 +549,10 @@ impl ScriptListApp {
             // Set up the on_close callback to restore focus when escape is pressed in ActionsWindow
             let app_entity = cx.entity().clone();
             dialog.update(cx, |d, _cx| {
-                d.set_on_close(std::sync::Arc::new(move |cx| {
-                    let app_entity = app_entity.clone();
-                    cx.defer(move |cx| {
-                        app_entity.update(cx, |app, cx| {
-                            if !app.show_actions_popup && app.actions_dialog.is_none() {
-                                return;
-                            }
-
-                            app.show_actions_popup = false;
-                            app.actions_dialog = None;
-                            app.mark_filter_resync_after_actions_if_needed();
-                            // Use coordinator to pop overlay and restore previous focus
-                            app.pop_focus_overlay(cx);
-                            logging::log(
-                                "FOCUS",
-                                "Chat actions closed via escape, focus restored via coordinator",
-                            );
-                        });
-                    });
-                }));
+                d.set_on_close(Self::make_actions_window_on_close_callback(
+                    app_entity.clone(),
+                    "Chat actions closed via escape, focus restored via coordinator",
+                ));
             });
 
             // Get main window bounds and display_id for positioning
@@ -633,22 +608,26 @@ mod on_close_reentrancy_tests {
     fn test_actions_toggle_on_close_defers_script_list_app_updates() {
         let source = fs::read_to_string("src/app_impl/actions_toggle.rs")
             .expect("Failed to read src/app_impl/actions_toggle.rs");
+        let impl_source = source
+            .split("\n#[cfg(test)]")
+            .next()
+            .expect("Expected implementation section before tests");
 
-        let set_on_close_count = source
-            .matches("d.set_on_close(std::sync::Arc::new(move |cx| {")
+        let set_on_close_count = impl_source
+            .matches("d.set_on_close(Self::make_actions_window_on_close_callback(")
             .count();
-        let defer_count = source.matches("cx.defer(move |cx| {").count();
+        let defer_count = impl_source.matches("cx.defer(move |cx| {").count();
 
         assert_eq!(
             set_on_close_count, 3,
-            "actions_toggle should define three on_close callbacks"
+            "actions_toggle should use the shared on_close callback factory at three call sites"
         );
         assert!(
-            defer_count >= 3,
-            "each actions_toggle on_close callback should defer ScriptListApp updates"
+            defer_count >= 1,
+            "actions_toggle on_close callback factory should defer ScriptListApp updates"
         );
         assert!(
-            source.contains("if !app.show_actions_popup && app.actions_dialog.is_none()"),
+            impl_source.contains("if !app.show_actions_popup && app.actions_dialog.is_none()"),
             "actions_toggle on_close callbacks should guard already-closed popup state"
         );
     }
@@ -674,8 +653,8 @@ mod on_close_reentrancy_tests {
             .matches("app.mark_filter_resync_after_actions_if_needed();")
             .count();
         assert_eq!(
-            on_close_mark_count, 3,
-            "actions window on_close callbacks should mark filter resync for next render"
+            on_close_mark_count, 1,
+            "shared actions window on_close callback should mark filter resync for next render"
         );
     }
 }
