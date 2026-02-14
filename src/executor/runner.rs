@@ -570,6 +570,53 @@ impl ScriptSession {
     }
 }
 
+#[derive(Debug)]
+struct RuntimeAttempt {
+    name: &'static str,
+    label: String,
+    cmd: String,
+    args: Vec<String>,
+}
+
+fn run_fallback_chain<T>(
+    attempts: &[RuntimeAttempt],
+    start: &Instant,
+    mut runner: impl FnMut(&str, &[&str], &str) -> Result<T, String>,
+    script_path: &str,
+) -> Option<T> {
+    for attempt in attempts {
+        if attempt.args.is_empty() {
+            logging::log("EXEC", &format!("Trying: {}", attempt.cmd));
+        } else {
+            logging::log(
+                "EXEC",
+                &format!("Trying: {} {}", attempt.cmd, attempt.args.join(" ")),
+            );
+        }
+        logging::bench_log(attempt.name);
+
+        let args: Vec<&str> = attempt.args.iter().map(String::as_str).collect();
+        match runner(&attempt.cmd, &args, script_path) {
+            Ok(result) => {
+                let duration_ms = start.elapsed().as_millis() as u64;
+                info!(
+                    runtime = attempt.name,
+                    duration_ms = duration_ms,
+                    "Runtime fallback succeeded"
+                );
+                logging::bench_log(&format!("{} succeeded in {}ms", attempt.name, duration_ms));
+                logging::log("EXEC", &format!("SUCCESS: {}", attempt.label));
+                return Some(result);
+            }
+            Err(e) => {
+                debug!(error = %e, runtime = attempt.name, "Spawn attempt failed");
+                logging::log("EXEC", &format!("FAILED: {}: {}", attempt.label, e));
+            }
+        }
+    }
+    None
+}
+
 /// Execute a script with bidirectional JSONL communication
 #[instrument(skip_all, fields(script_path = %path.display()))]
 pub fn execute_script_interactive(path: &Path) -> Result<ScriptSession, String> {
@@ -588,72 +635,45 @@ pub fn execute_script_interactive(path: &Path) -> Result<ScriptSession, String> 
     // Find SDK for preloading
     let sdk_path = find_sdk_path();
 
-    // Try bun with preload (preferred - supports TypeScript natively)
-    if let Some(ref sdk) = sdk_path {
-        let sdk_str = sdk.to_str().unwrap_or("");
-        logging::bench_log("bun_spawn_start");
-        logging::log(
-            "EXEC",
-            &format!("Trying: bun run --preload {} {}", sdk_str, path_str),
-        );
-        match spawn_script("bun", &["run", "--preload", sdk_str, path_str], path_str) {
-            Ok(session) => {
-                logging::bench_log(&format!("bun_spawned ({}ms)", start.elapsed().as_millis()));
-                info!(
-                    duration_ms = start.elapsed().as_millis() as u64,
-                    runtime = "bun",
-                    preload = true,
-                    "Script session started"
-                );
-                logging::log("EXEC", "SUCCESS: bun with preload");
-                return Ok(session);
-            }
-            Err(e) => {
-                debug!(error = %e, runtime = "bun", preload = true, "Spawn attempt failed");
-                logging::log("EXEC", &format!("FAILED: bun with preload: {}", e));
-            }
-        }
-    }
+    let bun_path = "bun".to_string();
+    let node_path = "node".to_string();
 
-    // Try bun without preload as fallback
+    let mut attempts = Vec::new();
     if is_typescript(path) {
-        logging::log("EXEC", &format!("Trying: bun run {}", path_str));
-        match spawn_script("bun", &["run", path_str], path_str) {
-            Ok(session) => {
-                info!(
-                    duration_ms = start.elapsed().as_millis() as u64,
-                    runtime = "bun",
-                    preload = false,
-                    "Script session started"
-                );
-                logging::log("EXEC", "SUCCESS: bun without preload");
-                return Ok(session);
-            }
-            Err(e) => {
-                debug!(error = %e, runtime = "bun", preload = false, "Spawn attempt failed");
-                logging::log("EXEC", &format!("FAILED: bun without preload: {}", e));
-            }
+        if let Some(ref sdk) = sdk_path {
+            let sdk_str = sdk.to_string_lossy().into_owned();
+            attempts.push(RuntimeAttempt {
+                name: "bun",
+                label: "bun with preload".to_string(),
+                cmd: bun_path.clone(),
+                args: vec![
+                    "run".to_string(),
+                    "--preload".to_string(),
+                    sdk_str,
+                    path_str.to_string(),
+                ],
+            });
         }
+
+        attempts.push(RuntimeAttempt {
+            name: "bun",
+            label: "bun without preload".to_string(),
+            cmd: bun_path,
+            args: vec!["run".to_string(), path_str.to_string()],
+        });
     }
 
-    // Try node for JavaScript files
     if is_javascript(path) {
-        logging::log("EXEC", &format!("Trying: node {}", path_str));
-        match spawn_script("node", &[path_str], path_str) {
-            Ok(session) => {
-                info!(
-                    duration_ms = start.elapsed().as_millis() as u64,
-                    runtime = "node",
-                    "Script session started"
-                );
-                logging::log("EXEC", "SUCCESS: node");
-                return Ok(session);
-            }
-            Err(e) => {
-                debug!(error = %e, runtime = "node", "Spawn attempt failed");
-                logging::log("EXEC", &format!("FAILED: node: {}", e));
-            }
-        }
+        attempts.push(RuntimeAttempt {
+            name: "node",
+            label: "node".to_string(),
+            cmd: node_path,
+            args: vec![path_str.to_string()],
+        });
+    }
+
+    if let Some(session) = run_fallback_chain(&attempts, &start, spawn_script, path_str) {
+        return Ok(session);
     }
 
     let err = format!(
@@ -765,107 +785,57 @@ pub fn execute_script(path: &Path) -> Result<String, String> {
     let sdk_path = find_sdk_path();
     logging::log("EXEC", &format!("SDK path: {:?}", sdk_path));
 
-    // Try kit CLI first (preferred for script-kit)
-    logging::log("EXEC", &format!("Trying: kit run {}", path_str));
-    match run_command("kit", &["run", path_str]) {
-        Ok(output) => {
-            info!(
-                duration_ms = start.elapsed().as_millis() as u64,
-                output_bytes = output.len(),
-                runtime = "kit",
-                "Script completed"
-            );
-            logging::log(
-                "EXEC",
-                &format!("SUCCESS: kit (output: {} bytes)", output.len()),
-            );
-            return Ok(output);
-        }
-        Err(e) => {
-            debug!(error = %e, runtime = "kit", "Command failed");
-            logging::log("EXEC", &format!("FAILED: kit: {}", e));
-        }
-    }
+    let kit_path = "kit".to_string();
+    let bun_path = "bun".to_string();
+    let node_path = "node".to_string();
 
-    // Try bun with preload for TypeScript files (injects arg, div, md globals)
+    let mut attempts = vec![RuntimeAttempt {
+        name: "kit",
+        label: "kit".to_string(),
+        cmd: kit_path,
+        args: vec!["run".to_string(), path_str.to_string()],
+    }];
+
     if is_typescript(path) {
         if let Some(ref sdk) = sdk_path {
-            let sdk_str = sdk.to_str().unwrap_or("");
-            logging::log(
-                "EXEC",
-                &format!("Trying: bun run --preload {} {}", sdk_str, path_str),
-            );
-            match run_command("bun", &["run", "--preload", sdk_str, path_str]) {
-                Ok(output) => {
-                    info!(
-                        duration_ms = start.elapsed().as_millis() as u64,
-                        output_bytes = output.len(),
-                        runtime = "bun",
-                        preload = true,
-                        "Script completed"
-                    );
-                    logging::log(
-                        "EXEC",
-                        &format!("SUCCESS: bun with preload (output: {} bytes)", output.len()),
-                    );
-                    return Ok(output);
-                }
-                Err(e) => {
-                    debug!(error = %e, runtime = "bun", preload = true, "Command failed");
-                    logging::log("EXEC", &format!("FAILED: bun with preload: {}", e));
-                }
-            }
+            let sdk_str = sdk.to_string_lossy().into_owned();
+            attempts.push(RuntimeAttempt {
+                name: "bun",
+                label: "bun with preload".to_string(),
+                cmd: bun_path.clone(),
+                args: vec![
+                    "run".to_string(),
+                    "--preload".to_string(),
+                    sdk_str,
+                    path_str.to_string(),
+                ],
+            });
         }
 
-        // Fallback: try bun without preload
-        logging::log(
-            "EXEC",
-            &format!("Trying: bun run {} (no preload)", path_str),
-        );
-        match run_command("bun", &["run", path_str]) {
-            Ok(output) => {
-                info!(
-                    duration_ms = start.elapsed().as_millis() as u64,
-                    output_bytes = output.len(),
-                    runtime = "bun",
-                    preload = false,
-                    "Script completed"
-                );
-                logging::log(
-                    "EXEC",
-                    &format!("SUCCESS: bun (output: {} bytes)", output.len()),
-                );
-                return Ok(output);
-            }
-            Err(e) => {
-                debug!(error = %e, runtime = "bun", preload = false, "Command failed");
-                logging::log("EXEC", &format!("FAILED: bun: {}", e));
-            }
-        }
+        attempts.push(RuntimeAttempt {
+            name: "bun",
+            label: "bun without preload".to_string(),
+            cmd: bun_path,
+            args: vec!["run".to_string(), path_str.to_string()],
+        });
     }
 
-    // Try node for JavaScript files
     if is_javascript(path) {
-        logging::log("EXEC", &format!("Trying: node {}", path_str));
-        match run_command("node", &[path_str]) {
-            Ok(output) => {
-                info!(
-                    duration_ms = start.elapsed().as_millis() as u64,
-                    output_bytes = output.len(),
-                    runtime = "node",
-                    "Script completed"
-                );
-                logging::log(
-                    "EXEC",
-                    &format!("SUCCESS: node (output: {} bytes)", output.len()),
-                );
-                return Ok(output);
-            }
-            Err(e) => {
-                debug!(error = %e, runtime = "node", "Command failed");
-                logging::log("EXEC", &format!("FAILED: node: {}", e));
-            }
-        }
+        attempts.push(RuntimeAttempt {
+            name: "node",
+            label: "node".to_string(),
+            cmd: node_path,
+            args: vec![path_str.to_string()],
+        });
+    }
+
+    if let Some(output) = run_fallback_chain(
+        &attempts,
+        &start,
+        |cmd, args, _| run_command(cmd, args),
+        path_str,
+    ) {
+        return Ok(output);
     }
 
     let err = format!(
@@ -955,6 +925,129 @@ pub fn is_javascript(path: &Path) -> bool {
         .and_then(|ext| ext.to_str())
         .map(|ext| ext == "js")
         .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod runtime_fallback_tests {
+    use super::{run_fallback_chain, RuntimeAttempt};
+    use std::cell::RefCell;
+    use std::time::Instant;
+
+    #[test]
+    fn test_run_fallback_chain_returns_first_success_when_previous_attempt_fails() {
+        let start = Instant::now();
+        let calls = RefCell::new(Vec::new());
+        let attempts = vec![
+            RuntimeAttempt {
+                name: "kit",
+                label: "kit".to_string(),
+                cmd: "kit".to_string(),
+                args: vec!["run".to_string(), "test.ts".to_string()],
+            },
+            RuntimeAttempt {
+                name: "bun",
+                label: "bun without preload".to_string(),
+                cmd: "bun".to_string(),
+                args: vec!["run".to_string(), "test.ts".to_string()],
+            },
+            RuntimeAttempt {
+                name: "node",
+                label: "node".to_string(),
+                cmd: "node".to_string(),
+                args: vec!["test.js".to_string()],
+            },
+        ];
+
+        let result = run_fallback_chain(
+            &attempts,
+            &start,
+            |cmd, _, _| {
+                calls.borrow_mut().push(cmd.to_string());
+                if cmd == "kit" {
+                    Err("kit missing".to_string())
+                } else {
+                    Ok(cmd.to_string())
+                }
+            },
+            "test.ts",
+        );
+
+        assert_eq!(result, Some("bun".to_string()));
+        assert_eq!(
+            calls.borrow().as_slice(),
+            &["kit".to_string(), "bun".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_run_fallback_chain_returns_none_when_all_attempts_fail() {
+        let start = Instant::now();
+        let attempts = vec![
+            RuntimeAttempt {
+                name: "kit",
+                label: "kit".to_string(),
+                cmd: "kit".to_string(),
+                args: vec!["run".to_string(), "test.ts".to_string()],
+            },
+            RuntimeAttempt {
+                name: "node",
+                label: "node".to_string(),
+                cmd: "node".to_string(),
+                args: vec!["test.js".to_string()],
+            },
+        ];
+
+        let result: Option<String> = run_fallback_chain(
+            &attempts,
+            &start,
+            |_, _, _| Err("failed".to_string()),
+            "test.ts",
+        );
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_run_fallback_chain_passes_script_path_and_args_to_runner() {
+        let start = Instant::now();
+        let attempts = vec![RuntimeAttempt {
+            name: "bun",
+            label: "bun with preload".to_string(),
+            cmd: "bun".to_string(),
+            args: vec![
+                "run".to_string(),
+                "--preload".to_string(),
+                "sdk.ts".to_string(),
+                "test.ts".to_string(),
+            ],
+        }];
+
+        let captured = RefCell::new((String::new(), Vec::new(), String::new()));
+        let result = run_fallback_chain(
+            &attempts,
+            &start,
+            |cmd, args, script_path| {
+                captured.borrow_mut().0 = cmd.to_string();
+                captured.borrow_mut().1 = args.iter().map(|arg| arg.to_string()).collect();
+                captured.borrow_mut().2 = script_path.to_string();
+                Ok("ok".to_string())
+            },
+            "test.ts",
+        );
+
+        assert_eq!(result, Some("ok".to_string()));
+        assert_eq!(captured.borrow().0, "bun".to_string());
+        assert_eq!(
+            captured.borrow().1,
+            vec![
+                "run".to_string(),
+                "--preload".to_string(),
+                "sdk.ts".to_string(),
+                "test.ts".to_string()
+            ]
+        );
+        assert_eq!(captured.borrow().2, "test.ts".to_string());
+    }
 }
 
 #[cfg(test)]
