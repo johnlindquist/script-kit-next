@@ -53,11 +53,7 @@ impl NotesApp {
     /// 50% opacity (0x80) for good contrast without being too heavy
     pub(super) fn get_modal_overlay_background() -> gpui::Rgba {
         let sk_theme = crate::theme::get_cached_theme();
-        if sk_theme.has_dark_colors() {
-            gpui::rgba(MODAL_OVERLAY_DARK)
-        } else {
-            gpui::rgba(MODAL_OVERLAY_LIGHT)
-        }
+        crate::theme::modal_overlay_bg(&sk_theme, 0x80)
     }
 
     pub(super) fn set_mouse_cursor_hidden_state(

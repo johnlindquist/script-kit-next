@@ -241,7 +241,6 @@ impl PromptColors {
 ///
 /// # Returns
 /// A Rgba color suitable for use with `.bg()`
-#[allow(dead_code)]
 pub fn modal_overlay_bg(theme: &Theme, opacity: u8) -> Rgba {
     let base_color = if theme.has_dark_colors() {
         0x000000u32 // black for dark mode

@@ -161,16 +161,6 @@ const SAVED_FLASH_MS: u64 = 1500;
 /// Duration (ms) of action feedback flash ("Deleted", "Pinned", etc.).
 const ACTION_FEEDBACK_MS: u64 = 2000;
 
-// =============================================================================
-// Modal overlay tokens (same palette as browse_panel.rs)
-// =============================================================================
-
-/// Dark-mode modal overlay: black at 50 % alpha.
-const MODAL_OVERLAY_DARK: u32 = 0x00000080;
-
-/// Light-mode modal overlay: white at 50 % alpha.
-const MODAL_OVERLAY_LIGHT: u32 = 0xffffff80;
-
 /// Corner radius for shortcuts panel card (px).
 const SHORTCUTS_PANEL_RADIUS: f32 = 10.0;
 
