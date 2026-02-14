@@ -35,7 +35,7 @@ static CACHE_UPDATED: OnceLock<Mutex<i64>> = OnceLock::new();
 /// Get the global image cache, initializing if needed
 pub fn get_image_cache() -> &'static Mutex<LruCache<String, Arc<RenderImage>>> {
     IMAGE_CACHE.get_or_init(|| {
-        let cap = NonZeroUsize::new(MAX_IMAGE_CACHE_ENTRIES).expect("cache size must be non-zero");
+        let cap = NonZeroUsize::new(MAX_IMAGE_CACHE_ENTRIES).unwrap_or(NonZeroUsize::MIN);
         Mutex::new(LruCache::new(cap))
     })
 }
