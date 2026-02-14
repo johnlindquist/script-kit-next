@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_imports)]
+
 mod colors;
 mod constants;
 mod render;
