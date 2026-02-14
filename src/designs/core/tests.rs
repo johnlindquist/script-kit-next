@@ -1,8 +1,5 @@
 use super::*;
 
-// --- merged from part_01.rs ---
-use super::*;
-
 #[test]
 fn test_all_variants_count() {
     assert_eq!(DesignVariant::all().len(), 11);
@@ -97,7 +94,10 @@ fn test_get_item_height() {
     assert_eq!(get_item_height(DesignVariant::RetroTerminal), 28.0);
 
     // Compact uses the smallest items (24px)
-    assert_eq!(get_item_height(DesignVariant::Compact), COMPACT_ITEM_HEIGHT);
+    assert_eq!(
+        get_item_height(DesignVariant::Compact),
+        get_tokens(DesignVariant::Compact).item_height()
+    );
     assert_eq!(get_item_height(DesignVariant::Compact), 24.0);
 
     // Default and others use standard height (40px - from design tokens)
