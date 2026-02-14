@@ -157,6 +157,29 @@ impl ScriptListApp {
         })
     }
 
+    fn spawn_open_actions_window(
+        cx: &mut Context<Self>,
+        main_bounds: gpui::Bounds<gpui::Pixels>,
+        display_id: Option<gpui::DisplayId>,
+        dialog: Entity<ActionsDialog>,
+        position: crate::actions::WindowPosition,
+        opened_log: &'static str,
+        failed_prefix: &'static str,
+    ) {
+        cx.spawn(async move |_this, cx| {
+            cx.update(|cx| match open_actions_window(cx, main_bounds, display_id, dialog, position) {
+                Ok(_handle) => {
+                    logging::log("ACTIONS", opened_log);
+                }
+                Err(e) => {
+                    logging::log("ACTIONS", &format!("{}: {}", failed_prefix, e));
+                }
+            })
+            .ok();
+        })
+        .detach();
+    }
+
     pub(crate) fn toggle_actions(&mut self, cx: &mut Context<Self>, window: &mut Window) {
         let popup_state = self.show_actions_popup;
         let window_open = is_actions_window_open();
@@ -246,29 +269,15 @@ impl ScriptListApp {
             );
 
             // Open the actions window via spawn, passing the shared dialog entity and display_id
-            cx.spawn(async move |_this, cx| {
-                cx.update(|cx| {
-                    match open_actions_window(
-                        cx,
-                        main_bounds,
-                        display_id,
-                        dialog,
-                        crate::actions::WindowPosition::BottomRight,
-                    ) {
-                        Ok(_handle) => {
-                            logging::log("ACTIONS", "Actions popup window opened");
-                        }
-                        Err(e) => {
-                            logging::log(
-                                "ACTIONS",
-                                &format!("Failed to open actions window: {}", e),
-                            );
-                        }
-                    }
-                })
-                .ok();
-            })
-            .detach();
+            Self::spawn_open_actions_window(
+                cx,
+                main_bounds,
+                display_id,
+                dialog,
+                crate::actions::WindowPosition::BottomRight,
+                "Actions popup window opened",
+                "Failed to open actions window",
+            );
 
             logging::log("FOCUS", "Actions opened, keyboard routing active");
         }
@@ -398,29 +407,15 @@ impl ScriptListApp {
             let display_id = window.display(cx).map(|d| d.id());
 
             // Open the actions window — same as toggle_chat_actions
-            cx.spawn(async move |_this, cx| {
-                cx.update(|cx| {
-                    match open_actions_window(
-                        cx,
-                        main_bounds,
-                        display_id,
-                        dialog,
-                        crate::actions::WindowPosition::BottomRight,
-                    ) {
-                        Ok(_handle) => {
-                            logging::log("ACTIONS", "Webcam actions popup window opened");
-                        }
-                        Err(e) => {
-                            logging::log(
-                                "ACTIONS",
-                                &format!("Failed to open webcam actions window: {}", e),
-                            );
-                        }
-                    }
-                })
-                .ok();
-            })
-            .detach();
+            Self::spawn_open_actions_window(
+                cx,
+                main_bounds,
+                display_id,
+                dialog,
+                crate::actions::WindowPosition::BottomRight,
+                "Webcam actions popup window opened",
+                "Failed to open webcam actions window",
+            );
 
             logging::log("FOCUS", "Webcam actions opened, keyboard routing active");
         }
@@ -570,29 +565,15 @@ impl ScriptListApp {
             );
 
             // Open the actions window via spawn
-            cx.spawn(async move |_this, cx| {
-                cx.update(|cx| {
-                    match open_actions_window(
-                        cx,
-                        main_bounds,
-                        display_id,
-                        dialog,
-                        crate::actions::WindowPosition::BottomRight,
-                    ) {
-                        Ok(_handle) => {
-                            logging::log("ACTIONS", "Chat actions popup window opened");
-                        }
-                        Err(e) => {
-                            logging::log(
-                                "ACTIONS",
-                                &format!("Failed to open chat actions window: {}", e),
-                            );
-                        }
-                    }
-                })
-                .ok();
-            })
-            .detach();
+            Self::spawn_open_actions_window(
+                cx,
+                main_bounds,
+                display_id,
+                dialog,
+                crate::actions::WindowPosition::BottomRight,
+                "Chat actions popup window opened",
+                "Failed to open chat actions window",
+            );
 
             logging::log("FOCUS", "Chat actions opened, keyboard routing active");
         }
@@ -655,6 +636,28 @@ mod on_close_reentrancy_tests {
         assert_eq!(
             on_close_mark_count, 1,
             "shared actions window on_close callback should mark filter resync for next render"
+        );
+    }
+
+    #[test]
+    fn test_actions_toggle_uses_shared_spawn_open_actions_window_helper() {
+        let source = fs::read_to_string("src/app_impl/actions_toggle.rs")
+            .expect("Failed to read src/app_impl/actions_toggle.rs");
+        let impl_source = source
+            .split("\n#[cfg(test)]")
+            .next()
+            .expect("Expected implementation section before tests");
+
+        let helper_call_count = impl_source.matches("Self::spawn_open_actions_window(").count();
+        assert_eq!(
+            helper_call_count, 3,
+            "toggle_actions, toggle_webcam_actions, and toggle_chat_actions should use the shared spawn helper"
+        );
+
+        let open_call_count = impl_source.matches("match open_actions_window(").count();
+        assert_eq!(
+            open_call_count, 1,
+            "open_actions_window match block should live only in spawn_open_actions_window helper"
         );
     }
 }
