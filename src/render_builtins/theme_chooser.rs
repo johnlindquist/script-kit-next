@@ -867,7 +867,8 @@ impl ScriptListApp {
                             .w(px(10.0))
                             .h(px(10.0))
                             .rounded(px(5.0))
-                            .bg(rgb(0xffffff))
+                            .when(vibrancy_enabled, |d| d.bg(rgb(text_on_accent)))
+                            .when(!vibrancy_enabled, |d| d.bg(rgb(text_primary)))
                             .when(vibrancy_enabled, |d| d.ml(px(16.0)))
                             .when(!vibrancy_enabled, |d| d.ml(px(2.0))),
                     ),
