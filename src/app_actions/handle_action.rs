@@ -255,7 +255,7 @@ impl ScriptListApp {
         match action_id {
             "clipboard_pin" | "clipboard_unpin" => {
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    self.show_hud("No clipboard entry selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
@@ -310,27 +310,27 @@ impl ScriptListApp {
                         }
 
                         if let Some(message) = clipboard_pin_action_success_hud(action_id) {
-                            self.show_hud(message.to_string(), Some(1500), cx);
+                            self.show_hud(message.to_string(), Some(HUD_SHORT_MS), cx);
                         }
                         cx.notify();
                     }
                     Err(e) => {
                         logging::log("ERROR", &format!("Failed to toggle clipboard pin: {}", e));
-                        self.show_hud(format!("Failed to update pin: {}", e), Some(3000), cx);
+                        self.show_hud(format!("Failed to update pin: {}", e), Some(HUD_LONG_MS), cx);
                     }
                 }
                 return;
             }
             "clipboard_share" => {
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    self.show_hud("No clipboard entry selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
                 let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
                     self.show_hud(
                         "Clipboard entry content unavailable".to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                     return;
@@ -367,15 +367,15 @@ impl ScriptListApp {
                 };
 
                 match share_result {
-                    Ok(()) => self.show_hud("Share sheet opened".to_string(), Some(1500), cx),
-                    Err(message) => self.show_hud(message, Some(2000), cx),
+                    Ok(()) => self.show_hud("Share sheet opened".to_string(), Some(HUD_SHORT_MS), cx),
+                    Err(message) => self.show_hud(message, Some(HUD_MEDIUM_MS), cx),
                 }
                 return;
             }
             // Paste to active app and close window (Enter)
             "clipboard_paste" => {
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    self.show_hud("No clipboard entry selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
@@ -404,14 +404,14 @@ impl ScriptListApp {
             }
             "clipboard_attach_to_ai" => {
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    self.show_hud("No clipboard entry selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
                 let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
                     self.show_hud(
                         "Clipboard entry content unavailable".to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                     return;
@@ -432,7 +432,7 @@ impl ScriptListApp {
                     | clipboard_history::ContentType::Color => {
                         if let Err(e) = ai::open_ai_window(cx) {
                             logging::log("ERROR", &format!("Failed to open AI window: {}", e));
-                            self.show_hud("Failed to open AI window".to_string(), Some(2000), cx);
+                            self.show_hud("Failed to open AI window".to_string(), Some(HUD_MEDIUM_MS), cx);
                             return;
                         }
                         ai::set_ai_input(cx, &content, false);
@@ -442,7 +442,7 @@ impl ScriptListApp {
                         else {
                             self.show_hud(
                                 "Failed to decode clipboard image".to_string(),
-                                Some(2000),
+                                Some(HUD_MEDIUM_MS),
                                 cx,
                             );
                             return;
@@ -454,21 +454,21 @@ impl ScriptListApp {
 
                         if let Err(e) = ai::open_ai_window(cx) {
                             logging::log("ERROR", &format!("Failed to open AI window: {}", e));
-                            self.show_hud("Failed to open AI window".to_string(), Some(2000), cx);
+                            self.show_hud("Failed to open AI window".to_string(), Some(HUD_MEDIUM_MS), cx);
                             return;
                         }
                         ai::set_ai_input_with_image(cx, "", &base64_data, false);
                     }
                 }
 
-                self.show_hud("Attached to AI".to_string(), Some(1500), cx);
+                self.show_hud("Attached to AI".to_string(), Some(HUD_SHORT_MS), cx);
                 self.hide_main_and_reset(cx);
                 return;
             }
             // Copy to clipboard without pasting (Cmd+Enter)
             "clipboard_copy" => {
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    self.show_hud("No clipboard entry selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
@@ -479,7 +479,7 @@ impl ScriptListApp {
                 match clipboard_history::copy_entry_to_clipboard(&entry.id) {
                     Ok(()) => {
                         logging::log("CLIPBOARD", "Entry copied to clipboard");
-                        self.show_hud("Copied to clipboard".to_string(), Some(1500), cx);
+                        self.show_hud("Copied to clipboard".to_string(), Some(HUD_SHORT_MS), cx);
                         // Keep the window open - do NOT call hide_main_and_reset
                     }
                     Err(e) => {
@@ -492,7 +492,7 @@ impl ScriptListApp {
             // Paste and keep window open (Opt+Enter)
             "clipboard_paste_keep_open" => {
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    self.show_hud("No clipboard entry selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
@@ -522,7 +522,7 @@ impl ScriptListApp {
             }
             "clipboard_quick_look" => {
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    self.show_hud("No clipboard entry selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
@@ -556,7 +556,7 @@ impl ScriptListApp {
                         }
                     }
                 });
-                self.show_hud("Opened scripts folder".to_string(), Some(1500), cx);
+                self.show_hud("Opened scripts folder".to_string(), Some(HUD_SHORT_MS), cx);
                 self.hide_main_and_reset(cx);
             }
             "run_script" => {
@@ -597,7 +597,7 @@ impl ScriptListApp {
 
                         this.update(cx, |this, cx| match reveal_result {
                             Ok(()) => {
-                                this.show_hud("Opened in Finder".to_string(), Some(1500), cx);
+                                this.show_hud("Opened in Finder".to_string(), Some(HUD_SHORT_MS), cx);
                                 this.hide_main_and_reset(cx);
                             }
                             Err(message) => {
@@ -610,7 +610,7 @@ impl ScriptListApp {
                 } else {
                     self.show_hud(
                         "Cannot reveal this item type in Finder".to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                 }
@@ -641,7 +641,7 @@ impl ScriptListApp {
                     if path_opt.is_none() {
                         self.show_hud(
                             "Cannot copy path for this item type".to_string(),
-                            Some(2000),
+                            Some(HUD_MEDIUM_MS),
                             cx,
                         );
                     }
@@ -649,7 +649,7 @@ impl ScriptListApp {
                 } else {
                     self.show_hud(
                         selection_required_message_for_action(action_id).to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                     None
@@ -664,11 +664,11 @@ impl ScriptListApp {
                                     "UI",
                                     &format!("Copied path to clipboard: {}", path_str),
                                 );
-                                self.show_hud(format!("Copied: {}", path_str), Some(2000), cx);
+                                self.show_hud(format!("Copied: {}", path_str), Some(HUD_MEDIUM_MS), cx);
                             }
                             Err(e) => {
                                 logging::log("ERROR", &format!("pbcopy failed: {}", e));
-                                self.show_hud("Failed to copy path".to_string(), Some(3000), cx);
+                                self.show_hud("Failed to copy path".to_string(), Some(HUD_LONG_MS), cx);
                             }
                         }
                     }
@@ -682,11 +682,11 @@ impl ScriptListApp {
                                     "UI",
                                     &format!("Copied path to clipboard: {}", path_str),
                                 );
-                                self.show_hud(format!("Copied: {}", path_str), Some(2000), cx);
+                                self.show_hud(format!("Copied: {}", path_str), Some(HUD_MEDIUM_MS), cx);
                             }
                             Err(e) => {
                                 logging::log("ERROR", &format!("Failed to copy path: {}", e));
-                                self.show_hud("Failed to copy path".to_string(), Some(3000), cx);
+                                self.show_hud("Failed to copy path".to_string(), Some(HUD_LONG_MS), cx);
                             }
                         }
                     }
@@ -708,13 +708,13 @@ impl ScriptListApp {
                                     "UI",
                                     &format!("Copied deeplink to clipboard: {}", deeplink_url),
                                 );
-                                self.show_hud(format!("Copied: {}", deeplink_url), Some(2000), cx);
+                                self.show_hud(format!("Copied: {}", deeplink_url), Some(HUD_MEDIUM_MS), cx);
                             }
                             Err(e) => {
                                 logging::log("ERROR", &format!("pbcopy failed: {}", e));
                                 self.show_hud(
                                     "Failed to copy deeplink".to_string(),
-                                    Some(3000),
+                                    Some(HUD_LONG_MS),
                                     cx,
                                 );
                             }
@@ -730,13 +730,13 @@ impl ScriptListApp {
                                     "UI",
                                     &format!("Copied deeplink to clipboard: {}", deeplink_url),
                                 );
-                                self.show_hud(format!("Copied: {}", deeplink_url), Some(2000), cx);
+                                self.show_hud(format!("Copied: {}", deeplink_url), Some(HUD_MEDIUM_MS), cx);
                             }
                             Err(e) => {
                                 logging::log("ERROR", &format!("Failed to copy deeplink: {}", e));
                                 self.show_hud(
                                     "Failed to copy deeplink".to_string(),
-                                    Some(3000),
+                                    Some(HUD_LONG_MS),
                                     cx,
                                 );
                             }
@@ -746,7 +746,7 @@ impl ScriptListApp {
                 } else {
                     self.show_hud(
                         selection_required_message_for_action(action_id).to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                 }
@@ -813,7 +813,7 @@ impl ScriptListApp {
                 } else {
                     self.show_hud(
                         selection_required_message_for_action(action_id).to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                 }
@@ -857,7 +857,7 @@ impl ScriptListApp {
                                     "SHORTCUT",
                                     &format!("Removed shortcut for: {}", command_id),
                                 );
-                                self.show_hud("Shortcut removed".to_string(), Some(2000), cx);
+                                self.show_hud("Shortcut removed".to_string(), Some(HUD_MEDIUM_MS), cx);
                                 // Refresh scripts to update shortcut display
                                 self.refresh_scripts(cx);
                             }
@@ -865,7 +865,7 @@ impl ScriptListApp {
                                 logging::log("ERROR", &format!("Failed to remove shortcut: {}", e));
                                 self.show_hud(
                                     format!("Failed to remove shortcut: {}", e),
-                                    Some(3000),
+                                    Some(HUD_LONG_MS),
                                     cx,
                                 );
                             }
@@ -873,7 +873,7 @@ impl ScriptListApp {
                     } else {
                         self.show_hud(
                             "Cannot remove shortcut for this item type".to_string(),
-                            Some(2000),
+                            Some(HUD_MEDIUM_MS),
                             cx,
                         );
                     }
@@ -881,7 +881,7 @@ impl ScriptListApp {
                 } else {
                     self.show_hud(
                         selection_required_message_for_action(action_id).to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                 }
@@ -929,7 +929,7 @@ impl ScriptListApp {
                 } else {
                     self.show_hud(
                         selection_required_message_for_action(action_id).to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                 }
@@ -973,7 +973,7 @@ impl ScriptListApp {
                                     "ALIAS",
                                     &format!("Removed alias for: {}", command_id),
                                 );
-                                self.show_hud("Alias removed".to_string(), Some(2000), cx);
+                                self.show_hud("Alias removed".to_string(), Some(HUD_MEDIUM_MS), cx);
                                 // Refresh scripts to update alias display and registry
                                 self.refresh_scripts(cx);
                             }
@@ -981,7 +981,7 @@ impl ScriptListApp {
                                 logging::log("ERROR", &format!("Failed to remove alias: {}", e));
                                 self.show_hud(
                                     format!("Failed to remove alias: {}", e),
-                                    Some(3000),
+                                    Some(HUD_LONG_MS),
                                     cx,
                                 );
                             }
@@ -989,7 +989,7 @@ impl ScriptListApp {
                     } else {
                         self.show_hud(
                             "Cannot remove alias for this item type".to_string(),
-                            Some(2000),
+                            Some(HUD_MEDIUM_MS),
                             cx,
                         );
                     }
@@ -997,7 +997,7 @@ impl ScriptListApp {
                 } else {
                     self.show_hud(
                         selection_required_message_for_action(action_id).to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                 }
@@ -1027,24 +1027,24 @@ impl ScriptListApp {
                                     this.hide_main_and_reset(cx);
                                 }
                                 Err(message) => {
-                                    this.show_hud(message, Some(3000), cx);
+                                    this.show_hud(message, Some(HUD_LONG_MS), cx);
                                 }
                             })
                             .ok();
                         })
                         .detach();
                     } else {
-                        self.show_hud("Cannot edit this item type".to_string(), Some(2000), cx);
+                        self.show_hud("Cannot edit this item type".to_string(), Some(HUD_MEDIUM_MS), cx);
                     }
                 } else {
-                    self.show_hud("No script selected".to_string(), Some(2000), cx);
+                    self.show_hud("No script selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                 }
             }
             "remove_script" | "delete_script" => {
                 logging::log("UI", &format!("{} action", action_id));
 
                 let Some(result) = self.get_selected_result() else {
-                    self.show_hud("No script selected".to_string(), Some(2000), cx);
+                    self.show_hud("No script selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
@@ -1177,7 +1177,7 @@ impl ScriptListApp {
             "reload_scripts" => {
                 logging::log("UI", "Reload scripts action");
                 self.refresh_scripts(cx);
-                self.show_hud("Scripts reloaded".to_string(), Some(1500), cx);
+                self.show_hud("Scripts reloaded".to_string(), Some(HUD_SHORT_MS), cx);
             }
             "settings" => {
                 logging::log("UI", "Settings action - opening config.ts");
@@ -1225,7 +1225,7 @@ impl ScriptListApp {
 
                 self.show_hud(
                     format!("Opening config.ts in {}", editor_for_hud),
-                    Some(1500),
+                    Some(HUD_SHORT_MS),
                     cx,
                 );
                 self.hide_main_and_reset(cx);
@@ -1258,7 +1258,7 @@ impl ScriptListApp {
                     match result {
                         Ok(()) => {
                             if let Some(message) = file_search_action_success_hud(action_id) {
-                                self.show_hud(message.to_string(), Some(1500), cx);
+                                self.show_hud(message.to_string(), Some(HUD_SHORT_MS), cx);
                             }
                             self.file_search_actions_path = None;
                             if action_id == "open_file" || action_id == "open_directory" {
@@ -1275,7 +1275,7 @@ impl ScriptListApp {
                             );
                             let prefix = file_search_action_error_hud_prefix(action_id)
                                 .unwrap_or("Action failed");
-                            self.show_hud(format!("{}: {}", prefix, e), Some(3000), cx);
+                            self.show_hud(format!("{}: {}", prefix, e), Some(HUD_LONG_MS), cx);
                             self.file_search_actions_path = None;
                         }
                     }
@@ -1297,21 +1297,21 @@ impl ScriptListApp {
                         use arboard::Clipboard;
                         let _ = Clipboard::new().and_then(|mut c| c.set_text(filename));
                     }
-                    self.show_hud(format!("Copied: {}", filename), Some(2000), cx);
+                    self.show_hud(format!("Copied: {}", filename), Some(HUD_MEDIUM_MS), cx);
                     self.file_search_actions_path = None;
                     self.hide_main_and_reset(cx);
                 }
             }
             "clipboard_open_with" => {
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    self.show_hud("No clipboard entry selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
                 let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
                     self.show_hud(
                         "Failed to load clipboard content".to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                     return;
@@ -1332,7 +1332,7 @@ impl ScriptListApp {
                     Ok(path) => path,
                     Err(e) => {
                         logging::log("ERROR", &format!("Failed to save temp file: {}", e));
-                        self.show_hud("Failed to save temp file".to_string(), Some(2000), cx);
+                        self.show_hud("Failed to save temp file".to_string(), Some(HUD_MEDIUM_MS), cx);
                         return;
                     }
                 };
@@ -1342,7 +1342,7 @@ impl ScriptListApp {
                     let path_str = temp_path.to_string_lossy().to_string();
                     if let Err(e) = crate::file_search::open_with(&path_str) {
                         logging::log("ERROR", &format!("Open With failed: {}", e));
-                        self.show_hud("Failed to open \"Open With\"".to_string(), Some(2000), cx);
+                        self.show_hud("Failed to open \"Open With\"".to_string(), Some(HUD_MEDIUM_MS), cx);
                     }
                 }
 
@@ -1351,21 +1351,21 @@ impl ScriptListApp {
                     let _ = temp_path;
                     self.show_hud(
                         "\"Open With\" is only supported on macOS".to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                 }
             }
             "clipboard_annotate_cleanshot" => {
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    self.show_hud("No clipboard entry selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
                 if entry.content_type != clipboard_history::ContentType::Image {
                     self.show_hud(
                         "CleanShot actions are only available for images".to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                     return;
@@ -1375,19 +1375,19 @@ impl ScriptListApp {
                 {
                     if let Err(e) = clipboard_history::copy_entry_to_clipboard(&entry.id) {
                         logging::log("ERROR", &format!("Failed to copy image: {}", e));
-                        self.show_hud("Failed to copy image".to_string(), Some(2000), cx);
+                        self.show_hud("Failed to copy image".to_string(), Some(HUD_MEDIUM_MS), cx);
                         return;
                     }
 
                     let url = "cleanshot://open-from-clipboard";
                     match std::process::Command::new("open").arg(url).spawn() {
                         Ok(_) => {
-                            self.show_hud("Opening CleanShot X…".to_string(), Some(1500), cx);
+                            self.show_hud("Opening CleanShot X…".to_string(), Some(HUD_SHORT_MS), cx);
                             self.hide_main_and_reset(cx);
                         }
                         Err(e) => {
                             logging::log("ERROR", &format!("Failed to open CleanShot X: {}", e));
-                            self.show_hud("Failed to open CleanShot X".to_string(), Some(2000), cx);
+                            self.show_hud("Failed to open CleanShot X".to_string(), Some(HUD_MEDIUM_MS), cx);
                         }
                     }
                 }
@@ -1396,21 +1396,21 @@ impl ScriptListApp {
                 {
                     self.show_hud(
                         "CleanShot actions are only supported on macOS".to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                 }
             }
             "clipboard_upload_cleanshot" => {
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    self.show_hud("No clipboard entry selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
                 if entry.content_type != clipboard_history::ContentType::Image {
                     self.show_hud(
                         "CleanShot actions are only available for images".to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                     return;
@@ -1419,12 +1419,12 @@ impl ScriptListApp {
                 #[cfg(target_os = "macos")]
                 {
                     let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
-                        self.show_hud("Failed to load image content".to_string(), Some(2000), cx);
+                        self.show_hud("Failed to load image content".to_string(), Some(HUD_MEDIUM_MS), cx);
                         return;
                     };
 
                     let Some(png_bytes) = clipboard_history::content_to_png_bytes(&content) else {
-                        self.show_hud("Failed to decode image".to_string(), Some(2000), cx);
+                        self.show_hud("Failed to decode image".to_string(), Some(HUD_MEDIUM_MS), cx);
                         return;
                     };
 
@@ -1433,7 +1433,7 @@ impl ScriptListApp {
 
                     if let Err(e) = std::fs::write(&temp_path, png_bytes) {
                         logging::log("ERROR", &format!("Failed to write temp image: {}", e));
-                        self.show_hud("Failed to save image".to_string(), Some(2000), cx);
+                        self.show_hud("Failed to save image".to_string(), Some(HUD_MEDIUM_MS), cx);
                         return;
                     }
 
@@ -1448,14 +1448,14 @@ impl ScriptListApp {
                         Ok(_) => {
                             self.show_hud(
                                 "Opening CleanShot X upload…".to_string(),
-                                Some(1500),
+                                Some(HUD_SHORT_MS),
                                 cx,
                             );
                             self.hide_main_and_reset(cx);
                         }
                         Err(e) => {
                             logging::log("ERROR", &format!("Failed to open CleanShot X: {}", e));
-                            self.show_hud("Failed to open CleanShot X".to_string(), Some(2000), cx);
+                            self.show_hud("Failed to open CleanShot X".to_string(), Some(HUD_MEDIUM_MS), cx);
                         }
                     }
                 }
@@ -1464,21 +1464,21 @@ impl ScriptListApp {
                 {
                     self.show_hud(
                         "CleanShot actions are only supported on macOS".to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                 }
             }
             "clipboard_ocr" => {
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    self.show_hud("No clipboard entry selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
                 if entry.content_type != clipboard_history::ContentType::Image {
                     self.show_hud(
                         "OCR is only available for images".to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                     return;
@@ -1498,7 +1498,7 @@ impl ScriptListApp {
                             let _ =
                                 Clipboard::new().and_then(|mut c| c.set_text(cached_text.clone()));
                         }
-                        self.show_hud("Copied text from image".to_string(), Some(1500), cx);
+                        self.show_hud("Copied text from image".to_string(), Some(HUD_SHORT_MS), cx);
                         self.hide_main_and_reset(cx);
                         return;
                     }
@@ -1508,7 +1508,7 @@ impl ScriptListApp {
                 {
                     // Get image content
                     let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
-                        self.show_hud("Failed to load image content".to_string(), Some(2000), cx);
+                        self.show_hud("Failed to load image content".to_string(), Some(HUD_MEDIUM_MS), cx);
                         return;
                     };
 
@@ -1516,7 +1516,7 @@ impl ScriptListApp {
                     let Some((width, height, rgba_bytes)) =
                         clipboard_history::decode_to_rgba_bytes(&content)
                     else {
-                        self.show_hud("Failed to decode image".to_string(), Some(2000), cx);
+                        self.show_hud("Failed to decode image".to_string(), Some(HUD_MEDIUM_MS), cx);
                         return;
                     };
 
@@ -1524,7 +1524,7 @@ impl ScriptListApp {
                         "OCR",
                         &format!("Starting OCR on {}x{} image", width, height),
                     );
-                    self.show_hud("Extracting text...".to_string(), Some(1500), cx);
+                    self.show_hud("Extracting text...".to_string(), Some(HUD_SHORT_MS), cx);
 
                     // Perform OCR synchronously (it runs on a background thread internally)
                     // For a truly async approach, we'd need to integrate with GPUI's async system
@@ -1533,7 +1533,7 @@ impl ScriptListApp {
                         Ok(text) => {
                             if text.trim().is_empty() {
                                 logging::log("OCR", "No text found in image");
-                                self.show_hud("No text found in image".to_string(), Some(2000), cx);
+                                self.show_hud("No text found in image".to_string(), Some(HUD_MEDIUM_MS), cx);
                             } else {
                                 logging::log(
                                     "OCR",
@@ -1555,20 +1555,20 @@ impl ScriptListApp {
                                         Clipboard::new().and_then(|mut c| c.set_text(text.clone()));
                                 }
 
-                                self.show_hud("Copied text from image".to_string(), Some(1500), cx);
+                                self.show_hud("Copied text from image".to_string(), Some(HUD_SHORT_MS), cx);
                                 self.hide_main_and_reset(cx);
                             }
                         }
                         Err(e) => {
                             logging::log("ERROR", &format!("OCR failed: {}", e));
-                            self.show_hud(format!("OCR failed: {}", e), Some(3000), cx);
+                            self.show_hud(format!("OCR failed: {}", e), Some(HUD_LONG_MS), cx);
                         }
                     }
                 }
 
                 #[cfg(not(all(target_os = "macos", feature = "ocr")))]
                 {
-                    self.show_hud("OCR is only supported on macOS".to_string(), Some(2000), cx);
+                    self.show_hud("OCR is only supported on macOS".to_string(), Some(HUD_MEDIUM_MS), cx);
                 }
             }
             // Clipboard delete actions
@@ -1596,7 +1596,7 @@ impl ScriptListApp {
                     .collect();
 
                 if ids_to_delete.is_empty() {
-                    self.show_hud("No matching entries to delete".to_string(), Some(2000), cx);
+                    self.show_hud("No matching entries to delete".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 }
 
@@ -1713,7 +1713,7 @@ impl ScriptListApp {
                         } else {
                             this.show_hud(
                                 format!("Deleted {}, failed {}", deleted, failed),
-                                Some(3000),
+                                Some(HUD_LONG_MS),
                                 cx,
                             );
                         }
@@ -1725,7 +1725,7 @@ impl ScriptListApp {
             }
             "clipboard_delete" => {
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    self.show_hud("No clipboard entry selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
@@ -1769,12 +1769,12 @@ impl ScriptListApp {
                             }
                         }
 
-                        self.show_hud("Entry deleted".to_string(), Some(1500), cx);
+                        self.show_hud("Entry deleted".to_string(), Some(HUD_SHORT_MS), cx);
                         cx.notify();
                     }
                     Err(e) => {
                         logging::log("ERROR", &format!("Failed to delete clipboard entry: {}", e));
-                        self.show_hud(format!("Delete failed: {}", e), Some(3000), cx);
+                        self.show_hud(format!("Delete failed: {}", e), Some(HUD_LONG_MS), cx);
                     }
                 }
                 return;
@@ -1788,7 +1788,7 @@ impl ScriptListApp {
                     .count();
 
                 if unpinned_count == 0 {
-                    self.show_hud("No unpinned entries to delete".to_string(), Some(2000), cx);
+                    self.show_hud("No unpinned entries to delete".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 }
 
@@ -1908,7 +1908,7 @@ impl ScriptListApp {
                                     "ERROR",
                                     &format!("Failed to clear unpinned history: {}", e),
                                 );
-                                this.show_hud(format!("Delete failed: {}", e), Some(3000), cx);
+                                this.show_hud(format!("Delete failed: {}", e), Some(HUD_LONG_MS), cx);
                             }
                         }
                     })
@@ -1920,12 +1920,12 @@ impl ScriptListApp {
 
             "clipboard_save_file" => {
                 let Some(entry) = selected_clipboard_entry.clone() else {
-                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    self.show_hud("No clipboard entry selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
                 let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
-                    self.show_hud("Clipboard content unavailable".to_string(), Some(2000), cx);
+                    self.show_hud("Clipboard content unavailable".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
@@ -1938,7 +1938,7 @@ impl ScriptListApp {
                     clipboard_history::ContentType::Image => {
                         let Some(png_bytes) = clipboard_history::content_to_png_bytes(&content)
                         else {
-                            self.show_hud("Failed to decode image".to_string(), Some(2000), cx);
+                            self.show_hud("Failed to decode image".to_string(), Some(HUD_MEDIUM_MS), cx);
                             return;
                         };
                         (png_bytes, "png")
@@ -1961,34 +1961,34 @@ impl ScriptListApp {
                 match std::fs::write(&save_path, &file_content) {
                     Ok(()) => {
                         logging::log("UI", &format!("Saved clipboard to: {:?}", save_path));
-                        self.show_hud(format!("Saved to: {}", save_path.display()), Some(3000), cx);
+                        self.show_hud(format!("Saved to: {}", save_path.display()), Some(HUD_LONG_MS), cx);
                         self.reveal_in_finder(&save_path);
                         self.hide_main_and_reset(cx);
                     }
                     Err(e) => {
                         logging::log("ERROR", &format!("Failed to save file: {}", e));
-                        self.show_hud(format!("Save failed: {}", e), Some(3000), cx);
+                        self.show_hud(format!("Save failed: {}", e), Some(HUD_LONG_MS), cx);
                     }
                 }
                 return;
             }
             "clipboard_save_snippet" => {
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    self.show_hud("No clipboard entry selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
                 if entry.content_type != clipboard_history::ContentType::Text {
                     self.show_hud(
                         "Only text can be saved as snippet".to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                     return;
                 }
 
                 let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
-                    self.show_hud("Clipboard content unavailable".to_string(), Some(2000), cx);
+                    self.show_hud("Clipboard content unavailable".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
@@ -2016,7 +2016,7 @@ impl ScriptListApp {
                 if !extensions_dir.exists() {
                     if let Err(e) = std::fs::create_dir_all(&extensions_dir) {
                         logging::log("ERROR", &format!("Failed to create extensions dir: {}", e));
-                        self.show_hud(format!("Failed to create snippets: {}", e), Some(3000), cx);
+                        self.show_hud(format!("Failed to create snippets: {}", e), Some(HUD_LONG_MS), cx);
                         return;
                     }
                 }
@@ -2059,7 +2059,7 @@ impl ScriptListApp {
                         logging::log("UI", &format!("Created snippet with keyword: {}", keyword));
                         self.show_hud(
                             format!("Snippet created: type '{}' to paste", keyword),
-                            Some(3000),
+                            Some(HUD_LONG_MS),
                             cx,
                         );
                         // Refresh scripts to pick up new snippet
@@ -2067,7 +2067,7 @@ impl ScriptListApp {
                     }
                     Err(e) => {
                         logging::log("ERROR", &format!("Failed to save snippet: {}", e));
-                        self.show_hud(format!("Save failed: {}", e), Some(3000), cx);
+                        self.show_hud(format!("Save failed: {}", e), Some(HUD_LONG_MS), cx);
                     }
                 }
                 return;
@@ -2093,7 +2093,7 @@ impl ScriptListApp {
                                         this.hide_main_and_reset(cx);
                                     }
                                     Err(message) => {
-                                        this.show_hud(message, Some(3000), cx);
+                                        this.show_hud(message, Some(HUD_LONG_MS), cx);
                                     }
                                 })
                                 .ok();
@@ -2102,21 +2102,21 @@ impl ScriptListApp {
                         } else {
                             self.show_hud(
                                 "Scriptlet has no source file path".to_string(),
-                                Some(2000),
+                                Some(HUD_MEDIUM_MS),
                                 cx,
                             );
                         }
                     } else {
                         self.show_hud(
                             "Selected item is not a scriptlet".to_string(),
-                            Some(2000),
+                            Some(HUD_MEDIUM_MS),
                             cx,
                         );
                     }
                 } else {
                     self.show_hud(
                         selection_required_message_for_action(action_id).to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                 }
@@ -2139,7 +2139,7 @@ impl ScriptListApp {
                                     Ok(()) => {
                                         this.show_hud(
                                             "Opened in Finder".to_string(),
-                                            Some(1500),
+                                            Some(HUD_SHORT_MS),
                                             cx,
                                         );
                                         this.hide_main_and_reset(cx);
@@ -2154,21 +2154,21 @@ impl ScriptListApp {
                         } else {
                             self.show_hud(
                                 "Scriptlet has no source file path".to_string(),
-                                Some(2000),
+                                Some(HUD_MEDIUM_MS),
                                 cx,
                             );
                         }
                     } else {
                         self.show_hud(
                             "Selected item is not a scriptlet".to_string(),
-                            Some(2000),
+                            Some(HUD_MEDIUM_MS),
                             cx,
                         );
                     }
                 } else {
                     self.show_hud(
                         selection_required_message_for_action(action_id).to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                 }
@@ -2194,7 +2194,7 @@ impl ScriptListApp {
                                         );
                                         self.show_hud(
                                             format!("Copied: {}", path_str),
-                                            Some(2000),
+                                            Some(HUD_MEDIUM_MS),
                                             cx,
                                         );
                                     }
@@ -2202,7 +2202,7 @@ impl ScriptListApp {
                                         logging::log("ERROR", &format!("pbcopy failed: {}", e));
                                         self.show_hud(
                                             "Failed to copy path".to_string(),
-                                            Some(3000),
+                                            Some(HUD_LONG_MS),
                                             cx,
                                         );
                                     }
@@ -2223,7 +2223,7 @@ impl ScriptListApp {
                                         );
                                         self.show_hud(
                                             format!("Copied: {}", path_str),
-                                            Some(2000),
+                                            Some(HUD_MEDIUM_MS),
                                             cx,
                                         );
                                     }
@@ -2234,7 +2234,7 @@ impl ScriptListApp {
                                         );
                                         self.show_hud(
                                             "Failed to copy path".to_string(),
-                                            Some(3000),
+                                            Some(HUD_LONG_MS),
                                             cx,
                                         );
                                     }
@@ -2244,21 +2244,21 @@ impl ScriptListApp {
                         } else {
                             self.show_hud(
                                 "Scriptlet has no source file path".to_string(),
-                                Some(2000),
+                                Some(HUD_MEDIUM_MS),
                                 cx,
                             );
                         }
                     } else {
                         self.show_hud(
                             "Selected item is not a scriptlet".to_string(),
-                            Some(2000),
+                            Some(HUD_MEDIUM_MS),
                             cx,
                         );
                     }
                 } else {
                     self.show_hud(
                         selection_required_message_for_action(action_id).to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                 }
@@ -2302,7 +2302,7 @@ impl ScriptListApp {
                                             );
                                             self.show_hud(
                                                 "Content copied to clipboard".to_string(),
-                                                Some(2000),
+                                                Some(HUD_MEDIUM_MS),
                                                 cx,
                                             );
                                         }
@@ -2310,7 +2310,7 @@ impl ScriptListApp {
                                             logging::log("ERROR", &format!("pbcopy failed: {}", e));
                                             self.show_hud(
                                                 "Failed to copy content".to_string(),
-                                                Some(3000),
+                                                Some(HUD_LONG_MS),
                                                 cx,
                                             );
                                         }
@@ -2331,7 +2331,7 @@ impl ScriptListApp {
                                             );
                                             self.show_hud(
                                                 "Content copied to clipboard".to_string(),
-                                                Some(2000),
+                                                Some(HUD_MEDIUM_MS),
                                                 cx,
                                             );
                                         }
@@ -2342,7 +2342,7 @@ impl ScriptListApp {
                                             );
                                             self.show_hud(
                                                 "Failed to copy content".to_string(),
-                                                Some(3000),
+                                                Some(HUD_LONG_MS),
                                                 cx,
                                             );
                                         }
@@ -2357,7 +2357,7 @@ impl ScriptListApp {
                                 );
                                 self.show_hud(
                                     format!("Failed to read file: {}", e),
-                                    Some(3000),
+                                    Some(HUD_LONG_MS),
                                     cx,
                                 );
                             }
@@ -2365,14 +2365,14 @@ impl ScriptListApp {
                     } else {
                         self.show_hud(
                             "Cannot copy content for this item type".to_string(),
-                            Some(2000),
+                            Some(HUD_MEDIUM_MS),
                             cx,
                         );
                     }
                 } else {
                     self.show_hud(
                         selection_required_message_for_action(action_id).to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                 }
@@ -2398,7 +2398,7 @@ impl ScriptListApp {
                             logging::log("UI", &format!("Reset ranking for: {}", script_info.name));
                             self.show_hud(
                                 format!("Ranking reset for \"{}\"", script_info.name),
-                                Some(2000),
+                                Some(HUD_MEDIUM_MS),
                                 cx,
                             );
                         } else {
@@ -2408,17 +2408,17 @@ impl ScriptListApp {
                             );
                             self.show_hud(
                                 "Item has no ranking to reset".to_string(),
-                                Some(2000),
+                                Some(HUD_MEDIUM_MS),
                                 cx,
                             );
                         }
                     } else {
-                        self.show_hud("Item has no ranking to reset".to_string(), Some(2000), cx);
+                        self.show_hud("Item has no ranking to reset".to_string(), Some(HUD_MEDIUM_MS), cx);
                     }
                 } else {
                     self.show_hud(
                         selection_required_message_for_action(action_id).to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                 }
@@ -2515,7 +2515,7 @@ impl ScriptListApp {
                                                     );
                                                     self.show_hud(
                                                         format!("Executed: {}", action.name),
-                                                        Some(2000),
+                                                        Some(HUD_MEDIUM_MS),
                                                         cx,
                                                     );
                                                 } else {
@@ -2534,7 +2534,7 @@ impl ScriptListApp {
                                                     );
                                                     self.show_hud(
                                                         format!("Error: {}", error_msg),
-                                                        Some(3000),
+                                                        Some(HUD_LONG_MS),
                                                         cx,
                                                     );
                                                 }
@@ -2549,7 +2549,7 @@ impl ScriptListApp {
                                                 );
                                                 self.show_hud(
                                                     format!("Error: {}", e),
-                                                    Some(3000),
+                                                    Some(HUD_LONG_MS),
                                                     cx,
                                                 );
                                             }
@@ -2578,19 +2578,19 @@ impl ScriptListApp {
                                 "ERROR",
                                 &format!("Scriptlet action not found: {}", action_command),
                             );
-                            self.show_hud("Scriptlet action not found".to_string(), Some(2000), cx);
+                            self.show_hud("Scriptlet action not found".to_string(), Some(HUD_MEDIUM_MS), cx);
                         }
                     } else {
                         self.show_hud(
                             "Selected item is not a scriptlet".to_string(),
-                            Some(2000),
+                            Some(HUD_MEDIUM_MS),
                             cx,
                         );
                     }
                 } else {
                     self.show_hud(
                         selection_required_message_for_action(action_id).to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                 }
