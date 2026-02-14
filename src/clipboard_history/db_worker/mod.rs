@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender, SyncSender};
 use std::sync::OnceLock;
 use std::thread::{self, JoinHandle};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use super::types::{ClipboardEntry, ClipboardEntryMeta, ContentType};
 use db_impl::*;
@@ -264,7 +264,7 @@ fn handle_request(conn: &Connection, req: DbRequest) -> bool {
             byte_size,
             reply,
         } => {
-            let _ = reply.send(add_or_touch_impl(
+            let result = add_or_touch_impl(
                 conn,
                 &content,
                 content_type,
@@ -273,60 +273,91 @@ fn handle_request(conn: &Connection, req: DbRequest) -> bool {
                 image_width,
                 image_height,
                 byte_size,
-            ));
+            );
+            if reply.send(result).is_err() {
+                warn!("DbRequest::AddOrTouch reply dropped");
+            }
         }
         DbRequest::GetContent { id, reply } => {
-            let _ = reply.send(get_content_impl(conn, &id));
+            if reply.send(get_content_impl(conn, &id)).is_err() {
+                warn!("DbRequest::GetContent reply dropped");
+            }
         }
         DbRequest::GetEntry { id, reply } => {
-            let _ = reply.send(get_entry_impl(conn, &id));
+            if reply.send(get_entry_impl(conn, &id)).is_err() {
+                warn!("DbRequest::GetEntry reply dropped");
+            }
         }
         DbRequest::GetMeta {
             limit,
             offset,
             reply,
         } => {
-            let _ = reply.send(get_meta_impl(conn, limit, offset));
+            if reply.send(get_meta_impl(conn, limit, offset)).is_err() {
+                warn!("DbRequest::GetMeta reply dropped");
+            }
         }
         DbRequest::GetPage {
             limit,
             offset,
             reply,
         } => {
-            let _ = reply.send(get_page_impl(conn, limit, offset));
+            if reply.send(get_page_impl(conn, limit, offset)).is_err() {
+                warn!("DbRequest::GetPage reply dropped");
+            }
         }
         DbRequest::GetCount { reply } => {
-            let _ = reply.send(get_count_impl(conn));
+            if reply.send(get_count_impl(conn)).is_err() {
+                warn!("DbRequest::GetCount reply dropped");
+            }
         }
         DbRequest::Pin { id, reply } => {
-            let _ = reply.send(pin_impl(conn, &id));
+            if reply.send(pin_impl(conn, &id)).is_err() {
+                warn!("DbRequest::Pin reply dropped");
+            }
         }
         DbRequest::Unpin { id, reply } => {
-            let _ = reply.send(unpin_impl(conn, &id));
+            if reply.send(unpin_impl(conn, &id)).is_err() {
+                warn!("DbRequest::Unpin reply dropped");
+            }
         }
         DbRequest::Remove { id, reply } => {
-            let _ = reply.send(remove_impl(conn, &id));
+            if reply.send(remove_impl(conn, &id)).is_err() {
+                warn!("DbRequest::Remove reply dropped");
+            }
         }
         DbRequest::Clear { reply } => {
-            let _ = reply.send(clear_impl(conn));
+            if reply.send(clear_impl(conn)).is_err() {
+                warn!("DbRequest::Clear reply dropped");
+            }
         }
         DbRequest::Prune {
             cutoff_timestamp_ms,
             reply,
         } => {
-            let _ = reply.send(prune_impl(conn, cutoff_timestamp_ms));
+            if reply.send(prune_impl(conn, cutoff_timestamp_ms)).is_err() {
+                warn!("DbRequest::Prune reply dropped");
+            }
         }
         DbRequest::TrimOversized { max_len, reply } => {
-            let _ = reply.send(trim_oversized_impl(conn, max_len));
+            if reply.send(trim_oversized_impl(conn, max_len)).is_err() {
+                warn!("DbRequest::TrimOversized reply dropped");
+            }
         }
         DbRequest::UpdateOcr { id, text, reply } => {
-            let _ = reply.send(update_ocr_impl(conn, &id, &text));
+            if reply.send(update_ocr_impl(conn, &id, &text)).is_err() {
+                warn!("DbRequest::UpdateOcr reply dropped");
+            }
         }
         DbRequest::IncrementalVacuum { reply } => {
-            let _ = reply.send(vacuum_impl(conn));
+            if reply.send(vacuum_impl(conn)).is_err() {
+                warn!("DbRequest::IncrementalVacuum reply dropped");
+            }
         }
         DbRequest::WalCheckpoint { reply } => {
-            let _ = reply.send(checkpoint_impl(conn));
+            if reply.send(checkpoint_impl(conn)).is_err() {
+                warn!("DbRequest::WalCheckpoint reply dropped");
+            }
         }
         DbRequest::Shutdown => {
             info!("DB worker shutdown");
