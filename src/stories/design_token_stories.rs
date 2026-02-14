@@ -2,6 +2,7 @@
 
 use gpui::*;
 
+use crate::list_item::FONT_MONO;
 use crate::storybook::{story_container, story_divider, story_section, Story, StoryVariant};
 use crate::theme::Theme;
 
@@ -195,7 +196,7 @@ fn color_swatch(name: &str, color: u32) -> impl IntoElement {
         .child(
             div()
                 .text_xs()
-                .font_family("Menlo")
+                .font_family(FONT_MONO)
                 .text_color(rgb(0x888888))
                 .child(format!("#{:06x}", color)),
         )

@@ -8,6 +8,7 @@
 
 use gpui::*;
 
+use crate::list_item::FONT_MONO;
 use crate::storybook::{story_container, story_divider, story_section, Story, StoryVariant};
 use crate::theme::Theme;
 
@@ -699,7 +700,7 @@ fn render_with_example(theme: &Theme) -> impl IntoElement {
                         .py_1()
                         .rounded(px(4.))
                         .bg(rgba((border << 8) | 0x4D)) // ~0.3 opacity
-                        .font_family("Menlo")
+                        .font_family(FONT_MONO)
                         .text_xs()
                         .text_color(rgb(text_muted))
                         .child("https://hooks.slack.com/services/T00/B00/XXX"),
