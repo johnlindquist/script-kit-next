@@ -159,7 +159,20 @@ impl ScriptListApp {
         );
         let elapsed = start.elapsed();
 
+        let mut first_selectable_index = None;
+        let mut last_selectable_index = None;
+        for (index, grouped_item) in grouped_items.iter().enumerate() {
+            if matches!(grouped_item, GroupedListItem::Item(_)) {
+                if first_selectable_index.is_none() {
+                    first_selectable_index = Some(index);
+                }
+                last_selectable_index = Some(index);
+            }
+        }
+
         // P1-Arc: Convert to Arc<[T]> for cheap clone
+        self.cached_grouped_first_selectable_index = first_selectable_index;
+        self.cached_grouped_last_selectable_index = last_selectable_index;
         self.cached_grouped_items = grouped_items.into();
         self.cached_grouped_flat_results = flat_results.into();
         self.grouped_cache_key = self.computed_filter_text.clone();
@@ -201,6 +214,8 @@ impl ScriptListApp {
         // This ensures the cache check (computed_filter_text == grouped_cache_key) fails,
         // forcing a recompute on the next get_grouped_results_cached() call.
         // DO NOT set computed_filter_text here - that would cause both to match (false cache HIT).
+        self.cached_grouped_first_selectable_index = None;
+        self.cached_grouped_last_selectable_index = None;
         self.grouped_cache_key = String::from("\0_INVALIDATED_\0");
     }
 

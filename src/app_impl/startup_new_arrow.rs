@@ -213,16 +213,11 @@
                                     // Main menu: handle list navigation + input history
                                     const HISTORY: &str = "HISTORY";
                                     if is_up {
-                                        let (grouped_items, _) = this.get_grouped_results_cached();
-                                        let first_item_position = grouped_items.iter().position(
-                                            |item| {
-                                                matches!(
-                                                    item,
-                                                    crate::list_item::GroupedListItem::Item(_)
-                                                )
-                                            },
-                                        );
-                                        let at_top_of_list = first_item_position
+                                        // Ensure grouped cache is populated before reading cached boundaries.
+                                        let _ = this.get_grouped_results_cached();
+                                        let first_selectable_index =
+                                            this.cached_grouped_first_selectable_index;
+                                        let at_top_of_list = first_selectable_index
                                             .map(|position| this.selected_index <= position)
                                             .unwrap_or(true);
                                         let in_history = this.input_history.current_index().is_some();

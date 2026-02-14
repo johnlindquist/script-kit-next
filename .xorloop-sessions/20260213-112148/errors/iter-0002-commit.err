@@ -1,0 +1,21 @@
+[0;36m🔗 Running local pre-commit hook...[0m
+🔍 Checking formatting...
+✓ Formatting OK
+Warning: bd command not found, skipping pre-commit flush
+[0;35m
+    ╔═══════════════════════════════════════════╗
+    ║     🤖 ANTI-SLOP BOT 2000 🤖              ║
+    ║     Powered by Claude Opus                ║
+    ╚═══════════════════════════════════════════╝
+[0m
+[0;36m📋 Reviewing 32 file(s)...[0m
+[0;36m📏 Diff size: 1880 lines[0m
+
+[0;36m🔍 Analyzing with Claude opus...[0m
+
+[0;32m╔═══════════════════════════════════════════╗[0m
+[0;32m║  ✅ APPROVED - Code passed quality check  ║[0m
+[0;32m╚═══════════════════════════════════════════╝[0m
+
+[0;32mClean refactoring: deduplicates 6 identical prompt wrappers into a shared helper, replaces 4 unsafe `.unwrap()` patterns with `is_some_and()`, and removes 7 dead `create_box_shadows()` calls plus dead `_bg_with_alpha` computations. No new issues introduced.[0m
+

@@ -78,6 +78,8 @@
             // P1: Initialize grouped results cache (Arc for cheap clone)
             cached_grouped_items: Arc::from([]),
             cached_grouped_flat_results: Arc::from([]),
+            cached_grouped_first_selectable_index: None,
+            cached_grouped_last_selectable_index: None,
             grouped_cache_key: String::from("\0_UNINITIALIZED_\0"), // Sentinel value to force initial compute
             // P3: Two-stage filter coalescing
             computed_filter_text: String::new(),
