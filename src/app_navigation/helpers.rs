@@ -7,15 +7,13 @@ fn page_down_target_index(
     grouped_items: &[GroupedListItem],
     selected_index: usize,
     page_size: usize,
+    last_selectable: Option<usize>,
 ) -> usize {
     if page_size == 0 {
         return selected_index;
     }
 
-    let Some(last_selectable) = grouped_items
-        .iter()
-        .rposition(|item| matches!(item, GroupedListItem::Item(_)))
-    else {
+    let Some(last_selectable) = last_selectable else {
         return selected_index;
     };
 
