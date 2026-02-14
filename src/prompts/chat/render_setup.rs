@@ -1,4 +1,5 @@
 use super::*;
+use crate::components::button::TRANSPARENT;
 
 impl ChatPrompt {
     pub(super) fn render_setup_card(&self, cx: &Context<Self>) -> impl IntoElement {
@@ -89,7 +90,7 @@ impl ChatPrompt {
                             .border_color(if is_configure_focused {
                                 ring_color
                             } else {
-                                rgba(0x00000000)
+                                rgba(TRANSPARENT)
                             })
                             .when(is_configure_focused, |s| {
                                 s.shadow(vec![gpui::BoxShadow {
@@ -147,7 +148,7 @@ impl ChatPrompt {
                             .border_color(if is_claude_focused {
                                 ring_color
                             } else {
-                                rgba(0x00000000)
+                                rgba(TRANSPARENT)
                             })
                             .when(is_claude_focused, |s| {
                                 s.shadow(vec![gpui::BoxShadow {

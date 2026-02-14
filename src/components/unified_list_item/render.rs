@@ -6,6 +6,7 @@
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
+use crate::components::button::TRANSPARENT;
 use crate::designs::icon_variations::{icon_name_from_str, IconName};
 
 use super::types::*;
@@ -125,7 +126,7 @@ impl RenderOnce for UnifiedListItem {
         } else if state.is_hovered {
             hover_bg
         } else {
-            rgba(0x00000000)
+            rgba(TRANSPARENT)
         };
 
         let title_color = if state.is_disabled {
@@ -213,7 +214,7 @@ impl RenderOnce for UnifiedListItem {
                 .border_color(if state.is_selected {
                     accent_color
                 } else {
-                    rgba(0x00000000)
+                    rgba(TRANSPARENT)
                 });
         }
 

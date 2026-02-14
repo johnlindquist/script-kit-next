@@ -14,6 +14,7 @@ mod tests;
 mod types;
 
 pub use component::Button;
+pub(crate) use component::TRANSPARENT;
 pub use types::{
     ButtonColors, ButtonVariant, BUTTON_GHOST_HEIGHT, BUTTON_GHOST_PADDING_X,
     BUTTON_GHOST_PADDING_Y,

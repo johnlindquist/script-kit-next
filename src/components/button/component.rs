@@ -178,6 +178,7 @@ impl Button {
 
 /// Focus ring border width
 const FOCUS_BORDER_WIDTH: f32 = 2.0;
+pub(crate) const TRANSPARENT: u32 = 0x00000000;
 
 impl RenderOnce for Button {
     fn render(self, window: &mut Window, _cx: &mut App) -> impl IntoElement {
@@ -244,7 +245,7 @@ impl RenderOnce for Button {
                 let bg = if focused {
                     focus_tint
                 } else {
-                    rgba(0x00000000)
+                    rgba(TRANSPARENT)
                 };
                 (rgb(colors.accent), bg)
             }
@@ -253,7 +254,7 @@ impl RenderOnce for Button {
                 let bg = if focused {
                     focus_tint
                 } else {
-                    rgba(0x00000000)
+                    rgba(TRANSPARENT)
                 };
                 (rgb(colors.accent), bg)
             }
