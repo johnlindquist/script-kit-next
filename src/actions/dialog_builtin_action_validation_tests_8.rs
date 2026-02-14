@@ -114,6 +114,9 @@ mod tests {
                 match content_type {
                     ContentType::Text => "text",
                     ContentType::Image => "image",
+                    ContentType::Link => "link",
+                    ContentType::File => "file",
+                    ContentType::Color => "color",
                 }
             ),
             content_type,

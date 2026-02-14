@@ -2,6 +2,49 @@
 // Screenshot Capture
 // ============================================================================
 
+use image::codecs::png::PngEncoder;
+use image::ImageEncoder;
+use xcap::Window;
+
+fn capture_and_encode_png(
+    window: &xcap::Window,
+    hi_dpi: bool,
+) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
+    const DOWNSCALE_DIVISOR: u32 = 2;
+
+    let image = window.capture_image()?;
+    let original_width = image.width();
+    let original_height = image.height();
+
+    let (final_image, width, height) = if hi_dpi {
+        (image, original_width, original_height)
+    } else {
+        let new_width = (original_width / DOWNSCALE_DIVISOR).max(1);
+        let new_height = (original_height / DOWNSCALE_DIVISOR).max(1);
+        let resized = image::imageops::resize(
+            &image,
+            new_width,
+            new_height,
+            image::imageops::FilterType::Lanczos3,
+        );
+        tracing::debug!(
+            original_width = original_width,
+            original_height = original_height,
+            new_width = new_width,
+            new_height = new_height,
+            downscale_divisor = DOWNSCALE_DIVISOR,
+            "Scaled screenshot to 1x resolution"
+        );
+        (resized, new_width, new_height)
+    };
+
+    let mut png_data = Vec::new();
+    let encoder = PngEncoder::new(&mut png_data);
+    encoder.write_image(&final_image, width, height, image::ExtendedColorType::Rgba8)?;
+
+    Ok((png_data, width, height))
+}
+
 /// Capture a screenshot of the app window using xcap for cross-platform support.
 ///
 /// Returns a tuple of (png_data, width, height) on success.
@@ -17,10 +60,6 @@
 pub fn capture_app_screenshot(
     hi_dpi: bool,
 ) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
-    use image::codecs::png::PngEncoder;
-    use image::ImageEncoder;
-    use xcap::Window;
-
     let windows = Window::all()?;
 
     struct Candidate {
@@ -104,37 +143,7 @@ pub fn capture_app_screenshot(
         "Found Script Kit window for screenshot"
     );
 
-    let image = window.capture_image()?;
-    let original_width = image.width();
-    let original_height = image.height();
-
-    // Scale down to 1x if not hi_dpi mode (xcap captures at retina resolution on macOS)
-    let (final_image, width, height) = if hi_dpi {
-        (image, original_width, original_height)
-    } else {
-        // Scale down by 2x for 1x resolution
-        let new_width = original_width / 2;
-        let new_height = original_height / 2;
-        let resized = image::imageops::resize(
-            &image,
-            new_width,
-            new_height,
-            image::imageops::FilterType::Lanczos3,
-        );
-        tracing::debug!(
-            original_width = original_width,
-            original_height = original_height,
-            new_width = new_width,
-            new_height = new_height,
-            "Scaled screenshot to 1x resolution"
-        );
-        (resized, new_width, new_height)
-    };
-
-    // Encode to PNG in memory (no temp files needed)
-    let mut png_data = Vec::new();
-    let encoder = PngEncoder::new(&mut png_data);
-    encoder.write_image(&final_image, width, height, image::ExtendedColorType::Rgba8)?;
+    let (png_data, width, height) = capture_and_encode_png(&window, hi_dpi)?;
 
     tracing::debug!(
         width = width,
@@ -162,10 +171,6 @@ pub fn capture_window_by_title(
     title_pattern: &str,
     hi_dpi: bool,
 ) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
-    use image::codecs::png::PngEncoder;
-    use image::ImageEncoder;
-    use xcap::Window;
-
     let windows = Window::all()?;
 
     for window in windows {
@@ -190,36 +195,7 @@ pub fn capture_window_by_title(
                 "Found window matching title pattern for screenshot"
             );
 
-            let image = window.capture_image()?;
-            let original_width = image.width();
-            let original_height = image.height();
-
-            // Scale down to 1x if not hi_dpi mode
-            let (final_image, width, height) = if hi_dpi {
-                (image, original_width, original_height)
-            } else {
-                let new_width = original_width / 2;
-                let new_height = original_height / 2;
-                let resized = image::imageops::resize(
-                    &image,
-                    new_width,
-                    new_height,
-                    image::imageops::FilterType::Lanczos3,
-                );
-                tracing::debug!(
-                    original_width = original_width,
-                    original_height = original_height,
-                    new_width = new_width,
-                    new_height = new_height,
-                    "Scaled screenshot to 1x resolution"
-                );
-                (resized, new_width, new_height)
-            };
-
-            // Encode to PNG in memory
-            let mut png_data = Vec::new();
-            let encoder = PngEncoder::new(&mut png_data);
-            encoder.write_image(&final_image, width, height, image::ExtendedColorType::Rgba8)?;
+            let (png_data, width, height) = capture_and_encode_png(&window, hi_dpi)?;
 
             tracing::debug!(
                 width = width,
@@ -236,4 +212,3 @@ pub fn capture_window_by_title(
 
     Err(format!("Window with title containing '{}' not found", title_pattern).into())
 }
-

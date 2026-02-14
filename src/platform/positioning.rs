@@ -127,6 +127,182 @@ pub fn move_first_window_to_bounds(bounds: &Bounds<Pixels>) {
 // Window Positioning (Eye-line)
 // ============================================================================
 
+const EYE_LINE_Y_RATIO: f64 = 0.14;
+const FALLBACK_VISIBLE_WIDTH: f64 = 1512.0;
+const FALLBACK_VISIBLE_HEIGHT: f64 = 982.0;
+
+#[derive(Clone, Copy)]
+enum MouseDisplayPlacement {
+    EyeLine,
+    Centered,
+}
+
+fn display_edges(bounds: &DisplayBounds) -> (f64, f64) {
+    (
+        bounds.origin_x + bounds.width,
+        bounds.origin_y + bounds.height,
+    )
+}
+
+fn log_positioning_banner(title_line: &str) {
+    logging::log("POSITION", "");
+    logging::log(
+        "POSITION",
+        "╔════════════════════════════════════════════════════════════╗",
+    );
+    logging::log("POSITION", title_line);
+    logging::log(
+        "POSITION",
+        "╚════════════════════════════════════════════════════════════╝",
+    );
+}
+
+fn log_available_displays(displays: &[VisibleDisplayBounds]) {
+    for (idx, display) in displays.iter().enumerate() {
+        let (frame_right, frame_bottom) = display_edges(&display.frame);
+        let (visible_right, visible_bottom) = display_edges(&display.visible_area);
+
+        logging::log(
+            "POSITION",
+            &format!(
+                "  Display {}: frame=({:.0},{:.0}) {:.0}x{:.0} [x={:.0}..{:.0}, y={:.0}..{:.0}] visible=({:.0},{:.0}) {:.0}x{:.0} [x={:.0}..{:.0}, y={:.0}..{:.0}]",
+                idx,
+                display.frame.origin_x,
+                display.frame.origin_y,
+                display.frame.width,
+                display.frame.height,
+                display.frame.origin_x,
+                frame_right,
+                display.frame.origin_y,
+                frame_bottom,
+                display.visible_area.origin_x,
+                display.visible_area.origin_y,
+                display.visible_area.width,
+                display.visible_area.height,
+                display.visible_area.origin_x,
+                visible_right,
+                display.visible_area.origin_y,
+                visible_bottom
+            ),
+        );
+    }
+}
+
+fn select_display_for_mouse(displays: &[VisibleDisplayBounds]) -> Option<VisibleDisplayBounds> {
+    if let Some((mouse_x, mouse_y)) = get_global_mouse_position() {
+        logging::log(
+            "POSITION",
+            &format!("Mouse cursor at ({:.0}, {:.0})", mouse_x, mouse_y),
+        );
+
+        if let Some(display) = display_for_point((mouse_x, mouse_y), displays) {
+            return Some(display);
+        }
+
+        logging::log(
+            "POSITION",
+            "Mouse is not inside any display frame, falling back to primary display",
+        );
+    } else {
+        logging::log(
+            "POSITION",
+            "Could not get mouse position, using primary display",
+        );
+    }
+
+    displays.first().cloned()
+}
+
+fn fallback_display_bounds() -> VisibleDisplayBounds {
+    let fallback = DisplayBounds {
+        origin_x: 0.0,
+        origin_y: 0.0,
+        width: FALLBACK_VISIBLE_WIDTH,
+        height: FALLBACK_VISIBLE_HEIGHT,
+    };
+
+    VisibleDisplayBounds {
+        frame: fallback.clone(),
+        visible_area: fallback,
+    }
+}
+
+fn calculate_bounds_on_mouse_display(
+    window_size: gpui::Size<Pixels>,
+    placement: MouseDisplayPlacement,
+) -> Bounds<Pixels> {
+    let displays = get_macos_visible_displays();
+    let title_line = match placement {
+        MouseDisplayPlacement::EyeLine => {
+            "║  CALCULATING WINDOW POSITION FOR MOUSE DISPLAY             ║"
+        }
+        MouseDisplayPlacement::Centered => {
+            "║  CALCULATING CENTERED POSITION ON MOUSE DISPLAY            ║"
+        }
+    };
+    log_positioning_banner(title_line);
+    logging::log(
+        "POSITION",
+        &format!("Available displays: {}", displays.len()),
+    );
+    log_available_displays(&displays);
+
+    let mut used_fallback_display = false;
+    let display = select_display_for_mouse(&displays).unwrap_or_else(|| {
+        used_fallback_display = true;
+        logging::log(
+            "POSITION",
+            "No displays found, using default centered bounds",
+        );
+        fallback_display_bounds()
+    });
+
+    let visible = &display.visible_area;
+    logging::log(
+        "POSITION",
+        &format!(
+            "Selected display visible area: origin=({:.0}, {:.0}) size={:.0}x{:.0}",
+            visible.origin_x, visible.origin_y, visible.width, visible.height
+        ),
+    );
+
+    let window_width: f64 = window_size.width.into();
+    let window_height: f64 = window_size.height.into();
+    let origin_x = visible.origin_x + (visible.width - window_width) / 2.0;
+    let origin_y = match placement {
+        // Keep fallback behavior centered while normal eye-line placement uses the ratio.
+        MouseDisplayPlacement::EyeLine if used_fallback_display => {
+            visible.origin_y + (visible.height - window_height) / 2.0
+        }
+        MouseDisplayPlacement::EyeLine => visible.origin_y + visible.height * EYE_LINE_Y_RATIO,
+        MouseDisplayPlacement::Centered => visible.origin_y + (visible.height - window_height) / 2.0,
+    };
+
+    let desired_bounds = Bounds {
+        origin: point(px(origin_x as f32), px(origin_y as f32)),
+        size: window_size,
+    };
+    let final_bounds = clamp_to_visible(desired_bounds, visible);
+
+    let final_x: f64 = final_bounds.origin.x.into();
+    let final_y: f64 = final_bounds.origin.y.into();
+    let final_width: f64 = final_bounds.size.width.into();
+    let final_height: f64 = final_bounds.size.height.into();
+    let final_message = match placement {
+        MouseDisplayPlacement::EyeLine => format!(
+            "Final window bounds: origin=({:.0}, {:.0}) size={:.0}x{:.0}",
+            final_x, final_y, final_width, final_height
+        ),
+        MouseDisplayPlacement::Centered => format!(
+            "Final centered bounds: origin=({:.0}, {:.0}) size={:.0}x{:.0}",
+            final_x, final_y, final_width, final_height
+        ),
+    };
+    logging::log("POSITION", &final_message);
+
+    final_bounds
+}
+
 /// Calculate window bounds positioned at eye-line height on the display containing the mouse cursor.
 ///
 /// - Finds the display where the mouse cursor is located
@@ -137,133 +313,7 @@ pub fn move_first_window_to_bounds(bounds: &Bounds<Pixels>) {
 pub fn calculate_eye_line_bounds_on_mouse_display(
     window_size: gpui::Size<Pixels>,
 ) -> Bounds<Pixels> {
-    // Use native macOS API to get actual display bounds with correct origins
-    // GPUI's cx.displays() returns incorrect origins for secondary displays
-    let displays = get_macos_displays();
-
-    logging::log("POSITION", "");
-    logging::log(
-        "POSITION",
-        "╔════════════════════════════════════════════════════════════╗",
-    );
-    logging::log(
-        "POSITION",
-        "║  CALCULATING WINDOW POSITION FOR MOUSE DISPLAY             ║",
-    );
-    logging::log(
-        "POSITION",
-        "╚════════════════════════════════════════════════════════════╝",
-    );
-    logging::log(
-        "POSITION",
-        &format!("Available displays: {}", displays.len()),
-    );
-
-    // Log all available displays for debugging
-    for (idx, display) in displays.iter().enumerate() {
-        let right = display.origin_x + display.width;
-        let bottom = display.origin_y + display.height;
-        logging::log("POSITION", &format!(
-            "  Display {}: origin=({:.0}, {:.0}) size={:.0}x{:.0} [bounds: x={:.0}..{:.0}, y={:.0}..{:.0}]",
-            idx, display.origin_x, display.origin_y, display.width, display.height,
-            display.origin_x, right, display.origin_y, bottom
-        ));
-    }
-
-    // Try to get mouse position and find which display contains it
-    let target_display = if let Some((mouse_x, mouse_y)) = get_global_mouse_position() {
-        logging::log(
-            "POSITION",
-            &format!("Mouse cursor at ({:.0}, {:.0})", mouse_x, mouse_y),
-        );
-
-        // Find the display that contains the mouse cursor
-        let mut found_display = None;
-        for (idx, display) in displays.iter().enumerate() {
-            let in_x = mouse_x >= display.origin_x && mouse_x < display.origin_x + display.width;
-            let in_y = mouse_y >= display.origin_y && mouse_y < display.origin_y + display.height;
-            let contains = in_x && in_y;
-
-            if contains {
-                logging::log("POSITION", &format!("  -> Mouse is on display {}", idx));
-                found_display = Some(display.clone());
-                break;
-            } else {
-                // Log why this display didn't match (helpful for debugging edge cases)
-                logging::log(
-                    "POSITION",
-                    &format!(
-                        "  Display {} rejected: in_x={} in_y={} (mouse: {:.0},{:.0} vs bounds: x={:.0}..{:.0}, y={:.0}..{:.0})",
-                        idx, in_x, in_y, mouse_x, mouse_y,
-                        display.origin_x, display.origin_x + display.width,
-                        display.origin_y, display.origin_y + display.height
-                    ),
-                );
-            }
-        }
-
-        found_display
-    } else {
-        logging::log(
-            "POSITION",
-            "Could not get mouse position, using primary display",
-        );
-        None
-    };
-
-    // Use the found display, or fall back to first display (primary)
-    let display = target_display.or_else(|| {
-        logging::log(
-            "POSITION",
-            "No display contains mouse, falling back to primary",
-        );
-        displays.first().cloned()
-    });
-
-    if let Some(display) = display {
-        logging::log(
-            "POSITION",
-            &format!(
-                "Selected display: origin=({:.0}, {:.0}) size={:.0}x{:.0}",
-                display.origin_x, display.origin_y, display.width, display.height
-            ),
-        );
-
-        // Eye-line: position window top at ~14% from screen top (input bar at eye level)
-        let eye_line_y = display.origin_y + display.height * 0.14;
-
-        // Center horizontally on the display
-        let window_width: f64 = window_size.width.into();
-        let center_x = display.origin_x + (display.width - window_width) / 2.0;
-
-        let final_bounds = Bounds {
-            origin: point(px(center_x as f32), px(eye_line_y as f32)),
-            size: window_size,
-        };
-
-        logging::log(
-            "POSITION",
-            &format!(
-                "Final window bounds: origin=({:.0}, {:.0}) size={:.0}x{:.0}",
-                center_x,
-                eye_line_y,
-                f64::from(window_size.width),
-                f64::from(window_size.height)
-            ),
-        );
-
-        final_bounds
-    } else {
-        logging::log(
-            "POSITION",
-            "No displays found, using default centered bounds",
-        );
-        // Fallback: just center on screen using 1512x982 as default (common MacBook)
-        Bounds {
-            origin: point(px(381.0), px(246.0)),
-            size: window_size,
-        }
-    }
+    calculate_bounds_on_mouse_display(window_size, MouseDisplayPlacement::EyeLine)
 }
 
 /// Calculate window bounds centered on the display containing the mouse cursor.
@@ -281,126 +331,42 @@ pub fn calculate_eye_line_bounds_on_mouse_display(
 pub fn calculate_centered_bounds_on_mouse_display(
     window_size: gpui::Size<Pixels>,
 ) -> Bounds<Pixels> {
-    let displays = get_macos_displays();
-
-    logging::log("POSITION", "");
-    logging::log(
-        "POSITION",
-        "╔════════════════════════════════════════════════════════════╗",
-    );
-    logging::log(
-        "POSITION",
-        "║  CALCULATING CENTERED POSITION ON MOUSE DISPLAY            ║",
-    );
-    logging::log(
-        "POSITION",
-        "╚════════════════════════════════════════════════════════════╝",
-    );
-    logging::log(
-        "POSITION",
-        &format!("Available displays: {}", displays.len()),
-    );
-
-    // Log all available displays for debugging
-    for (idx, display) in displays.iter().enumerate() {
-        let right = display.origin_x + display.width;
-        let bottom = display.origin_y + display.height;
-        logging::log(
-            "POSITION",
-            &format!(
-                "  Display {}: origin=({:.0}, {:.0}) size={:.0}x{:.0} [bounds: x={:.0}..{:.0}, y={:.0}..{:.0}]",
-                idx, display.origin_x, display.origin_y, display.width, display.height,
-                display.origin_x, right, display.origin_y, bottom
-            ),
-        );
-    }
-
-    // Try to get mouse position and find which display contains it
-    let target_display = if let Some((mouse_x, mouse_y)) = get_global_mouse_position() {
-        logging::log(
-            "POSITION",
-            &format!("Mouse cursor at ({:.0}, {:.0})", mouse_x, mouse_y),
-        );
-
-        // Find the display that contains the mouse cursor
-        let mut found_display = None;
-        for (idx, display) in displays.iter().enumerate() {
-            let in_x = mouse_x >= display.origin_x && mouse_x < display.origin_x + display.width;
-            let in_y = mouse_y >= display.origin_y && mouse_y < display.origin_y + display.height;
-            let contains = in_x && in_y;
-
-            if contains {
-                logging::log("POSITION", &format!("  -> Mouse is on display {}", idx));
-                found_display = Some(display.clone());
-                break;
-            }
-        }
-
-        found_display
-    } else {
-        logging::log(
-            "POSITION",
-            "Could not get mouse position, using primary display",
-        );
-        None
-    };
-
-    // Use the found display, or fall back to first display (primary)
-    let display = target_display.or_else(|| {
-        logging::log(
-            "POSITION",
-            "No display contains mouse, falling back to primary",
-        );
-        displays.first().cloned()
-    });
-
-    if let Some(display) = display {
-        logging::log(
-            "POSITION",
-            &format!(
-                "Selected display: origin=({:.0}, {:.0}) size={:.0}x{:.0}",
-                display.origin_x, display.origin_y, display.width, display.height
-            ),
-        );
-
-        // Center both horizontally and vertically on the display
-        let window_width: f64 = window_size.width.into();
-        let window_height: f64 = window_size.height.into();
-        let center_x = display.origin_x + (display.width - window_width) / 2.0;
-        let center_y = display.origin_y + (display.height - window_height) / 2.0;
-
-        let final_bounds = Bounds {
-            origin: point(px(center_x as f32), px(center_y as f32)),
-            size: window_size,
-        };
-
-        logging::log(
-            "POSITION",
-            &format!(
-                "Final centered bounds: origin=({:.0}, {:.0}) size={:.0}x{:.0}",
-                center_x,
-                center_y,
-                f64::from(window_size.width),
-                f64::from(window_size.height)
-            ),
-        );
-
-        final_bounds
-    } else {
-        logging::log(
-            "POSITION",
-            "No displays found, using default centered bounds",
-        );
-        // Fallback: just center on screen using 1512x982 as default (common MacBook)
-        let window_width: f64 = window_size.width.into();
-        let window_height: f64 = window_size.height.into();
-        Bounds {
-            origin: point(
-                px(((1512.0 - window_width) / 2.0) as f32),
-                px(((982.0 - window_height) / 2.0) as f32),
-            ),
-            size: window_size,
-        }
-    }
+    calculate_bounds_on_mouse_display(window_size, MouseDisplayPlacement::Centered)
 }
 
+#[cfg(test)]
+mod positioning_bounds_tests {
+    use super::*;
+    use gpui::size;
+
+    #[test]
+    fn test_fallback_display_bounds_sets_frame_and_visible_area() {
+        let fallback = fallback_display_bounds();
+
+        assert_eq!(fallback.frame.origin_x, 0.0);
+        assert_eq!(fallback.frame.origin_y, 0.0);
+        assert_eq!(fallback.frame.width, FALLBACK_VISIBLE_WIDTH);
+        assert_eq!(fallback.frame.height, FALLBACK_VISIBLE_HEIGHT);
+        assert_eq!(fallback.visible_area.origin_x, 0.0);
+        assert_eq!(fallback.visible_area.origin_y, 0.0);
+        assert_eq!(fallback.visible_area.width, FALLBACK_VISIBLE_WIDTH);
+        assert_eq!(fallback.visible_area.height, FALLBACK_VISIBLE_HEIGHT);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_calculate_eye_line_bounds_on_mouse_display_centers_fallback_for_window_size() {
+        let window_size = size(px(1000.0), px(200.0));
+
+        let eye_line = calculate_eye_line_bounds_on_mouse_display(window_size);
+        let centered = calculate_centered_bounds_on_mouse_display(window_size);
+
+        let eye_line_x: f64 = eye_line.origin.x.into();
+        let eye_line_y: f64 = eye_line.origin.y.into();
+        let centered_x: f64 = centered.origin.x.into();
+        let centered_y: f64 = centered.origin.y.into();
+
+        assert_eq!(eye_line_x, centered_x);
+        assert_eq!(eye_line_y, centered_y);
+    }
+}

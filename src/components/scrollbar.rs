@@ -137,9 +137,10 @@ pub struct Scrollbar {
     colors: ScrollbarColors,
     /// Container height in pixels (for calculating thumb position)
     container_height: Option<f32>,
-    /// Whether the scrollbar is visible (for scroll-activity-aware fade)
-    /// When Some(true), shows at full opacity; Some(false), hidden; None, always visible
-    is_visible: Option<bool>,
+    /// Scrollbar visibility factor (for scroll-activity-aware fade)
+    /// When Some(v), base opacities are multiplied by v (clamped 0.0..1.0)
+    /// When None, the scrollbar uses base opacities unchanged
+    visibility: Option<f32>,
 }
 
 impl Scrollbar {
@@ -162,7 +163,7 @@ impl Scrollbar {
             scroll_offset,
             colors,
             container_height: None,
-            is_visible: None,
+            visibility: None,
         }
     }
 
@@ -174,14 +175,12 @@ impl Scrollbar {
         self
     }
 
-    /// Set the scrollbar visibility for scroll-activity-aware fade
+    /// Set a visibility opacity multiplier for scroll-activity-aware fade.
     ///
-    /// - `true`: Show scrollbar at full opacity (during scroll activity)
-    /// - `false`: Hide scrollbar (0 opacity, after scroll fade-out)
-    ///
-    /// If not called, the scrollbar uses default behavior (always visible when content overflows)
-    pub fn visible(mut self, is_visible: bool) -> Self {
-        self.is_visible = Some(is_visible);
+    /// Value is clamped to 0.0..1.0 and multiplies the base theme opacities.
+    /// If not called, the scrollbar uses default behavior (opacity factor 1.0).
+    pub fn visibility_opacity(mut self, visibility: f32) -> Self {
+        self.visibility = Some(visibility.clamp(0.0, 1.0));
         self
     }
 
@@ -230,17 +229,10 @@ impl RenderOnce for Scrollbar {
             return div().into_any_element();
         }
 
-        // Handle scroll-activity-aware visibility
-        // When is_visible is Some(false), use 0.0 opacity (hidden)
-        // When is_visible is Some(true) or None, use the configured opacity
-        let thumb_opacity = match self.is_visible {
-            Some(false) => 0.0,
-            _ => self.colors.thumb_opacity,
-        };
-        let thumb_hover_opacity = match self.is_visible {
-            Some(false) => 0.0,
-            _ => self.colors.thumb_hover_opacity,
-        };
+        // Handle scroll-activity-aware visibility using an opacity multiplier
+        let visibility = self.visibility.unwrap_or(1.0);
+        let thumb_opacity = self.colors.thumb_opacity * visibility;
+        let thumb_hover_opacity = self.colors.thumb_hover_opacity * visibility;
 
         let colors = self.colors;
         let thumb_height_ratio = self.thumb_height_ratio();
@@ -355,7 +347,7 @@ impl RenderOnce for Scrollbar {
 
 #[cfg(test)]
 mod tests {
-    use super::ScrollbarColors;
+    use super::{Scrollbar, ScrollbarColors};
 
     #[test]
     fn test_scrollbar_colors_default_uses_cached_theme_tokens() {
@@ -368,5 +360,26 @@ mod tests {
         assert_eq!(resolved.thumb_opacity, expected.thumb_opacity);
         assert_eq!(resolved.thumb_hover, expected.thumb_hover);
         assert_eq!(resolved.thumb_hover_opacity, expected.thumb_hover_opacity);
+    }
+
+    #[test]
+    fn test_visibility_opacity_does_clamp_to_zero_when_below_range() {
+        let scrollbar =
+            Scrollbar::new(10, 5, 0, ScrollbarColors::default()).visibility_opacity(-1.5);
+        assert_eq!(scrollbar.visibility, Some(0.0));
+    }
+
+    #[test]
+    fn test_visibility_opacity_does_clamp_to_one_when_above_range() {
+        let scrollbar =
+            Scrollbar::new(10, 5, 0, ScrollbarColors::default()).visibility_opacity(2.5);
+        assert_eq!(scrollbar.visibility, Some(1.0));
+    }
+
+    #[test]
+    fn test_visibility_opacity_does_preserve_value_when_in_range() {
+        let scrollbar =
+            Scrollbar::new(10, 5, 0, ScrollbarColors::default()).visibility_opacity(0.42);
+        assert_eq!(scrollbar.visibility, Some(0.42));
     }
 }

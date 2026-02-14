@@ -1,3 +1,15 @@
+#[inline]
+fn scrollbar_fade_duration() -> std::time::Duration {
+    crate::transitions::DURATION_MEDIUM + std::time::Duration::from_millis(50)
+}
+
+#[inline]
+fn scrollbar_fade_opacity(progress: f32) -> crate::transitions::Opacity {
+    use crate::transitions::Lerp;
+    let eased = crate::transitions::ease_in_quad(progress.clamp(0.0, 1.0));
+    crate::transitions::Opacity::VISIBLE.lerp(&crate::transitions::Opacity::INVISIBLE, eased)
+}
+
 impl ScriptListApp {
     fn scroll_to_selected_if_needed(&mut self, _reason: &str) {
         let target = self.selected_index;
@@ -23,23 +35,78 @@ impl ScriptListApp {
     /// - scroll_to_item calls
     /// - Mouse wheel scrolling (if tracked)
     fn trigger_scroll_activity(&mut self, cx: &mut Context<Self>) {
-        self.is_scrolling = true;
-        self.last_scroll_time = Some(std::time::Instant::now());
+        const SCROLLBAR_IDLE_DELAY: std::time::Duration = std::time::Duration::from_millis(1000);
+        const SCROLLBAR_FADE_TICK: std::time::Duration = std::time::Duration::from_millis(16);
+
+        let now = std::time::Instant::now();
+        self.last_scroll_time = Some(now);
+        self.scrollbar_visibility = crate::transitions::Opacity::VISIBLE;
+        self.scrollbar_fade_gen = self.scrollbar_fade_gen.wrapping_add(1);
+        let fade_gen = self.scrollbar_fade_gen;
+
+        tracing::debug!(
+            target: "SCROLL_STATE",
+            fade_gen,
+            "Scrollbar activity detected; scheduling fade-out"
+        );
 
         // Schedule fade-out after 1000ms of inactivity
         cx.spawn(async move |this, cx| {
-            Timer::after(std::time::Duration::from_millis(1000)).await;
-            let _ = cx.update(|cx| {
-                this.update(cx, |app, cx| {
-                    // Only hide if no new scroll activity occurred
-                    if let Some(last_time) = app.last_scroll_time {
-                        if last_time.elapsed() >= std::time::Duration::from_millis(1000) {
-                            app.is_scrolling = false;
-                            cx.notify();
+            Timer::after(SCROLLBAR_IDLE_DELAY).await;
+
+            let should_start_fade = cx
+                .update(|cx| {
+                    this.update(cx, |app, _cx| {
+                        if app.scrollbar_fade_gen != fade_gen {
+                            return false;
                         }
-                    }
+
+                        app.last_scroll_time
+                            .map(|last_time| last_time.elapsed() >= SCROLLBAR_IDLE_DELAY)
+                            .unwrap_or(false)
+                    })
                 })
-            });
+                .unwrap_or(Ok(false))
+                .unwrap_or(false);
+
+            if !should_start_fade {
+                tracing::trace!(
+                    target: "SCROLL_STATE",
+                    fade_gen,
+                    "Skipping scrollbar fade due to newer activity"
+                );
+                return;
+            }
+
+            let fade_duration = scrollbar_fade_duration();
+            let fade_start = std::time::Instant::now();
+
+            loop {
+                let elapsed = fade_start.elapsed();
+                let t = (elapsed.as_secs_f32() / fade_duration.as_secs_f32()).clamp(0.0, 1.0);
+                let opacity = scrollbar_fade_opacity(t);
+
+                let continue_fade = cx
+                    .update(|cx| {
+                        this.update(cx, |app, cx| {
+                            if app.scrollbar_fade_gen != fade_gen {
+                                return false;
+                            }
+
+                            app.scrollbar_visibility = opacity;
+                            cx.notify();
+                            t < 1.0
+                        })
+                    })
+                    .unwrap_or(Ok(false))
+                    .unwrap_or(false);
+
+                if !continue_fade {
+                    break;
+                }
+
+                Timer::after(SCROLLBAR_FADE_TICK).await;
+            }
         })
         .detach();
 
@@ -322,5 +389,40 @@ impl ScriptListApp {
             }
         })
         .detach();
+    }
+}
+
+#[cfg(test)]
+mod scroll_fade_tests {
+    use super::{scrollbar_fade_duration, scrollbar_fade_opacity};
+
+    #[test]
+    fn test_scrollbar_fade_duration_does_match_medium_plus_50ms_when_computed() {
+        assert_eq!(
+            scrollbar_fade_duration(),
+            crate::transitions::DURATION_MEDIUM + std::time::Duration::from_millis(50)
+        );
+    }
+
+    #[test]
+    fn test_scrollbar_fade_opacity_does_stay_visible_when_progress_is_zero() {
+        assert_eq!(
+            scrollbar_fade_opacity(0.0),
+            crate::transitions::Opacity::VISIBLE
+        );
+    }
+
+    #[test]
+    fn test_scrollbar_fade_opacity_does_turn_invisible_when_progress_is_one() {
+        assert_eq!(
+            scrollbar_fade_opacity(1.0),
+            crate::transitions::Opacity::INVISIBLE
+        );
+    }
+
+    #[test]
+    fn test_scrollbar_fade_opacity_does_use_ease_in_curve_when_progress_is_midpoint() {
+        let midpoint = scrollbar_fade_opacity(0.5).value();
+        assert!((midpoint - 0.75).abs() < f32::EPSILON);
     }
 }

@@ -66,18 +66,19 @@ mod arg_prompt_render_tests {
     }
 
     #[test]
-    fn test_footer_surface_color_uses_legacy_light_gray_in_light_mode() {
+    fn test_footer_surface_color_uses_surface_token_in_light_mode() {
         let footer = crate::components::prompt_footer::PromptFooterColors {
             accent: 0,
             text_muted: 0,
             border: 0,
+            surface: 0x123456,
             background: 0x000000,
             is_light_mode: true,
         };
 
         assert_eq!(
             crate::components::prompt_footer::footer_surface_rgba(footer),
-            0xf2f1f1ff
+            0x123456ff
         );
     }
 

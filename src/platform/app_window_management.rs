@@ -13,6 +13,16 @@ use objc::{class, msg_send, sel, sel_impl};
 #[cfg(target_os = "macos")]
 use crate::window_manager;
 
+/// NSWindowCollectionBehaviorCanJoinAllSpaces constant value (1 << 0 = 1)
+#[cfg(target_os = "macos")]
+const NS_WINDOW_COLLECTION_BEHAVIOR_CAN_JOIN_ALL_SPACES: u64 = 1 << 0;
+#[cfg(target_os = "macos")]
+const NS_APPLICATION_ACTIVATION_POLICY_REGULAR: i64 = 0;
+#[cfg(target_os = "macos")]
+const NS_APPLICATION_ACTIVATION_POLICY_ACCESSORY: i64 = 1;
+#[cfg(target_os = "macos")]
+const NS_WINDOW_ANIMATION_BEHAVIOR_NONE: i64 = 2;
+
 // ============================================================================
 // Thread Safety
 // ============================================================================
@@ -78,7 +88,10 @@ pub fn configure_as_accessory_app() {
         let app: id = NSApp();
         // NSApplicationActivationPolicyAccessory = 1
         // This makes the app not appear in Dock and not take menu bar ownership
-        let _: () = msg_send![app, setActivationPolicy: 1i64];
+        let _: () = msg_send![
+            app,
+            setActivationPolicy: NS_APPLICATION_ACTIVATION_POLICY_ACCESSORY
+        ];
         logging::log(
             "PANEL",
             "Configured app as accessory (no Dock icon, no menu bar ownership)",
@@ -114,7 +127,7 @@ pub fn set_regular_app_mode() {
         let app: id = NSApp();
         // NSApplicationActivationPolicyRegular = 0
         // This makes the app appear in Dock and Cmd+Tab
-        let _: () = msg_send![app, setActivationPolicy: 0i64];
+        let _: () = msg_send![app, setActivationPolicy: NS_APPLICATION_ACTIVATION_POLICY_REGULAR];
         logging::log(
             "PANEL",
             "Switched to regular app mode (appears in Dock and Cmd+Tab)",
@@ -148,7 +161,10 @@ pub fn set_accessory_app_mode() {
     unsafe {
         let app: id = NSApp();
         // NSApplicationActivationPolicyAccessory = 1
-        let _: () = msg_send![app, setActivationPolicy: 1i64];
+        let _: () = msg_send![
+            app,
+            setActivationPolicy: NS_APPLICATION_ACTIVATION_POLICY_ACCESSORY
+        ];
         logging::log(
             "PANEL",
             "Switched to accessory app mode (no Dock icon, no Cmd+Tab)",
@@ -271,7 +287,8 @@ pub fn ensure_move_to_active_space() {
 
         // Check if window has CanJoinAllSpaces (set by GPUI for PopUp windows)
         // If so, we can't add MoveToActiveSpace (they're mutually exclusive)
-        let has_can_join_all_spaces = (current & 1) != 0; // NSWindowCollectionBehaviorCanJoinAllSpaces = 1
+        let has_can_join_all_spaces =
+            (current & NS_WINDOW_COLLECTION_BEHAVIOR_CAN_JOIN_ALL_SPACES) != 0;
 
         let desired = if has_can_join_all_spaces {
             // PopUp window - only add FullScreenAuxiliary (no MoveToActiveSpace)
@@ -358,7 +375,8 @@ pub fn configure_as_floating_panel() {
 
         // Check if window has CanJoinAllSpaces (set by GPUI for PopUp windows)
         // If so, we can't add MoveToActiveSpace (they're mutually exclusive)
-        let has_can_join_all_spaces = (current & 1) != 0; // NSWindowCollectionBehaviorCanJoinAllSpaces = 1
+        let has_can_join_all_spaces =
+            (current & NS_WINDOW_COLLECTION_BEHAVIOR_CAN_JOIN_ALL_SPACES) != 0;
 
         // OR in our desired flags instead of replacing:
         // - FullScreenAuxiliary: window can show over fullscreen apps without disrupting
@@ -389,12 +407,13 @@ pub fn configure_as_floating_panel() {
         let _: () = msg_send![window, setFrameAutosaveName:empty_string];
 
         // Disable close/hide animation for instant dismiss (NSWindowAnimationBehaviorNone = 2)
-        let _: () = msg_send![window, setAnimationBehavior: 2i64];
+        let _: () = msg_send![window, setAnimationBehavior: NS_WINDOW_ANIMATION_BEHAVIOR_NONE];
 
         // Log detailed breakdown of collection behavior bits
-        let has_can_join = (desired & 1) != 0;
-        let has_ignores = (desired & 64) != 0;
-        let has_move_to_active = (desired & 2) != 0;
+        let has_can_join = (desired & NS_WINDOW_COLLECTION_BEHAVIOR_CAN_JOIN_ALL_SPACES) != 0;
+        let has_ignores = (desired & NS_WINDOW_COLLECTION_BEHAVIOR_IGNORES_CYCLE) != 0;
+        let has_move_to_active =
+            (desired & NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE) != 0;
 
         logging::log(
             "PANEL",

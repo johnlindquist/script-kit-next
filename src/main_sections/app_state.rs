@@ -45,8 +45,10 @@ struct ScriptListApp {
     #[allow(dead_code)]
     config: config::Config,
     // Scroll activity tracking for scrollbar fade
-    /// Whether scroll activity is happening (scrollbar should be visible)
-    is_scrolling: bool,
+    /// Current animated visibility for scrollbar fade (0.0 invisible .. 1.0 visible)
+    scrollbar_visibility: crate::transitions::Opacity,
+    /// Generation counter for cancelling stale fade-out tasks when new scroll activity occurs
+    scrollbar_fade_gen: u64,
     /// Timestamp of last scroll activity (for fade-out timer)
     last_scroll_time: Option<std::time::Instant>,
     // Interactive script state

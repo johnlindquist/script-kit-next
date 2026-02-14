@@ -33,10 +33,9 @@ use ffi::AXUIElementRef;
 
 pub use actions::{
     close_window, focus_window, maximize_window, minimize_window, move_to_next_display,
-    move_to_previous_display, move_window, resize_window, set_window_bounds, tile_window,
+    move_to_previous_display, move_window, resize_window, tile_window,
 };
 pub use query::{
-    get_frontmost_window_of_previous_app, get_menu_bar_owner_pid, has_accessibility_permission,
-    list_windows, request_accessibility_permission,
+    get_frontmost_window_of_previous_app, has_accessibility_permission, list_windows,
 };
 pub use types::*;
