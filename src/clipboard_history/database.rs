@@ -194,7 +194,7 @@ pub fn get_connection() -> Result<Arc<Mutex<Connection>>> {
     let conn = Arc::new(Mutex::new(conn));
 
     if DB_CONNECTION.set(conn.clone()).is_err() {
-        return Ok(DB_CONNECTION.get().unwrap().clone());
+        return DB_CONNECTION.get().cloned().ok_or_else(|| anyhow::anyhow!("DB_CONNECTION set failed but get() returned None"));
     }
 
     Ok(conn)
