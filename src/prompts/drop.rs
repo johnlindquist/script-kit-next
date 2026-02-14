@@ -12,7 +12,7 @@ use crate::components::{FocusablePrompt, FocusablePromptInterceptedKey};
 use crate::designs::{get_tokens, DesignVariant};
 use crate::logging;
 use crate::theme;
-use crate::ui_foundation::get_vibrancy_background;
+use crate::ui_foundation::{get_vibrancy_background, is_key_enter};
 
 use super::SubmitCallback;
 
@@ -220,9 +220,7 @@ impl Render for DropPrompt {
                 },
                 |this, event, _window, _cx| {
                     let key_str = event.keystroke.key.as_str();
-                    if key_str.eq_ignore_ascii_case("enter")
-                        || key_str.eq_ignore_ascii_case("return")
-                    {
+                    if is_key_enter(key_str) {
                         this.submit();
                     }
                 },
