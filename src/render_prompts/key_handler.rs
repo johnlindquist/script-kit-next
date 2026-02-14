@@ -101,3 +101,45 @@ where
 
     false
 }
+
+#[inline]
+pub(crate) fn handle_prompt_key_preamble_default(
+    app: &mut ScriptListApp,
+    event: &gpui::KeyDownEvent,
+    window: &mut Window,
+    cx: &mut Context<ScriptListApp>,
+    cfg: PromptKeyPreambleCfg,
+    has_actions: bool,
+    prompt_label: &'static str,
+) -> bool {
+    handle_prompt_key_preamble(
+        app,
+        event,
+        window,
+        cx,
+        cfg,
+        |_, _, _, _| false,
+        |key, _, modifiers| modifiers.platform && ui_foundation::is_key_k(key) && has_actions,
+        |app, window, cx| {
+            logging::log(
+                "KEY",
+                &format!("Cmd+K in {prompt_label} - calling toggle_arg_actions"),
+            );
+            app.toggle_arg_actions(cx, window);
+        },
+        |app, action_id, cx| {
+            app.trigger_action_by_name(action_id, cx);
+        },
+        |_, _, _| true,
+        |app, matched_shortcut, cx| {
+            logging::log(
+                "KEY",
+                &format!(
+                    "SDK action shortcut matched in {prompt_label}: {}",
+                    matched_shortcut.action_name
+                ),
+            );
+            app.trigger_action_by_name(&matched_shortcut.action_name, cx);
+        },
+    )
+}
