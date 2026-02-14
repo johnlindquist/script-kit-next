@@ -1,5 +1,16 @@
 use super::*;
 
+#[cfg(target_os = "macos")]
+const NS_FLOATING_WINDOW_LEVEL: i64 = 3;
+#[cfg(target_os = "macos")]
+const NS_WINDOW_COLLECTION_BEHAVIOR_CAN_JOIN_ALL_SPACES: u64 = 1 << 0;
+#[cfg(target_os = "macos")]
+const NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE: u64 = 1 << 1;
+#[cfg(target_os = "macos")]
+const NS_WINDOW_COLLECTION_BEHAVIOR_IGNORES_CYCLE: u64 = 1 << 6;
+#[cfg(target_os = "macos")]
+const NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY: u64 = 1 << 8;
+
 /// Sync Script Kit theme with gpui-component theme
 /// NOTE: Do NOT call gpui_component::init here - it's already called in main.rs
 /// and calling it again resets the theme to system defaults (opaque backgrounds),
@@ -13,37 +24,32 @@ fn ensure_theme_initialized(cx: &mut App) {
 
 /// Calculate window bounds positioned in the top-right corner of the display containing the mouse.
 fn calculate_top_right_bounds(width: f32, height: f32, padding: f32) -> gpui::Bounds<gpui::Pixels> {
-    use crate::platform::{get_global_mouse_position, get_macos_displays};
+    use crate::platform::{
+        clamp_to_visible, display_for_point, get_global_mouse_position, get_macos_visible_displays,
+    };
 
-    let displays = get_macos_displays();
+    let displays = get_macos_visible_displays();
 
     // Find display containing mouse
-    let target_display = if let Some((mouse_x, mouse_y)) = get_global_mouse_position() {
-        displays
-            .iter()
-            .find(|display| {
-                mouse_x >= display.origin_x
-                    && mouse_x < display.origin_x + display.width
-                    && mouse_y >= display.origin_y
-                    && mouse_y < display.origin_y + display.height
-            })
-            .cloned()
-    } else {
-        None
-    };
+    let target_display =
+        get_global_mouse_position().and_then(|mouse_pt| display_for_point(mouse_pt, &displays));
 
     // Use found display or fall back to primary
     let display = target_display.or_else(|| displays.first().cloned());
 
     if let Some(display) = display {
-        // Position in top-right corner with padding
-        let x = display.origin_x + display.width - width as f64 - padding as f64;
-        let y = display.origin_y + padding as f64;
+        let visible = &display.visible_area;
 
-        gpui::Bounds::new(
+        // Position in top-right corner with padding
+        let x = visible.origin_x + visible.width - width as f64 - padding as f64;
+        let y = visible.origin_y + padding as f64;
+
+        let desired_bounds = gpui::Bounds::new(
             gpui::Point::new(px(x as f32), px(y as f32)),
             gpui::Size::new(px(width), px(height)),
-        )
+        );
+
+        clamp_to_visible(desired_bounds, visible)
     } else {
         // Fallback to centered on primary
         gpui::Bounds::new(
@@ -390,9 +396,8 @@ fn configure_notes_as_floating_panel() {
                     if title_str == "Notes" {
                         // Found the Notes window - configure it
 
-                        // NSFloatingWindowLevel = 3
                         // Use i64 (NSInteger) for proper ABI compatibility on 64-bit macOS
-                        let floating_level: i64 = 3;
+                        let floating_level: i64 = NS_FLOATING_WINDOW_LEVEL;
                         let _: () = msg_send![window, setLevel:floating_level];
 
                         // Get current collection behavior to preserve existing flags
@@ -400,15 +405,21 @@ fn configure_notes_as_floating_panel() {
 
                         // Check if window has CanJoinAllSpaces (set by GPUI for PopUp windows)
                         // If so, we can't add MoveToActiveSpace (they're mutually exclusive)
-                        let has_can_join_all_spaces = (current & 1) != 0;
+                        let has_can_join_all_spaces =
+                            (current & NS_WINDOW_COLLECTION_BEHAVIOR_CAN_JOIN_ALL_SPACES) != 0;
 
                         // OR in FullScreenAuxiliary (256) + IgnoresCycle (64)
                         // IgnoresCycle excludes Notes from Cmd+Tab - it's a utility window
                         // MoveToActiveSpace (2) only if not already CanJoinAllSpaces
                         let desired: u64 = if has_can_join_all_spaces {
-                            current | 256 | 64
+                            current
+                                | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY
+                                | NS_WINDOW_COLLECTION_BEHAVIOR_IGNORES_CYCLE
                         } else {
-                            current | 2 | 256 | 64
+                            current
+                                | NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE
+                                | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY
+                                | NS_WINDOW_COLLECTION_BEHAVIOR_IGNORES_CYCLE
                         };
                         let _: () = msg_send![window, setCollectionBehavior:desired];
 
@@ -432,9 +443,12 @@ fn configure_notes_as_floating_panel() {
                         );
 
                         // Log detailed breakdown of collection behavior bits
-                        let has_can_join = (desired & 1) != 0;
-                        let has_ignores = (desired & 64) != 0;
-                        let has_move_to_active = (desired & 2) != 0;
+                        let has_can_join =
+                            (desired & NS_WINDOW_COLLECTION_BEHAVIOR_CAN_JOIN_ALL_SPACES) != 0;
+                        let has_ignores =
+                            (desired & NS_WINDOW_COLLECTION_BEHAVIOR_IGNORES_CYCLE) != 0;
+                        let has_move_to_active =
+                            (desired & NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE) != 0;
 
                         logging::log(
                             "PANEL",

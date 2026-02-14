@@ -39,7 +39,8 @@
             theme,
             config,
             // Scroll activity tracking: start with scrollbar hidden
-            is_scrolling: false,
+            scrollbar_visibility: crate::transitions::Opacity::INVISIBLE,
+            scrollbar_fade_gen: 0,
             last_scroll_time: None,
             current_view: AppView::ScriptList,
             script_session: Arc::new(ParkingMutex::new(None)),

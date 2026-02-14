@@ -6,6 +6,46 @@ fn ensure_theme_initialized(cx: &mut App) {
     info!("AI window theme synchronized with Script Kit");
 }
 
+const AI_WINDOW_DEFAULT_WIDTH: f32 = 900.0;
+const AI_WINDOW_DEFAULT_HEIGHT: f32 = 700.0;
+
+fn centered_ai_window_bounds_on_cursor_display() -> gpui::Bounds<gpui::Pixels> {
+    crate::platform::calculate_centered_bounds_on_mouse_display(size(
+        px(AI_WINDOW_DEFAULT_WIDTH),
+        px(AI_WINDOW_DEFAULT_HEIGHT),
+    ))
+}
+
+fn ai_window_reference_legacy_per_display_apis() {
+    // Transitional no-op references keep legacy AI per-display helpers linked
+    // until a dedicated cleanup removes them from window_state.
+    let _ = crate::window_state::save_ai_position_for_display
+        as fn(&crate::windows::DisplayBounds, crate::window_state::PersistedWindowBounds);
+    let _ = crate::window_state::get_ai_position_for_mouse_display
+        as fn(
+            f64,
+            f64,
+            &[crate::windows::DisplayBounds],
+        ) -> Option<(
+            crate::window_state::PersistedWindowBounds,
+            crate::windows::DisplayBounds,
+        )>;
+}
+
+fn resolve_new_ai_window_bounds(
+    saved_bounds: Option<crate::window_state::PersistedWindowBounds>,
+    displays: &[crate::windows::DisplayBounds],
+    fallback_bounds: gpui::Bounds<gpui::Pixels>,
+) -> gpui::Bounds<gpui::Pixels> {
+    if let Some(saved) = saved_bounds {
+        if crate::window_state::is_bounds_visible(&saved, displays) {
+            return saved.to_gpui().get_bounds();
+        }
+    }
+
+    fallback_bounds
+}
+
 /// Toggle the AI window (open if closed, bring to front if open)
 ///
 /// The AI window behaves as a NORMAL window (not a floating panel):
@@ -17,6 +57,7 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
     use crate::logging;
 
     logging::log("AI", "open_ai_window called - checking state");
+    ai_window_reference_legacy_per_display_apis();
 
     // Ensure gpui-component theme is initialized before opening window
     ensure_theme_initialized(cx);
@@ -43,16 +84,6 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
 
             // Ensure regular app mode (in case it was switched back to accessory)
             crate::platform::set_regular_app_mode();
-
-            // Move the window to the display containing the mouse cursor
-            // This ensures the AI window appears on the same screen as where the user is working
-            let new_bounds = crate::platform::calculate_centered_bounds_on_mouse_display(size(
-                px(900.),
-                px(700.),
-            ));
-            let _ = handle.update(cx, |_root, window, cx| {
-                crate::window_ops::queue_move(new_bounds, window, cx);
-            });
 
             // Activate the app to ensure the window can receive focus
             cx.activate(true);
@@ -90,23 +121,30 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
         gpui::WindowBackgroundAppearance::Opaque
     };
 
-    // Calculate position: try per-display saved position first, then centered on mouse display
-    // Use mouse display positioning so AI window appears on the same screen as the cursor
+    // Restore one global AI window position. If that position is now off-screen
+    // (for example, a display was disconnected), center on the cursor display.
     let displays = crate::platform::get_macos_displays();
-    let bounds = if let Some((mouse_x, mouse_y)) = crate::platform::get_global_mouse_position() {
-        if let Some((saved, _display)) =
-            crate::window_state::get_ai_position_for_mouse_display(mouse_x, mouse_y, &displays)
-        {
-            // Use saved per-display position
-            saved.to_gpui().get_bounds()
+    let saved_bounds = crate::window_state::load_window_bounds(crate::window_state::WindowRole::Ai);
+    if let Some(saved) = saved_bounds {
+        if crate::window_state::is_bounds_visible(&saved, &displays) {
+            logging::log("AI", "Restoring AI window from global saved bounds");
         } else {
-            // Fall back to centered on mouse display
-            crate::platform::calculate_centered_bounds_on_mouse_display(size(px(900.), px(700.)))
+            logging::log(
+                "AI",
+                "Saved AI window bounds are off-screen; centering on cursor display",
+            );
         }
     } else {
-        // Mouse position unavailable, fall back to centered
-        crate::platform::calculate_centered_bounds_on_mouse_display(size(px(900.), px(700.)))
-    };
+        logging::log(
+            "AI",
+            "No saved AI window bounds; centering on cursor display",
+        );
+    }
+    let bounds = resolve_new_ai_window_bounds(
+        saved_bounds,
+        &displays,
+        centered_ai_window_bounds_on_cursor_display(),
+    );
 
     let window_options = WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -248,19 +286,9 @@ pub fn close_ai_window(cx: &mut App) {
 
     if let Some(handle) = handle {
         let _ = handle.update(cx, |_, window, _| {
-            // Save window bounds per-display before closing
+            // Save one global AI window position before closing.
             let wb = window.window_bounds();
-            let persisted = crate::window_state::PersistedWindowBounds::from_gpui(wb);
-            let displays = crate::platform::get_macos_displays();
-            // Find which display the window center is on
-            if let Some(display) =
-                crate::window_state::find_display_for_bounds(&persisted, &displays)
-            {
-                crate::window_state::save_ai_position_for_display(display, persisted);
-            } else {
-                // Fallback to legacy save if display not found
-                crate::window_state::save_window_from_gpui(crate::window_state::WindowRole::Ai, wb);
-            }
+            crate::window_state::save_window_from_gpui(crate::window_state::WindowRole::Ai, wb);
             window.remove_window();
         });
     }
@@ -470,4 +498,72 @@ pub fn simulate_ai_key(key: &str, modifiers: Vec<KeyModifier>) {
             key
         ),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_display() -> crate::windows::DisplayBounds {
+        crate::windows::DisplayBounds {
+            origin_x: 0.0,
+            origin_y: 0.0,
+            width: 1920.0,
+            height: 1080.0,
+        }
+    }
+
+    fn assert_bounds_eq(actual: gpui::Bounds<gpui::Pixels>, expected: gpui::Bounds<gpui::Pixels>) {
+        assert_eq!(f64::from(actual.origin.x), f64::from(expected.origin.x));
+        assert_eq!(f64::from(actual.origin.y), f64::from(expected.origin.y));
+        assert_eq!(f64::from(actual.size.width), f64::from(expected.size.width));
+        assert_eq!(
+            f64::from(actual.size.height),
+            f64::from(expected.size.height)
+        );
+    }
+
+    #[test]
+    fn test_resolve_new_ai_window_bounds_returns_saved_bounds_when_visible() {
+        let displays = vec![test_display()];
+        let fallback = gpui::Bounds {
+            origin: point(px(10.0), px(20.0)),
+            size: size(px(900.0), px(700.0)),
+        };
+        let saved = crate::window_state::PersistedWindowBounds::new(100.0, 200.0, 910.0, 710.0);
+
+        let actual = resolve_new_ai_window_bounds(Some(saved), &displays, fallback);
+
+        assert_eq!(f64::from(actual.origin.x), 100.0);
+        assert_eq!(f64::from(actual.origin.y), 200.0);
+        assert_eq!(f64::from(actual.size.width), 910.0);
+        assert_eq!(f64::from(actual.size.height), 710.0);
+    }
+
+    #[test]
+    fn test_resolve_new_ai_window_bounds_returns_fallback_when_saved_is_offscreen() {
+        let displays = vec![test_display()];
+        let fallback = gpui::Bounds {
+            origin: point(px(300.0), px(400.0)),
+            size: size(px(900.0), px(700.0)),
+        };
+        let saved = crate::window_state::PersistedWindowBounds::new(5000.0, 5000.0, 900.0, 700.0);
+
+        let actual = resolve_new_ai_window_bounds(Some(saved), &displays, fallback);
+
+        assert_bounds_eq(actual, fallback);
+    }
+
+    #[test]
+    fn test_resolve_new_ai_window_bounds_returns_fallback_when_no_saved_bounds() {
+        let displays = vec![test_display()];
+        let fallback = gpui::Bounds {
+            origin: point(px(50.0), px(60.0)),
+            size: size(px(900.0), px(700.0)),
+        };
+
+        let actual = resolve_new_ai_window_bounds(None, &displays, fallback);
+
+        assert_bounds_eq(actual, fallback);
+    }
 }

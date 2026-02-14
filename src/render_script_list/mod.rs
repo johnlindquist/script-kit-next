@@ -328,7 +328,7 @@ impl ScriptListApp {
             let scrollbar =
                 Scrollbar::new(item_count, visible_items, scroll_offset, scrollbar_colors)
                     .container_height(estimated_container_height)
-                    .visible(self.is_scrolling);
+                    .visibility_opacity(self.scrollbar_visibility.value());
 
             // Capture entity handle for use in the render closure
             let entity = cx.entity();

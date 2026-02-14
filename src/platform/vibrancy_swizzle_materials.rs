@@ -87,19 +87,28 @@ pub mod ns_visual_effect_material {
 /// Current material index for cycling
 /// Default: 11 = HudWindow (best for light mode vibrancy)
 #[cfg(target_os = "macos")]
+const DEFAULT_MATERIAL_INDEX: usize = 11;
+#[cfg(target_os = "macos")]
+const DEFAULT_BLENDING_MODE: usize = 0;
+#[cfg(target_os = "macos")]
+const DEFAULT_APPEARANCE_INDEX: usize = 3;
+
+/// Current material index for cycling
+/// Default: 11 = HudWindow (best for light mode vibrancy)
+#[cfg(target_os = "macos")]
 static CURRENT_MATERIAL_INDEX: std::sync::atomic::AtomicUsize =
-    std::sync::atomic::AtomicUsize::new(11); // HudWindow
+    std::sync::atomic::AtomicUsize::new(DEFAULT_MATERIAL_INDEX); // HudWindow
 
 /// Current blending mode (0 = behindWindow, 1 = withinWindow)
 #[cfg(target_os = "macos")]
 static CURRENT_BLENDING_MODE: std::sync::atomic::AtomicUsize =
-    std::sync::atomic::AtomicUsize::new(0);
+    std::sync::atomic::AtomicUsize::new(DEFAULT_BLENDING_MODE);
 
 /// Current appearance index for cycling
 /// Default: 3 = VibrantLight (for light mode), will be set to 1 (VibrantDark) for dark mode
 #[cfg(target_os = "macos")]
 static CURRENT_APPEARANCE_INDEX: std::sync::atomic::AtomicUsize =
-    std::sync::atomic::AtomicUsize::new(3); // VibrantLight
+    std::sync::atomic::AtomicUsize::new(DEFAULT_APPEARANCE_INDEX); // VibrantLight
 
 /// All appearance options to try
 #[cfg(target_os = "macos")]

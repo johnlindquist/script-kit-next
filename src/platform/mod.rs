@@ -15,6 +15,8 @@
 //! On non-macOS platforms, these functions are no-ops, allowing cross-platform code
 //! to call them without conditional compilation at the call site.
 
+mod display;
+
 include!("app_window_management.rs");
 include!("visibility_focus.rs");
 include!("vibrancy_swizzle_materials.rs");

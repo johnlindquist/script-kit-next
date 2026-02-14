@@ -14,8 +14,6 @@ impl RenderOnce for Toast {
         let colors = self.colors;
         let variant = self.variant;
         let on_dismiss_callback = self.on_dismiss;
-        let has_details = self.details.is_some();
-        let details_expanded = self.details_expanded;
         let transition = self.transition;
 
         // Check vibrancy to conditionally apply shadow
@@ -123,24 +121,6 @@ impl RenderOnce for Toast {
             message_col = message_col.child(actions_row);
         }
 
-        // View details toggle (if has details)
-        if has_details {
-            let details_toggle_text = if details_expanded {
-                "Hide details"
-            } else {
-                "View details"
-            };
-
-            let details_toggle = div()
-                .text_xs()
-                .text_color(rgb(colors.action_text))
-                .cursor_pointer()
-                .hover(|s| s.underline())
-                .child(details_toggle_text);
-
-            message_col = message_col.child(details_toggle);
-        }
-
         // Dismiss button (if dismissible)
         let dismiss_btn = if self.dismissible {
             let dismiss_callback = on_dismiss_callback.clone();
@@ -179,27 +159,25 @@ impl RenderOnce for Toast {
 
         toast = toast.child(assembled_row);
 
-        // Details section (if expanded)
-        if details_expanded {
-            if let Some(details_text) = self.details {
-                let details_section = div()
-                    .w_full()
-                    .px(px(TOAST_CONTENT_PADDING_X_PX))
-                    .py(px(TOAST_CONTENT_PADDING_Y_PX))
-                    .bg(rgba(colors.details_bg)) // Theme-aware details background
-                    .border_t_1()
-                    .border_color(rgba((colors.border << 8) | 0x40))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(colors.text))
-                            .font_family("Menlo")
-                            .overflow_hidden()
-                            .child(details_text),
-                    );
+        // Details section (if present)
+        if let Some(details_text) = self.details {
+            let details_section = div()
+                .w_full()
+                .px(px(TOAST_CONTENT_PADDING_X_PX))
+                .py(px(TOAST_CONTENT_PADDING_Y_PX))
+                .bg(rgba(colors.details_bg)) // Theme-aware details background
+                .border_t_1()
+                .border_color(rgba((colors.border << 8) | 0x40))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(colors.text))
+                        .font_family("Menlo")
+                        .overflow_hidden()
+                        .child(details_text),
+                );
 
-                toast = toast.child(details_section);
-            }
+            toast = toast.child(details_section);
         }
 
         toast

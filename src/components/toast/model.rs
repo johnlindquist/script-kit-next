@@ -29,8 +29,6 @@ pub struct Toast {
     pub(super) dismissible: bool,
     /// Optional expandable details text
     pub(super) details: Option<String>,
-    /// Whether details are currently expanded
-    pub(super) details_expanded: bool,
     /// Action buttons to display
     pub(super) actions: Vec<ToastAction>,
     /// Callback when toast is dismissed
@@ -49,7 +47,6 @@ impl Toast {
             duration_ms: Some(5000), // Default 5 second auto-dismiss
             dismissible: true,
             details: None,
-            details_expanded: false,
             actions: Vec::new(),
             on_dismiss: None,
             transition: AppearTransition::visible(), // Default to fully visible
@@ -84,12 +81,6 @@ impl Toast {
     /// Set optional details text (convenience for Option<String>)
     pub fn details_opt(mut self, details: Option<String>) -> Self {
         self.details = details;
-        self
-    }
-
-    /// Set whether details are initially expanded
-    pub fn details_expanded(mut self, expanded: bool) -> Self {
-        self.details_expanded = expanded;
         self
     }
 

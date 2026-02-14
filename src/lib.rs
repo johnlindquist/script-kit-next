@@ -69,6 +69,7 @@ pub mod window_control;
 
 // Enhanced window control - backends + capabilities architecture
 // Internal-only subsystem; external callers should use `window_control` APIs.
+#[cfg(feature = "window-control-enhanced")]
 pub(crate) mod window_control_enhanced;
 
 // System actions - macOS AppleScript-based system commands

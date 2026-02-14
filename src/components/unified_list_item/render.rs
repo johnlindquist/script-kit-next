@@ -166,11 +166,16 @@ impl RenderOnce for UnifiedListItem {
             .bg(bg_color)
             .text_color(title_color)
             .font_family(crate::list_item::FONT_SYSTEM_UI)
-            .cursor_pointer()
             .flex()
             .flex_row()
             .items_center()
             .gap(px(layout.gap));
+
+        inner = if should_use_pointer_cursor(state.is_disabled) {
+            inner.cursor_pointer()
+        } else {
+            inner.cursor_default()
+        };
 
         if let Some(leading_el) = leading_element {
             inner = inner.child(leading_el);
@@ -219,6 +224,10 @@ impl RenderOnce for UnifiedListItem {
 // =============================================================================
 // Render Helpers
 // =============================================================================
+
+fn should_use_pointer_cursor(is_disabled: bool) -> bool {
+    !is_disabled
+}
 
 fn render_leading(
     leading: &Option<LeadingContent>,
@@ -476,5 +485,20 @@ impl RenderOnce for SectionHeader {
                     .text_color(rgb(self.colors.text_dimmed))
                     .child(label_text),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_use_pointer_cursor;
+
+    #[test]
+    fn test_cursor_uses_pointer_when_item_is_enabled() {
+        assert!(should_use_pointer_cursor(false));
+    }
+
+    #[test]
+    fn test_cursor_uses_default_when_item_is_disabled() {
+        assert!(!should_use_pointer_cursor(true));
     }
 }
