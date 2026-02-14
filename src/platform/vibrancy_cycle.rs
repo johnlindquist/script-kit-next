@@ -126,70 +126,6 @@ pub fn cycle_vibrancy_material() -> String {
     "Vibrancy cycling not supported on this platform".to_string()
 }
 
-/// Toggle between blending modes (behindWindow vs withinWindow)
-/// Call with Cmd+Shift+B
-#[cfg(target_os = "macos")]
-#[allow(dead_code)]
-pub fn toggle_blending_mode() -> String {
-    use std::sync::atomic::Ordering;
-
-    if require_main_thread("toggle_blending_mode") {
-        return "ERROR: Not on main thread".to_string();
-    }
-
-    // Toggle between 0 (behindWindow) and 1 (withinWindow)
-    let current = CURRENT_BLENDING_MODE.fetch_xor(1, Ordering::SeqCst);
-    let new_mode = current ^ 1;
-    let mode_name = if new_mode == 0 {
-        "BehindWindow"
-    } else {
-        "WithinWindow"
-    };
-
-    // SAFETY: Main thread verified. Window from WindowManager is valid.
-    // Content view and subviews are nil-checked. setBlendingMode: is standard.
-    unsafe {
-        let window = match window_manager::get_main_window() {
-            Some(w) => w,
-            None => return "ERROR: No main window".to_string(),
-        };
-
-        let content_view: id = msg_send![window, contentView];
-        if content_view.is_null() {
-            return "ERROR: No content view".to_string();
-        }
-
-        let subviews: id = msg_send![content_view, subviews];
-        if subviews.is_null() {
-            return "ERROR: No subviews".to_string();
-        }
-
-        let count: usize = msg_send![subviews, count];
-        for i in 0..count {
-            let subview: id = msg_send![subviews, objectAtIndex: i];
-            let is_visual_effect_view: bool =
-                msg_send![subview, isKindOfClass: class!(NSVisualEffectView)];
-
-            if is_visual_effect_view {
-                let _: () = msg_send![subview, setBlendingMode: new_mode as isize];
-                let _: () = msg_send![subview, setNeedsDisplay: true];
-
-                let msg = format!("Blending: {}", mode_name);
-                logging::log("VIBRANCY", &msg);
-                return msg;
-            }
-        }
-    }
-
-    "ERROR: No NSVisualEffectView found".to_string()
-}
-
-#[cfg(not(target_os = "macos"))]
-#[allow(dead_code)]
-pub fn toggle_blending_mode() -> String {
-    "Blending mode toggle not supported on this platform".to_string()
-}
-
 /// Get the current material name for display in the UI
 #[cfg(target_os = "macos")]
 pub fn get_current_material_name() -> String {
@@ -297,4 +233,3 @@ pub fn cycle_appearance() -> String {
 pub fn cycle_appearance() -> String {
     "Appearance cycling not supported on this platform".to_string()
 }
-

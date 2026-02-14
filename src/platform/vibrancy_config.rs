@@ -110,26 +110,6 @@ pub fn configure_window_vibrancy_material_for_appearance(_is_dark: bool) {
     // No-op on non-macOS platforms
 }
 
-/// Configure the vibrancy blur for the main window (backward compatible).
-///
-/// This function defaults to dark mode (VibrantDark) for backward compatibility.
-/// For appearance-aware vibrancy, use `configure_window_vibrancy_material_for_appearance()`.
-///
-/// # macOS Behavior
-///
-/// Clears the window's NSAppearance and sets VibrantDark on each NSVisualEffectView,
-/// then configures appropriate material and state.
-///
-/// # Safety
-///
-/// Uses Objective-C message sending internally.
-#[cfg(target_os = "macos")]
-#[allow(dead_code)]
-pub fn configure_window_vibrancy_material() {
-    // Backward compatible: default to dark mode
-    configure_window_vibrancy_material_for_appearance(true);
-}
-
 /// Recursively walk view hierarchy and configure all NSVisualEffectViews.
 ///
 /// # Arguments
@@ -248,9 +228,4 @@ unsafe fn configure_visual_effect_views_recursive(view: id, count: &mut usize, i
             configure_visual_effect_views_recursive(child, count, is_dark);
         }
     }
-}
-
-#[cfg(not(target_os = "macos"))]
-pub fn configure_window_vibrancy_material() {
-    // No-op on non-macOS platforms
 }
