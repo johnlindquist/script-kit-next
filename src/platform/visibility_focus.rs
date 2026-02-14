@@ -2,6 +2,9 @@
 // Main Window Visibility Control
 // ============================================================================
 
+#[cfg(target_os = "macos")]
+use cocoa::foundation::NSRect;
+
 /// Hide the main window without hiding the entire app.
 ///
 /// This is used when opening secondary windows (Notes, AI) to ensure the main
@@ -285,93 +288,17 @@ pub fn get_main_window_bounds() -> Option<(f64, f64, f64, f64)> {
 }
 
 // ============================================================================
-// App Active State Detection
+// Main Window Focus Detection
 // ============================================================================
-
-/// Check if the application is currently active (has focus).
-///
-/// On macOS, this uses NSApplication's isActive property to determine
-/// if our app is the frontmost app receiving keyboard events.
-///
-/// # Returns
-/// - `true` if the app is active (user is interacting with our windows)
-/// - `false` if another app is active (user clicked on another app)
-///
-/// # Platform Support
-/// - macOS: Uses NSApplication isActive
-/// - Other platforms: Always returns true (not yet implemented)
-#[cfg(target_os = "macos")]
-#[allow(dead_code)]
-pub fn is_app_active() -> bool {
-    if require_main_thread("is_app_active") {
-        return false;
-    }
-    // SAFETY: Main thread verified. NSApp() is always valid after app launch.
-    // isActive returns a BOOL value type.
-    unsafe {
-        let app: id = NSApp();
-        let is_active: bool = msg_send![app, isActive];
-        is_active
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-#[allow(dead_code)]
-pub fn is_app_active() -> bool {
-    // TODO: Implement for other platforms
-    // On non-macOS, assume always active
-    true
-}
-
-// ============================================================================
-// Focus State Cache (avoids FFI calls on every render frame)
-// ============================================================================
-
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::OnceLock;
-use std::time::Instant;
-
-/// Baseline instant for relative time calculations
-static FOCUS_CACHE_BASELINE: OnceLock<Instant> = OnceLock::new();
-/// Cached focus state to avoid repeated FFI calls
-static FOCUS_CACHE_VALUE: AtomicBool = AtomicBool::new(false);
-/// Timestamp (millis since baseline) when focus was last checked
-static FOCUS_CACHE_TIME: AtomicU64 = AtomicU64::new(0);
-/// Cache TTL in milliseconds (16ms = ~1 frame at 60fps)
-const FOCUS_CACHE_TTL_MS: u64 = 16;
 
 /// Check if the main window is currently focused (key window).
 ///
 /// This is used to detect focus loss even when the app remains active
 /// (e.g., when switching focus to Notes/AI windows).
 ///
-/// **Performance**: Uses a 16ms cache to avoid repeated FFI calls during
-/// render. Multiple calls within the same frame return the cached value.
 #[cfg(target_os = "macos")]
 pub fn is_main_window_focused() -> bool {
-    // Get or create baseline instant
-    let baseline = FOCUS_CACHE_BASELINE.get_or_init(Instant::now);
-    let now_ms = baseline.elapsed().as_millis() as u64;
-
-    let last_check = FOCUS_CACHE_TIME.load(Ordering::Relaxed);
-    if now_ms.saturating_sub(last_check) < FOCUS_CACHE_TTL_MS {
-        return FOCUS_CACHE_VALUE.load(Ordering::Relaxed);
-    }
-
-    // Cache expired, do actual FFI call
-    let is_focused = is_main_window_focused_uncached();
-
-    // Update cache
-    FOCUS_CACHE_VALUE.store(is_focused, Ordering::Relaxed);
-    FOCUS_CACHE_TIME.store(now_ms, Ordering::Relaxed);
-
-    is_focused
-}
-
-/// Uncached version that always makes the FFI call
-#[cfg(target_os = "macos")]
-fn is_main_window_focused_uncached() -> bool {
-    if require_main_thread("is_main_window_focused_uncached") {
+    if require_main_thread("is_main_window_focused") {
         return false;
     }
     // SAFETY: Main thread verified. Window from WindowManager is valid.
@@ -393,10 +320,3 @@ pub fn is_main_window_focused() -> bool {
     // On non-macOS, assume focused to avoid auto-dismiss behavior.
     true
 }
-
-/// Invalidate the focus cache (call when focus changes are expected)
-#[allow(dead_code)]
-pub fn invalidate_focus_cache() {
-    FOCUS_CACHE_TIME.store(0, Ordering::Relaxed);
-}
-
