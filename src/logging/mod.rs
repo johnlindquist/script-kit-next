@@ -767,6 +767,19 @@ pub fn init() {
     // Only initialize once - subsequent calls are no-ops
     LOGGING_GUARD.get_or_init(init_internal);
 }
+
+fn open_writer_or_sink(
+    open_result: std::io::Result<File>,
+    description: &str,
+) -> Box<dyn Write + Send> {
+    open_result
+        .map(|file| Box::new(file) as Box<dyn Write + Send>)
+        .unwrap_or_else(|error| {
+            eprintln!("[LOGGING] Failed to open {}: {}", description, error);
+            Box::new(std::io::sink())
+        })
+}
+
 /// Internal initialization that returns a LoggingGuard.
 /// This is used by init() to store the guard in LOGGING_GUARD.
 fn init_internal() -> LoggingGuard {
@@ -809,31 +822,20 @@ fn init_internal() -> LoggingGuard {
     eprintln!("========================================");
 
     // Open append-forever log file
-    let file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&log_path)
-        .unwrap_or_else(|e| {
-            eprintln!("[LOGGING] Failed to open log file: {}", e);
-            OpenOptions::new()
-                .write(true)
-                .open("/dev/null")
-                .expect("Failed to open /dev/null")
-        });
+    let file = open_writer_or_sink(
+        OpenOptions::new().create(true).append(true).open(&log_path),
+        "log file",
+    );
 
     // Open session log file (truncated on each launch)
-    let session_file = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open(&session_path)
-        .unwrap_or_else(|e| {
-            eprintln!("[LOGGING] Failed to open session log file: {}", e);
-            OpenOptions::new()
-                .write(true)
-                .open("/dev/null")
-                .expect("Failed to open /dev/null")
-        });
+    let session_file = open_writer_or_sink(
+        OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&session_path),
+        "session log file",
+    );
 
     // Create non-blocking writers for both files
     let (non_blocking_append, file_guard) = tracing_appender::non_blocking(file);
@@ -2274,6 +2276,20 @@ mod tests {
         assert!(!parse_ai_log("no"));
         assert!(!parse_ai_log(""));
     }
+
+    #[test]
+    fn test_open_writer_or_sink_uses_sink_when_open_fails() {
+        let mut writer = open_writer_or_sink(
+            Err(std::io::Error::other("forced open failure")),
+            "test log file",
+        );
+
+        writer
+            .write_all(b"test log line")
+            .expect("sink fallback should accept writes");
+        writer.flush().expect("sink fallback should flush");
+    }
+
     // -------------------------------------------------------------------------
     // Payload truncation tests
     // -------------------------------------------------------------------------
