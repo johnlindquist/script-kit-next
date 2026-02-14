@@ -1,5 +1,8 @@
 use super::*;
 use crate::components::{FocusablePrompt, FocusablePromptInterceptedKey};
+use crate::ui_foundation::{
+    is_key_backspace, is_key_down, is_key_enter, is_key_space, is_key_up, printable_char,
+};
 
 const ROW_FOCUSED_BG_ALPHA: u32 = 0x3A;
 const ROW_HOVER_BG_ALPHA: u32 = 0x26;
@@ -364,14 +367,11 @@ impl Render for SelectPrompt {
                 |this, event, _window, cx| {
                     let key_str = event.keystroke.key.as_str();
                     let has_ctrl = event.keystroke.modifiers.platform; // Cmd on macOS, Ctrl on others
-                    let is_up = key_str.eq_ignore_ascii_case("up")
-                        || key_str.eq_ignore_ascii_case("arrowup");
-                    let is_down = key_str.eq_ignore_ascii_case("down")
-                        || key_str.eq_ignore_ascii_case("arrowdown");
-                    let is_space = key_str.eq_ignore_ascii_case("space") || key_str == " ";
-                    let is_enter = key_str.eq_ignore_ascii_case("enter")
-                        || key_str.eq_ignore_ascii_case("return");
-                    let is_backspace = key_str.eq_ignore_ascii_case("backspace");
+                    let is_up = is_key_up(key_str);
+                    let is_down = is_key_down(key_str);
+                    let is_space = is_key_space(key_str);
+                    let is_enter = is_key_enter(key_str);
+                    let is_backspace = is_key_backspace(key_str);
 
                     // Handle Ctrl/Cmd+A for select all
                     if has_ctrl && key_str.eq_ignore_ascii_case("a") {
@@ -393,11 +393,9 @@ impl Render for SelectPrompt {
                         this.submit();
                     } else if is_backspace {
                         this.handle_backspace(cx);
-                    } else if let Some(ref key_char) = event.keystroke.key_char {
-                        if let Some(ch) = key_char.chars().next() {
-                            if should_append_to_filter(ch) {
-                                this.handle_char(ch, cx);
-                            }
+                    } else if let Some(ch) = printable_char(event.keystroke.key_char.as_deref()) {
+                        if should_append_to_filter(ch) {
+                            this.handle_char(ch, cx);
                         }
                     }
                 },
