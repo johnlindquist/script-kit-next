@@ -1,7 +1,7 @@
 // --- merged from part_01.rs ---
 use gpui::*;
 
-use super::{DesignRenderer, DesignVariant};
+use super::DesignVariant;
 use crate::scripts::SearchResult;
 
 /// Fixed height for terminal list items (dense terminal feel)
@@ -223,50 +223,16 @@ impl RetroTerminalRenderer {
             .text_color(rgb(colors.dim))
             .child(message)
     }
+
+    /// Get the design variant represented by this renderer.
+    pub fn variant(&self) -> DesignVariant {
+        DesignVariant::RetroTerminal
+    }
 }
 
 impl Default for RetroTerminalRenderer {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl<App> DesignRenderer<App> for RetroTerminalRenderer
-where
-    App: 'static,
-{
-    fn render_script_list(&self, _app: &App, _cx: &mut Context<App>) -> AnyElement {
-        // Note: This is a placeholder implementation.
-        // The actual integration requires access to app state (scripts, filter, selected_index).
-        // For now, we return an empty terminal container.
-        // The real implementation will be wired up when the main app integrates custom renderers.
-
-        let colors = self.colors;
-
-        div()
-            .w_full()
-            .h_full()
-            .flex()
-            .flex_col()
-            .bg(rgb(colors.background))
-            .font_family("Menlo")
-            .child(self.render_header())
-            .child(
-                div()
-                    .flex_1()
-                    .w_full()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .text_color(rgb(colors.dim))
-                    .child("INITIALIZING..."),
-            )
-            .child(self.render_footer(0))
-            .into_any_element()
-    }
-
-    fn variant(&self) -> DesignVariant {
-        DesignVariant::RetroTerminal
     }
 }
 

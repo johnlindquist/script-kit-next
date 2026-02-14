@@ -1,5 +1,20 @@
 use super::*;
 
+const SCRIPT_EXT_FRAGMENTS: [(&str, &str); 12] = [
+    (".ts", ".ts#"),
+    (".tsx", ".tsx#"),
+    (".js", ".js#"),
+    (".jsx", ".jsx#"),
+    (".mjs", ".mjs#"),
+    (".cjs", ".cjs#"),
+    (".sh", ".sh#"),
+    (".py", ".py#"),
+    (".rb", ".rb#"),
+    (".ps1", ".ps1#"),
+    (".zsh", ".zsh#"),
+    (".bash", ".bash#"),
+];
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(super) struct ChoiceDisplayMetadata {
     pub(super) description: Option<String>,
@@ -22,16 +37,24 @@ pub(super) struct SelectChoiceIndex {
 
 impl SelectChoiceIndex {
     pub(super) fn from_choice(choice: &Choice, source_index: usize) -> Self {
-        let metadata = ChoiceDisplayMetadata::from_choice(choice);
+        let name_lower = choice.name.to_lowercase();
+        let description_lower = choice
+            .description
+            .as_deref()
+            .unwrap_or_default()
+            .to_lowercase();
+        let value_lower = choice.value.to_lowercase();
+        let metadata = ChoiceDisplayMetadata::from_choice_with_lower(
+            choice,
+            &name_lower,
+            &description_lower,
+            &value_lower,
+        );
 
         SelectChoiceIndex {
-            name_lower: choice.name.to_lowercase(),
-            description_lower: choice
-                .description
-                .as_deref()
-                .unwrap_or_default()
-                .to_lowercase(),
-            value_lower: choice.value.to_lowercase(),
+            name_lower,
+            description_lower,
+            value_lower,
             item_type_lower: metadata
                 .item_type
                 .as_deref()
@@ -55,6 +78,22 @@ impl SelectChoiceIndex {
 
 impl ChoiceDisplayMetadata {
     pub(super) fn from_choice(choice: &Choice) -> Self {
+        let name_lower = choice.name.to_lowercase();
+        let description_lower = choice
+            .description
+            .as_deref()
+            .unwrap_or_default()
+            .to_lowercase();
+        let value_lower = choice.value.to_lowercase();
+        Self::from_choice_with_lower(choice, &name_lower, &description_lower, &value_lower)
+    }
+
+    pub(super) fn from_choice_with_lower(
+        choice: &Choice,
+        name_lower: &str,
+        description_lower: &str,
+        value_lower: &str,
+    ) -> Self {
         let mut metadata = Self::default();
         let mut description_parts = Vec::new();
 
@@ -94,7 +133,9 @@ impl ChoiceDisplayMetadata {
         }
 
         if metadata.item_type.is_none() {
-            metadata.item_type = infer_script_type(choice);
+            metadata.item_type =
+                infer_script_type_from_lowercase(name_lower, description_lower, value_lower)
+                    .map(str::to_string);
         }
 
         metadata
@@ -137,35 +178,45 @@ fn infer_script_type(choice: &Choice) -> Option<String> {
         .as_deref()
         .unwrap_or_default()
         .to_lowercase();
-    let combined = format!("{} {} {}", name_lower, description_lower, value_lower);
+    infer_script_type_from_lowercase(&name_lower, &description_lower, &value_lower)
+        .map(str::to_string)
+}
 
-    if combined.contains("scriptlet")
+fn infer_script_type_from_lowercase(
+    name_lower: &str,
+    description_lower: &str,
+    value_lower: &str,
+) -> Option<&'static str> {
+    let contains_any = |needle: &str| {
+        name_lower.contains(needle)
+            || description_lower.contains(needle)
+            || value_lower.contains(needle)
+    };
+
+    if contains_any("scriptlet")
         || value_lower.contains(".md#")
         || value_lower.contains("/snippets/")
     {
-        return Some("Scriptlet".to_string());
+        return Some("Scriptlet");
     }
 
-    if combined.contains("extension")
+    if contains_any("extension")
         || value_lower.contains("/extensions/")
         || value_lower.contains("/extension/")
     {
-        return Some("Extension".to_string());
+        return Some("Extension");
     }
 
-    if combined.contains("agent") {
-        return Some("Agent".to_string());
+    if contains_any("agent") {
+        return Some("Agent");
     }
 
-    let script_extensions = [
-        ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".sh", ".py", ".rb", ".ps1", ".zsh", ".bash",
-    ];
-    if combined.contains("script")
-        || script_extensions
+    if contains_any("script")
+        || SCRIPT_EXT_FRAGMENTS
             .iter()
-            .any(|ext| value_lower.ends_with(ext) || value_lower.contains(&format!("{ext}#")))
+            .any(|(ext, ext_hash)| value_lower.ends_with(ext) || value_lower.contains(ext_hash))
     {
-        return Some("Script".to_string());
+        return Some("Script");
     }
 
     None
@@ -283,4 +334,62 @@ fn extract_last_run_token(token: &str) -> Option<String> {
 }
 pub(super) fn fallback_select_semantic_id(source_index: usize, value: &str) -> String {
     generate_semantic_id("select", source_index, value)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn choice(name: &str, value: &str, description: Option<&str>) -> Choice {
+        let mut choice = Choice::new(name.to_string(), value.to_string());
+        choice.description = description.map(str::to_string);
+        choice
+    }
+
+    #[test]
+    fn test_from_choice_with_lower_infers_script_when_value_contains_extension_fragment() {
+        let choice = choice(
+            "Deploy API",
+            "/Users/me/.scriptkit/scripts/DEPLOY.TS#edit",
+            None,
+        );
+        let name_lower = choice.name.to_lowercase();
+        let description_lower = choice
+            .description
+            .as_deref()
+            .unwrap_or_default()
+            .to_lowercase();
+        let value_lower = choice.value.to_lowercase();
+
+        let metadata = ChoiceDisplayMetadata::from_choice_with_lower(
+            &choice,
+            &name_lower,
+            &description_lower,
+            &value_lower,
+        );
+
+        assert_eq!(metadata.item_type.as_deref(), Some("Script"));
+    }
+
+    #[test]
+    fn test_infer_script_type_wrapper_matches_lowercase_helper() {
+        let choice = choice(
+            "Agent Runner",
+            "/Users/me/.scriptkit/scripts/runner",
+            Some("Runs agent workflows"),
+        );
+        let name_lower = choice.name.to_lowercase();
+        let description_lower = choice
+            .description
+            .as_deref()
+            .unwrap_or_default()
+            .to_lowercase();
+        let value_lower = choice.value.to_lowercase();
+
+        assert_eq!(
+            infer_script_type(&choice),
+            infer_script_type_from_lowercase(&name_lower, &description_lower, &value_lower)
+                .map(str::to_string)
+        );
+    }
 }

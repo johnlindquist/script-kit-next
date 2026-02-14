@@ -1,4 +1,8 @@
 use super::*;
+use crate::ui_foundation::{
+    is_key_backspace, is_key_down, is_key_enter, is_key_escape, is_key_k, is_key_space, is_key_tab,
+    is_key_up,
+};
 use std::borrow::Cow;
 /// Available AI models for the chat
 #[derive(Clone, Debug, PartialEq)]
@@ -79,7 +83,7 @@ pub(crate) fn resolve_setup_card_key(
 ) -> (usize, SetupCardAction, bool) {
     let current_index = current_index % 2;
 
-    if key.eq_ignore_ascii_case("tab") {
+    if is_key_tab(key) {
         let next_index = if shift {
             if current_index == 0 {
                 1
@@ -92,7 +96,7 @@ pub(crate) fn resolve_setup_card_key(
         return (next_index, SetupCardAction::None, true);
     }
 
-    if key.eq_ignore_ascii_case("up") || key.eq_ignore_ascii_case("arrowup") {
+    if is_key_up(key) {
         let next_index = if current_index == 0 {
             1
         } else {
@@ -101,12 +105,12 @@ pub(crate) fn resolve_setup_card_key(
         return (next_index, SetupCardAction::None, true);
     }
 
-    if key.eq_ignore_ascii_case("down") || key.eq_ignore_ascii_case("arrowdown") {
+    if is_key_down(key) {
         let next_index = (current_index + 1) % 2;
         return (next_index, SetupCardAction::None, true);
     }
 
-    if key.eq_ignore_ascii_case("enter") || key.eq_ignore_ascii_case("return") || key == " " {
+    if is_key_enter(key) || is_key_space(key) {
         let action = if current_index == 0 {
             SetupCardAction::ActivateConfigure
         } else {
@@ -115,7 +119,7 @@ pub(crate) fn resolve_setup_card_key(
         return (current_index, action, false);
     }
 
-    if key.eq_ignore_ascii_case("escape") {
+    if is_key_escape(key) {
         return (current_index, SetupCardAction::Escape, false);
     }
 
@@ -185,21 +189,40 @@ pub(crate) fn resolve_chat_input_key_action(
     cmd_pressed: bool,
     shift_pressed: bool,
 ) -> ChatInputKeyAction {
-    let key_lower = key.to_ascii_lowercase();
-
-    match key_lower.as_str() {
-        "escape" | "esc" => ChatInputKeyAction::Escape,
-        "." if cmd_pressed => ChatInputKeyAction::StopStreaming,
-        "k" if cmd_pressed => ChatInputKeyAction::ToggleActions,
-        "enter" | "return" if cmd_pressed => ChatInputKeyAction::ContinueInChat,
-        "enter" | "return" if shift_pressed => ChatInputKeyAction::InsertNewline,
-        "enter" | "return" => ChatInputKeyAction::Submit,
-        "c" if cmd_pressed => ChatInputKeyAction::CopyLastResponse,
-        "backspace" if cmd_pressed => ChatInputKeyAction::ClearConversation,
-        "v" if cmd_pressed => ChatInputKeyAction::Paste,
-        _ if cmd_pressed => ChatInputKeyAction::Ignore,
-        _ => ChatInputKeyAction::DelegateToInput,
+    if is_key_escape(key) {
+        return ChatInputKeyAction::Escape;
     }
+
+    if cmd_pressed {
+        if key == "." {
+            return ChatInputKeyAction::StopStreaming;
+        }
+        if is_key_k(key) {
+            return ChatInputKeyAction::ToggleActions;
+        }
+        if is_key_enter(key) {
+            return ChatInputKeyAction::ContinueInChat;
+        }
+        if key.eq_ignore_ascii_case("c") {
+            return ChatInputKeyAction::CopyLastResponse;
+        }
+        if is_key_backspace(key) {
+            return ChatInputKeyAction::ClearConversation;
+        }
+        if key.eq_ignore_ascii_case("v") {
+            return ChatInputKeyAction::Paste;
+        }
+        return ChatInputKeyAction::Ignore;
+    }
+
+    if is_key_enter(key) {
+        if shift_pressed {
+            return ChatInputKeyAction::InsertNewline;
+        }
+        return ChatInputKeyAction::Submit;
+    }
+
+    ChatInputKeyAction::DelegateToInput
 }
 
 pub(super) fn should_ignore_stream_reveal_update(

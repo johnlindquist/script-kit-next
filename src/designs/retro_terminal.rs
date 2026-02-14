@@ -1,7 +1,4 @@
-#![allow(dead_code)]
-
-#[allow(unused_imports)]
-use super::{DesignRenderer, DesignVariant};
+use super::DesignVariant;
 
 mod parts;
 pub use parts::*;
