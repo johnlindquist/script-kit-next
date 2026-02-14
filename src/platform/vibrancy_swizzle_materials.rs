@@ -349,33 +349,3 @@ unsafe fn dump_layer_hierarchy(layer: id, depth: usize) {
 pub fn swizzle_gpui_blurred_view() {
     // No-op on non-macOS platforms
 }
-
-/// Get diagnostic info about the BlurredView swizzle status
-#[cfg(target_os = "macos")]
-#[allow(dead_code)]
-pub fn get_swizzle_diagnostics() -> (bool, u64) {
-    use std::sync::atomic::Ordering;
-    (
-        SWIZZLE_DONE.load(Ordering::Relaxed),
-        PATCHED_UPDATE_LAYER_CALLS.load(Ordering::Relaxed),
-    )
-}
-
-#[cfg(not(target_os = "macos"))]
-#[allow(dead_code)]
-pub fn get_swizzle_diagnostics() -> (bool, u64) {
-    (false, 0)
-}
-
-/// Log swizzle diagnostics - call periodically to monitor swizzle health
-#[allow(dead_code)]
-pub fn log_swizzle_diagnostics() {
-    let (done, calls) = get_swizzle_diagnostics();
-    logging::log(
-        "VIBRANCY",
-        &format!(
-            "Swizzle diagnostics: done={}, patched_update_layer_calls={}",
-            done, calls
-        ),
-    );
-}
