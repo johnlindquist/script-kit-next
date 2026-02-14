@@ -20,7 +20,6 @@ pub struct StoryBrowser {
     stories: Vec<&'static StoryEntry>,
     selected_index: usize,
     filter: String,
-    #[allow(dead_code)]
     current_theme: Theme,
     theme_name: String,
     design_variant: DesignVariant,
@@ -83,11 +82,12 @@ impl StoryBrowser {
     }
 
     fn render_search_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = crate::theme::get_cached_theme();
         let filter = self.filter.clone();
         div()
             .p_2()
             .border_b_1()
-            .border_color(rgb(0x3d3d3d))
+            .border_color(rgb(theme.colors.ui.border))
             .child(
                 div()
                     .flex()
@@ -96,20 +96,20 @@ impl StoryBrowser {
                     .gap_2()
                     .px_2()
                     .py_1()
-                    .bg(rgb(0x2d2d2d))
+                    .bg(rgb(theme.colors.background.title_bar))
                     .rounded_md()
                     .child(
                         // Search icon
-                        div().text_color(rgb(0x666666)).child("🔍"),
+                        div().text_color(rgb(theme.colors.text.dimmed)).child("🔍"),
                     )
                     .child(
                         div()
                             .flex_1()
                             .text_sm()
                             .text_color(if filter.is_empty() {
-                                rgb(0x666666)
+                                rgb(theme.colors.text.dimmed)
                             } else {
-                                rgb(0xcccccc)
+                                rgb(theme.colors.text.secondary)
                             })
                             .child(if filter.is_empty() {
                                 "Search stories...".to_string()
@@ -131,6 +131,7 @@ impl StoryBrowser {
         filtered: &[&'static StoryEntry],
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let theme = crate::theme::get_cached_theme();
         let categories = all_categories();
 
         div()
@@ -158,7 +159,7 @@ impl StoryBrowser {
                             .px_3()
                             .py_2()
                             .text_xs()
-                            .text_color(rgb(0x888888))
+                            .text_color(rgb(theme.colors.text.tertiary))
                             .font_weight(FontWeight::SEMIBOLD)
                             .child(category.to_uppercase()),
                     )
@@ -189,10 +190,11 @@ impl StoryBrowser {
                             }));
 
                         if is_selected {
-                            base.bg(rgb(0x4a90d9)).text_color(rgb(0xffffff))
+                            base.bg(rgb(theme.colors.ui.info))
+                                .text_color(rgb(theme.colors.text.primary))
                         } else {
-                            base.text_color(rgb(0xcccccc))
-                                .hover(|s| s.bg(rgb(0x3d3d3d)))
+                            base.text_color(rgb(theme.colors.text.secondary))
+                                .hover(|s| s.bg(rgb(theme.colors.ui.border)))
                         }
                     }))
                     .into_any_element()
@@ -200,6 +202,7 @@ impl StoryBrowser {
     }
 
     fn render_toolbar(&self, _cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = crate::theme::get_cached_theme();
         div()
             .flex()
             .flex_row()
@@ -208,8 +211,8 @@ impl StoryBrowser {
             .px_4()
             .py_2()
             .border_b_1()
-            .border_color(rgb(0x3d3d3d))
-            .bg(rgb(0x252525))
+            .border_color(rgb(theme.colors.ui.border))
+            .bg(rgb(theme.colors.background.title_bar))
             .child(
                 // Left: Story info
                 div()
@@ -221,7 +224,7 @@ impl StoryBrowser {
                         div()
                             .text_base()
                             .font_weight(FontWeight::MEDIUM)
-                            .text_color(rgb(0xffffff))
+                            .text_color(rgb(theme.colors.text.primary))
                             .child(
                                 self.stories
                                     .get(self.selected_index)
@@ -230,7 +233,7 @@ impl StoryBrowser {
                             ),
                     )
                     .child(
-                        div().text_xs().text_color(rgb(0x666666)).child(
+                        div().text_xs().text_color(rgb(theme.colors.text.dimmed)).child(
                             self.stories
                                 .get(self.selected_index)
                                 .map(|s| format!("({})", s.story.category()))
@@ -251,14 +254,19 @@ impl StoryBrowser {
                             .flex_row()
                             .items_center()
                             .gap_1()
-                            .child(div().text_xs().text_color(rgb(0x888888)).child("Theme:"))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(rgb(theme.colors.text.tertiary))
+                                    .child("Theme:"),
+                            )
                             .child(
                                 div()
                                     .px_2()
                                     .py_1()
                                     .text_xs()
-                                    .text_color(rgb(0xcccccc))
-                                    .bg(rgb(0x2d2d2d))
+                                    .text_color(rgb(theme.colors.text.secondary))
+                                    .bg(rgb(theme.colors.background.title_bar))
                                     .rounded_sm()
                                     .cursor_pointer()
                                     .child(self.theme_name.clone()),
@@ -270,14 +278,19 @@ impl StoryBrowser {
                             .flex_row()
                             .items_center()
                             .gap_1()
-                            .child(div().text_xs().text_color(rgb(0x888888)).child("Design:"))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(rgb(theme.colors.text.tertiary))
+                                    .child("Design:"),
+                            )
                             .child(
                                 div()
                                     .px_2()
                                     .py_1()
                                     .text_xs()
-                                    .text_color(rgb(0xcccccc))
-                                    .bg(rgb(0x2d2d2d))
+                                    .text_color(rgb(theme.colors.text.secondary))
+                                    .bg(rgb(theme.colors.background.title_bar))
                                     .rounded_sm()
                                     .cursor_pointer()
                                     .child(format!("{:?}", self.design_variant)),
@@ -287,6 +300,7 @@ impl StoryBrowser {
     }
 
     fn render_preview(&self) -> AnyElement {
+        let theme = crate::theme::get_cached_theme();
         if let Some(story) = self.stories.get(self.selected_index) {
             story.story.render()
         } else {
@@ -295,7 +309,7 @@ impl StoryBrowser {
                 .items_center()
                 .justify_center()
                 .size_full()
-                .text_color(rgb(0x666666))
+                .text_color(rgb(theme.colors.text.dimmed))
                 .child("No story selected")
                 .into_any_element()
         }
@@ -430,6 +444,8 @@ impl StoryBrowser {
 
 impl Render for StoryBrowser {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = crate::theme::get_cached_theme();
+        let _current_theme = &self.current_theme;
         let filtered = self.filtered_stories();
 
         // Render the story preview - stories are stateless so no App context needed
@@ -458,29 +474,29 @@ impl Render for StoryBrowser {
             .flex()
             .flex_row()
             .size_full()
-            .bg(rgb(0x1e1e1e))
-            .text_color(rgb(0xcccccc))
+            .bg(rgb(theme.colors.background.main))
+            .text_color(rgb(theme.colors.text.secondary))
             // Left sidebar: story list
             .child(
                 div()
                     .w(px(280.))
                     .border_r_1()
-                    .border_color(rgb(0x3d3d3d))
+                    .border_color(rgb(theme.colors.ui.border))
                     .flex()
                     .flex_col()
-                    .bg(rgb(0x252525))
+                    .bg(rgb(theme.colors.background.title_bar))
                     .child(
                         // Header
                         div()
                             .px_3()
                             .py_2()
                             .border_b_1()
-                            .border_color(rgb(0x3d3d3d))
+                            .border_color(rgb(theme.colors.ui.border))
                             .child(
                                 div()
                                     .text_sm()
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(rgb(0xffffff))
+                                    .text_color(rgb(theme.colors.text.primary))
                                     .child("Script Kit Storybook"),
                             ),
                     )
