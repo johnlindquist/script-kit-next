@@ -180,6 +180,13 @@ impl ScriptListApp {
         .detach();
     }
 
+    fn begin_actions_popup_window_open(&mut self, cx: &mut Context<Self>, window: &mut Window) {
+        self.show_actions_popup = true;
+        self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
+        self.focus_handle.focus(window, cx);
+        self.gpui_input_focused = false;
+    }
+
     pub(crate) fn toggle_actions(&mut self, cx: &mut Context<Self>, window: &mut Window) {
         let popup_state = self.show_actions_popup;
         let window_open = is_actions_window_open();
@@ -198,16 +205,7 @@ impl ScriptListApp {
             }
             self.resync_filter_input_after_actions_if_needed(window, cx);
             // Open actions as a separate window with vibrancy blur
-            self.show_actions_popup = true;
-
-            // Use coordinator to push overlay - saves current focus state for restore
-            self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
-
-            // CRITICAL: Transfer focus from Input to main focus_handle
-            // This prevents the Input from receiving text (which would go to main filter)
-            // while keeping keyboard focus in main window for routing to actions dialog
-            self.focus_handle.focus(window, cx);
-            self.gpui_input_focused = false;
+            self.begin_actions_popup_window_open(cx, window);
 
             let script_info = self.get_focused_script_info();
 
@@ -366,12 +364,7 @@ impl ScriptListApp {
         } else {
             self.resync_filter_input_after_actions_if_needed(window, cx);
             // Open actions as a separate window — same pattern as toggle_chat_actions
-            self.show_actions_popup = true;
-            self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
-
-            // Transfer focus to main focus_handle while actions window is open
-            self.focus_handle.focus(window, cx);
-            self.gpui_input_focused = false;
+            self.begin_actions_popup_window_open(cx, window);
 
             let theme_arc = std::sync::Arc::clone(&self.theme);
             let webcam_actions = Self::webcam_actions_for_dialog();
@@ -517,15 +510,7 @@ impl ScriptListApp {
 
             self.resync_filter_input_after_actions_if_needed(window, cx);
             // Open actions as a separate window with vibrancy blur
-            self.show_actions_popup = true;
-            // Push overlay to save chat prompt focus state
-            self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
-
-            // CRITICAL: Transfer focus from ChatPrompt to main focus_handle
-            // This prevents the ChatPrompt from receiving text input while
-            // the actions dialog is open (same pattern as toggle_actions for ScriptList)
-            self.focus_handle.focus(window, cx);
-            self.gpui_input_focused = false;
+            self.begin_actions_popup_window_open(cx, window);
 
             let theme_arc = std::sync::Arc::clone(&self.theme);
             let dialog = cx.new(|cx| {
@@ -658,6 +643,80 @@ mod on_close_reentrancy_tests {
         assert_eq!(
             open_call_count, 1,
             "open_actions_window match block should live only in spawn_open_actions_window helper"
+        );
+    }
+
+    #[test]
+    fn test_begin_actions_popup_window_open_is_used_by_popup_window_toggles_only() {
+        let source = fs::read_to_string("src/app_impl/actions_toggle.rs")
+            .expect("Failed to read src/app_impl/actions_toggle.rs");
+        let impl_source = source
+            .split("\n#[cfg(test)]")
+            .next()
+            .expect("Expected implementation section before tests");
+
+        assert!(
+            impl_source.contains(
+                "fn begin_actions_popup_window_open(&mut self, cx: &mut Context<Self>, window: &mut Window) {"
+            ),
+            "actions_toggle should define begin_actions_popup_window_open helper"
+        );
+
+        let helper_call_count = impl_source
+            .matches("self.begin_actions_popup_window_open(cx, window);")
+            .count();
+        assert_eq!(
+            helper_call_count, 3,
+            "toggle_actions, toggle_webcam_actions, and toggle_chat_actions should call begin_actions_popup_window_open"
+        );
+
+        let toggle_actions_source = impl_source
+            .split("pub(crate) fn toggle_actions")
+            .nth(1)
+            .and_then(|section| section.split("pub(crate) fn toggle_arg_actions").next())
+            .expect("toggle_actions source section should exist");
+        assert!(
+            toggle_actions_source.contains("self.begin_actions_popup_window_open(cx, window);"),
+            "toggle_actions should use begin_actions_popup_window_open"
+        );
+
+        let toggle_webcam_actions_source = impl_source
+            .split("pub fn toggle_webcam_actions")
+            .nth(1)
+            .and_then(|section| section.split("pub fn toggle_terminal_commands").next())
+            .expect("toggle_webcam_actions source section should exist");
+        assert!(
+            toggle_webcam_actions_source.contains("self.begin_actions_popup_window_open(cx, window);"),
+            "toggle_webcam_actions should use begin_actions_popup_window_open"
+        );
+
+        let toggle_chat_actions_source = impl_source
+            .split("pub fn toggle_chat_actions")
+            .nth(1)
+            .expect("toggle_chat_actions source section should exist");
+        assert!(
+            toggle_chat_actions_source.contains("self.begin_actions_popup_window_open(cx, window);"),
+            "toggle_chat_actions should use begin_actions_popup_window_open"
+        );
+
+        let toggle_arg_actions_source = impl_source
+            .split("pub(crate) fn toggle_arg_actions")
+            .nth(1)
+            .and_then(|section| section.split("pub fn toggle_webcam_actions").next())
+            .expect("toggle_arg_actions source section should exist");
+        assert!(
+            !toggle_arg_actions_source.contains("self.begin_actions_popup_window_open(cx, window);"),
+            "toggle_arg_actions should not use begin_actions_popup_window_open"
+        );
+
+        let toggle_terminal_commands_source = impl_source
+            .split("pub fn toggle_terminal_commands")
+            .nth(1)
+            .and_then(|section| section.split("pub fn toggle_chat_actions").next())
+            .expect("toggle_terminal_commands source section should exist");
+        assert!(
+            !toggle_terminal_commands_source.contains("self.begin_actions_popup_window_open(cx, window);"),
+            "toggle_terminal_commands should not use begin_actions_popup_window_open"
         );
     }
 }
