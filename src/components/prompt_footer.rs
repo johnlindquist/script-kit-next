@@ -95,6 +95,8 @@ pub struct PromptFooterColors {
     pub text_muted: u32,
     /// Border color for top border and divider
     pub border: u32,
+    /// Surface color for the footer container background
+    pub surface: u32,
     /// Background color for footer surface
     pub background: u32,
     /// Whether we're in light mode (affects opacity)
@@ -108,6 +110,7 @@ impl PromptFooterColors {
             accent: theme.colors.accent.selected,
             text_muted: theme.colors.text.muted,
             border: theme.colors.ui.border,
+            surface: theme.colors.background.main,
             // Match selected item surface token for footer consistency.
             background: theme.colors.accent.selected_subtle,
             is_light_mode: !theme.is_dark_mode(),
@@ -132,8 +135,8 @@ impl Default for PromptFooterColors {
 /// Resolve footer surface color with mode-specific opacity.
 pub fn footer_surface_rgba(colors: PromptFooterColors) -> u32 {
     if colors.is_light_mode {
-        // Neutral warm gray for light mode — blocks vibrancy so footer text stays legible.
-        0xf0eeefff
+        // Light mode uses the theme's base surface token as an opaque footer background.
+        (colors.surface << 8) | 0xff
     } else {
         // Dark mode: use selected_subtle as a subtle overlay (~12% opacity).
         (colors.background << 8) | 0x1f
@@ -581,17 +584,19 @@ mod tests {
     };
 
     #[test]
-    fn test_footer_surface_rgba_returns_neutral_gray_in_light_mode() {
+    fn test_footer_surface_rgba_uses_surface_token_with_full_opacity_in_light_mode() {
         let colors = PromptFooterColors {
             accent: 0,
             text_muted: 0,
             border: 0,
+            surface: 0x112233,
             background: 0x2255aa,
             is_light_mode: true,
         };
 
-        // Light mode always returns the neutral warm gray, regardless of background token.
-        assert_eq!(footer_surface_rgba(colors), 0xf0eeefff);
+        // Light mode uses the theme-derived surface token, not a hard-coded gray.
+        assert_eq!(footer_surface_rgba(colors), 0x112233ff);
+        assert_ne!(footer_surface_rgba(colors), 0xf0eeefff);
     }
 
     #[test]
@@ -600,12 +605,23 @@ mod tests {
             accent: 0,
             text_muted: 0,
             border: 0,
+            surface: 0x112233,
             background: 0x2255aa,
             is_light_mode: false,
         };
 
         // Dark mode uses background token at ~12% opacity.
         assert_eq!(footer_surface_rgba(colors), 0x2255aa1f);
+    }
+
+    #[test]
+    fn test_prompt_footer_colors_from_theme_sets_surface_from_background_main() {
+        let mut theme = crate::theme::Theme::default();
+        theme.colors.background.main = 0x445566;
+
+        let resolved = PromptFooterColors::from_theme(&theme);
+
+        assert_eq!(resolved.surface, 0x445566);
     }
 
     #[test]
@@ -624,6 +640,7 @@ mod tests {
         assert_eq!(resolved.accent, expected.accent);
         assert_eq!(resolved.text_muted, expected.text_muted);
         assert_eq!(resolved.border, expected.border);
+        assert_eq!(resolved.surface, expected.surface);
         assert_eq!(resolved.background, expected.background);
         assert_eq!(resolved.is_light_mode, expected.is_light_mode);
     }
@@ -636,6 +653,7 @@ mod tests {
         assert_eq!(resolved.accent, expected.accent);
         assert_eq!(resolved.text_muted, expected.text_muted);
         assert_eq!(resolved.border, expected.border);
+        assert_eq!(resolved.surface, expected.surface);
         assert_eq!(resolved.background, expected.background);
         assert_eq!(resolved.is_light_mode, expected.is_light_mode);
     }
@@ -646,6 +664,7 @@ mod tests {
             accent: 0,
             text_muted: 0,
             border: 0,
+            surface: 0,
             background: 0,
             is_light_mode: true,
         };
@@ -664,6 +683,7 @@ mod tests {
             accent: 0,
             text_muted: 0,
             border: 0,
+            surface: 0,
             background: 0x2255aa,
             is_light_mode: false,
         };
@@ -677,6 +697,7 @@ mod tests {
             accent: 0,
             text_muted: 0,
             border: 0,
+            surface: 0,
             background: 0x2255aa,
             is_light_mode: false,
         };
