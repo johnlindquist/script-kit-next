@@ -210,8 +210,7 @@ pub fn decode_to_render_image(content: &str) -> Option<Arc<RenderImage>> {
     }
 }
 
-fn ensure_render_image_dimensions_within_limit(content: &str, format: &str) -> Option<(u32, u32)> {
-    let (width, height) = get_image_dimensions(content)?;
+fn ensure_dimensions_within_limit(width: u32, height: u32, format: &str) -> Option<(u32, u32)> {
     let pixel_count = u64::from(width).checked_mul(u64::from(height))?;
 
     if pixel_count > MAX_RENDER_IMAGE_PIXELS {
@@ -229,12 +228,11 @@ fn ensure_render_image_dimensions_within_limit(content: &str, format: &str) -> O
     Some((width, height))
 }
 
-/// Decode blob format to RenderImage
-fn decode_blob_to_render_image(content: &str) -> Option<Arc<RenderImage>> {
-    ensure_render_image_dimensions_within_limit(content, "blob")?;
-    let png_bytes = load_blob(content)?;
-
-    let img = image::load_from_memory_with_format(&png_bytes, image::ImageFormat::Png).ok()?;
+fn decode_png_bytes_to_render_image_with_format(
+    png: &[u8],
+    format: &'static str,
+) -> Option<Arc<RenderImage>> {
+    let img = image::load_from_memory_with_format(png, image::ImageFormat::Png).ok()?;
     let mut rgba = img.to_rgba8();
     let img_width = rgba.width();
     let img_height = rgba.height();
@@ -252,40 +250,31 @@ fn decode_blob_to_render_image(content: &str) -> Option<Arc<RenderImage>> {
     debug!(
         width = img_width,
         height = img_height,
-        format = "blob",
-        "Decoded blob clipboard image to RenderImage"
+        format,
+        "Decoded clipboard image to RenderImage"
     );
     Some(Arc::new(render_image))
 }
 
+fn decode_png_bytes_to_render_image(png: &[u8]) -> Option<Arc<RenderImage>> {
+    decode_png_bytes_to_render_image_with_format(png, "png")
+}
+
+/// Decode blob format to RenderImage
+fn decode_blob_to_render_image(content: &str) -> Option<Arc<RenderImage>> {
+    let png_bytes = load_blob(content)?;
+    let (width, height) = png_dims_from_bytes(&png_bytes)?;
+    ensure_dimensions_within_limit(width, height, "blob")?;
+    decode_png_bytes_to_render_image_with_format(&png_bytes, "blob")
+}
+
 /// Decode PNG format to RenderImage
 fn decode_png_to_render_image(content: &str) -> Option<Arc<RenderImage>> {
-    ensure_render_image_dimensions_within_limit(content, "png")?;
     let base64_data = content.strip_prefix("png:")?;
     let png_bytes = BASE64.decode(base64_data).ok()?;
-
-    let img = image::load_from_memory_with_format(&png_bytes, image::ImageFormat::Png).ok()?;
-    let mut rgba = img.to_rgba8();
-    let img_width = rgba.width();
-    let img_height = rgba.height();
-
-    // Convert RGBA to BGRA for Metal/GPUI (swap R and B channels)
-    for pixel in rgba.chunks_exact_mut(4) {
-        pixel.swap(0, 2);
-    }
-
-    let frame = image::Frame::new(rgba);
-    // Use smallvec! macro to avoid cloning the frame buffer
-    // (SmallVec::from_elem clones the element, which would duplicate megabytes of pixel data)
-    let render_image = RenderImage::new(smallvec![frame]);
-
-    debug!(
-        width = img_width,
-        height = img_height,
-        format = "png",
-        "Decoded clipboard image to RenderImage"
-    );
-    Some(Arc::new(render_image))
+    let (width, height) = png_dims_from_bytes(&png_bytes)?;
+    ensure_dimensions_within_limit(width, height, "png")?;
+    decode_png_bytes_to_render_image(&png_bytes)
 }
 
 /// Decode legacy RGBA format to RenderImage
@@ -362,12 +351,7 @@ pub fn get_image_dimensions(content: &str) -> Option<(u32, u32)> {
 /// Extract dimensions from blob file without full decode
 fn get_blob_dimensions(content: &str) -> Option<(u32, u32)> {
     let png_bytes = load_blob(content)?;
-
-    let cursor = std::io::Cursor::new(&png_bytes);
-    let reader = image::ImageReader::with_format(cursor, image::ImageFormat::Png);
-    let (width, height) = reader.into_dimensions().ok()?;
-
-    Some((width, height))
+    png_dims_from_bytes(&png_bytes)
 }
 
 /// Extract dimensions from PNG header using fast header-only parsing
@@ -390,11 +374,13 @@ fn get_png_dimensions(content: &str) -> Option<(u32, u32)> {
 
     // Fallback: decode entire PNG and use image crate (handles edge cases)
     let png_bytes = BASE64.decode(base64_data).ok()?;
-    let cursor = std::io::Cursor::new(&png_bytes);
-    let reader = image::ImageReader::with_format(cursor, image::ImageFormat::Png);
-    let (width, height) = reader.into_dimensions().ok()?;
+    png_dims_from_bytes(&png_bytes)
+}
 
-    Some((width, height))
+fn png_dims_from_bytes(png: &[u8]) -> Option<(u32, u32)> {
+    let cursor = std::io::Cursor::new(png);
+    let reader = image::ImageReader::with_format(cursor, image::ImageFormat::Png);
+    reader.into_dimensions().ok()
 }
 
 /// Fast PNG dimension extraction from base64 data (header only)
@@ -731,6 +717,27 @@ mod tests {
         assert!(
             decode_to_render_image(&oversized_png).is_none(),
             "Oversized PNG should be rejected before full decode"
+        );
+    }
+
+    #[test]
+    fn test_decode_to_render_image_rejects_blob_above_pixel_limit() {
+        let original = arboard::ImageData {
+            width: 1,
+            height: 1,
+            bytes: vec![255, 0, 0, 255].into(),
+        };
+        let mut png_bytes = encode_image_to_png_bytes(&original).expect("Should encode PNG bytes");
+
+        // Overwrite IHDR dimensions to exceed MAX_RENDER_IMAGE_PIXELS.
+        png_bytes[16..20].copy_from_slice(&5000u32.to_be_bytes());
+        png_bytes[20..24].copy_from_slice(&5000u32.to_be_bytes());
+
+        let oversized_blob = store_blob(&png_bytes).expect("Should store oversized blob");
+        assert_eq!(get_image_dimensions(&oversized_blob), Some((5000, 5000)));
+        assert!(
+            decode_to_render_image(&oversized_blob).is_none(),
+            "Oversized blob should be rejected before full decode"
         );
     }
 
