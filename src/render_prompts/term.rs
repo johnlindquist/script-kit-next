@@ -139,110 +139,110 @@ impl ScriptListApp {
 
         // Key handler for Cmd+K actions toggle
         let actions_mode_for_handler = actions_mode;
+        let has_actions_for_toggle = true;
         let handle_key = cx.listener(
             move |this: &mut Self,
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
-                // Hide cursor while typing - automatically shows when mouse moves
-                this.hide_mouse_cursor(cx);
-
-                if key_preamble(this, event, false, false, cx) {
-                    return;
-                }
-
-                let key = event.keystroke.key.as_str();
-                let has_cmd = event.keystroke.modifiers.platform;
-                let has_shift = event.keystroke.modifiers.shift;
-                let is_quick_terminal = matches!(this.current_view, AppView::QuickTerminalView { .. });
-
-                if should_block_escape_for_non_dismissable_term(
-                    is_quick_terminal,
-                    this.show_actions_popup,
-                    key,
-                ) {
-                    let correlation_id = logging::current_correlation_id();
-                    logging::log_debug(
-                        "KEY",
-                        &format!(
-                            "{TERM_PROMPT_KEY_CONTEXT}: swallow non-dismissable escape (correlation_id={correlation_id})"
-                        ),
-                    );
-                    return;
-                }
-
-                // For QuickTerminalView (built-in utility): ESC returns to main menu or closes window
-                // This is different from TermPrompt (SDK prompt) which doesn't respond to ESC
-                if is_quick_terminal {
-                    if ui_foundation::is_key_escape(key) && !this.show_actions_popup {
-                        logging::log("KEY", "ESC in QuickTerminalView");
-                        this.go_back_or_close(window, cx);
-                        return;
-                    }
-
-                    if has_cmd && key.eq_ignore_ascii_case("w") {
-                        logging::log("KEY", "Cmd+W - closing window");
-                        this.close_and_reset_window(cx);
-                        return;
-                    }
-                }
-
-                let key_char = event.keystroke.key_char.as_deref();
-
-                // Cmd+K clears terminal output.
-                if is_term_prompt_clear_shortcut(has_cmd, has_shift, key) {
-                    let correlation_id = logging::current_correlation_id();
-                    logging::log(
-                        "KEY",
-                        &format!(
-                            "{TERM_PROMPT_KEY_CONTEXT}: Cmd+K clears terminal (correlation_id={correlation_id})"
-                        ),
-                    );
-                    this.execute_term_prompt_action_by_id(
-                        crate::actions_toggle::TERM_PROMPT_CLEAR_ACTION_ID,
-                        cx,
-                    );
-                    if this.show_actions_popup {
-                        this.close_actions_popup(ActionsDialogHost::TermPrompt, window, cx);
-                    }
-                    return;
-                }
-
-                // Cmd+Shift+K toggles terminal actions.
-                if is_term_prompt_actions_toggle_shortcut(has_cmd, has_shift, key) {
-                    let correlation_id = logging::current_correlation_id();
-                    logging::log(
-                        "KEY",
-                        &format!(
-                            "{TERM_PROMPT_KEY_CONTEXT}: Cmd+Shift+K toggles actions (mode={actions_mode_for_handler:?}, correlation_id={correlation_id})"
-                        ),
-                    );
-                    this.toggle_term_prompt_actions(actions_mode_for_handler, cx, window);
-                    return;
-                }
-
-                let modifiers = &event.keystroke.modifiers;
-
-                // Route to shared actions dialog handler (modal when open)
-                match this.route_key_to_actions_dialog(
-                    key,
-                    key_char,
-                    modifiers,
-                    ActionsDialogHost::TermPrompt,
+                if handle_prompt_key_preamble(
+                    this,
+                    event,
                     window,
                     cx,
-                ) {
-                    ActionsRoute::Execute { action_id } => {
+                    PromptKeyPreambleCfg {
+                        is_dismissable: false,
+                        stop_propagation_on_global_shortcut: false,
+                        stop_propagation_when_handled: false,
+                        host: ActionsDialogHost::TermPrompt,
+                    },
+                    |this, event, window, cx| {
+                        let key = event.keystroke.key.as_str();
+                        let has_cmd = event.keystroke.modifiers.platform;
+                        let has_shift = event.keystroke.modifiers.shift;
+                        let is_quick_terminal =
+                            matches!(this.current_view, AppView::QuickTerminalView { .. });
+
+                        if should_block_escape_for_non_dismissable_term(
+                            is_quick_terminal,
+                            this.show_actions_popup,
+                            key,
+                        ) {
+                            let correlation_id = logging::current_correlation_id();
+                            logging::log_debug(
+                                "KEY",
+                                &format!(
+                                    "{TERM_PROMPT_KEY_CONTEXT}: swallow non-dismissable escape (correlation_id={correlation_id})"
+                                ),
+                            );
+                            return true;
+                        }
+
+                        // For QuickTerminalView (built-in utility): ESC returns to main menu or closes window
+                        // This is different from TermPrompt (SDK prompt) which doesn't respond to ESC
+                        if is_quick_terminal {
+                            if ui_foundation::is_key_escape(key) && !this.show_actions_popup {
+                                logging::log("KEY", "ESC in QuickTerminalView");
+                                this.go_back_or_close(window, cx);
+                                return true;
+                            }
+
+                            if has_cmd && key.eq_ignore_ascii_case("w") {
+                                logging::log("KEY", "Cmd+W - closing window");
+                                this.close_and_reset_window(cx);
+                                return true;
+                            }
+                        }
+
+                        // Cmd+K clears terminal output.
+                        if is_term_prompt_clear_shortcut(has_cmd, has_shift, key) {
+                            let correlation_id = logging::current_correlation_id();
+                            logging::log(
+                                "KEY",
+                                &format!(
+                                    "{TERM_PROMPT_KEY_CONTEXT}: Cmd+K clears terminal (correlation_id={correlation_id})"
+                                ),
+                            );
+                            this.execute_term_prompt_action_by_id(
+                                crate::actions_toggle::TERM_PROMPT_CLEAR_ACTION_ID,
+                                cx,
+                            );
+                            if this.show_actions_popup {
+                                this.close_actions_popup(ActionsDialogHost::TermPrompt, window, cx);
+                            }
+                            return true;
+                        }
+
+                        false
+                    },
+                    |key, _key_char, modifiers| {
+                        is_term_prompt_actions_toggle_shortcut(
+                            modifiers.platform,
+                            modifiers.shift,
+                            key,
+                        ) && has_actions_for_toggle
+                    },
+                    |this, window, cx| {
+                        let correlation_id = logging::current_correlation_id();
+                        logging::log(
+                            "KEY",
+                            &format!(
+                                "{TERM_PROMPT_KEY_CONTEXT}: Cmd+Shift+K toggles actions (mode={actions_mode_for_handler:?}, correlation_id={correlation_id})"
+                            ),
+                        );
+                        this.toggle_term_prompt_actions(actions_mode_for_handler, cx, window);
+                    },
+                    |this, action_id, cx| {
                         if action_id == crate::actions_toggle::TERM_PROMPT_ACTIONS_TOGGLE_ACTION_ID
                         {
                             return;
                         }
 
-                        if this.trigger_action_by_name(&action_id, cx) {
+                        if this.trigger_action_by_name(action_id, cx) {
                             return;
                         }
 
-                        if this.execute_term_prompt_action_by_id(&action_id, cx) {
+                        if this.execute_term_prompt_action_by_id(action_id, cx) {
                             return;
                         }
 
@@ -253,32 +253,20 @@ impl ScriptListApp {
                                 "{TERM_PROMPT_KEY_CONTEXT}: unhandled actions dialog selection (action_id={action_id}, correlation_id={correlation_id})"
                             ),
                         );
-                        return;
-                    }
-                    ActionsRoute::Handled => {
-                        // Key consumed by actions dialog
-                        return;
-                    }
-                    ActionsRoute::NotHandled => {
-                        // Actions popup not open - continue with normal handling
-                    }
-                }
-
-                // Check for SDK action shortcuts (only when popup is NOT open)
-                let key_lower = key.to_lowercase();
-                if let Some(matched_shortcut) =
-                    check_sdk_action_shortcut(&this.action_shortcuts, &key_lower, &event.keystroke.modifiers)
-                {
-                    let correlation_id = logging::current_correlation_id();
-                    logging::log(
-                        "KEY",
-                        &format!(
-                            "{TERM_PROMPT_KEY_CONTEXT}: SDK action shortcut matched (action={}, shortcut={}, correlation_id={correlation_id})",
-                            matched_shortcut.action_name, matched_shortcut.shortcut_key
-                        ),
-                    );
-                    this.trigger_action_by_name(&matched_shortcut.action_name, cx);
-                }
+                    },
+                    |_key, _key_char, _modifiers| true,
+                    |this, matched_shortcut, cx| {
+                        let correlation_id = logging::current_correlation_id();
+                        logging::log(
+                            "KEY",
+                            &format!(
+                                "{TERM_PROMPT_KEY_CONTEXT}: SDK action shortcut matched (action={}, shortcut={}, correlation_id={correlation_id})",
+                                matched_shortcut.action_name, matched_shortcut.shortcut_key
+                            ),
+                        );
+                        this.trigger_action_by_name(&matched_shortcut.action_name, cx);
+                    },
+                ) {}
                 // Let other keys fall through to the terminal
             },
         );
@@ -397,6 +385,24 @@ mod term_prompt_render_tests {
         assert!(
             TERM_RENDER_SOURCE.contains("show_pointer_cursor: false"),
             "term render should keep backdrop cursor pointer disabled"
+        );
+    }
+
+    #[test]
+    fn test_term_key_handler_uses_shared_preamble_helper() {
+        const TERM_RENDER_SOURCE: &str = include_str!("term.rs");
+
+        assert!(
+            TERM_RENDER_SOURCE.contains("handle_prompt_key_preamble("),
+            "term key handling should delegate preamble logic to shared helper"
+        );
+        assert!(
+            TERM_RENDER_SOURCE.contains("PromptKeyPreambleCfg"),
+            "term key handling should configure the shared helper via PromptKeyPreambleCfg"
+        );
+        assert!(
+            TERM_RENDER_SOURCE.contains("let has_actions_for_toggle = true;"),
+            "term key handling should keep action toggling enabled in terminal-commands mode"
         );
     }
 
