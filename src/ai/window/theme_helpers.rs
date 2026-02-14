@@ -196,12 +196,6 @@ impl AiApp {
     /// 50% opacity (0x80) for good contrast without being too heavy.
     pub(super) fn get_modal_overlay_background() -> gpui::Rgba {
         let sk_theme = crate::theme::get_cached_theme();
-        if sk_theme.has_dark_colors() {
-            // Dark mode: use background-derived overlay
-            gpui::rgba(0x0B122080) // dark bg at 50%
-        } else {
-            // Light mode: use background-derived overlay
-            gpui::rgba(0xF8FAFC80) // light bg at 50%
-        }
+        crate::theme::modal_overlay_bg(&sk_theme, 0x80)
     }
 }

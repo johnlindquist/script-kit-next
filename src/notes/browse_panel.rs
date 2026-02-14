@@ -74,15 +74,6 @@ pub enum NoteAction {
     Delete,
 }
 
-// =============================================================================
-// Modal overlay tokens
-// =============================================================================
-
-/// Dark-mode modal overlay: black at 50 % (0x80 alpha channel).
-const MODAL_OVERLAY_DARK: u32 = 0x00000080;
-/// Light-mode modal overlay: white at 50 % (0x80 alpha channel).
-const MODAL_OVERLAY_LIGHT: u32 = 0xffffff80;
-
 /// Browse Panel - modal overlay for browsing and selecting notes
 ///
 /// This component is designed to be rendered as an overlay on top of the
@@ -396,21 +387,6 @@ impl BrowsePanel {
         ))
     }
 
-    /// Get modal overlay background (theme-aware)
-    ///
-    /// For dark mode: black overlay (darkens content behind)
-    /// For light mode: white overlay (keeps content readable on light backgrounds)
-    ///
-    /// Uses cached theme to avoid file I/O on every render.
-    fn get_modal_overlay_background() -> gpui::Rgba {
-        let sk_theme = crate::theme::get_cached_theme();
-        if sk_theme.has_dark_colors() {
-            rgba(MODAL_OVERLAY_DARK)
-        } else {
-            rgba(MODAL_OVERLAY_LIGHT)
-        }
-    }
-
     /// Render the notes list
     fn render_list(&self, cx: &mut Context<Self>) -> impl IntoElement {
         if self.notes.is_empty() {
@@ -449,7 +425,10 @@ impl Render for BrowsePanel {
             .id("browse-panel-backdrop")
             .absolute()
             .inset_0()
-            .bg(Self::get_modal_overlay_background()) // Theme-aware: black for dark, white for light
+            .bg({
+                let sk_theme = crate::theme::get_cached_theme();
+                crate::theme::modal_overlay_bg(&sk_theme, 0x80)
+            }) // Theme-aware: black for dark, white for light
             .flex()
             .items_center()
             .justify_center()
