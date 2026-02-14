@@ -1107,10 +1107,16 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
             return;
         }
 
-        let manager_guard = match MAIN_MANAGER.get().unwrap().lock() {
-            Ok(g) => g,
-            Err(e) => {
-                logging::log("HOTKEY", &format!("Failed to lock manager: {}", e));
+        let manager_guard = match MAIN_MANAGER.get() {
+            Some(m) => match m.lock() {
+                Ok(g) => g,
+                Err(e) => {
+                    logging::log("HOTKEY", &format!("Failed to lock manager: {}", e));
+                    return;
+                }
+            },
+            None => {
+                tracing::error!("MAIN_MANAGER not initialized");
                 return;
             }
         };
