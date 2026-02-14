@@ -15,7 +15,6 @@
 
 use gpui::*;
 
-use super::DesignVariant;
 use crate::scripts::SearchResult;
 use crate::theme::Theme;
 
@@ -105,11 +104,6 @@ impl MinimalRenderer {
             // Subtle hover: just slightly brighter
             .hover(|s| s.opacity(0.8))
             .child(name)
-    }
-
-    /// Get the design variant represented by this renderer.
-    pub fn variant(&self) -> DesignVariant {
-        DesignVariant::Minimal
     }
 }
 

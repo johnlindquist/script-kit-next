@@ -223,7 +223,7 @@ fn format_value(value: f64) -> Option<String> {
     };
     let abs = normalized.abs();
 
-    if abs > 0.0 && (abs >= SCI_NOTATION_HIGH || abs < SCI_NOTATION_LOW) {
+    if abs > 0.0 && !(SCI_NOTATION_LOW..SCI_NOTATION_HIGH).contains(&abs) {
         return format_scientific(normalized);
     }
 

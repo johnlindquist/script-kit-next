@@ -1,0 +1,30 @@
+[0;36m🔗 Running local pre-commit hook...[0m
+🔍 Checking formatting...
+✓ Formatting OK
+Warning: bd command not found, skipping pre-commit flush
+[0;35m
+    ╔═══════════════════════════════════════════╗
+    ║     🤖 ANTI-SLOP BOT 2000 🤖              ║
+    ║     Powered by Claude Opus                ║
+    ╚═══════════════════════════════════════════╝
+[0m
+[0;36m📋 Reviewing 18 file(s)...[0m
+[0;36m📏 Diff size: 1517 lines[0m
+
+[0;36m🔍 Analyzing with Claude opus...[0m
+
+[0;31m╔═══════════════════════════════════════════╗[0m
+[0;31m║  🚫 REJECTED - Slop detected!             ║[0m
+[0;31m╚═══════════════════════════════════════════╝[0m
+
+[0;31m[1mSummary:[0m Worker PID file committed to repository - runtime state should not be version-controlled
+
+[1mIssues:[0m
+  [MEDIUM] .xorloop-sessions/20260213-234813/worker.pid:1 - dead-code
+    → Worker PID file (containing process ID 32397) is runtime state being committed to the repository. This is ephemeral data that has no place in version control.
+    💡 Add .xorloop-sessions/**/worker.pid to .gitignore and remove this file from the commit. The old session's worker.pid is correctly being deleted but the new one is being added.
+
+
+[1;33mFix the issues above and try again.[0m
+[1;33mUse 'git commit --no-verify' to bypass (not recommended).[0m
+

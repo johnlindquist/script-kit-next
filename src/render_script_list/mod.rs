@@ -303,80 +303,93 @@ impl ScriptListApp {
                                 }
                                 GroupedListItem::Item(result_idx) => {
                                     // Regular item at 40px height (LIST_ITEM_HEIGHT)
-                                    if let Some(result) = flat_results_clone.get(*result_idx) {
-                                        let is_selected = ix == current_selected;
-                                        // Only show hover effect when in Mouse mode to prevent dual-highlight
-                                        let is_hovered = current_hovered == Some(ix) && current_input_mode == InputMode::Mouse;
+                                    let is_selected = ix == current_selected;
+                                    // Only show hover effect when in Mouse mode to prevent dual-highlight
+                                    let is_hovered = current_hovered == Some(ix)
+                                        && current_input_mode == InputMode::Mouse;
 
-                                        // Create hover handler
-                                        let hover_handler = cx.listener(
-                                            move |this: &mut ScriptListApp,
-                                                  hovered: &bool,
-                                                  _window,
-                                                  cx| {
-                                                let now = std::time::Instant::now();
-                                                const HOVER_DEBOUNCE_MS: u64 = 16;
+                                    // Create hover handler
+                                    let hover_handler = cx.listener(
+                                        move |this: &mut ScriptListApp,
+                                              hovered: &bool,
+                                              _window,
+                                              cx| {
+                                            let now = std::time::Instant::now();
+                                            const HOVER_DEBOUNCE_MS: u64 = 16;
 
-                                                if *hovered {
-                                                    // Mouse entered - switch to Mouse mode and set hovered_index
-                                                    // This re-enables hover effects after keyboard navigation
-                                                    this.input_mode = InputMode::Mouse;
+                                            if *hovered {
+                                                // Mouse entered - switch to Mouse mode and set hovered_index
+                                                // This re-enables hover effects after keyboard navigation
+                                                this.input_mode = InputMode::Mouse;
 
-                                                    if this.hovered_index != Some(ix)
-                                                        && now
-                                                            .duration_since(this.last_hover_notify)
-                                                            .as_millis()
-                                                            >= HOVER_DEBOUNCE_MS as u128
-                                                    {
-                                                        this.hovered_index = Some(ix);
-                                                        this.last_hover_notify = now;
-                                                        cx.notify();
-                                                    }
-                                                } else if this.hovered_index == Some(ix) {
-                                                    // Mouse left - clear hovered_index if it was this item
-                                                    this.hovered_index = None;
+                                                if this.hovered_index != Some(ix)
+                                                    && now
+                                                        .duration_since(this.last_hover_notify)
+                                                        .as_millis()
+                                                        >= HOVER_DEBOUNCE_MS as u128
+                                                {
+                                                    this.hovered_index = Some(ix);
                                                     this.last_hover_notify = now;
                                                     cx.notify();
                                                 }
-                                            },
-                                        );
+                                            } else if this.hovered_index == Some(ix) {
+                                                // Mouse left - clear hovered_index if it was this item
+                                                this.hovered_index = None;
+                                                this.last_hover_notify = now;
+                                                cx.notify();
+                                            }
+                                        },
+                                    );
 
-                                        // Create click handler with double-click support
-                                        let click_handler = cx.listener(
-                                            move |this: &mut ScriptListApp,
-                                                  event: &gpui::ClickEvent,
-                                                  _window,
-                                                  cx| {
-                                                // Always select the item on any click
-                                                if this.selected_index != ix {
-                                                    this.selected_index = ix;
-                                                    cx.notify();
+                                    // Create click handler with double-click support
+                                    let click_handler = cx.listener(
+                                        move |this: &mut ScriptListApp,
+                                              event: &gpui::ClickEvent,
+                                              _window,
+                                              cx| {
+                                            // Always select the item on any click
+                                            if this.selected_index != ix {
+                                                this.selected_index = ix;
+                                                cx.notify();
+                                            }
+
+                                            // Check for double-click (mouse clicks only)
+                                            if let gpui::ClickEvent::Mouse(mouse_event) = event {
+                                                if mouse_event.down.click_count == 2 {
+                                                    logging::log(
+                                                        "UI",
+                                                        &format!(
+                                                            "Double-click on item {}, executing",
+                                                            ix
+                                                        ),
+                                                    );
+                                                    this.execute_selected(cx);
                                                 }
+                                            }
+                                        },
+                                    );
 
-                                                // Check for double-click (mouse clicks only)
-                                                if let gpui::ClickEvent::Mouse(mouse_event) = event
-                                                {
-                                                    if mouse_event.down.click_count == 2 {
-                                                        logging::log(
-                                                            "UI",
-                                                            &format!(
-                                                                "Double-click on item {}, executing",
-                                                                ix
-                                                            ),
-                                                        );
-                                                        this.execute_selected(cx);
-                                                    }
-                                                }
-                                            },
-                                        );
-
-                                        // Dispatch to design-specific item renderer
-                                        // Note: Confirmation for dangerous builtins is now handled
-                                        // via modal dialog, not inline overlay
-                                        let design_render_start = std::time::Instant::now();
+                                    // Dispatch to design-specific item renderer
+                                    // Note: Confirmation for dangerous builtins is now handled
+                                    // via modal dialog, not inline overlay
+                                    let design_render_start = std::time::Instant::now();
+                                    let inline_calculator =
+                                        this.inline_calculator_for_result_index(*result_idx);
+                                    let mut item_name = "inline-calculator";
+                                    let item_element = if let Some(calculator) = inline_calculator
+                                    {
+                                        render_calculator_item(
+                                            calculator,
+                                            is_selected,
+                                            &this.theme,
+                                            this.current_design,
+                                        )
+                                    } else if let Some(result) = flat_results_clone.get(*result_idx)
+                                    {
+                                        item_name = result.name();
                                         // Enable hover effects only when in Mouse mode
                                         let enable_hover = current_input_mode == InputMode::Mouse;
-                                        let item_element = render_design_item(
+                                        render_design_item(
                                             current_design,
                                             result,
                                             ix,
@@ -385,37 +398,34 @@ impl ScriptListApp {
                                             theme_colors,
                                             enable_hover,
                                             &filter_for_highlight,
-                                        );
-                                        let design_elapsed = design_render_start.elapsed();
-
-                                        // Log slow items (>1ms)
-                                        if design_elapsed.as_micros() > 1000 {
-                                            logging::log(
-                                                "FILTER_PERF",
-                                                &format!(
-                                                    "[SLOW_ITEM] ix={} name='{}' design_render={:.2}ms filter='{}'",
-                                                    ix,
-                                                    result.name(),
-                                                    design_elapsed.as_secs_f64() * 1000.0,
-                                                    filter_for_closure
-                                                ),
-                                            );
-                                        }
-
-                                        div()
-                                            .id(ElementId::NamedInteger(
-                                                "script-item".into(),
-                                                ix as u64,
-                                            ))
-                                            .h(px(LIST_ITEM_HEIGHT)) // Explicit 40px height (8px grid)
-                                            .on_hover(hover_handler)
-                                            .on_click(click_handler)
-                                            .child(item_element)
-                                            .into_any_element()
+                                        )
                                     } else {
-                                        // Fallback for missing result
+                                        item_name = "<missing-result>";
                                         div().h(px(LIST_ITEM_HEIGHT)).into_any_element()
+                                    };
+                                    let design_elapsed = design_render_start.elapsed();
+
+                                    // Log slow items (>1ms)
+                                    if design_elapsed.as_micros() > 1000 {
+                                        logging::log(
+                                            "FILTER_PERF",
+                                            &format!(
+                                                "[SLOW_ITEM] ix={} name='{}' design_render={:.2}ms filter='{}'",
+                                                ix,
+                                                item_name,
+                                                design_elapsed.as_secs_f64() * 1000.0,
+                                                filter_for_closure
+                                            ),
+                                        );
                                     }
+
+                                    div()
+                                        .id(ElementId::NamedInteger("script-item".into(), ix as u64))
+                                        .h(px(LIST_ITEM_HEIGHT)) // Explicit 40px height (8px grid)
+                                        .on_hover(hover_handler)
+                                        .on_click(click_handler)
+                                        .child(item_element)
+                                        .into_any_element()
                                 }
                             }
                         } else {
