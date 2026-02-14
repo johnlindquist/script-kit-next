@@ -19,85 +19,19 @@
 #![allow(non_upper_case_globals)]
 #![allow(dead_code)]
 
+mod cf;
+mod ffi;
 mod types;
 
 // --- merged from part_000.rs ---
 use anyhow::{bail, Context, Result};
+use cf::*;
 use core_graphics::display::{CGDisplay, CGRect};
+use ffi::*;
 use macos_accessibility_client::accessibility;
 use std::ffi::c_void;
 use tracing::{debug, info, instrument, warn};
 pub use types::*;
-// ============================================================================
-// CoreFoundation FFI bindings
-// ============================================================================
-
-#[link(name = "CoreFoundation", kind = "framework")]
-extern "C" {
-    fn CFRelease(cf: *const c_void);
-    fn CFRetain(cf: *const c_void) -> *const c_void;
-}
-// ============================================================================
-// ApplicationServices (Accessibility) FFI bindings
-// ============================================================================
-
-#[link(name = "ApplicationServices", kind = "framework")]
-extern "C" {
-    fn AXUIElementCreateSystemWide() -> AXUIElementRef;
-    fn AXUIElementCreateApplication(pid: i32) -> AXUIElementRef;
-    fn AXUIElementCopyAttributeValue(
-        element: AXUIElementRef,
-        attribute: CFStringRef,
-        value: *mut CFTypeRef,
-    ) -> i32;
-    fn AXUIElementSetAttributeValue(
-        element: AXUIElementRef,
-        attribute: CFStringRef,
-        value: CFTypeRef,
-    ) -> i32;
-    fn AXUIElementPerformAction(element: AXUIElementRef, action: CFStringRef) -> i32;
-    fn AXValueCreate(value_type: i32, value: *const c_void) -> AXValueRef;
-    fn AXValueGetValue(value: AXValueRef, value_type: i32, value_out: *mut c_void) -> bool;
-    fn AXValueGetType(value: AXValueRef) -> i32;
-}
-// AXValue types
-const kAXValueTypeCGPoint: i32 = 1;
-const kAXValueTypeCGSize: i32 = 2;
-// AXError codes
-const kAXErrorSuccess: i32 = 0;
-const kAXErrorAPIDisabled: i32 = -25211;
-const kAXErrorNoValue: i32 = -25212;
-type AXUIElementRef = *const c_void;
-type AXValueRef = *const c_void;
-type CFTypeRef = *const c_void;
-type CFStringRef = *const c_void;
-type CFArrayRef = *const c_void;
-// ============================================================================
-// CoreFoundation String FFI bindings
-// ============================================================================
-
-#[link(name = "CoreFoundation", kind = "framework")]
-extern "C" {
-    fn CFStringCreateWithCString(
-        alloc: *const c_void,
-        c_str: *const i8,
-        encoding: u32,
-    ) -> CFStringRef;
-    fn CFStringGetCString(
-        string: CFStringRef,
-        buffer: *mut i8,
-        buffer_size: i64,
-        encoding: u32,
-    ) -> bool;
-    fn CFStringGetLength(string: CFStringRef) -> i64;
-    fn CFArrayGetCount(array: CFArrayRef) -> i64;
-    fn CFArrayGetValueAtIndex(array: CFArrayRef, index: i64) -> CFTypeRef;
-    fn CFGetTypeID(cf: CFTypeRef) -> u64;
-    fn CFStringGetTypeID() -> u64;
-    fn CFNumberGetValue(number: CFTypeRef, number_type: i32, value_ptr: *mut c_void) -> bool;
-}
-const kCFStringEncodingUTF8: u32 = 0x08000100;
-const kCFNumberSInt32Type: i32 = 3;
 // ============================================================================
 // AppKit (NSWorkspace/NSRunningApplication) FFI bindings
 // ============================================================================
@@ -109,65 +43,6 @@ extern "C" {
 // ============================================================================
 // Helper Functions
 // ============================================================================
-
-/// Create a CFString from a Rust string.
-fn try_create_cf_string(s: &str) -> Result<CFStringRef> {
-    let c_str = std::ffi::CString::new(s)
-        .with_context(|| format!("CFString input contains interior NUL: {:?}", s))?;
-    let cf_string = unsafe {
-        CFStringCreateWithCString(std::ptr::null(), c_str.as_ptr(), kCFStringEncodingUTF8)
-    };
-    if cf_string.is_null() {
-        bail!("CFStringCreateWithCString returned null for input: {:?}", s);
-    }
-    Ok(cf_string)
-}
-/// Convert a CFString to a Rust String
-fn cf_string_to_string(cf_string: CFStringRef) -> Option<String> {
-    if cf_string.is_null() {
-        return None;
-    }
-
-    unsafe {
-        let length = CFStringGetLength(cf_string);
-        if length <= 0 {
-            return Some(String::new());
-        }
-
-        // Allocate buffer with extra space for UTF-8 expansion
-        let buffer_size = (length * 4 + 1) as usize;
-        let mut buffer: Vec<i8> = vec![0; buffer_size];
-
-        if CFStringGetCString(
-            cf_string,
-            buffer.as_mut_ptr(),
-            buffer_size as i64,
-            kCFStringEncodingUTF8,
-        ) {
-            let c_str = std::ffi::CStr::from_ptr(buffer.as_ptr());
-            c_str.to_str().ok().map(|s| s.to_string())
-        } else {
-            None
-        }
-    }
-}
-/// Release a CoreFoundation object
-fn cf_release(cf: CFTypeRef) {
-    if !cf.is_null() {
-        unsafe {
-            CFRelease(cf);
-        }
-    }
-}
-/// Retain a CoreFoundation object (increment reference count)
-/// Returns the same pointer for convenience
-fn cf_retain(cf: CFTypeRef) -> CFTypeRef {
-    if !cf.is_null() {
-        unsafe { CFRetain(cf) }
-    } else {
-        cf
-    }
-}
 /// Get an attribute value from an AXUIElement
 fn get_ax_attribute(element: AXUIElementRef, attribute: &str) -> Result<CFTypeRef> {
     let attr_str = try_create_cf_string(attribute)?;
@@ -1523,15 +1398,6 @@ mod tests {
 
         assert_eq!(next_display, display);
         assert_eq!(previous_display, display);
-    }
-
-    #[test]
-    fn test_try_create_cf_string_rejects_interior_nul() {
-        let error = try_create_cf_string("AX\0Title").expect_err("interior NUL should fail");
-        assert!(
-            error.to_string().contains("interior NUL"),
-            "error should describe invalid CFString input: {error}"
-        );
     }
 
     #[cfg(target_os = "macos")]
