@@ -118,6 +118,10 @@ struct ScriptListApp {
     // P1-Arc: Use Arc<[T]> for cheap clone in render closures
     cached_grouped_items: Arc<[GroupedListItem]>,
     cached_grouped_flat_results: Arc<[scripts::SearchResult]>,
+    #[allow(dead_code)]
+    cached_grouped_first_selectable_index: Option<usize>,
+    #[allow(dead_code)]
+    cached_grouped_last_selectable_index: Option<usize>,
     grouped_cache_key: String,
     // P3: Two-stage filter - display vs search separation with coalescing
     /// What the search cache is built from (may lag behind filter_text during rapid typing)
