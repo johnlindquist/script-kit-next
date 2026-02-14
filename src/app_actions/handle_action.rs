@@ -26,10 +26,19 @@ impl ScriptListApp {
             };
 
             match crate::file_search::reveal_in_finder(&path_str) {
-                Ok(_) => logging::log("UI", &format!("Revealed in {}: {}", file_manager, path_str)),
-                Err(e) => logging::log(
-                    "ERROR",
-                    &format!("Failed to reveal in {}: {}", file_manager, e),
+                Ok(_) => tracing::info!(
+                    category = "UI",
+                    action = "reveal_in_finder",
+                    file_manager,
+                    path = %path_str,
+                    "Revealed path in file manager"
+                ),
+                Err(error) => tracing::error!(
+                    action = "reveal_in_finder",
+                    file_manager,
+                    path = %path_str,
+                    error = %error,
+                    "Failed to reveal path in file manager"
                 ),
             }
         });
@@ -52,32 +61,33 @@ impl ScriptListApp {
                 "File Manager"
             };
 
-            logging::log(
-                "UI",
-                &format!(
-                    "ACTION_REVEAL_IN_FINDER_START file_manager='{}' path='{}'",
-                    file_manager, path_str
-                ),
+            tracing::info!(
+                category = "UI",
+                event = "action_reveal_in_finder_start",
+                file_manager,
+                path = %path_str,
+                "Reveal in file manager started"
             );
 
             let reveal_result = match crate::file_search::reveal_in_finder(&path_str) {
                 Ok(()) => {
-                    logging::log(
-                        "UI",
-                        &format!(
-                            "ACTION_REVEAL_IN_FINDER_SUCCESS file_manager='{}' path='{}'",
-                            file_manager, path_str
-                        ),
+                    tracing::info!(
+                        category = "UI",
+                        event = "action_reveal_in_finder_success",
+                        file_manager,
+                        path = %path_str,
+                        "Reveal in file manager succeeded"
                     );
                     Ok(())
                 }
                 Err(error) => {
-                    logging::log(
-                        "ERROR",
-                        &format!(
-                            "ACTION_REVEAL_IN_FINDER_FAILED attempted='reveal_in_finder' path='{}' file_manager='{}' error='{}'",
-                            path_str, file_manager, error
-                        ),
+                    tracing::error!(
+                        event = "action_reveal_in_finder_failed",
+                        attempted = "reveal_in_finder",
+                        file_manager,
+                        path = %path_str,
+                        error = %error,
+                        "Reveal in file manager failed"
                     );
                     Err(format!("Failed to reveal in {}: {}", file_manager, error))
                 }
@@ -101,32 +111,33 @@ impl ScriptListApp {
         std::thread::spawn(move || {
             use std::process::Command;
 
-            logging::log(
-                "UI",
-                &format!(
-                    "ACTION_EDITOR_LAUNCH_START editor='{}' path='{}'",
-                    editor, path_str
-                ),
+            tracing::info!(
+                category = "UI",
+                event = "action_editor_launch_start",
+                editor = %editor,
+                path = %path_str,
+                "Editor launch started"
             );
 
             let launch_result = match Command::new(&editor).arg(&path_str).spawn() {
                 Ok(_) => {
-                    logging::log(
-                        "UI",
-                        &format!(
-                            "ACTION_EDITOR_LAUNCH_SUCCESS editor='{}' path='{}'",
-                            editor, path_str
-                        ),
+                    tracing::info!(
+                        category = "UI",
+                        event = "action_editor_launch_success",
+                        editor = %editor,
+                        path = %path_str,
+                        "Editor launch succeeded"
                     );
                     Ok(())
                 }
                 Err(error) => {
-                    logging::log(
-                        "ERROR",
-                        &format!(
-                            "ACTION_EDITOR_LAUNCH_FAILED attempted='{} {}' path='{}' error='{}'",
-                            editor, path_str, path_str, error
-                        ),
+                    tracing::error!(
+                        event = "action_editor_launch_failed",
+                        attempted = "launch_editor",
+                        editor = %editor,
+                        path = %path_str,
+                        error = %error,
+                        "Editor launch failed"
                     );
                     Err(format!("Failed to open in {}: {}", editor, error))
                 }
@@ -235,7 +246,11 @@ impl ScriptListApp {
 
     /// Handle action selection from the actions dialog
     fn handle_action(&mut self, action_id: String, cx: &mut Context<Self>) {
-        logging::log("UI", &format!("Action selected: {}", action_id));
+        tracing::info!(
+            category = "UI",
+            action = %action_id,
+            "Action selected"
+        );
 
         let action_id = action_id
             .strip_prefix("clip:")
@@ -315,7 +330,7 @@ impl ScriptListApp {
                         cx.notify();
                     }
                     Err(e) => {
-                        logging::log("ERROR", &format!("Failed to toggle clipboard pin: {}", e));
+                        tracing::error!(message = ? &format!("Failed to toggle clipboard pin: {}", e));
                         self.show_hud(format!("Failed to update pin: {}", e), Some(HUD_LONG_MS), cx);
                     }
                 }
@@ -336,8 +351,7 @@ impl ScriptListApp {
                     return;
                 };
 
-                logging::log(
-                    "UI",
+                tracing::info!(category = "UI", message = ?
                     &format!(
                         "Opening share sheet for clipboard entry {} ({:?})",
                         entry.id, entry.content_type
@@ -379,16 +393,16 @@ impl ScriptListApp {
                     return;
                 };
 
-                logging::log("CLIPBOARD", &format!("Paste entry: {}", entry.id));
+                tracing::info!(category = "CLIPBOARD", message = ? &format!("Paste entry: {}", entry.id));
                 match clipboard_history::copy_entry_to_clipboard(&entry.id) {
                     Ok(()) => {
-                        logging::log("CLIPBOARD", "Entry copied, simulating paste");
+                        tracing::info!(category = "CLIPBOARD", message = ? "Entry copied, simulating paste");
                         cx.spawn(async move |_this, _cx| {
                             Timer::after(std::time::Duration::from_millis(50)).await;
                             if let Err(e) = selected_text::simulate_paste_with_cg() {
-                                logging::log("ERROR", &format!("Failed to simulate paste: {}", e));
+                                tracing::error!(message = ? &format!("Failed to simulate paste: {}", e));
                             } else {
-                                logging::log("CLIPBOARD", "Simulated Cmd+V paste");
+                                tracing::info!(category = "CLIPBOARD", message = ? "Simulated Cmd+V paste");
                             }
                         })
                         .detach();
@@ -396,10 +410,11 @@ impl ScriptListApp {
                         self.hide_main_and_reset(cx);
                     }
                     Err(e) => {
-                        logging::log("ERROR", &format!("Failed to paste entry: {}", e));
+                        tracing::error!(message = ? &format!("Failed to paste entry: {}", e));
                         self.show_hud(format!("Failed to paste: {}", e), Some(2500), cx);
                     }
                 }
+                cx.notify();
                 return;
             }
             "clipboard_attach_to_ai" => {
@@ -417,12 +432,11 @@ impl ScriptListApp {
                     return;
                 };
 
-                logging::log(
-                    "AI",
-                    &format!(
-                        "Attaching clipboard entry {} ({:?}) to AI chat",
-                        entry.id, entry.content_type
-                    ),
+                tracing::info!(
+                    category = "AI",
+                    entry_id = %entry.id,
+                    content_type = ?entry.content_type,
+                    "Attaching clipboard entry to AI chat"
                 );
 
                 match entry.content_type {
@@ -431,7 +445,7 @@ impl ScriptListApp {
                     | clipboard_history::ContentType::File
                     | clipboard_history::ContentType::Color => {
                         if let Err(e) = ai::open_ai_window(cx) {
-                            logging::log("ERROR", &format!("Failed to open AI window: {}", e));
+                            tracing::error!(message = ? &format!("Failed to open AI window: {}", e));
                             self.show_hud("Failed to open AI window".to_string(), Some(HUD_MEDIUM_MS), cx);
                             return;
                         }
@@ -453,7 +467,7 @@ impl ScriptListApp {
                             base64::engine::general_purpose::STANDARD.encode(&png_bytes);
 
                         if let Err(e) = ai::open_ai_window(cx) {
-                            logging::log("ERROR", &format!("Failed to open AI window: {}", e));
+                            tracing::error!(message = ? &format!("Failed to open AI window: {}", e));
                             self.show_hud("Failed to open AI window".to_string(), Some(HUD_MEDIUM_MS), cx);
                             return;
                         }
@@ -463,6 +477,7 @@ impl ScriptListApp {
 
                 self.show_hud("Attached to AI".to_string(), Some(HUD_SHORT_MS), cx);
                 self.hide_main_and_reset(cx);
+                cx.notify();
                 return;
             }
             // Copy to clipboard without pasting (Cmd+Enter)
@@ -472,18 +487,17 @@ impl ScriptListApp {
                     return;
                 };
 
-                logging::log(
-                    "CLIPBOARD",
+                tracing::info!(category = "CLIPBOARD", message = ?
                     &format!("Copying entry to clipboard: {}", entry.id),
                 );
                 match clipboard_history::copy_entry_to_clipboard(&entry.id) {
                     Ok(()) => {
-                        logging::log("CLIPBOARD", "Entry copied to clipboard");
+                        tracing::info!(category = "CLIPBOARD", message = ? "Entry copied to clipboard");
                         self.show_hud("Copied to clipboard".to_string(), Some(HUD_SHORT_MS), cx);
                         // Keep the window open - do NOT call hide_main_and_reset
                     }
                     Err(e) => {
-                        logging::log("ERROR", &format!("Failed to copy entry: {}", e));
+                        tracing::error!(message = ? &format!("Failed to copy entry: {}", e));
                         self.show_hud(format!("Failed to copy: {}", e), Some(2500), cx);
                     }
                 }
@@ -496,17 +510,17 @@ impl ScriptListApp {
                     return;
                 };
 
-                logging::log("CLIPBOARD", &format!("Paste and keep open: {}", entry.id));
+                tracing::info!(category = "CLIPBOARD", message = ? &format!("Paste and keep open: {}", entry.id));
                 match clipboard_history::copy_entry_to_clipboard(&entry.id) {
                     Ok(()) => {
-                        logging::log("CLIPBOARD", "Entry copied, simulating paste");
+                        tracing::info!(category = "CLIPBOARD", message = ? "Entry copied, simulating paste");
                         // Simulate Cmd+V paste after a brief delay
                         cx.spawn(async move |_this, _cx| {
                             Timer::after(std::time::Duration::from_millis(50)).await;
                             if let Err(e) = selected_text::simulate_paste_with_cg() {
-                                logging::log("ERROR", &format!("Failed to simulate paste: {}", e));
+                                tracing::error!(message = ? &format!("Failed to simulate paste: {}", e));
                             } else {
-                                logging::log("CLIPBOARD", "Simulated Cmd+V paste");
+                                tracing::info!(category = "CLIPBOARD", message = ? "Simulated Cmd+V paste");
                             }
                         })
                         .detach();
@@ -514,7 +528,7 @@ impl ScriptListApp {
                         // Keep the window open - do NOT call hide_main_and_reset
                     }
                     Err(e) => {
-                        logging::log("ERROR", &format!("Failed to copy entry: {}", e));
+                        tracing::error!(message = ? &format!("Failed to copy entry: {}", e));
                         self.show_hud(format!("Failed to paste: {}", e), Some(2500), cx);
                     }
                 }
@@ -527,7 +541,7 @@ impl ScriptListApp {
                 };
 
                 if let Err(e) = clipboard_history::quick_look_entry(&entry) {
-                    logging::log("ERROR", &format!("Quick Look failed: {}", e));
+                    tracing::error!(message = ? &format!("Quick Look failed: {}", e));
                     self.show_hud(format!("Quick Look failed: {}", e), Some(2500), cx);
                 }
                 return;
@@ -543,16 +557,16 @@ impl ScriptListApp {
 
         match action_id {
             "create_script" => {
-                logging::log("UI", "Create script action - opening scripts folder");
+                tracing::info!(category = "UI", message = ? "Create script action - opening scripts folder");
                 let scripts_dir = shellexpand::tilde("~/.scriptkit/scripts").to_string();
                 std::thread::spawn(move || {
                     use std::process::Command;
                     match Command::new("open").arg(&scripts_dir).spawn() {
                         Ok(_) => {
-                            logging::log("UI", &format!("Opened scripts folder: {}", scripts_dir))
+                            tracing::info!(category = "UI", message = ? &format!("Opened scripts folder: {}", scripts_dir))
                         }
                         Err(e) => {
-                            logging::log("ERROR", &format!("Failed to open scripts folder: {}", e))
+                            tracing::error!(message = ? &format!("Failed to open scripts folder: {}", e))
                         }
                     }
                 });
@@ -560,18 +574,18 @@ impl ScriptListApp {
                 self.hide_main_and_reset(cx);
             }
             "run_script" => {
-                logging::log("UI", "Run script action");
+                tracing::info!(category = "UI", message = ? "Run script action");
                 self.execute_selected(cx);
             }
             "view_logs" => {
-                logging::log("UI", "View logs action");
+                tracing::info!(category = "UI", message = ? "View logs action");
                 self.toggle_logs(cx);
             }
             "reveal_in_finder" => {
-                logging::log("UI", "Reveal in Finder action");
+                tracing::info!(category = "UI", message = ? "Reveal in Finder action");
                 // First check if we have a file search path (takes priority)
                 let path_opt = if let Some(path) = self.file_search_actions_path.take() {
-                    logging::log("UI", &format!("Reveal in Finder (file search): {}", path));
+                    tracing::info!(category = "UI", message = ? &format!("Reveal in Finder (file search): {}", path));
                     Some(std::path::PathBuf::from(path))
                 } else if let Some(result) = self.get_selected_result() {
                     // Fall back to main menu selected result
@@ -616,10 +630,10 @@ impl ScriptListApp {
                 }
             }
             "copy_path" => {
-                logging::log("UI", "Copy path action");
+                tracing::info!(category = "UI", message = ? "Copy path action");
                 // First check if we have a file search path (takes priority)
                 let path_str = if let Some(path) = self.file_search_actions_path.take() {
-                    logging::log("UI", &format!("Copy path (file search): {}", path));
+                    tracing::info!(category = "UI", message = ? &format!("Copy path (file search): {}", path));
                     Some(path)
                 } else if let Some(result) = self.get_selected_result() {
                     // Fall back to main menu selected result
@@ -660,14 +674,13 @@ impl ScriptListApp {
                     {
                         match self.pbcopy(&path_str) {
                             Ok(_) => {
-                                logging::log(
-                                    "UI",
+                                tracing::info!(category = "UI", message = ?
                                     &format!("Copied path to clipboard: {}", path_str),
                                 );
                                 self.show_hud(format!("Copied: {}", path_str), Some(HUD_MEDIUM_MS), cx);
                             }
                             Err(e) => {
-                                logging::log("ERROR", &format!("pbcopy failed: {}", e));
+                                tracing::error!(message = ? &format!("pbcopy failed: {}", e));
                                 self.show_hud("Failed to copy path".to_string(), Some(HUD_LONG_MS), cx);
                             }
                         }
@@ -678,14 +691,13 @@ impl ScriptListApp {
                         use arboard::Clipboard;
                         match Clipboard::new().and_then(|mut c| c.set_text(&path_str)) {
                             Ok(_) => {
-                                logging::log(
-                                    "UI",
+                                tracing::info!(category = "UI", message = ?
                                     &format!("Copied path to clipboard: {}", path_str),
                                 );
                                 self.show_hud(format!("Copied: {}", path_str), Some(HUD_MEDIUM_MS), cx);
                             }
                             Err(e) => {
-                                logging::log("ERROR", &format!("Failed to copy path: {}", e));
+                                tracing::error!(message = ? &format!("Failed to copy path: {}", e));
                                 self.show_hud("Failed to copy path".to_string(), Some(HUD_LONG_MS), cx);
                             }
                         }
@@ -694,7 +706,7 @@ impl ScriptListApp {
                 }
             }
             "copy_deeplink" => {
-                logging::log("UI", "Copy deeplink action");
+                tracing::info!(category = "UI", message = ? "Copy deeplink action");
                 if let Some(result) = self.get_selected_result() {
                     let name = result.name();
                     let deeplink_name = crate::actions::to_deeplink_name(name);
@@ -704,14 +716,13 @@ impl ScriptListApp {
                     {
                         match self.pbcopy(&deeplink_url) {
                             Ok(_) => {
-                                logging::log(
-                                    "UI",
+                                tracing::info!(category = "UI", message = ?
                                     &format!("Copied deeplink to clipboard: {}", deeplink_url),
                                 );
                                 self.show_hud(format!("Copied: {}", deeplink_url), Some(HUD_MEDIUM_MS), cx);
                             }
                             Err(e) => {
-                                logging::log("ERROR", &format!("pbcopy failed: {}", e));
+                                tracing::error!(message = ? &format!("pbcopy failed: {}", e));
                                 self.show_hud(
                                     "Failed to copy deeplink".to_string(),
                                     Some(HUD_LONG_MS),
@@ -726,14 +737,13 @@ impl ScriptListApp {
                         use arboard::Clipboard;
                         match Clipboard::new().and_then(|mut c| c.set_text(&deeplink_url)) {
                             Ok(_) => {
-                                logging::log(
-                                    "UI",
+                                tracing::info!(category = "UI", message = ?
                                     &format!("Copied deeplink to clipboard: {}", deeplink_url),
                                 );
                                 self.show_hud(format!("Copied: {}", deeplink_url), Some(HUD_MEDIUM_MS), cx);
                             }
                             Err(e) => {
-                                logging::log("ERROR", &format!("Failed to copy deeplink: {}", e));
+                                tracing::error!(message = ? &format!("Failed to copy deeplink: {}", e));
                                 self.show_hud(
                                     "Failed to copy deeplink".to_string(),
                                     Some(HUD_LONG_MS),
@@ -754,7 +764,7 @@ impl ScriptListApp {
             // Handle both legacy "configure_shortcut" and new dynamic actions
             // "add_shortcut" and "update_shortcut" open the shortcut recorder
             "configure_shortcut" | "add_shortcut" | "update_shortcut" => {
-                logging::log("UI", &format!("{} action", action_id));
+                tracing::info!(category = "UI", message = ? &format!("{} action", action_id));
                 if let Some(result) = self.get_selected_result() {
                     match result {
                         // Scripts: open the script file to edit // Shortcut: comment
@@ -820,7 +830,7 @@ impl ScriptListApp {
             }
             // "remove_shortcut" removes the existing shortcut from the registry
             "remove_shortcut" => {
-                logging::log("UI", "Remove shortcut action");
+                tracing::info!(category = "UI", message = ? "Remove shortcut action");
                 if let Some(result) = self.get_selected_result() {
                     let command_id_opt = match result {
                         scripts::SearchResult::Script(m) => {
@@ -853,16 +863,17 @@ impl ScriptListApp {
                         // Remove the shortcut override from persistence
                         match crate::shortcuts::remove_shortcut_override(&command_id) {
                             Ok(()) => {
-                                logging::log(
-                                    "SHORTCUT",
-                                    &format!("Removed shortcut for: {}", command_id),
+                                tracing::info!(
+                                    category = "SHORTCUT",
+                                    command_id = %command_id,
+                                    "Removed shortcut override"
                                 );
                                 self.show_hud("Shortcut removed".to_string(), Some(HUD_MEDIUM_MS), cx);
                                 // Refresh scripts to update shortcut display
                                 self.refresh_scripts(cx);
                             }
                             Err(e) => {
-                                logging::log("ERROR", &format!("Failed to remove shortcut: {}", e));
+                                tracing::error!(message = ? &format!("Failed to remove shortcut: {}", e));
                                 self.show_hud(
                                     format!("Failed to remove shortcut: {}", e),
                                     Some(HUD_LONG_MS),
@@ -888,7 +899,7 @@ impl ScriptListApp {
             }
             // Alias actions: add_alias, update_alias open the alias input
             "add_alias" | "update_alias" => {
-                logging::log("UI", &format!("{} action", action_id));
+                tracing::info!(category = "UI", message = ? &format!("{} action", action_id));
                 if let Some(result) = self.get_selected_result() {
                     let (command_id, command_name) = match result {
                         scripts::SearchResult::Script(m) => {
@@ -936,7 +947,7 @@ impl ScriptListApp {
             }
             // "remove_alias" removes the existing alias from persistence
             "remove_alias" => {
-                logging::log("UI", "Remove alias action");
+                tracing::info!(category = "UI", message = ? "Remove alias action");
                 if let Some(result) = self.get_selected_result() {
                     let command_id_opt = match result {
                         scripts::SearchResult::Script(m) => {
@@ -969,16 +980,17 @@ impl ScriptListApp {
                         // Remove the alias override from persistence
                         match crate::aliases::remove_alias_override(&command_id) {
                             Ok(()) => {
-                                logging::log(
-                                    "ALIAS",
-                                    &format!("Removed alias for: {}", command_id),
+                                tracing::info!(
+                                    category = "ALIAS",
+                                    command_id = %command_id,
+                                    "Removed alias override"
                                 );
                                 self.show_hud("Alias removed".to_string(), Some(HUD_MEDIUM_MS), cx);
                                 // Refresh scripts to update alias display and registry
                                 self.refresh_scripts(cx);
                             }
                             Err(e) => {
-                                logging::log("ERROR", &format!("Failed to remove alias: {}", e));
+                                tracing::error!(message = ? &format!("Failed to remove alias: {}", e));
                                 self.show_hud(
                                     format!("Failed to remove alias: {}", e),
                                     Some(HUD_LONG_MS),
@@ -1003,7 +1015,7 @@ impl ScriptListApp {
                 }
             }
             "edit_script" => {
-                logging::log("UI", "Edit script action");
+                tracing::info!(category = "UI", message = ? "Edit script action");
                 if let Some(result) = self.get_selected_result() {
                     let path_opt = match result {
                         scripts::SearchResult::Script(m) => Some(m.script.path.clone()),
@@ -1041,7 +1053,7 @@ impl ScriptListApp {
                 }
             }
             "remove_script" | "delete_script" => {
-                logging::log("UI", &format!("{} action", action_id));
+                tracing::info!(category = "UI", message = ? &format!("{} action", action_id));
 
                 let Some(result) = self.get_selected_result() else {
                     self.show_hud("No script selected".to_string(), Some(HUD_MEDIUM_MS), cx);
@@ -1056,6 +1068,7 @@ impl ScriptListApp {
                 if !target.path.exists() {
                     self.show_hud(format!("{} no longer exists", target.name), Some(2500), cx);
                     self.refresh_scripts(cx);
+                    cx.notify();
                     return;
                 }
 
@@ -1112,8 +1125,7 @@ impl ScriptListApp {
                         Ok(Ok(_)) => {}
                         Ok(Err(e)) => {
                             this.update(cx, |this, cx| {
-                                logging::log(
-                                    "ERROR",
+                                tracing::error!(message = ?
                                     &format!("Failed to open confirmation modal: {}", e),
                                 );
                                 this.show_hud(
@@ -1137,8 +1149,7 @@ impl ScriptListApp {
 
                     this.update(cx, move |this, cx| match move_path_to_trash(&target.path) {
                         Ok(()) => {
-                            logging::log(
-                                "UI",
+                            tracing::info!(category = "UI", message = ?
                                 &format!(
                                     "Moved {} '{}' to trash: {}",
                                     target.item_kind,
@@ -1156,8 +1167,7 @@ impl ScriptListApp {
                             cx.notify();
                         }
                         Err(e) => {
-                            logging::log(
-                                "ERROR",
+                            tracing::error!(message = ?
                                 &format!(
                                     "Failed to move {} '{}' to trash ({}): {}",
                                     target.item_kind,
@@ -1175,12 +1185,12 @@ impl ScriptListApp {
                 return;
             }
             "reload_scripts" => {
-                logging::log("UI", "Reload scripts action");
+                tracing::info!(category = "UI", message = ? "Reload scripts action");
                 self.refresh_scripts(cx);
                 self.show_hud("Scripts reloaded".to_string(), Some(HUD_SHORT_MS), cx);
             }
             "settings" => {
-                logging::log("UI", "Settings action - opening config.ts");
+                tracing::info!(category = "UI", message = ? "Settings action - opening config.ts");
 
                 // Get editor from config
                 let editor = self.config.get_editor();
@@ -1215,9 +1225,8 @@ impl ScriptListApp {
                     };
 
                     match result {
-                        Ok(_) => logging::log("UI", &format!("Opened config.ts in {}", editor)),
-                        Err(e) => logging::log(
-                            "ERROR",
+                        Ok(_) => tracing::info!(category = "UI", message = ? &format!("Opened config.ts in {}", editor)),
+                        Err(e) => tracing::error!(message = ?
                             &format!("Failed to open editor '{}': {}", editor, e),
                         ),
                     }
@@ -1231,21 +1240,21 @@ impl ScriptListApp {
                 self.hide_main_and_reset(cx);
             }
             "quit" => {
-                logging::log("UI", "Quit action");
+                tracing::info!(category = "UI", message = ? "Quit action");
                 PROCESS_MANAGER.kill_all_processes();
                 PROCESS_MANAGER.remove_main_pid();
                 cx.quit();
                 return; // Early return after quit - no notify needed
             }
             "__cancel__" => {
-                logging::log("UI", "Actions dialog cancelled");
+                tracing::info!(category = "UI", message = ? "Actions dialog cancelled");
                 // Clear file search actions path on cancel
                 self.file_search_actions_path = None;
             }
             // File search specific actions
             "open_file" | "open_directory" | "quick_look" | "open_with" | "show_info" => {
                 if let Some(path) = self.file_search_actions_path.clone() {
-                    logging::log("UI", &format!("File action '{}': {}", action_id, path));
+                    tracing::info!(category = "UI", message = ? &format!("File action '{}': {}", action_id, path));
 
                     let result = match action_id {
                         "open_file" | "open_directory" => crate::file_search::open_file(&path),
@@ -1266,8 +1275,7 @@ impl ScriptListApp {
                             }
                         }
                         Err(e) => {
-                            logging::log(
-                                "ERROR",
+                            tracing::error!(message = ?
                                 &format!(
                                     "File search action '{}' failed for '{}': {}",
                                     action_id, path, e
@@ -1287,7 +1295,7 @@ impl ScriptListApp {
                         .file_name()
                         .and_then(|n| n.to_str())
                         .unwrap_or("");
-                    logging::log("UI", &format!("Copy filename: {}", filename));
+                    tracing::info!(category = "UI", message = ? &format!("Copy filename: {}", filename));
                     #[cfg(target_os = "macos")]
                     {
                         let _ = self.pbcopy(filename);
@@ -1331,7 +1339,7 @@ impl ScriptListApp {
                 let temp_path = match clipboard_history::save_entry_to_temp_file(&full_entry) {
                     Ok(path) => path,
                     Err(e) => {
-                        logging::log("ERROR", &format!("Failed to save temp file: {}", e));
+                        tracing::error!(message = ? &format!("Failed to save temp file: {}", e));
                         self.show_hud("Failed to save temp file".to_string(), Some(HUD_MEDIUM_MS), cx);
                         return;
                     }
@@ -1341,7 +1349,7 @@ impl ScriptListApp {
                 {
                     let path_str = temp_path.to_string_lossy().to_string();
                     if let Err(e) = crate::file_search::open_with(&path_str) {
-                        logging::log("ERROR", &format!("Open With failed: {}", e));
+                        tracing::error!(message = ? &format!("Open With failed: {}", e));
                         self.show_hud("Failed to open \"Open With\"".to_string(), Some(HUD_MEDIUM_MS), cx);
                     }
                 }
@@ -1374,7 +1382,7 @@ impl ScriptListApp {
                 #[cfg(target_os = "macos")]
                 {
                     if let Err(e) = clipboard_history::copy_entry_to_clipboard(&entry.id) {
-                        logging::log("ERROR", &format!("Failed to copy image: {}", e));
+                        tracing::error!(message = ? &format!("Failed to copy image: {}", e));
                         self.show_hud("Failed to copy image".to_string(), Some(HUD_MEDIUM_MS), cx);
                         return;
                     }
@@ -1386,7 +1394,7 @@ impl ScriptListApp {
                             self.hide_main_and_reset(cx);
                         }
                         Err(e) => {
-                            logging::log("ERROR", &format!("Failed to open CleanShot X: {}", e));
+                            tracing::error!(message = ? &format!("Failed to open CleanShot X: {}", e));
                             self.show_hud("Failed to open CleanShot X".to_string(), Some(HUD_MEDIUM_MS), cx);
                         }
                     }
@@ -1432,7 +1440,7 @@ impl ScriptListApp {
                         .join(format!("script-kit-clipboard-{}.png", uuid::Uuid::new_v4()));
 
                     if let Err(e) = std::fs::write(&temp_path, png_bytes) {
-                        logging::log("ERROR", &format!("Failed to write temp image: {}", e));
+                        tracing::error!(message = ? &format!("Failed to write temp image: {}", e));
                         self.show_hud("Failed to save image".to_string(), Some(HUD_MEDIUM_MS), cx);
                         return;
                     }
@@ -1454,7 +1462,7 @@ impl ScriptListApp {
                             self.hide_main_and_reset(cx);
                         }
                         Err(e) => {
-                            logging::log("ERROR", &format!("Failed to open CleanShot X: {}", e));
+                            tracing::error!(message = ? &format!("Failed to open CleanShot X: {}", e));
                             self.show_hud("Failed to open CleanShot X".to_string(), Some(HUD_MEDIUM_MS), cx);
                         }
                     }
@@ -1487,7 +1495,7 @@ impl ScriptListApp {
                 // Check if we already have cached OCR text
                 if let Some(ref cached_text) = entry.ocr_text {
                     if !cached_text.trim().is_empty() {
-                        logging::log("OCR", "Using cached OCR text");
+                        tracing::debug!(category = "OCR", message = ? "Using cached OCR text");
                         #[cfg(target_os = "macos")]
                         {
                             let _ = self.pbcopy(cached_text);
@@ -1500,6 +1508,7 @@ impl ScriptListApp {
                         }
                         self.show_hud("Copied text from image".to_string(), Some(HUD_SHORT_MS), cx);
                         self.hide_main_and_reset(cx);
+                        cx.notify();
                         return;
                     }
                 }
@@ -1520,8 +1529,7 @@ impl ScriptListApp {
                         return;
                     };
 
-                    logging::log(
-                        "OCR",
+                    tracing::debug!(category = "OCR", message = ?
                         &format!("Starting OCR on {}x{} image", width, height),
                     );
                     self.show_hud("Extracting text...".to_string(), Some(HUD_SHORT_MS), cx);
@@ -1532,11 +1540,10 @@ impl ScriptListApp {
                     match script_kit_gpui::ocr::extract_text_from_rgba(width, height, &rgba_bytes) {
                         Ok(text) => {
                             if text.trim().is_empty() {
-                                logging::log("OCR", "No text found in image");
+                                tracing::debug!(category = "OCR", message = ? "No text found in image");
                                 self.show_hud("No text found in image".to_string(), Some(HUD_MEDIUM_MS), cx);
                             } else {
-                                logging::log(
-                                    "OCR",
+                                tracing::debug!(category = "OCR", message = ?
                                     &format!("Extracted {} characters", text.len()),
                                 );
 
@@ -1560,7 +1567,7 @@ impl ScriptListApp {
                             }
                         }
                         Err(e) => {
-                            logging::log("ERROR", &format!("OCR failed: {}", e));
+                            tracing::error!(message = ? &format!("OCR failed: {}", e));
                             self.show_hud(format!("OCR failed: {}", e), Some(HUD_LONG_MS), cx);
                         }
                     }
@@ -1654,8 +1661,7 @@ impl ScriptListApp {
                         Ok(Ok(_)) => {}
                         Ok(Err(e)) => {
                             this.update(cx, |this, cx| {
-                                logging::log(
-                                    "ERROR",
+                                tracing::error!(message = ?
                                     &format!("Failed to open confirmation modal: {}", e),
                                 );
                                 this.show_hud(
@@ -1685,8 +1691,7 @@ impl ScriptListApp {
                                 Ok(()) => deleted += 1,
                                 Err(e) => {
                                     failed += 1;
-                                    logging::log(
-                                        "ERROR",
+                                    tracing::error!(message = ?
                                         &format!("Failed to delete clipboard entry {}: {}", id, e),
                                     );
                                 }
@@ -1731,7 +1736,7 @@ impl ScriptListApp {
 
                 match clipboard_history::remove_entry(&entry.id) {
                     Ok(()) => {
-                        logging::log("UI", &format!("Deleted clipboard entry: {}", entry.id));
+                        tracing::info!(category = "UI", message = ? &format!("Deleted clipboard entry: {}", entry.id));
                         // Refresh cached entries
                         self.cached_clipboard_entries = clipboard_history::get_cached_entries(100);
 
@@ -1773,7 +1778,7 @@ impl ScriptListApp {
                         cx.notify();
                     }
                     Err(e) => {
-                        logging::log("ERROR", &format!("Failed to delete clipboard entry: {}", e));
+                        tracing::error!(message = ? &format!("Failed to delete clipboard entry: {}", e));
                         self.show_hud(format!("Delete failed: {}", e), Some(HUD_LONG_MS), cx);
                     }
                 }
@@ -1845,8 +1850,7 @@ impl ScriptListApp {
                         Ok(Ok(_)) => {}
                         Ok(Err(e)) => {
                             this.update(cx, |this, cx| {
-                                logging::log(
-                                    "ERROR",
+                                tracing::error!(message = ?
                                     &format!("Failed to open confirmation modal: {}", e),
                                 );
                                 this.show_hud(
@@ -1871,8 +1875,7 @@ impl ScriptListApp {
                     this.update(cx, move |this, cx| {
                         match clipboard_history::clear_unpinned_history() {
                             Ok(()) => {
-                                logging::log(
-                                    "UI",
+                                tracing::info!(category = "UI", message = ?
                                     &format!(
                                         "Deleted {} unpinned clipboard entries",
                                         unpinned_count
@@ -1904,8 +1907,7 @@ impl ScriptListApp {
                                 cx.notify();
                             }
                             Err(e) => {
-                                logging::log(
-                                    "ERROR",
+                                tracing::error!(message = ?
                                     &format!("Failed to clear unpinned history: {}", e),
                                 );
                                 this.show_hud(format!("Delete failed: {}", e), Some(HUD_LONG_MS), cx);
@@ -1960,13 +1962,13 @@ impl ScriptListApp {
 
                 match std::fs::write(&save_path, &file_content) {
                     Ok(()) => {
-                        logging::log("UI", &format!("Saved clipboard to: {:?}", save_path));
+                        tracing::info!(category = "UI", message = ? &format!("Saved clipboard to: {:?}", save_path));
                         self.show_hud(format!("Saved to: {}", save_path.display()), Some(HUD_LONG_MS), cx);
                         self.reveal_in_finder(&save_path);
                         self.hide_main_and_reset(cx);
                     }
                     Err(e) => {
-                        logging::log("ERROR", &format!("Failed to save file: {}", e));
+                        tracing::error!(message = ? &format!("Failed to save file: {}", e));
                         self.show_hud(format!("Save failed: {}", e), Some(HUD_LONG_MS), cx);
                     }
                 }
@@ -2015,7 +2017,7 @@ impl ScriptListApp {
                 // Ensure extensions directory exists
                 if !extensions_dir.exists() {
                     if let Err(e) = std::fs::create_dir_all(&extensions_dir) {
-                        logging::log("ERROR", &format!("Failed to create extensions dir: {}", e));
+                        tracing::error!(message = ? &format!("Failed to create extensions dir: {}", e));
                         self.show_hud(format!("Failed to create snippets: {}", e), Some(HUD_LONG_MS), cx);
                         return;
                     }
@@ -2056,7 +2058,7 @@ impl ScriptListApp {
 
                 match result {
                     Ok(()) => {
-                        logging::log("UI", &format!("Created snippet with keyword: {}", keyword));
+                        tracing::info!(category = "UI", message = ? &format!("Created snippet with keyword: {}", keyword));
                         self.show_hud(
                             format!("Snippet created: type '{}' to paste", keyword),
                             Some(HUD_LONG_MS),
@@ -2066,7 +2068,7 @@ impl ScriptListApp {
                         self.refresh_scripts(cx);
                     }
                     Err(e) => {
-                        logging::log("ERROR", &format!("Failed to save snippet: {}", e));
+                        tracing::error!(message = ? &format!("Failed to save snippet: {}", e));
                         self.show_hud(format!("Save failed: {}", e), Some(HUD_LONG_MS), cx);
                     }
                 }
@@ -2075,7 +2077,7 @@ impl ScriptListApp {
 
             // Scriptlet-specific actions
             "edit_scriptlet" => {
-                logging::log("UI", "Edit scriptlet action");
+                tracing::info!(category = "UI", message = ? "Edit scriptlet action");
                 if let Some(result) = self.get_selected_result() {
                     if let scripts::SearchResult::Scriptlet(m) = result {
                         if let Some(ref file_path) = m.scriptlet.file_path {
@@ -2122,7 +2124,7 @@ impl ScriptListApp {
                 }
             }
             "reveal_scriptlet_in_finder" => {
-                logging::log("UI", "Reveal scriptlet in Finder action");
+                tracing::info!(category = "UI", message = ? "Reveal scriptlet in Finder action");
                 if let Some(result) = self.get_selected_result() {
                     if let scripts::SearchResult::Scriptlet(m) = result {
                         if let Some(ref file_path) = m.scriptlet.file_path {
@@ -2174,7 +2176,7 @@ impl ScriptListApp {
                 }
             }
             "copy_scriptlet_path" => {
-                logging::log("UI", "Copy scriptlet path action");
+                tracing::info!(category = "UI", message = ? "Copy scriptlet path action");
                 if let Some(result) = self.get_selected_result() {
                     if let scripts::SearchResult::Scriptlet(m) = result {
                         if let Some(ref file_path) = m.scriptlet.file_path {
@@ -2185,8 +2187,7 @@ impl ScriptListApp {
                             {
                                 match self.pbcopy(path_str) {
                                     Ok(_) => {
-                                        logging::log(
-                                            "UI",
+                                        tracing::info!(category = "UI", message = ?
                                             &format!(
                                                 "Copied scriptlet path to clipboard: {}",
                                                 path_str
@@ -2199,7 +2200,7 @@ impl ScriptListApp {
                                         );
                                     }
                                     Err(e) => {
-                                        logging::log("ERROR", &format!("pbcopy failed: {}", e));
+                                        tracing::error!(message = ? &format!("pbcopy failed: {}", e));
                                         self.show_hud(
                                             "Failed to copy path".to_string(),
                                             Some(HUD_LONG_MS),
@@ -2214,8 +2215,7 @@ impl ScriptListApp {
                                 use arboard::Clipboard;
                                 match Clipboard::new().and_then(|mut c| c.set_text(path_str)) {
                                     Ok(_) => {
-                                        logging::log(
-                                            "UI",
+                                        tracing::info!(category = "UI", message = ?
                                             &format!(
                                                 "Copied scriptlet path to clipboard: {}",
                                                 path_str
@@ -2228,8 +2228,7 @@ impl ScriptListApp {
                                         );
                                     }
                                     Err(e) => {
-                                        logging::log(
-                                            "ERROR",
+                                        tracing::error!(message = ?
                                             &format!("Failed to copy path: {}", e),
                                         );
                                         self.show_hud(
@@ -2265,7 +2264,7 @@ impl ScriptListApp {
             }
 
             "copy_content" => {
-                logging::log("UI", "Copy content action");
+                tracing::info!(category = "UI", message = ? "Copy content action");
                 if let Some(result) = self.get_selected_result() {
                     // Get the file path based on the result type
                     let file_path_opt: Option<String> = match result {
@@ -2293,8 +2292,7 @@ impl ScriptListApp {
                                 {
                                     match self.pbcopy(&content) {
                                         Ok(_) => {
-                                            logging::log(
-                                                "UI",
+                                            tracing::info!(category = "UI", message = ?
                                                 &format!(
                                                     "Copied content to clipboard from: {}",
                                                     file_path
@@ -2307,7 +2305,7 @@ impl ScriptListApp {
                                             );
                                         }
                                         Err(e) => {
-                                            logging::log("ERROR", &format!("pbcopy failed: {}", e));
+                                            tracing::error!(message = ? &format!("pbcopy failed: {}", e));
                                             self.show_hud(
                                                 "Failed to copy content".to_string(),
                                                 Some(HUD_LONG_MS),
@@ -2322,8 +2320,7 @@ impl ScriptListApp {
                                     use arboard::Clipboard;
                                     match Clipboard::new().and_then(|mut c| c.set_text(&content)) {
                                         Ok(_) => {
-                                            logging::log(
-                                                "UI",
+                                            tracing::info!(category = "UI", message = ?
                                                 &format!(
                                                     "Copied content to clipboard from: {}",
                                                     file_path
@@ -2336,8 +2333,7 @@ impl ScriptListApp {
                                             );
                                         }
                                         Err(e) => {
-                                            logging::log(
-                                                "ERROR",
+                                            tracing::error!(message = ?
                                                 &format!("Failed to copy content: {}", e),
                                             );
                                             self.show_hud(
@@ -2351,8 +2347,7 @@ impl ScriptListApp {
                                 self.hide_main_and_reset(cx);
                             }
                             Err(e) => {
-                                logging::log(
-                                    "ERROR",
+                                tracing::error!(message = ?
                                     &format!("Failed to read file {}: {}", file_path, e),
                                 );
                                 self.show_hud(
@@ -2378,7 +2373,7 @@ impl ScriptListApp {
                 }
             }
             "reset_ranking" => {
-                logging::log("UI", "Reset ranking action");
+                tracing::info!(category = "UI", message = ? "Reset ranking action");
                 // Get the frecency path from the focused script info
                 if let Some(script_info) = self.get_focused_script_info() {
                     if let Some(ref frecency_path) = script_info.frecency_path {
@@ -2386,8 +2381,7 @@ impl ScriptListApp {
                         if self.frecency_store.remove(frecency_path).is_some() {
                             // Save the updated frecency store
                             if let Err(e) = self.frecency_store.save() {
-                                logging::log(
-                                    "ERROR",
+                                tracing::error!(message = ?
                                     &format!("Failed to save frecency after reset: {}", e),
                                 );
                             }
@@ -2395,15 +2389,14 @@ impl ScriptListApp {
                             // This ensures the item is immediately removed from the Suggested section
                             self.invalidate_grouped_cache();
                             self.refresh_scripts(cx);
-                            logging::log("UI", &format!("Reset ranking for: {}", script_info.name));
+                            tracing::info!(category = "UI", message = ? &format!("Reset ranking for: {}", script_info.name));
                             self.show_hud(
                                 format!("Ranking reset for \"{}\"", script_info.name),
                                 Some(HUD_MEDIUM_MS),
                                 cx,
                             );
                         } else {
-                            logging::log(
-                                "UI",
+                            tracing::info!(category = "UI", message = ?
                                 &format!("No frecency entry found for: {}", frecency_path),
                             );
                             self.show_hud(
@@ -2429,8 +2422,7 @@ impl ScriptListApp {
             // Handle scriptlet actions defined via H3 headers
             action_id if action_id.starts_with("scriptlet_action:") => {
                 let action_command = action_id.strip_prefix("scriptlet_action:").unwrap_or("");
-                logging::log(
-                    "UI",
+                tracing::info!(category = "UI", message = ?
                     &format!("Scriptlet action triggered: {}", action_command),
                 );
 
@@ -2506,8 +2498,7 @@ impl ScriptListApp {
                                         match executor::run_scriptlet(&action_scriptlet, options) {
                                             Ok(exec_result) => {
                                                 if exec_result.success {
-                                                    logging::log(
-                                                        "UI",
+                                                    tracing::info!(category = "UI", message = ?
                                                         &format!(
                                                             "Scriptlet action '{}' executed successfully",
                                                             action.name
@@ -2525,8 +2516,7 @@ impl ScriptListApp {
                                                     } else {
                                                         exec_result.stderr.clone()
                                                     };
-                                                    logging::log(
-                                                        "ERROR",
+                                                    tracing::error!(message = ?
                                                         &format!(
                                                             "Scriptlet action '{}' failed: {}",
                                                             action.name, error_msg
@@ -2540,8 +2530,7 @@ impl ScriptListApp {
                                                 }
                                             }
                                             Err(e) => {
-                                                logging::log(
-                                                    "ERROR",
+                                                tracing::error!(message = ?
                                                     &format!(
                                                         "Failed to execute scriptlet action '{}': {}",
                                                         action.name, e
@@ -2563,8 +2552,7 @@ impl ScriptListApp {
                                     false
                                 }
                             } else {
-                                logging::log(
-                                    "ERROR",
+                                tracing::error!(message = ?
                                     &format!("Failed to read scriptlet file: {}", file_only),
                                 );
                                 false
@@ -2574,8 +2562,7 @@ impl ScriptListApp {
                         };
 
                         if !action_found {
-                            logging::log(
-                                "ERROR",
+                            tracing::error!(message = ?
                                 &format!("Scriptlet action not found: {}", action_command),
                             );
                             self.show_hud("Scriptlet action not found".to_string(), Some(HUD_MEDIUM_MS), cx);
