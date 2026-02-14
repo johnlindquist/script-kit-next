@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // --- merged from part_01.rs ---
 use gpui::*;
 
