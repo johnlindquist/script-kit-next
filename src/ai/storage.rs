@@ -397,25 +397,6 @@ pub fn delete_chat(chat_id: &ChatId) -> Result<()> {
     Ok(())
 }
 
-/// Restore a chat from trash
-pub fn restore_chat(chat_id: &ChatId) -> Result<()> {
-    let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
-
-    let now = Utc::now().to_rfc3339();
-
-    conn.execute(
-        "UPDATE chats SET deleted_at = NULL, updated_at = ?2 WHERE id = ?1",
-        params![chat_id.as_str(), now],
-    )
-    .context("Failed to restore chat")?;
-
-    info!(chat_id = %chat_id, "Chat restored from trash");
-    Ok(())
-}
-
 /// Permanently delete a chat and all its messages
 pub fn delete_chat_permanently(chat_id: &ChatId) -> Result<()> {
     let db = get_db()?;
@@ -667,86 +648,6 @@ pub fn get_recent_messages(chat_id: &ChatId, limit: usize) -> Result<Vec<Message
     messages.reverse();
 
     Ok(messages)
-}
-
-/// Get total token usage for a chat
-pub fn get_chat_token_usage(chat_id: &ChatId) -> Result<u64> {
-    let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
-
-    let total: i64 = conn
-        .query_row(
-            "SELECT COALESCE(SUM(tokens_used), 0) FROM messages WHERE chat_id = ?1",
-            params![chat_id.as_str()],
-            |row| row.get(0),
-        )
-        .context("Failed to get token usage")?;
-
-    Ok(total as u64)
-}
-
-/// Get chat count (active only)
-pub fn get_chat_count() -> Result<usize> {
-    let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
-
-    let count: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM chats WHERE deleted_at IS NULL",
-            [],
-            |row| row.get(0),
-        )
-        .context("Failed to count chats")?;
-
-    Ok(count as usize)
-}
-
-/// Prune chats deleted more than `days` ago
-pub fn prune_old_deleted_chats(days: u32) -> Result<usize> {
-    let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
-
-    let cutoff = Utc::now() - chrono::Duration::days(days as i64);
-
-    // Get IDs of chats to delete
-    let chat_ids: Vec<String> = {
-        let mut stmt = conn
-            .prepare("SELECT id FROM chats WHERE deleted_at IS NOT NULL AND deleted_at < ?1")
-            .context("Failed to prepare prune query")?;
-
-        let results = stmt
-            .query_map(params![cutoff.to_rfc3339()], |row| row.get(0))
-            .context("Failed to query chats to prune")?
-            .collect::<Result<Vec<_>, _>>()
-            .context("Failed to collect chat IDs")?;
-        results
-    };
-
-    // Delete messages for these chats
-    for chat_id in &chat_ids {
-        conn.execute("DELETE FROM messages WHERE chat_id = ?1", params![chat_id])
-            .context("Failed to delete messages for pruned chat")?;
-    }
-
-    // Delete the chats
-    let count = conn
-        .execute(
-            "DELETE FROM chats WHERE deleted_at IS NOT NULL AND deleted_at < ?1",
-            params![cutoff.to_rfc3339()],
-        )
-        .context("Failed to prune old deleted chats")?;
-
-    if count > 0 {
-        info!(count, days, "Pruned old deleted chats");
-    }
-
-    Ok(count)
 }
 
 // ============================================================================
