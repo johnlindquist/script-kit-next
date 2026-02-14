@@ -197,21 +197,6 @@ fn test_design_prev() {
 // =========================================================================
 
 #[test]
-fn test_get_tokens_returns_correct_variant() {
-    // Verify get_tokens returns tokens with matching variant
-    for variant in DesignVariant::all() {
-        let tokens = get_tokens(*variant);
-        assert_eq!(
-            tokens.variant(),
-            *variant,
-            "get_tokens({:?}) returned tokens for {:?}",
-            variant,
-            tokens.variant()
-        );
-    }
-}
-
-#[test]
 fn test_get_tokens_item_height_matches() {
     // Verify token item_height matches get_item_height function
     for variant in DesignVariant::all() {

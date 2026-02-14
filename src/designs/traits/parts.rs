@@ -1,8 +1,6 @@
 // --- merged from part_01.rs ---
 use gpui::*;
 
-use crate::designs::DesignVariant;
-
 // ============================================================================
 // Design Token Structs (Copy/Clone for efficient closure use)
 // ============================================================================
@@ -244,50 +242,6 @@ impl Default for DesignTypography {
 // Implement Copy for DesignTypography by storing only static str references
 impl Copy for DesignTypography {}
 
-impl DesignTypography {
-    /// Calculate the cursor height for text input fields.
-    ///
-    /// The cursor should be slightly shorter than the line height for visual balance.
-    /// This follows the pattern from editor.rs where cursor_height = line_height - 4.0
-    ///
-    /// # Arguments
-    /// * `font_size` - The font size in pixels (e.g., font_size_lg for .text_lg())
-    ///
-    /// # Returns
-    /// The cursor height in pixels, slightly shorter than the line height.
-    #[inline]
-    pub fn cursor_height_for_font(&self, font_size: f32) -> f32 {
-        // Calculate line height based on normal multiplier
-        let line_height = font_size * self.line_height_normal;
-        // Subtract 4px for visual balance (matches editor.rs pattern)
-        // This leaves 2px margin on top and bottom for vertical centering
-        (line_height - 4.0).max(12.0) // Minimum 12px for visibility
-    }
-
-    /// Calculate cursor height for large text (used with .text_lg())
-    ///
-    /// GPUI's .text_lg() is approximately 18px font with ~1.55 line height.
-    /// Returns a cursor height that aligns properly with GPUI's text rendering.
-    #[inline]
-    pub fn cursor_height_lg(&self) -> f32 {
-        // For GPUI .text_lg() compatibility:
-        // - GPUI text_lg is ~18px font size
-        // - Natural line height ~28px (1.55 multiplier)
-        // - Cursor should be ~20px with 4px margin for centering
-        //
-        // We use 18px as a good middle ground that works with various line heights
-        18.0
-    }
-
-    /// Calculate vertical margin for cursor centering within text line
-    ///
-    /// Returns the top/bottom margin needed to vertically center the cursor.
-    #[inline]
-    pub fn cursor_margin_y(&self) -> f32 {
-        2.0
-    }
-}
-
 /// Visual effect tokens for a design variant
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DesignVisual {
@@ -403,9 +357,6 @@ pub trait DesignTokens: Send + Sync {
     ///
     /// This is used by uniform_list for virtualization.
     fn item_height(&self) -> f32;
-
-    /// Get the design variant this token set represents
-    fn variant(&self) -> DesignVariant;
 }
 
 /// Default token implementation for the standard design
@@ -431,10 +382,6 @@ impl DesignTokens for DefaultDesignTokens {
 
     fn item_height(&self) -> f32 {
         40.0 // Standard list item height matching LIST_ITEM_HEIGHT constant
-    }
-
-    fn variant(&self) -> DesignVariant {
-        DesignVariant::Default
     }
 }
 
@@ -563,10 +510,6 @@ impl DesignTokens for MinimalDesignTokens {
     fn item_height(&self) -> f32 {
         64.0 // Taller items for minimal
     }
-
-    fn variant(&self) -> DesignVariant {
-        DesignVariant::Minimal
-    }
 }
 
 /// Retro Terminal design tokens
@@ -685,10 +628,6 @@ impl DesignTokens for RetroTerminalDesignTokens {
     fn item_height(&self) -> f32 {
         28.0 // Dense terminal items
     }
-
-    fn variant(&self) -> DesignVariant {
-        DesignVariant::RetroTerminal
-    }
 }
 
 /// Glassmorphism design tokens
@@ -784,10 +723,6 @@ impl DesignTokens for GlassmorphismDesignTokens {
 
     fn item_height(&self) -> f32 {
         56.0
-    }
-
-    fn variant(&self) -> DesignVariant {
-        DesignVariant::Glassmorphism
     }
 }
 
@@ -909,10 +844,6 @@ impl DesignTokens for BrutalistDesignTokens {
     fn item_height(&self) -> f32 {
         40.0 // Standard list item height matching LIST_ITEM_HEIGHT constant
     }
-
-    fn variant(&self) -> DesignVariant {
-        DesignVariant::Brutalist
-    }
 }
 
 /// Compact design tokens (for power users)
@@ -1009,10 +940,6 @@ impl DesignTokens for CompactDesignTokens {
     fn item_height(&self) -> f32 {
         24.0 // Very compact
     }
-
-    fn variant(&self) -> DesignVariant {
-        DesignVariant::Compact
-    }
 }
 
 // ============================================================================
@@ -1093,10 +1020,6 @@ impl DesignTokens for NeonCyberpunkDesignTokens {
 
     fn item_height(&self) -> f32 {
         34.0 // Compact list item height matching LIST_ITEM_HEIGHT constant
-    }
-
-    fn variant(&self) -> DesignVariant {
-        DesignVariant::NeonCyberpunk
     }
 }
 
@@ -1214,10 +1137,6 @@ impl DesignTokens for PaperDesignTokens {
     fn item_height(&self) -> f32 {
         34.0 // Compact list item height matching LIST_ITEM_HEIGHT constant
     }
-
-    fn variant(&self) -> DesignVariant {
-        DesignVariant::Paper
-    }
 }
 
 // --- merged from part_04.rs ---
@@ -1334,10 +1253,6 @@ impl DesignTokens for AppleHIGDesignTokens {
     fn item_height(&self) -> f32 {
         44.0 // iOS standard row height
     }
-
-    fn variant(&self) -> DesignVariant {
-        DesignVariant::AppleHIG
-    }
 }
 
 /// Material Design 3 tokens
@@ -1453,10 +1368,6 @@ impl DesignTokens for Material3DesignTokens {
 
     fn item_height(&self) -> f32 {
         56.0 // M3 list item height
-    }
-
-    fn variant(&self) -> DesignVariant {
-        DesignVariant::Material3
     }
 }
 
@@ -1577,20 +1488,4 @@ impl DesignTokens for PlayfulDesignTokens {
     fn item_height(&self) -> f32 {
         56.0
     }
-
-    fn variant(&self) -> DesignVariant {
-        DesignVariant::Playful
-    }
 }
-
-// ============================================================================
-// Boxed Token Type for Dynamic Dispatch
-// ============================================================================
-
-/// Type alias for boxed design tokens (for dynamic dispatch)
-pub type DesignTokensBox = Box<dyn DesignTokens>;
-
-// Note: Tests for DesignTypography cursor methods are validated at compile time
-// through usage in src/panel.rs (CursorStyle) and editor.rs patterns.
-// The cursor_height_lg() returns 18.0 for GPUI .text_lg() compatibility.
-// The cursor_margin_y() returns 2.0 for vertical centering (matching editor.rs pattern).

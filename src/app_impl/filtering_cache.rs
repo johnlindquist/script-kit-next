@@ -1,5 +1,28 @@
 use super::*;
 
+const INLINE_CALCULATOR_SECTION_LABEL: &str = "Calculator";
+const INLINE_CALCULATOR_RESULT_INDEX: usize = usize::MAX;
+
+fn prepend_inline_calculator_group(
+    grouped_items: Vec<GroupedListItem>,
+    flat_results: Vec<scripts::SearchResult>,
+    calculator: Option<&crate::calculator::CalculatorInlineResult>,
+) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
+    let Some(_calculator) = calculator else {
+        return (grouped_items, flat_results);
+    };
+
+    let mut merged_grouped_items = Vec::with_capacity(grouped_items.len() + 2);
+    merged_grouped_items.push(GroupedListItem::SectionHeader(
+        INLINE_CALCULATOR_SECTION_LABEL.to_string(),
+        None,
+    ));
+    merged_grouped_items.push(GroupedListItem::Item(INLINE_CALCULATOR_RESULT_INDEX));
+    merged_grouped_items.extend(grouped_items);
+
+    (merged_grouped_items, flat_results)
+}
+
 impl ScriptListApp {
     pub(crate) fn filter_text(&self) -> &str {
         self.filter_text.as_str()
@@ -157,6 +180,11 @@ impl ScriptListApp {
             &menu_bar_items,
             menu_bar_bundle_id.as_deref(),
         );
+        let (grouped_items, flat_results) = prepend_inline_calculator_group(
+            grouped_items,
+            flat_results,
+            self.inline_calculator.as_ref(),
+        );
         let elapsed = start.elapsed();
 
         let mut first_selectable_index = None;
@@ -234,8 +262,25 @@ impl ScriptListApp {
         let (grouped_items, flat_results) = self.get_grouped_results_cached();
 
         match grouped_items.get(selected_index) {
-            Some(GroupedListItem::Item(idx)) => flat_results.get(*idx).cloned(),
+            Some(GroupedListItem::Item(idx)) => {
+                if self.inline_calculator_for_result_index(*idx).is_some() {
+                    None
+                } else {
+                    flat_results.get(*idx).cloned()
+                }
+            }
             _ => None,
+        }
+    }
+
+    pub(crate) fn inline_calculator_for_result_index(
+        &self,
+        result_idx: usize,
+    ) -> Option<&crate::calculator::CalculatorInlineResult> {
+        if result_idx == INLINE_CALCULATOR_RESULT_INDEX {
+            self.inline_calculator.as_ref()
+        } else {
+            None
         }
     }
 
@@ -315,4 +360,59 @@ impl ScriptListApp {
         self.preview_cache_lines.clear();
     }
 
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn calculator_result() -> crate::calculator::CalculatorInlineResult {
+        crate::calculator::CalculatorInlineResult {
+            raw_input: "12 / 3".to_string(),
+            normalized_expr: "12 / 3".to_string(),
+            operation_name: "Divide".to_string(),
+            value: 4.0,
+            formatted: "4".to_string(),
+            words: "Four".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_prepend_inline_calculator_group_prepends_header_and_item() {
+        let grouped_items = vec![
+            GroupedListItem::SectionHeader("Suggested".to_string(), None),
+            GroupedListItem::Item(0),
+            GroupedListItem::Item(1),
+        ];
+        let flat_results = Vec::new();
+
+        let (grouped, flat) =
+            prepend_inline_calculator_group(grouped_items, flat_results, Some(&calculator_result()));
+
+        assert!(matches!(
+            grouped.first(),
+            Some(GroupedListItem::SectionHeader(label, None))
+            if label == INLINE_CALCULATOR_SECTION_LABEL
+        ));
+        assert!(matches!(
+            grouped.get(1),
+            Some(GroupedListItem::Item(INLINE_CALCULATOR_RESULT_INDEX))
+        ));
+        assert!(matches!(grouped.get(2), Some(GroupedListItem::SectionHeader(_, _))));
+        assert!(matches!(grouped.get(3), Some(GroupedListItem::Item(0))));
+        assert!(matches!(grouped.get(4), Some(GroupedListItem::Item(1))));
+        assert!(flat.is_empty());
+    }
+
+    #[test]
+    fn test_prepend_inline_calculator_group_is_noop_without_calculator() {
+        let grouped_items = vec![GroupedListItem::Item(0)];
+        let flat_results = Vec::new();
+
+        let (grouped, flat) = prepend_inline_calculator_group(grouped_items, flat_results, None);
+
+        assert_eq!(grouped.len(), 1);
+        assert!(matches!(grouped.first(), Some(GroupedListItem::Item(0))));
+        assert!(flat.is_empty());
+    }
 }

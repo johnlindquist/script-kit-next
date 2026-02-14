@@ -131,6 +131,17 @@ impl ScriptListApp {
             if resolved_index != self.selected_index {
                 self.selected_index = resolved_index;
             }
+
+            if let Some(formatted_value) = self
+                .inline_calculator_for_result_index(idx)
+                .map(|calculator| calculator.formatted.clone())
+            {
+                cx.write_to_clipboard(gpui::ClipboardItem::new_string(formatted_value.clone()));
+                self.show_hud(format!("Copied: {}", formatted_value), Some(2000), cx);
+                self.close_and_reset_window(cx);
+                return;
+            }
+
             if let Some(result) = flat_results.get(idx).cloned() {
                 // Record frecency usage before executing (unless excluded)
                 let frecency_path: Option<String> = match &result {

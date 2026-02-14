@@ -1,7 +1,6 @@
 // --- merged from part_01.rs ---
 use gpui::*;
 
-use super::DesignVariant;
 use crate::scripts::SearchResult;
 
 /// Fixed height for terminal list items (dense terminal feel)
@@ -222,11 +221,6 @@ impl RetroTerminalRenderer {
             .text_sm()
             .text_color(rgb(colors.dim))
             .child(message)
-    }
-
-    /// Get the design variant represented by this renderer.
-    pub fn variant(&self) -> DesignVariant {
-        DesignVariant::RetroTerminal
     }
 }
 

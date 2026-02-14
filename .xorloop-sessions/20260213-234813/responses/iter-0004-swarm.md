@@ -1,0 +1,1 @@
+Another stale notification — `fix-dead-code-warnings` also completed earlier. All 4 workers are done, `cargo check` passes, and 6 files with dead-code cleanup remain uncommitted. Waiting on your go-ahead to commit and push.

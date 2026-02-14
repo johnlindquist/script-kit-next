@@ -126,10 +126,15 @@ impl ScriptListApp {
         let flat_results = flat_results.clone();
 
         // Get the result index from the grouped item
-        let selected_result = match grouped_items.get(selected_index) {
-            Some(GroupedListItem::Item(idx)) => flat_results.get(*idx).cloned(),
+        let selected_result_idx = match grouped_items.get(selected_index) {
+            Some(GroupedListItem::Item(idx)) => Some(*idx),
             _ => None,
         };
+        let selected_result =
+            selected_result_idx.and_then(|result_idx| flat_results.get(result_idx).cloned());
+        let selected_calculator = selected_result_idx
+            .and_then(|result_idx| self.inline_calculator_for_result_index(result_idx))
+            .cloned();
 
         // Use design tokens for GLOBAL theming - design applies to ALL components
         let tokens = get_tokens(self.current_design);
@@ -209,21 +214,25 @@ impl ScriptListApp {
 
         // Get shortcut display string for the selected item (if any)
         // Check BOTH config.ts commands AND shortcut overrides file
-        let shortcut_display: Option<String> = selected_result.as_ref().and_then(|result| {
-            Self::get_command_id_for_result(result).and_then(|command_id| {
-                // First check config.ts commands
-                if let Some(hotkey) = self.config.get_command_shortcut(&command_id) {
-                    return Some(hotkey.to_display_string());
-                }
-                // Then check shortcut overrides file (where ShortcutRecorder saves)
-                // Uses cached version to avoid file I/O on every render
-                let overrides = crate::shortcuts::get_cached_shortcut_overrides();
-                if let Some(shortcut) = overrides.get(&command_id) {
-                    return Some(shortcut.to_string());
-                }
-                None
+        let shortcut_display: Option<String> = if selected_calculator.is_some() {
+            None
+        } else {
+            selected_result.as_ref().and_then(|result| {
+                Self::get_command_id_for_result(result).and_then(|command_id| {
+                    // First check config.ts commands
+                    if let Some(hotkey) = self.config.get_command_shortcut(&command_id) {
+                        return Some(hotkey.to_display_string());
+                    }
+                    // Then check shortcut overrides file (where ShortcutRecorder saves)
+                    // Uses cached version to avoid file I/O on every render
+                    let overrides = crate::shortcuts::get_cached_shortcut_overrides();
+                    if let Some(shortcut) = overrides.get(&command_id) {
+                        return Some(shortcut.to_string());
+                    }
+                    None
+                })
             })
-        });
+        };
 
         // Get opacity for vibrancy support from theme
         let opacity = self.theme.get_opacity();
@@ -247,6 +256,87 @@ impl ScriptListApp {
 
         // P4: Compute match indices lazily for visible preview (only one result at a time)
         let computed_filter = self.computed_filter_text.clone();
+
+        if let Some(calculator) = selected_calculator {
+            panel = panel
+                .child(
+                    div()
+                        .text_xs()
+                        .font_family(typography.font_family_mono)
+                        .text_color(rgba((text_muted << 8) | 0x99))
+                        .pb(px(spacing.padding_xs))
+                        .child("calculator: inline"),
+                )
+                .child(
+                    div()
+                        .text_lg()
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(rgb(text_primary))
+                        .pb(px(spacing.padding_sm))
+                        .child(calculator.normalized_expr),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .gap(px(spacing.gap_sm))
+                        .pb(px(spacing.padding_md))
+                        .child(
+                            div()
+                                .px(px(6.0))
+                                .py(px(2.0))
+                                .rounded(px(4.0))
+                                .bg(badge_bg)
+                                .border_1()
+                                .border_color(badge_border)
+                                .text_xs()
+                                .text_color(badge_text)
+                                .child(calculator.operation_name),
+                        )
+                        .child(
+                            div()
+                                .px(px(6.0))
+                                .py(px(2.0))
+                                .rounded(px(4.0))
+                                .bg(accent_badge_bg)
+                                .border_1()
+                                .border_color(accent_badge_border)
+                                .text_xs()
+                                .text_color(accent_badge_text)
+                                .child("Enter copies result"),
+                        ),
+                )
+                .child(
+                    div()
+                        .w_full()
+                        .h(px(visual.border_thin))
+                        .bg(rgba((ui_border << 8) | if is_light_mode { 0x30 } else { 0x60 }))
+                        .my(px(spacing.padding_sm)),
+                )
+                .child(
+                    div()
+                        .text_size(px(section_label_font_size))
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(rgba((text_muted << 8) | 0xCC))
+                        .pb(px(spacing.padding_sm))
+                        .child("RESULT"),
+                )
+                .child(
+                    div()
+                        .text_size(px(typography.font_size_xl))
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(rgb(self.theme.colors.accent.selected))
+                        .pb(px(spacing.padding_xs))
+                        .child(calculator.formatted),
+                )
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(rgb(text_secondary))
+                        .child(calculator.words),
+                );
+            return panel;
+        }
 
         match selected_result {
             Some(ref result) => {
