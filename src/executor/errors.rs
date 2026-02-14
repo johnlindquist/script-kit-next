@@ -3,9 +3,7 @@
 //! This module provides utilities for parsing script errors and generating
 //! helpful suggestions for users.
 
-fn truncate_str_chars(s: &str, max_chars: usize) -> &str {
-    s.char_indices().nth(max_chars).map_or(s, |(i, _)| &s[..i])
-}
+use crate::utils::truncate_str_chars;
 
 /// Parse stderr output to extract stack trace if present
 pub fn parse_stack_trace(stderr: &str) -> Option<String> {

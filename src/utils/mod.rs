@@ -12,6 +12,10 @@ mod html;
 mod paths;
 mod tailwind;
 
+pub(crate) fn truncate_str_chars(s: &str, max_chars: usize) -> &str {
+    s.char_indices().nth(max_chars).map_or(s, |(i, _)| &s[..i])
+}
+
 // Re-export all public items for backwards compatibility
 // Allow unused imports - these are public API exports for external use
 pub use applescript::escape_applescript_string;
@@ -51,5 +55,21 @@ mod tests {
         assert!(styles.flex);
         assert_eq!(styles.padding, Some(16.0));
         assert_eq!(parse_color("white"), Some(0xFFFFFF));
+    }
+
+    #[test]
+    fn test_truncate_str_chars_preserves_utf8_boundaries() {
+        let input = "🙂".repeat(45);
+        let truncated = truncate_str_chars(&input, 27);
+
+        assert_eq!(truncated.chars().count(), 27);
+        assert!(std::str::from_utf8(truncated.as_bytes()).is_ok());
+    }
+
+    #[test]
+    fn test_truncate_str_chars_returns_original_when_shorter_than_limit() {
+        let input = "short";
+
+        assert_eq!(truncate_str_chars(input, 30), input);
     }
 }

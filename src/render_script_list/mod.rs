@@ -27,14 +27,6 @@ fn script_list_footer_info_label(
     }
 }
 
-mod render_script_list_utf8 {
-    pub(super) fn truncate_str_chars(s: &str, max_chars: usize) -> &str {
-        s.char_indices()
-            .nth(max_chars)
-            .map_or(s, |(i, _)| &s[..i])
-    }
-}
-
 impl ScriptListApp {
     fn render_script_list(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let render_list_start = std::time::Instant::now();
@@ -184,7 +176,7 @@ impl ScriptListApp {
                 let filter_display = if self.filter_text.chars().count() > 30 {
                     format!(
                         "{}...",
-                        render_script_list_utf8::truncate_str_chars(&self.filter_text, 27)
+                        crate::utils::truncate_str_chars(&self.filter_text, 27)
                     )
                 } else {
                     self.filter_text.clone()
@@ -1148,8 +1140,7 @@ impl ScriptListApp {
 #[cfg(test)]
 mod render_script_list_footer_tests {
     use super::{
-        app_shell_footer_colors, render_script_list_utf8, script_list_footer_info_label,
-        script_list_footer_primary_label,
+        app_shell_footer_colors, script_list_footer_info_label, script_list_footer_primary_label,
     };
 
     #[test]
@@ -1195,7 +1186,7 @@ mod render_script_list_footer_tests {
     #[test]
     fn test_truncate_str_chars_returns_valid_utf8_boundary_when_filter_text_is_multibyte() {
         let input = "é".repeat(45);
-        let truncated = render_script_list_utf8::truncate_str_chars(&input, 27);
+        let truncated = crate::utils::truncate_str_chars(&input, 27);
 
         assert_eq!(truncated.chars().count(), 27);
         assert!(std::str::from_utf8(truncated.as_bytes()).is_ok());
