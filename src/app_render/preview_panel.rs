@@ -174,7 +174,7 @@ impl ScriptListApp {
         // Light mode: use theme text colors (dark on light) for visible badges
         // Dark mode: use semi-transparent overlays that work with vibrancy
         let badge_bg = if is_light_mode {
-            rgba(0x0000000Cu32) // black at ~5% → visible gray on light vibrancy
+            rgba((ui_border << 8) | 0x0C) // border at ~5% for light vibrancy
         } else {
             rgba((ui_border << 8) | 0x60) // border at 37% on dark
         };
@@ -184,7 +184,7 @@ impl ScriptListApp {
             rgb(text_muted)
         };
         let badge_border = if is_light_mode {
-            rgba(0x00000018u32) // black at ~9% border
+            rgba((ui_border << 8) | 0x18) // border at ~9% for light vibrancy
         } else {
             rgba((ui_border << 8) | 0x40)
         };
