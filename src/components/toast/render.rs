@@ -1,6 +1,7 @@
 use gpui::*;
 
 use crate::components::button::{Button, ButtonColors, ButtonVariant};
+use crate::list_item::FONT_MONO;
 
 use super::types::{
     TOAST_ACTIONS_GAP_PX, TOAST_ACTIONS_MARGIN_TOP_PX, TOAST_BORDER_WIDTH_PX, TOAST_CONTENT_GAP_PX,
@@ -172,7 +173,7 @@ impl RenderOnce for Toast {
                     div()
                         .text_xs()
                         .text_color(rgb(colors.text))
-                        .font_family("Menlo")
+                        .font_family(FONT_MONO)
                         .overflow_hidden()
                         .child(details_text),
                 );
