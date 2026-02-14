@@ -49,8 +49,7 @@ pub use self::script_generation::{generate_script_from_prompt, GeneratedScriptOu
 pub use self::sdk_handlers::try_handle_ai_message;
 pub use self::storage::{
     clear_all_chats, create_chat, delete_chat, get_all_chats, get_chat, get_chat_messages,
-    get_deleted_chats, init_ai_db, insert_mock_data, restore_chat, save_message, search_chats,
-    update_chat_title,
+    get_deleted_chats, init_ai_db, insert_mock_data, save_message, search_chats, update_chat_title,
 };
 pub use self::window::{
     close_ai_window, is_ai_window, is_ai_window_open, open_ai_window, open_ai_window_with_chat,
