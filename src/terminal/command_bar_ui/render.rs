@@ -9,11 +9,10 @@ impl TerminalCommandBar {
     /// Create box shadow for the popup
     fn create_popup_shadow(&self) -> Vec<BoxShadow> {
         let is_dark = self.theme.has_dark_colors();
-        let shadow_color = if is_dark {
-            rgba(0x00000080)
-        } else {
-            rgba(0x00000040)
-        };
+        let shadow_rgb = self.theme.get_drop_shadow().color;
+        let primary_shadow_alpha = if is_dark { 0x80 } else { 0x40 };
+        let shadow_color = rgba((shadow_rgb << 8) | primary_shadow_alpha);
+        let secondary_shadow_color = rgba((shadow_rgb << 8) | 0x20);
 
         vec![
             BoxShadow {
@@ -23,7 +22,7 @@ impl TerminalCommandBar {
                 spread_radius: px(0.),
             },
             BoxShadow {
-                color: Hsla::from(rgba(0x00000020)),
+                color: Hsla::from(secondary_shadow_color),
                 offset: gpui::point(px(0.), px(2.)),
                 blur_radius: px(8.),
                 spread_radius: px(0.),
@@ -38,17 +37,10 @@ impl TerminalCommandBar {
 
     /// Render a single keycap
     fn render_keycap(&self, key: &str, is_dark: bool) -> impl IntoElement {
-        let keycap_bg = if is_dark {
-            rgba(0xffffff18)
-        } else {
-            rgba(0x00000010)
-        };
+        let overlay_base = self.theme.colors.accent.selected_subtle;
+        let keycap_bg = rgba((overlay_base << 8) | if is_dark { 0x18 } else { 0x10 });
         let keycap_text = rgb(self.theme.colors.text.dimmed);
-        let keycap_border = if is_dark {
-            rgba(0xffffff20)
-        } else {
-            rgba(0x00000020)
-        };
+        let keycap_border = rgba((overlay_base << 8) | 0x20);
 
         div()
             .h(px(KEYCAP_HEIGHT))
