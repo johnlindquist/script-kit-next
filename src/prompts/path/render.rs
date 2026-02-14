@@ -1,5 +1,9 @@
 use super::*;
 use crate::components::{FocusablePrompt, FocusablePromptInterceptedKey};
+use crate::ui_foundation::{
+    is_key_backspace, is_key_down, is_key_enter, is_key_left, is_key_right, is_key_tab, is_key_up,
+    printable_char,
+};
 
 impl Focusable for PathPrompt {
     fn focus_handle(&self, _cx: &gpui::App) -> FocusHandle {
@@ -195,31 +199,26 @@ impl Render for PathPrompt {
                         return;
                     }
 
-                    match key {
-                        "up" | "Up" | "ArrowUp" | "arrowup" => this.move_up(cx),
-                        "down" | "Down" | "ArrowDown" | "arrowdown" => this.move_down(cx),
-                        "left" | "Left" | "ArrowLeft" | "arrowleft" => this.navigate_to_parent(cx),
-                        "right" | "Right" | "ArrowRight" | "arrowright" => {
-                            this.navigate_into_selected(cx)
+                    if is_key_up(key) {
+                        this.move_up(cx);
+                    } else if is_key_down(key) {
+                        this.move_down(cx);
+                    } else if is_key_left(key) {
+                        this.navigate_to_parent(cx);
+                    } else if is_key_right(key) {
+                        this.navigate_into_selected(cx);
+                    } else if is_key_tab(key) {
+                        if event.keystroke.modifiers.shift {
+                            this.navigate_to_parent(cx);
+                        } else {
+                            this.navigate_into_selected(cx);
                         }
-                        "tab" | "Tab" => {
-                            if event.keystroke.modifiers.shift {
-                                this.navigate_to_parent(cx);
-                            } else {
-                                this.navigate_into_selected(cx);
-                            }
-                        }
-                        "enter" | "Enter" | "return" | "Return" => this.handle_enter(cx),
-                        "backspace" | "Backspace" => this.handle_backspace(cx),
-                        _ => {
-                            if let Some(ref key_char) = event.keystroke.key_char {
-                                if let Some(ch) = key_char.chars().next() {
-                                    if !ch.is_control() {
-                                        this.handle_char(ch, cx);
-                                    }
-                                }
-                            }
-                        }
+                    } else if is_key_enter(key) {
+                        this.handle_enter(cx);
+                    } else if is_key_backspace(key) {
+                        this.handle_backspace(cx);
+                    } else if let Some(ch) = printable_char(event.keystroke.key_char.as_deref()) {
+                        this.handle_char(ch, cx);
                     }
                 },
             )

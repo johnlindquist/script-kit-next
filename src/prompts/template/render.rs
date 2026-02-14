@@ -1,5 +1,6 @@
 use super::*;
 use crate::components::{FocusablePrompt, FocusablePromptInterceptedKey};
+use crate::ui_foundation::{is_key_backspace, is_key_enter, is_key_tab, printable_char};
 
 impl Focusable for TemplatePrompt {
     fn focus_handle(&self, _cx: &gpui::App) -> FocusHandle {
@@ -216,25 +217,18 @@ impl Render for TemplatePrompt {
                 |this, event, _window, cx| {
                     let key_str = event.keystroke.key.as_str();
 
-                    match key_str {
-                        "tab" | "Tab" => {
-                            if event.keystroke.modifiers.shift {
-                                this.prev_input(cx);
-                            } else {
-                                this.next_input(cx);
-                            }
+                    if is_key_tab(key_str) {
+                        if event.keystroke.modifiers.shift {
+                            this.prev_input(cx);
+                        } else {
+                            this.next_input(cx);
                         }
-                        "enter" | "Enter" | "return" | "Return" => this.submit(cx),
-                        "backspace" | "Backspace" => this.handle_backspace(cx),
-                        _ => {
-                            if let Some(ref key_char) = event.keystroke.key_char {
-                                if let Some(ch) = key_char.chars().next() {
-                                    if !ch.is_control() {
-                                        this.handle_char(ch, cx);
-                                    }
-                                }
-                            }
-                        }
+                    } else if is_key_enter(key_str) {
+                        this.submit(cx);
+                    } else if is_key_backspace(key_str) {
+                        this.handle_backspace(cx);
+                    } else if let Some(ch) = printable_char(event.keystroke.key_char.as_deref()) {
+                        this.handle_char(ch, cx);
                     }
                 },
             )
