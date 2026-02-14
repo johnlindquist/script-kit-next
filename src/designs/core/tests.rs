@@ -83,13 +83,16 @@ fn test_uses_default_renderer() {
 #[test]
 fn test_get_item_height() {
     // Minimal uses taller items (64px)
-    assert_eq!(get_item_height(DesignVariant::Minimal), MINIMAL_ITEM_HEIGHT);
+    assert_eq!(
+        get_item_height(DesignVariant::Minimal),
+        get_tokens(DesignVariant::Minimal).item_height()
+    );
     assert_eq!(get_item_height(DesignVariant::Minimal), 64.0);
 
     // RetroTerminal uses denser items (28px)
     assert_eq!(
         get_item_height(DesignVariant::RetroTerminal),
-        TERMINAL_ITEM_HEIGHT
+        get_tokens(DesignVariant::RetroTerminal).item_height()
     );
     assert_eq!(get_item_height(DesignVariant::RetroTerminal), 28.0);
 
@@ -329,7 +332,7 @@ fn test_all_variants_have_valid_colors() {
 
 // --- merged from part_02.rs ---
 use crate::metadata_parser::TypedMetadata;
-use crate::scripts::{MatchIndices, Script, ScriptMatch, Scriptlet, ScriptletMatch};
+use crate::scripts::{MatchIndices, Script, ScriptMatch, Scriptlet, ScriptletMatch, SearchResult};
 use std::path::PathBuf;
 use std::sync::Arc;
 
