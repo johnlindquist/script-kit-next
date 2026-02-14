@@ -333,9 +333,7 @@ pub fn render_design_item(
         DesignVariant::Minimal => {
             let colors = MinimalColors {
                 text_primary: list_colors.text_primary,
-                text_muted: list_colors.text_muted,
                 accent_selected: list_colors.accent_selected,
-                background: list_colors.background,
             };
             MinimalRenderer::new()
                 .render_item(result, index, is_selected, colors)
