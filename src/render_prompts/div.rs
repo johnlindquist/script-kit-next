@@ -31,62 +31,41 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
-                // Hide cursor while typing - automatically shows when mouse moves
-                this.hide_mouse_cursor(cx);
-
-                if key_preamble(this, event, true, true, cx) {
-                    return;
-                }
-
-                let key = event.keystroke.key.as_str();
-                let key_char = event.keystroke.key_char.as_deref();
-                let has_cmd = event.keystroke.modifiers.platform;
-
-                // Check for Cmd+K to toggle actions popup (if actions are available)
-                if has_cmd && ui_foundation::is_key_k(key) && has_actions_for_handler {
-                    logging::log("KEY", "Cmd+K in DivPrompt - calling toggle_arg_actions");
-                    this.toggle_arg_actions(cx, window);
-                    cx.stop_propagation();
-                    return;
-                }
-
-                let modifiers = &event.keystroke.modifiers;
-
-                // Route to shared actions dialog handler (modal when open)
-                match this.route_key_to_actions_dialog(
-                    key,
-                    key_char,
-                    modifiers,
-                    ActionsDialogHost::DivPrompt,
+                if handle_prompt_key_preamble(
+                    this,
+                    event,
                     window,
                     cx,
-                ) {
-                    ActionsRoute::Execute { action_id } => {
-                        this.trigger_action_by_name(&action_id, cx);
-                        cx.stop_propagation();
-                    }
-                    ActionsRoute::Handled => {
-                        // Key consumed by actions dialog
-                        cx.stop_propagation();
-                    }
-                    ActionsRoute::NotHandled => {
-                        // Actions popup not open - check SDK action shortcuts
-                        let key_lower = key.to_lowercase();
-                        if let Some(matched_shortcut) =
-                            check_sdk_action_shortcut(&this.action_shortcuts, &key_lower, &event.keystroke.modifiers)
-                        {
-                            logging::log(
-                                "KEY",
-                                &format!(
-                                    "SDK action shortcut matched in DivPrompt: {}",
-                                    matched_shortcut.action_name
-                                ),
-                            );
-                            this.trigger_action_by_name(&matched_shortcut.action_name, cx);
-                            cx.stop_propagation();
-                        }
-                    }
-                }
+                    PromptKeyPreambleCfg {
+                        is_dismissable: true,
+                        stop_propagation_on_global_shortcut: true,
+                        stop_propagation_when_handled: true,
+                        host: ActionsDialogHost::DivPrompt,
+                    },
+                    |_this, _event, _window, _cx| false,
+                    |key, _key_char, modifiers| {
+                        modifiers.platform && ui_foundation::is_key_k(key) && has_actions_for_handler
+                    },
+                    |this, window, cx| {
+                        logging::log("KEY", "Cmd+K in DivPrompt - calling toggle_arg_actions");
+                        this.toggle_arg_actions(cx, window);
+                    },
+                    |this, action_id, cx| {
+                        this.trigger_action_by_name(action_id, cx);
+                    },
+                    |_key, _key_char, _modifiers| true,
+                    |this, matched_shortcut, cx| {
+                        logging::log(
+                            "KEY",
+                            &format!(
+                                "SDK action shortcut matched in DivPrompt: {}",
+                                matched_shortcut.action_name
+                            ),
+                        );
+                        this.trigger_action_by_name(&matched_shortcut.action_name, cx);
+                    },
+                ) {}
+                // Fall through to DivPrompt entity key handling.
             },
         );
 
@@ -217,6 +196,22 @@ mod div_prompt_render_backdrop_tests {
         assert!(
             DIV_RENDER_SOURCE.contains("show_pointer_cursor: true"),
             "div render should keep backdrop cursor pointer enabled"
+        );
+    }
+
+    #[test]
+    fn test_div_key_handling_uses_preamble_helper_with_handled_propagation_stop() {
+        assert!(
+            DIV_RENDER_SOURCE.contains("handle_prompt_key_preamble("),
+            "div key handling should delegate shared preamble behavior to helper"
+        );
+        assert!(
+            DIV_RENDER_SOURCE.contains("stop_propagation_on_global_shortcut: true"),
+            "div key preamble should stop propagation when global shortcut consumes the key"
+        );
+        assert!(
+            DIV_RENDER_SOURCE.contains("stop_propagation_when_handled: true"),
+            "div key preamble should stop propagation when helper branches handle the key"
         );
     }
 }

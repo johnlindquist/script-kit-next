@@ -82,104 +82,84 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
-                // Hide cursor while typing - automatically shows when mouse moves
-                this.hide_mouse_cursor(cx);
-
-                if key_preamble(this, event, false, false, cx) {
-                    return;
-                }
-
-                let key_str = event.keystroke.key.to_lowercase();
-                let has_cmd = event.keystroke.modifiers.platform;
-
-                // For ScratchPadView (built-in utility): ESC returns to main menu or closes window
-                // This is different from EditorPrompt (SDK prompt) which doesn't respond to ESC
-                if matches!(this.current_view, AppView::ScratchPadView { .. }) {
-                    if key_str == "escape" && !this.show_actions_popup {
-                        logging::log("KEY", "ESC in ScratchPadView");
-                        this.go_back_or_close(window, cx);
-                        return;
-                    }
-
-                    if has_cmd && key_str == "w" {
-                        logging::log("KEY", "Cmd+W - closing window");
-                        this.close_and_reset_window(cx);
-                        return;
-                    }
-                }
-
-                let key = event.keystroke.key.as_str();
-                let key_char = event.keystroke.key_char.as_deref();
-                let has_cmd = event.keystroke.modifiers.platform;
-
-                // Check for Cmd+K to toggle actions popup (if actions are available)
-                if has_cmd && ui_foundation::is_key_k(key) && has_actions_for_handler {
-                    let correlation_id = logging::current_correlation_id();
-                    logging::log(
-                        "KEY",
-                        &format!(
-                            "{EDITOR_PROMPT_KEY_CONTEXT}: Cmd+K toggles actions (correlation_id={correlation_id})"
-                        ),
-                    );
-                    this.toggle_arg_actions(cx, window);
-                    return;
-                }
-
-                let modifiers = &event.keystroke.modifiers;
-
-                // Route to shared actions dialog handler (modal when open)
-                match this.route_key_to_actions_dialog(
-                    key,
-                    key_char,
-                    modifiers,
-                    ActionsDialogHost::EditorPrompt,
+                if handle_prompt_key_preamble(
+                    this,
+                    event,
                     window,
                     cx,
-                ) {
-                    ActionsRoute::Execute { action_id } => {
-                        this.trigger_action_by_name(&action_id, cx);
-                        return;
-                    }
-                    ActionsRoute::Handled => {
-                        // Key consumed by actions dialog
-                        return;
-                    }
-                    ActionsRoute::NotHandled => {
-                        // Actions popup not open - continue with normal handling
-                    }
-                }
+                    PromptKeyPreambleCfg {
+                        is_dismissable: false,
+                        stop_propagation_on_global_shortcut: false,
+                        stop_propagation_when_handled: false,
+                        host: ActionsDialogHost::EditorPrompt,
+                    },
+                    |this, event, window, cx| {
+                        let key_str = event.keystroke.key.to_lowercase();
+                        let has_cmd = event.keystroke.modifiers.platform;
 
-                // Check for SDK action shortcuts (only when popup is NOT open)
-                let key_lower = key.to_lowercase();
-                let shortcut_key =
-                    shortcuts::keystroke_to_shortcut(&key_lower, &event.keystroke.modifiers);
-                if let Some(reason) =
-                    editor_reserved_shortcut_reason(&key_lower, &event.keystroke.modifiers)
-                {
-                    let correlation_id = logging::current_correlation_id();
-                    logging::log_debug(
-                        "KEY",
-                        &format!(
-                            "{EDITOR_PROMPT_KEY_CONTEXT}: reserved shortcut preserved (reason={reason}, shortcut={shortcut_key}, correlation_id={correlation_id})"
-                        ),
-                    );
-                    return;
-                }
-                if let Some(matched_shortcut) = check_sdk_action_shortcut(
-                    &this.action_shortcuts,
-                    &key_lower,
-                    &event.keystroke.modifiers,
-                ) {
-                    let correlation_id = logging::current_correlation_id();
-                    logging::log(
-                        "KEY",
-                        &format!(
-                            "{EDITOR_PROMPT_KEY_CONTEXT}: SDK action shortcut matched (action={}, shortcut={}, correlation_id={correlation_id})",
-                            matched_shortcut.action_name, matched_shortcut.shortcut_key
-                        ),
-                    );
-                    this.trigger_action_by_name(&matched_shortcut.action_name, cx);
-                }
+                        // For ScratchPadView (built-in utility): ESC returns to main menu or closes window
+                        // This is different from EditorPrompt (SDK prompt) which doesn't respond to ESC
+                        if matches!(this.current_view, AppView::ScratchPadView { .. }) {
+                            if key_str == "escape" && !this.show_actions_popup {
+                                logging::log("KEY", "ESC in ScratchPadView");
+                                this.go_back_or_close(window, cx);
+                                return true;
+                            }
+
+                            if has_cmd && key_str == "w" {
+                                logging::log("KEY", "Cmd+W - closing window");
+                                this.close_and_reset_window(cx);
+                                return true;
+                            }
+                        }
+
+                        false
+                    },
+                    |key, _key_char, modifiers| {
+                        modifiers.platform && ui_foundation::is_key_k(key) && has_actions_for_handler
+                    },
+                    |this, window, cx| {
+                        let correlation_id = logging::current_correlation_id();
+                        logging::log(
+                            "KEY",
+                            &format!(
+                                "{EDITOR_PROMPT_KEY_CONTEXT}: Cmd+K toggles actions (correlation_id={correlation_id})"
+                            ),
+                        );
+                        this.toggle_arg_actions(cx, window);
+                    },
+                    |this, action_id, cx| {
+                        this.trigger_action_by_name(action_id, cx);
+                    },
+                    |key, _key_char, modifiers| {
+                        let key_lower = key.to_lowercase();
+                        let shortcut_key = shortcuts::keystroke_to_shortcut(&key_lower, modifiers);
+                        if let Some(reason) = editor_reserved_shortcut_reason(&key_lower, modifiers)
+                        {
+                            let correlation_id = logging::current_correlation_id();
+                            logging::log_debug(
+                                "KEY",
+                                &format!(
+                                    "{EDITOR_PROMPT_KEY_CONTEXT}: reserved shortcut preserved (reason={reason}, shortcut={shortcut_key}, correlation_id={correlation_id})"
+                                ),
+                            );
+                            return false;
+                        }
+
+                        true
+                    },
+                    |this, matched_shortcut, cx| {
+                        let correlation_id = logging::current_correlation_id();
+                        logging::log(
+                            "KEY",
+                            &format!(
+                                "{EDITOR_PROMPT_KEY_CONTEXT}: SDK action shortcut matched (action={}, shortcut={}, correlation_id={correlation_id})",
+                                matched_shortcut.action_name, matched_shortcut.shortcut_key
+                            ),
+                        );
+                        this.trigger_action_by_name(&matched_shortcut.action_name, cx);
+                    },
+                ) {}
                 // Let other keys fall through to the editor
             },
         );
@@ -432,6 +412,24 @@ mod editor_prompt_tests {
         assert!(
             EDITOR_RENDER_SOURCE.contains("show_pointer_cursor: true"),
             "editor render should keep backdrop cursor pointer enabled"
+        );
+    }
+
+    #[test]
+    fn test_editor_key_handling_uses_preamble_helper_with_reserved_shortcut_filter() {
+        const EDITOR_RENDER_SOURCE: &str = include_str!("editor.rs");
+
+        assert!(
+            EDITOR_RENDER_SOURCE.contains("handle_prompt_key_preamble("),
+            "editor key handling should delegate shared preamble behavior to helper"
+        );
+        assert!(
+            EDITOR_RENDER_SOURCE.contains("is_dismissable: false"),
+            "editor key preamble should remain non-dismissable"
+        );
+        assert!(
+            EDITOR_RENDER_SOURCE.contains("editor_reserved_shortcut_reason(&key_lower, modifiers)"),
+            "editor key handling should preserve reserved shortcut filtering before SDK shortcut matching"
         );
     }
 }
