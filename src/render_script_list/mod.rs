@@ -27,6 +27,68 @@ fn script_list_footer_info_label(
     }
 }
 
+fn inline_calc_list_item_title(formatted_result: &str) -> String {
+    format!("= {}", formatted_result)
+}
+
+fn inline_calc_list_copy_hint() -> &'static str {
+    "↵ Copy"
+}
+
+fn render_inline_calc_list_item(
+    calculator: &crate::calculator::CalculatorInlineResult,
+    is_selected: bool,
+    theme: &crate::theme::Theme,
+    design_variant: DesignVariant,
+) -> AnyElement {
+    let tokens = get_tokens(design_variant);
+    let spacing = tokens.spacing();
+    let typography = tokens.typography();
+
+    let result_title = inline_calc_list_item_title(&calculator.formatted);
+    let result_text_color = if is_selected {
+        theme.colors.accent.selected
+    } else {
+        theme.colors.text.primary
+    };
+    let hint_alpha = if is_selected { 0xD9 } else { 0x8C };
+
+    div()
+        .w_full()
+        .h_full()
+        .px(px(spacing.item_padding_x))
+        .py(px(spacing.padding_xs))
+        .when(is_selected, |div| {
+            let selected_overlay_alpha = ((theme.get_opacity().selected.clamp(0.0, 1.0) * 255.0)
+                .round() as u32)
+                .max(0x2E);
+            div.bg(rgba(
+                (theme.colors.accent.selected_subtle << 8) | selected_overlay_alpha,
+            ))
+        })
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_between()
+        .gap(px(spacing.gap_md))
+        .child(
+            div()
+                .flex_1()
+                .overflow_x_hidden()
+                .text_size(px(typography.font_size_lg))
+                .font_weight(typography.font_weight_semibold)
+                .text_color(rgb(result_text_color))
+                .child(result_title),
+        )
+        .child(
+            div()
+                .text_size(px(typography.font_size_xs))
+                .text_color(rgba((theme.colors.text.muted << 8) | hint_alpha))
+                .child(inline_calc_list_copy_hint()),
+        )
+        .into_any_element()
+}
+
 impl ScriptListApp {
     fn render_script_list(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let render_list_start = std::time::Instant::now();
@@ -378,7 +440,8 @@ impl ScriptListApp {
                                     let mut item_name = "inline-calculator";
                                     let item_element = if let Some(calculator) = inline_calculator
                                     {
-                                        render_calculator_item(
+                                        let _legacy_calculator_renderer = render_calculator_item;
+                                        render_inline_calc_list_item(
                                             calculator,
                                             is_selected,
                                             &this.theme,
@@ -1150,7 +1213,8 @@ impl ScriptListApp {
 #[cfg(test)]
 mod render_script_list_footer_tests {
     use super::{
-        app_shell_footer_colors, script_list_footer_info_label, script_list_footer_primary_label,
+        app_shell_footer_colors, inline_calc_list_item_title, script_list_footer_info_label,
+        script_list_footer_primary_label,
     };
 
     #[test]
@@ -1200,5 +1264,10 @@ mod render_script_list_footer_tests {
 
         assert_eq!(truncated.chars().count(), 27);
         assert!(std::str::from_utf8(truncated.as_bytes()).is_ok());
+    }
+
+    #[test]
+    fn test_inline_calc_list_item_title_prefixes_equals_sign() {
+        assert_eq!(inline_calc_list_item_title("1500"), "= 1500");
     }
 }
