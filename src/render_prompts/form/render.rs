@@ -38,64 +38,46 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
-                // Hide cursor while typing - automatically shows when mouse moves
-                this.hide_mouse_cursor(cx);
-
-                if key_preamble(this, event, true, false, cx) {
+                if handle_prompt_key_preamble(
+                    this,
+                    event,
+                    window,
+                    cx,
+                    PromptKeyPreambleCfg {
+                        is_dismissable: true,
+                        stop_propagation_on_global_shortcut: false,
+                        stop_propagation_when_handled: false,
+                        host: ActionsDialogHost::FormPrompt,
+                    },
+                    |_this, _event, _window, _cx| false,
+                    |key, _key_char, modifiers| {
+                        modifiers.platform && ui_foundation::is_key_k(key) && has_actions_for_handler
+                    },
+                    |this, window, cx| {
+                        logging::log("KEY", "Cmd+K in FormPrompt - calling toggle_arg_actions");
+                        this.toggle_arg_actions(cx, window);
+                    },
+                    |this, action_id, cx| {
+                        this.trigger_action_by_name(action_id, cx);
+                    },
+                    |_key, _key_char, _modifiers| true,
+                    |this, matched_shortcut, cx| {
+                        logging::log(
+                            "KEY",
+                            &format!(
+                                "SDK action shortcut matched: {}",
+                                matched_shortcut.action_name
+                            ),
+                        );
+                        this.trigger_action_by_name(&matched_shortcut.action_name, cx);
+                    },
+                ) {
                     return;
                 }
 
                 let key = event.keystroke.key.as_str();
-                let key_char = event.keystroke.key_char.as_deref();
                 let has_shift = event.keystroke.modifiers.shift;
                 let has_cmd = event.keystroke.modifiers.platform;
-
-                // Check for Cmd+K to toggle actions popup (if actions are available)
-                if has_cmd && ui_foundation::is_key_k(key) && has_actions_for_handler {
-                    logging::log("KEY", "Cmd+K in FormPrompt - calling toggle_arg_actions");
-                    this.toggle_arg_actions(cx, window);
-                    return;
-                }
-
-                let modifiers = &event.keystroke.modifiers;
-
-                // Route to shared actions dialog handler (modal when open)
-                match this.route_key_to_actions_dialog(
-                    key,
-                    key_char,
-                    modifiers,
-                    ActionsDialogHost::FormPrompt,
-                    window,
-                    cx,
-                ) {
-                    ActionsRoute::Execute { action_id } => {
-                        this.trigger_action_by_name(&action_id, cx);
-                        return;
-                    }
-                    ActionsRoute::Handled => {
-                        // Key consumed by actions dialog
-                        return;
-                    }
-                    ActionsRoute::NotHandled => {
-                        // Actions popup not open - continue with normal handling
-                    }
-                }
-
-                // Check for SDK action shortcuts (only when popup is NOT open)
-                let key_lower = key.to_lowercase();
-                if let Some(matched_shortcut) =
-                    check_sdk_action_shortcut(&this.action_shortcuts, &key_lower, &event.keystroke.modifiers)
-                {
-                    logging::log(
-                        "KEY",
-                        &format!(
-                            "SDK action shortcut matched: {}",
-                            matched_shortcut.action_name
-                        ),
-                    );
-                    this.trigger_action_by_name(&matched_shortcut.action_name, cx);
-                    return;
-                }
 
                 // Handle form-level keys (Enter, Escape, Tab) at this level
                 // Forward all other keys to the focused form field for text input
@@ -258,6 +240,18 @@ mod form_prompt_render_backdrop_tests {
         assert!(
             FORM_RENDER_SOURCE.contains("show_pointer_cursor: true"),
             "form render should keep backdrop cursor pointer enabled"
+        );
+    }
+
+    #[test]
+    fn test_form_key_handler_uses_shared_preamble_helper() {
+        assert!(
+            FORM_RENDER_SOURCE.contains("handle_prompt_key_preamble("),
+            "form key handling should delegate preamble logic to shared helper"
+        );
+        assert!(
+            FORM_RENDER_SOURCE.contains("PromptKeyPreambleCfg"),
+            "form key handling should configure the shared helper via PromptKeyPreambleCfg"
         );
     }
 }
