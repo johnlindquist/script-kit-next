@@ -1,4 +1,3 @@
-We need a "paste sequentially" built-in command that behaves exactly like the "paste sequentially" command from raycast.
 We need a "attach to ai chat" action in the clipboard history, search files, and other built-in commands that reference files. '/Users/johnlindquist/screenshots/CleanShot 2026-02-15 at 12.53.05@2x.png'
 We need a larger thumbnail in the preview in the search files. Also, let's be incredibly careful about working with large files, small files, weird formats, etc so we never crash. When in doubt, feel free to show a message on why you prefer not to show the thumbnail '/Users/johnlindquist/screenshots/CleanShot 2026-02-15 at 12.51.50@2x.png'
 Fix the left/right arrow in the emoji picker. It's still navigating the input field text instead of the emoji picker grid. Also, make the border around the emoji rounded squares and much tighter with the emoji. '/Users/johnlindquist/screenshots/CleanShot 2026-02-15 at 13.01.29@2x.png'
