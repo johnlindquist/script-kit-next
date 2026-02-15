@@ -104,7 +104,7 @@ fn cat28_03_script_copy_content_shortcut() {
 fn cat28_03_script_copy_path_shortcut() {
     let script = ScriptInfo::new("my-script", "/path/test.ts");
     let actions = get_script_context_actions(&script);
-    let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
+    let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
     assert_eq!(cp.shortcut.as_deref(), Some("⌘⇧C"));
 }
 
@@ -120,7 +120,7 @@ fn cat28_03_script_edit_shortcut() {
 fn cat28_03_script_reveal_shortcut() {
     let script = ScriptInfo::new("my-script", "/path/test.ts");
     let actions = get_script_context_actions(&script);
-    let rv = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
+    let rv = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
     assert_eq!(rv.shortcut.as_deref(), Some("⌘⇧F"));
 }
 
@@ -141,7 +141,7 @@ fn cat28_04_script_view_logs_title() {
     let script = ScriptInfo::new("my-script", "/path/test.ts");
     let actions = get_script_context_actions(&script);
     let vl = actions.iter().find(|a| a.id == "view_logs").unwrap();
-    assert_eq!(vl.title, "View Logs");
+    assert_eq!(vl.title, "Show Logs");
 }
 
 #[test]
@@ -358,7 +358,7 @@ fn cat28_07_clipboard_share_desc_mentions_share() {
         .as_ref()
         .unwrap()
         .to_lowercase()
-        .contains("script:share"));
+        .contains("share"));
 }
 
 // =============================================================================
@@ -406,7 +406,7 @@ fn cat28_08_file_open_desc_says_application() {
         .as_ref()
         .unwrap()
         .to_lowercase()
-        .contains("application"));
+        .contains("default app"));
 }
 
 #[test]
@@ -591,7 +591,7 @@ fn cat28_11_path_select_desc_says_submit() {
         .as_ref()
         .unwrap()
         .to_lowercase()
-        .contains("chat:submit"));
+        .contains("selects this file"));
 }
 
 #[test]
@@ -608,7 +608,7 @@ fn cat28_11_path_open_dir_desc_says_navigate() {
         .as_ref()
         .unwrap()
         .to_lowercase()
-        .contains("navigate"));
+        .contains("opens this directory"));
 }
 
 // =============================================================================
@@ -998,8 +998,8 @@ fn cat28_19_notes_trash_view_count() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    // new_note, browse, auto_sizing = 3 (trash hides duplicate, edit, copy sections)
-    assert_eq!(actions.len(), 3);
+    // new_note, restore_note, permanently_delete_note, browse, auto_sizing = 5
+    assert_eq!(actions.len(), 5);
 }
 
 // =============================================================================
@@ -1143,8 +1143,11 @@ fn cat28_22_new_chat_model_description() {
         provider_display_name: "Anthropic".into(),
     }];
     let actions = get_new_chat_actions(&[], &[], &models);
-    let model_action = actions.iter().find(|a| a.id == "model_0").unwrap();
-    assert_eq!(model_action.description.as_deref(), Some("Anthropic"));
+    let model_action = actions
+        .iter()
+        .find(|a| a.id == "model_anthropic::claude-3-opus")
+        .unwrap();
+    assert_eq!(model_action.description.as_deref(), Some("Uses Anthropic"));
 }
 
 #[test]
@@ -1156,7 +1159,10 @@ fn cat28_22_new_chat_model_icon() {
         provider_display_name: "OpenAI".into(),
     }];
     let actions = get_new_chat_actions(&[], &[], &models);
-    let model_action = actions.iter().find(|a| a.id == "model_0").unwrap();
+    let model_action = actions
+        .iter()
+        .find(|a| a.id == "model_openai::gpt4")
+        .unwrap();
     assert_eq!(model_action.icon, Some(IconName::Settings));
 }
 
@@ -1169,7 +1175,10 @@ fn cat28_22_new_chat_model_section() {
         provider_display_name: "OpenAI".into(),
     }];
     let actions = get_new_chat_actions(&[], &[], &models);
-    let model_action = actions.iter().find(|a| a.id == "model_0").unwrap();
+    let model_action = actions
+        .iter()
+        .find(|a| a.id == "model_openai::gpt4")
+        .unwrap();
     assert_eq!(model_action.section.as_deref(), Some("Models"));
 }
 
@@ -1182,7 +1191,10 @@ fn cat28_22_new_chat_model_title_is_display_name() {
         provider_display_name: "OpenAI".into(),
     }];
     let actions = get_new_chat_actions(&[], &[], &models);
-    let model_action = actions.iter().find(|a| a.id == "model_0").unwrap();
+    let model_action = actions
+        .iter()
+        .find(|a| a.id == "model_openai::gpt4")
+        .unwrap();
     assert_eq!(model_action.title, "GPT-4");
 }
 
@@ -1199,7 +1211,7 @@ fn cat28_23_new_chat_preset_description_none() {
     }];
     let actions = get_new_chat_actions(&[], &presets, &[]);
     let preset = actions.iter().find(|a| a.id == "preset_general").unwrap();
-    assert!(preset.description.is_none());
+    assert_eq!(preset.description.as_deref(), Some("Uses General preset"));
 }
 
 #[test]
@@ -1259,7 +1271,7 @@ fn cat28_24_to_deeplink_name_underscores() {
 
 #[test]
 fn cat28_24_to_deeplink_name_empty() {
-    assert_eq!(to_deeplink_name(""), "");
+    assert_eq!(to_deeplink_name(""), "_unnamed");
 }
 
 // =============================================================================

@@ -517,7 +517,7 @@ fn script_run_title_includes_quoted_name() {
     let s = ScriptInfo::new("My Script", "/p");
     let actions = get_script_context_actions(&s);
     let run = actions.iter().find(|a| a.id == "run_script").unwrap();
-    assert!(run.title.contains("\"My Script\""));
+    assert_eq!(run.title, "Run");
 }
 
 #[test]
@@ -542,7 +542,7 @@ fn script_run_shortcut_enter() {
 fn script_deeplink_desc_has_correct_url() {
     let s = ScriptInfo::new("My Cool Script", "/p");
     let actions = get_script_context_actions(&s);
-    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
     assert!(dl
         .description
         .as_ref()
@@ -554,7 +554,7 @@ fn script_deeplink_desc_has_correct_url() {
 fn script_deeplink_shortcut() {
     let s = ScriptInfo::new("X", "/p");
     let actions = get_script_context_actions(&s);
-    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
     assert_eq!(dl.shortcut, Some("⌘⇧D".to_string()));
 }
 
@@ -562,15 +562,15 @@ fn script_deeplink_shortcut() {
 fn script_deeplink_title() {
     let s = ScriptInfo::new("X", "/p");
     let actions = get_script_context_actions(&s);
-    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
-    assert_eq!(dl.title, "Copy Deeplink");
+    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    assert_eq!(dl.title, "Copy Deep Link");
 }
 
 #[test]
 fn scriptlet_deeplink_desc_has_slugified_name() {
     let s = ScriptInfo::scriptlet("Open GitHub PR", "/path.md", None, None);
     let actions = get_script_context_actions(&s);
-    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
     assert!(dl.description.as_ref().unwrap().contains("open-github-pr"));
 }
 
@@ -592,7 +592,7 @@ fn agent_reveal_desc_mentions_agent() {
     s.is_script = false;
     s.is_agent = true;
     let actions = get_script_context_actions(&s);
-    let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
+    let reveal = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
     assert!(reveal.description.as_ref().unwrap().contains("agent"));
 }
 
@@ -602,7 +602,7 @@ fn agent_copy_path_desc_mentions_agent() {
     s.is_script = false;
     s.is_agent = true;
     let actions = get_script_context_actions(&s);
-    let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
+    let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
     assert!(cp.description.as_ref().unwrap().contains("agent"));
 }
 
@@ -1000,8 +1000,8 @@ fn notes_trash_selection_count() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    // new_note + browse + enable_auto_sizing = 3
-    assert_eq!(actions.len(), 3);
+    // new_note + restore_note + permanently_delete_note + browse + enable_auto_sizing = 5
+    assert_eq!(actions.len(), 5);
 }
 
 #[test]
@@ -1113,7 +1113,7 @@ fn chat_model_desc_via_provider() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    assert_eq!(actions[0].description, Some("via OpenAI".to_string()));
+    assert_eq!(actions[0].description, Some("Uses OpenAI".to_string()));
 }
 
 #[test]
@@ -1167,7 +1167,7 @@ fn new_chat_last_used_desc_is_provider() {
         provider_display_name: "Anthropic".into(),
     }];
     let actions = get_new_chat_actions(&lu, &[], &[]);
-    assert_eq!(actions[0].description, Some("Anthropic".to_string()));
+    assert_eq!(actions[0].description, Some("Uses Anthropic".to_string()));
 }
 
 #[test]
@@ -1179,7 +1179,7 @@ fn new_chat_last_used_id_format() {
         provider_display_name: "P".into(),
     }];
     let actions = get_new_chat_actions(&lu, &[], &[]);
-    assert_eq!(actions[0].id, "last_used_0");
+    assert_eq!(actions[0].id, "last_used_p::m1");
 }
 
 // =========== 25. New chat: preset section and icon ===========
@@ -1225,7 +1225,7 @@ fn new_chat_preset_desc_none() {
         icon: IconName::Star,
     }];
     let actions = get_new_chat_actions(&[], &presets, &[]);
-    assert!(actions[0].description.is_none());
+    assert_eq!(actions[0].description, Some("Uses General preset".to_string()));
 }
 
 // =========== 26. Note switcher: current note has bullet prefix ===========

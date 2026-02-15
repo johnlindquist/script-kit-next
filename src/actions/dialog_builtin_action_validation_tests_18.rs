@@ -44,7 +44,7 @@ mod tests {
         script.is_agent = true;
         script.is_script = false;
         let actions = get_script_context_actions(&script);
-        assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
+        assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
     }
 
     #[test]
@@ -53,7 +53,7 @@ mod tests {
         script.is_agent = true;
         script.is_script = false;
         let actions = get_script_context_actions(&script);
-        assert!(actions.iter().any(|a| a.id == "file:copy_path"));
+        assert!(actions.iter().any(|a| a.id == "copy_path"));
     }
 
     #[test]
@@ -401,7 +401,7 @@ mod tests {
             .iter()
             .find(|a| a.id == "chat:select_model_gpt-4")
             .unwrap();
-        assert_eq!(model_action.description.as_ref().unwrap(), "via OpenAI");
+        assert_eq!(model_action.description.as_ref().unwrap(), "Uses OpenAI");
     }
 
     #[test]
@@ -448,8 +448,11 @@ mod tests {
             provider_display_name: "Anthropic".to_string(),
         }];
         let actions = get_new_chat_actions(&last_used, &[], &[]);
-        let lu = actions.iter().find(|a| a.id == "last_used_0").unwrap();
-        assert_eq!(lu.description.as_ref().unwrap(), "Anthropic");
+        let lu = actions
+            .iter()
+            .find(|a| a.id == "last_used_anthropic::claude-3")
+            .unwrap();
+        assert_eq!(lu.description.as_ref().unwrap(), "Uses Anthropic");
     }
 
 
@@ -463,8 +466,11 @@ mod tests {
             provider_display_name: "OpenAI".to_string(),
         }];
         let actions = get_new_chat_actions(&[], &[], &models);
-        let m = actions.iter().find(|a| a.id == "model_0").unwrap();
-        assert_eq!(m.description.as_ref().unwrap(), "OpenAI");
+        let m = actions
+            .iter()
+            .find(|a| a.id == "model_openai::gpt-4")
+            .unwrap();
+        assert_eq!(m.description.as_ref().unwrap(), "Uses OpenAI");
     }
 
     #[test]
@@ -476,7 +482,7 @@ mod tests {
         }];
         let actions = get_new_chat_actions(&[], &presets, &[]);
         let p = actions.iter().find(|a| a.id == "preset_general").unwrap();
-        assert!(p.description.is_none());
+        assert_eq!(p.description.as_deref(), Some("Uses General preset"));
     }
 
     #[test]
@@ -710,7 +716,7 @@ mod tests {
         };
         let actions = get_path_context_actions(&path);
         let action = actions.iter().find(|a| a.id == "file:open_in_finder").unwrap();
-        assert_eq!(action.description.as_ref().unwrap(), "Reveal in Finder");
+        assert_eq!(action.description.as_ref().unwrap(), "Shows this item in Finder");
     }
 
     #[test]
@@ -765,7 +771,7 @@ mod tests {
         let open = actions.iter().find(|a| a.id == "file:open_file").unwrap();
         assert_eq!(
             open.description.as_ref().unwrap(),
-            "Open with default application"
+            "Opens with the default app"
         );
     }
 
@@ -779,7 +785,7 @@ mod tests {
         };
         let actions = get_file_context_actions(&dir);
         let open = actions.iter().find(|a| a.id == "file:open_directory").unwrap();
-        assert_eq!(open.description.as_ref().unwrap(), "Open this folder");
+        assert_eq!(open.description.as_ref().unwrap(), "Opens this folder");
     }
 
     #[test]
@@ -792,7 +798,7 @@ mod tests {
         };
         let actions = get_file_context_actions(&file);
         let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
-        assert_eq!(reveal.description.as_ref().unwrap(), "Reveal in Finder");
+        assert_eq!(reveal.description.as_ref().unwrap(), "Shows this item in Finder");
     }
 
     #[test]
@@ -807,7 +813,7 @@ mod tests {
         let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
         assert_eq!(
             cp.description.as_ref().unwrap(),
-            "Copy the full path to clipboard"
+            "Copies the full path to the clipboard"
         );
     }
 
@@ -823,7 +829,7 @@ mod tests {
         let cf = actions.iter().find(|a| a.id == "file:copy_filename").unwrap();
         assert_eq!(
             cf.description.as_ref().unwrap(),
-            "Copy just the filename to clipboard"
+            "Copies only the filename to the clipboard"
         );
     }
 
@@ -1446,7 +1452,7 @@ mod tests {
 
     #[test]
     fn cat26_all_special_chars_becomes_empty() {
-        assert_eq!(to_deeplink_name("!@#$%^&*()"), "");
+        assert_eq!(to_deeplink_name("!@#$%^&*()"), "_unnamed");
     }
 
     #[test]
@@ -1471,8 +1477,8 @@ mod tests {
 
     #[test]
     fn cat26_unicode_preserved() {
-        // CJK characters are alphanumeric in Unicode
-        assert_eq!(to_deeplink_name("日本語"), "日本語");
+        // Non-ASCII characters are percent-encoded.
+        assert_eq!(to_deeplink_name("日本語"), "%E6%97%A5%E6%9C%AC%E8%AA%9E");
     }
 
     // =========================================================================
@@ -1585,8 +1591,8 @@ mod tests {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // Only new_note, browse_notes, enable_auto_sizing
-        assert_eq!(actions.len(), 3);
+        // new_note, restore_note, permanently_delete_note, browse_notes, enable_auto_sizing
+        assert_eq!(actions.len(), 5);
     }
 
     #[test]
