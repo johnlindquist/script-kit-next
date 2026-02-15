@@ -1071,7 +1071,10 @@ impl RenderOnce for ListItem {
                 .font_weight(name_weight)
                 .overflow_hidden()
                 .text_ellipsis()
-                .id(ElementId::NamedInteger("list-name".into(), item_index as u64))
+                .id(ElementId::NamedInteger(
+                    "list-name".into(),
+                    item_index as u64,
+                ))
                 .tooltip(move |window, cx| Tooltip::new(full_name.clone()).build(window, cx))
                 .whitespace_nowrap()
                 .line_height(px(NAME_LINE_HEIGHT))
@@ -1091,7 +1094,10 @@ impl RenderOnce for ListItem {
                 .font_weight(name_weight)
                 .overflow_hidden()
                 .text_ellipsis()
-                .id(ElementId::NamedInteger("list-name".into(), item_index as u64))
+                .id(ElementId::NamedInteger(
+                    "list-name".into(),
+                    item_index as u64,
+                ))
                 .tooltip(move |window, cx| Tooltip::new(full_name.clone()).build(window, cx))
                 .whitespace_nowrap()
                 .line_height(px(NAME_LINE_HEIGHT))
@@ -1158,8 +1164,13 @@ impl RenderOnce for ListItem {
                         .text_color(base_color)
                         .overflow_hidden()
                         .text_ellipsis()
-                        .id(ElementId::NamedInteger("list-desc".into(), item_index as u64))
-                        .tooltip(move |window, cx| Tooltip::new(full_desc.clone()).build(window, cx))
+                        .id(ElementId::NamedInteger(
+                            "list-desc".into(),
+                            item_index as u64,
+                        ))
+                        .tooltip(move |window, cx| {
+                            Tooltip::new(full_desc.clone()).build(window, cx)
+                        })
                         .whitespace_nowrap()
                         .child(styled)
                 } else {
@@ -1170,8 +1181,13 @@ impl RenderOnce for ListItem {
                         .text_color(desc_color)
                         .overflow_hidden()
                         .text_ellipsis()
-                        .id(ElementId::NamedInteger("list-desc".into(), item_index as u64))
-                        .tooltip(move |window, cx| Tooltip::new(full_desc.clone()).build(window, cx))
+                        .id(ElementId::NamedInteger(
+                            "list-desc".into(),
+                            item_index as u64,
+                        ))
+                        .tooltip(move |window, cx| {
+                            Tooltip::new(full_desc.clone()).build(window, cx)
+                        })
                         .whitespace_nowrap()
                         .child(desc)
                 };
@@ -1222,7 +1238,7 @@ impl RenderOnce for ListItem {
         } else if self.hovered {
             hover_bg // 10% opacity - subtle hover feedback (state-based)
         } else {
-            hsla(0.0, 0.0, 0.0, 0.0) // fully transparent
+            Hsla::transparent_black() // fully transparent
         };
 
         // Build the inner content div with all styling
@@ -1347,7 +1363,7 @@ impl RenderOnce for ListItem {
                 .border_color(if self.selected {
                     accent_color
                 } else {
-                    rgba(0x00000000)
+                    gpui::transparent_black().into()
                 });
         }
 
@@ -1422,13 +1438,12 @@ fn decode_png_to_render_image_internal(
     }
 
     // Create Frame from buffer (now in BGRA order if converted)
-    let buffer = image::RgbaImage::from_raw(width, height, rgba.into_raw())
-        .ok_or_else(|| {
-            image::ImageError::IoError(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "Failed to create image buffer",
-            ))
-        })?;
+    let buffer = image::RgbaImage::from_raw(width, height, rgba.into_raw()).ok_or_else(|| {
+        image::ImageError::IoError(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Failed to create image buffer",
+        ))
+    })?;
     let frame = image::Frame::new(buffer);
 
     // Create RenderImage
