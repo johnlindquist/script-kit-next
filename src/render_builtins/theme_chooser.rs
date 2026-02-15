@@ -17,7 +17,7 @@ impl ScriptListApp {
 
     /// Helper: compute filtered preset indices from a filter string
     fn theme_chooser_filtered_indices(filter: &str) -> Vec<usize> {
-        let presets = theme::presets::all_presets();
+        let presets = theme::presets::presets_cached();
         if filter.is_empty() {
             (0..presets.len()).collect()
         } else if filter.is_ascii() {
@@ -155,8 +155,8 @@ impl ScriptListApp {
         let opacity = self.theme.get_opacity();
         let selected_alpha = (opacity.selected * 255.0) as u32;
         let hover_alpha = (opacity.hover * 255.0).max(18.0) as u32;
-        let presets = theme::presets::all_presets();
-        let preview_colors = theme::presets::all_preset_preview_colors();
+        let presets = theme::presets::presets_cached();
+        let preview_colors = theme::presets::preset_preview_colors_cached();
         let first_light = theme::presets::first_light_theme_index();
         let original_index = self
             .theme_before_chooser
@@ -340,7 +340,7 @@ impl ScriptListApp {
                         } else {
                             return;
                         };
-                    let presets = theme::presets::all_presets();
+                    let presets = theme::presets::presets_cached();
                     let filtered = Self::theme_chooser_filtered_indices(&current_filter);
                     if let AppView::ThemeChooserView {
                         ref selected_index, ..
@@ -374,7 +374,7 @@ impl ScriptListApp {
                     } else {
                         return;
                     };
-                let presets = theme::presets::all_presets();
+                let presets = theme::presets::presets_cached();
                 let filtered = Self::theme_chooser_filtered_indices(&current_filter);
                 let count = filtered.len();
                 if count == 0 {
@@ -425,7 +425,7 @@ impl ScriptListApp {
         );
 
         // ── Pre-compute data for list closure ──────────────────────
-        let presets_for_list = presets.clone();
+        let presets_for_list = presets;
         let selected = selected_index;
         let hovered = self.hovered_index;
         let current_input_mode = self.input_mode;
@@ -549,7 +549,7 @@ impl ScriptListApp {
                                         } else {
                                             return;
                                         };
-                                        let presets = theme::presets::all_presets();
+                                        let presets = theme::presets::presets_cached();
                                         let filtered =
                                             Self::theme_chooser_filtered_indices(&current_filter);
 
@@ -1011,7 +1011,7 @@ impl ScriptListApp {
                                 } else {
                                     return;
                                 };
-                            let presets = theme::presets::all_presets();
+                            let presets = theme::presets::presets_cached();
                             let filtered = Self::theme_chooser_filtered_indices(&current_filter);
                             if let AppView::ThemeChooserView {
                                 ref selected_index, ..
@@ -1468,14 +1468,14 @@ mod theme_chooser_filter_tests {
 
     #[test]
     fn test_theme_chooser_filtered_indices_returns_all_presets_when_filter_empty() {
-        let expected_count = theme::presets::all_presets().len();
+        let expected_count = theme::presets::presets_cached().len();
         let filtered = ScriptListApp::theme_chooser_filtered_indices("");
         assert_eq!(filtered.len(), expected_count);
     }
 
     #[test]
     fn test_theme_chooser_filtered_indices_matches_ascii_filter_case_insensitively() {
-        let presets = theme::presets::all_presets();
+        let presets = theme::presets::presets_cached();
         let dracula_index = presets
             .iter()
             .position(|preset| preset.id == "dracula")

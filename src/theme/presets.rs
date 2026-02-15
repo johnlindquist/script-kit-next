@@ -8,6 +8,7 @@ use super::types::{
     AccentColors, AppearanceMode, BackgroundColors, BackgroundOpacity, ColorScheme, DropShadow,
     FontConfig, TerminalColors, TextColors, Theme, UIColors, VibrancySettings,
 };
+use std::{collections::HashMap, sync::OnceLock};
 
 /// A theme preset with metadata for the chooser UI
 #[derive(Debug, Clone)]
@@ -184,43 +185,84 @@ pub fn all_presets() -> Vec<ThemePreset> {
     ]
 }
 
+struct PresetsCache {
+    presets: Vec<ThemePreset>,
+    preset_preview_colors: Vec<PresetPreviewColors>,
+    first_light_theme_index: usize,
+    preset_index_by_bg_accent: HashMap<u64, usize>,
+}
+
+impl PresetsCache {
+    fn new() -> Self {
+        let presets = all_presets();
+        let first_light_theme_index = presets.iter().position(|p| !p.is_dark).unwrap_or(0);
+        let mut preset_preview_colors = Vec::with_capacity(presets.len());
+        let mut preset_index_by_bg_accent = HashMap::with_capacity(presets.len());
+
+        for (index, preset) in presets.iter().enumerate() {
+            let theme = preset.create_theme();
+            let bg_main = theme.colors.background.main;
+            let accent_selected = theme.colors.accent.selected;
+
+            preset_preview_colors.push(PresetPreviewColors {
+                bg: bg_main,
+                accent: accent_selected,
+                text: theme.colors.text.primary,
+                secondary: theme.colors.text.secondary,
+                border: theme.colors.ui.border,
+            });
+            preset_index_by_bg_accent
+                .insert(preset_bg_accent_key(bg_main, accent_selected), index);
+        }
+
+        Self {
+            presets,
+            preset_preview_colors,
+            first_light_theme_index,
+            preset_index_by_bg_accent,
+        }
+    }
+}
+
+static PRESETS_CACHE: OnceLock<PresetsCache> = OnceLock::new();
+
+fn preset_bg_accent_key(bg_main: u32, accent_selected: u32) -> u64 {
+    ((bg_main as u64) << 32) | (accent_selected as u64)
+}
+
+fn presets_cache() -> &'static PresetsCache {
+    PRESETS_CACHE.get_or_init(PresetsCache::new)
+}
+
+pub(crate) fn presets_cached() -> &'static [ThemePreset] {
+    &presets_cache().presets
+}
+
+pub(crate) fn preset_preview_colors_cached() -> &'static [PresetPreviewColors] {
+    &presets_cache().preset_preview_colors
+}
+
 /// Find the index of the preset matching the given theme, or 0 if not found.
 /// Matches on (background.main, accent.selected) which is unique per preset.
 pub fn find_current_preset_index(theme: &Theme) -> usize {
-    let current_bg = theme.colors.background.main;
-    let current_accent = theme.colors.accent.selected;
-    let presets = all_presets();
-    presets
-        .iter()
-        .position(|p| {
-            let t = p.create_theme();
-            t.colors.background.main == current_bg && t.colors.accent.selected == current_accent
-        })
+    let key = preset_bg_accent_key(theme.colors.background.main, theme.colors.accent.selected);
+    presets_cache()
+        .preset_index_by_bg_accent
+        .get(&key)
+        .copied()
         .unwrap_or(0)
 }
 
 /// Index of the first light theme in all_presets() (used for section separator rendering)
 #[allow(dead_code)]
 pub fn first_light_theme_index() -> usize {
-    all_presets().iter().position(|p| !p.is_dark).unwrap_or(0)
+    presets_cache().first_light_theme_index
 }
 
 /// Pre-compute preview colors for all presets (avoids creating themes in render closures)
 #[allow(dead_code)]
 pub fn all_preset_preview_colors() -> Vec<PresetPreviewColors> {
-    all_presets()
-        .iter()
-        .map(|p| {
-            let t = p.create_theme();
-            PresetPreviewColors {
-                bg: t.colors.background.main,
-                accent: t.colors.accent.selected,
-                text: t.colors.text.primary,
-                secondary: t.colors.text.secondary,
-                border: t.colors.ui.border,
-            }
-        })
-        .collect()
+    preset_preview_colors_cached().to_vec()
 }
 
 // ============================================================================
@@ -1111,12 +1153,6 @@ fn theme_material_ocean() -> Theme {
     })
 }
 
-/// Serialize a theme to JSON string for writing to disk
-#[allow(dead_code)]
-pub fn theme_to_json(theme: &Theme) -> Result<String, serde_json::Error> {
-    serde_json::to_string_pretty(theme)
-}
-
 // --- merged from part_04.rs ---
 /// Write a theme to the user's theme.json file
 #[allow(dead_code)]
@@ -1208,12 +1244,70 @@ mod tests {
     fn test_theme_serialization() {
         for preset in all_presets() {
             let theme = preset.create_theme();
-            let json = theme_to_json(&theme);
+            let json = serde_json::to_string_pretty(&theme);
             assert!(
                 json.is_ok(),
                 "Theme '{}' should serialize to JSON",
                 preset.name
             );
+        }
+    }
+
+    #[test]
+    fn test_presets_cached_matches_all_presets_order_and_metadata() {
+        let all = all_presets();
+        let cached = presets_cached();
+        assert_eq!(cached.len(), all.len());
+
+        for (cached_preset, all_preset) in cached.iter().zip(all.iter()) {
+            assert_eq!(cached_preset.id, all_preset.id);
+            assert_eq!(cached_preset.name, all_preset.name);
+            assert_eq!(cached_preset.description, all_preset.description);
+            assert_eq!(cached_preset.is_dark, all_preset.is_dark);
+        }
+    }
+
+    #[test]
+    fn test_find_current_preset_index_does_lookup_for_each_cached_preset() {
+        for (index, preset) in presets_cached().iter().enumerate() {
+            let theme = preset.create_theme();
+            assert_eq!(find_current_preset_index(&theme), index);
+        }
+    }
+
+    #[test]
+    fn test_find_current_preset_index_returns_zero_when_theme_not_in_cache() {
+        let mut theme = presets_cached()[0].create_theme();
+        let missing_bg = u32::MAX;
+        let missing_accent = 1;
+        let missing_key = preset_bg_accent_key(missing_bg, missing_accent);
+        assert!(!presets_cache().preset_index_by_bg_accent.contains_key(&missing_key));
+
+        theme.colors.background.main = missing_bg;
+        theme.colors.accent.selected = missing_accent;
+
+        assert_eq!(find_current_preset_index(&theme), 0);
+    }
+
+    #[test]
+    fn test_first_light_theme_index_uses_cached_value() {
+        let expected = presets_cached().iter().position(|p| !p.is_dark).unwrap_or(0);
+        assert_eq!(first_light_theme_index(), expected);
+    }
+
+    #[test]
+    fn test_all_preset_preview_colors_matches_cached_preview_colors() {
+        let all_preview_colors = all_preset_preview_colors();
+        let cached_preview_colors = preset_preview_colors_cached();
+        assert_eq!(all_preview_colors.len(), cached_preview_colors.len());
+
+        for (all_colors, cached_colors) in all_preview_colors.iter().zip(cached_preview_colors.iter())
+        {
+            assert_eq!(all_colors.bg, cached_colors.bg);
+            assert_eq!(all_colors.accent, cached_colors.accent);
+            assert_eq!(all_colors.text, cached_colors.text);
+            assert_eq!(all_colors.secondary, cached_colors.secondary);
+            assert_eq!(all_colors.border, cached_colors.border);
         }
     }
 }

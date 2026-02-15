@@ -19,8 +19,8 @@
         let opacity = self.theme.get_opacity();
         let selected_alpha = (opacity.selected * 255.0) as u32;
         let hover_alpha = (opacity.hover * 255.0).max(18.0) as u32;
-        let presets = theme::presets::all_presets();
-        let preview_colors = theme::presets::all_preset_preview_colors();
+        let presets = theme::presets::presets_cached();
+        let preview_colors = theme::presets::preset_preview_colors_cached();
         let first_light = theme::presets::first_light_theme_index();
         let original_index = self
             .theme_before_chooser
@@ -202,7 +202,7 @@
                         } else {
                             return;
                         };
-                    let presets = theme::presets::all_presets();
+                    let presets = theme::presets::presets_cached();
                     let filtered = Self::theme_chooser_filtered_indices(&current_filter);
                     if let AppView::ThemeChooserView {
                         ref selected_index, ..
@@ -237,7 +237,7 @@
                     } else {
                         return;
                     };
-                let presets = theme::presets::all_presets();
+                let presets = theme::presets::presets_cached();
                 let filtered = Self::theme_chooser_filtered_indices(&current_filter);
                 let count = filtered.len();
                 if count == 0 {
