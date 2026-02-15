@@ -14,6 +14,7 @@ impl ChatPrompt {
         cx: &Context<Self>,
     ) -> impl IntoElement {
         let colors = &self.prompt_colors;
+        let theme_colors = &self.theme.colors;
 
         // VIBRANCY: Use theme-aware overlay for subtle lift that lets blur show through
         // Dark mode: white overlay brightens; Light mode: much subtler black overlay
@@ -23,9 +24,9 @@ impl ChatPrompt {
             theme::hover_overlay_bg(&self.theme, 0x08) // ~3% black overlay for light mode
         };
         let copy_hover_bg = theme::hover_overlay_bg(&self.theme, 0x28); // ~16% for hover
-        let error_color = self.theme.colors.ui.error;
+        let error_color = theme_colors.ui.error;
         let error_bg = rgba((error_color << 8) | 0x40); // Theme error with transparency
-        let retry_hover_bg = rgba((colors.accent_color << 8) | 0x40);
+        let retry_hover_bg = rgba((theme_colors.accent.selected << 8) | 0x40);
         let has_retry_callback = self.on_retry.is_some();
 
         let mut content = div().flex().flex_col().gap(px(6.0)).w_full().min_w_0();
@@ -39,7 +40,7 @@ impl ChatPrompt {
                     .min_w_0()
                     .text_sm()
                     .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .text_color(rgb(colors.text_secondary))
+                    .text_color(rgb(theme_colors.text.secondary))
                     .child(turn.user_prompt.clone()),
             );
         }
@@ -82,7 +83,7 @@ impl ChatPrompt {
                         .hover(|s| s.bg(retry_hover_bg))
                         .text_xs()
                         .font_weight(gpui::FontWeight::MEDIUM)
-                        .text_color(rgb(colors.text_primary))
+                        .text_color(rgb(theme_colors.text.primary))
                         .child("Retry")
                         .on_click(cx.listener(move |this, _, _window, _cx| {
                             if let Some(msg_id) = &message_id {
@@ -135,19 +136,14 @@ impl ChatPrompt {
                         .child(
                             div()
                                 .text_sm()
-                                .text_color(rgb(colors.accent_color))
+                                .text_color(rgb(theme_colors.accent.selected))
                                 .child("▌"),
                         ),
                 );
             } else {
                 // Complete response - full markdown rendering (with container for proper wrapping)
-                content = content.child(
-                    div()
-                        .w_full()
-                        .min_w_0()
-                        .overflow_x_hidden()
-                        .child(render_markdown(markdown_response.as_ref(), colors)),
-                );
+                content = content
+                    .child(render_markdown(markdown_response.as_ref(), colors).overflow_x_hidden());
             }
         }
 
@@ -167,7 +163,7 @@ impl ChatPrompt {
                 svg()
                     .external_path(IconName::Copy.external_path())
                     .size(px(16.))
-                    .text_color(rgb(colors.text_secondary)),
+                    .text_color(rgb(theme_colors.text.secondary)),
             )
             .on_click(cx.listener(move |this, _, _window, cx| {
                 this.copy_turn_response(turn_index, cx);
@@ -183,9 +179,9 @@ impl ChatPrompt {
             .flex()
             .flex_row()
             .items_start()
-            .gap(px(10.0))
-            .child(content.flex_1().min_w_0())
-            .child(copy_button.mt(px(1.0)))
+            .gap(px(8.0))
+            .child(content.flex_1())
+            .child(copy_button)
     }
 
     /// Handle retry for a failed message
@@ -234,6 +230,7 @@ impl ChatPrompt {
 #[cfg(test)]
 mod tests {
     use super::truncate_str_chars;
+    const CHAT_RENDER_TURNS_SOURCE: &str = include_str!("render_turns.rs");
 
     #[test]
     fn test_truncate_str_chars_returns_original_when_detail_within_limit() {
@@ -244,5 +241,26 @@ mod tests {
     fn test_truncate_str_chars_truncates_detail_without_breaking_utf8_chars() {
         let input = "🙂🙂🙂abc";
         assert_eq!(truncate_str_chars(input, 2), "🙂🙂");
+    }
+
+    #[test]
+    fn test_render_turn_uses_theme_colors_and_keeps_copy_alignment_without_manual_offset() {
+        let legacy_text_pattern = ["rgb(colors.", "text_"].concat();
+        let legacy_copy_button_margin = ["copy_button", ".mt(px(1.0))"].concat();
+
+        assert!(
+            CHAT_RENDER_TURNS_SOURCE.contains("theme_colors.text.secondary")
+                && CHAT_RENDER_TURNS_SOURCE.contains("theme_colors.text.primary")
+                && CHAT_RENDER_TURNS_SOURCE.contains("theme_colors.accent.selected"),
+            "Turn renderer should use theme color scheme entries for turn text and accents"
+        );
+        assert!(
+            !CHAT_RENDER_TURNS_SOURCE.contains(&legacy_text_pattern),
+            "Turn renderer should avoid prompt palette text colors for turn chrome"
+        );
+        assert!(
+            !CHAT_RENDER_TURNS_SOURCE.contains(&legacy_copy_button_margin),
+            "Copy button should align without a manual margin offset wrapper"
+        );
     }
 }
