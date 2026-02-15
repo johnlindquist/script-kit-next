@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod tests {
+mod app_navigation_tests {
     use super::{page_down_target_index, validated_selection_index, wheel_scroll_target_index};
     use crate::list_item::GroupedListItem;
 

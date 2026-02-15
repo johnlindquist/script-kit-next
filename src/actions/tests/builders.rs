@@ -11,7 +11,6 @@ use crate::actions::builders::*;
 // multiple contexts: file search, path prompt, clipboard history,
 // chat prompt, notes command bar, and AI command bar.
 
-use super::*;
 use crate::clipboard_history::ContentType;
 use crate::file_search::{FileInfo, FileType};
 use crate::prompts::PathInfo;

@@ -671,8 +671,9 @@ mod tests {
 
     #[test]
     fn test_window_resize_animation_flag_is_disabled() {
+        let flag = WINDOW_RESIZE_ANIMATE;
         assert!(
-            !WINDOW_RESIZE_ANIMATE,
+            !flag,
             "Window resize must stay instant with animation disabled"
         );
     }

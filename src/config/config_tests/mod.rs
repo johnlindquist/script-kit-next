@@ -3,6 +3,7 @@
 use super::*;
 use std::collections::HashMap;
 
+#[test]
 fn test_default_config() {
     let config = Config::default();
     assert_eq!(config.hotkey.modifiers, vec!["meta"]);

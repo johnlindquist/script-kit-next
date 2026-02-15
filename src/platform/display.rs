@@ -246,6 +246,7 @@ pub fn clamp_to_visible(bounds: Bounds<Pixels>, visible_area: &DisplayBounds) ->
 mod tests {
     use super::*;
 
+    #[allow(clippy::too_many_arguments)]
     fn make_display(
         frame_origin_x: f64,
         frame_origin_y: f64,

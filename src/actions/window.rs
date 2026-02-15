@@ -1243,8 +1243,9 @@ mod resize_instant_tests {
 
     #[test]
     fn test_actions_window_resize_animation_flag_is_disabled() {
+        let flag = ACTIONS_WINDOW_RESIZE_ANIMATE;
         assert!(
-            !ACTIONS_WINDOW_RESIZE_ANIMATE,
+            !flag,
             "Actions window resize must stay instant with animation disabled"
         );
     }

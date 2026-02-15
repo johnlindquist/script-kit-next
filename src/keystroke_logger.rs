@@ -238,7 +238,7 @@ mod tests {
         }
 
         let stats = logger.stats.lock().unwrap_or_else(|e| e.into_inner());
-        assert_eq!(stats.recent_chars.iter().count(), 10);
+        assert_eq!(stats.recent_chars.len(), 10);
     }
 
     #[test]

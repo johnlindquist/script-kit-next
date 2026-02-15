@@ -7,6 +7,7 @@ use serde::{Deserializer, Serializer};
 
 /// Transparent color constant (fully transparent black)
 #[cfg(test)]
+#[allow(dead_code)]
 pub const TRANSPARENT: u32 = 0x00000000;
 
 /// Hex color representation (u32)

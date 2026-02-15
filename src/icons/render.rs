@@ -210,11 +210,17 @@ mod tests {
     use super::*;
     use gpui::rgb;
 
+    #[allow(dead_code)]
     const TEST_ICON_FOREGROUND: u32 = 0xffffff;
+    #[allow(dead_code)]
     const TEST_ICON_MUTED: u32 = 0x888888;
+    #[allow(dead_code)]
     const TEST_ICON_ACCENT: u32 = 0x0066ff;
+    #[allow(dead_code)]
     const TEST_ICON_DANGER: u32 = 0xff0000;
+    #[allow(dead_code)]
     const TEST_ICON_SUCCESS: u32 = 0x00ff00;
+    #[allow(dead_code)]
     const TEST_ICON_WARNING: u32 = 0xffaa00;
 
     /// Simple theme for testing
