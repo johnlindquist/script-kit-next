@@ -9,15 +9,24 @@ const THEME_LIST_PAGE_SIZE: usize = 5;
 const OPACITY_MATCH_TOLERANCE: f32 = 0.05;
 const FONT_SIZE_MATCH_TOLERANCE: f32 = 0.5;
 const LEGACY_THEME_ITEM_HEIGHT: f32 = 48.0;
-const THEME_ITEM_MIN_HEIGHT: f32 = 52.0;
-const THEME_ITEM_VERTICAL_PADDING_MIN: f32 = 4.0;
-const THEME_ITEM_VERTICAL_PADDING_MAX: f32 = 12.0;
-const THEME_ITEM_HORIZONTAL_PADDING_MIN: f32 = 12.0;
-const THEME_ITEM_HORIZONTAL_PADDING_MAX: f32 = 16.0;
-const THEME_ITEM_CONTENT_GAP_MIN: f32 = 8.0;
-const THEME_ITEM_CONTENT_GAP_MAX: f32 = 12.0;
-const THEME_ITEM_TEXT_GAP_MIN: f32 = 2.0;
-const THEME_ITEM_TEXT_GAP_MAX: f32 = 4.0;
+const THEME_ITEM_MIN_HEIGHT: f32 = 56.0;
+const THEME_ITEM_MAX_HEIGHT: f32 = 66.0;
+const THEME_ITEM_VERTICAL_PADDING_MIN: f32 = 6.0;
+const THEME_ITEM_VERTICAL_PADDING_MAX: f32 = 14.0;
+const THEME_ITEM_HORIZONTAL_PADDING_MIN: f32 = 14.0;
+const THEME_ITEM_HORIZONTAL_PADDING_MAX: f32 = 20.0;
+const THEME_ITEM_CONTENT_GAP_MIN: f32 = 10.0;
+const THEME_ITEM_CONTENT_GAP_MAX: f32 = 14.0;
+const THEME_ITEM_TEXT_GAP_MIN: f32 = 3.0;
+const THEME_ITEM_TEXT_GAP_MAX: f32 = 6.0;
+const THEME_ITEM_SWATCH_GAP_MIN: f32 = 2.0;
+const THEME_ITEM_SWATCH_GAP_MAX: f32 = 4.0;
+const THEME_LIST_VERTICAL_PADDING_MIN: f32 = 2.0;
+const THEME_LIST_VERTICAL_PADDING_MAX: f32 = 6.0;
+const THEME_ITEM_BADGE_HORIZONTAL_PADDING_MIN: f32 = 8.0;
+const THEME_ITEM_BADGE_HORIZONTAL_PADDING_MAX: f32 = 10.0;
+const THEME_ITEM_BADGE_VERTICAL_PADDING_MIN: f32 = 2.0;
+const THEME_ITEM_BADGE_VERTICAL_PADDING_MAX: f32 = 4.0;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct ThemeChooserRowLayout {
@@ -25,6 +34,10 @@ struct ThemeChooserRowLayout {
     horizontal_padding: f32,
     content_gap: f32,
     text_gap: f32,
+    swatch_gap: f32,
+    list_vertical_padding: f32,
+    badge_horizontal_padding: f32,
+    badge_vertical_padding: f32,
 }
 
 impl ScriptListApp {
@@ -159,22 +172,42 @@ impl ScriptListApp {
             THEME_ITEM_VERTICAL_PADDING_MIN,
             THEME_ITEM_VERTICAL_PADDING_MAX,
         );
-        let item_height = (LEGACY_THEME_ITEM_HEIGHT + vertical_padding).max(THEME_ITEM_MIN_HEIGHT);
-        let horizontal_padding = spacing.padding_md.clamp(
+        let item_height = (LEGACY_THEME_ITEM_HEIGHT + vertical_padding + spacing.gap_sm / 2.0)
+            .clamp(THEME_ITEM_MIN_HEIGHT, THEME_ITEM_MAX_HEIGHT);
+        let horizontal_padding = spacing.item_padding_x.clamp(
             THEME_ITEM_HORIZONTAL_PADDING_MIN,
             THEME_ITEM_HORIZONTAL_PADDING_MAX,
         );
         let content_gap = spacing
             .icon_text_gap
             .clamp(THEME_ITEM_CONTENT_GAP_MIN, THEME_ITEM_CONTENT_GAP_MAX);
-        let text_gap =
-            (spacing.gap_sm / 2.0).clamp(THEME_ITEM_TEXT_GAP_MIN, THEME_ITEM_TEXT_GAP_MAX);
+        let text_gap = spacing
+            .gap_sm
+            .clamp(THEME_ITEM_TEXT_GAP_MIN, THEME_ITEM_TEXT_GAP_MAX);
+        let swatch_gap =
+            (spacing.gap_sm / 2.0).clamp(THEME_ITEM_SWATCH_GAP_MIN, THEME_ITEM_SWATCH_GAP_MAX);
+        let list_vertical_padding = spacing.margin_sm.clamp(
+            THEME_LIST_VERTICAL_PADDING_MIN,
+            THEME_LIST_VERTICAL_PADDING_MAX,
+        );
+        let badge_horizontal_padding = spacing.padding_sm.clamp(
+            THEME_ITEM_BADGE_HORIZONTAL_PADDING_MIN,
+            THEME_ITEM_BADGE_HORIZONTAL_PADDING_MAX,
+        );
+        let badge_vertical_padding = (spacing.padding_xs / 2.0).clamp(
+            THEME_ITEM_BADGE_VERTICAL_PADDING_MIN,
+            THEME_ITEM_BADGE_VERTICAL_PADDING_MAX,
+        );
 
         ThemeChooserRowLayout {
             item_height,
             horizontal_padding,
             content_gap,
             text_gap,
+            swatch_gap,
+            list_vertical_padding,
+            badge_horizontal_padding,
+            badge_vertical_padding,
         }
     }
 
@@ -518,8 +551,7 @@ impl ScriptListApp {
                         let palette = div()
                             .flex()
                             .flex_row()
-                            .gap(px(2.0))
-                            .mr(px(10.0))
+                            .gap(px(row_layout.swatch_gap))
                             .child(swatch(colors.bg))
                             .child(swatch(colors.accent))
                             .child(swatch(colors.text))
@@ -545,8 +577,8 @@ impl ScriptListApp {
                             .text_xs()
                             .text_color(rgb(text_dimmed))
                             .ml_auto()
-                            .px(px(6.0))
-                            .py(px(2.0))
+                            .px(px(row_layout.badge_horizontal_padding))
+                            .py(px(row_layout.badge_vertical_padding))
                             .rounded(px(4.0))
                             .border_1()
                             .border_color(badge_border)
@@ -559,9 +591,9 @@ impl ScriptListApp {
                             Some(
                                 div()
                                     .w_full()
-                                    .pt(px(8.0))
-                                    .pb(px(4.0))
-                                    .px(px(16.0))
+                                    .pt(px(row_layout.list_vertical_padding + 2.0))
+                                    .pb(px(row_layout.list_vertical_padding))
+                                    .px(px(row_layout.horizontal_padding))
                                     .border_color(border_rgba)
                                     .border_t_1()
                                     .child(
@@ -1508,7 +1540,13 @@ impl ScriptListApp {
                     .overflow_hidden()
                     .flex()
                     .flex_row()
-                    .child(div().w_1_2().h_full().child(list))
+                    .child(
+                        div()
+                            .w_1_2()
+                            .h_full()
+                            .py(px(row_layout.list_vertical_padding))
+                            .child(list),
+                    )
                     .child(preview_panel),
             )
             .child(footer)
@@ -1574,17 +1612,24 @@ mod theme_chooser_filter_tests {
     fn test_theme_chooser_row_layout_increases_spacing_when_default_tokens_used() {
         let layout = ScriptListApp::theme_chooser_row_layout(&designs::DesignSpacing::default());
 
-        assert_eq!(layout.item_height, 56.0);
-        assert_eq!(layout.horizontal_padding, 12.0);
-        assert_eq!(layout.content_gap, 8.0);
-        assert_eq!(layout.text_gap, 2.0);
+        assert_eq!(layout.item_height, 58.0);
+        assert_eq!(layout.horizontal_padding, 16.0);
+        assert_eq!(layout.content_gap, 10.0);
+        assert_eq!(layout.text_gap, 4.0);
+        assert_eq!(layout.swatch_gap, 2.0);
+        assert_eq!(layout.list_vertical_padding, 4.0);
+        assert_eq!(layout.badge_horizontal_padding, 8.0);
+        assert_eq!(layout.badge_vertical_padding, 2.0);
     }
 
     #[test]
     fn test_theme_chooser_row_layout_clamps_extreme_spacing_tokens() {
         let spacing = designs::DesignSpacing {
-            padding_md: 40.0,
+            padding_xs: 12.0,
+            padding_sm: 20.0,
             gap_sm: 20.0,
+            margin_sm: 20.0,
+            item_padding_x: 40.0,
             item_padding_y: 40.0,
             icon_text_gap: 32.0,
             ..designs::DesignSpacing::default()
@@ -1592,9 +1637,19 @@ mod theme_chooser_filter_tests {
 
         let layout = ScriptListApp::theme_chooser_row_layout(&spacing);
 
-        assert_eq!(layout.item_height, 60.0);
+        assert_eq!(layout.item_height, THEME_ITEM_MAX_HEIGHT);
         assert_eq!(layout.horizontal_padding, THEME_ITEM_HORIZONTAL_PADDING_MAX);
         assert_eq!(layout.content_gap, THEME_ITEM_CONTENT_GAP_MAX);
         assert_eq!(layout.text_gap, THEME_ITEM_TEXT_GAP_MAX);
+        assert_eq!(layout.swatch_gap, THEME_ITEM_SWATCH_GAP_MAX);
+        assert_eq!(layout.list_vertical_padding, THEME_LIST_VERTICAL_PADDING_MAX);
+        assert_eq!(
+            layout.badge_horizontal_padding,
+            THEME_ITEM_BADGE_HORIZONTAL_PADDING_MAX
+        );
+        assert_eq!(
+            layout.badge_vertical_padding,
+            THEME_ITEM_BADGE_VERTICAL_PADDING_MAX
+        );
     }
 }
