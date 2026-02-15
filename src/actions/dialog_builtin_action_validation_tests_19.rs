@@ -88,7 +88,7 @@ mod tests {
     fn cat02_script_deeplink_desc_contains_url_pattern() {
         let script = ScriptInfo::new("My Cool Script", "/path/script.ts");
         let actions = get_script_context_actions(&script);
-        let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+        let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
         assert!(dl
             .description
             .as_ref()
@@ -100,7 +100,7 @@ mod tests {
     fn cat02_script_deeplink_desc_contains_deeplink_name() {
         let script = ScriptInfo::new("My Cool Script", "/path/script.ts");
         let actions = get_script_context_actions(&script);
-        let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+        let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
         assert!(dl.description.as_ref().unwrap().contains("my-cool-script"));
     }
 
@@ -108,7 +108,7 @@ mod tests {
     fn cat02_builtin_deeplink_desc_contains_url() {
         let script = ScriptInfo::builtin("Clipboard History");
         let actions = get_script_context_actions(&script);
-        let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+        let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
         assert!(dl
             .description
             .as_ref()
@@ -120,7 +120,7 @@ mod tests {
     fn cat02_scriptlet_context_deeplink_desc_contains_url() {
         let script = ScriptInfo::scriptlet("Open GitHub", "/path/urls.md", None, None);
         let actions = get_scriptlet_context_actions_with_custom(&script, None);
-        let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+        let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
         assert!(dl.description.as_ref().unwrap().contains("open-github"));
     }
 
@@ -209,7 +209,7 @@ mod tests {
             };
             let actions = get_notes_command_bar_actions(&info);
             assert!(
-                actions.iter().any(|a| a.id == "notes:new_note"),
+                actions.iter().any(|a| a.id == "new_note"),
                 "new_note absent with sel={sel} trash={trash} auto={auto}"
             );
         }
@@ -807,14 +807,14 @@ mod tests {
 
     #[test]
     fn cat12_deeplink_all_specials_returns_empty() {
-        assert_eq!(to_deeplink_name("!@#$%^&*"), "");
+        assert_eq!(to_deeplink_name("!@#$%^&*"), "_unnamed");
     }
 
     #[test]
     fn cat12_deeplink_unicode_preserved() {
         let result = to_deeplink_name("日本語テスト");
-        assert!(result.contains('日'));
-        assert!(result.contains('語'));
+        assert!(result.starts_with("%E6%97%A5"));
+        assert!(result.contains("%E8%AA%9E"));
     }
 
     #[test]
@@ -899,7 +899,7 @@ mod tests {
             Some("Open in editor".to_string()),
             ActionCategory::ScriptContext,
         );
-        let score = ActionsDialog::score_action(&action, "script:edit");
+        let score = ActionsDialog::score_action(&action, "edit");
         assert!(score >= 100, "Prefix match should be 100+, got {}", score);
     }
 

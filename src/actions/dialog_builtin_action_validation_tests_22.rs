@@ -105,8 +105,8 @@ fn batch22_score_prefix_plus_desc_plus_shortcut() {
         ActionCategory::ScriptContext,
     )
     .with_shortcut("⌘E");
-    let score = ActionsDialog::score_action(&action, "script:edit");
-    // prefix=100 + desc(edit)=15 = 115 (shortcut ⌘e doesn't contain "script:edit")
+    let score = ActionsDialog::score_action(&action, "edit");
+    // prefix=100 + desc(edit)=15 = 115
     assert!(score >= 115, "Expected >=115, got {}", score);
 }
 
@@ -187,7 +187,7 @@ fn batch22_deeplink_single_char() {
 
 #[test]
 fn batch22_deeplink_all_special_chars_returns_empty() {
-    assert_eq!(super::builders::to_deeplink_name("@#$%^&*"), "");
+    assert_eq!(super::builders::to_deeplink_name("@#$%^&*"), "_unnamed");
 }
 
 #[test]
@@ -205,7 +205,7 @@ fn batch22_deeplink_underscores_to_hyphens() {
 
 #[test]
 fn batch22_deeplink_empty_string() {
-    assert_eq!(super::builders::to_deeplink_name(""), "");
+    assert_eq!(super::builders::to_deeplink_name(""), "_unnamed");
 }
 
 // ============================================================
@@ -324,7 +324,7 @@ fn batch22_agent_reveal_desc_mentions_agent() {
     s.is_agent = true;
     s.is_script = false;
     let actions = get_script_context_actions(&s);
-    let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
+    let reveal = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
     assert!(reveal
         .description
         .as_ref()
@@ -339,7 +339,7 @@ fn batch22_agent_copy_path_desc_mentions_agent() {
     s.is_agent = true;
     s.is_script = false;
     let actions = get_script_context_actions(&s);
-    let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
+    let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
     assert!(cp
         .description
         .as_ref()
@@ -687,8 +687,8 @@ fn batch22_notes_trash_mode_minimal() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    // Trash mode: new_note, browse_notes, enable_auto_sizing = 3
-    assert_eq!(actions.len(), 3);
+    // Trash mode with selection includes restore + permanently delete.
+    assert_eq!(actions.len(), 5);
 }
 
 #[test]
@@ -786,9 +786,9 @@ fn batch22_new_chat_id_patterns() {
         provider_display_name: "P".into(),
     }];
     let actions = get_new_chat_actions(&last_used, &presets, &models);
-    assert_eq!(actions[0].id, "last_used_0");
+    assert_eq!(actions[0].id, "last_used_P::m1");
     assert_eq!(actions[1].id, "preset_code");
-    assert_eq!(actions[2].id, "model_0");
+    assert_eq!(actions[2].id, "model_P::m2");
 }
 
 #[test]
