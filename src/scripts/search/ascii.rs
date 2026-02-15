@@ -147,7 +147,7 @@ pub(crate) fn fuzzy_match_with_indices_ascii(
 }
 
 /// Check if a pattern is a fuzzy match for haystack (characters appear in order)
-#[allow(dead_code)]
+#[cfg(test)]
 pub(crate) fn is_fuzzy_match(haystack: &str, pattern: &str) -> bool {
     let mut pattern_chars = pattern.chars().peekable();
     for ch in haystack.chars() {
@@ -162,7 +162,7 @@ pub(crate) fn is_fuzzy_match(haystack: &str, pattern: &str) -> bool {
 
 /// Perform fuzzy matching and return the indices of matched characters
 /// Returns (matched, indices) where matched is true if all pattern chars found in order
-#[allow(dead_code)]
+#[cfg(test)]
 pub(crate) fn fuzzy_match_with_indices(haystack: &str, pattern: &str) -> (bool, Vec<usize>) {
     let mut indices = Vec::new();
     let mut pattern_chars = pattern.chars().peekable();

@@ -1,18 +1,6 @@
 use nucleo_matcher::pattern::Pattern;
 use nucleo_matcher::{Matcher, Utf32Str};
 
-/// DEPRECATED: Prefer using NucleoCtx::score() to avoid per-call allocations.
-#[inline]
-pub(crate) fn nucleo_score(
-    haystack: &str,
-    pattern: &Pattern,
-    matcher: &mut Matcher,
-) -> Option<u32> {
-    let mut haystack_buf = Vec::new();
-    let haystack_utf32 = Utf32Str::new(haystack, &mut haystack_buf);
-    pattern.score(haystack_utf32, matcher)
-}
-
 /// Context for nucleo fuzzy matching that reuses allocations across calls.
 ///
 /// This struct is designed for hot-path scoring where avoiding allocations
