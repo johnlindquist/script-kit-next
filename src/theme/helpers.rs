@@ -47,7 +47,7 @@ impl ColorScheme {
     ///
     /// Uses the canonical list item color struct from `crate::list_item`.
     /// A temporary `Theme` is built to preserve the existing `ColorScheme` API.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn list_item_colors(&self) -> ListItemColors {
         ListItemColors::from_theme(&Theme {
             colors: self.clone(),
