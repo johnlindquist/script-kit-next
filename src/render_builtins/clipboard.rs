@@ -237,10 +237,7 @@ impl ScriptListApp {
                                     logging::log("ERROR", &format!("Failed to copy entry: {}", e));
                                 } else {
                                     logging::log("EXEC", "Entry copied to clipboard");
-                                    // Hide main window only (not entire app) to keep HUD visible
-                                    script_kit_gpui::set_main_window_visible(false);
-                                    platform::hide_main_window();
-                                    NEEDS_RESET.store(true, Ordering::SeqCst);
+                                    this.hide_main_and_reset(cx);
 
                                     // Simulate Cmd+V paste after a brief delay to let focus return
                                     std::thread::spawn(|| {
@@ -394,12 +391,7 @@ impl ScriptListApp {
                                                     )
                                                     .is_ok()
                                                     {
-                                                        script_kit_gpui::set_main_window_visible(
-                                                            false,
-                                                        );
-                                                        platform::hide_main_window();
-                                                        NEEDS_RESET
-                                                            .store(true, Ordering::SeqCst);
+                                                        this.hide_main_and_reset(cx);
                                                         std::thread::spawn(|| {
                                                             std::thread::sleep(
                                                                 std::time::Duration::from_millis(

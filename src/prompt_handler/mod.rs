@@ -447,10 +447,10 @@ impl ScriptListApp {
                     // Restore window height to main menu size in case a prompt (like EnvPrompt)
                     // had shrunk the window
                     resize_to_view_sync(ViewType::ScriptList, 0);
-                    script_kit_gpui::set_main_window_visible(false);
+                    self.hide_main_and_reset(cx);
                     tracing::info!(
                         category = "VISIBILITY",
-                        "Script didn't hide window - restored height and keeping visibility state"
+                        "Script didn't hide window - restored height and hid/reset main window"
                     );
                 }
             }
@@ -466,10 +466,6 @@ impl ScriptListApp {
                     "Window visibility state before hide request"
                 );
 
-                // CRITICAL: Update visibility state so hotkey toggle works correctly
-                script_kit_gpui::set_main_window_visible(false);
-                tracing::info!(category = "VISIBILITY", "WINDOW_VISIBLE set to: false");
-
                 // Mark that script requested hide - so ScriptExit knows to show window again
                 script_kit_gpui::set_script_requested_hide(true);
                 tracing::info!(
@@ -477,15 +473,10 @@ impl ScriptListApp {
                     "SCRIPT_REQUESTED_HIDE set to: true"
                 );
 
-                // Set flag so next hotkey show will reset to script list
-                NEEDS_RESET.store(true, Ordering::SeqCst);
-                tracing::info!(category = "VISIBILITY", "NEEDS_RESET set to: true");
-
-                // Hide main window only (not entire app) to keep HUD visible
-                platform::hide_main_window();
+                self.hide_main_and_reset(cx);
                 tracing::info!(
                     category = "VISIBILITY",
-                    "platform::hide_main_window() called - main window hidden, HUDs remain visible"
+                    "hide_main_and_reset() called - main window hidden and reset requested"
                 );
             }
             PromptMessage::OpenBrowser { url } => {

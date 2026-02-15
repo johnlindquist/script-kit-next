@@ -137,10 +137,7 @@ impl ScriptListApp {
                                         "EXEC",
                                         &format!("Focused window: {}", window_info.title),
                                     );
-                                    // Hide main window only (not entire app) to keep HUD visible
-                                    script_kit_gpui::set_main_window_visible(false);
-                                    platform::hide_main_window();
-                                    NEEDS_RESET.store(true, Ordering::SeqCst);
+                                    this.hide_main_and_reset(cx);
                                 }
                             }
                         }
@@ -237,12 +234,7 @@ impl ScriptListApp {
                                                     );
                                                     if window_control::focus_window(win_id).is_ok()
                                                     {
-                                                        script_kit_gpui::set_main_window_visible(
-                                                            false,
-                                                        );
-                                                        platform::hide_main_window();
-                                                        NEEDS_RESET
-                                                            .store(true, Ordering::SeqCst);
+                                                        this.hide_main_and_reset(cx);
                                                     }
                                                 }
                                             }

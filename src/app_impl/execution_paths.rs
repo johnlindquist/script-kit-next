@@ -207,10 +207,7 @@ impl ScriptListApp {
                             &format!("Revealed in {}: {}", file_manager, path_info.path),
                         );
                         self.show_hud(format!("Opened in {}", file_manager), Some(HUD_SHORT_MS), cx);
-                        // Hide main window only (not entire app) to keep HUD visible
-                        script_kit_gpui::set_main_window_visible(false);
-                        NEEDS_RESET.store(true, Ordering::SeqCst);
-                        platform::hide_main_window();
+                        self.hide_main_and_reset(cx);
                     }
                     Err(e) => {
                         logging::log(
@@ -238,10 +235,7 @@ impl ScriptListApp {
                     Ok(_) => {
                         logging::log("UI", &format!("Opened in editor: {}", path_str));
                         self.show_hud(format!("Opened in {}", editor), Some(HUD_SHORT_MS), cx);
-                        // Hide main window only (not entire app) to keep HUD visible
-                        script_kit_gpui::set_main_window_visible(false);
-                        NEEDS_RESET.store(true, Ordering::SeqCst);
-                        platform::hide_main_window();
+                        self.hide_main_and_reset(cx);
                     }
                     Err(e) => {
                         logging::log("ERROR", &format!("Failed to open in editor: {}", e));
@@ -262,10 +256,7 @@ impl ScriptListApp {
                             Some(HUD_SHORT_MS),
                             cx,
                         );
-                        // Hide main window only (not entire app) to keep HUD visible
-                        script_kit_gpui::set_main_window_visible(false);
-                        NEEDS_RESET.store(true, Ordering::SeqCst);
-                        platform::hide_main_window();
+                        self.hide_main_and_reset(cx);
                     }
                     Err(e) => {
                         logging::log("ERROR", &format!("Failed to open terminal: {}", e));
