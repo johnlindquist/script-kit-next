@@ -344,3 +344,43 @@ pub fn is_within_focus_grace_period() -> bool {
     }
     false
 }
+
+#[cfg(test)]
+mod main_menu_input_guard_tests {
+    use std::fs;
+
+    #[test]
+    fn test_execute_selected_ignores_stale_input_when_window_just_opened() {
+        let selection_fallback = fs::read_to_string("src/app_impl/selection_fallback.rs")
+            .expect("Failed to read src/app_impl/selection_fallback.rs");
+
+        assert!(
+            selection_fallback.contains("script_kit_gpui::is_within_focus_grace_period()"),
+            "Selection guard should use window show focus-grace timing"
+        );
+
+        let execute_selected_pos = selection_fallback
+            .find("pub(crate) fn execute_selected")
+            .expect("execute_selected not found");
+        let execute_selected_end = (execute_selected_pos + 260).min(selection_fallback.len());
+        let execute_selected_section =
+            &selection_fallback[execute_selected_pos..execute_selected_end];
+        assert!(
+            execute_selected_section
+                .contains("if self.should_ignore_selection_event_during_main_menu_open_guard()"),
+            "execute_selected should early-return when stale input is detected"
+        );
+
+        let execute_fallback_pos = selection_fallback
+            .find("pub fn execute_selected_fallback")
+            .expect("execute_selected_fallback not found");
+        let execute_fallback_end = (execute_fallback_pos + 260).min(selection_fallback.len());
+        let execute_fallback_section =
+            &selection_fallback[execute_fallback_pos..execute_fallback_end];
+        assert!(
+            execute_fallback_section
+                .contains("if self.should_ignore_selection_event_during_main_menu_open_guard()"),
+            "execute_selected_fallback should also early-return when stale input is detected"
+        );
+    }
+}

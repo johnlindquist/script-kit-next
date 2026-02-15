@@ -21,7 +21,33 @@ fn fallback_keeps_window_open(fallback: &crate::fallbacks::FallbackItem) -> bool
     }
 }
 
+fn should_ignore_main_menu_open_carryover_input(
+    current_view: &AppView,
+    within_focus_grace_period: bool,
+) -> bool {
+    matches!(current_view, AppView::ScriptList) && within_focus_grace_period
+}
+
 impl ScriptListApp {
+    fn should_ignore_selection_event_during_main_menu_open_guard(&self) -> bool {
+        let within_focus_grace_period = script_kit_gpui::is_within_focus_grace_period();
+        let should_ignore = should_ignore_main_menu_open_carryover_input(
+            &self.current_view,
+            within_focus_grace_period,
+        );
+
+        if should_ignore {
+            tracing::info!(
+                event = "main_menu_input_guard_blocked",
+                selected_index = self.selected_index,
+                fallback_mode = self.fallback_mode,
+                "Ignoring selection event during post-open main menu guard window"
+            );
+        }
+
+        should_ignore
+    }
+
     #[allow(dead_code)]
     pub(crate) fn filtered_scripts(&self) -> Vec<Arc<scripts::Script>> {
         let filter_text = self.filter_text();
@@ -111,6 +137,10 @@ impl ScriptListApp {
     }
 
     pub(crate) fn execute_selected(&mut self, cx: &mut Context<Self>) {
+        if self.should_ignore_selection_event_during_main_menu_open_guard() {
+            return;
+        }
+
         // Record input to history if filter has meaningful text
         if !self.filter_text.trim().is_empty() {
             self.input_history.add_entry(&self.filter_text);
@@ -262,6 +292,10 @@ impl ScriptListApp {
     /// Execute the currently selected fallback command
     /// This is called from keyboard handler, so we need to defer window access
     pub fn execute_selected_fallback(&mut self, cx: &mut Context<Self>) {
+        if self.should_ignore_selection_event_during_main_menu_open_guard() {
+            return;
+        }
+
         if !self.fallback_mode || self.cached_fallbacks.is_empty() {
             return;
         }
