@@ -997,7 +997,6 @@ impl ScriptListApp {
                     design_spacing.gap_md
                 };
                 let text_muted = color_resolver.empty_text_color();
-                let _text_dimmed = color_resolver.dimmed_text_color();
                 let accent_color = color_resolver.primary_accent();
                 let search_box_bg = color_resolver.secondary_background_color();
                 let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);

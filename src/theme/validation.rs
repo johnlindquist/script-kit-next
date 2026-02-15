@@ -7,8 +7,6 @@
 //! - Unknown key detection
 //! - Last-known-good fallback support
 
-#![allow(dead_code)] // Types are designed for incremental adoption
-
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;

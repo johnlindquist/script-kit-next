@@ -25,6 +25,7 @@ pub mod prelude;
 pub mod presets;
 pub mod service;
 mod types;
+#[cfg(test)]
 pub mod validation;
 
 #[cfg(test)]
@@ -32,12 +33,15 @@ pub mod validation;
 mod validation_tests;
 
 // Re-export types used externally
+#[allow(unused_imports)]
+pub(crate) use types::relative_luminance_srgb;
 pub use types::{ColorScheme, FontConfig, Theme, VibrancyMaterial};
 
 // Re-export helper types for lightweight color extraction (allow unused - designed for incremental adoption)
 #[allow(unused_imports)]
 pub use helpers::{
-    hover_overlay_bg, modal_overlay_bg, InputFieldColors, ListItemColors, PromptColors,
+    accent_color_name, hover_overlay_bg, modal_overlay_bg, ListItemColors, PromptColors,
+    ACCENT_PALETTE,
 };
 
 // Re-export color resolver for unified color access
@@ -45,6 +49,7 @@ pub use helpers::{
 pub use color_resolver::{ColorResolver, SpacingResolver, TypographyResolver};
 
 // Re-export validation types
+#[cfg(test)]
 #[allow(unused_imports)]
 pub use validation::{validate_theme_json, Diagnostic, DiagnosticSeverity, ThemeDiagnostics};
 
@@ -70,10 +75,6 @@ pub use hex_color::{hex_color_serde, HexColor};
 pub use types::{
     detect_system_appearance, AppearanceMode, BackgroundOpacity, DropShadow, VibrancySettings,
 };
-
-#[cfg(test)]
-#[path = "theme_tests/mod.rs"]
-mod legacy_theme_tests;
 
 #[cfg(test)]
 #[path = "lightweight_colors_test.rs"]

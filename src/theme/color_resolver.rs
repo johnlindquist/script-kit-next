@@ -165,18 +165,12 @@ impl ColorResolver {
 
 /// Unified typography resolution that works with both theme and design tokens
 #[derive(Debug, Clone, Copy)]
-#[allow(dead_code)] // Incremental migration away from direct design token access.
 pub struct TypographyResolver {
     font_family: &'static str,
     font_family_mono: &'static str,
-    font_size_xs: f32,
-    font_size_sm: f32,
-    font_size_md: f32,
-    font_size_lg: f32,
     font_size_xl: f32,
 }
 
-#[allow(dead_code)]
 impl TypographyResolver {
     /// Create a new typography resolver for the given theme and design variant
     pub fn new(_theme: &Theme, variant: DesignVariant) -> Self {
@@ -185,10 +179,6 @@ impl TypographyResolver {
         Self {
             font_family: typography.font_family,
             font_family_mono: typography.font_family_mono,
-            font_size_xs: typography.font_size_xs,
-            font_size_sm: typography.font_size_sm,
-            font_size_md: typography.font_size_md,
-            font_size_lg: typography.font_size_lg,
             font_size_xl: typography.font_size_xl,
         }
     }
@@ -211,38 +201,16 @@ impl TypographyResolver {
 
 /// Unified spacing resolution that works with both theme and design tokens
 #[derive(Debug, Clone, Copy)]
-#[allow(dead_code)] // Incremental migration away from direct design token access.
 pub struct SpacingResolver {
-    padding_xs: f32,
-    padding_sm: f32,
-    padding_md: f32,
-    padding_lg: f32,
-    padding_xl: f32,
-    gap_sm: f32,
-    gap_md: f32,
-    gap_lg: f32,
-    margin_sm: f32,
-    margin_md: f32,
     margin_lg: f32,
 }
 
-#[allow(dead_code)]
 impl SpacingResolver {
     /// Create a new spacing resolver for the given design variant
     pub fn new(variant: DesignVariant) -> Self {
         let tokens = get_tokens(variant);
         let spacing = tokens.spacing();
         Self {
-            padding_xs: spacing.padding_xs,
-            padding_sm: spacing.padding_sm,
-            padding_md: spacing.padding_md,
-            padding_lg: spacing.padding_lg,
-            padding_xl: spacing.padding_xl,
-            gap_sm: spacing.gap_sm,
-            gap_md: spacing.gap_md,
-            gap_lg: spacing.gap_lg,
-            margin_sm: spacing.margin_sm,
-            margin_md: spacing.margin_md,
             margin_lg: spacing.margin_lg,
         }
     }
