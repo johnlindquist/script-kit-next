@@ -1,0 +1,92 @@
+[
+  {
+    "input": "#1E1E1E",
+    "parsed": "#1E1E1E",
+    "error": null
+  },
+  {
+    "input": "1e1e1e",
+    "parsed": "#1E1E1E",
+    "error": null
+  },
+  {
+    "input": "0xFBBF24",
+    "parsed": "#FBBF24",
+    "error": null
+  },
+  {
+    "input": "0X464647",
+    "parsed": "#464647",
+    "error": null
+  },
+  {
+    "input": "rgb(30, 30, 30)",
+    "parsed": "#1E1E1E",
+    "error": null
+  },
+  {
+    "input": "rgba(251, 191, 36, 0.75)",
+    "parsed": "#FBBF24",
+    "error": null
+  },
+  {
+    "input": " rgba(0, 120, 212, 1.0) ",
+    "parsed": "#0078D4",
+    "error": null
+  },
+  {
+    "input": "#fff",
+    "parsed": null,
+    "error": "hex color must be 6 characters, got 3"
+  },
+  {
+    "input": "#1E1E1G",
+    "parsed": null,
+    "error": "invalid hex color: 1E1E1G"
+  },
+  {
+    "input": "rgb(256, 0, 0)",
+    "parsed": null,
+    "error": "invalid red value"
+  },
+  {
+    "input": "rgb(30, 30)",
+    "parsed": null,
+    "error": "rgb() requires 3 values: r, g, b"
+  },
+  {
+    "input": "rgba(30, 30, 30)",
+    "parsed": null,
+    "error": "rgba() requires 4 values: r, g, b, a"
+  },
+  {
+    "input": "rgb(10, green, 30)",
+    "parsed": null,
+    "error": "invalid green value"
+  },
+  {
+    "input": "rgba(10, 20, blue, 0.5)",
+    "parsed": null,
+    "error": "invalid blue value"
+  },
+  {
+    "input": "0x12345",
+    "parsed": null,
+    "error": "hex color must be 6 characters, got 5"
+  },
+  {
+    "input": "1234567",
+    "parsed": null,
+    "error": "invalid color format '1234567' - use #RRGGBB, rgba(r,g,b,a), or a number"
+  },
+  {
+    "input": "",
+    "parsed": null,
+    "error": "invalid color format '' - use #RRGGBB, rgba(r,g,b,a), or a number"
+  },
+  {
+    "input": "hello",
+    "parsed": null,
+    "error": "invalid color format 'hello' - use #RRGGBB, rgba(r,g,b,a), or a number"
+  }
+]

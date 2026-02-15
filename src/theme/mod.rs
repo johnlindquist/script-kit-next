@@ -79,8 +79,12 @@ pub use types::{
 
 #[cfg(test)]
 #[path = "theme_tests/mod.rs"]
-mod tests;
+mod legacy_theme_tests;
 
 #[cfg(test)]
 #[path = "lightweight_colors_test.rs"]
-mod lightweight_colors_test;
+mod legacy_lightweight_colors_test;
+
+#[cfg(test)]
+#[path = "tests.rs"]
+mod tests;
