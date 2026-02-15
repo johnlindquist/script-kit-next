@@ -1148,14 +1148,14 @@ fn batch24_score_prefix_match() {
         Some("Open editor".to_string()),
         ActionCategory::ScriptContext,
     );
-    let score = ActionsDialog::score_action(&action, "edit");
+    let score = ActionsDialog::score_action(&action, "script:edit");
     assert!(score >= 100);
 }
 
 #[test]
 fn batch24_score_contains_match() {
     let action = Action::new("id", "Copy Edit Path", None, ActionCategory::ScriptContext);
-    let score = ActionsDialog::score_action(&action, "edit");
+    let score = ActionsDialog::score_action(&action, "script:edit");
     assert!(score >= 50);
     assert!(score < 100);
 }
@@ -1193,7 +1193,7 @@ fn batch24_score_shortcut_bonus() {
 
 #[test]
 fn batch24_fuzzy_exact() {
-    assert!(ActionsDialog::fuzzy_match("edit", "edit"));
+    assert!(ActionsDialog::fuzzy_match("script:edit", "script:edit"));
 }
 
 #[test]

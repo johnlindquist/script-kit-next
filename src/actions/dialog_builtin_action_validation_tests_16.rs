@@ -155,7 +155,7 @@ mod tests {
         let ids = action_ids(&actions);
         assert!(ids.contains(&"run_script".to_string()));
         assert!(ids.contains(&"edit_scriptlet".to_string()));
-        assert!(ids.contains(&"copy_deeplink".to_string()));
+        assert!(ids.contains(&"script:copy_deeplink".to_string()));
         assert!(!ids.iter().any(|id| id.starts_with("scriptlet_action:")));
     }
 
@@ -309,8 +309,8 @@ mod tests {
         script.is_agent = true;
         let actions = get_script_context_actions(&script);
         let ids = action_ids(&actions);
-        assert!(ids.contains(&"reveal_in_finder".to_string()));
-        assert!(ids.contains(&"copy_path".to_string()));
+        assert!(ids.contains(&"file:reveal_in_finder".to_string()));
+        assert!(ids.contains(&"file:copy_path".to_string()));
     }
 
     #[test]
@@ -329,7 +329,7 @@ mod tests {
         script.is_script = false;
         script.is_agent = true;
         let actions = get_script_context_actions(&script);
-        let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
+        let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
         assert_eq!(cp.shortcut.as_deref(), Some("⌘⇧C"));
     }
 
@@ -345,7 +345,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_path_context_actions(&info);
-        let terminal = actions.iter().find(|a| a.id == "open_in_terminal").unwrap();
+        let terminal = actions.iter().find(|a| a.id == "file:open_in_terminal").unwrap();
         assert_eq!(terminal.shortcut.as_deref(), Some("⌘T"));
     }
 
@@ -357,7 +357,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&info);
-        let editor = actions.iter().find(|a| a.id == "open_in_editor").unwrap();
+        let editor = actions.iter().find(|a| a.id == "file:open_in_editor").unwrap();
         assert_eq!(editor.shortcut.as_deref(), Some("⌘E"));
     }
 
@@ -369,7 +369,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_path_context_actions(&info);
-        let finder = actions.iter().find(|a| a.id == "open_in_finder").unwrap();
+        let finder = actions.iter().find(|a| a.id == "file:open_in_finder").unwrap();
         assert_eq!(finder.shortcut.as_deref(), Some("⌘⇧F"));
     }
 
@@ -381,7 +381,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&info);
-        let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
+        let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
         assert_eq!(cp.shortcut.as_deref(), Some("⌘⇧C"));
     }
 
@@ -393,7 +393,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_path_context_actions(&info);
-        let trash = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+        let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
         assert_eq!(trash.shortcut.as_deref(), Some("⌘⌫"));
     }
 
@@ -417,11 +417,11 @@ mod tests {
         };
         let f_reveal = get_file_context_actions(&file)
             .into_iter()
-            .find(|a| a.id == "reveal_in_finder")
+            .find(|a| a.id == "file:reveal_in_finder")
             .unwrap();
         let d_reveal = get_file_context_actions(&dir)
             .into_iter()
-            .find(|a| a.id == "reveal_in_finder")
+            .find(|a| a.id == "file:reveal_in_finder")
             .unwrap();
         assert_eq!(f_reveal.shortcut, d_reveal.shortcut, "same shortcut");
     }
@@ -442,11 +442,11 @@ mod tests {
         };
         let f_cp = get_file_context_actions(&file)
             .into_iter()
-            .find(|a| a.id == "copy_path")
+            .find(|a| a.id == "file:copy_path")
             .unwrap();
         let d_cp = get_file_context_actions(&dir)
             .into_iter()
-            .find(|a| a.id == "copy_path")
+            .find(|a| a.id == "file:copy_path")
             .unwrap();
         assert_eq!(f_cp.shortcut, d_cp.shortcut);
     }
@@ -488,7 +488,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_file_context_actions(&file);
-        let cf = actions.iter().find(|a| a.id == "copy_filename").unwrap();
+        let cf = actions.iter().find(|a| a.id == "file:copy_filename").unwrap();
         assert_eq!(cf.shortcut.as_deref(), Some("⌘C"));
     }
 
@@ -615,7 +615,7 @@ mod tests {
             has_response: true,
         };
         let ids = action_ids(&get_chat_context_actions(&info));
-        assert!(ids.contains(&"copy_response".to_string()));
+        assert!(ids.contains(&"chat:copy_response".to_string()));
     }
 
     #[test]
@@ -627,7 +627,7 @@ mod tests {
             has_response: false,
         };
         let ids = action_ids(&get_chat_context_actions(&info));
-        assert!(!ids.contains(&"copy_response".to_string()));
+        assert!(!ids.contains(&"chat:copy_response".to_string()));
     }
 
     #[test]
@@ -944,7 +944,7 @@ mod tests {
     #[test]
     fn cat13_score_prefix_beats_contains() {
         let action = Action::new("test", "Edit Script", None, ActionCategory::ScriptContext);
-        let prefix_score = ActionsDialog::score_action(&action, "edit");
+        let prefix_score = ActionsDialog::score_action(&action, "script:edit");
         let contains_score = ActionsDialog::score_action(&action, "script");
         assert!(
             prefix_score > contains_score,
@@ -1328,7 +1328,7 @@ mod tests {
         script.is_script = false;
         script.is_agent = true;
         let actions = get_script_context_actions(&script);
-        let reveal = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
+        let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
         assert_eq!(reveal.shortcut.as_deref(), Some("⌘⇧F"));
     }
 
@@ -1480,7 +1480,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&info);
-        let cf = actions.iter().find(|a| a.id == "copy_filename").unwrap();
+        let cf = actions.iter().find(|a| a.id == "file:copy_filename").unwrap();
         assert!(
             cf.shortcut.is_none(),
             "path copy_filename should have no shortcut"
@@ -1495,7 +1495,7 @@ mod tests {
             is_dir: false,
         };
         let ids = action_ids(&get_path_context_actions(&info));
-        assert!(ids.contains(&"copy_filename".to_string()));
+        assert!(ids.contains(&"file:copy_filename".to_string()));
     }
 
     #[test]
@@ -1506,7 +1506,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&info);
-        let cf = actions.iter().find(|a| a.id == "copy_filename").unwrap();
+        let cf = actions.iter().find(|a| a.id == "file:copy_filename").unwrap();
         assert!(cf
             .description
             .as_ref()
@@ -1529,7 +1529,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_file_context_actions(&file);
-        let ow = actions.iter().find(|a| a.id == "open_with").unwrap();
+        let ow = actions.iter().find(|a| a.id == "file:open_with").unwrap();
         assert_eq!(ow.shortcut.as_deref(), Some("⌘O"));
     }
 
@@ -1543,7 +1543,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_file_context_actions(&file);
-        let si = actions.iter().find(|a| a.id == "show_info").unwrap();
+        let si = actions.iter().find(|a| a.id == "file:show_info").unwrap();
         assert_eq!(si.shortcut.as_deref(), Some("⌘I"));
     }
 
@@ -1557,7 +1557,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_file_context_actions(&file);
-        let ql = actions.iter().find(|a| a.id == "quick_look").unwrap();
+        let ql = actions.iter().find(|a| a.id == "file:quick_look").unwrap();
         assert_eq!(ql.shortcut.as_deref(), Some("⌘Y"));
     }
 
@@ -1620,14 +1620,14 @@ mod tests {
     #[test]
     fn cat27_ai_copy_response_icon() {
         let actions = get_ai_command_bar_actions();
-        let cr = actions.iter().find(|a| a.id == "copy_response").unwrap();
+        let cr = actions.iter().find(|a| a.id == "chat:copy_response").unwrap();
         assert_eq!(cr.icon, Some(IconName::Copy));
     }
 
     #[test]
     fn cat27_ai_submit_icon() {
         let actions = get_ai_command_bar_actions();
-        let submit = actions.iter().find(|a| a.id == "submit").unwrap();
+        let submit = actions.iter().find(|a| a.id == "chat:submit").unwrap();
         assert_eq!(submit.icon, Some(IconName::ArrowUp));
     }
 

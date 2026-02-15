@@ -228,7 +228,7 @@ mod tests {
             .as_ref()
             .unwrap()
             .to_lowercase()
-            .contains("remove"));
+            .contains("script:remove"));
     }
 
     #[test]
@@ -735,14 +735,14 @@ mod tests {
     #[test]
     fn cat12_prefix_scores_100() {
         let action = Action::new("id", "Edit Script", None, ActionCategory::ScriptContext);
-        let score = ActionsDialog::score_action(&action, "edit");
+        let score = ActionsDialog::score_action(&action, "script:edit");
         assert_eq!(score, 100);
     }
 
     #[test]
     fn cat12_contains_scores_50() {
         let action = Action::new("id", "Copy Edit Path", None, ActionCategory::ScriptContext);
-        let score = ActionsDialog::score_action(&action, "edit");
+        let score = ActionsDialog::score_action(&action, "script:edit");
         assert_eq!(score, 50);
     }
 

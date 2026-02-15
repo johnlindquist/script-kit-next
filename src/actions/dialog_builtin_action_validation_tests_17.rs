@@ -1051,7 +1051,7 @@ mod tests {
     #[test]
     fn cat19_prefix_match_100() {
         let action = Action::new("id", "Edit Script", None, ActionCategory::ScriptContext);
-        assert_eq!(ActionsDialog::score_action(&action, "edit"), 100);
+        assert_eq!(ActionsDialog::score_action(&action, "script:edit"), 100);
     }
 
     #[test]
@@ -1063,14 +1063,14 @@ mod tests {
             ActionCategory::ScriptContext,
         );
         // prefix(100) + description(15) = 115
-        assert_eq!(ActionsDialog::score_action(&action, "edit"), 115);
+        assert_eq!(ActionsDialog::score_action(&action, "script:edit"), 115);
     }
 
     #[test]
     fn cat19_contains_match_50() {
         let action = Action::new("id", "Script Editor", None, ActionCategory::ScriptContext);
-        // "edit" is contained but not prefix in "script editor"
-        assert_eq!(ActionsDialog::score_action(&action, "edit"), 50);
+        // "script:edit" is contained but not prefix in "script editor"
+        assert_eq!(ActionsDialog::score_action(&action, "script:edit"), 50);
     }
 
     #[test]

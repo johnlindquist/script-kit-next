@@ -124,9 +124,9 @@ fn batch23_clipboard_text_first_three_actions() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert_eq!(actions[0].id, "clipboard_paste");
-    assert_eq!(actions[1].id, "clipboard_copy");
-    assert_eq!(actions[2].id, "clipboard_paste_keep_open");
+    assert_eq!(actions[0].id, "clip:clipboard_paste");
+    assert_eq!(actions[1].id, "clip:clipboard_copy");
+    assert_eq!(actions[2].id, "clip:clipboard_paste_keep_open");
 }
 
 #[test]
@@ -140,8 +140,8 @@ fn batch23_clipboard_share_and_attach_after_paste_keep_open() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert_eq!(actions[3].id, "clipboard_share");
-    assert_eq!(actions[4].id, "clipboard_attach_to_ai");
+    assert_eq!(actions[3].id, "clip:clipboard_share");
+    assert_eq!(actions[4].id, "clip:clipboard_attach_to_ai");
 }
 
 #[test]
@@ -156,9 +156,9 @@ fn batch23_clipboard_destructive_actions_at_end() {
     };
     let actions = get_clipboard_history_context_actions(&entry);
     let len = actions.len();
-    assert_eq!(actions[len - 3].id, "clipboard_delete");
-    assert_eq!(actions[len - 2].id, "clipboard_delete_multiple");
-    assert_eq!(actions[len - 1].id, "clipboard_delete_all");
+    assert_eq!(actions[len - 3].id, "clip:clipboard_delete");
+    assert_eq!(actions[len - 2].id, "clip:clipboard_delete_multiple");
+    assert_eq!(actions[len - 1].id, "clip:clipboard_delete_all");
 }
 
 #[test]
@@ -174,15 +174,15 @@ fn batch23_clipboard_save_before_delete() {
     let actions = get_clipboard_history_context_actions(&entry);
     let snippet_idx = actions
         .iter()
-        .position(|a| a.id == "clipboard_save_snippet")
+        .position(|a| a.id == "clip:clipboard_save_snippet")
         .unwrap();
     let file_idx = actions
         .iter()
-        .position(|a| a.id == "clipboard_save_file")
+        .position(|a| a.id == "clip:clipboard_save_file")
         .unwrap();
     let delete_idx = actions
         .iter()
-        .position(|a| a.id == "clipboard_delete")
+        .position(|a| a.id == "clip:clipboard_delete")
         .unwrap();
     assert!(snippet_idx < delete_idx);
     assert!(file_idx < delete_idx);
@@ -206,7 +206,7 @@ fn batch23_clipboard_attach_to_ai_shortcut() {
     let actions = get_clipboard_history_context_actions(&entry);
     let attach = actions
         .iter()
-        .find(|a| a.id == "clipboard_attach_to_ai")
+        .find(|a| a.id == "clip:clipboard_attach_to_ai")
         .unwrap();
     assert_eq!(attach.shortcut.as_ref().unwrap(), "⌃⌘A");
 }
@@ -224,7 +224,7 @@ fn batch23_clipboard_attach_to_ai_description() {
     let actions = get_clipboard_history_context_actions(&entry);
     let attach = actions
         .iter()
-        .find(|a| a.id == "clipboard_attach_to_ai")
+        .find(|a| a.id == "clip:clipboard_attach_to_ai")
         .unwrap();
     assert!(attach
         .description
@@ -245,7 +245,7 @@ fn batch23_clipboard_attach_present_for_image() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_attach_to_ai"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_attach_to_ai"));
 }
 
 // ============================================================
@@ -257,13 +257,13 @@ fn batch23_path_dir_action_ids_in_order() {
     let path = PathInfo::new("Documents", "/Users/test/Documents", true);
     let actions = get_path_context_actions(&path);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
-    assert_eq!(ids[0], "open_directory");
-    assert_eq!(ids[1], "copy_path");
-    assert_eq!(ids[2], "open_in_finder");
-    assert_eq!(ids[3], "open_in_editor");
-    assert_eq!(ids[4], "open_in_terminal");
-    assert_eq!(ids[5], "copy_filename");
-    assert_eq!(ids[6], "move_to_trash");
+    assert_eq!(ids[0], "file:open_directory");
+    assert_eq!(ids[1], "file:copy_path");
+    assert_eq!(ids[2], "file:open_in_finder");
+    assert_eq!(ids[3], "file:open_in_editor");
+    assert_eq!(ids[4], "file:open_in_terminal");
+    assert_eq!(ids[5], "file:copy_filename");
+    assert_eq!(ids[6], "file:move_to_trash");
 }
 
 #[test]
@@ -271,13 +271,13 @@ fn batch23_path_file_action_ids_in_order() {
     let path = PathInfo::new("readme.md", "/Users/test/readme.md", false);
     let actions = get_path_context_actions(&path);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
-    assert_eq!(ids[0], "select_file");
-    assert_eq!(ids[1], "copy_path");
-    assert_eq!(ids[2], "open_in_finder");
-    assert_eq!(ids[3], "open_in_editor");
-    assert_eq!(ids[4], "open_in_terminal");
-    assert_eq!(ids[5], "copy_filename");
-    assert_eq!(ids[6], "move_to_trash");
+    assert_eq!(ids[0], "file:select_file");
+    assert_eq!(ids[1], "file:copy_path");
+    assert_eq!(ids[2], "file:open_in_finder");
+    assert_eq!(ids[3], "file:open_in_editor");
+    assert_eq!(ids[4], "file:open_in_terminal");
+    assert_eq!(ids[5], "file:copy_filename");
+    assert_eq!(ids[6], "file:move_to_trash");
 }
 
 #[test]
@@ -296,7 +296,7 @@ fn batch23_path_always_7_actions() {
 fn batch23_path_open_in_editor_desc() {
     let path = PathInfo::new("test.txt", "/test.txt", false);
     let actions = get_path_context_actions(&path);
-    let editor = actions.iter().find(|a| a.id == "open_in_editor").unwrap();
+    let editor = actions.iter().find(|a| a.id == "file:open_in_editor").unwrap();
     assert!(editor.description.as_ref().unwrap().contains("$EDITOR"));
 }
 
@@ -304,7 +304,7 @@ fn batch23_path_open_in_editor_desc() {
 fn batch23_path_open_in_terminal_desc() {
     let path = PathInfo::new("src", "/src", true);
     let actions = get_path_context_actions(&path);
-    let terminal = actions.iter().find(|a| a.id == "open_in_terminal").unwrap();
+    let terminal = actions.iter().find(|a| a.id == "file:open_in_terminal").unwrap();
     assert!(terminal
         .description
         .as_ref()
@@ -317,7 +317,7 @@ fn batch23_path_open_in_terminal_desc() {
 fn batch23_path_copy_path_shortcut() {
     let path = PathInfo::new("test", "/test", false);
     let actions = get_path_context_actions(&path);
-    let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
+    let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
     assert_eq!(cp.shortcut.as_ref().unwrap(), "⌘⇧C");
 }
 
@@ -334,7 +334,7 @@ fn batch23_file_open_shortcut_enter() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&file);
-    let open = actions.iter().find(|a| a.id == "open_file").unwrap();
+    let open = actions.iter().find(|a| a.id == "file:open_file").unwrap();
     assert_eq!(open.shortcut.as_ref().unwrap(), "↵");
 }
 
@@ -347,7 +347,7 @@ fn batch23_file_reveal_shortcut() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&file);
-    let reveal = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
+    let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
     assert_eq!(reveal.shortcut.as_ref().unwrap(), "⌘↵");
 }
 
@@ -360,7 +360,7 @@ fn batch23_file_copy_path_shortcut() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&file);
-    let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
+    let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
     assert_eq!(cp.shortcut.as_ref().unwrap(), "⌘⇧C");
 }
 
@@ -373,7 +373,7 @@ fn batch23_file_copy_filename_shortcut() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&file);
-    let cf = actions.iter().find(|a| a.id == "copy_filename").unwrap();
+    let cf = actions.iter().find(|a| a.id == "file:copy_filename").unwrap();
     assert_eq!(cf.shortcut.as_ref().unwrap(), "⌘C");
 }
 
@@ -390,7 +390,7 @@ fn batch23_file_open_title_quotes_name() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&file);
-    let open = actions.iter().find(|a| a.id == "open_file").unwrap();
+    let open = actions.iter().find(|a| a.id == "file:open_file").unwrap();
     assert!(open.title.contains("\"readme.md\""));
 }
 
@@ -403,7 +403,7 @@ fn batch23_file_dir_open_title_quotes_name() {
         is_dir: true,
     };
     let actions = get_file_context_actions(&dir);
-    let open = actions.iter().find(|a| a.id == "open_directory").unwrap();
+    let open = actions.iter().find(|a| a.id == "file:open_directory").unwrap();
     assert!(open.title.contains("\"src\""));
 }
 
@@ -416,7 +416,7 @@ fn batch23_file_open_dir_description() {
         is_dir: true,
     };
     let actions = get_file_context_actions(&dir);
-    let open = actions.iter().find(|a| a.id == "open_directory").unwrap();
+    let open = actions.iter().find(|a| a.id == "file:open_directory").unwrap();
     assert!(open
         .description
         .as_ref()
@@ -434,7 +434,7 @@ fn batch23_file_open_file_description() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&file);
-    let open = actions.iter().find(|a| a.id == "open_file").unwrap();
+    let open = actions.iter().find(|a| a.id == "file:open_file").unwrap();
     assert!(open
         .description
         .as_ref()
@@ -452,35 +452,35 @@ fn batch23_file_open_file_description() {
 #[test]
 fn batch23_ai_copy_response_has_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "copy_response").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:copy_response").unwrap();
     assert_eq!(a.shortcut.as_ref().unwrap(), "⇧⌘C");
 }
 
 #[test]
 fn batch23_ai_copy_chat_has_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "copy_chat").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:copy_chat").unwrap();
     assert_eq!(a.shortcut.as_ref().unwrap(), "⌥⇧⌘C");
 }
 
 #[test]
 fn batch23_ai_copy_last_code_has_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "copy_last_code").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:copy_last_code").unwrap();
     assert_eq!(a.shortcut.as_ref().unwrap(), "⌥⌘C");
 }
 
 #[test]
 fn batch23_ai_branch_from_last_no_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "branch_from_last").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:branch_from_last").unwrap();
     assert!(a.shortcut.is_none());
 }
 
 #[test]
 fn batch23_ai_change_model_no_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "change_model").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:change_model").unwrap();
     assert!(a.shortcut.is_none());
 }
 
@@ -491,7 +491,7 @@ fn batch23_ai_change_model_no_shortcut() {
 #[test]
 fn batch23_ai_submit_description() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "submit").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:submit").unwrap();
     assert!(a
         .description
         .as_ref()
@@ -503,7 +503,7 @@ fn batch23_ai_submit_description() {
 #[test]
 fn batch23_ai_new_chat_description() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "new_chat").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:new_chat").unwrap();
     assert!(a
         .description
         .as_ref()
@@ -515,7 +515,7 @@ fn batch23_ai_new_chat_description() {
 #[test]
 fn batch23_ai_delete_chat_description() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "delete_chat").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:delete_chat").unwrap();
     assert!(a
         .description
         .as_ref()
@@ -527,7 +527,7 @@ fn batch23_ai_delete_chat_description() {
 #[test]
 fn batch23_ai_export_markdown_description() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "export_markdown").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:export_markdown").unwrap();
     assert!(a
         .description
         .as_ref()
@@ -539,7 +539,7 @@ fn batch23_ai_export_markdown_description() {
 #[test]
 fn batch23_ai_paste_image_description() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "paste_image").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:paste_image").unwrap();
     assert!(a
         .description
         .as_ref()
@@ -646,7 +646,7 @@ fn batch23_chat_continue_in_chat_always_present() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "continue_in_chat"));
+    assert!(actions.iter().any(|a| a.id == "chat:continue_in_chat"));
 }
 
 #[test]
@@ -658,7 +658,7 @@ fn batch23_chat_continue_in_chat_shortcut() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    let c = actions.iter().find(|a| a.id == "continue_in_chat").unwrap();
+    let c = actions.iter().find(|a| a.id == "chat:continue_in_chat").unwrap();
     assert_eq!(c.shortcut.as_ref().unwrap(), "⌘↵");
 }
 
@@ -681,7 +681,7 @@ fn batch23_chat_continue_after_models() {
         .unwrap();
     let continue_idx = actions
         .iter()
-        .position(|a| a.id == "continue_in_chat")
+        .position(|a| a.id == "chat:continue_in_chat")
         .unwrap();
     assert!(continue_idx > model_idx);
 }
@@ -698,7 +698,7 @@ fn batch23_notes_new_note_icon() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    let note = actions.iter().find(|a| a.id == "new_note").unwrap();
+    let note = actions.iter().find(|a| a.id == "notes:new_note").unwrap();
     assert_eq!(note.icon, Some(IconName::Plus));
 }
 
@@ -765,7 +765,7 @@ fn batch23_notes_new_note_shortcut() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    let note = actions.iter().find(|a| a.id == "new_note").unwrap();
+    let note = actions.iter().find(|a| a.id == "notes:new_note").unwrap();
     assert_eq!(note.shortcut.as_ref().unwrap(), "⌘N");
 }
 
@@ -1329,7 +1329,7 @@ fn batch23_score_prefix_highest() {
 fn batch23_score_contains_medium() {
     let action = Action::new("a", "Full Copy Path", None, ActionCategory::ScriptContext);
     let score = ActionsDialog::score_action(&action, "copy");
-    assert!(score >= 50 && score < 100);
+    assert!((50..100).contains(&score));
 }
 
 // --- merged from part_04.rs ---

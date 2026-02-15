@@ -105,8 +105,8 @@ fn batch22_score_prefix_plus_desc_plus_shortcut() {
         ActionCategory::ScriptContext,
     )
     .with_shortcut("⌘E");
-    let score = ActionsDialog::score_action(&action, "edit");
-    // prefix=100 + desc(edit)=15 = 115 (shortcut ⌘e doesn't contain "edit")
+    let score = ActionsDialog::score_action(&action, "script:edit");
+    // prefix=100 + desc(edit)=15 = 115 (shortcut ⌘e doesn't contain "script:edit")
     assert!(score >= 115, "Expected >=115, got {}", score);
 }
 
