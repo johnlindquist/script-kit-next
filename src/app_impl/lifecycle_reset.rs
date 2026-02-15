@@ -264,6 +264,7 @@ impl ScriptListApp {
                 self.file_search_loading = false;
                 self.cached_file_results.clear();
                 self.file_search_display_indices.clear();
+                self.file_search_preview_thumbnail = FileSearchThumbnailPreviewState::Idle;
                 self.file_search_scroll_handle
                     .scroll_to_item(0, ScrollStrategy::Top);
             }

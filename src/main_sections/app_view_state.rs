@@ -256,6 +256,32 @@ enum ActionsRoute {
     Execute { action_id: String },
 }
 
+/// File-search preview thumbnail lifecycle state.
+///
+/// Tracks async thumbnail loading for the right-side FileSearch preview panel.
+/// The `path` field on non-idle variants guards against stale async updates.
+#[derive(Clone)]
+enum FileSearchThumbnailPreviewState {
+    /// No thumbnail should be rendered (no selection or non-image selection).
+    Idle,
+    /// Thumbnail load is in-flight for this path.
+    Loading {
+        path: String,
+    },
+    /// Thumbnail loaded successfully with decoded image and dimensions.
+    Ready {
+        path: String,
+        image: Arc<gpui::RenderImage>,
+        width: u32,
+        height: u32,
+    },
+    /// Thumbnail not available for this path (size/format/decode constraints).
+    Unavailable {
+        path: String,
+        message: String,
+    },
+}
+
 /// State for the inline shortcut recorder overlay.
 ///
 /// When this is Some, the ShortcutRecorder modal is displayed.
