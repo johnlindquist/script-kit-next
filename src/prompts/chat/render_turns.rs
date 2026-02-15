@@ -28,7 +28,7 @@ impl ChatPrompt {
         let retry_hover_bg = rgba((colors.accent_color << 8) | 0x40);
         let has_retry_callback = self.on_retry.is_some();
 
-        let mut content = div().flex().flex_col().gap(px(4.0)).w_full().min_w_0();
+        let mut content = div().flex().flex_col().gap(px(6.0)).w_full().min_w_0();
         // Note: removed overflow_hidden() to allow text to wrap naturally
 
         // User prompt (small, bold) - only if not empty
@@ -176,15 +176,16 @@ impl ChatPrompt {
         // The full-width container with copy button
         div()
             .w_full()
-            .px(px(12.0))
-            .py(px(10.0))
+            .px(px(CHAT_LAYOUT_CARD_PADDING_X))
+            .py(px(CHAT_LAYOUT_CARD_PADDING_Y))
             .bg(container_bg)
             .rounded(px(8.0))
             .flex()
             .flex_row()
-            .gap(px(8.0))
+            .items_start()
+            .gap(px(10.0))
             .child(content.flex_1().min_w_0())
-            .child(copy_button)
+            .child(copy_button.mt(px(1.0)))
     }
 
     /// Handle retry for a failed message

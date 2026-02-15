@@ -49,20 +49,34 @@ impl ChatPrompt {
                 .w(px(2.0))
                 .h(px(16.0))
                 .when(cursor_visible, |d| d.bg(rgb(colors.accent_color)));
-            input_content = div().flex().flex_row().items_center().child(cursor).child(
-                div()
-                    .text_color(rgb(colors.text_tertiary))
-                    .child(placeholder),
-            );
+            input_content = div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .text_size(px(14.0))
+                .child(cursor)
+                .child(
+                    div()
+                        .text_color(rgb(colors.text_tertiary))
+                        .child(placeholder),
+                );
         }
 
-        let input_bg_alpha = if is_focused { 0xD8 } else { 0xA8 };
+        let input_bg_alpha = if is_focused {
+            CHAT_LAYOUT_INPUT_BG_FOCUSED_ALPHA
+        } else {
+            CHAT_LAYOUT_INPUT_BG_IDLE_ALPHA
+        };
         let input_border = if is_focused {
             theme_colors.accent.selected
         } else {
             theme_colors.ui.border
         };
-        let input_border_alpha = if is_focused { 0xA0 } else { 0x60 };
+        let input_border_alpha = if is_focused {
+            CHAT_LAYOUT_INPUT_BORDER_FOCUSED_ALPHA
+        } else {
+            CHAT_LAYOUT_INPUT_BORDER_IDLE_ALPHA
+        };
 
         div()
             .id("chat-input-field")
@@ -74,10 +88,10 @@ impl ChatPrompt {
             .items_center()
             .rounded(px(8.0))
             .bg(rgba(
-                (theme_colors.background.search_box << 8) | input_bg_alpha as u32,
+                (theme_colors.background.search_box << 8) | input_bg_alpha,
             ))
             .border_1()
-            .border_color(rgba((input_border << 8) | input_border_alpha as u32))
+            .border_color(rgba((input_border << 8) | input_border_alpha))
             .child(input_content)
     }
 
@@ -92,10 +106,10 @@ impl ChatPrompt {
             .flex_row()
             .items_center()
             .gap(px(8.0))
-            .px(px(12.0))
-            .py(px(8.0))
+            .px(px(CHAT_LAYOUT_PADDING_X))
+            .py(px(CHAT_LAYOUT_SECTION_PADDING_Y))
             .border_b_1()
-            .border_color(rgba((colors.quote_border << 8) | 0x40))
+            .border_color(rgba((colors.quote_border << 8) | CHAT_LAYOUT_BORDER_ALPHA))
             .child(
                 // Back arrow
                 div()

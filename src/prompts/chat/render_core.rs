@@ -73,9 +73,14 @@ impl ChatPrompt {
 
     fn render_footer(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let footer_colors = PromptFooterColors::from_theme(&self.theme);
-        let footer_bg = rgba(crate::components::prompt_footer::footer_surface_rgba(
-            footer_colors,
-        ));
+        let footer_bg = theme::hover_overlay_bg(
+            &self.theme,
+            if self.theme.is_dark_mode() {
+                CHAT_LAYOUT_FOOTER_BG_DARK_ALPHA
+            } else {
+                CHAT_LAYOUT_FOOTER_BG_LIGHT_ALPHA
+            },
+        );
         let model_text = self.model.clone().unwrap_or_else(|| "Select Model".into());
         let footer_height = crate::window_resize::layout::FOOTER_HEIGHT;
         let divider = || {
@@ -165,7 +170,7 @@ impl ChatPrompt {
             .max_h(px(footer_height))
             .flex_shrink_0()
             .overflow_hidden()
-            .px(px(12.0))
+            .px(px(CHAT_LAYOUT_PADDING_X))
             .pt(px(0.0))
             .pb(px(2.0))
             .flex()
@@ -447,25 +452,25 @@ impl Render for ChatPrompt {
                 .on_key_down(handle_key)
                 .child(self.render_header())
                 .child(
-                    div().flex().flex_1().items_center().justify_center().child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .items_center()
-                            .gap(px(4.0))
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(rgb(colors.text_secondary))
-                                    .child("Connecting to AI..."),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(colors.text_tertiary))
-                                    .child("Loading providers and models"),
-                            ),
-                    ),
+                    div()
+                        .flex()
+                        .flex_col()
+                        .flex_1()
+                        .items_center()
+                        .justify_center()
+                        .gap(px(4.0))
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(rgb(colors.text_secondary))
+                                .child("Connecting to AI..."),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(rgb(colors.text_tertiary))
+                                .child("Loading providers and models"),
+                        ),
                 )
                 .into_any_element();
         }
@@ -474,13 +479,13 @@ impl Render for ChatPrompt {
         let has_pending_image = self.pending_image.is_some();
         let input_area = div()
             .w_full()
-            .px(px(12.0))
-            .py(px(8.0))
+            .px(px(CHAT_LAYOUT_PADDING_X))
+            .py(px(CHAT_LAYOUT_SECTION_PADDING_Y))
             .flex()
             .flex_col()
             .gap(px(8.0))
             .border_b_1()
-            .border_color(rgba((colors.quote_border << 8) | 0x40))
+            .border_color(rgba((colors.quote_border << 8) | CHAT_LAYOUT_BORDER_ALPHA))
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _window, cx| {
                 this.handle_file_drop(paths, cx);
             }))
@@ -513,8 +518,8 @@ impl Render for ChatPrompt {
             })
             .with_sizing_behavior(ListSizingBehavior::Infer)
             .size_full()
-            .px(px(12.0))
-            .py(px(12.0));
+            .px(px(CHAT_LAYOUT_PADDING_X))
+            .py(px(CHAT_LAYOUT_MESSAGES_PADDING_Y));
 
             div()
                 .id("chat-messages")
@@ -587,18 +592,14 @@ impl Render for ChatPrompt {
         } else {
             div()
                 .id("chat-messages")
+                .flex()
+                .flex_col()
                 .flex_1()
                 .min_h(px(0.))
                 .overflow_y_scroll()
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .w_full()
-                        .px(px(12.0))
-                        .py(px(12.0))
-                        .child(self.render_conversation_starters(cx)),
-                )
+                .px(px(CHAT_LAYOUT_PADDING_X))
+                .py(px(CHAT_LAYOUT_MESSAGES_PADDING_Y))
+                .child(self.render_conversation_starters(cx))
                 .into_any_element()
         };
 
