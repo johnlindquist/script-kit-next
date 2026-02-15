@@ -44,7 +44,7 @@ fn file_context_directory_primary_action_is_open_directory() {
     let ids = action_ids(&actions);
 
     assert_eq!(
-        actions[0].id, "open_directory",
+        actions[0].id, "file:open_directory",
         "First action for a directory must be open_directory"
     );
     assert!(
@@ -72,7 +72,7 @@ fn file_context_file_primary_action_is_open_file() {
     let ids = action_ids(&actions);
 
     assert_eq!(
-        actions[0].id, "open_file",
+        actions[0].id, "file:open_file",
         "First action for a file must be open_file"
     );
     assert!(
@@ -83,7 +83,7 @@ fn file_context_file_primary_action_is_open_file() {
     // Files SHOULD have quick_look on macOS
     #[cfg(target_os = "macos")]
     assert!(
-        ids.contains(&"quick_look"),
+        ids.contains(&"file:quick_look"),
         "Files should have Quick Look on macOS"
     );
 }
@@ -107,17 +107,17 @@ fn file_context_common_actions_present_for_both() {
         let actions = get_file_context_actions(info);
         let ids = action_ids(&actions);
         assert!(
-            ids.contains(&"reveal_in_finder"),
+            ids.contains(&"file:reveal_in_finder"),
             "{} should have reveal_in_finder",
             info.name
         );
         assert!(
-            ids.contains(&"copy_path"),
+            ids.contains(&"file:copy_path"),
             "{} should have copy_path",
             info.name
         );
         assert!(
-            ids.contains(&"copy_filename"),
+            ids.contains(&"file:copy_filename"),
             "{} should have copy_filename",
             info.name
         );
@@ -137,18 +137,18 @@ fn file_context_macos_specific_actions() {
 
     #[cfg(target_os = "macos")]
     {
-        assert!(ids.contains(&"open_with"), "macOS should have Open With...");
-        assert!(ids.contains(&"show_info"), "macOS should have Show Info");
+        assert!(ids.contains(&"file:open_with"), "macOS should have Open With...");
+        assert!(ids.contains(&"file:show_info"), "macOS should have Show Info");
     }
 
     #[cfg(not(target_os = "macos"))]
     {
         assert!(
-            !ids.contains(&"open_with"),
+            !ids.contains(&"file:open_with"),
             "Non-macOS should not have Open With"
         );
         assert!(
-            !ids.contains(&"show_info"),
+            !ids.contains(&"file:show_info"),
             "Non-macOS should not have Show Info"
         );
     }
@@ -164,12 +164,13 @@ fn file_context_finder_labels_use_reveal_consistently() {
     };
     let actions = get_file_context_actions(&file);
 
-    let reveal = find_action(&actions, "reveal_in_finder").expect("missing reveal_in_finder");
+    let reveal =
+        find_action(&actions, "file:reveal_in_finder").expect("missing reveal_in_finder");
     assert_eq!(reveal.title, "Reveal in Finder");
 
     #[cfg(target_os = "macos")]
     {
-        let show_info = find_action(&actions, "show_info").expect("missing show_info");
+        let show_info = find_action(&actions, "file:show_info").expect("missing show_info");
         assert_eq!(show_info.title, "Show Info");
     }
 }
