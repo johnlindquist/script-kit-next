@@ -209,7 +209,7 @@ mod tests {
         let actions = get_notes_command_bar_actions(&info);
         let ids = action_ids(&actions);
         // Always present: new_note, browse_notes
-        assert!(ids.contains(&"new_note".to_string()));
+        assert!(ids.contains(&"notes:new_note".to_string()));
         assert!(ids.contains(&"browse_notes".to_string()));
         // No selection → no duplicate, find, format, etc.
         assert!(!ids.contains(&"duplicate_note".to_string()));
@@ -597,7 +597,7 @@ mod tests {
             .collect();
         assert_eq!(
             response_ids,
-            vec!["copy_response", "copy_chat", "copy_last_code"]
+            vec!["chat:copy_response", "copy_chat", "copy_last_code"]
         );
     }
 
@@ -611,7 +611,7 @@ mod tests {
             .collect();
         assert_eq!(
             action_ids,
-            vec!["submit", "new_chat", "delete_chat", "branch_from_last"]
+            vec!["chat:submit", "new_chat", "delete_chat", "branch_from_last"]
         );
     }
 
@@ -907,7 +907,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_path_context_actions(&pi);
-        assert_eq!(actions[0].id, "open_directory");
+        assert_eq!(actions[0].id, "file:open_directory");
     }
 
 
@@ -920,7 +920,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&pi);
-        assert_eq!(actions[0].id, "select_file");
+        assert_eq!(actions[0].id, "file:select_file");
     }
 
     #[test]
@@ -931,7 +931,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&pi);
-        assert_eq!(actions.last().unwrap().id, "move_to_trash");
+        assert_eq!(actions.last().unwrap().id, "file:move_to_trash");
     }
 
     #[test]
@@ -997,7 +997,7 @@ mod tests {
             file_type: crate::file_search::FileType::Document,
         };
         let actions = get_file_context_actions(&fi);
-        assert_eq!(actions[0].id, "open_file");
+        assert_eq!(actions[0].id, "file:open_file");
     }
 
     #[test]
@@ -1009,7 +1009,7 @@ mod tests {
             file_type: crate::file_search::FileType::Directory,
         };
         let actions = get_file_context_actions(&fi);
-        assert_eq!(actions[0].id, "open_directory");
+        assert_eq!(actions[0].id, "file:open_directory");
     }
 
     // =========================================================================
@@ -1533,7 +1533,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert_eq!(actions[0].id, "clipboard_paste");
+        assert_eq!(actions[0].id, "clip:clipboard_paste");
     }
 
     #[test]
@@ -1547,7 +1547,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert_eq!(actions[1].id, "clipboard_copy");
+        assert_eq!(actions[1].id, "clip:clipboard_copy");
     }
 
     // =========================================================================
@@ -1697,7 +1697,7 @@ mod tests {
             file_type: crate::file_search::FileType::Document,
         };
         let ids = action_ids(&get_file_context_actions(&fi));
-        assert!(ids.contains(&"reveal_in_finder".to_string()));
+        assert!(ids.contains(&"file:reveal_in_finder".to_string()));
     }
 
     #[test]
@@ -1709,7 +1709,7 @@ mod tests {
             file_type: crate::file_search::FileType::Document,
         };
         let ids = action_ids(&get_file_context_actions(&fi));
-        assert!(ids.contains(&"copy_path".to_string()));
+        assert!(ids.contains(&"file:copy_path".to_string()));
     }
 
     #[test]
@@ -1721,7 +1721,7 @@ mod tests {
             file_type: crate::file_search::FileType::Document,
         };
         let ids = action_ids(&get_file_context_actions(&fi));
-        assert!(ids.contains(&"copy_filename".to_string()));
+        assert!(ids.contains(&"file:copy_filename".to_string()));
     }
 
     #[test]
@@ -1733,7 +1733,7 @@ mod tests {
             file_type: crate::file_search::FileType::Directory,
         };
         let ids = action_ids(&get_file_context_actions(&fi));
-        assert!(ids.contains(&"reveal_in_finder".to_string()));
+        assert!(ids.contains(&"file:reveal_in_finder".to_string()));
     }
 
     #[test]
@@ -1745,7 +1745,7 @@ mod tests {
             file_type: crate::file_search::FileType::Directory,
         };
         let ids = action_ids(&get_file_context_actions(&fi));
-        assert!(ids.contains(&"copy_path".to_string()));
+        assert!(ids.contains(&"file:copy_path".to_string()));
     }
 
     // =========================================================================

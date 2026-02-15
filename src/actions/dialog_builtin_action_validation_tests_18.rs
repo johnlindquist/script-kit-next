@@ -24,10 +24,6 @@ mod tests {
     use crate::scriptlets::{Scriptlet, ScriptletAction};
     use std::collections::HashSet;
 
-    fn action_ids(actions: &[Action]) -> Vec<String> {
-        actions.iter().map(|a| a.id.clone()).collect()
-    }
-
     // =========================================================================
     // Category 01: Agent context is_agent via mutation — action set correctness
     // =========================================================================
@@ -48,7 +44,7 @@ mod tests {
         script.is_agent = true;
         script.is_script = false;
         let actions = get_script_context_actions(&script);
-        assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
+        assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
     }
 
     #[test]
@@ -57,7 +53,7 @@ mod tests {
         script.is_agent = true;
         script.is_script = false;
         let actions = get_script_context_actions(&script);
-        assert!(actions.iter().any(|a| a.id == "copy_path"));
+        assert!(actions.iter().any(|a| a.id == "file:copy_path"));
     }
 
     #[test]
@@ -151,7 +147,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let ocr = actions.iter().find(|a| a.id == "clipboard_ocr").unwrap();
+        let ocr = actions.iter().find(|a| a.id == "clip:clipboard_ocr").unwrap();
         assert_eq!(ocr.shortcut.as_ref().unwrap(), "⇧⌘C");
     }
 
@@ -166,7 +162,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let ocr = actions.iter().find(|a| a.id == "clipboard_ocr").unwrap();
+        let ocr = actions.iter().find(|a| a.id == "clip:clipboard_ocr").unwrap();
         assert_eq!(ocr.title, "Copy Text from Image");
     }
 
@@ -181,7 +177,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let ocr = actions.iter().find(|a| a.id == "clipboard_ocr").unwrap();
+        let ocr = actions.iter().find(|a| a.id == "clip:clipboard_ocr").unwrap();
         assert!(ocr.description.as_ref().unwrap().contains("OCR"));
     }
 
@@ -196,7 +192,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(!actions.iter().any(|a| a.id == "clipboard_ocr"));
+        assert!(!actions.iter().any(|a| a.id == "clip:clipboard_ocr"));
     }
 
     // =========================================================================
@@ -217,7 +213,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let annotate = actions
             .iter()
-            .find(|a| a.id == "clipboard_annotate_cleanshot")
+            .find(|a| a.id == "clip:clipboard_annotate_cleanshot")
             .unwrap();
         assert_eq!(annotate.shortcut.as_ref().unwrap(), "⇧⌘A");
     }
@@ -236,7 +232,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let upload = actions
             .iter()
-            .find(|a| a.id == "clipboard_upload_cleanshot")
+            .find(|a| a.id == "clip:clipboard_upload_cleanshot")
             .unwrap();
         assert_eq!(upload.shortcut.as_ref().unwrap(), "⇧⌘U");
     }
@@ -255,8 +251,8 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         assert!(!actions
             .iter()
-            .any(|a| a.id == "clipboard_annotate_cleanshot"));
-        assert!(!actions.iter().any(|a| a.id == "clipboard_upload_cleanshot"));
+            .any(|a| a.id == "clip:clipboard_annotate_cleanshot"));
+        assert!(!actions.iter().any(|a| a.id == "clip:clipboard_upload_cleanshot"));
     }
 
     #[cfg(target_os = "macos")]
@@ -280,8 +276,8 @@ mod tests {
         };
         let img_actions = get_clipboard_history_context_actions(&img);
         let txt_actions = get_clipboard_history_context_actions(&txt);
-        assert!(img_actions.iter().any(|a| a.id == "clipboard_open_with"));
-        assert!(!txt_actions.iter().any(|a| a.id == "clipboard_open_with"));
+        assert!(img_actions.iter().any(|a| a.id == "clip:clipboard_open_with"));
+        assert!(!txt_actions.iter().any(|a| a.id == "clip:clipboard_open_with"));
     }
 
     // =========================================================================
@@ -298,7 +294,7 @@ mod tests {
         };
         let actions = get_chat_context_actions(&info);
         assert_eq!(actions.len(), 1);
-        assert_eq!(actions[0].id, "continue_in_chat");
+        assert_eq!(actions[0].id, "chat:continue_in_chat");
     }
 
     #[test]
@@ -311,9 +307,9 @@ mod tests {
         };
         let actions = get_chat_context_actions(&info);
         assert_eq!(actions.len(), 3);
-        assert!(actions.iter().any(|a| a.id == "continue_in_chat"));
-        assert!(actions.iter().any(|a| a.id == "copy_response"));
-        assert!(actions.iter().any(|a| a.id == "clear_conversation"));
+        assert!(actions.iter().any(|a| a.id == "chat:continue_in_chat"));
+        assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
+        assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
     }
 
     #[test]
@@ -326,8 +322,8 @@ mod tests {
         };
         let actions = get_chat_context_actions(&info);
         assert_eq!(actions.len(), 2);
-        assert!(actions.iter().any(|a| a.id == "copy_response"));
-        assert!(!actions.iter().any(|a| a.id == "clear_conversation"));
+        assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
+        assert!(!actions.iter().any(|a| a.id == "chat:clear_conversation"));
     }
 
     #[test]
@@ -340,8 +336,8 @@ mod tests {
         };
         let actions = get_chat_context_actions(&info);
         assert_eq!(actions.len(), 2);
-        assert!(actions.iter().any(|a| a.id == "clear_conversation"));
-        assert!(!actions.iter().any(|a| a.id == "copy_response"));
+        assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
+        assert!(!actions.iter().any(|a| a.id == "chat:copy_response"));
     }
 
     // =========================================================================
@@ -713,7 +709,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_path_context_actions(&path);
-        let action = actions.iter().find(|a| a.id == "open_in_finder").unwrap();
+        let action = actions.iter().find(|a| a.id == "file:open_in_finder").unwrap();
         assert_eq!(action.description.as_ref().unwrap(), "Reveal in Finder");
     }
 
@@ -725,7 +721,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&path);
-        let action = actions.iter().find(|a| a.id == "open_in_finder").unwrap();
+        let action = actions.iter().find(|a| a.id == "file:open_in_finder").unwrap();
         assert_eq!(action.shortcut.as_ref().unwrap(), "⌘⇧F");
     }
 
@@ -737,7 +733,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&path);
-        let action = actions.iter().find(|a| a.id == "open_in_editor").unwrap();
+        let action = actions.iter().find(|a| a.id == "file:open_in_editor").unwrap();
         assert!(action.description.as_ref().unwrap().contains("$EDITOR"));
     }
 
@@ -749,7 +745,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_path_context_actions(&path);
-        let action = actions.iter().find(|a| a.id == "open_in_terminal").unwrap();
+        let action = actions.iter().find(|a| a.id == "file:open_in_terminal").unwrap();
         assert_eq!(action.shortcut.as_ref().unwrap(), "⌘T");
     }
 
@@ -766,7 +762,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_file_context_actions(&file);
-        let open = actions.iter().find(|a| a.id == "open_file").unwrap();
+        let open = actions.iter().find(|a| a.id == "file:open_file").unwrap();
         assert_eq!(
             open.description.as_ref().unwrap(),
             "Open with default application"
@@ -782,7 +778,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_file_context_actions(&dir);
-        let open = actions.iter().find(|a| a.id == "open_directory").unwrap();
+        let open = actions.iter().find(|a| a.id == "file:open_directory").unwrap();
         assert_eq!(open.description.as_ref().unwrap(), "Open this folder");
     }
 
@@ -795,7 +791,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_file_context_actions(&file);
-        let reveal = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
+        let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
         assert_eq!(reveal.description.as_ref().unwrap(), "Reveal in Finder");
     }
 
@@ -808,7 +804,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_file_context_actions(&file);
-        let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
+        let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
         assert_eq!(
             cp.description.as_ref().unwrap(),
             "Copy the full path to clipboard"
@@ -824,7 +820,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_file_context_actions(&file);
-        let cf = actions.iter().find(|a| a.id == "copy_filename").unwrap();
+        let cf = actions.iter().find(|a| a.id == "file:copy_filename").unwrap();
         assert_eq!(
             cf.description.as_ref().unwrap(),
             "Copy just the filename to clipboard"
@@ -1305,7 +1301,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let snippet = actions
             .iter()
-            .find(|a| a.id == "clipboard_save_snippet")
+            .find(|a| a.id == "clip:clipboard_save_snippet")
             .unwrap();
         assert_eq!(snippet.shortcut.as_ref().unwrap(), "⇧⌘S");
     }
@@ -1323,7 +1319,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let save = actions
             .iter()
-            .find(|a| a.id == "clipboard_save_file")
+            .find(|a| a.id == "clip:clipboard_save_file")
             .unwrap();
         assert_eq!(save.shortcut.as_ref().unwrap(), "⌥⇧⌘S");
     }
@@ -1341,7 +1337,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let snippet = actions
             .iter()
-            .find(|a| a.id == "clipboard_save_snippet")
+            .find(|a| a.id == "clip:clipboard_save_snippet")
             .unwrap();
         assert_eq!(snippet.title, "Save Text as Snippet");
     }
@@ -1361,7 +1357,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let save = actions
             .iter()
-            .find(|a| a.id == "clipboard_save_file")
+            .find(|a| a.id == "clip:clipboard_save_file")
             .unwrap();
         assert_eq!(save.title, "Save as File...");
     }
@@ -1381,7 +1377,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let del = actions.iter().find(|a| a.id == "clipboard_delete").unwrap();
+        let del = actions.iter().find(|a| a.id == "clip:clipboard_delete").unwrap();
         assert_eq!(del.shortcut.as_ref().unwrap(), "⌃X");
     }
 
@@ -1398,7 +1394,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let del = actions
             .iter()
-            .find(|a| a.id == "clipboard_delete_multiple")
+            .find(|a| a.id == "clip:clipboard_delete_multiple")
             .unwrap();
         assert_eq!(del.shortcut.as_ref().unwrap(), "⇧⌘X");
     }
@@ -1416,7 +1412,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let del = actions
             .iter()
-            .find(|a| a.id == "clipboard_delete_all")
+            .find(|a| a.id == "clip:clipboard_delete_all")
             .unwrap();
         assert_eq!(del.shortcut.as_ref().unwrap(), "⌃⇧X");
     }
@@ -1434,7 +1430,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let del = actions
             .iter()
-            .find(|a| a.id == "clipboard_delete_all")
+            .find(|a| a.id == "clip:clipboard_delete_all")
             .unwrap();
         assert!(del.description.as_ref().unwrap().contains("pinned"));
     }
@@ -1629,7 +1625,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_path_context_actions(&path);
-        let trash = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+        let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
         assert!(trash.description.as_ref().unwrap().contains("folder"));
     }
 
@@ -1641,7 +1637,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&path);
-        let trash = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+        let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
         assert!(trash.description.as_ref().unwrap().contains("file"));
     }
 
@@ -1653,7 +1649,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&path);
-        let trash = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+        let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
         assert_eq!(trash.shortcut.as_ref().unwrap(), "⌘⌫");
     }
 
@@ -1666,7 +1662,7 @@ mod tests {
         };
         let actions = get_path_context_actions(&path);
         let last = actions.last().unwrap();
-        assert_eq!(last.id, "move_to_trash");
+        assert_eq!(last.id, "file:move_to_trash");
     }
 
     // =========================================================================

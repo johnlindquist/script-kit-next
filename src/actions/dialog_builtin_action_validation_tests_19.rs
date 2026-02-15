@@ -23,10 +23,6 @@ mod tests {
     use crate::prompts::PathInfo;
     use std::collections::HashSet;
 
-    fn action_ids(actions: &[Action]) -> Vec<String> {
-        actions.iter().map(|a| a.id.clone()).collect()
-    }
-
     // =========================================================================
     // Category 01: Scriptlet context shortcut/alias toggle symmetry
     // Verifies that scriptlet context actions correctly toggle add vs
@@ -92,7 +88,7 @@ mod tests {
     fn cat02_script_deeplink_desc_contains_url_pattern() {
         let script = ScriptInfo::new("My Cool Script", "/path/script.ts");
         let actions = get_script_context_actions(&script);
-        let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+        let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
         assert!(dl
             .description
             .as_ref()
@@ -104,7 +100,7 @@ mod tests {
     fn cat02_script_deeplink_desc_contains_deeplink_name() {
         let script = ScriptInfo::new("My Cool Script", "/path/script.ts");
         let actions = get_script_context_actions(&script);
-        let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+        let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
         assert!(dl.description.as_ref().unwrap().contains("my-cool-script"));
     }
 
@@ -112,7 +108,7 @@ mod tests {
     fn cat02_builtin_deeplink_desc_contains_url() {
         let script = ScriptInfo::builtin("Clipboard History");
         let actions = get_script_context_actions(&script);
-        let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+        let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
         assert!(dl
             .description
             .as_ref()
@@ -124,7 +120,7 @@ mod tests {
     fn cat02_scriptlet_context_deeplink_desc_contains_url() {
         let script = ScriptInfo::scriptlet("Open GitHub", "/path/urls.md", None, None);
         let actions = get_scriptlet_context_actions_with_custom(&script, None);
-        let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+        let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
         assert!(dl.description.as_ref().unwrap().contains("open-github"));
     }
 
@@ -144,7 +140,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let paste = actions.iter().find(|a| a.id == "clipboard_paste").unwrap();
+        let paste = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
         assert_eq!(paste.title, "Paste to Active App");
     }
 
@@ -159,7 +155,7 @@ mod tests {
             frontmost_app_name: Some("Safari".to_string()),
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let paste = actions.iter().find(|a| a.id == "clipboard_paste").unwrap();
+        let paste = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
         assert_eq!(paste.title, "Paste to Safari");
     }
 
@@ -174,7 +170,7 @@ mod tests {
             frontmost_app_name: Some("日本語エディタ".to_string()),
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let paste = actions.iter().find(|a| a.id == "clipboard_paste").unwrap();
+        let paste = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
         assert_eq!(paste.title, "Paste to 日本語エディタ");
     }
 
@@ -189,7 +185,7 @@ mod tests {
             frontmost_app_name: Some("".to_string()),
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let paste = actions.iter().find(|a| a.id == "clipboard_paste").unwrap();
+        let paste = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
         // Empty string still formats as "Paste to "
         assert_eq!(paste.title, "Paste to ");
     }
@@ -213,7 +209,7 @@ mod tests {
             };
             let actions = get_notes_command_bar_actions(&info);
             assert!(
-                actions.iter().any(|a| a.id == "new_note"),
+                actions.iter().any(|a| a.id == "notes:new_note"),
                 "new_note absent with sel={sel} trash={trash} auto={auto}"
             );
         }
@@ -322,7 +318,7 @@ mod tests {
         };
         let actions = get_chat_context_actions(&info);
         assert_eq!(actions.len(), 1); // only continue_in_chat
-        assert_eq!(actions[0].id, "continue_in_chat");
+        assert_eq!(actions[0].id, "chat:continue_in_chat");
     }
 
     #[test]
@@ -613,7 +609,7 @@ mod tests {
             name: "Downloads".to_string(),
         };
         let actions = get_path_context_actions(&info);
-        assert_eq!(actions[0].id, "open_directory");
+        assert_eq!(actions[0].id, "file:open_directory");
     }
 
     #[test]
@@ -624,7 +620,7 @@ mod tests {
             name: "file.txt".to_string(),
         };
         let actions = get_path_context_actions(&info);
-        assert_eq!(actions[0].id, "select_file");
+        assert_eq!(actions[0].id, "file:select_file");
     }
 
     #[test]
@@ -657,7 +653,7 @@ mod tests {
             name: "Downloads".to_string(),
         };
         let actions = get_path_context_actions(&info);
-        assert_eq!(actions.last().unwrap().id, "move_to_trash");
+        assert_eq!(actions.last().unwrap().id, "file:move_to_trash");
     }
 
     // =========================================================================
@@ -675,7 +671,7 @@ mod tests {
             file_type: FileType::File,
         };
         let actions = get_file_context_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "quick_look"));
+        assert!(actions.iter().any(|a| a.id == "file:quick_look"));
     }
 
     #[cfg(target_os = "macos")]
@@ -688,7 +684,7 @@ mod tests {
             file_type: FileType::File,
         };
         let actions = get_file_context_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "open_with"));
+        assert!(actions.iter().any(|a| a.id == "file:open_with"));
     }
 
     #[cfg(target_os = "macos")]
@@ -701,7 +697,7 @@ mod tests {
             file_type: FileType::Directory,
         };
         let actions = get_file_context_actions(&info);
-        assert!(!actions.iter().any(|a| a.id == "quick_look"));
+        assert!(!actions.iter().any(|a| a.id == "file:quick_look"));
     }
 
     #[cfg(target_os = "macos")]
@@ -714,7 +710,7 @@ mod tests {
             file_type: FileType::File,
         };
         let actions = get_file_context_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "show_info"));
+        assert!(actions.iter().any(|a| a.id == "file:show_info"));
     }
 
     // =========================================================================
@@ -732,7 +728,7 @@ mod tests {
             .collect();
         assert_eq!(
             response_ids,
-            vec!["copy_response", "copy_chat", "copy_last_code"]
+            vec!["chat:copy_response", "chat:copy_chat", "chat:copy_last_code"]
         );
     }
 
@@ -746,7 +742,7 @@ mod tests {
             .collect();
         assert_eq!(
             action_ids,
-            vec!["submit", "new_chat", "delete_chat", "branch_from_last"]
+            vec!["chat:submit", "chat:new_chat", "chat:delete_chat", "chat:branch_from_last"]
         );
     }
 
@@ -758,7 +754,7 @@ mod tests {
             .filter(|a| a.section.as_deref() == Some("Attachments"))
             .map(|a| a.id.as_str())
             .collect();
-        assert_eq!(attachment_ids, vec!["add_attachment", "paste_image"]);
+        assert_eq!(attachment_ids, vec!["chat:add_attachment", "chat:paste_image"]);
     }
 
     #[test]
@@ -769,7 +765,7 @@ mod tests {
             .filter(|a| a.section.as_deref() == Some("Export"))
             .map(|a| a.id.as_str())
             .collect();
-        assert_eq!(export_ids, vec!["export_markdown"]);
+        assert_eq!(export_ids, vec!["chat:export_markdown"]);
     }
 
     #[test]
@@ -785,8 +781,8 @@ mod tests {
             .filter(|a| a.section.as_deref() == Some("Settings"))
             .map(|a| a.id.as_str())
             .collect();
-        assert_eq!(help_ids, vec!["toggle_shortcuts_help"]);
-        assert_eq!(settings_ids, vec!["change_model"]);
+        assert_eq!(help_ids, vec!["chat:toggle_shortcuts_help"]);
+        assert_eq!(settings_ids, vec!["chat:change_model"]);
     }
 
     // =========================================================================
@@ -868,7 +864,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let del = actions.iter().find(|a| a.id == "clipboard_delete").unwrap();
+        let del = actions.iter().find(|a| a.id == "clip:clipboard_delete").unwrap();
         assert_eq!(del.shortcut.as_deref(), Some("⌃X"));
     }
 
@@ -885,7 +881,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let del_all = actions
             .iter()
-            .find(|a| a.id == "clipboard_delete_all")
+            .find(|a| a.id == "clip:clipboard_delete_all")
             .unwrap();
         assert_eq!(del_all.shortcut.as_deref(), Some("⌃⇧X"));
     }
@@ -903,7 +899,7 @@ mod tests {
             Some("Open in editor".to_string()),
             ActionCategory::ScriptContext,
         );
-        let score = ActionsDialog::score_action(&action, "edit");
+        let score = ActionsDialog::score_action(&action, "script:edit");
         assert!(score >= 100, "Prefix match should be 100+, got {}", score);
     }
 
@@ -912,7 +908,7 @@ mod tests {
     #[test]
     fn cat14_score_contains_match_50() {
         let action = Action::new(
-            "copy_path",
+            "file:copy_path",
             "Copy Path",
             Some("Copy to clipboard".to_string()),
             ActionCategory::ScriptContext,
@@ -956,7 +952,7 @@ mod tests {
     #[test]
     fn cat14_score_description_bonus() {
         let action = Action::new(
-            "open_file",
+            "file:open_file",
             "Open File",
             Some("Edit the file in your editor".to_string()),
             ActionCategory::ScriptContext,
@@ -1339,8 +1335,8 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(actions.iter().any(|a| a.id == "clipboard_pin"));
-        assert!(!actions.iter().any(|a| a.id == "clipboard_unpin"));
+        assert!(actions.iter().any(|a| a.id == "clip:clipboard_pin"));
+        assert!(!actions.iter().any(|a| a.id == "clip:clipboard_unpin"));
     }
 
     #[test]
@@ -1354,8 +1350,8 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(!actions.iter().any(|a| a.id == "clipboard_pin"));
-        assert!(actions.iter().any(|a| a.id == "clipboard_unpin"));
+        assert!(!actions.iter().any(|a| a.id == "clip:clipboard_pin"));
+        assert!(actions.iter().any(|a| a.id == "clip:clipboard_unpin"));
     }
 
 
@@ -1382,11 +1378,11 @@ mod tests {
         let unpinned_actions = get_clipboard_history_context_actions(&unpinned_entry);
         let unpin = pinned_actions
             .iter()
-            .find(|a| a.id == "clipboard_unpin")
+            .find(|a| a.id == "clip:clipboard_unpin")
             .unwrap();
         let pin = unpinned_actions
             .iter()
-            .find(|a| a.id == "clipboard_pin")
+            .find(|a| a.id == "clip:clipboard_pin")
             .unwrap();
         assert_eq!(unpin.shortcut, pin.shortcut);
         assert_eq!(pin.shortcut.as_deref(), Some("⇧⌘P"));
@@ -1403,7 +1399,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let pin = actions.iter().find(|a| a.id == "clipboard_pin").unwrap();
+        let pin = actions.iter().find(|a| a.id == "clip:clipboard_pin").unwrap();
         assert_eq!(pin.title, "Pin Entry");
         assert!(pin
             .description
@@ -1431,7 +1427,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let snippet = actions
             .iter()
-            .find(|a| a.id == "clipboard_save_snippet")
+            .find(|a| a.id == "clip:clipboard_save_snippet")
             .unwrap();
         assert_eq!(snippet.shortcut.as_deref(), Some("⇧⌘S"));
     }
@@ -1449,7 +1445,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let file = actions
             .iter()
-            .find(|a| a.id == "clipboard_save_file")
+            .find(|a| a.id == "clip:clipboard_save_file")
             .unwrap();
         assert_eq!(file.shortcut.as_deref(), Some("⌥⇧⌘S"));
     }
@@ -1467,7 +1463,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let snippet = actions
             .iter()
-            .find(|a| a.id == "clipboard_save_snippet")
+            .find(|a| a.id == "clip:clipboard_save_snippet")
             .unwrap();
         assert_eq!(snippet.title, "Save Text as Snippet");
     }
@@ -1485,7 +1481,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let file = actions
             .iter()
-            .find(|a| a.id == "clipboard_save_file")
+            .find(|a| a.id == "clip:clipboard_save_file")
             .unwrap();
         assert_eq!(file.title, "Save as File...");
     }
