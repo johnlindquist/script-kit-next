@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-02-15T18:57:25.208Z",
+  "updatedAt": "2026-02-15T19:06:24.403Z",
   "agents": {
     "codex-actions-consistency": {
       "id": "codex-actions-consistency",
@@ -7079,6 +7079,22 @@
       "lastSeenAt": "2026-02-15T18:57:25.208Z",
       "host": "johns.macbook.pro.lan",
       "startSha": "b2311ce7ef4ebc2808c87db05fab88bd971ec8cb",
+      "notes": "[policy] missing agent_report json"
+    },
+    "codex-menu-autorun-fix": {
+      "id": "codex-menu-autorun-fix",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "gpt-5.3-codex",
+      "task": "Bug fix: The first item in the main menu (Clipboard History) sometimes auto-runs when the main menu is opened. This is likely a race condition where an Enter keypress, mouse click, or selection event fires before the menu is fully rendered/interactive. Investigate how the main menu is shown and how item selection/execution works. Look at: (1) how the main menu items are populated via get_builtin_entries() and displayed, (2) how Enter key or click events trigger item execution via execute_builtin(), (3) whether there's a timing issue where a pending Enter/click event from the shortcut that opens the menu carries over and selects the first item. The fix should add a guard so that selection events are ignored for a brief period after the menu first appears, OR debounce/consume stale input events when the menu opens. Follow existing patterns - use theme.colors.* not hardcoded colors, match both key variants (e.g. 'enter' | 'Enter'), use ? not unwrap(). Run cargo check && cargo clippy --all-targets -- -D warnings && cargo test before finishing. Commit with a descriptive message.",
+      "scope": "src/**/*.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-02-15T18:59:02.757Z",
+      "lastSeenAt": "2026-02-15T19:06:24.403Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "5bc81ab70c683fc404857d4f88f2ebad801f8258",
       "notes": "[policy] missing agent_report json"
     }
   }

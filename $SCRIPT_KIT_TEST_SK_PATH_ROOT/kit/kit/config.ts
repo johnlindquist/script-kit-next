@@ -1,0 +1,210 @@
+import type { Config } from "@scriptkit/sdk";
+
+/**
+ * Script Kit Configuration
+ * ========================
+ *
+ * This file controls Script Kit's behavior, appearance, and built-in features.
+ * It's loaded on startup from ~/.scriptkit/config.ts.
+ *
+ * HOW TO CUSTOMIZE:
+ * 1. Uncomment the options you want to change
+ * 2. Modify the values to your preference
+ * 3. Save the file - changes take effect on next Script Kit restart
+ *
+ * DOCUMENTATION:
+ * - Full schema with all options: See Config interface in kit-sdk.ts
+ * - Type definitions provide inline documentation via your editor's hover
+ *
+ * TYPE SAFETY:
+ * This file uses `satisfies Config` for compile-time type checking.
+ * Your editor will warn you about invalid options or values.
+ */
+export default {
+  // ===========================================================================
+  // REQUIRED: Global Hotkey
+  // ===========================================================================
+  // hotkey: Global keyboard shortcut used to open the Script Kit launcher.
+  // hotkey.modifiers: Array of modifier keys to hold.
+  // Valid values: 'meta', 'ctrl', 'alt', 'shift'
+  // hotkey.key: KeyboardEvent.code string for the non-modifier key.
+  // Common key values: 'Semicolon', 'KeyK', 'Digit1', 'Space', 'Enter'
+  // Example hotkey configs:
+  // - { modifiers: ['meta'], key: 'Semicolon' } // Cmd + ;
+  // - { modifiers: ['meta', 'shift'], key: 'KeyK' } // Cmd + Shift + K
+  // - { modifiers: ['ctrl', 'alt'], key: 'Digit1' } // Ctrl + Alt + 1
+  // - { modifiers: ['ctrl', 'alt'], key: 'Space' } // Ctrl + Alt + Space
+
+  hotkey: {
+    // hotkey.modifiers: Ordered list of modifier keys that must be held.
+    // Allowed values: 'meta', 'ctrl', 'alt', 'shift'
+    // - meta: Command on macOS, Windows key on Windows/Linux
+    // - ctrl: Control key
+    // - alt: Option on macOS, Alt on Windows/Linux
+    // - shift: Shift key
+    // Examples: ['meta'], ['meta', 'shift'], ['ctrl', 'alt']
+    modifiers: ["meta"],
+
+    // hotkey.key: Non-modifier key using KeyboardEvent.code values.
+    // Common values: 'Semicolon', 'KeyK', 'Digit1', 'Space', 'Enter'
+    // Other valid patterns include letters ("KeyA"..."KeyZ"), numbers
+    // ("Digit0"..."Digit9"), punctuation keys, and function keys ("F1"..."F12").
+    key: "Semicolon", // Cmd+; on Mac, Win+; on Windows
+  },
+
+  // ===========================================================================
+  // UI Settings
+  // ===========================================================================
+  // Customize the appearance of Script Kit's interface.
+
+  // Font size for the Monaco-style code editor (in pixels)
+  // editorFontSize: 14,
+
+  // Font size for the integrated terminal (in pixels)
+  // terminalFontSize: 14,
+
+  // UI scale factor (1.0 = 100%, 1.5 = 150%, etc.)
+  // Useful for HiDPI displays or accessibility
+  // uiScale: 1.0,
+
+  // Content padding for prompts (terminal, editor, etc.)
+  // All values in pixels
+  // padding: {
+  //   top: 8,    // Inner top spacing
+  //   left: 12,  // Inner left spacing
+  //   right: 12, // Inner right spacing
+  // },
+
+  // ===========================================================================
+  // Editor Settings
+  // ===========================================================================
+  // Configure the external editor used for "Open in Editor" actions.
+
+  // Editor command (falls back to $EDITOR env var, then "code")
+  // Examples: "code", "vim", "nvim", "subl", "zed", "cursor"
+  // editor: "code",
+
+  // ===========================================================================
+  // Built-in Features
+  // ===========================================================================
+  // Enable or disable Script Kit's built-in productivity features.
+
+  // builtIns: {
+  //   // Clipboard history - tracks clipboard changes with searchable history
+  //   clipboardHistory: true,
+  //
+  //   // App launcher - search and launch applications
+  //   appLauncher: true,
+  //
+  //   // Window switcher - manage open windows across applications
+  //   windowSwitcher: true,
+  // },
+  //
+  // Max text size (bytes) stored per clipboard history entry
+  // Set to 0 to disable the limit
+  // clipboardHistoryMaxTextLength: 100000,
+
+  // ===========================================================================
+  // Command Configuration
+  // ===========================================================================
+  // Configure shortcuts and visibility for any command in Script Kit.
+  // Commands are identified by category-prefixed IDs: {category}/{identifier}
+  //
+  // CATEGORIES:
+  //   builtin/   - Built-in features (clipboard-history, app-launcher, etc.)
+  //   app/       - macOS apps by bundle ID (com.apple.Safari, etc.)
+  //   script/    - User scripts by filename without .ts (my-script, etc.)
+  //   scriptlet/ - Inline scriptlets by UUID or name
+  //
+  // DEEPLINKS: Each command maps to kit://commands/{id}
+  //   Example: "builtin/clipboard-history" → kit://commands/builtin/clipboard-history
+  //
+  // OPTIONS:
+  //   shortcut - Global keyboard shortcut to invoke directly
+  //   hidden   - Hide from main menu (still accessible via shortcut/deeplink)
+
+  // commands: {
+  //   // ─────────────────────────────────────────────────────────────────────
+  //   // BUILT-IN FEATURES
+  //   // ─────────────────────────────────────────────────────────────────────
+  //
+  //   // Quick access to clipboard history with Cmd+Shift+V
+  //   "builtin/clipboard-history": {
+  //     shortcut: { modifiers: ["meta", "shift"], key: "KeyV" }
+  //   },
+  //
+  //   // Hide app launcher if you prefer Spotlight/Raycast
+  //   // "builtin/app-launcher": {
+  //   //   hidden: true
+  //   // },
+  //
+  //   // Emoji picker with Cmd+Ctrl+Space
+  //   // "builtin/emoji-picker": {
+  //   //   shortcut: { modifiers: ["meta", "ctrl"], key: "Space" }
+  //   // },
+  //
+  //   // ─────────────────────────────────────────────────────────────────────
+  //   // APPLICATIONS (by macOS bundle identifier)
+  //   // ─────────────────────────────────────────────────────────────────────
+  //   // Find bundle IDs with: osascript -e 'id of app "App Name"'
+  //
+  //   // Quick launch Safari with Cmd+Shift+S
+  //   // "app/com.apple.Safari": {
+  //   //   shortcut: { modifiers: ["meta", "shift"], key: "KeyS" }
+  //   // },
+  //
+  //   // Quick launch VS Code with Cmd+Shift+C
+  //   // "app/com.microsoft.VSCode": {
+  //   //   shortcut: { modifiers: ["meta", "shift"], key: "KeyC" }
+  //   // },
+  //
+  //   // ─────────────────────────────────────────────────────────────────────
+  //   // USER SCRIPTS (by filename without .ts extension)
+  //   // ─────────────────────────────────────────────────────────────────────
+  //   // Scripts are in ~/.scriptkit/scripts/
+  //
+  //   // Add shortcut to a frequently-used script
+  //   // "script/my-workflow": {
+  //   //   shortcut: { modifiers: ["meta", "shift"], key: "KeyW" }
+  //   // },
+  //
+  //   // Hide a deprecated script but keep it accessible via deeplink
+  //   // "script/deprecated-helper": {
+  //   //   hidden: true
+  //   // },
+  //
+  //   // ─────────────────────────────────────────────────────────────────────
+  //   // SCRIPTLETS (inline scripts by UUID or name)
+  //   // ─────────────────────────────────────────────────────────────────────
+  //
+  //   // Add shortcut to a scriptlet
+  //   // "scriptlet/clipboard-to-uppercase": {
+  //   //   shortcut: { modifiers: ["meta", "shift"], key: "KeyU" }
+  //   // },
+  // },
+
+  // ===========================================================================
+  // Process Limits
+  // ===========================================================================
+  // Control resource usage for running scripts.
+  // Leave undefined for no limits.
+
+  // processLimits: {
+  //   // Maximum memory usage in MB (scripts exceeding this may be terminated)
+  //   maxMemoryMb: 512,
+  //
+  //   // Maximum runtime in seconds (scripts running longer will be terminated)
+  //   maxRuntimeSeconds: 300,  // 5 minutes
+  //
+  //   // How often to check script health (in milliseconds)
+  //   healthCheckIntervalMs: 5000,  // 5 seconds
+  // },
+
+  // ===========================================================================
+  // Advanced Settings
+  // ===========================================================================
+  // These settings are rarely needed but available for special cases.
+
+  // Custom path to the bun executable (auto-detected by default)
+  // bun_path: "/opt/homebrew/bin/bun",
+} satisfies Config;

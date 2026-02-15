@@ -1,0 +1,49 @@
+{
+  "colors": {
+    "background": {
+      "main": "#1E1E1E",
+      "title_bar": "#2D2D30",
+      "search_box": "#3C3C3C",
+      "log_panel": "#0D0D0D"
+    },
+    "text": {
+      "primary": "#FFFFFF",
+      "secondary": "#CCCCCC",
+      "tertiary": "#999999",
+      "muted": "#808080",
+      "dimmed": "#666666"
+    },
+    "accent": {
+      "selected": "#FBBF24",
+      "selected_subtle": "#FFFFFF"
+    },
+    "ui": {
+      "border": "#464647",
+      "success": "#00FF00",
+      "error": "#EF4444",
+      "warning": "#F59E0B",
+      "info": "#3B82F6"
+    }
+  },
+  "opacity": {
+    "main": 0.3,
+    "title_bar": 0.65,
+    "search_box": 0.7,
+    "log_panel": 0.55,
+    "selected": 0.12,
+    "hover": 0.07
+  },
+  "drop_shadow": {
+    "enabled": true,
+    "blur_radius": 20.0,
+    "spread_radius": 0.0,
+    "offset_x": 0.0,
+    "offset_y": 8.0,
+    "color": "#000000",
+    "opacity": 0.25
+  },
+  "vibrancy": {
+    "enabled": true,
+    "material": "popover"
+  }
+}
