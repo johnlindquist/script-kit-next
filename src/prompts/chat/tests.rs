@@ -13,6 +13,10 @@ mod tests {
         ScriptGenerationAction, SetupCardAction,
     };
 
+    const CHAT_RENDER_CORE_SOURCE: &str = include_str!("render_core.rs");
+    const CHAT_RENDER_INPUT_SOURCE: &str = include_str!("render_input.rs");
+    const CHAT_RENDER_TURNS_SOURCE: &str = include_str!("render_turns.rs");
+
     #[test]
     fn resolve_setup_card_key_cycles_focus_for_tab_and_arrows() {
         assert_eq!(
@@ -75,6 +79,29 @@ mod tests {
         assert_eq!(
             resolve_setup_card_key("x", false, 1),
             (1, SetupCardAction::None, false)
+        );
+    }
+
+    #[test]
+    fn chat_layout_renderers_use_shared_spacing_and_translucent_surfaces() {
+        assert!(
+            CHAT_RENDER_CORE_SOURCE.contains(".px(px(CHAT_LAYOUT_PADDING_X))"),
+            "Render core should use shared horizontal padding constants"
+        );
+        assert!(
+            CHAT_RENDER_CORE_SOURCE.contains("CHAT_LAYOUT_FOOTER_BG_DARK_ALPHA")
+                && CHAT_RENDER_CORE_SOURCE.contains("CHAT_LAYOUT_FOOTER_BG_LIGHT_ALPHA"),
+            "Footer should use translucent overlay alpha constants for both theme modes"
+        );
+        assert!(
+            CHAT_RENDER_INPUT_SOURCE.contains("CHAT_LAYOUT_INPUT_BG_FOCUSED_ALPHA")
+                && CHAT_RENDER_INPUT_SOURCE.contains("CHAT_LAYOUT_INPUT_BG_IDLE_ALPHA"),
+            "Input surface should use shared opacity constants"
+        );
+        assert!(
+            CHAT_RENDER_TURNS_SOURCE.contains("CHAT_LAYOUT_CARD_PADDING_X")
+                && CHAT_RENDER_TURNS_SOURCE.contains("CHAT_LAYOUT_CARD_PADDING_Y"),
+            "Turn renderer should use shared card padding constants"
         );
     }
 

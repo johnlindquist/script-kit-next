@@ -415,20 +415,27 @@ impl ChatPrompt {
 
     /// Render the pending image preview badge
     pub(super) fn render_pending_image_preview(&self, cx: &Context<Self>) -> impl IntoElement {
-        let theme = cx.theme();
         let render_img = self.pending_image_render.clone();
+        let colors = &self.theme.colors;
+        let preview_bg = if self.theme.is_dark_mode() {
+            theme::hover_overlay_bg(&self.theme, 0x24)
+        } else {
+            theme::hover_overlay_bg(&self.theme, 0x12)
+        };
+        let preview_border = rgba((colors.accent.selected << 8) | 0x55);
+        let remove_hover_bg = rgba((colors.ui.error << 8) | 0x2d);
 
         div()
             .id("pending-image-preview")
             .flex()
             .items_center()
-            .gap_2()
-            .px_2()
-            .py_1()
-            .rounded_md()
-            .bg(theme.muted.opacity(0.3))
+            .gap(px(8.0))
+            .px(px(8.0))
+            .py(px(4.0))
+            .rounded(px(8.0))
+            .bg(preview_bg)
             .border_1()
-            .border_color(theme.accent.opacity(0.5))
+            .border_color(preview_border)
             // Thumbnail
             .when_some(render_img, |d, render_img| {
                 d.child(
@@ -442,7 +449,7 @@ impl ChatPrompt {
             .child(
                 div()
                     .text_xs()
-                    .text_color(theme.foreground)
+                    .text_color(rgb(colors.text.primary))
                     .child("Image attached"),
             )
             // Remove button
@@ -455,7 +462,7 @@ impl ChatPrompt {
                     .size(px(16.))
                     .rounded_full()
                     .cursor_pointer()
-                    .hover(|s| s.bg(theme.danger.opacity(0.3)))
+                    .hover(move |s| s.bg(remove_hover_bg))
                     .on_mouse_down(
                         gpui::MouseButton::Left,
                         cx.listener(|this, _, _, cx| {
@@ -466,7 +473,7 @@ impl ChatPrompt {
                         svg()
                             .external_path(IconName::Close.external_path())
                             .size(px(10.))
-                            .text_color(theme.muted_foreground),
+                            .text_color(rgb(colors.text.muted)),
                     ),
             )
     }

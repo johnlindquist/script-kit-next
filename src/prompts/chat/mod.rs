@@ -15,7 +15,7 @@ use gpui::{
     FocusHandle, Focusable, Hsla, KeyDownEvent, ListAlignment, ListSizingBehavior, ListState,
     Render, RenderImage, ScrollWheelEvent, Timer, Window,
 };
-use gpui_component::{scroll::ScrollableElement, theme::ActiveTheme};
+use gpui_component::scroll::ScrollableElement;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -45,6 +45,19 @@ mod types;
 
 #[cfg(test)]
 pub(crate) use tests::chat_tests;
+
+pub(super) const CHAT_LAYOUT_PADDING_X: f32 = 12.0;
+pub(super) const CHAT_LAYOUT_SECTION_PADDING_Y: f32 = 8.0;
+pub(super) const CHAT_LAYOUT_MESSAGES_PADDING_Y: f32 = 12.0;
+pub(super) const CHAT_LAYOUT_CARD_PADDING_X: f32 = 12.0;
+pub(super) const CHAT_LAYOUT_CARD_PADDING_Y: f32 = 10.0;
+pub(super) const CHAT_LAYOUT_BORDER_ALPHA: u32 = 0x40;
+pub(super) const CHAT_LAYOUT_INPUT_BG_FOCUSED_ALPHA: u32 = 0xC0;
+pub(super) const CHAT_LAYOUT_INPUT_BG_IDLE_ALPHA: u32 = 0x90;
+pub(super) const CHAT_LAYOUT_INPUT_BORDER_FOCUSED_ALPHA: u32 = 0x90;
+pub(super) const CHAT_LAYOUT_INPUT_BORDER_IDLE_ALPHA: u32 = 0x55;
+pub(super) const CHAT_LAYOUT_FOOTER_BG_DARK_ALPHA: u8 = 0x24;
+pub(super) const CHAT_LAYOUT_FOOTER_BG_LIGHT_ALPHA: u8 = 0x14;
 
 use self::types::{
     build_conversation_turns, default_conversation_starters, next_chat_scroll_follow_state,
