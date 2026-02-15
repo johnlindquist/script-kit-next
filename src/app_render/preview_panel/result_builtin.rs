@@ -1,4 +1,6 @@
                     scripts::SearchResult::BuiltIn(builtin_match) => {
+                        use super::ALPHA_SECTION_HEADER;
+
                         let builtin = &builtin_match.entry;
 
                         // Built-in name header — extra bottom padding for visual hierarchy
@@ -22,7 +24,7 @@
                                         div()
                                             .text_size(px(11.0))
                                             .font_weight(gpui::FontWeight::SEMIBOLD)
-                                            .text_color(rgba((text_muted << 8) | 0xCC))
+                                            .text_color(rgba((text_muted << 8) | ALPHA_SECTION_HEADER))
                                             .pb(px(spacing.padding_xs))
                                             .child("KEYBOARD SHORTCUT"),
                                     )

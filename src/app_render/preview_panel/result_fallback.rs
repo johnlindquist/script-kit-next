@@ -1,4 +1,6 @@
                     scripts::SearchResult::Fallback(fallback_match) => {
+                        use super::{ALPHA_DIVIDER_DARK, ALPHA_MUTED_LABEL, ALPHA_SECTION_HEADER};
+
                         // Fallback command preview
                         let fallback = &fallback_match.fallback;
 
@@ -12,13 +14,13 @@
                             .overflow_x_hidden()
                             .child(
                                 div()
-                                    .text_color(rgba((text_muted << 8) | 0x99))
+                                    .text_color(rgba((text_muted << 8) | ALPHA_MUTED_LABEL))
                                     .child("fallback: "),
                             );
 
                         path_div = path_div.child(
                             div()
-                                .text_color(rgba((text_muted << 8) | 0x99))
+                                .text_color(rgba((text_muted << 8) | ALPHA_MUTED_LABEL))
                                 .child(fallback.name().to_string()),
                         );
 
@@ -48,7 +50,7 @@
                             div()
                                 .w_full()
                                 .h(px(visual.border_thin))
-                                .bg(rgba((ui_border << 8) | 0x60))
+                                .bg(rgba((ui_border << 8) | ALPHA_DIVIDER_DARK))
                                 .my(px(spacing.padding_sm)),
                         );
 
@@ -61,7 +63,7 @@
                                     div()
                                         .text_size(px(11.0))
                                         .font_weight(gpui::FontWeight::SEMIBOLD)
-                                        .text_color(rgba((text_muted << 8) | 0xCC))
+                                        .text_color(rgba((text_muted << 8) | ALPHA_SECTION_HEADER))
                                         .pb(px(spacing.padding_xs))
                                         .child("TYPE"),
                                 )
