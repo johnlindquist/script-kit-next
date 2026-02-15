@@ -195,7 +195,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let ids = action_ids(&get_clipboard_history_context_actions(&entry));
-        assert!(ids.contains(&"clipboard_share".to_string()));
+        assert!(ids.contains(&"clip:clipboard_share".to_string()));
     }
 
     #[test]
@@ -209,7 +209,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let ids = action_ids(&get_clipboard_history_context_actions(&entry));
-        assert!(ids.contains(&"clipboard_share".to_string()));
+        assert!(ids.contains(&"clip:clipboard_share".to_string()));
     }
 
     #[test]
@@ -223,7 +223,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let ids = action_ids(&get_clipboard_history_context_actions(&entry));
-        assert!(ids.contains(&"clipboard_attach_to_ai".to_string()));
+        assert!(ids.contains(&"clip:clipboard_attach_to_ai".to_string()));
     }
 
     #[test]
@@ -237,7 +237,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let ids = action_ids(&get_clipboard_history_context_actions(&entry));
-        assert!(ids.contains(&"clipboard_attach_to_ai".to_string()));
+        assert!(ids.contains(&"clip:clipboard_attach_to_ai".to_string()));
     }
 
     #[test]
@@ -251,7 +251,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let share = actions.iter().find(|a| a.id == "clipboard_share").unwrap();
+        let share = actions.iter().find(|a| a.id == "clip:clipboard_share").unwrap();
         assert_eq!(share.shortcut.as_deref(), Some("⇧⌘E"));
     }
 
@@ -268,7 +268,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let attach = actions
             .iter()
-            .find(|a| a.id == "clipboard_attach_to_ai")
+            .find(|a| a.id == "clip:clipboard_attach_to_ai")
             .unwrap();
         assert_eq!(attach.shortcut.as_deref(), Some("⌃⌘A"));
     }
@@ -589,7 +589,7 @@ mod tests {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        let cont = actions.iter().find(|a| a.id == "continue_in_chat").unwrap();
+        let cont = actions.iter().find(|a| a.id == "chat:continue_in_chat").unwrap();
         assert_eq!(cont.shortcut.as_deref(), Some("⌘↵"));
     }
 
@@ -603,7 +603,7 @@ mod tests {
             has_response: false,
         };
         let ids = action_ids(&get_chat_context_actions(&info));
-        assert!(ids.contains(&"continue_in_chat".to_string()));
+        assert!(ids.contains(&"chat:continue_in_chat".to_string()));
     }
 
     #[test]
@@ -639,7 +639,7 @@ mod tests {
             has_response: false,
         };
         let ids = action_ids(&get_chat_context_actions(&info));
-        assert!(ids.contains(&"clear_conversation".to_string()));
+        assert!(ids.contains(&"chat:clear_conversation".to_string()));
     }
 
     #[test]
@@ -651,7 +651,7 @@ mod tests {
             has_response: false,
         };
         let ids = action_ids(&get_chat_context_actions(&info));
-        assert!(!ids.contains(&"clear_conversation".to_string()));
+        assert!(!ids.contains(&"chat:clear_conversation".to_string()));
     }
 
     // =========================================================================
@@ -675,20 +675,20 @@ mod tests {
             .iter()
             .find(|a| a.section.as_deref() == Some("Export"))
             .unwrap();
-        assert_eq!(export.id, "export_markdown");
+        assert_eq!(export.id, "chat:export_markdown");
     }
 
     #[test]
     fn cat08_ai_export_markdown_shortcut() {
         let actions = get_ai_command_bar_actions();
-        let export = actions.iter().find(|a| a.id == "export_markdown").unwrap();
+        let export = actions.iter().find(|a| a.id == "chat:export_markdown").unwrap();
         assert_eq!(export.shortcut.as_deref(), Some("⇧⌘E"));
     }
 
     #[test]
     fn cat08_ai_export_markdown_icon() {
         let actions = get_ai_command_bar_actions();
-        let export = actions.iter().find(|a| a.id == "export_markdown").unwrap();
+        let export = actions.iter().find(|a| a.id == "chat:export_markdown").unwrap();
         assert_eq!(export.icon, Some(IconName::FileCode));
     }
 
@@ -1427,7 +1427,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let pko = actions
             .iter()
-            .find(|a| a.id == "clipboard_paste_keep_open")
+            .find(|a| a.id == "clip:clipboard_paste_keep_open")
             .unwrap();
         assert_eq!(pko.shortcut.as_deref(), Some("⌥↵"));
     }
@@ -1445,7 +1445,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let pko = actions
             .iter()
-            .find(|a| a.id == "clipboard_paste_keep_open")
+            .find(|a| a.id == "clip:clipboard_paste_keep_open")
             .unwrap();
         assert_eq!(pko.title, "Paste and Keep Window Open");
     }
@@ -1463,7 +1463,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let pko = actions
             .iter()
-            .find(|a| a.id == "clipboard_paste_keep_open")
+            .find(|a| a.id == "clip:clipboard_paste_keep_open")
             .unwrap();
         assert!(pko.description.is_some());
     }
@@ -1634,21 +1634,21 @@ mod tests {
     #[test]
     fn cat27_ai_new_chat_icon() {
         let actions = get_ai_command_bar_actions();
-        let nc = actions.iter().find(|a| a.id == "new_chat").unwrap();
+        let nc = actions.iter().find(|a| a.id == "chat:new_chat").unwrap();
         assert_eq!(nc.icon, Some(IconName::Plus));
     }
 
     #[test]
     fn cat27_ai_delete_chat_icon() {
         let actions = get_ai_command_bar_actions();
-        let dc = actions.iter().find(|a| a.id == "delete_chat").unwrap();
+        let dc = actions.iter().find(|a| a.id == "chat:delete_chat").unwrap();
         assert_eq!(dc.icon, Some(IconName::Trash));
     }
 
     #[test]
     fn cat27_ai_change_model_icon() {
         let actions = get_ai_command_bar_actions();
-        let cm = actions.iter().find(|a| a.id == "change_model").unwrap();
+        let cm = actions.iter().find(|a| a.id == "chat:change_model").unwrap();
         assert_eq!(cm.icon, Some(IconName::Settings));
     }
 
@@ -1657,7 +1657,7 @@ mod tests {
         let actions = get_ai_command_bar_actions();
         let ts = actions
             .iter()
-            .find(|a| a.id == "toggle_shortcuts_help")
+            .find(|a| a.id == "chat:toggle_shortcuts_help")
             .unwrap();
         assert_eq!(ts.icon, Some(IconName::Star));
     }

@@ -291,35 +291,35 @@ fn batch21_ai_command_bar_export_section_1() {
 #[test]
 fn batch21_ai_copy_chat_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "copy_chat").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:copy_chat").unwrap();
     assert_eq!(a.shortcut.as_deref(), Some("⌥⇧⌘C"));
 }
 
 #[test]
 fn batch21_ai_copy_chat_icon_copy() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "copy_chat").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:copy_chat").unwrap();
     assert_eq!(a.icon, Some(IconName::Copy));
 }
 
 #[test]
 fn batch21_ai_copy_last_code_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "copy_last_code").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:copy_last_code").unwrap();
     assert_eq!(a.shortcut.as_deref(), Some("⌥⌘C"));
 }
 
 #[test]
 fn batch21_ai_copy_last_code_icon_code() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "copy_last_code").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:copy_last_code").unwrap();
     assert_eq!(a.icon, Some(IconName::Code));
 }
 
 #[test]
 fn batch21_ai_copy_last_code_section_response() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "copy_last_code").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:copy_last_code").unwrap();
     assert_eq!(a.section.as_deref(), Some("Response"));
 }
 
@@ -330,28 +330,28 @@ fn batch21_ai_copy_last_code_section_response() {
 #[test]
 fn batch21_ai_paste_image_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "paste_image").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:paste_image").unwrap();
     assert_eq!(a.shortcut.as_deref(), Some("⌘V"));
 }
 
 #[test]
 fn batch21_ai_paste_image_icon_file() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "paste_image").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:paste_image").unwrap();
     assert_eq!(a.icon, Some(IconName::File));
 }
 
 #[test]
 fn batch21_ai_paste_image_section_attachments() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "paste_image").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:paste_image").unwrap();
     assert_eq!(a.section.as_deref(), Some("Attachments"));
 }
 
 #[test]
 fn batch21_ai_add_attachment_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "add_attachment").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:add_attachment").unwrap();
     assert_eq!(a.shortcut.as_deref(), Some("⇧⌘A"));
 }
 
@@ -364,7 +364,7 @@ fn batch21_ai_toggle_shortcuts_help_shortcut() {
     let actions = get_ai_command_bar_actions();
     let a = actions
         .iter()
-        .find(|a| a.id == "toggle_shortcuts_help")
+        .find(|a| a.id == "chat:toggle_shortcuts_help")
         .unwrap();
     assert_eq!(a.shortcut.as_deref(), Some("⌘/"));
 }
@@ -374,7 +374,7 @@ fn batch21_ai_toggle_shortcuts_help_icon_star() {
     let actions = get_ai_command_bar_actions();
     let a = actions
         .iter()
-        .find(|a| a.id == "toggle_shortcuts_help")
+        .find(|a| a.id == "chat:toggle_shortcuts_help")
         .unwrap();
     assert_eq!(a.icon, Some(IconName::Star));
 }
@@ -384,7 +384,7 @@ fn batch21_ai_toggle_shortcuts_help_section_help() {
     let actions = get_ai_command_bar_actions();
     let a = actions
         .iter()
-        .find(|a| a.id == "toggle_shortcuts_help")
+        .find(|a| a.id == "chat:toggle_shortcuts_help")
         .unwrap();
     assert_eq!(a.section.as_deref(), Some("Help"));
 }
@@ -392,14 +392,14 @@ fn batch21_ai_toggle_shortcuts_help_section_help() {
 #[test]
 fn batch21_ai_change_model_no_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "change_model").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:change_model").unwrap();
     assert!(a.shortcut.is_none());
 }
 
 #[test]
 fn batch21_ai_branch_from_last_no_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "branch_from_last").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:branch_from_last").unwrap();
     assert!(a.shortcut.is_none());
 }
 
@@ -416,7 +416,7 @@ fn batch21_chat_clear_absent_no_messages() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    assert!(!actions.iter().any(|a| a.id == "clear_conversation"));
+    assert!(!actions.iter().any(|a| a.id == "chat:clear_conversation"));
 }
 
 #[test]
@@ -428,7 +428,7 @@ fn batch21_chat_clear_present_with_messages() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "clear_conversation"));
+    assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
 }
 
 #[test]
@@ -442,7 +442,7 @@ fn batch21_chat_clear_shortcut() {
     let actions = get_chat_context_actions(&info);
     let a = actions
         .iter()
-        .find(|a| a.id == "clear_conversation")
+        .find(|a| a.id == "chat:clear_conversation")
         .unwrap();
     assert_eq!(a.shortcut.as_deref(), Some("⌘⌫"));
 }
@@ -488,11 +488,11 @@ fn batch21_chat_continue_after_models() {
     let actions = get_chat_context_actions(&info);
     let model_last_pos = actions
         .iter()
-        .rposition(|a| a.id.starts_with("select_model_"))
+        .rposition(|a| a.id.starts_with("chat:select_model_"))
         .unwrap();
     let continue_pos = actions
         .iter()
-        .position(|a| a.id == "continue_in_chat")
+        .position(|a| a.id == "chat:continue_in_chat")
         .unwrap();
     assert!(continue_pos > model_last_pos);
 }
@@ -506,7 +506,7 @@ fn batch21_chat_continue_present_zero_models() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "continue_in_chat"));
+    assert!(actions.iter().any(|a| a.id == "chat:continue_in_chat"));
 }
 
 #[test]
@@ -518,7 +518,7 @@ fn batch21_chat_continue_shortcut() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    let a = actions.iter().find(|a| a.id == "continue_in_chat").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:continue_in_chat").unwrap();
     assert_eq!(a.shortcut.as_deref(), Some("⌘↵"));
 }
 
@@ -852,7 +852,7 @@ fn batch21_clipboard_paste_keep_open_desc_mentions_keep() {
     let actions = get_clipboard_history_context_actions(&entry);
     let a = actions
         .iter()
-        .find(|a| a.id == "clipboard_paste_keep_open")
+        .find(|a| a.id == "clip:clipboard_paste_keep_open")
         .unwrap();
     assert!(a
         .description
@@ -875,7 +875,7 @@ fn batch21_clipboard_delete_all_desc_mentions_pinned() {
     let actions = get_clipboard_history_context_actions(&entry);
     let a = actions
         .iter()
-        .find(|a| a.id == "clipboard_delete_all")
+        .find(|a| a.id == "clip:clipboard_delete_all")
         .unwrap();
     assert!(a
         .description

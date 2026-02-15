@@ -179,8 +179,8 @@ fn cat28_05_pinned_entry_has_unpin() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_unpin"));
-    assert!(!actions.iter().any(|a| a.id == "clipboard_pin"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_unpin"));
+    assert!(!actions.iter().any(|a| a.id == "clip:clipboard_pin"));
 }
 
 #[test]
@@ -194,8 +194,8 @@ fn cat28_05_unpinned_entry_has_pin() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_pin"));
-    assert!(!actions.iter().any(|a| a.id == "clipboard_unpin"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_pin"));
+    assert!(!actions.iter().any(|a| a.id == "clip:clipboard_unpin"));
 }
 
 #[test]
@@ -220,13 +220,13 @@ fn cat28_05_pin_unpin_same_shortcut() {
     let a2 = get_clipboard_history_context_actions(&unpinned);
     let s1 = a1
         .iter()
-        .find(|a| a.id == "clipboard_unpin")
+        .find(|a| a.id == "clip:clipboard_unpin")
         .unwrap()
         .shortcut
         .as_deref();
     let s2 = a2
         .iter()
-        .find(|a| a.id == "clipboard_pin")
+        .find(|a| a.id == "clip:clipboard_pin")
         .unwrap()
         .shortcut
         .as_deref();
@@ -251,7 +251,7 @@ fn cat28_06_save_snippet_title() {
     let actions = get_clipboard_history_context_actions(&entry);
     let ss = actions
         .iter()
-        .find(|a| a.id == "clipboard_save_snippet")
+        .find(|a| a.id == "clip:clipboard_save_snippet")
         .unwrap();
     assert_eq!(ss.title, "Save Text as Snippet");
 }
@@ -269,7 +269,7 @@ fn cat28_06_save_snippet_description_mentions_scriptlet() {
     let actions = get_clipboard_history_context_actions(&entry);
     let ss = actions
         .iter()
-        .find(|a| a.id == "clipboard_save_snippet")
+        .find(|a| a.id == "clip:clipboard_save_snippet")
         .unwrap();
     assert!(ss
         .description
@@ -292,7 +292,7 @@ fn cat28_06_save_file_title() {
     let actions = get_clipboard_history_context_actions(&entry);
     let sf = actions
         .iter()
-        .find(|a| a.id == "clipboard_save_file")
+        .find(|a| a.id == "clip:clipboard_save_file")
         .unwrap();
     assert_eq!(sf.title, "Save as File...");
 }
@@ -352,13 +352,13 @@ fn cat28_07_clipboard_share_desc_mentions_share() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let cs = actions.iter().find(|a| a.id == "clipboard_share").unwrap();
+    let cs = actions.iter().find(|a| a.id == "clip:clipboard_share").unwrap();
     assert!(cs
         .description
         .as_ref()
         .unwrap()
         .to_lowercase()
-        .contains("share"));
+        .contains("script:share"));
 }
 
 // =============================================================================
@@ -591,7 +591,7 @@ fn cat28_11_path_select_desc_says_submit() {
         .as_ref()
         .unwrap()
         .to_lowercase()
-        .contains("submit"));
+        .contains("chat:submit"));
 }
 
 #[test]
@@ -620,7 +620,7 @@ fn cat28_12_ai_toggle_shortcuts_shortcut() {
     let actions = get_ai_command_bar_actions();
     let tsh = actions
         .iter()
-        .find(|a| a.id == "toggle_shortcuts_help")
+        .find(|a| a.id == "chat:toggle_shortcuts_help")
         .unwrap();
     assert_eq!(tsh.shortcut.as_deref(), Some("⌘/"));
 }
@@ -630,7 +630,7 @@ fn cat28_12_ai_toggle_shortcuts_icon() {
     let actions = get_ai_command_bar_actions();
     let tsh = actions
         .iter()
-        .find(|a| a.id == "toggle_shortcuts_help")
+        .find(|a| a.id == "chat:toggle_shortcuts_help")
         .unwrap();
     assert_eq!(tsh.icon, Some(IconName::Star));
 }
@@ -640,7 +640,7 @@ fn cat28_12_ai_toggle_shortcuts_section() {
     let actions = get_ai_command_bar_actions();
     let tsh = actions
         .iter()
-        .find(|a| a.id == "toggle_shortcuts_help")
+        .find(|a| a.id == "chat:toggle_shortcuts_help")
         .unwrap();
     assert_eq!(tsh.section.as_deref(), Some("Help"));
 }
@@ -650,7 +650,7 @@ fn cat28_12_ai_toggle_shortcuts_title() {
     let actions = get_ai_command_bar_actions();
     let tsh = actions
         .iter()
-        .find(|a| a.id == "toggle_shortcuts_help")
+        .find(|a| a.id == "chat:toggle_shortcuts_help")
         .unwrap();
     assert_eq!(tsh.title, "Keyboard Shortcuts");
 }
@@ -662,28 +662,28 @@ fn cat28_12_ai_toggle_shortcuts_title() {
 #[test]
 fn cat28_13_ai_new_chat_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let nc = actions.iter().find(|a| a.id == "new_chat").unwrap();
+    let nc = actions.iter().find(|a| a.id == "chat:new_chat").unwrap();
     assert_eq!(nc.shortcut.as_deref(), Some("⌘N"));
 }
 
 #[test]
 fn cat28_13_ai_new_chat_icon() {
     let actions = get_ai_command_bar_actions();
-    let nc = actions.iter().find(|a| a.id == "new_chat").unwrap();
+    let nc = actions.iter().find(|a| a.id == "chat:new_chat").unwrap();
     assert_eq!(nc.icon, Some(IconName::Plus));
 }
 
 #[test]
 fn cat28_13_ai_new_chat_section() {
     let actions = get_ai_command_bar_actions();
-    let nc = actions.iter().find(|a| a.id == "new_chat").unwrap();
+    let nc = actions.iter().find(|a| a.id == "chat:new_chat").unwrap();
     assert_eq!(nc.section.as_deref(), Some("Actions"));
 }
 
 #[test]
 fn cat28_13_ai_new_chat_desc_mentions_new() {
     let actions = get_ai_command_bar_actions();
-    let nc = actions.iter().find(|a| a.id == "new_chat").unwrap();
+    let nc = actions.iter().find(|a| a.id == "chat:new_chat").unwrap();
     assert!(nc
         .description
         .as_ref()
@@ -699,28 +699,28 @@ fn cat28_13_ai_new_chat_desc_mentions_new() {
 #[test]
 fn cat28_14_ai_delete_chat_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let dc = actions.iter().find(|a| a.id == "delete_chat").unwrap();
+    let dc = actions.iter().find(|a| a.id == "chat:delete_chat").unwrap();
     assert_eq!(dc.shortcut.as_deref(), Some("⌘⌫"));
 }
 
 #[test]
 fn cat28_14_ai_delete_chat_icon() {
     let actions = get_ai_command_bar_actions();
-    let dc = actions.iter().find(|a| a.id == "delete_chat").unwrap();
+    let dc = actions.iter().find(|a| a.id == "chat:delete_chat").unwrap();
     assert_eq!(dc.icon, Some(IconName::Trash));
 }
 
 #[test]
 fn cat28_14_ai_delete_chat_section() {
     let actions = get_ai_command_bar_actions();
-    let dc = actions.iter().find(|a| a.id == "delete_chat").unwrap();
+    let dc = actions.iter().find(|a| a.id == "chat:delete_chat").unwrap();
     assert_eq!(dc.section.as_deref(), Some("Actions"));
 }
 
 #[test]
 fn cat28_14_ai_delete_chat_desc_mentions_delete() {
     let actions = get_ai_command_bar_actions();
-    let dc = actions.iter().find(|a| a.id == "delete_chat").unwrap();
+    let dc = actions.iter().find(|a| a.id == "chat:delete_chat").unwrap();
     assert!(dc
         .description
         .as_ref()
@@ -742,7 +742,7 @@ fn cat28_15_chat_continue_in_chat_shortcut() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    let cic = actions.iter().find(|a| a.id == "continue_in_chat").unwrap();
+    let cic = actions.iter().find(|a| a.id == "chat:continue_in_chat").unwrap();
     assert_eq!(cic.shortcut.as_deref(), Some("⌘↵"));
 }
 
@@ -755,7 +755,7 @@ fn cat28_15_chat_continue_in_chat_desc_mentions_chat() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    let cic = actions.iter().find(|a| a.id == "continue_in_chat").unwrap();
+    let cic = actions.iter().find(|a| a.id == "chat:continue_in_chat").unwrap();
     assert!(cic
         .description
         .as_ref()
@@ -777,7 +777,7 @@ fn cat28_15_chat_continue_always_present() {
         has_response: true,
     };
     let actions = get_chat_context_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "continue_in_chat"));
+    assert!(actions.iter().any(|a| a.id == "chat:continue_in_chat"));
 }
 
 // =============================================================================
@@ -795,7 +795,7 @@ fn cat28_16_chat_clear_shortcut() {
     let actions = get_chat_context_actions(&info);
     let clr = actions
         .iter()
-        .find(|a| a.id == "clear_conversation")
+        .find(|a| a.id == "chat:clear_conversation")
         .unwrap();
     assert_eq!(clr.shortcut.as_deref(), Some("⌘⌫"));
 }
@@ -809,7 +809,7 @@ fn cat28_16_chat_clear_absent_when_no_messages() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    assert!(!actions.iter().any(|a| a.id == "clear_conversation"));
+    assert!(!actions.iter().any(|a| a.id == "chat:clear_conversation"));
 }
 
 #[test]
@@ -823,7 +823,7 @@ fn cat28_16_chat_clear_desc_mentions_clear() {
     let actions = get_chat_context_actions(&info);
     let clr = actions
         .iter()
-        .find(|a| a.id == "clear_conversation")
+        .find(|a| a.id == "chat:clear_conversation")
         .unwrap();
     assert!(clr
         .description

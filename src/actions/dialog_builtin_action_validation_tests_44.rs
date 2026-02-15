@@ -142,7 +142,7 @@ fn clipboard_save_snippet_shortcut() {
     let actions = get_clipboard_history_context_actions(&entry);
     let ss = actions
         .iter()
-        .find(|a| a.id == "clipboard_save_snippet")
+        .find(|a| a.id == "clip:clipboard_save_snippet")
         .unwrap();
     assert_eq!(ss.shortcut, Some("⇧⌘S".to_string()));
 }
@@ -160,7 +160,7 @@ fn clipboard_save_snippet_title() {
     let actions = get_clipboard_history_context_actions(&entry);
     let ss = actions
         .iter()
-        .find(|a| a.id == "clipboard_save_snippet")
+        .find(|a| a.id == "clip:clipboard_save_snippet")
         .unwrap();
     assert_eq!(ss.title, "Save Text as Snippet");
 }
@@ -178,7 +178,7 @@ fn clipboard_save_file_shortcut() {
     let actions = get_clipboard_history_context_actions(&entry);
     let sf = actions
         .iter()
-        .find(|a| a.id == "clipboard_save_file")
+        .find(|a| a.id == "clip:clipboard_save_file")
         .unwrap();
     assert_eq!(sf.shortcut, Some("⌥⇧⌘S".to_string()));
 }
@@ -196,7 +196,7 @@ fn clipboard_save_file_title() {
     let actions = get_clipboard_history_context_actions(&entry);
     let sf = actions
         .iter()
-        .find(|a| a.id == "clipboard_save_file")
+        .find(|a| a.id == "clip:clipboard_save_file")
         .unwrap();
     assert_eq!(sf.title, "Save as File...");
 }
@@ -217,7 +217,7 @@ fn clipboard_upload_cleanshot_shortcut() {
     let actions = get_clipboard_history_context_actions(&entry);
     let uc = actions
         .iter()
-        .find(|a| a.id == "clipboard_upload_cleanshot")
+        .find(|a| a.id == "clip:clipboard_upload_cleanshot")
         .unwrap();
     assert_eq!(uc.shortcut, Some("⇧⌘U".to_string()));
 }
@@ -236,7 +236,7 @@ fn clipboard_upload_cleanshot_title() {
     let actions = get_clipboard_history_context_actions(&entry);
     let uc = actions
         .iter()
-        .find(|a| a.id == "clipboard_upload_cleanshot")
+        .find(|a| a.id == "clip:clipboard_upload_cleanshot")
         .unwrap();
     assert_eq!(uc.title, "Upload to CleanShot X");
 }
@@ -253,7 +253,7 @@ fn clipboard_upload_cleanshot_not_present_for_text() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(!actions.iter().any(|a| a.id == "clipboard_upload_cleanshot"));
+    assert!(!actions.iter().any(|a| a.id == "clip:clipboard_upload_cleanshot"));
 }
 
 #[cfg(target_os = "macos")]
@@ -270,7 +270,7 @@ fn clipboard_upload_cleanshot_desc_mentions_cloud() {
     let actions = get_clipboard_history_context_actions(&entry);
     let uc = actions
         .iter()
-        .find(|a| a.id == "clipboard_upload_cleanshot")
+        .find(|a| a.id == "clip:clipboard_upload_cleanshot")
         .unwrap();
     assert!(uc.description.as_ref().unwrap().contains("Cloud"));
 }
@@ -288,7 +288,7 @@ fn clipboard_ocr_shortcut() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let ocr = actions.iter().find(|a| a.id == "clipboard_ocr").unwrap();
+    let ocr = actions.iter().find(|a| a.id == "clip:clipboard_ocr").unwrap();
     assert_eq!(ocr.shortcut, Some("⇧⌘C".to_string()));
 }
 
@@ -303,7 +303,7 @@ fn clipboard_ocr_title() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let ocr = actions.iter().find(|a| a.id == "clipboard_ocr").unwrap();
+    let ocr = actions.iter().find(|a| a.id == "clip:clipboard_ocr").unwrap();
     assert_eq!(ocr.title, "Copy Text from Image");
 }
 
@@ -318,7 +318,7 @@ fn clipboard_ocr_desc_mentions_ocr() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let ocr = actions.iter().find(|a| a.id == "clipboard_ocr").unwrap();
+    let ocr = actions.iter().find(|a| a.id == "clip:clipboard_ocr").unwrap();
     assert!(ocr.description.as_ref().unwrap().contains("OCR"));
 }
 
@@ -333,7 +333,7 @@ fn clipboard_ocr_not_present_for_text() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(!actions.iter().any(|a| a.id == "clipboard_ocr"));
+    assert!(!actions.iter().any(|a| a.id == "clip:clipboard_ocr"));
 }
 
 // =========== 7. File context: quick_look only for files (macOS) ===========
@@ -723,28 +723,28 @@ fn scriptlet_defined_action_shortcut_formatted() {
 #[test]
 fn ai_bar_copy_last_code_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let clc = actions.iter().find(|a| a.id == "copy_last_code").unwrap();
+    let clc = actions.iter().find(|a| a.id == "chat:copy_last_code").unwrap();
     assert_eq!(clc.shortcut, Some("⌥⌘C".to_string()));
 }
 
 #[test]
 fn ai_bar_copy_last_code_icon() {
     let actions = get_ai_command_bar_actions();
-    let clc = actions.iter().find(|a| a.id == "copy_last_code").unwrap();
+    let clc = actions.iter().find(|a| a.id == "chat:copy_last_code").unwrap();
     assert_eq!(clc.icon, Some(IconName::Code));
 }
 
 #[test]
 fn ai_bar_copy_last_code_section() {
     let actions = get_ai_command_bar_actions();
-    let clc = actions.iter().find(|a| a.id == "copy_last_code").unwrap();
+    let clc = actions.iter().find(|a| a.id == "chat:copy_last_code").unwrap();
     assert_eq!(clc.section, Some("Response".to_string()));
 }
 
 #[test]
 fn ai_bar_copy_last_code_desc_mentions_code() {
     let actions = get_ai_command_bar_actions();
-    let clc = actions.iter().find(|a| a.id == "copy_last_code").unwrap();
+    let clc = actions.iter().find(|a| a.id == "chat:copy_last_code").unwrap();
     assert!(clc
         .description
         .as_ref()
@@ -793,28 +793,28 @@ fn ai_bar_submit_desc_mentions_send() {
 #[test]
 fn ai_bar_export_markdown_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let em = actions.iter().find(|a| a.id == "export_markdown").unwrap();
+    let em = actions.iter().find(|a| a.id == "chat:export_markdown").unwrap();
     assert_eq!(em.shortcut, Some("⇧⌘E".to_string()));
 }
 
 #[test]
 fn ai_bar_export_markdown_icon() {
     let actions = get_ai_command_bar_actions();
-    let em = actions.iter().find(|a| a.id == "export_markdown").unwrap();
+    let em = actions.iter().find(|a| a.id == "chat:export_markdown").unwrap();
     assert_eq!(em.icon, Some(IconName::FileCode));
 }
 
 #[test]
 fn ai_bar_export_markdown_section() {
     let actions = get_ai_command_bar_actions();
-    let em = actions.iter().find(|a| a.id == "export_markdown").unwrap();
+    let em = actions.iter().find(|a| a.id == "chat:export_markdown").unwrap();
     assert_eq!(em.section, Some("Export".to_string()));
 }
 
 #[test]
 fn ai_bar_export_markdown_title() {
     let actions = get_ai_command_bar_actions();
-    let em = actions.iter().find(|a| a.id == "export_markdown").unwrap();
+    let em = actions.iter().find(|a| a.id == "chat:export_markdown").unwrap();
     assert_eq!(em.title, "Export as Markdown");
 }
 
@@ -1039,7 +1039,7 @@ fn chat_no_models_single_is_continue() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    assert_eq!(actions[0].id, "continue_in_chat");
+    assert_eq!(actions[0].id, "chat:continue_in_chat");
 }
 
 #[test]
@@ -1081,7 +1081,7 @@ fn chat_model_id_format() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    assert_eq!(actions[0].id, "select_model_claude-3-opus");
+    assert_eq!(actions[0].id, "chat:select_model_claude-3-opus");
 }
 
 #[test]

@@ -435,7 +435,7 @@ fn batch22_clipboard_image_has_ocr() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_ocr"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_ocr"));
 }
 
 // --- merged from part_02.rs ---
@@ -451,7 +451,7 @@ fn batch22_clipboard_text_no_ocr() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(!actions.iter().any(|a| a.id == "clipboard_ocr"));
+    assert!(!actions.iter().any(|a| a.id == "clip:clipboard_ocr"));
 }
 
 #[test]
@@ -497,8 +497,8 @@ fn batch22_clipboard_unpinned_shows_pin() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_pin"));
-    assert!(!actions.iter().any(|a| a.id == "clipboard_unpin"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_pin"));
+    assert!(!actions.iter().any(|a| a.id == "clip:clipboard_unpin"));
 }
 
 #[test]
@@ -512,8 +512,8 @@ fn batch22_clipboard_pinned_shows_unpin() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_unpin"));
-    assert!(!actions.iter().any(|a| a.id == "clipboard_pin"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_unpin"));
+    assert!(!actions.iter().any(|a| a.id == "clip:clipboard_pin"));
 }
 
 #[test]
@@ -538,13 +538,13 @@ fn batch22_clipboard_pin_unpin_same_shortcut() {
     let ua = get_clipboard_history_context_actions(&unpinned_entry);
     let unpin_shortcut = pa
         .iter()
-        .find(|a| a.id == "clipboard_unpin")
+        .find(|a| a.id == "clip:clipboard_unpin")
         .unwrap()
         .shortcut
         .as_deref();
     let pin_shortcut = ua
         .iter()
-        .find(|a| a.id == "clipboard_pin")
+        .find(|a| a.id == "clip:clipboard_pin")
         .unwrap()
         .shortcut
         .as_deref();
@@ -567,7 +567,7 @@ fn batch22_chat_zero_models_no_flags() {
     let actions = get_chat_context_actions(&info);
     // Just continue_in_chat
     assert_eq!(actions.len(), 1);
-    assert_eq!(actions[0].id, "continue_in_chat");
+    assert_eq!(actions[0].id, "chat:continue_in_chat");
 }
 
 #[test]
@@ -609,7 +609,7 @@ fn batch22_chat_current_model_checkmark() {
     let actions = get_chat_context_actions(&info);
     let model_action = actions
         .iter()
-        .find(|a| a.id == "select_model_gpt4")
+        .find(|a| a.id == "chat:select_model_gpt4")
         .unwrap();
     assert!(model_action.title.contains('✓'));
 }
@@ -629,7 +629,7 @@ fn batch22_chat_non_current_model_no_checkmark() {
     let actions = get_chat_context_actions(&info);
     let model_action = actions
         .iter()
-        .find(|a| a.id == "select_model_gpt4")
+        .find(|a| a.id == "chat:select_model_gpt4")
         .unwrap();
     assert!(!model_action.title.contains('✓'));
 }
@@ -671,7 +671,7 @@ fn batch22_ai_command_bar_total_is_12() {
 #[test]
 fn batch22_ai_export_markdown_icon_is_filecode() {
     let actions = get_ai_command_bar_actions();
-    let export = actions.iter().find(|a| a.id == "export_markdown").unwrap();
+    let export = actions.iter().find(|a| a.id == "chat:export_markdown").unwrap();
     assert_eq!(export.icon, Some(IconName::FileCode));
 }
 
@@ -1375,7 +1375,7 @@ fn batch22_cross_notes_non_empty_ids_titles() {
 
 fn is_snake_case(s: &str) -> bool {
     !s.contains(' ') && !s.contains('-') && s == s.to_lowercase()
-        || s.starts_with("select_model_") // model IDs may contain mixed case
+        || s.starts_with("chat:select_model_") // model IDs may contain mixed case
         || s.starts_with("note_") // note IDs contain UUIDs
         || s.starts_with("last_used_")
         || s.starts_with("preset_")

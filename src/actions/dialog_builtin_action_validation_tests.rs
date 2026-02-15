@@ -281,9 +281,9 @@ fn clipboard_destructive_actions_last_for_text_unpinned() {
     let actions = get_clipboard_history_context_actions(&entry);
     let ids = action_ids(&actions);
     let len = ids.len();
-    assert_eq!(ids[len - 3], "clipboard_delete");
-    assert_eq!(ids[len - 2], "clipboard_delete_multiple");
-    assert_eq!(ids[len - 1], "clipboard_delete_all");
+    assert_eq!(ids[len - 3], "clip:clipboard_delete");
+    assert_eq!(ids[len - 2], "clip:clipboard_delete_multiple");
+    assert_eq!(ids[len - 1], "clip:clipboard_delete_all");
 }
 
 #[test]
@@ -299,9 +299,9 @@ fn clipboard_destructive_actions_last_for_image_pinned() {
     let actions = get_clipboard_history_context_actions(&entry);
     let ids = action_ids(&actions);
     let len = ids.len();
-    assert_eq!(ids[len - 3], "clipboard_delete");
-    assert_eq!(ids[len - 2], "clipboard_delete_multiple");
-    assert_eq!(ids[len - 1], "clipboard_delete_all");
+    assert_eq!(ids[len - 3], "clip:clipboard_delete");
+    assert_eq!(ids[len - 2], "clip:clipboard_delete_multiple");
+    assert_eq!(ids[len - 1], "clip:clipboard_delete_all");
 }
 
 // =========================================================================
@@ -496,7 +496,7 @@ fn chat_ten_models_all_present_exactly_one_checkmark() {
     let checked = actions.iter().filter(|a| a.title.contains('✓')).count();
     assert_eq!(checked, 1);
     let checked_action = actions.iter().find(|a| a.title.contains('✓')).unwrap();
-    assert_eq!(checked_action.id, "select_model_model-5");
+    assert_eq!(checked_action.id, "chat:select_model_model-5");
 }
 
 #[test]
@@ -543,7 +543,7 @@ fn chat_model_actions_all_have_provider_description() {
     let actions = get_chat_context_actions(&info);
     let model_actions: Vec<&Action> = actions
         .iter()
-        .filter(|a| a.id.starts_with("select_model_"))
+        .filter(|a| a.id.starts_with("chat:select_model_"))
         .collect();
     for action in &model_actions {
         assert!(
@@ -729,7 +729,7 @@ fn clipboard_delete_all_has_description() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let delete_all = find_action(&actions, "clipboard_delete_all").unwrap();
+    let delete_all = find_action(&actions, "clip:clipboard_delete_all").unwrap();
     assert!(
         delete_all.description.is_some(),
         "clipboard_delete_all should have a description"
@@ -1274,7 +1274,7 @@ fn chat_context_always_has_continue_in_chat() {
     };
     let actions = get_chat_context_actions(&info);
     let ids = action_ids(&actions);
-    assert!(ids.contains(&"continue_in_chat"));
+    assert!(ids.contains(&"chat:continue_in_chat"));
 }
 
 // =========================================================================

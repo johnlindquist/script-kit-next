@@ -565,8 +565,8 @@ fn batch23_chat_model_id_prefix() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    assert!(actions[0].id.starts_with("select_model_"));
-    assert_eq!(actions[0].id, "select_model_gpt-4");
+    assert!(actions[0].id.starts_with("chat:select_model_"));
+    assert_eq!(actions[0].id, "chat:select_model_gpt-4");
 }
 
 #[test]
@@ -589,8 +589,8 @@ fn batch23_chat_multiple_models_sequential_ids() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    assert_eq!(actions[0].id, "select_model_claude-3");
-    assert_eq!(actions[1].id, "select_model_gpt-4");
+    assert_eq!(actions[0].id, "chat:select_model_claude-3");
+    assert_eq!(actions[1].id, "chat:select_model_gpt-4");
 }
 
 #[test]
@@ -677,7 +677,7 @@ fn batch23_chat_continue_after_models() {
     let actions = get_chat_context_actions(&info);
     let model_idx = actions
         .iter()
-        .position(|a| a.id.starts_with("select_model_"))
+        .position(|a| a.id.starts_with("chat:select_model_"))
         .unwrap();
     let continue_idx = actions
         .iter()

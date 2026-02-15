@@ -134,7 +134,7 @@ fn clipboard_paste_is_always_first_action() {
         frontmost_app_name: Some("Finder".to_string()),
     };
     let text_actions = get_clipboard_history_context_actions(&text_entry);
-    assert_eq!(text_actions[0].id, "clipboard_paste");
+    assert_eq!(text_actions[0].id, "clip:clipboard_paste");
 
     // Image entry
     let img_entry = ClipboardEntryInfo {
@@ -146,7 +146,7 @@ fn clipboard_paste_is_always_first_action() {
         frontmost_app_name: None,
     };
     let img_actions = get_clipboard_history_context_actions(&img_entry);
-    assert_eq!(img_actions[0].id, "clipboard_paste");
+    assert_eq!(img_actions[0].id, "clip:clipboard_paste");
 }
 
 #[test]
@@ -163,9 +163,9 @@ fn clipboard_destructive_actions_are_last_three() {
     let len = actions.len();
 
     // Last three actions should be the destructive ones
-    assert_eq!(actions[len - 3].id, "clipboard_delete");
-    assert_eq!(actions[len - 2].id, "clipboard_delete_multiple");
-    assert_eq!(actions[len - 1].id, "clipboard_delete_all");
+    assert_eq!(actions[len - 3].id, "clip:clipboard_delete");
+    assert_eq!(actions[len - 2].id, "clip:clipboard_delete_multiple");
+    assert_eq!(actions[len - 1].id, "clip:clipboard_delete_all");
 }
 
 #[test]
@@ -179,7 +179,7 @@ fn clipboard_copy_is_second_action() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert_eq!(actions[1].id, "clipboard_copy");
+    assert_eq!(actions[1].id, "clip:clipboard_copy");
 }
 
 // =========================================================================
@@ -196,9 +196,9 @@ fn chat_no_messages_no_response_has_only_continue() {
     };
     let actions = get_chat_context_actions(&info);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
-    assert!(ids.contains(&"continue_in_chat"));
-    assert!(!ids.contains(&"copy_response"));
-    assert!(!ids.contains(&"clear_conversation"));
+    assert!(ids.contains(&"chat:continue_in_chat"));
+    assert!(!ids.contains(&"chat:copy_response"));
+    assert!(!ids.contains(&"chat:clear_conversation"));
     assert_eq!(actions.len(), 1);
 }
 
@@ -212,9 +212,9 @@ fn chat_has_response_only_shows_copy_response() {
     };
     let actions = get_chat_context_actions(&info);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
-    assert!(ids.contains(&"continue_in_chat"));
-    assert!(ids.contains(&"copy_response"));
-    assert!(!ids.contains(&"clear_conversation"));
+    assert!(ids.contains(&"chat:continue_in_chat"));
+    assert!(ids.contains(&"chat:copy_response"));
+    assert!(!ids.contains(&"chat:clear_conversation"));
 }
 
 #[test]
@@ -227,9 +227,9 @@ fn chat_has_messages_only_shows_clear() {
     };
     let actions = get_chat_context_actions(&info);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
-    assert!(ids.contains(&"continue_in_chat"));
-    assert!(!ids.contains(&"copy_response"));
-    assert!(ids.contains(&"clear_conversation"));
+    assert!(ids.contains(&"chat:continue_in_chat"));
+    assert!(!ids.contains(&"chat:copy_response"));
+    assert!(ids.contains(&"chat:clear_conversation"));
 }
 
 #[test]
@@ -242,9 +242,9 @@ fn chat_has_both_response_and_messages() {
     };
     let actions = get_chat_context_actions(&info);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
-    assert!(ids.contains(&"continue_in_chat"));
-    assert!(ids.contains(&"copy_response"));
-    assert!(ids.contains(&"clear_conversation"));
+    assert!(ids.contains(&"chat:continue_in_chat"));
+    assert!(ids.contains(&"chat:copy_response"));
+    assert!(ids.contains(&"chat:clear_conversation"));
 }
 
 #[test]
@@ -271,14 +271,14 @@ fn chat_model_checkmark_exact_format() {
     // Current model should have checkmark in title
     let sonnet = actions
         .iter()
-        .find(|a| a.id == "select_model_sonnet")
+        .find(|a| a.id == "chat:select_model_sonnet")
         .unwrap();
     assert_eq!(sonnet.title, "Claude Sonnet \u{2713}"); // "Claude Sonnet ✓"
 
     // Other model should NOT have checkmark
     let gpt4 = actions
         .iter()
-        .find(|a| a.id == "select_model_gpt4")
+        .find(|a| a.id == "chat:select_model_gpt4")
         .unwrap();
     assert_eq!(gpt4.title, "GPT-4");
     assert!(!gpt4.title.contains('\u{2713}'));
@@ -299,7 +299,7 @@ fn chat_model_description_shows_provider() {
     let actions = get_chat_context_actions(&info);
     let haiku = actions
         .iter()
-        .find(|a| a.id == "select_model_haiku")
+        .find(|a| a.id == "chat:select_model_haiku")
         .unwrap();
     assert_eq!(haiku.description, Some("via Anthropic".to_string()));
 }
@@ -318,7 +318,7 @@ fn notes_no_selection_no_trash_no_autosizing() {
     let actions = get_notes_command_bar_actions(&info);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
 
-    assert!(ids.contains(&"new_note"));
+    assert!(ids.contains(&"notes:new_note"));
     assert!(ids.contains(&"browse_notes"));
     assert!(ids.contains(&"enable_auto_sizing"));
     // No selection → no edit/copy/export actions
@@ -338,13 +338,13 @@ fn notes_with_selection_no_trash_no_autosizing() {
     let actions = get_notes_command_bar_actions(&info);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
 
-    assert!(ids.contains(&"new_note"));
+    assert!(ids.contains(&"notes:new_note"));
     assert!(ids.contains(&"browse_notes"));
     assert!(ids.contains(&"duplicate_note"));
     assert!(ids.contains(&"find_in_note"));
     assert!(ids.contains(&"format"));
     assert!(ids.contains(&"copy_note_as"));
-    assert!(ids.contains(&"copy_deeplink"));
+    assert!(ids.contains(&"script:copy_deeplink"));
     assert!(ids.contains(&"create_quicklink"));
     assert!(ids.contains(&"export"));
     assert!(ids.contains(&"enable_auto_sizing"));
@@ -382,12 +382,12 @@ fn notes_trash_view_with_selection_suppresses_edit_copy_export() {
     assert!(!ids.contains(&"find_in_note"));
     assert!(!ids.contains(&"format"));
     assert!(!ids.contains(&"copy_note_as"));
-    assert!(!ids.contains(&"copy_deeplink"));
+    assert!(!ids.contains(&"script:copy_deeplink"));
     assert!(!ids.contains(&"create_quicklink"));
     assert!(!ids.contains(&"export"));
 
     // Always-present actions remain
-    assert!(ids.contains(&"new_note"));
+    assert!(ids.contains(&"notes:new_note"));
     assert!(ids.contains(&"browse_notes"));
 }
 
@@ -402,7 +402,7 @@ fn notes_no_selection_trash_view() {
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
 
     // Minimal actions only
-    assert!(ids.contains(&"new_note"));
+    assert!(ids.contains(&"notes:new_note"));
     assert!(ids.contains(&"browse_notes"));
     assert!(!ids.contains(&"duplicate_note"));
     assert!(!ids.contains(&"enable_auto_sizing")); // auto-sizing already enabled
@@ -807,10 +807,10 @@ fn agent_with_shortcut_alias_frecency() {
 
     // Agent-specific actions
     assert!(ids.contains(&"edit_script")); // title says "Edit Agent"
-    assert!(ids.contains(&"reveal_in_finder"));
-    assert!(ids.contains(&"copy_path"));
+    assert!(ids.contains(&"file:reveal_in_finder"));
+    assert!(ids.contains(&"file:copy_path"));
     assert!(ids.contains(&"copy_content"));
-    assert!(ids.contains(&"copy_deeplink"));
+    assert!(ids.contains(&"script:copy_deeplink"));
 
     // Should NOT have script-only or add variants
     assert!(!ids.contains(&"view_logs"));
@@ -921,13 +921,13 @@ fn path_context_directory_has_all_expected_actions() {
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
 
     // Directory should have: open_directory + 6 common
-    assert!(ids.contains(&"open_directory"));
-    assert!(ids.contains(&"copy_path"));
-    assert!(ids.contains(&"open_in_finder"));
-    assert!(ids.contains(&"open_in_editor"));
-    assert!(ids.contains(&"open_in_terminal"));
-    assert!(ids.contains(&"copy_filename"));
-    assert!(ids.contains(&"move_to_trash"));
+    assert!(ids.contains(&"file:open_directory"));
+    assert!(ids.contains(&"file:copy_path"));
+    assert!(ids.contains(&"file:open_in_finder"));
+    assert!(ids.contains(&"file:open_in_editor"));
+    assert!(ids.contains(&"file:open_in_terminal"));
+    assert!(ids.contains(&"file:copy_filename"));
+    assert!(ids.contains(&"file:move_to_trash"));
     assert_eq!(actions.len(), 7);
 }
 
@@ -942,13 +942,13 @@ fn path_context_file_has_all_expected_actions() {
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
 
     // File should have: select_file + 6 common
-    assert!(ids.contains(&"select_file"));
-    assert!(ids.contains(&"copy_path"));
-    assert!(ids.contains(&"open_in_finder"));
-    assert!(ids.contains(&"open_in_editor"));
-    assert!(ids.contains(&"open_in_terminal"));
-    assert!(ids.contains(&"copy_filename"));
-    assert!(ids.contains(&"move_to_trash"));
+    assert!(ids.contains(&"file:select_file"));
+    assert!(ids.contains(&"file:copy_path"));
+    assert!(ids.contains(&"file:open_in_finder"));
+    assert!(ids.contains(&"file:open_in_editor"));
+    assert!(ids.contains(&"file:open_in_terminal"));
+    assert!(ids.contains(&"file:copy_filename"));
+    assert!(ids.contains(&"file:move_to_trash"));
     assert_eq!(actions.len(), 7);
 }
 
@@ -962,7 +962,7 @@ fn path_trash_description_folder_vs_file() {
     let dir_actions = get_path_context_actions(&dir_path);
     let dir_trash = dir_actions
         .iter()
-        .find(|a| a.id == "move_to_trash")
+        .find(|a| a.id == "file:move_to_trash")
         .unwrap();
     assert_eq!(dir_trash.description, Some("Delete folder".to_string()));
 
@@ -974,7 +974,7 @@ fn path_trash_description_folder_vs_file() {
     let file_actions = get_path_context_actions(&file_path);
     let file_trash = file_actions
         .iter()
-        .find(|a| a.id == "move_to_trash")
+        .find(|a| a.id == "file:move_to_trash")
         .unwrap();
     assert_eq!(file_trash.description, Some("Delete file".to_string()));
 }
@@ -996,11 +996,11 @@ fn file_directory_excludes_quick_look_includes_open_with() {
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
 
     assert!(
-        !ids.contains(&"quick_look"),
+        !ids.contains(&"file:quick_look"),
         "Dir should NOT have Quick Look"
     );
-    assert!(ids.contains(&"open_with"), "Dir should have Open With");
-    assert!(ids.contains(&"show_info"), "Dir should have Show Info");
+    assert!(ids.contains(&"file:open_with"), "Dir should have Open With");
+    assert!(ids.contains(&"file:show_info"), "Dir should have Show Info");
 }
 
 // =========================================================================
@@ -1121,7 +1121,7 @@ fn protocol_action_hidden_but_closes() {
 #[test]
 fn score_action_title_prefix_plus_description_match() {
     let action = Action::new(
-        "copy_path",
+        "file:copy_path",
         "Copy Path",
         Some("Copy the full path to clipboard".to_string()),
         ActionCategory::ScriptContext,
@@ -1134,7 +1134,7 @@ fn score_action_title_prefix_plus_description_match() {
 #[test]
 fn score_action_title_contains_plus_shortcut_match() {
     let action = Action::new(
-        "reveal",
+        "script:reveal",
         "Reveal in Finder",
         None,
         ActionCategory::ScriptContext,

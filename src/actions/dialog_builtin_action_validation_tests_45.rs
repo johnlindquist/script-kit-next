@@ -174,7 +174,7 @@ fn clipboard_text_third_action_is_paste_keep_open() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert_eq!(actions[2].id, "clipboard_paste_keep_open");
+    assert_eq!(actions[2].id, "clip:clipboard_paste_keep_open");
 }
 
 #[test]
@@ -188,7 +188,7 @@ fn clipboard_text_fourth_action_is_share() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert_eq!(actions[3].id, "clipboard_share");
+    assert_eq!(actions[3].id, "clip:clipboard_share");
 }
 
 // =========== 6. Clipboard: save_snippet desc mentions "scriptlet" ===========
@@ -206,7 +206,7 @@ fn clipboard_save_snippet_desc_mentions_scriptlet() {
     let actions = get_clipboard_history_context_actions(&entry);
     let action = actions
         .iter()
-        .find(|a| a.id == "clipboard_save_snippet")
+        .find(|a| a.id == "clip:clipboard_save_snippet")
         .unwrap();
     assert!(action.description.as_ref().unwrap().contains("scriptlet"));
 }
@@ -224,7 +224,7 @@ fn clipboard_save_file_desc_mentions_file() {
     let actions = get_clipboard_history_context_actions(&entry);
     let action = actions
         .iter()
-        .find(|a| a.id == "clipboard_save_file")
+        .find(|a| a.id == "clip:clipboard_save_file")
         .unwrap();
     assert!(action.description.as_ref().unwrap().contains("file"));
 }
@@ -242,11 +242,11 @@ fn clipboard_save_snippet_shortcut_differs_from_save_file() {
     let actions = get_clipboard_history_context_actions(&entry);
     let snippet = actions
         .iter()
-        .find(|a| a.id == "clipboard_save_snippet")
+        .find(|a| a.id == "clip:clipboard_save_snippet")
         .unwrap();
     let file = actions
         .iter()
-        .find(|a| a.id == "clipboard_save_file")
+        .find(|a| a.id == "clip:clipboard_save_file")
         .unwrap();
     assert_ne!(snippet.shortcut, file.shortcut);
 }
@@ -262,8 +262,8 @@ fn clipboard_save_snippet_and_save_file_both_present() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_save_snippet"));
-    assert!(actions.iter().any(|a| a.id == "clipboard_save_file"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_save_snippet"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_save_file"));
 }
 
 // =========== 7. Clipboard: destructive actions in last 3 positions ===========
@@ -280,7 +280,7 @@ fn clipboard_delete_is_third_from_last() {
     };
     let actions = get_clipboard_history_context_actions(&entry);
     let len = actions.len();
-    assert_eq!(actions[len - 3].id, "clipboard_delete");
+    assert_eq!(actions[len - 3].id, "clip:clipboard_delete");
 }
 
 #[test]
@@ -295,7 +295,7 @@ fn clipboard_delete_multiple_is_second_from_last() {
     };
     let actions = get_clipboard_history_context_actions(&entry);
     let len = actions.len();
-    assert_eq!(actions[len - 2].id, "clipboard_delete_multiple");
+    assert_eq!(actions[len - 2].id, "clip:clipboard_delete_multiple");
 }
 
 #[test]
@@ -310,7 +310,7 @@ fn clipboard_delete_all_is_last() {
     };
     let actions = get_clipboard_history_context_actions(&entry);
     let last = actions.last().unwrap();
-    assert_eq!(last.id, "clipboard_delete_all");
+    assert_eq!(last.id, "clip:clipboard_delete_all");
 }
 
 #[test]
@@ -324,9 +324,9 @@ fn clipboard_all_three_destructive_actions_present() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_delete"));
-    assert!(actions.iter().any(|a| a.id == "clipboard_delete_multiple"));
-    assert!(actions.iter().any(|a| a.id == "clipboard_delete_all"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_delete"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_delete_multiple"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_delete_all"));
 }
 
 // =========== 8. Clipboard: annotate_cleanshot image-only ===========
@@ -344,7 +344,7 @@ fn clipboard_annotate_present_for_image() {
     let actions = get_clipboard_history_context_actions(&entry);
     assert!(actions
         .iter()
-        .any(|a| a.id == "clipboard_annotate_cleanshot"));
+        .any(|a| a.id == "clip:clipboard_annotate_cleanshot"));
 }
 
 #[test]
@@ -360,7 +360,7 @@ fn clipboard_annotate_absent_for_text() {
     let actions = get_clipboard_history_context_actions(&entry);
     assert!(!actions
         .iter()
-        .any(|a| a.id == "clipboard_annotate_cleanshot"));
+        .any(|a| a.id == "clip:clipboard_annotate_cleanshot"));
 }
 
 #[test]
@@ -376,7 +376,7 @@ fn clipboard_annotate_shortcut() {
     let actions = get_clipboard_history_context_actions(&entry);
     let action = actions
         .iter()
-        .find(|a| a.id == "clipboard_annotate_cleanshot")
+        .find(|a| a.id == "clip:clipboard_annotate_cleanshot")
         .unwrap();
     assert_eq!(action.shortcut.as_deref(), Some("⇧⌘A"));
 }
@@ -394,7 +394,7 @@ fn clipboard_annotate_desc_mentions_cleanshot() {
     let actions = get_clipboard_history_context_actions(&entry);
     let action = actions
         .iter()
-        .find(|a| a.id == "clipboard_annotate_cleanshot")
+        .find(|a| a.id == "clip:clipboard_annotate_cleanshot")
         .unwrap();
     assert!(action.description.as_ref().unwrap().contains("CleanShot X"));
 }
@@ -967,7 +967,7 @@ fn ai_bar_response_has_copy_chat() {
         .iter()
         .filter(|a| a.section.as_deref() == Some("Response"))
         .collect();
-    assert!(response.iter().any(|a| a.id == "copy_chat"));
+    assert!(response.iter().any(|a| a.id == "chat:copy_chat"));
 }
 
 #[test]
@@ -977,7 +977,7 @@ fn ai_bar_response_has_copy_last_code() {
         .iter()
         .filter(|a| a.section.as_deref() == Some("Response"))
         .collect();
-    assert!(response.iter().any(|a| a.id == "copy_last_code"));
+    assert!(response.iter().any(|a| a.id == "chat:copy_last_code"));
 }
 
 // =========== 22. Notes: untested boolean combos ===========
@@ -1117,7 +1117,7 @@ fn chat_2_models_response_messages_has_continue() {
         has_response: true,
     };
     let actions = get_chat_context_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "continue_in_chat"));
+    assert!(actions.iter().any(|a| a.id == "chat:continue_in_chat"));
 }
 
 #[test]
@@ -1163,7 +1163,7 @@ fn chat_2_models_response_messages_has_clear() {
         has_response: true,
     };
     let actions = get_chat_context_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "clear_conversation"));
+    assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
 }
 
 // =========== 25. Chat: models before continue_in_chat in ordering ===========
@@ -1181,7 +1181,7 @@ fn chat_model_at_index_0() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    assert!(actions[0].id.starts_with("select_model_"));
+    assert!(actions[0].id.starts_with("chat:select_model_"));
 }
 
 #[test]
@@ -1204,7 +1204,7 @@ fn chat_continue_after_models() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    assert_eq!(actions[2].id, "continue_in_chat");
+    assert_eq!(actions[2].id, "chat:continue_in_chat");
 }
 
 #[test]
@@ -1227,8 +1227,8 @@ fn chat_models_preserve_insertion_order() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    assert_eq!(actions[0].id, "select_model_first");
-    assert_eq!(actions[1].id, "select_model_second");
+    assert_eq!(actions[0].id, "chat:select_model_first");
+    assert_eq!(actions[1].id, "chat:select_model_second");
 }
 
 #[test]
@@ -1244,7 +1244,7 @@ fn chat_single_model_continue_at_index_1() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    assert_eq!(actions[1].id, "continue_in_chat");
+    assert_eq!(actions[1].id, "chat:continue_in_chat");
 }
 
 // =========== 26. New chat: section assignment per type ===========
@@ -1326,7 +1326,7 @@ fn clipboard_text_no_ocr() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(!actions.iter().any(|a| a.id == "clipboard_ocr"));
+    assert!(!actions.iter().any(|a| a.id == "clip:clipboard_ocr"));
 }
 
 // --- merged from part_04.rs ---
@@ -1342,7 +1342,7 @@ fn clipboard_text_no_open_with() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(!actions.iter().any(|a| a.id == "clipboard_open_with"));
+    assert!(!actions.iter().any(|a| a.id == "clip:clipboard_open_with"));
 }
 
 #[test]
@@ -1358,7 +1358,7 @@ fn clipboard_text_no_annotate_cleanshot() {
     let actions = get_clipboard_history_context_actions(&entry);
     assert!(!actions
         .iter()
-        .any(|a| a.id == "clipboard_annotate_cleanshot"));
+        .any(|a| a.id == "clip:clipboard_annotate_cleanshot"));
 }
 
 #[test]
@@ -1372,7 +1372,7 @@ fn clipboard_text_no_upload_cleanshot() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(!actions.iter().any(|a| a.id == "clipboard_upload_cleanshot"));
+    assert!(!actions.iter().any(|a| a.id == "clip:clipboard_upload_cleanshot"));
 }
 
 // =========== 28. Script: scriptlet vs with_custom share common actions ===========

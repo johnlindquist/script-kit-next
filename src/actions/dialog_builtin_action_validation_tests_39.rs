@@ -287,7 +287,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert_eq!(actions[2].id, "clipboard_paste_keep_open");
+        assert_eq!(actions[2].id, "clip:clipboard_paste_keep_open");
     }
 
     #[test]
@@ -301,7 +301,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert_eq!(actions[3].id, "clipboard_share");
+        assert_eq!(actions[3].id, "clip:clipboard_share");
     }
 
     // =========================================================================
@@ -320,9 +320,9 @@ mod tests {
         };
         let actions = get_clipboard_history_context_actions(&entry);
         let len = actions.len();
-        assert_eq!(actions[len - 3].id, "clipboard_delete");
-        assert_eq!(actions[len - 2].id, "clipboard_delete_multiple");
-        assert_eq!(actions[len - 1].id, "clipboard_delete_all");
+        assert_eq!(actions[len - 3].id, "clip:clipboard_delete");
+        assert_eq!(actions[len - 2].id, "clip:clipboard_delete_multiple");
+        assert_eq!(actions[len - 1].id, "clip:clipboard_delete_all");
     }
 
     #[test]
@@ -367,9 +367,9 @@ mod tests {
         };
         let actions = get_clipboard_history_context_actions(&entry);
         let len = actions.len();
-        assert_eq!(actions[len - 3].id, "clipboard_delete");
-        assert_eq!(actions[len - 2].id, "clipboard_delete_multiple");
-        assert_eq!(actions[len - 1].id, "clipboard_delete_all");
+        assert_eq!(actions[len - 3].id, "clip:clipboard_delete");
+        assert_eq!(actions[len - 2].id, "clip:clipboard_delete_multiple");
+        assert_eq!(actions[len - 1].id, "clip:clipboard_delete_all");
     }
 
     // =========================================================================
@@ -389,11 +389,11 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let pin_pos = actions
             .iter()
-            .position(|a| a.id == "clipboard_pin")
+            .position(|a| a.id == "clip:clipboard_pin")
             .unwrap();
         let ocr_pos = actions
             .iter()
-            .position(|a| a.id == "clipboard_ocr")
+            .position(|a| a.id == "clip:clipboard_ocr")
             .unwrap();
         assert!(
             pin_pos < ocr_pos,
@@ -416,11 +416,11 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let unpin_pos = actions
             .iter()
-            .position(|a| a.id == "clipboard_unpin")
+            .position(|a| a.id == "clip:clipboard_unpin")
             .unwrap();
         let ocr_pos = actions
             .iter()
-            .position(|a| a.id == "clipboard_ocr")
+            .position(|a| a.id == "clip:clipboard_ocr")
             .unwrap();
         assert!(
             unpin_pos < ocr_pos,
@@ -441,11 +441,11 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let ocr_pos = actions
             .iter()
-            .position(|a| a.id == "clipboard_ocr")
+            .position(|a| a.id == "clip:clipboard_ocr")
             .unwrap();
         let snippet_pos = actions
             .iter()
-            .position(|a| a.id == "clipboard_save_snippet")
+            .position(|a| a.id == "clip:clipboard_save_snippet")
             .unwrap();
         assert!(ocr_pos < snippet_pos);
     }
@@ -461,7 +461,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(!actions.iter().any(|a| a.id == "clipboard_ocr"));
+        assert!(!actions.iter().any(|a| a.id == "clip:clipboard_ocr"));
     }
 
     // =========================================================================
@@ -905,14 +905,14 @@ mod tests {
     #[test]
     fn ai_bar_paste_image_shortcut() {
         let actions = get_ai_command_bar_actions();
-        let pi = actions.iter().find(|a| a.id == "paste_image").unwrap();
+        let pi = actions.iter().find(|a| a.id == "chat:paste_image").unwrap();
         assert_eq!(pi.shortcut.as_deref(), Some("⌘V"));
     }
 
     #[test]
     fn ai_bar_paste_image_icon() {
         let actions = get_ai_command_bar_actions();
-        let pi = actions.iter().find(|a| a.id == "paste_image").unwrap();
+        let pi = actions.iter().find(|a| a.id == "chat:paste_image").unwrap();
         assert_eq!(pi.icon, Some(IconName::File));
     }
 
@@ -920,14 +920,14 @@ mod tests {
     #[test]
     fn ai_bar_paste_image_section() {
         let actions = get_ai_command_bar_actions();
-        let pi = actions.iter().find(|a| a.id == "paste_image").unwrap();
+        let pi = actions.iter().find(|a| a.id == "chat:paste_image").unwrap();
         assert_eq!(pi.section.as_deref(), Some("Attachments"));
     }
 
     #[test]
     fn ai_bar_paste_image_desc_mentions_clipboard() {
         let actions = get_ai_command_bar_actions();
-        let pi = actions.iter().find(|a| a.id == "paste_image").unwrap();
+        let pi = actions.iter().find(|a| a.id == "chat:paste_image").unwrap();
         assert!(pi
             .description
             .as_ref()
@@ -1107,11 +1107,11 @@ mod tests {
         let actions = get_chat_context_actions(&info);
         let model_pos = actions
             .iter()
-            .position(|a| a.id.starts_with("select_model_"))
+            .position(|a| a.id.starts_with("chat:select_model_"))
             .unwrap();
         let continue_pos = actions
             .iter()
-            .position(|a| a.id == "continue_in_chat")
+            .position(|a| a.id == "chat:continue_in_chat")
             .unwrap();
         assert!(model_pos < continue_pos);
     }
@@ -1139,7 +1139,7 @@ mod tests {
         let model_indices: Vec<usize> = actions
             .iter()
             .enumerate()
-            .filter(|(_, a)| a.id.starts_with("select_model_"))
+            .filter(|(_, a)| a.id.starts_with("chat:select_model_"))
             .map(|(i, _)| i)
             .collect();
         assert_eq!(model_indices, vec![0, 1]);
@@ -1154,7 +1154,7 @@ mod tests {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions[0].id, "continue_in_chat");
+        assert_eq!(actions[0].id, "chat:continue_in_chat");
     }
 
     #[test]
@@ -1168,7 +1168,7 @@ mod tests {
         let actions = get_chat_context_actions(&info);
         let cont_pos = actions
             .iter()
-            .position(|a| a.id == "continue_in_chat")
+            .position(|a| a.id == "chat:continue_in_chat")
             .unwrap();
         let copy_pos = actions
             .iter()
@@ -1196,7 +1196,7 @@ mod tests {
         let actions = get_chat_context_actions(&info);
         let model_action = actions
             .iter()
-            .find(|a| a.id == "select_model_claude")
+            .find(|a| a.id == "chat:select_model_claude")
             .unwrap();
         assert!(model_action.title.contains("✓"));
     }
@@ -1216,7 +1216,7 @@ mod tests {
         let actions = get_chat_context_actions(&info);
         let model_action = actions
             .iter()
-            .find(|a| a.id == "select_model_gpt4")
+            .find(|a| a.id == "chat:select_model_gpt4")
             .unwrap();
         assert!(!model_action.title.contains("✓"));
     }
@@ -1236,7 +1236,7 @@ mod tests {
         let actions = get_chat_context_actions(&info);
         let model_action = actions
             .iter()
-            .find(|a| a.id == "select_model_claude")
+            .find(|a| a.id == "chat:select_model_claude")
             .unwrap();
         assert!(model_action
             .description
@@ -1260,7 +1260,7 @@ mod tests {
         let actions = get_chat_context_actions(&info);
         let model_action = actions
             .iter()
-            .find(|a| a.id == "select_model_claude")
+            .find(|a| a.id == "chat:select_model_claude")
             .unwrap();
         assert!(model_action.shortcut.is_none());
     }

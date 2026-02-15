@@ -155,10 +155,10 @@ fn cat04_script_no_shortcut_no_alias_ids() {
         "add_alias",
         "edit_script",
         "view_logs",
-        "reveal_in_finder",
-        "copy_path",
+        "file:reveal_in_finder",
+        "file:copy_path",
         "copy_content",
-        "copy_deeplink",
+        "script:copy_deeplink",
     ] {
         assert!(ids.contains(*expected), "Missing: {}", expected);
     }
@@ -255,7 +255,7 @@ fn cat05_scriptlet_copy_content_before_deeplink() {
     let content_pos = actions.iter().position(|a| a.id == "copy_content").unwrap();
     let deeplink_pos = actions
         .iter()
-        .position(|a| a.id == "copy_deeplink")
+        .position(|a| a.id == "script:copy_deeplink")
         .unwrap();
     assert!(content_pos < deeplink_pos);
 }
@@ -298,8 +298,8 @@ fn image_entry() -> ClipboardEntryInfo {
 fn cat06_image_has_ocr_text_does_not() {
     let text_actions = get_clipboard_history_context_actions(&text_entry());
     let image_actions = get_clipboard_history_context_actions(&image_entry());
-    assert!(!text_actions.iter().any(|a| a.id == "clipboard_ocr"));
-    assert!(image_actions.iter().any(|a| a.id == "clipboard_ocr"));
+    assert!(!text_actions.iter().any(|a| a.id == "clip:clipboard_ocr"));
+    assert!(image_actions.iter().any(|a| a.id == "clip:clipboard_ocr"));
 }
 
 #[test]
@@ -319,9 +319,9 @@ fn cat06_destructive_actions_always_last_three() {
     for entry in &[text_entry(), image_entry()] {
         let actions = get_clipboard_history_context_actions(entry);
         let len = actions.len();
-        assert_eq!(actions[len - 3].id, "clipboard_delete");
-        assert_eq!(actions[len - 2].id, "clipboard_delete_multiple");
-        assert_eq!(actions[len - 1].id, "clipboard_delete_all");
+        assert_eq!(actions[len - 3].id, "clip:clipboard_delete");
+        assert_eq!(actions[len - 2].id, "clip:clipboard_delete_multiple");
+        assert_eq!(actions[len - 1].id, "clip:clipboard_delete_all");
     }
 }
 
@@ -329,7 +329,7 @@ fn cat06_destructive_actions_always_last_three() {
 fn cat06_paste_is_always_first() {
     for entry in &[text_entry(), image_entry()] {
         let actions = get_clipboard_history_context_actions(entry);
-        assert_eq!(actions[0].id, "clipboard_paste");
+        assert_eq!(actions[0].id, "clip:clipboard_paste");
     }
 }
 
@@ -340,8 +340,8 @@ fn cat06_paste_is_always_first() {
 #[test]
 fn cat07_unpinned_shows_pin() {
     let actions = get_clipboard_history_context_actions(&text_entry());
-    assert!(actions.iter().any(|a| a.id == "clipboard_pin"));
-    assert!(!actions.iter().any(|a| a.id == "clipboard_unpin"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_pin"));
+    assert!(!actions.iter().any(|a| a.id == "clip:clipboard_unpin"));
 }
 
 #[test]
@@ -349,8 +349,8 @@ fn cat07_pinned_shows_unpin() {
     let mut e = text_entry();
     e.pinned = true;
     let actions = get_clipboard_history_context_actions(&e);
-    assert!(!actions.iter().any(|a| a.id == "clipboard_pin"));
-    assert!(actions.iter().any(|a| a.id == "clipboard_unpin"));
+    assert!(!actions.iter().any(|a| a.id == "clip:clipboard_pin"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_unpin"));
 }
 
 #[test]
@@ -361,14 +361,14 @@ fn cat07_pin_unpin_share_same_shortcut() {
     let unpin_actions = get_clipboard_history_context_actions(&pinned);
     let pin_sc = pin_actions
         .iter()
-        .find(|a| a.id == "clipboard_pin")
+        .find(|a| a.id == "clip:clipboard_pin")
         .unwrap()
         .shortcut
         .as_ref()
         .unwrap();
     let unpin_sc = unpin_actions
         .iter()
-        .find(|a| a.id == "clipboard_unpin")
+        .find(|a| a.id == "clip:clipboard_unpin")
         .unwrap()
         .shortcut
         .as_ref()
@@ -383,7 +383,7 @@ fn cat07_pin_unpin_share_same_shortcut() {
 #[test]
 fn cat08_no_app_shows_active_app() {
     let actions = get_clipboard_history_context_actions(&text_entry());
-    let paste = actions.iter().find(|a| a.id == "clipboard_paste").unwrap();
+    let paste = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
     assert_eq!(paste.title, "Paste to Active App");
 }
 
@@ -392,7 +392,7 @@ fn cat08_with_app_shows_name() {
     let mut e = text_entry();
     e.frontmost_app_name = Some("Firefox".into());
     let actions = get_clipboard_history_context_actions(&e);
-    let paste = actions.iter().find(|a| a.id == "clipboard_paste").unwrap();
+    let paste = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
     assert_eq!(paste.title, "Paste to Firefox");
 }
 
@@ -430,15 +430,15 @@ fn file_info_dir() -> FileInfo {
 #[test]
 fn cat09_file_has_open_file_not_open_directory() {
     let actions = get_file_context_actions(&file_info_file());
-    assert!(actions.iter().any(|a| a.id == "open_file"));
-    assert!(!actions.iter().any(|a| a.id == "open_directory"));
+    assert!(actions.iter().any(|a| a.id == "file:open_file"));
+    assert!(!actions.iter().any(|a| a.id == "file:open_directory"));
 }
 
 #[test]
 fn cat09_dir_has_open_directory_not_open_file() {
     let actions = get_file_context_actions(&file_info_dir());
-    assert!(actions.iter().any(|a| a.id == "open_directory"));
-    assert!(!actions.iter().any(|a| a.id == "open_file"));
+    assert!(actions.iter().any(|a| a.id == "file:open_directory"));
+    assert!(!actions.iter().any(|a| a.id == "file:open_file"));
 }
 
 // --- merged from part_02.rs ---
@@ -447,9 +447,9 @@ fn cat09_dir_has_open_directory_not_open_file() {
 fn cat09_both_have_reveal_copy_path_copy_filename() {
     for info in &[file_info_file(), file_info_dir()] {
         let actions = get_file_context_actions(info);
-        assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
-        assert!(actions.iter().any(|a| a.id == "copy_path"));
-        assert!(actions.iter().any(|a| a.id == "copy_filename"));
+        assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
+        assert!(actions.iter().any(|a| a.id == "file:copy_path"));
+        assert!(actions.iter().any(|a| a.id == "file:copy_filename"));
     }
 }
 
@@ -458,8 +458,8 @@ fn cat09_both_have_reveal_copy_path_copy_filename() {
 fn cat09_quick_look_only_for_files() {
     let file_actions = get_file_context_actions(&file_info_file());
     let dir_actions = get_file_context_actions(&file_info_dir());
-    assert!(file_actions.iter().any(|a| a.id == "quick_look"));
-    assert!(!dir_actions.iter().any(|a| a.id == "quick_look"));
+    assert!(file_actions.iter().any(|a| a.id == "file:quick_look"));
+    assert!(!dir_actions.iter().any(|a| a.id == "file:quick_look"));
 }
 
 // ============================================================================
@@ -508,20 +508,20 @@ fn path_file() -> PathInfo {
 #[test]
 fn cat11_dir_primary_is_open_directory() {
     let actions = get_path_context_actions(&path_dir());
-    assert_eq!(actions[0].id, "open_directory");
+    assert_eq!(actions[0].id, "file:open_directory");
 }
 
 #[test]
 fn cat11_file_primary_is_select_file() {
     let actions = get_path_context_actions(&path_file());
-    assert_eq!(actions[0].id, "select_file");
+    assert_eq!(actions[0].id, "file:select_file");
 }
 
 #[test]
 fn cat11_trash_is_always_last() {
     for info in &[path_dir(), path_file()] {
         let actions = get_path_context_actions(info);
-        assert_eq!(actions.last().unwrap().id, "move_to_trash");
+        assert_eq!(actions.last().unwrap().id, "file:move_to_trash");
     }
 }
 
@@ -531,11 +531,11 @@ fn cat11_trash_description_mentions_folder_or_file() {
     let file_actions = get_path_context_actions(&path_file());
     let dir_trash = dir_actions
         .iter()
-        .find(|a| a.id == "move_to_trash")
+        .find(|a| a.id == "file:move_to_trash")
         .unwrap();
     let file_trash = file_actions
         .iter()
-        .find(|a| a.id == "move_to_trash")
+        .find(|a| a.id == "file:move_to_trash")
         .unwrap();
     assert!(dir_trash.description.as_ref().unwrap().contains("folder"));
     assert!(file_trash.description.as_ref().unwrap().contains("file"));
@@ -556,11 +556,11 @@ fn cat11_dir_and_file_have_same_action_count() {
 fn cat12_always_has_copy_path_and_open_in_editor() {
     for info in &[path_dir(), path_file()] {
         let actions = get_path_context_actions(info);
-        assert!(actions.iter().any(|a| a.id == "copy_path"));
-        assert!(actions.iter().any(|a| a.id == "open_in_editor"));
-        assert!(actions.iter().any(|a| a.id == "open_in_terminal"));
-        assert!(actions.iter().any(|a| a.id == "open_in_finder"));
-        assert!(actions.iter().any(|a| a.id == "copy_filename"));
+        assert!(actions.iter().any(|a| a.id == "file:copy_path"));
+        assert!(actions.iter().any(|a| a.id == "file:open_in_editor"));
+        assert!(actions.iter().any(|a| a.id == "file:open_in_terminal"));
+        assert!(actions.iter().any(|a| a.id == "file:open_in_finder"));
+        assert!(actions.iter().any(|a| a.id == "file:copy_filename"));
     }
 }
 
@@ -1014,7 +1014,7 @@ fn cat20_no_models_still_has_continue_in_chat() {
     };
     let actions = get_chat_context_actions(&info);
     assert_eq!(actions.len(), 1);
-    assert_eq!(actions[0].id, "continue_in_chat");
+    assert_eq!(actions[0].id, "chat:continue_in_chat");
 }
 
 #[test]
@@ -1039,12 +1039,12 @@ fn cat20_current_model_gets_checkmark() {
     let actions = get_chat_context_actions(&info);
     let gpt4 = actions
         .iter()
-        .find(|a| a.id == "select_model_gpt4")
+        .find(|a| a.id == "chat:select_model_gpt4")
         .unwrap();
     assert!(gpt4.title.contains('✓'), "Current should have ✓");
     let claude = actions
         .iter()
-        .find(|a| a.id == "select_model_claude")
+        .find(|a| a.id == "chat:select_model_claude")
         .unwrap();
     assert!(!claude.title.contains('✓'), "Non-current should not have ✓");
 }
@@ -1065,10 +1065,10 @@ fn cat20_copy_response_only_when_has_response() {
     };
     assert!(!get_chat_context_actions(&no_resp)
         .iter()
-        .any(|a| a.id == "copy_response"));
+        .any(|a| a.id == "chat:copy_response"));
     assert!(get_chat_context_actions(&with_resp)
         .iter()
-        .any(|a| a.id == "copy_response"));
+        .any(|a| a.id == "chat:copy_response"));
 }
 
 #[test]
@@ -1087,10 +1087,10 @@ fn cat20_clear_conversation_only_when_has_messages() {
     };
     assert!(!get_chat_context_actions(&no_msgs)
         .iter()
-        .any(|a| a.id == "clear_conversation"));
+        .any(|a| a.id == "chat:clear_conversation"));
     assert!(get_chat_context_actions(&with_msgs)
         .iter()
-        .any(|a| a.id == "clear_conversation"));
+        .any(|a| a.id == "chat:clear_conversation"));
 }
 
 // ============================================================================
@@ -1178,15 +1178,15 @@ fn cat22_needle_longer_than_haystack() {
 #[test]
 fn cat23_prefix_match_gives_100() {
     let a = Action::new("id", "Edit Script", None, ActionCategory::ScriptContext);
-    assert!(ActionsDialog::score_action(&a, "edit") >= 100);
+    assert!(ActionsDialog::score_action(&a, "script:edit") >= 100);
 }
 
 #[test]
 fn cat23_contains_match_gives_50() {
     let a = Action::new("id", "My Edit Tool", None, ActionCategory::ScriptContext);
-    let score = ActionsDialog::score_action(&a, "edit");
+    let score = ActionsDialog::score_action(&a, "script:edit");
     assert!(
-        score >= 50 && score < 100,
+        (50..100).contains(&score),
         "Contains should be 50-99: {}",
         score
     );
@@ -1197,7 +1197,7 @@ fn cat23_fuzzy_match_gives_25() {
     let a = Action::new("id", "Elephant", None, ActionCategory::ScriptContext);
     let score = ActionsDialog::score_action(&a, "ept");
     assert!(
-        score >= 25 && score < 50,
+        (25..50).contains(&score),
         "Fuzzy should be 25-49: {}",
         score
     );
@@ -1233,7 +1233,7 @@ fn cat23_prefix_plus_desc_stacks() {
         Some("Edit the script in editor".into()),
         ActionCategory::ScriptContext,
     );
-    let score = ActionsDialog::score_action(&a, "edit");
+    let score = ActionsDialog::score_action(&a, "script:edit");
     assert!(score >= 115, "Prefix(100) + Desc(15) = 115: {}", score);
 }
 
@@ -1420,7 +1420,7 @@ fn cat27_ai_and_notes_no_id_overlap() {
     // Allow known shared IDs
     let unexpected: Vec<&&String> = overlap
         .iter()
-        .filter(|id| !["copy_deeplink", "new_chat"].contains(&id.as_str()))
+        .filter(|id| !["script:copy_deeplink", "chat:new_chat"].contains(&id.as_str()))
         .collect();
     assert!(
         unexpected.is_empty(),

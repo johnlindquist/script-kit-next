@@ -286,12 +286,12 @@ mod tests {
     #[test]
     fn score_title_plus_description_stacks() {
         let action = Action::new(
-            "run",
+            "script:run",
             "run script",
             Some("run the script now".to_string()),
             ActionCategory::ScriptContext,
         );
-        let score = ActionsDialog::score_action(&action, "run");
+        let score = ActionsDialog::score_action(&action, "script:run");
         assert!(
             score >= 115,
             "Title prefix (100) + desc (15) should stack, got {}",
@@ -399,9 +399,9 @@ mod tests {
         let entry = make_text_entry(false, None);
         let actions = get_clipboard_history_context_actions(&entry);
         let ids = action_ids(&actions);
-        assert!(ids.contains(&"clipboard_pin"));
-        assert!(!ids.contains(&"clipboard_unpin"));
-        assert!(!ids.contains(&"clipboard_ocr"), "Text should not have OCR");
+        assert!(ids.contains(&"clip:clipboard_pin"));
+        assert!(!ids.contains(&"clip:clipboard_unpin"));
+        assert!(!ids.contains(&"clip:clipboard_ocr"), "Text should not have OCR");
     }
 
     #[test]
@@ -409,8 +409,8 @@ mod tests {
         let entry = make_text_entry(true, None);
         let actions = get_clipboard_history_context_actions(&entry);
         let ids = action_ids(&actions);
-        assert!(ids.contains(&"clipboard_unpin"));
-        assert!(!ids.contains(&"clipboard_pin"));
+        assert!(ids.contains(&"clip:clipboard_unpin"));
+        assert!(!ids.contains(&"clip:clipboard_pin"));
     }
 
     #[test]
@@ -418,9 +418,9 @@ mod tests {
         let entry = make_image_entry(false);
         let actions = get_clipboard_history_context_actions(&entry);
         let ids = action_ids(&actions);
-        assert!(ids.contains(&"clipboard_ocr"), "Image should have OCR");
-        assert!(ids.contains(&"clipboard_pin"));
-        assert!(!ids.contains(&"clipboard_unpin"));
+        assert!(ids.contains(&"clip:clipboard_ocr"), "Image should have OCR");
+        assert!(ids.contains(&"clip:clipboard_pin"));
+        assert!(!ids.contains(&"clip:clipboard_unpin"));
     }
 
     #[test]
@@ -428,9 +428,9 @@ mod tests {
         let entry = make_image_entry(true);
         let actions = get_clipboard_history_context_actions(&entry);
         let ids = action_ids(&actions);
-        assert!(ids.contains(&"clipboard_ocr"), "Image should have OCR");
-        assert!(ids.contains(&"clipboard_unpin"));
-        assert!(!ids.contains(&"clipboard_pin"));
+        assert!(ids.contains(&"clip:clipboard_ocr"), "Image should have OCR");
+        assert!(ids.contains(&"clip:clipboard_unpin"));
+        assert!(!ids.contains(&"clip:clipboard_pin"));
     }
 
     #[test]
@@ -472,8 +472,8 @@ mod tests {
         };
         let actions = get_chat_context_actions(&info);
         // Model actions should have select_model_{id} format
-        assert!(actions.iter().any(|a| a.id == "select_model_gpt-4"));
-        assert!(actions.iter().any(|a| a.id == "select_model_claude-3"));
+        assert!(actions.iter().any(|a| a.id == "chat:select_model_gpt-4"));
+        assert!(actions.iter().any(|a| a.id == "chat:select_model_claude-3"));
     }
 
 
@@ -498,9 +498,9 @@ mod tests {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        let gpt = find_action(&actions, "select_model_gpt-4").unwrap();
+        let gpt = find_action(&actions, "chat:select_model_gpt-4").unwrap();
         assert!(gpt.title.contains('✓'), "Current model should have ✓");
-        let claude = find_action(&actions, "select_model_claude-3").unwrap();
+        let claude = find_action(&actions, "chat:select_model_claude-3").unwrap();
         assert!(
             !claude.title.contains('✓'),
             "Non-current model should not have ✓"
@@ -517,7 +517,7 @@ mod tests {
         };
         let actions = get_chat_context_actions(&info);
         assert!(
-            action_ids(&actions).contains(&"continue_in_chat"),
+            action_ids(&actions).contains(&"chat:continue_in_chat"),
             "continue_in_chat should always be present"
         );
     }
@@ -537,9 +537,9 @@ mod tests {
             has_response: true,
         };
         let without_actions = get_chat_context_actions(&without);
-        assert!(!action_ids(&without_actions).contains(&"copy_response"));
+        assert!(!action_ids(&without_actions).contains(&"chat:copy_response"));
         let with_actions = get_chat_context_actions(&with);
-        assert!(action_ids(&with_actions).contains(&"copy_response"));
+        assert!(action_ids(&with_actions).contains(&"chat:copy_response"));
     }
 
     #[test]
@@ -557,9 +557,9 @@ mod tests {
             has_response: false,
         };
         let without_actions = get_chat_context_actions(&without);
-        assert!(!action_ids(&without_actions).contains(&"clear_conversation"));
+        assert!(!action_ids(&without_actions).contains(&"chat:clear_conversation"));
         let with_actions = get_chat_context_actions(&with);
-        assert!(action_ids(&with_actions).contains(&"clear_conversation"));
+        assert!(action_ids(&with_actions).contains(&"chat:clear_conversation"));
     }
 
     // ============================================================
@@ -790,8 +790,8 @@ mod tests {
         agent.is_agent = true;
         let actions = get_script_context_actions(&agent);
         let ids = action_ids(&actions);
-        assert!(ids.contains(&"reveal_in_finder"));
-        assert!(ids.contains(&"copy_path"));
+        assert!(ids.contains(&"file:reveal_in_finder"));
+        assert!(ids.contains(&"file:copy_path"));
         assert!(ids.contains(&"copy_content"));
     }
 
@@ -842,7 +842,7 @@ mod tests {
         // Both should have these common actions
         let common = [
             "run_script",
-            "copy_deeplink",
+            "script:copy_deeplink",
             "add_shortcut",
             "add_alias",
             "copy_content",
@@ -861,7 +861,7 @@ mod tests {
     fn deeplink_description_contains_url() {
         let script = ScriptInfo::new("My Cool Script", "/path/script.ts");
         let actions = get_script_context_actions(&script);
-        let dl = find_action(&actions, "copy_deeplink").unwrap();
+        let dl = find_action(&actions, "script:copy_deeplink").unwrap();
         let desc = dl.description.as_ref().unwrap();
         assert!(desc.contains("scriptkit://run/my-cool-script"));
     }
@@ -870,7 +870,7 @@ mod tests {
     fn deeplink_description_special_chars() {
         let script = ScriptInfo::new("Test!@#$Script", "/path/script.ts");
         let actions = get_script_context_actions(&script);
-        let dl = find_action(&actions, "copy_deeplink").unwrap();
+        let dl = find_action(&actions, "script:copy_deeplink").unwrap();
         let desc = dl.description.as_ref().unwrap();
         assert!(desc.contains("scriptkit://run/test-script"));
     }
@@ -879,7 +879,7 @@ mod tests {
     fn deeplink_scriptlet_context() {
         let script = ScriptInfo::scriptlet("Open GitHub", "/path.md", None, None);
         let actions = get_scriptlet_context_actions_with_custom(&script, None);
-        let dl = find_action(&actions, "copy_deeplink").unwrap();
+        let dl = find_action(&actions, "script:copy_deeplink").unwrap();
         let desc = dl.description.as_ref().unwrap();
         assert!(desc.contains("scriptkit://run/open-github"));
     }
@@ -990,7 +990,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_path_context_actions(&path);
-        assert_eq!(actions[0].id, "open_directory");
+        assert_eq!(actions[0].id, "file:open_directory");
     }
 
     #[test]
@@ -1001,7 +1001,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&path);
-        assert_eq!(actions[0].id, "select_file");
+        assert_eq!(actions[0].id, "file:select_file");
     }
 
     #[test]
@@ -1014,7 +1014,7 @@ mod tests {
         let actions = get_path_context_actions(&path);
         assert_eq!(
             actions.last().unwrap().id,
-            "move_to_trash",
+            "file:move_to_trash",
             "Trash should be last action"
         );
     }
@@ -1027,7 +1027,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_path_context_actions(&path);
-        let trash = find_action(&actions, "move_to_trash").unwrap();
+        let trash = find_action(&actions, "file:move_to_trash").unwrap();
         assert!(
             trash.description.as_ref().unwrap().contains("folder"),
             "Dir trash should say 'folder'"
@@ -1042,7 +1042,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&path);
-        let trash = find_action(&actions, "move_to_trash").unwrap();
+        let trash = find_action(&actions, "file:move_to_trash").unwrap();
         assert!(
             trash.description.as_ref().unwrap().contains("file"),
             "File trash should say 'file'"
@@ -1573,7 +1573,7 @@ mod tests {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        let model_action = find_action(&actions, "select_model_model-x").unwrap();
+        let model_action = find_action(&actions, "chat:select_model_model-x").unwrap();
         assert_eq!(model_action.title, "Model X Ultra");
     }
 
@@ -1590,7 +1590,7 @@ mod tests {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        let model_action = find_action(&actions, "select_model_m").unwrap();
+        let model_action = find_action(&actions, "chat:select_model_m").unwrap();
         assert_eq!(model_action.description, Some("via Acme Corp".to_string()));
     }
 
@@ -1618,7 +1618,7 @@ mod tests {
     fn clipboard_delete_all_mentions_pinned() {
         let entry = make_text_entry(false, None);
         let actions = get_clipboard_history_context_actions(&entry);
-        let delete_all = find_action(&actions, "clipboard_delete_all").unwrap();
+        let delete_all = find_action(&actions, "clip:clipboard_delete_all").unwrap();
         assert!(
             delete_all
                 .description
@@ -1688,12 +1688,12 @@ mod tests {
             let actions = get_path_context_actions(&path);
             let ids = action_ids(&actions);
             assert!(
-                ids.contains(&"copy_path"),
+                ids.contains(&"file:copy_path"),
                 "Path (is_dir={}) should have copy_path",
                 is_dir
             );
             assert!(
-                ids.contains(&"copy_filename"),
+                ids.contains(&"file:copy_filename"),
                 "Path (is_dir={}) should have copy_filename",
                 is_dir
             );
@@ -1710,9 +1710,9 @@ mod tests {
             };
             let actions = get_path_context_actions(&path);
             let ids = action_ids(&actions);
-            assert!(ids.contains(&"open_in_finder"));
-            assert!(ids.contains(&"open_in_editor"));
-            assert!(ids.contains(&"open_in_terminal"));
+            assert!(ids.contains(&"file:open_in_finder"));
+            assert!(ids.contains(&"file:open_in_editor"));
+            assert!(ids.contains(&"file:open_in_terminal"));
         }
     }
 

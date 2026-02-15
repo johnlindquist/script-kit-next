@@ -316,25 +316,25 @@ mod tests {
     #[test]
     fn cat04_text_has_save_snippet() {
         let actions = get_clipboard_history_context_actions(&make_text_entry());
-        assert!(actions.iter().any(|a| a.id == "clipboard_save_snippet"));
+        assert!(actions.iter().any(|a| a.id == "clip:clipboard_save_snippet"));
     }
 
     #[test]
     fn cat04_text_has_save_file() {
         let actions = get_clipboard_history_context_actions(&make_text_entry());
-        assert!(actions.iter().any(|a| a.id == "clipboard_save_file"));
+        assert!(actions.iter().any(|a| a.id == "clip:clipboard_save_file"));
     }
 
     #[test]
     fn cat04_image_has_save_snippet() {
         let actions = get_clipboard_history_context_actions(&make_image_entry());
-        assert!(actions.iter().any(|a| a.id == "clipboard_save_snippet"));
+        assert!(actions.iter().any(|a| a.id == "clip:clipboard_save_snippet"));
     }
 
     #[test]
     fn cat04_image_has_save_file() {
         let actions = get_clipboard_history_context_actions(&make_image_entry());
-        assert!(actions.iter().any(|a| a.id == "clipboard_save_file"));
+        assert!(actions.iter().any(|a| a.id == "clip:clipboard_save_file"));
     }
 
     #[test]
@@ -342,7 +342,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&make_text_entry());
         let a = actions
             .iter()
-            .find(|a| a.id == "clipboard_save_snippet")
+            .find(|a| a.id == "clip:clipboard_save_snippet")
             .unwrap();
         assert_eq!(a.shortcut.as_deref(), Some("⇧⌘S"));
     }
@@ -352,7 +352,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&make_text_entry());
         let a = actions
             .iter()
-            .find(|a| a.id == "clipboard_save_file")
+            .find(|a| a.id == "clip:clipboard_save_file")
             .unwrap();
         assert_eq!(a.shortcut.as_deref(), Some("⌥⇧⌘S"));
     }
@@ -369,7 +369,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&info);
-        let a = actions.iter().find(|a| a.id == "copy_filename").unwrap();
+        let a = actions.iter().find(|a| a.id == "file:copy_filename").unwrap();
         assert!(
             a.shortcut.is_none(),
             "Path copy_filename should have no shortcut"
@@ -384,7 +384,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&info);
-        let a = actions.iter().find(|a| a.id == "copy_filename").unwrap();
+        let a = actions.iter().find(|a| a.id == "file:copy_filename").unwrap();
         assert!(a.description.as_ref().unwrap().contains("filename"));
     }
 
@@ -398,7 +398,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_file_context_actions(&info);
-        let a = actions.iter().find(|a| a.id == "copy_filename").unwrap();
+        let a = actions.iter().find(|a| a.id == "file:copy_filename").unwrap();
         assert_eq!(a.shortcut.as_deref(), Some("⌘C"));
     }
 
@@ -516,8 +516,8 @@ mod tests {
             false,
         );
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions[0].id, "select_model_m1");
-        assert_eq!(actions[1].id, "select_model_m2");
+        assert_eq!(actions[0].id, "chat:select_model_m1");
+        assert_eq!(actions[1].id, "chat:select_model_m2");
     }
 
     #[test]
@@ -529,7 +529,7 @@ mod tests {
             false,
         );
         let actions = get_chat_context_actions(&info);
-        let m1 = actions.iter().find(|a| a.id == "select_model_m1").unwrap();
+        let m1 = actions.iter().find(|a| a.id == "chat:select_model_m1").unwrap();
         assert!(m1.title.contains('✓'), "Current model should have ✓");
     }
 
@@ -542,7 +542,7 @@ mod tests {
             false,
         );
         let actions = get_chat_context_actions(&info);
-        let m2 = actions.iter().find(|a| a.id == "select_model_m2").unwrap();
+        let m2 = actions.iter().find(|a| a.id == "chat:select_model_m2").unwrap();
         assert!(
             !m2.title.contains('✓'),
             "Non-current model should NOT have ✓"
@@ -561,42 +561,42 @@ mod tests {
     fn cat07_no_models_still_has_continue_in_chat() {
         let info = make_chat_info(None, &[], false, false);
         let actions = get_chat_context_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "continue_in_chat"));
+        assert!(actions.iter().any(|a| a.id == "chat:continue_in_chat"));
     }
 
     #[test]
     fn cat07_has_response_adds_copy_response() {
         let info = make_chat_info(None, &[], true, false);
         let actions = get_chat_context_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "copy_response"));
+        assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
     }
 
     #[test]
     fn cat07_no_response_no_copy_response() {
         let info = make_chat_info(None, &[], false, false);
         let actions = get_chat_context_actions(&info);
-        assert!(!actions.iter().any(|a| a.id == "copy_response"));
+        assert!(!actions.iter().any(|a| a.id == "chat:copy_response"));
     }
 
     #[test]
     fn cat07_has_messages_adds_clear_conversation() {
         let info = make_chat_info(None, &[], false, true);
         let actions = get_chat_context_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "clear_conversation"));
+        assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
     }
 
     #[test]
     fn cat07_no_messages_no_clear_conversation() {
         let info = make_chat_info(None, &[], false, false);
         let actions = get_chat_context_actions(&info);
-        assert!(!actions.iter().any(|a| a.id == "clear_conversation"));
+        assert!(!actions.iter().any(|a| a.id == "chat:clear_conversation"));
     }
 
     #[test]
     fn cat07_continue_in_chat_shortcut() {
         let info = make_chat_info(None, &[], false, false);
         let actions = get_chat_context_actions(&info);
-        let a = actions.iter().find(|a| a.id == "continue_in_chat").unwrap();
+        let a = actions.iter().find(|a| a.id == "chat:continue_in_chat").unwrap();
         assert_eq!(a.shortcut.as_deref(), Some("⌘↵"));
     }
 
@@ -607,7 +607,7 @@ mod tests {
     #[test]
     fn cat08_branch_from_last_no_shortcut() {
         let actions = get_ai_command_bar_actions();
-        let a = actions.iter().find(|a| a.id == "branch_from_last").unwrap();
+        let a = actions.iter().find(|a| a.id == "chat:branch_from_last").unwrap();
         assert!(
             a.shortcut.is_none(),
             "branch_from_last should have no shortcut"
@@ -617,7 +617,7 @@ mod tests {
     #[test]
     fn cat08_change_model_no_shortcut() {
         let actions = get_ai_command_bar_actions();
-        let a = actions.iter().find(|a| a.id == "change_model").unwrap();
+        let a = actions.iter().find(|a| a.id == "chat:change_model").unwrap();
         assert!(a.shortcut.is_none(), "change_model should have no shortcut");
     }
 
@@ -626,7 +626,7 @@ mod tests {
         let actions = get_ai_command_bar_actions();
         let a = actions
             .iter()
-            .find(|a| a.id == "toggle_shortcuts_help")
+            .find(|a| a.id == "chat:toggle_shortcuts_help")
             .unwrap();
         assert_eq!(a.shortcut.as_deref(), Some("⌘/"));
     }
@@ -634,7 +634,7 @@ mod tests {
     #[test]
     fn cat08_export_markdown_shortcut() {
         let actions = get_ai_command_bar_actions();
-        let a = actions.iter().find(|a| a.id == "export_markdown").unwrap();
+        let a = actions.iter().find(|a| a.id == "chat:export_markdown").unwrap();
         assert_eq!(a.shortcut.as_deref(), Some("⇧⌘E"));
     }
 
@@ -850,7 +850,7 @@ mod tests {
         s.is_agent = true;
         s.is_script = false;
         let actions = get_script_context_actions(&s);
-        assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
+        assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
     }
 
     #[test]
@@ -859,7 +859,7 @@ mod tests {
         s.is_agent = true;
         s.is_script = false;
         let actions = get_script_context_actions(&s);
-        assert!(actions.iter().any(|a| a.id == "copy_path"));
+        assert!(actions.iter().any(|a| a.id == "file:copy_path"));
     }
 
     #[test]
@@ -888,7 +888,7 @@ mod tests {
         let actions = get_script_context_actions(&s);
         let edit = actions.iter().find(|a| a.id == "edit_script").unwrap();
         assert!(edit.description.as_ref().unwrap().contains("agent"));
-        let reveal = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
+        let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
         assert!(reveal.description.as_ref().unwrap().contains("agent"));
     }
 
@@ -900,7 +900,7 @@ mod tests {
     fn cat13_scriptlet_deeplink_description_contains_url() {
         let s = ScriptInfo::scriptlet("My Script", "/p", None, None);
         let actions = get_scriptlet_context_actions_with_custom(&s, None);
-        let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+        let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
         let desc = dl.description.as_ref().unwrap();
         assert!(desc.contains("scriptkit://run/my-script"), "Desc: {}", desc);
     }
@@ -909,7 +909,7 @@ mod tests {
     fn cat13_script_deeplink_description_format() {
         let s = ScriptInfo::new("Hello World", "/p");
         let actions = get_script_context_actions(&s);
-        let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+        let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
         let desc = dl.description.as_ref().unwrap();
         assert!(
             desc.contains("scriptkit://run/hello-world"),
@@ -1154,13 +1154,13 @@ mod tests {
     #[test]
     fn cat17_prefix_match_100() {
         let a = Action::new("id", "Edit Script", None, ActionCategory::ScriptContext);
-        assert_eq!(ActionsDialog::score_action(&a, "edit"), 100);
+        assert_eq!(ActionsDialog::score_action(&a, "script:edit"), 100);
     }
 
     #[test]
     fn cat17_contains_match_50() {
         let a = Action::new("id", "Copy Edit Path", None, ActionCategory::ScriptContext);
-        assert_eq!(ActionsDialog::score_action(&a, "edit"), 50);
+        assert_eq!(ActionsDialog::score_action(&a, "script:edit"), 50);
     }
 
     #[test]
@@ -1208,8 +1208,8 @@ mod tests {
             Some("Edit the script file".into()),
             ActionCategory::ScriptContext,
         );
-        // "edit" is prefix (100) + description contains "edit" (15)
-        assert_eq!(ActionsDialog::score_action(&a, "edit"), 115);
+        // "script:edit" is prefix (100) + description contains "script:edit" (15)
+        assert_eq!(ActionsDialog::score_action(&a, "script:edit"), 115);
     }
 
     // =========================================================================
@@ -1556,9 +1556,9 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&make_text_entry());
         let ids = action_ids(&actions);
         let n = ids.len();
-        assert_eq!(ids[n - 3], "clipboard_delete");
-        assert_eq!(ids[n - 2], "clipboard_delete_multiple");
-        assert_eq!(ids[n - 1], "clipboard_delete_all");
+        assert_eq!(ids[n - 3], "clip:clipboard_delete");
+        assert_eq!(ids[n - 2], "clip:clipboard_delete_multiple");
+        assert_eq!(ids[n - 1], "clip:clipboard_delete_all");
     }
 
     #[test]
@@ -1566,21 +1566,21 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&make_image_entry());
         let ids = action_ids(&actions);
         let n = ids.len();
-        assert_eq!(ids[n - 3], "clipboard_delete");
-        assert_eq!(ids[n - 2], "clipboard_delete_multiple");
-        assert_eq!(ids[n - 1], "clipboard_delete_all");
+        assert_eq!(ids[n - 3], "clip:clipboard_delete");
+        assert_eq!(ids[n - 2], "clip:clipboard_delete_multiple");
+        assert_eq!(ids[n - 1], "clip:clipboard_delete_all");
     }
 
     #[test]
     fn cat24_paste_always_first() {
         let actions = get_clipboard_history_context_actions(&make_text_entry());
-        assert_eq!(actions[0].id, "clipboard_paste");
+        assert_eq!(actions[0].id, "clip:clipboard_paste");
     }
 
     #[test]
     fn cat24_copy_always_second() {
         let actions = get_clipboard_history_context_actions(&make_text_entry());
-        assert_eq!(actions[1].id, "clipboard_copy");
+        assert_eq!(actions[1].id, "clip:clipboard_copy");
     }
 
     // =========================================================================

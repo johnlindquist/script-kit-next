@@ -43,10 +43,6 @@ mod tests {
         actions.iter().map(|a| a.id.as_str()).collect()
     }
 
-    fn action_titles(actions: &[Action]) -> Vec<&str> {
-        actions.iter().map(|a| a.title.as_str()).collect()
-    }
-
     // =========================================================================
     // 1. ScriptInfo impossible flag combinations
     //    The constructors don't prevent these, so verify behavior is reasonable.
@@ -117,7 +113,7 @@ mod tests {
             "scriptlet block: edit_scriptlet"
         );
         assert!(
-            ids.contains(&"reveal_in_finder"),
+            ids.contains(&"file:reveal_in_finder"),
             "agent block: reveal_in_finder"
         );
     }
@@ -236,7 +232,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         // Should still produce valid actions even with empty preview
         assert!(!actions.is_empty());
-        assert!(actions.iter().any(|a| a.id == "clipboard_paste"));
+        assert!(actions.iter().any(|a| a.id == "clip:clipboard_paste"));
     }
 
     #[test]
@@ -250,7 +246,7 @@ mod tests {
             frontmost_app_name: Some("Super Long Application Name That Goes On And On".to_string()),
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let paste = actions.iter().find(|a| a.id == "clipboard_paste").unwrap();
+        let paste = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
         assert_eq!(
             paste.title,
             "Paste to Super Long Application Name That Goes On And On"
@@ -269,9 +265,9 @@ mod tests {
         };
         let actions = get_clipboard_history_context_actions(&entry);
         let ids = action_ids(&actions);
-        assert!(ids.contains(&"clipboard_unpin"), "pinned image has unpin");
-        assert!(!ids.contains(&"clipboard_pin"), "pinned image has no pin");
-        assert!(ids.contains(&"clipboard_ocr"), "image has OCR");
+        assert!(ids.contains(&"clip:clipboard_unpin"), "pinned image has unpin");
+        assert!(!ids.contains(&"clip:clipboard_pin"), "pinned image has no pin");
+        assert!(ids.contains(&"clip:clipboard_ocr"), "image has OCR");
     }
 
     #[test]
@@ -286,8 +282,8 @@ mod tests {
         };
         let actions = get_clipboard_history_context_actions(&entry);
         let ids = action_ids(&actions);
-        assert!(!ids.contains(&"clipboard_ocr"), "text has no OCR");
-        assert!(ids.contains(&"clipboard_unpin"), "pinned text has unpin");
+        assert!(!ids.contains(&"clip:clipboard_ocr"), "text has no OCR");
+        assert!(ids.contains(&"clip:clipboard_unpin"), "pinned text has unpin");
     }
 
     #[test]
@@ -301,10 +297,10 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert_eq!(actions[0].id, "clipboard_paste", "1st: paste");
-        assert_eq!(actions[1].id, "clipboard_copy", "2nd: copy");
+        assert_eq!(actions[0].id, "clip:clipboard_paste", "1st: paste");
+        assert_eq!(actions[1].id, "clip:clipboard_copy", "2nd: copy");
         assert_eq!(
-            actions[2].id, "clipboard_paste_keep_open",
+            actions[2].id, "clip:clipboard_paste_keep_open",
             "3rd: paste_keep_open"
         );
     }
@@ -321,9 +317,9 @@ mod tests {
         };
         let actions = get_clipboard_history_context_actions(&entry);
         let len = actions.len();
-        assert_eq!(actions[len - 3].id, "clipboard_delete");
-        assert_eq!(actions[len - 2].id, "clipboard_delete_multiple");
-        assert_eq!(actions[len - 1].id, "clipboard_delete_all");
+        assert_eq!(actions[len - 3].id, "clip:clipboard_delete");
+        assert_eq!(actions[len - 2].id, "clip:clipboard_delete_multiple");
+        assert_eq!(actions[len - 1].id, "clip:clipboard_delete_all");
     }
 
     // =========================================================================
@@ -350,7 +346,7 @@ mod tests {
         assert_eq!(actions.len(), 21);
         for action in actions.iter().take(20) {
             assert!(
-                action.id.starts_with("select_model_"),
+                action.id.starts_with("chat:select_model_"),
                 "Model action ID should start with select_model_: {}",
                 action.id
             );
@@ -422,7 +418,7 @@ mod tests {
         };
         let actions = get_chat_context_actions(&info);
         assert_eq!(actions.len(), 1);
-        assert_eq!(actions[0].id, "continue_in_chat");
+        assert_eq!(actions[0].id, "chat:continue_in_chat");
     }
 
     #[test]
@@ -439,9 +435,9 @@ mod tests {
         };
         let actions = get_chat_context_actions(&info);
         let ids = action_ids(&actions);
-        assert!(ids.contains(&"continue_in_chat"));
-        assert!(ids.contains(&"copy_response"));
-        assert!(ids.contains(&"clear_conversation"));
+        assert!(ids.contains(&"chat:continue_in_chat"));
+        assert!(ids.contains(&"chat:copy_response"));
+        assert!(ids.contains(&"chat:clear_conversation"));
         assert_eq!(actions.len(), 4); // 1 model + 3 actions
     }
 
@@ -455,8 +451,8 @@ mod tests {
         };
         let actions = get_chat_context_actions(&info);
         let ids = action_ids(&actions);
-        assert!(ids.contains(&"copy_response"));
-        assert!(!ids.contains(&"clear_conversation"));
+        assert!(ids.contains(&"chat:copy_response"));
+        assert!(!ids.contains(&"chat:clear_conversation"));
     }
 
     // --- merged from tests_part_02.rs ---
@@ -470,8 +466,8 @@ mod tests {
         };
         let actions = get_chat_context_actions(&info);
         let ids = action_ids(&actions);
-        assert!(!ids.contains(&"copy_response"));
-        assert!(ids.contains(&"clear_conversation"));
+        assert!(!ids.contains(&"chat:copy_response"));
+        assert!(ids.contains(&"chat:clear_conversation"));
     }
 
     // =========================================================================
@@ -1281,7 +1277,7 @@ mod tests {
         };
         let actions = get_path_context_actions(&info);
         assert_eq!(actions[0].title, "Open \"Documents\"");
-        assert_eq!(actions[0].id, "open_directory");
+        assert_eq!(actions[0].id, "file:open_directory");
     }
 
     #[test]
@@ -1293,7 +1289,7 @@ mod tests {
         };
         let actions = get_path_context_actions(&info);
         assert_eq!(actions[0].title, "Select \"file.txt\"");
-        assert_eq!(actions[0].id, "select_file");
+        assert_eq!(actions[0].id, "file:select_file");
     }
 
     #[test]
@@ -1304,7 +1300,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_path_context_actions(&info);
-        let trash = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+        let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
         assert_eq!(trash.description.as_ref().unwrap(), "Delete folder");
     }
 
@@ -1316,7 +1312,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&info);
-        let trash = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+        let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
         assert_eq!(trash.description.as_ref().unwrap(), "Delete file");
     }
 
@@ -1329,8 +1325,8 @@ mod tests {
         };
         let actions = get_path_context_actions(&info);
         let ids = action_ids(&actions);
-        assert!(ids.contains(&"copy_path"));
-        assert!(ids.contains(&"copy_filename"));
+        assert!(ids.contains(&"file:copy_path"));
+        assert!(ids.contains(&"file:copy_filename"));
     }
 
     #[test]
@@ -1342,8 +1338,8 @@ mod tests {
         };
         let actions = get_path_context_actions(&info);
         let ids = action_ids(&actions);
-        assert!(ids.contains(&"open_in_editor"));
-        assert!(ids.contains(&"open_in_terminal"));
+        assert!(ids.contains(&"file:open_in_editor"));
+        assert!(ids.contains(&"file:open_in_terminal"));
     }
 
 
@@ -1381,7 +1377,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_file_context_actions(&info);
-        assert_eq!(actions[0].id, "open_file");
+        assert_eq!(actions[0].id, "file:open_file");
         assert!(actions[0].title.contains("doc.pdf"));
     }
 
@@ -1394,7 +1390,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_file_context_actions(&info);
-        assert_eq!(actions[0].id, "open_file");
+        assert_eq!(actions[0].id, "file:open_file");
     }
 
     #[test]
@@ -1406,7 +1402,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_file_context_actions(&info);
-        assert_eq!(actions[0].id, "open_file");
+        assert_eq!(actions[0].id, "file:open_file");
     }
 
     #[test]
@@ -1418,7 +1414,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_file_context_actions(&info);
-        assert_eq!(actions[0].id, "open_file");
+        assert_eq!(actions[0].id, "file:open_file");
     }
 
     #[test]
@@ -1430,7 +1426,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_file_context_actions(&info);
-        assert_eq!(actions[0].id, "open_file");
+        assert_eq!(actions[0].id, "file:open_file");
         assert!(actions[0].title.contains("Safari.app"));
     }
 
@@ -1443,7 +1439,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_file_context_actions(&info);
-        assert_eq!(actions[0].id, "open_directory");
+        assert_eq!(actions[0].id, "file:open_directory");
         assert!(actions[0].title.contains("folder"));
     }
 
@@ -1456,7 +1452,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_file_context_actions(&info);
-        assert_eq!(actions[0].id, "open_file");
+        assert_eq!(actions[0].id, "file:open_file");
     }
 
     // =========================================================================
@@ -1623,7 +1619,7 @@ mod tests {
         let actions = get_scriptlet_context_actions_with_custom(&info, None);
         let ids = action_ids(&actions);
         assert!(ids.contains(&"reveal_scriptlet_in_finder"));
-        assert!(!ids.contains(&"reveal_in_finder"));
+        assert!(!ids.contains(&"file:reveal_in_finder"));
     }
 
     #[test]
@@ -1632,7 +1628,7 @@ mod tests {
         let actions = get_scriptlet_context_actions_with_custom(&info, None);
         let ids = action_ids(&actions);
         assert!(ids.contains(&"copy_scriptlet_path"));
-        assert!(!ids.contains(&"copy_path"));
+        assert!(!ids.contains(&"file:copy_path"));
     }
 
     #[test]
@@ -1729,9 +1725,9 @@ mod tests {
             .collect();
         assert_eq!(response_actions.len(), 3);
         let ids: Vec<&str> = response_actions.iter().map(|a| a.id.as_str()).collect();
-        assert!(ids.contains(&"copy_response"));
-        assert!(ids.contains(&"copy_chat"));
-        assert!(ids.contains(&"copy_last_code"));
+        assert!(ids.contains(&"chat:copy_response"));
+        assert!(ids.contains(&"chat:copy_chat"));
+        assert!(ids.contains(&"chat:copy_last_code"));
     }
 
     #[test]
@@ -1743,10 +1739,10 @@ mod tests {
             .collect();
         assert_eq!(action_section.len(), 4);
         let ids: Vec<&str> = action_section.iter().map(|a| a.id.as_str()).collect();
-        assert!(ids.contains(&"submit"));
-        assert!(ids.contains(&"new_chat"));
-        assert!(ids.contains(&"delete_chat"));
-        assert!(ids.contains(&"branch_from_last"));
+        assert!(ids.contains(&"chat:submit"));
+        assert!(ids.contains(&"chat:new_chat"));
+        assert!(ids.contains(&"chat:delete_chat"));
+        assert!(ids.contains(&"chat:branch_from_last"));
     }
 
     #[test]
@@ -1767,7 +1763,7 @@ mod tests {
             .filter(|a| a.section.as_deref() == Some("Settings"))
             .collect();
         assert_eq!(settings_actions.len(), 1);
-        assert_eq!(settings_actions[0].id, "change_model");
+        assert_eq!(settings_actions[0].id, "chat:change_model");
     }
 
     #[test]
@@ -1994,9 +1990,9 @@ mod tests {
         assert!(ids.contains(&"reset_ranking"));
 
         // Has agent copy actions
-        assert!(ids.contains(&"copy_path"));
+        assert!(ids.contains(&"file:copy_path"));
         assert!(ids.contains(&"copy_content"));
-        assert!(ids.contains(&"reveal_in_finder"));
+        assert!(ids.contains(&"file:reveal_in_finder"));
     }
 
     // =========================================================================

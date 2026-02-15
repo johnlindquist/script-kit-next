@@ -41,7 +41,7 @@ fn clipboard_attach_to_ai_shortcut_is_ctrl_cmd_a() {
     let actions = get_clipboard_history_context_actions(&entry);
     let action = actions
         .iter()
-        .find(|a| a.id == "clipboard_attach_to_ai")
+        .find(|a| a.id == "clip:clipboard_attach_to_ai")
         .unwrap();
     assert_eq!(action.shortcut.as_ref().unwrap(), "⌃⌘A");
 }
@@ -59,7 +59,7 @@ fn clipboard_attach_to_ai_title() {
     let actions = get_clipboard_history_context_actions(&entry);
     let action = actions
         .iter()
-        .find(|a| a.id == "clipboard_attach_to_ai")
+        .find(|a| a.id == "clip:clipboard_attach_to_ai")
         .unwrap();
     assert_eq!(action.title, "Attach to AI Chat");
 }
@@ -77,7 +77,7 @@ fn clipboard_attach_to_ai_desc_mentions_ai() {
     let actions = get_clipboard_history_context_actions(&entry);
     let action = actions
         .iter()
-        .find(|a| a.id == "clipboard_attach_to_ai")
+        .find(|a| a.id == "clip:clipboard_attach_to_ai")
         .unwrap();
     assert!(action
         .description
@@ -98,7 +98,7 @@ fn clipboard_attach_to_ai_present_for_image() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_attach_to_ai"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_attach_to_ai"));
 }
 
 // =====================================================================
@@ -505,42 +505,42 @@ fn scriptlet_custom_action_title_is_name() {
 #[test]
 fn ai_bar_copy_chat_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "copy_chat").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:copy_chat").unwrap();
     assert_eq!(a.shortcut.as_ref().unwrap(), "⌥⇧⌘C");
 }
 
 #[test]
 fn ai_bar_copy_chat_icon_copy() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "copy_chat").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:copy_chat").unwrap();
     assert_eq!(a.icon, Some(IconName::Copy));
 }
 
 #[test]
 fn ai_bar_copy_chat_section_response() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "copy_chat").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:copy_chat").unwrap();
     assert_eq!(a.section.as_ref().unwrap(), "Response");
 }
 
 #[test]
 fn ai_bar_copy_last_code_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "copy_last_code").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:copy_last_code").unwrap();
     assert_eq!(a.shortcut.as_ref().unwrap(), "⌥⌘C");
 }
 
 #[test]
 fn ai_bar_copy_last_code_icon_code() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "copy_last_code").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:copy_last_code").unwrap();
     assert_eq!(a.icon, Some(IconName::Code));
 }
 
 #[test]
 fn ai_bar_copy_last_code_section_response() {
     let actions = get_ai_command_bar_actions();
-    let a = actions.iter().find(|a| a.id == "copy_last_code").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:copy_last_code").unwrap();
     assert_eq!(a.section.as_ref().unwrap(), "Response");
 }
 
@@ -605,7 +605,7 @@ fn chat_model_id_format() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "select_model_gpt-4"));
+    assert!(actions.iter().any(|a| a.id == "chat:select_model_gpt-4"));
 }
 
 #[test]
@@ -623,7 +623,7 @@ fn chat_model_current_check_by_display_name() {
     let actions = get_chat_context_actions(&info);
     let model = actions
         .iter()
-        .find(|a| a.id == "select_model_gpt-4")
+        .find(|a| a.id == "chat:select_model_gpt-4")
         .unwrap();
     assert!(model.title.contains("✓"));
 }
@@ -643,7 +643,7 @@ fn chat_model_non_current_no_check() {
     let actions = get_chat_context_actions(&info);
     let model = actions
         .iter()
-        .find(|a| a.id == "select_model_gpt-4")
+        .find(|a| a.id == "chat:select_model_gpt-4")
         .unwrap();
     assert!(!model.title.contains("✓"));
 }
@@ -663,7 +663,7 @@ fn chat_model_desc_via_provider() {
     let actions = get_chat_context_actions(&info);
     let model = actions
         .iter()
-        .find(|a| a.id == "select_model_claude")
+        .find(|a| a.id == "chat:select_model_claude")
         .unwrap();
     assert_eq!(model.description.as_ref().unwrap(), "via Anthropic");
 }
@@ -1218,7 +1218,7 @@ fn scriptlet_copy_path_desc_mentions_clipboard() {
 #[test]
 fn score_action_fuzzy_lower_than_prefix() {
     let action = Action::new("test", "Edit Script", None, ActionCategory::ScriptContext);
-    let prefix_score = ActionsDialog::score_action(&action, "edit");
+    let prefix_score = ActionsDialog::score_action(&action, "script:edit");
     let fuzzy_score = ActionsDialog::score_action(&action, "eds"); // e-d-i-t s-c-r-i-p-t has e,d,s
     assert!(prefix_score > fuzzy_score);
 }
@@ -1232,7 +1232,7 @@ fn score_action_contains_lower_than_prefix() {
         ActionCategory::ScriptContext,
     );
     let prefix_score = ActionsDialog::score_action(&action, "my");
-    let contains_score = ActionsDialog::score_action(&action, "edit");
+    let contains_score = ActionsDialog::score_action(&action, "script:edit");
     assert!(prefix_score > contains_score);
 }
 
@@ -1244,7 +1244,7 @@ fn score_action_both_title_and_desc_match() {
         Some("Edit the script file".into()),
         ActionCategory::ScriptContext,
     );
-    let score = ActionsDialog::score_action(&action, "edit");
+    let score = ActionsDialog::score_action(&action, "script:edit");
     // prefix(100) + desc(15) = 115
     assert!(score >= 115);
 }
@@ -1347,7 +1347,7 @@ fn clipboard_share_shortcut() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let share = actions.iter().find(|a| a.id == "clipboard_share").unwrap();
+    let share = actions.iter().find(|a| a.id == "clip:clipboard_share").unwrap();
     assert_eq!(share.shortcut.as_ref().unwrap(), "⇧⌘E");
 }
 
@@ -1362,7 +1362,7 @@ fn clipboard_share_title() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let share = actions.iter().find(|a| a.id == "clipboard_share").unwrap();
+    let share = actions.iter().find(|a| a.id == "clip:clipboard_share").unwrap();
     assert_eq!(share.title, "Share...");
 }
 
@@ -1377,13 +1377,13 @@ fn clipboard_share_desc_mentions_share() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let share = actions.iter().find(|a| a.id == "clipboard_share").unwrap();
+    let share = actions.iter().find(|a| a.id == "clip:clipboard_share").unwrap();
     assert!(share
         .description
         .as_ref()
         .unwrap()
         .to_lowercase()
-        .contains("share"));
+        .contains("script:share"));
 }
 
 #[test]
@@ -1397,7 +1397,7 @@ fn clipboard_share_present_for_image() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_share"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_share"));
 }
 
 // =====================================================================

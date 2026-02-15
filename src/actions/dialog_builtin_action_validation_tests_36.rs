@@ -201,7 +201,7 @@ fn clipboard_quick_look_shortcut_is_space() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let ql = actions.iter().find(|a| a.id == "clipboard_quick_look");
+    let ql = actions.iter().find(|a| a.id == "clip:clipboard_quick_look");
     // On macOS this should exist
     if let Some(action) = ql {
         assert_eq!(action.shortcut.as_deref(), Some("␣"));
@@ -219,7 +219,7 @@ fn clipboard_quick_look_title() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    if let Some(action) = actions.iter().find(|a| a.id == "clipboard_quick_look") {
+    if let Some(action) = actions.iter().find(|a| a.id == "clip:clipboard_quick_look") {
         assert_eq!(action.title, "Quick Look");
     }
 }
@@ -235,7 +235,7 @@ fn clipboard_quick_look_desc_mentions_preview() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    if let Some(action) = actions.iter().find(|a| a.id == "clipboard_quick_look") {
+    if let Some(action) = actions.iter().find(|a| a.id == "clip:clipboard_quick_look") {
         let desc = action.description.as_deref().unwrap();
         assert!(desc.contains("Quick Look"));
     }
@@ -253,7 +253,7 @@ fn clipboard_quick_look_present_for_image_too() {
     };
     let actions = get_clipboard_history_context_actions(&entry);
     // On macOS, quick_look is available for both text and image
-    let has_ql = actions.iter().any(|a| a.id == "clipboard_quick_look");
+    let has_ql = actions.iter().any(|a| a.id == "clip:clipboard_quick_look");
     // Either present (macOS) or absent (non-macOS), consistent with text entries
     let text_entry = ClipboardEntryInfo {
         id: "ql-4b".into(),
@@ -264,7 +264,7 @@ fn clipboard_quick_look_present_for_image_too() {
         frontmost_app_name: None,
     };
     let text_actions = get_clipboard_history_context_actions(&text_entry);
-    let text_has_ql = text_actions.iter().any(|a| a.id == "clipboard_quick_look");
+    let text_has_ql = text_actions.iter().any(|a| a.id == "clip:clipboard_quick_look");
     assert_eq!(
         has_ql, text_has_ql,
         "quick_look availability should be consistent"
@@ -286,7 +286,7 @@ fn clipboard_delete_shortcut_ctrl_x() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let action = actions.iter().find(|a| a.id == "clipboard_delete").unwrap();
+    let action = actions.iter().find(|a| a.id == "clip:clipboard_delete").unwrap();
     assert_eq!(action.shortcut.as_deref(), Some("⌃X"));
 }
 
@@ -301,7 +301,7 @@ fn clipboard_delete_title() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let action = actions.iter().find(|a| a.id == "clipboard_delete").unwrap();
+    let action = actions.iter().find(|a| a.id == "clip:clipboard_delete").unwrap();
     assert_eq!(action.title, "Delete Entry");
 }
 
@@ -316,7 +316,7 @@ fn clipboard_delete_desc_mentions_remove() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let action = actions.iter().find(|a| a.id == "clipboard_delete").unwrap();
+    let action = actions.iter().find(|a| a.id == "clip:clipboard_delete").unwrap();
     assert!(action.description.as_deref().unwrap().contains("Remove"));
 }
 
@@ -331,7 +331,7 @@ fn clipboard_delete_present_for_image() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_delete"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_delete"));
 }
 
 // =====================================================================
@@ -349,7 +349,7 @@ fn clipboard_first_action_is_paste() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert_eq!(actions[0].id, "clipboard_paste");
+    assert_eq!(actions[0].id, "clip:clipboard_paste");
 }
 
 #[test]
@@ -363,7 +363,7 @@ fn clipboard_second_action_is_copy() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert_eq!(actions[1].id, "clipboard_copy");
+    assert_eq!(actions[1].id, "clip:clipboard_copy");
 }
 
 #[test]
@@ -377,7 +377,7 @@ fn clipboard_last_action_is_delete_all() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert_eq!(actions.last().unwrap().id, "clipboard_delete_all");
+    assert_eq!(actions.last().unwrap().id, "clip:clipboard_delete_all");
 }
 
 #[test]
@@ -392,9 +392,9 @@ fn clipboard_last_3_are_destructive() {
     };
     let actions = get_clipboard_history_context_actions(&entry);
     let n = actions.len();
-    assert_eq!(actions[n - 3].id, "clipboard_delete");
-    assert_eq!(actions[n - 2].id, "clipboard_delete_multiple");
-    assert_eq!(actions[n - 1].id, "clipboard_delete_all");
+    assert_eq!(actions[n - 3].id, "clip:clipboard_delete");
+    assert_eq!(actions[n - 2].id, "clip:clipboard_delete_multiple");
+    assert_eq!(actions[n - 1].id, "clip:clipboard_delete_all");
 }
 
 // =====================================================================
@@ -410,7 +410,7 @@ fn file_context_file_has_quick_look_on_macos() {
         file_type: FileType::File,
     };
     let actions = get_file_context_actions(&fi);
-    let has_ql = actions.iter().any(|a| a.id == "quick_look");
+    let has_ql = actions.iter().any(|a| a.id == "file:quick_look");
     // On macOS it should be present; on other platforms it's absent
     #[cfg(target_os = "macos")]
     assert!(has_ql);
@@ -427,7 +427,7 @@ fn file_context_dir_no_quick_look() {
         file_type: FileType::Directory,
     };
     let actions = get_file_context_actions(&fi);
-    assert!(!actions.iter().any(|a| a.id == "quick_look"));
+    assert!(!actions.iter().any(|a| a.id == "file:quick_look"));
 }
 
 #[test]
@@ -439,7 +439,7 @@ fn file_context_file_quick_look_shortcut() {
         file_type: FileType::Image,
     };
     let actions = get_file_context_actions(&fi);
-    if let Some(ql) = actions.iter().find(|a| a.id == "quick_look") {
+    if let Some(ql) = actions.iter().find(|a| a.id == "file:quick_look") {
         assert_eq!(ql.shortcut.as_deref(), Some("⌘Y"));
     }
 }
@@ -455,7 +455,7 @@ fn file_context_file_quick_look_desc() {
         file_type: FileType::Document,
     };
     let actions = get_file_context_actions(&fi);
-    if let Some(ql) = actions.iter().find(|a| a.id == "quick_look") {
+    if let Some(ql) = actions.iter().find(|a| a.id == "file:quick_look") {
         assert!(ql.description.as_deref().unwrap().contains("Quick Look"));
     }
 }
@@ -473,7 +473,7 @@ fn file_context_copy_path_shortcut() {
         file_type: FileType::File,
     };
     let actions = get_file_context_actions(&fi);
-    let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
+    let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
     assert_eq!(cp.shortcut.as_deref(), Some("⌘⇧C"));
 }
 
@@ -486,7 +486,7 @@ fn file_context_copy_path_desc_mentions_full_path() {
         file_type: FileType::File,
     };
     let actions = get_file_context_actions(&fi);
-    let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
+    let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
     assert!(cp.description.as_deref().unwrap().contains("full path"));
 }
 
@@ -499,7 +499,7 @@ fn file_context_copy_filename_shortcut_cmd_c() {
         file_type: FileType::File,
     };
     let actions = get_file_context_actions(&fi);
-    let cf = actions.iter().find(|a| a.id == "copy_filename").unwrap();
+    let cf = actions.iter().find(|a| a.id == "file:copy_filename").unwrap();
     assert_eq!(cf.shortcut.as_deref(), Some("⌘C"));
 }
 
@@ -515,7 +515,7 @@ fn path_context_open_in_terminal_shortcut() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&pi);
-    let ot = actions.iter().find(|a| a.id == "open_in_terminal").unwrap();
+    let ot = actions.iter().find(|a| a.id == "file:open_in_terminal").unwrap();
     assert_eq!(ot.shortcut.as_deref(), Some("⌘T"));
 }
 
@@ -527,7 +527,7 @@ fn path_context_open_in_terminal_desc() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&pi);
-    let ot = actions.iter().find(|a| a.id == "open_in_terminal").unwrap();
+    let ot = actions.iter().find(|a| a.id == "file:open_in_terminal").unwrap();
     assert!(ot.description.as_deref().unwrap().contains("terminal"));
 }
 
@@ -539,7 +539,7 @@ fn path_context_open_in_terminal_title() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&pi);
-    let ot = actions.iter().find(|a| a.id == "open_in_terminal").unwrap();
+    let ot = actions.iter().find(|a| a.id == "file:open_in_terminal").unwrap();
     assert_eq!(ot.title, "Open in Terminal");
 }
 
@@ -551,7 +551,7 @@ fn path_context_open_in_terminal_present_for_file() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&pi);
-    assert!(actions.iter().any(|a| a.id == "open_in_terminal"));
+    assert!(actions.iter().any(|a| a.id == "file:open_in_terminal"));
 }
 
 // =====================================================================
@@ -733,7 +733,7 @@ fn agent_has_reveal_in_finder() {
     script.is_script = false;
     script.is_agent = true;
     let actions = get_script_context_actions(&script);
-    assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
+    assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
 }
 
 #[test]
@@ -742,7 +742,7 @@ fn agent_has_copy_path_and_copy_content() {
     script.is_script = false;
     script.is_agent = true;
     let actions = get_script_context_actions(&script);
-    assert!(actions.iter().any(|a| a.id == "copy_path"));
+    assert!(actions.iter().any(|a| a.id == "file:copy_path"));
     assert!(actions.iter().any(|a| a.id == "copy_content"));
 }
 
@@ -762,28 +762,28 @@ fn agent_no_view_logs() {
 #[test]
 fn ai_bar_branch_from_last_no_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let bfl = actions.iter().find(|a| a.id == "branch_from_last").unwrap();
+    let bfl = actions.iter().find(|a| a.id == "chat:branch_from_last").unwrap();
     assert!(bfl.shortcut.is_none());
 }
 
 #[test]
 fn ai_bar_branch_from_last_section_actions() {
     let actions = get_ai_command_bar_actions();
-    let bfl = actions.iter().find(|a| a.id == "branch_from_last").unwrap();
+    let bfl = actions.iter().find(|a| a.id == "chat:branch_from_last").unwrap();
     assert_eq!(bfl.section.as_deref(), Some("Actions"));
 }
 
 #[test]
 fn ai_bar_branch_from_last_icon_arrowright() {
     let actions = get_ai_command_bar_actions();
-    let bfl = actions.iter().find(|a| a.id == "branch_from_last").unwrap();
+    let bfl = actions.iter().find(|a| a.id == "chat:branch_from_last").unwrap();
     assert_eq!(bfl.icon, Some(IconName::ArrowRight));
 }
 
 #[test]
 fn ai_bar_branch_from_last_desc_mentions_branch() {
     let actions = get_ai_command_bar_actions();
-    let bfl = actions.iter().find(|a| a.id == "branch_from_last").unwrap();
+    let bfl = actions.iter().find(|a| a.id == "chat:branch_from_last").unwrap();
     assert!(bfl.description.as_deref().unwrap().contains("branch"));
 }
 
@@ -1371,14 +1371,14 @@ fn coerce_selection_header_then_item() {
 #[test]
 fn score_action_prefix_plus_desc_plus_shortcut() {
     let action = Action::new(
-        "edit",
+        "script:edit",
         "Edit Script",
         Some("Edit the script file".into()),
         ActionCategory::ScriptContext,
     )
     .with_shortcut("⌘E");
-    let score = ActionsDialog::score_action(&action, "edit");
-    // prefix(100) + desc contains "edit"(15) + shortcut probably no match = 115
+    let score = ActionsDialog::score_action(&action, "script:edit");
+    // prefix(100) + desc contains "script:edit"(15) + shortcut probably no match = 115
     assert!(score >= 115, "Expected ≥115, got {}", score);
 }
 
@@ -1390,8 +1390,8 @@ fn score_action_contains_only() {
         None,
         ActionCategory::ScriptContext,
     );
-    let score = ActionsDialog::score_action(&action, "edit");
-    assert!(score >= 50 && score < 100, "Expected 50-99, got {}", score);
+    let score = ActionsDialog::score_action(&action, "script:edit");
+    assert!((50..100).contains(&score), "Expected 50-99, got {}", score);
 }
 
 #[test]

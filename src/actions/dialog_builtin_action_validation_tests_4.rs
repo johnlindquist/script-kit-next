@@ -153,8 +153,8 @@ fn agent_has_reveal_copy_path_copy_content() {
     agent.is_agent = true;
     let actions = get_script_context_actions(&agent);
     let ids = action_ids(&actions);
-    assert!(ids.contains(&"reveal_in_finder"));
-    assert!(ids.contains(&"copy_path"));
+    assert!(ids.contains(&"file:reveal_in_finder"));
+    assert!(ids.contains(&"file:copy_path"));
     assert!(ids.contains(&"copy_content"));
 }
 
@@ -228,7 +228,7 @@ fn scriptlet_context_has_reveal_scriptlet_not_reveal() {
     let ids = action_ids(&actions);
     assert!(ids.contains(&"reveal_scriptlet_in_finder"));
     // The regular reveal_in_finder should NOT be present for scriptlets
-    assert!(!ids.contains(&"reveal_in_finder"));
+    assert!(!ids.contains(&"file:reveal_in_finder"));
 }
 
 #[test]
@@ -237,7 +237,7 @@ fn scriptlet_context_has_copy_scriptlet_path_not_copy_path() {
     let actions = get_script_context_actions(&scriptlet);
     let ids = action_ids(&actions);
     assert!(ids.contains(&"copy_scriptlet_path"));
-    assert!(!ids.contains(&"copy_path"));
+    assert!(!ids.contains(&"file:copy_path"));
 }
 
 #[test]
@@ -311,8 +311,8 @@ fn clipboard_image_has_ocr_text_does_not() {
     let image_actions = get_clipboard_history_context_actions(&image_entry);
     let text_ids = action_ids(&text_actions);
     let image_ids = action_ids(&image_actions);
-    assert!(!text_ids.contains(&"clipboard_ocr"));
-    assert!(image_ids.contains(&"clipboard_ocr"));
+    assert!(!text_ids.contains(&"clip:clipboard_ocr"));
+    assert!(image_ids.contains(&"clip:clipboard_ocr"));
 }
 
 #[test]
@@ -337,10 +337,10 @@ fn clipboard_pinned_shows_unpin_unpinned_shows_pin() {
     let unpinned_actions = get_clipboard_history_context_actions(&unpinned);
     let pinned_ids = action_ids(&pinned_actions);
     let unpinned_ids = action_ids(&unpinned_actions);
-    assert!(pinned_ids.contains(&"clipboard_unpin"));
-    assert!(!pinned_ids.contains(&"clipboard_pin"));
-    assert!(unpinned_ids.contains(&"clipboard_pin"));
-    assert!(!unpinned_ids.contains(&"clipboard_unpin"));
+    assert!(pinned_ids.contains(&"clip:clipboard_unpin"));
+    assert!(!pinned_ids.contains(&"clip:clipboard_pin"));
+    assert!(unpinned_ids.contains(&"clip:clipboard_pin"));
+    assert!(!unpinned_ids.contains(&"clip:clipboard_unpin"));
 }
 
 // =========================================================================
@@ -410,17 +410,17 @@ fn file_context_all_file_types_have_reveal_and_copy_path() {
         let actions = get_file_context_actions(&info);
         let ids = action_ids(&actions);
         assert!(
-            ids.contains(&"reveal_in_finder"),
+            ids.contains(&"file:reveal_in_finder"),
             "FileType {:?} should have reveal_in_finder",
             info.file_type
         );
         assert!(
-            ids.contains(&"copy_path"),
+            ids.contains(&"file:copy_path"),
             "FileType {:?} should have copy_path",
             info.file_type
         );
         assert!(
-            ids.contains(&"copy_filename"),
+            ids.contains(&"file:copy_filename"),
             "FileType {:?} should have copy_filename",
             info.file_type
         );
@@ -443,10 +443,10 @@ fn file_context_file_has_open_file_dir_has_open_directory() {
     };
     let file_actions = get_file_context_actions(&file);
     let dir_actions = get_file_context_actions(&dir);
-    assert!(action_ids(&file_actions).contains(&"open_file"));
-    assert!(!action_ids(&file_actions).contains(&"open_directory"));
-    assert!(action_ids(&dir_actions).contains(&"open_directory"));
-    assert!(!action_ids(&dir_actions).contains(&"open_file"));
+    assert!(action_ids(&file_actions).contains(&"file:open_file"));
+    assert!(!action_ids(&file_actions).contains(&"file:open_directory"));
+    assert!(action_ids(&dir_actions).contains(&"file:open_directory"));
+    assert!(!action_ids(&dir_actions).contains(&"file:open_file"));
 }
 
 // --- merged from part_02.rs ---
@@ -671,7 +671,7 @@ fn score_action_empty_query_returns_zero() {
 
 #[test]
 fn score_action_exact_title_match_gets_prefix_score() {
-    let action = Action::new("edit", "Edit Script", None, ActionCategory::ScriptContext);
+    let action = Action::new("script:edit", "Edit Script", None, ActionCategory::ScriptContext);
     let score = ActionsDialog::score_action(&action, "edit script");
     assert!(
         score >= 100,
@@ -719,13 +719,13 @@ fn score_action_shortcut_only_match_returns_ten() {
 #[test]
 fn score_action_title_plus_description_stacks() {
     let action = Action::new(
-        "edit",
+        "script:edit",
         "Edit Script",
         Some("Edit the script file".to_string()),
         ActionCategory::ScriptContext,
     );
-    let score = ActionsDialog::score_action(&action, "edit");
-    // title prefix (100) + description contains "edit" (15) = 115
+    let score = ActionsDialog::score_action(&action, "script:edit");
+    // title prefix (100) + description contains "script:edit" (15) = 115
     assert!(
         score >= 115,
         "Stacked score should be >= 115, got {}",
@@ -735,7 +735,7 @@ fn score_action_title_plus_description_stacks() {
 
 #[test]
 fn score_action_single_char_query() {
-    let action = Action::new("edit", "Edit Script", None, ActionCategory::ScriptContext);
+    let action = Action::new("script:edit", "Edit Script", None, ActionCategory::ScriptContext);
     let score = ActionsDialog::score_action(&action, "e");
     assert!(
         score >= 100,
@@ -1347,7 +1347,7 @@ fn clipboard_paste_title_with_empty_string_app_name() {
         frontmost_app_name: Some("".to_string()),
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let paste = find_action(&actions, "clipboard_paste").unwrap();
+    let paste = find_action(&actions, "clip:clipboard_paste").unwrap();
     // Even empty string gets formatted with "Paste to "
     assert_eq!(paste.title, "Paste to ");
 }
@@ -1365,7 +1365,7 @@ fn clipboard_paste_title_with_unicode_app_name() {
         frontmost_app_name: Some("日本語App".to_string()),
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let paste = find_action(&actions, "clipboard_paste").unwrap();
+    let paste = find_action(&actions, "clip:clipboard_paste").unwrap();
     assert_eq!(paste.title, "Paste to 日本語App");
 }
 
@@ -1380,7 +1380,7 @@ fn clipboard_paste_title_without_app_name() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let paste = find_action(&actions, "clipboard_paste").unwrap();
+    let paste = find_action(&actions, "clip:clipboard_paste").unwrap();
     assert_eq!(paste.title, "Paste to Active App");
 }
 
@@ -1398,9 +1398,9 @@ fn chat_no_models_no_messages_no_response() {
     };
     let actions = get_chat_context_actions(&info);
     let ids = action_ids(&actions);
-    assert!(ids.contains(&"continue_in_chat"));
-    assert!(!ids.contains(&"copy_response"));
-    assert!(!ids.contains(&"clear_conversation"));
+    assert!(ids.contains(&"chat:continue_in_chat"));
+    assert!(!ids.contains(&"chat:copy_response"));
+    assert!(!ids.contains(&"chat:clear_conversation"));
     assert_eq!(actions.len(), 1);
 }
 
@@ -1414,9 +1414,9 @@ fn chat_with_response_only_has_copy_response() {
     };
     let actions = get_chat_context_actions(&info);
     let ids = action_ids(&actions);
-    assert!(ids.contains(&"continue_in_chat"));
-    assert!(ids.contains(&"copy_response"));
-    assert!(!ids.contains(&"clear_conversation"));
+    assert!(ids.contains(&"chat:continue_in_chat"));
+    assert!(ids.contains(&"chat:copy_response"));
+    assert!(!ids.contains(&"chat:clear_conversation"));
 }
 
 #[test]
@@ -1429,9 +1429,9 @@ fn chat_with_messages_only_has_clear_conversation() {
     };
     let actions = get_chat_context_actions(&info);
     let ids = action_ids(&actions);
-    assert!(ids.contains(&"continue_in_chat"));
-    assert!(!ids.contains(&"copy_response"));
-    assert!(ids.contains(&"clear_conversation"));
+    assert!(ids.contains(&"chat:continue_in_chat"));
+    assert!(!ids.contains(&"chat:copy_response"));
+    assert!(ids.contains(&"chat:clear_conversation"));
 }
 
 #[test]
@@ -1448,11 +1448,11 @@ fn chat_with_all_flags_has_all_actions() {
     };
     let actions = get_chat_context_actions(&info);
     let ids = action_ids(&actions);
-    assert!(ids.contains(&"continue_in_chat"));
-    assert!(ids.contains(&"copy_response"));
-    assert!(ids.contains(&"clear_conversation"));
+    assert!(ids.contains(&"chat:continue_in_chat"));
+    assert!(ids.contains(&"chat:copy_response"));
+    assert!(ids.contains(&"chat:clear_conversation"));
     // Plus model selection action
-    assert!(ids.iter().any(|id| id.starts_with("select_model_")));
+    assert!(ids.iter().any(|id| id.starts_with("chat:select_model_")));
 }
 
 #[test]
@@ -1475,8 +1475,8 @@ fn chat_model_checkmark_on_current() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    let claude = find_action(&actions, "select_model_claude-3.5").unwrap();
-    let gpt = find_action(&actions, "select_model_gpt-4").unwrap();
+    let claude = find_action(&actions, "chat:select_model_claude-3.5").unwrap();
+    let gpt = find_action(&actions, "chat:select_model_gpt-4").unwrap();
     assert!(
         claude.title.contains('✓'),
         "Current model should have checkmark"
@@ -1741,7 +1741,7 @@ fn path_dir_primary_is_open_directory() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&path);
-    assert_eq!(actions[0].id, "open_directory");
+    assert_eq!(actions[0].id, "file:open_directory");
     assert!(actions[0].title.contains("Documents"));
 }
 
@@ -1753,7 +1753,7 @@ fn path_file_primary_is_select_file() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&path);
-    assert_eq!(actions[0].id, "select_file");
+    assert_eq!(actions[0].id, "file:select_file");
     assert!(actions[0].title.contains("readme.md"));
 }
 
@@ -1771,8 +1771,8 @@ fn path_trash_description_differs_by_is_dir() {
     };
     let dir_actions = get_path_context_actions(&dir_path);
     let file_actions = get_path_context_actions(&file_path);
-    let dir_trash = find_action(&dir_actions, "move_to_trash").unwrap();
-    let file_trash = find_action(&file_actions, "move_to_trash").unwrap();
+    let dir_trash = find_action(&dir_actions, "file:move_to_trash").unwrap();
+    let file_trash = find_action(&file_actions, "file:move_to_trash").unwrap();
     assert_eq!(dir_trash.description.as_deref(), Some("Delete folder"));
     assert_eq!(file_trash.description.as_deref(), Some("Delete file"));
 }
@@ -1823,7 +1823,7 @@ fn file_dir_primary_title_includes_dirname() {
 fn deeplink_description_contains_url_with_formatted_name() {
     let script = ScriptInfo::new("My Cool Script", "/path/to/script.ts");
     let actions = get_script_context_actions(&script);
-    let dl = find_action(&actions, "copy_deeplink").unwrap();
+    let dl = find_action(&actions, "script:copy_deeplink").unwrap();
     assert!(
         dl.description
             .as_ref()
@@ -1838,7 +1838,7 @@ fn deeplink_description_contains_url_with_formatted_name() {
 fn deeplink_description_for_builtin() {
     let builtin = ScriptInfo::builtin("Clipboard History");
     let actions = get_script_context_actions(&builtin);
-    let dl = find_action(&actions, "copy_deeplink").unwrap();
+    let dl = find_action(&actions, "script:copy_deeplink").unwrap();
     assert!(dl
         .description
         .as_ref()
@@ -2068,9 +2068,9 @@ fn clipboard_destructive_actions_are_last_three() {
     let actions = get_clipboard_history_context_actions(&entry);
     let len = actions.len();
     assert!(len >= 3);
-    assert_eq!(actions[len - 3].id, "clipboard_delete");
-    assert_eq!(actions[len - 2].id, "clipboard_delete_multiple");
-    assert_eq!(actions[len - 1].id, "clipboard_delete_all");
+    assert_eq!(actions[len - 3].id, "clip:clipboard_delete");
+    assert_eq!(actions[len - 2].id, "clip:clipboard_delete_multiple");
+    assert_eq!(actions[len - 1].id, "clip:clipboard_delete_all");
 }
 
 #[test]
@@ -2086,9 +2086,9 @@ fn clipboard_image_destructive_actions_are_last_three() {
     let actions = get_clipboard_history_context_actions(&entry);
     let len = actions.len();
     assert!(len >= 3);
-    assert_eq!(actions[len - 3].id, "clipboard_delete");
-    assert_eq!(actions[len - 2].id, "clipboard_delete_multiple");
-    assert_eq!(actions[len - 1].id, "clipboard_delete_all");
+    assert_eq!(actions[len - 3].id, "clip:clipboard_delete");
+    assert_eq!(actions[len - 2].id, "clip:clipboard_delete_multiple");
+    assert_eq!(actions[len - 1].id, "clip:clipboard_delete_all");
 }
 
 // =========================================================================
@@ -2106,8 +2106,8 @@ fn clipboard_paste_is_first_copy_is_second() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert_eq!(actions[0].id, "clipboard_paste");
-    assert_eq!(actions[1].id, "clipboard_copy");
+    assert_eq!(actions[0].id, "clip:clipboard_paste");
+    assert_eq!(actions[1].id, "clip:clipboard_copy");
 }
 
 // =========================================================================
@@ -2178,7 +2178,7 @@ fn primary_action_first_in_file_context() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&file);
-    assert_eq!(actions[0].id, "open_file");
+    assert_eq!(actions[0].id, "file:open_file");
     assert_eq!(actions[0].shortcut.as_deref(), Some("↵"));
 }
 
@@ -2190,7 +2190,7 @@ fn primary_action_first_in_path_context() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&path);
-    assert_eq!(actions[0].id, "select_file");
+    assert_eq!(actions[0].id, "file:select_file");
     assert_eq!(actions[0].shortcut.as_deref(), Some("↵"));
 }
 
@@ -2205,7 +2205,7 @@ fn primary_action_first_in_clipboard_context() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert_eq!(actions[0].id, "clipboard_paste");
+    assert_eq!(actions[0].id, "clip:clipboard_paste");
     assert_eq!(actions[0].shortcut.as_deref(), Some("↵"));
 }
 

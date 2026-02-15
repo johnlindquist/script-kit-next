@@ -266,7 +266,7 @@ fn builtin_has_shortcut_has_alias() {
     assert!(ids.contains(&"remove_shortcut"));
     assert!(ids.contains(&"update_alias"));
     assert!(ids.contains(&"remove_alias"));
-    assert!(ids.contains(&"copy_deeplink"));
+    assert!(ids.contains(&"script:copy_deeplink"));
     // No script-only actions
     assert!(!ids.contains(&"edit_script"));
     assert!(!ids.contains(&"view_logs"));
@@ -332,14 +332,14 @@ fn clipboard_text_pinned_with_app_name() {
     let actions = get_clipboard_history_context_actions(&entry);
     let ids = action_ids(&actions);
     // Pinned → unpin
-    assert!(ids.contains(&"clipboard_unpin"));
-    assert!(!ids.contains(&"clipboard_pin"));
+    assert!(ids.contains(&"clip:clipboard_unpin"));
+    assert!(!ids.contains(&"clip:clipboard_pin"));
     // App name in title
-    let paste = find_action(&actions, "clipboard_paste").unwrap();
+    let paste = find_action(&actions, "clip:clipboard_paste").unwrap();
     assert_eq!(paste.title, "Paste to Safari");
     // Destructive still last
     let len = ids.len();
-    assert_eq!(ids[len - 1], "clipboard_delete_all");
+    assert_eq!(ids[len - 1], "clip:clipboard_delete_all");
 }
 
 #[test]
@@ -354,10 +354,10 @@ fn clipboard_image_unpinned_no_app() {
     };
     let actions = get_clipboard_history_context_actions(&entry);
     let ids = action_ids(&actions);
-    assert!(ids.contains(&"clipboard_pin"));
-    assert!(!ids.contains(&"clipboard_unpin"));
-    assert!(ids.contains(&"clipboard_ocr"));
-    let paste = find_action(&actions, "clipboard_paste").unwrap();
+    assert!(ids.contains(&"clip:clipboard_pin"));
+    assert!(!ids.contains(&"clip:clipboard_unpin"));
+    assert!(ids.contains(&"clip:clipboard_ocr"));
+    let paste = find_action(&actions, "clip:clipboard_paste").unwrap();
     assert_eq!(paste.title, "Paste to Active App");
 }
 
@@ -382,28 +382,28 @@ fn clipboard_all_entries_have_core_actions() {
                 let ids = action_ids(&actions);
                 // Core actions always present
                 assert!(
-                    ids.contains(&"clipboard_paste"),
+                    ids.contains(&"clip:clipboard_paste"),
                     "Missing paste for {:?}/{}/{:?}",
                     content_type,
                     pinned,
                     app
                 );
                 assert!(
-                    ids.contains(&"clipboard_copy"),
+                    ids.contains(&"clip:clipboard_copy"),
                     "Missing copy for {:?}/{}/{:?}",
                     content_type,
                     pinned,
                     app
                 );
                 assert!(
-                    ids.contains(&"clipboard_delete"),
+                    ids.contains(&"clip:clipboard_delete"),
                     "Missing delete for {:?}/{}/{:?}",
                     content_type,
                     pinned,
                     app
                 );
                 assert!(
-                    ids.contains(&"clipboard_delete_all"),
+                    ids.contains(&"clip:clipboard_delete_all"),
                     "Missing delete_all for {:?}/{}/{:?}",
                     content_type,
                     pinned,
@@ -411,7 +411,7 @@ fn clipboard_all_entries_have_core_actions() {
                 );
                 // Pin/unpin mutually exclusive
                 assert!(
-                    ids.contains(&"clipboard_pin") ^ ids.contains(&"clipboard_unpin"),
+                    ids.contains(&"clip:clipboard_pin") ^ ids.contains(&"clip:clipboard_unpin"),
                     "Pin/unpin should be mutually exclusive for {:?}/{}/{:?}",
                     content_type,
                     pinned,
@@ -439,7 +439,7 @@ fn chat_single_model_current_checkmark() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    let model = find_action(&actions, "select_model_tm").unwrap();
+    let model = find_action(&actions, "chat:select_model_tm").unwrap();
     assert!(model.title.contains('✓'));
     assert_eq!(model.description.as_deref(), Some("via TestCo"));
 }
@@ -465,7 +465,7 @@ fn chat_many_models_only_one_checkmark() {
     let checkmark_count = actions.iter().filter(|a| a.title.contains('✓')).count();
     assert_eq!(checkmark_count, 1, "Only one model should have checkmark");
     let checked = actions.iter().find(|a| a.title.contains('✓')).unwrap();
-    assert_eq!(checked.id, "select_model_m2");
+    assert_eq!(checked.id, "chat:select_model_m2");
 }
 
 #[test]
@@ -478,8 +478,8 @@ fn chat_response_without_messages_still_gives_copy_response() {
     };
     let actions = get_chat_context_actions(&info);
     let ids = action_ids(&actions);
-    assert!(ids.contains(&"copy_response"));
-    assert!(!ids.contains(&"clear_conversation"));
+    assert!(ids.contains(&"chat:copy_response"));
+    assert!(!ids.contains(&"chat:clear_conversation"));
 }
 
 #[test]
@@ -492,8 +492,8 @@ fn chat_messages_without_response_gives_clear_but_no_copy() {
     };
     let actions = get_chat_context_actions(&info);
     let ids = action_ids(&actions);
-    assert!(!ids.contains(&"copy_response"));
-    assert!(ids.contains(&"clear_conversation"));
+    assert!(!ids.contains(&"chat:copy_response"));
+    assert!(ids.contains(&"chat:clear_conversation"));
 }
 
 // =========================================================================
@@ -516,7 +516,7 @@ fn notes_trash_view_disables_edit_copy_export() {
     assert!(!ids.contains(&"copy_note_as"));
     assert!(!ids.contains(&"export"));
     // But new_note and browse_notes are always present
-    assert!(ids.contains(&"new_note"));
+    assert!(ids.contains(&"notes:new_note"));
     assert!(ids.contains(&"browse_notes"));
 }
 
@@ -619,7 +619,7 @@ fn file_context_directory_never_has_quick_look() {
     let actions = get_file_context_actions(&info);
     let ids = action_ids(&actions);
     assert!(
-        !ids.contains(&"quick_look"),
+        !ids.contains(&"file:quick_look"),
         "Directory should not have quick_look"
     );
 }
@@ -632,7 +632,7 @@ fn file_context_directory_never_has_quick_look() {
 fn path_context_dir_starts_with_open_directory() {
     let info = PathInfo::new("mydir", "/home/mydir", true);
     let actions = get_path_context_actions(&info);
-    assert_eq!(actions[0].id, "open_directory");
+    assert_eq!(actions[0].id, "file:open_directory");
     assert!(actions[0].title.contains("mydir"));
 }
 
@@ -640,7 +640,7 @@ fn path_context_dir_starts_with_open_directory() {
 fn path_context_file_starts_with_select_file() {
     let info = PathInfo::new("data.csv", "/home/data.csv", false);
     let actions = get_path_context_actions(&info);
-    assert_eq!(actions[0].id, "select_file");
+    assert_eq!(actions[0].id, "file:select_file");
     assert!(actions[0].title.contains("data.csv"));
 }
 
@@ -648,8 +648,8 @@ fn path_context_file_starts_with_select_file() {
 fn path_context_trash_differs_for_file_and_dir() {
     let dir = get_path_context_actions(&PathInfo::new("d", "/d", true));
     let file = get_path_context_actions(&PathInfo::new("f", "/f", false));
-    let dir_trash = find_action(&dir, "move_to_trash").unwrap();
-    let file_trash = find_action(&file, "move_to_trash").unwrap();
+    let dir_trash = find_action(&dir, "file:move_to_trash").unwrap();
+    let file_trash = find_action(&file, "file:move_to_trash").unwrap();
     assert_ne!(dir_trash.description, file_trash.description);
     assert!(dir_trash.description.as_ref().unwrap().contains("folder"));
     assert!(file_trash.description.as_ref().unwrap().contains("file"));
@@ -800,7 +800,7 @@ fn note_switcher_large_char_count() {
 
 #[test]
 fn score_action_single_char_search() {
-    let action = Action::new("run", "Run Script", None, ActionCategory::ScriptContext);
+    let action = Action::new("script:run", "Run Script", None, ActionCategory::ScriptContext);
     let score = ActionsDialog::score_action(&action, "r");
     assert!(
         score >= 100,

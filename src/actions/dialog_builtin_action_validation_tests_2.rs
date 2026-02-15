@@ -480,7 +480,7 @@ fn notes_copy_section_only_when_selected_and_not_trash() {
     let actions_1 = get_notes_command_bar_actions(&info);
     let ids = action_ids(&actions_1);
     assert!(ids.contains(&"copy_note_as"));
-    assert!(ids.contains(&"copy_deeplink"));
+    assert!(ids.contains(&"script:copy_deeplink"));
     assert!(ids.contains(&"create_quicklink"));
 
     let info_no_sel = NotesInfo {
@@ -491,7 +491,7 @@ fn notes_copy_section_only_when_selected_and_not_trash() {
     let actions_2 = get_notes_command_bar_actions(&info_no_sel);
     let ids_no_sel = action_ids(&actions_2);
     assert!(!ids_no_sel.contains(&"copy_note_as"));
-    assert!(!ids_no_sel.contains(&"copy_deeplink"));
+    assert!(!ids_no_sel.contains(&"script:copy_deeplink"));
     assert!(!ids_no_sel.contains(&"create_quicklink"));
 }
 
@@ -561,7 +561,7 @@ fn chat_copy_response_only_when_has_response() {
     };
     let actions_1 = get_chat_context_actions(&with_response);
     let ids = action_ids(&actions_1);
-    assert!(ids.contains(&"copy_response"));
+    assert!(ids.contains(&"chat:copy_response"));
 
     let without_response = ChatPromptInfo {
         current_model: None,
@@ -571,7 +571,7 @@ fn chat_copy_response_only_when_has_response() {
     };
     let actions_2 = get_chat_context_actions(&without_response);
     let ids_no = action_ids(&actions_2);
-    assert!(!ids_no.contains(&"copy_response"));
+    assert!(!ids_no.contains(&"chat:copy_response"));
 }
 
 #[test]
@@ -584,7 +584,7 @@ fn chat_clear_conversation_only_when_has_messages() {
     };
     let actions_1 = get_chat_context_actions(&with_messages);
     let ids = action_ids(&actions_1);
-    assert!(ids.contains(&"clear_conversation"));
+    assert!(ids.contains(&"chat:clear_conversation"));
 
     let without_messages = ChatPromptInfo {
         current_model: None,
@@ -594,7 +594,7 @@ fn chat_clear_conversation_only_when_has_messages() {
     };
     let actions_2 = get_chat_context_actions(&without_messages);
     let ids_no = action_ids(&actions_2);
-    assert!(!ids_no.contains(&"clear_conversation"));
+    assert!(!ids_no.contains(&"chat:clear_conversation"));
 }
 
 #[test]
@@ -611,7 +611,7 @@ fn chat_empty_models_still_has_continue_in_chat() {
         1,
         "Empty chat should have only continue_in_chat"
     );
-    assert_eq!(actions[0].id, "continue_in_chat");
+    assert_eq!(actions[0].id, "chat:continue_in_chat");
 }
 
 #[test]
@@ -628,10 +628,10 @@ fn chat_full_context_has_all_actions() {
     };
     let actions_tmp = get_chat_context_actions(&info);
     let ids = action_ids(&actions_tmp);
-    assert!(ids.contains(&"select_model_gpt4"));
-    assert!(ids.contains(&"continue_in_chat"));
-    assert!(ids.contains(&"copy_response"));
-    assert!(ids.contains(&"clear_conversation"));
+    assert!(ids.contains(&"chat:select_model_gpt4"));
+    assert!(ids.contains(&"chat:continue_in_chat"));
+    assert!(ids.contains(&"chat:copy_response"));
+    assert!(ids.contains(&"chat:clear_conversation"));
 }
 
 // =========================================================================
@@ -651,7 +651,7 @@ fn clipboard_image_has_ocr_action() {
     let actions_tmp = get_clipboard_history_context_actions(&entry);
     let ids = action_ids(&actions_tmp);
     assert!(
-        ids.contains(&"clipboard_ocr"),
+        ids.contains(&"clip:clipboard_ocr"),
         "Image entry should have OCR action"
     );
 }
@@ -669,7 +669,7 @@ fn clipboard_text_has_no_ocr_action() {
     let actions_tmp = get_clipboard_history_context_actions(&entry);
     let ids = action_ids(&actions_tmp);
     assert!(
-        !ids.contains(&"clipboard_ocr"),
+        !ids.contains(&"clip:clipboard_ocr"),
         "Text entry should NOT have OCR action"
     );
 }
@@ -719,11 +719,11 @@ fn clipboard_pinned_has_unpin_not_pin() {
     let actions_tmp = get_clipboard_history_context_actions(&entry);
     let ids = action_ids(&actions_tmp);
     assert!(
-        ids.contains(&"clipboard_unpin"),
+        ids.contains(&"clip:clipboard_unpin"),
         "Pinned entry should have unpin"
     );
     assert!(
-        !ids.contains(&"clipboard_pin"),
+        !ids.contains(&"clip:clipboard_pin"),
         "Pinned entry should NOT have pin"
     );
 }
@@ -741,11 +741,11 @@ fn clipboard_unpinned_has_pin_not_unpin() {
     let actions_tmp = get_clipboard_history_context_actions(&entry);
     let ids = action_ids(&actions_tmp);
     assert!(
-        ids.contains(&"clipboard_pin"),
+        ids.contains(&"clip:clipboard_pin"),
         "Unpinned entry should have pin"
     );
     assert!(
-        !ids.contains(&"clipboard_unpin"),
+        !ids.contains(&"clip:clipboard_unpin"),
         "Unpinned entry should NOT have unpin"
     );
 }
@@ -765,7 +765,7 @@ fn clipboard_paste_title_includes_app_name() {
         frontmost_app_name: Some("VS Code".into()),
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let paste = find_action(&actions, "clipboard_paste").unwrap();
+    let paste = find_action(&actions, "clip:clipboard_paste").unwrap();
     assert!(
         paste.title.contains("VS Code"),
         "Paste title should include app name, got '{}'",
@@ -784,7 +784,7 @@ fn clipboard_paste_title_fallback_when_no_app() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let paste = find_action(&actions, "clipboard_paste").unwrap();
+    let paste = find_action(&actions, "clip:clipboard_paste").unwrap();
     assert!(
         paste.title.contains("Active App"),
         "Paste title should say 'Active App' as fallback, got '{}'",
@@ -800,7 +800,7 @@ fn clipboard_paste_title_fallback_when_no_app() {
 fn path_directory_primary_is_open_directory() {
     let path = PathInfo::new("my-dir", "/my-dir", true);
     let actions = get_path_context_actions(&path);
-    assert_eq!(actions[0].id, "open_directory");
+    assert_eq!(actions[0].id, "file:open_directory");
     assert!(actions[0].title.contains("my-dir"));
 }
 
@@ -808,7 +808,7 @@ fn path_directory_primary_is_open_directory() {
 fn path_file_primary_is_select_file() {
     let path = PathInfo::new("file.txt", "/file.txt", false);
     let actions = get_path_context_actions(&path);
-    assert_eq!(actions[0].id, "select_file");
+    assert_eq!(actions[0].id, "file:select_file");
     assert!(actions[0].title.contains("file.txt"));
 }
 
@@ -816,7 +816,7 @@ fn path_file_primary_is_select_file() {
 fn path_trash_description_varies_by_is_dir() {
     let dir_path = PathInfo::new("dir", "/dir", true);
     let dir_actions = get_path_context_actions(&dir_path);
-    let dir_trash = find_action(&dir_actions, "move_to_trash").unwrap();
+    let dir_trash = find_action(&dir_actions, "file:move_to_trash").unwrap();
     assert!(
         dir_trash.description.as_ref().unwrap().contains("folder"),
         "Directory trash description should mention 'folder', got '{:?}'",
@@ -825,7 +825,7 @@ fn path_trash_description_varies_by_is_dir() {
 
     let file_path = PathInfo::new("file.txt", "/file.txt", false);
     let file_actions = get_path_context_actions(&file_path);
-    let file_trash = find_action(&file_actions, "move_to_trash").unwrap();
+    let file_trash = find_action(&file_actions, "file:move_to_trash").unwrap();
     assert!(
         file_trash.description.as_ref().unwrap().contains("file"),
         "File trash description should mention 'file', got '{:?}'",
@@ -846,7 +846,7 @@ fn file_directory_primary_is_open_directory() {
         is_dir: true,
     };
     let actions = get_file_context_actions(&dir);
-    assert_eq!(actions[0].id, "open_directory");
+    assert_eq!(actions[0].id, "file:open_directory");
 }
 
 #[test]
@@ -858,7 +858,7 @@ fn file_non_directory_primary_is_open_file() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&file);
-    assert_eq!(actions[0].id, "open_file");
+    assert_eq!(actions[0].id, "file:open_file");
 }
 
 #[test]
@@ -872,7 +872,7 @@ fn file_directory_has_no_quick_look() {
     let actions_tmp = get_file_context_actions(&dir);
     let ids = action_ids(&actions_tmp);
     assert!(
-        !ids.contains(&"quick_look"),
+        !ids.contains(&"file:quick_look"),
         "Directories should not have quick_look"
     );
 }
@@ -904,8 +904,8 @@ fn agent_has_reveal_and_copy_path() {
     agent.is_script = false;
     let actions_tmp = get_script_context_actions(&agent);
     let ids = action_ids(&actions_tmp);
-    assert!(ids.contains(&"reveal_in_finder"));
-    assert!(ids.contains(&"copy_path"));
+    assert!(ids.contains(&"file:reveal_in_finder"));
+    assert!(ids.contains(&"file:copy_path"));
     assert!(ids.contains(&"copy_content"));
 }
 
@@ -933,8 +933,8 @@ fn builtin_lacks_edit_view_logs_reveal_copy_path_copy_content() {
     let ids = action_ids(&actions_tmp);
     assert!(!ids.contains(&"edit_script"));
     assert!(!ids.contains(&"view_logs"));
-    assert!(!ids.contains(&"reveal_in_finder"));
-    assert!(!ids.contains(&"copy_path"));
+    assert!(!ids.contains(&"file:reveal_in_finder"));
+    assert!(!ids.contains(&"file:copy_path"));
     assert!(!ids.contains(&"copy_content"));
 }
 
@@ -946,7 +946,7 @@ fn builtin_has_run_shortcut_alias_deeplink() {
     assert!(ids.contains(&"run_script"));
     assert!(ids.contains(&"add_shortcut"));
     assert!(ids.contains(&"add_alias"));
-    assert!(ids.contains(&"copy_deeplink"));
+    assert!(ids.contains(&"script:copy_deeplink"));
 }
 
 // =========================================================================
@@ -1185,12 +1185,12 @@ fn score_no_match_returns_zero() {
 #[test]
 fn score_title_plus_description_bonus_stacks() {
     let action = Action::new(
-        "edit",
+        "script:edit",
         "Edit Script",
         Some("Edit the script file".into()),
         ActionCategory::ScriptContext,
     );
-    let score = ActionsDialog::score_action(&action, "edit");
+    let score = ActionsDialog::score_action(&action, "script:edit");
     // Should get prefix bonus (100) + description bonus (15) = 115
     assert!(
         score > 100,
@@ -1829,7 +1829,7 @@ fn scriptlet_context_has_shortcut_alias_deeplink() {
     let ids = action_ids(&actions_tmp);
     assert!(ids.contains(&"add_shortcut"));
     assert!(ids.contains(&"add_alias"));
-    assert!(ids.contains(&"copy_deeplink"));
+    assert!(ids.contains(&"script:copy_deeplink"));
 }
 
 #[test]
@@ -1860,7 +1860,7 @@ fn notes_new_note_always_present() {
                 let actions_tmp = get_notes_command_bar_actions(&info);
                 let ids = action_ids(&actions_tmp);
                 assert!(
-                    ids.contains(&"new_note"),
+                    ids.contains(&"notes:new_note"),
                     "new_note should always be present (sel={}, trash={}, auto={})",
                     sel,
                     trash,
@@ -1913,7 +1913,7 @@ fn fuzzy_match_on_clipboard_action_titles() {
     // "pke" should fuzzy match "Paste and Keep Window Open" (p-a-s-t-e... k-e-e-p)
     let paste_keep = actions
         .iter()
-        .find(|a| a.id == "clipboard_paste_keep_open")
+        .find(|a| a.id == "clip:clipboard_paste_keep_open")
         .unwrap();
     assert!(ActionsDialog::fuzzy_match(&paste_keep.title_lower, "pke"));
 }
@@ -1926,7 +1926,7 @@ fn fuzzy_match_on_notes_action_titles() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    let new_note = actions.iter().find(|a| a.id == "new_note").unwrap();
+    let new_note = actions.iter().find(|a| a.id == "notes:new_note").unwrap();
     // "nn" matches "new note" → n at 0, n at 4
     assert!(ActionsDialog::fuzzy_match(&new_note.title_lower, "nn"));
 }

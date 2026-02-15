@@ -144,7 +144,7 @@ fn batch24_chat_no_response_no_messages() {
     let actions = get_chat_context_actions(&info);
     // Only continue_in_chat
     assert_eq!(actions.len(), 1);
-    assert_eq!(actions[0].id, "continue_in_chat");
+    assert_eq!(actions[0].id, "chat:continue_in_chat");
 }
 
 #[test]
@@ -158,7 +158,7 @@ fn batch24_chat_response_only() {
     let actions = get_chat_context_actions(&info);
     assert_eq!(actions.len(), 2);
     assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
-    assert!(!actions.iter().any(|a| a.id == "clear_conversation"));
+    assert!(!actions.iter().any(|a| a.id == "chat:clear_conversation"));
 }
 
 #[test]
@@ -172,7 +172,7 @@ fn batch24_chat_messages_only() {
     let actions = get_chat_context_actions(&info);
     assert_eq!(actions.len(), 2);
     assert!(!actions.iter().any(|a| a.id == "chat:copy_response"));
-    assert!(actions.iter().any(|a| a.id == "clear_conversation"));
+    assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
 }
 
 #[test]
@@ -186,7 +186,7 @@ fn batch24_chat_both_flags() {
     let actions = get_chat_context_actions(&info);
     assert_eq!(actions.len(), 3);
     assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
-    assert!(actions.iter().any(|a| a.id == "clear_conversation"));
+    assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
 }
 
 // ============================================================
@@ -215,12 +215,12 @@ fn batch24_chat_current_model_checkmark() {
     let actions = get_chat_context_actions(&info);
     let gpt4 = actions
         .iter()
-        .find(|a| a.id == "select_model_gpt4")
+        .find(|a| a.id == "chat:select_model_gpt4")
         .unwrap();
     assert!(gpt4.title.contains("✓"));
     let claude = actions
         .iter()
-        .find(|a| a.id == "select_model_claude")
+        .find(|a| a.id == "chat:select_model_claude")
         .unwrap();
     assert!(!claude.title.contains("✓"));
 }
@@ -240,7 +240,7 @@ fn batch24_chat_no_current_model_no_checkmark() {
     let actions = get_chat_context_actions(&info);
     let gpt4 = actions
         .iter()
-        .find(|a| a.id == "select_model_gpt4")
+        .find(|a| a.id == "chat:select_model_gpt4")
         .unwrap();
     assert!(!gpt4.title.contains("✓"));
 }
@@ -258,7 +258,7 @@ fn batch24_chat_model_description_via_provider() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    let m1 = actions.iter().find(|a| a.id == "select_model_m1").unwrap();
+    let m1 = actions.iter().find(|a| a.id == "chat:select_model_m1").unwrap();
     assert_eq!(m1.description.as_ref().unwrap(), "via TestProvider");
 }
 
@@ -278,7 +278,7 @@ fn batch24_clipboard_image_has_open_with() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_open_with"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_open_with"));
 }
 
 #[cfg(target_os = "macos")]
@@ -295,7 +295,7 @@ fn batch24_clipboard_image_has_annotate_cleanshot() {
     let actions = get_clipboard_history_context_actions(&entry);
     assert!(actions
         .iter()
-        .any(|a| a.id == "clipboard_annotate_cleanshot"));
+        .any(|a| a.id == "clip:clipboard_annotate_cleanshot"));
 }
 
 #[cfg(target_os = "macos")]
@@ -310,7 +310,7 @@ fn batch24_clipboard_image_has_upload_cleanshot() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_upload_cleanshot"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_upload_cleanshot"));
 }
 
 #[cfg(target_os = "macos")]
@@ -325,7 +325,7 @@ fn batch24_clipboard_text_no_open_with() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(!actions.iter().any(|a| a.id == "clipboard_open_with"));
+    assert!(!actions.iter().any(|a| a.id == "clip:clipboard_open_with"));
 }
 
 // ============================================================
@@ -343,7 +343,7 @@ fn batch24_clipboard_image_has_ocr() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_ocr"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_ocr"));
 }
 
 #[test]
@@ -357,7 +357,7 @@ fn batch24_clipboard_text_no_ocr() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(!actions.iter().any(|a| a.id == "clipboard_ocr"));
+    assert!(!actions.iter().any(|a| a.id == "clip:clipboard_ocr"));
 }
 
 #[test]
@@ -371,7 +371,7 @@ fn batch24_clipboard_ocr_shortcut() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let ocr = actions.iter().find(|a| a.id == "clipboard_ocr").unwrap();
+    let ocr = actions.iter().find(|a| a.id == "clip:clipboard_ocr").unwrap();
     assert_eq!(ocr.shortcut.as_ref().unwrap(), "⇧⌘C");
 }
 
@@ -390,7 +390,7 @@ fn batch24_clipboard_image_no_dimensions_still_has_ocr() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_ocr"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_ocr"));
 }
 
 #[test]
@@ -746,7 +746,7 @@ fn batch24_ai_command_bar_actions_section_count() {
 #[test]
 fn batch24_ai_export_markdown_shortcut_icon() {
     let actions = get_ai_command_bar_actions();
-    let export = actions.iter().find(|a| a.id == "export_markdown").unwrap();
+    let export = actions.iter().find(|a| a.id == "chat:export_markdown").unwrap();
     assert_eq!(export.shortcut.as_ref().unwrap(), "⇧⌘E");
     assert_eq!(export.icon, Some(IconName::FileCode));
 }
@@ -754,7 +754,7 @@ fn batch24_ai_export_markdown_shortcut_icon() {
 #[test]
 fn batch24_ai_branch_from_last_no_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let branch = actions.iter().find(|a| a.id == "branch_from_last").unwrap();
+    let branch = actions.iter().find(|a| a.id == "chat:branch_from_last").unwrap();
     assert!(branch.shortcut.is_none());
     assert_eq!(branch.icon, Some(IconName::ArrowRight));
 }
@@ -762,7 +762,7 @@ fn batch24_ai_branch_from_last_no_shortcut() {
 #[test]
 fn batch24_ai_change_model_no_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let model = actions.iter().find(|a| a.id == "change_model").unwrap();
+    let model = actions.iter().find(|a| a.id == "chat:change_model").unwrap();
     assert!(model.shortcut.is_none());
     assert_eq!(model.icon, Some(IconName::Settings));
 }
@@ -772,7 +772,7 @@ fn batch24_ai_toggle_shortcuts_help_shortcut() {
     let actions = get_ai_command_bar_actions();
     let help = actions
         .iter()
-        .find(|a| a.id == "toggle_shortcuts_help")
+        .find(|a| a.id == "chat:toggle_shortcuts_help")
         .unwrap();
     assert_eq!(help.shortcut.as_ref().unwrap(), "⌘/");
 }

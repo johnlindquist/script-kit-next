@@ -242,28 +242,28 @@ fn cat27_04_notes_auto_sizing_icon_is_settings() {
 #[test]
 fn cat27_05_ai_paste_image_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let paste = actions.iter().find(|a| a.id == "paste_image").unwrap();
+    let paste = actions.iter().find(|a| a.id == "chat:paste_image").unwrap();
     assert_eq!(paste.shortcut.as_deref(), Some("⌘V"));
 }
 
 #[test]
 fn cat27_05_ai_paste_image_section_is_attachments() {
     let actions = get_ai_command_bar_actions();
-    let paste = actions.iter().find(|a| a.id == "paste_image").unwrap();
+    let paste = actions.iter().find(|a| a.id == "chat:paste_image").unwrap();
     assert_eq!(paste.section.as_deref(), Some("Attachments"));
 }
 
 #[test]
 fn cat27_05_ai_paste_image_icon_is_file() {
     let actions = get_ai_command_bar_actions();
-    let paste = actions.iter().find(|a| a.id == "paste_image").unwrap();
+    let paste = actions.iter().find(|a| a.id == "chat:paste_image").unwrap();
     assert_eq!(paste.icon, Some(IconName::File));
 }
 
 #[test]
 fn cat27_05_ai_paste_image_desc_mentions_clipboard() {
     let actions = get_ai_command_bar_actions();
-    let paste = actions.iter().find(|a| a.id == "paste_image").unwrap();
+    let paste = actions.iter().find(|a| a.id == "chat:paste_image").unwrap();
     assert!(paste
         .description
         .as_ref()
@@ -286,7 +286,7 @@ fn cat27_06_chat_zero_models_no_flags_one_action() {
     };
     let actions = get_chat_context_actions(&info);
     assert_eq!(actions.len(), 1);
-    assert_eq!(actions[0].id, "continue_in_chat");
+    assert_eq!(actions[0].id, "chat:continue_in_chat");
 }
 
 #[test]
@@ -348,7 +348,7 @@ fn cat27_06_chat_response_without_messages() {
     assert_eq!(actions.len(), 2);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
     assert!(ids.contains(&"chat:copy_response"));
-    assert!(!ids.contains(&"clear_conversation"));
+    assert!(!ids.contains(&"chat:clear_conversation"));
 }
 
 // ─────────────────────────────────────────────
@@ -641,7 +641,7 @@ fn cat27_13_score_fuzzy_match_gives_25() {
 #[test]
 fn cat27_13_score_prefix_gives_at_least_100() {
     let action = Action::new("script:edit", "Edit Script", None, ActionCategory::ScriptContext);
-    let score = super::dialog::ActionsDialog::score_action(&action, "edit");
+    let score = super::dialog::ActionsDialog::score_action(&action, "script:edit");
     assert!(score >= 100);
 }
 
@@ -812,7 +812,7 @@ fn cat27_17_clipboard_image_has_ocr() {
     };
     let actions = get_clipboard_history_context_actions(&entry);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
-    assert!(ids.contains(&"clipboard_ocr"));
+    assert!(ids.contains(&"clip:clipboard_ocr"));
 }
 
 #[test]
@@ -827,7 +827,7 @@ fn cat27_17_clipboard_text_no_ocr() {
     };
     let actions = get_clipboard_history_context_actions(&entry);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
-    assert!(!ids.contains(&"clipboard_ocr"));
+    assert!(!ids.contains(&"clip:clipboard_ocr"));
 }
 
 #[test]
@@ -1096,7 +1096,7 @@ fn cat27_23_parse_keycaps_lowercase_uppercased() {
 
 #[test]
 fn cat27_24_fuzzy_match_exact() {
-    assert!(super::dialog::ActionsDialog::fuzzy_match("edit", "edit"));
+    assert!(super::dialog::ActionsDialog::fuzzy_match("script:edit", "script:edit"));
 }
 
 #[test]
@@ -1109,7 +1109,7 @@ fn cat27_24_fuzzy_match_subsequence() {
 
 #[test]
 fn cat27_24_fuzzy_match_no_match() {
-    assert!(!super::dialog::ActionsDialog::fuzzy_match("edit", "z"));
+    assert!(!super::dialog::ActionsDialog::fuzzy_match("script:edit", "z"));
 }
 
 #[test]
@@ -1176,7 +1176,7 @@ fn cat27_26_clipboard_delete_all_desc_mentions_pinned() {
     let actions = get_clipboard_history_context_actions(&entry);
     let del_all = actions
         .iter()
-        .find(|a| a.id == "clipboard_delete_all")
+        .find(|a| a.id == "clip:clipboard_delete_all")
         .unwrap();
     assert!(del_all
         .description
@@ -1199,7 +1199,7 @@ fn cat27_26_clipboard_delete_multiple_desc_mentions_filter() {
     let actions = get_clipboard_history_context_actions(&entry);
     let del_multi = actions
         .iter()
-        .find(|a| a.id == "clipboard_delete_multiple")
+        .find(|a| a.id == "clip:clipboard_delete_multiple")
         .unwrap();
     assert!(del_multi
         .description
@@ -1220,7 +1220,7 @@ fn cat27_26_clipboard_delete_shortcut_is_ctrl_x() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let del = actions.iter().find(|a| a.id == "clipboard_delete").unwrap();
+    let del = actions.iter().find(|a| a.id == "clip:clipboard_delete").unwrap();
     assert_eq!(del.shortcut.as_deref(), Some("⌃X"));
 }
 

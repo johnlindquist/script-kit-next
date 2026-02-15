@@ -34,8 +34,8 @@ fn clipboard_pinned_image_has_unpin_not_pin() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_unpin"));
-    assert!(!actions.iter().any(|a| a.id == "clipboard_pin"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_unpin"));
+    assert!(!actions.iter().any(|a| a.id == "clip:clipboard_pin"));
 }
 
 #[test]
@@ -49,7 +49,7 @@ fn clipboard_pinned_image_has_ocr() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_ocr"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_ocr"));
 }
 
 #[test]
@@ -63,8 +63,8 @@ fn clipboard_unpinned_text_has_pin_not_unpin() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_pin"));
-    assert!(!actions.iter().any(|a| a.id == "clipboard_unpin"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_pin"));
+    assert!(!actions.iter().any(|a| a.id == "clip:clipboard_unpin"));
 }
 
 #[test]
@@ -78,8 +78,8 @@ fn clipboard_pinned_text_has_unpin() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_unpin"));
-    assert!(!actions.iter().any(|a| a.id == "clipboard_pin"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_unpin"));
+    assert!(!actions.iter().any(|a| a.id == "clip:clipboard_pin"));
 }
 
 // =====================================================================
@@ -97,7 +97,7 @@ fn clipboard_ocr_shortcut_is_shift_cmd_c() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let ocr = actions.iter().find(|a| a.id == "clipboard_ocr").unwrap();
+    let ocr = actions.iter().find(|a| a.id == "clip:clipboard_ocr").unwrap();
     assert_eq!(ocr.shortcut.as_deref(), Some("⇧⌘C"));
 }
 
@@ -112,7 +112,7 @@ fn clipboard_ocr_title_is_copy_text_from_image() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let ocr = actions.iter().find(|a| a.id == "clipboard_ocr").unwrap();
+    let ocr = actions.iter().find(|a| a.id == "clip:clipboard_ocr").unwrap();
     assert_eq!(ocr.title, "Copy Text from Image");
 }
 
@@ -127,7 +127,7 @@ fn clipboard_ocr_desc_mentions_ocr() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let ocr = actions.iter().find(|a| a.id == "clipboard_ocr").unwrap();
+    let ocr = actions.iter().find(|a| a.id == "clip:clipboard_ocr").unwrap();
     assert!(ocr.description.as_ref().unwrap().contains("OCR"));
 }
 
@@ -142,7 +142,7 @@ fn clipboard_ocr_absent_for_text_entry() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(!actions.iter().any(|a| a.id == "clipboard_ocr"));
+    assert!(!actions.iter().any(|a| a.id == "clip:clipboard_ocr"));
 }
 
 // =====================================================================
@@ -267,28 +267,28 @@ fn file_copy_filename_desc_says_just_the_filename() {
 #[test]
 fn ai_bar_new_chat_shortcut_cmd_n() {
     let actions = get_ai_command_bar_actions();
-    let nc = actions.iter().find(|a| a.id == "new_chat").unwrap();
+    let nc = actions.iter().find(|a| a.id == "chat:new_chat").unwrap();
     assert_eq!(nc.shortcut.as_deref(), Some("⌘N"));
 }
 
 #[test]
 fn ai_bar_new_chat_icon_plus() {
     let actions = get_ai_command_bar_actions();
-    let nc = actions.iter().find(|a| a.id == "new_chat").unwrap();
+    let nc = actions.iter().find(|a| a.id == "chat:new_chat").unwrap();
     assert_eq!(nc.icon, Some(IconName::Plus));
 }
 
 #[test]
 fn ai_bar_delete_chat_shortcut_cmd_delete() {
     let actions = get_ai_command_bar_actions();
-    let dc = actions.iter().find(|a| a.id == "delete_chat").unwrap();
+    let dc = actions.iter().find(|a| a.id == "chat:delete_chat").unwrap();
     assert_eq!(dc.shortcut.as_deref(), Some("⌘⌫"));
 }
 
 #[test]
 fn ai_bar_delete_chat_icon_trash() {
     let actions = get_ai_command_bar_actions();
-    let dc = actions.iter().find(|a| a.id == "delete_chat").unwrap();
+    let dc = actions.iter().find(|a| a.id == "chat:delete_chat").unwrap();
     assert_eq!(dc.icon, Some(IconName::Trash));
 }
 
@@ -301,7 +301,7 @@ fn ai_bar_toggle_shortcuts_help_shortcut_cmd_slash() {
     let actions = get_ai_command_bar_actions();
     let tsh = actions
         .iter()
-        .find(|a| a.id == "toggle_shortcuts_help")
+        .find(|a| a.id == "chat:toggle_shortcuts_help")
         .unwrap();
     assert_eq!(tsh.shortcut.as_deref(), Some("⌘/"));
 }
@@ -311,7 +311,7 @@ fn ai_bar_toggle_shortcuts_help_icon_star() {
     let actions = get_ai_command_bar_actions();
     let tsh = actions
         .iter()
-        .find(|a| a.id == "toggle_shortcuts_help")
+        .find(|a| a.id == "chat:toggle_shortcuts_help")
         .unwrap();
     assert_eq!(tsh.icon, Some(IconName::Star));
 }
@@ -321,7 +321,7 @@ fn ai_bar_toggle_shortcuts_help_section_help() {
     let actions = get_ai_command_bar_actions();
     let tsh = actions
         .iter()
-        .find(|a| a.id == "toggle_shortcuts_help")
+        .find(|a| a.id == "chat:toggle_shortcuts_help")
         .unwrap();
     assert_eq!(tsh.section.as_deref(), Some("Help"));
 }
@@ -357,13 +357,13 @@ fn ai_bar_settings_action_is_change_model() {
         .iter()
         .filter(|a| a.section.as_deref() == Some("Settings"))
         .collect();
-    assert_eq!(settings[0].id, "change_model");
+    assert_eq!(settings[0].id, "chat:change_model");
 }
 
 #[test]
 fn ai_bar_change_model_has_no_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let cm = actions.iter().find(|a| a.id == "change_model").unwrap();
+    let cm = actions.iter().find(|a| a.id == "chat:change_model").unwrap();
     assert!(cm.shortcut.is_none());
 }
 
@@ -508,7 +508,7 @@ fn chat_no_messages_no_response_has_only_models_and_continue() {
     // 1 model + continue_in_chat = 2
     assert_eq!(actions.len(), 2);
     assert!(!actions.iter().any(|a| a.id == "chat:copy_response"));
-    assert!(!actions.iter().any(|a| a.id == "clear_conversation"));
+    assert!(!actions.iter().any(|a| a.id == "chat:clear_conversation"));
 }
 
 #[test]
@@ -524,7 +524,7 @@ fn chat_has_messages_no_response_has_clear_no_copy() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "clear_conversation"));
+    assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
     assert!(!actions.iter().any(|a| a.id == "chat:copy_response"));
 }
 
@@ -542,7 +542,7 @@ fn chat_no_messages_has_response_has_copy_no_clear() {
     };
     let actions = get_chat_context_actions(&info);
     assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
-    assert!(!actions.iter().any(|a| a.id == "clear_conversation"));
+    assert!(!actions.iter().any(|a| a.id == "chat:clear_conversation"));
 }
 
 #[test]
@@ -559,7 +559,7 @@ fn chat_has_both_flags_has_copy_and_clear() {
     };
     let actions = get_chat_context_actions(&info);
     assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
-    assert!(actions.iter().any(|a| a.id == "clear_conversation"));
+    assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
     // 1 model + continue + copy + clear = 4
     assert_eq!(actions.len(), 4);
 }
@@ -580,7 +580,7 @@ fn chat_continue_in_chat_always_present() {
         };
         let actions = get_chat_context_actions(&info);
         assert!(
-            actions.iter().any(|a| a.id == "continue_in_chat"),
+            actions.iter().any(|a| a.id == "chat:continue_in_chat"),
             "continue_in_chat missing for has_messages={has_messages}, has_response={has_response}"
         );
     }
@@ -595,7 +595,7 @@ fn chat_continue_in_chat_shortcut_cmd_enter() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    let cont = actions.iter().find(|a| a.id == "continue_in_chat").unwrap();
+    let cont = actions.iter().find(|a| a.id == "chat:continue_in_chat").unwrap();
     assert_eq!(cont.shortcut.as_deref(), Some("⌘↵"));
 }
 
@@ -608,7 +608,7 @@ fn chat_continue_in_chat_desc_mentions_ai_chat() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    let cont = actions.iter().find(|a| a.id == "continue_in_chat").unwrap();
+    let cont = actions.iter().find(|a| a.id == "chat:continue_in_chat").unwrap();
     assert!(cont.description.as_ref().unwrap().contains("AI Chat"));
 }
 
@@ -623,7 +623,7 @@ fn chat_clear_conversation_shortcut_cmd_delete() {
     let actions = get_chat_context_actions(&info);
     let clear = actions
         .iter()
-        .find(|a| a.id == "clear_conversation")
+        .find(|a| a.id == "chat:clear_conversation")
         .unwrap();
     assert_eq!(clear.shortcut.as_deref(), Some("⌘⌫"));
 }
@@ -1000,7 +1000,7 @@ fn clipboard_pin_shortcut_shift_cmd_p() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let pin = actions.iter().find(|a| a.id == "clipboard_pin").unwrap();
+    let pin = actions.iter().find(|a| a.id == "clip:clipboard_pin").unwrap();
     assert_eq!(pin.shortcut.as_deref(), Some("⇧⌘P"));
 }
 
@@ -1015,7 +1015,7 @@ fn clipboard_unpin_shortcut_shift_cmd_p() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let unpin = actions.iter().find(|a| a.id == "clipboard_unpin").unwrap();
+    let unpin = actions.iter().find(|a| a.id == "clip:clipboard_unpin").unwrap();
     assert_eq!(unpin.shortcut.as_deref(), Some("⇧⌘P"));
 }
 
@@ -1030,7 +1030,7 @@ fn clipboard_pin_title_is_pin_entry() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let pin = actions.iter().find(|a| a.id == "clipboard_pin").unwrap();
+    let pin = actions.iter().find(|a| a.id == "clip:clipboard_pin").unwrap();
     assert_eq!(pin.title, "Pin Entry");
 }
 
@@ -1045,7 +1045,7 @@ fn clipboard_unpin_title_is_unpin_entry() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let unpin = actions.iter().find(|a| a.id == "clipboard_unpin").unwrap();
+    let unpin = actions.iter().find(|a| a.id == "clip:clipboard_unpin").unwrap();
     assert_eq!(unpin.title, "Unpin Entry");
 }
 
@@ -1227,7 +1227,7 @@ fn clipboard_upload_cleanshot_shortcut_shift_cmd_u() {
     let actions = get_clipboard_history_context_actions(&entry);
     let upload = actions
         .iter()
-        .find(|a| a.id == "clipboard_upload_cleanshot")
+        .find(|a| a.id == "clip:clipboard_upload_cleanshot")
         .unwrap();
     assert_eq!(upload.shortcut.as_deref(), Some("⇧⌘U"));
 }
@@ -1246,7 +1246,7 @@ fn clipboard_upload_cleanshot_title() {
     let actions = get_clipboard_history_context_actions(&entry);
     let upload = actions
         .iter()
-        .find(|a| a.id == "clipboard_upload_cleanshot")
+        .find(|a| a.id == "clip:clipboard_upload_cleanshot")
         .unwrap();
     assert_eq!(upload.title, "Upload to CleanShot X");
 }
@@ -1265,7 +1265,7 @@ fn clipboard_upload_cleanshot_desc_mentions_cloud() {
     let actions = get_clipboard_history_context_actions(&entry);
     let upload = actions
         .iter()
-        .find(|a| a.id == "clipboard_upload_cleanshot")
+        .find(|a| a.id == "clip:clipboard_upload_cleanshot")
         .unwrap();
     assert!(upload.description.as_ref().unwrap().contains("Cloud"));
 }
@@ -1282,7 +1282,7 @@ fn clipboard_upload_cleanshot_absent_for_text() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(!actions.iter().any(|a| a.id == "clipboard_upload_cleanshot"));
+    assert!(!actions.iter().any(|a| a.id == "clip:clipboard_upload_cleanshot"));
 }
 
 // =====================================================================
@@ -1391,7 +1391,7 @@ fn score_action_matches_case_insensitive() {
         Some("Open in editor".into()),
         ActionCategory::ScriptContext,
     );
-    let score = ActionsDialog::score_action(&action, "edit");
+    let score = ActionsDialog::score_action(&action, "script:edit");
     assert!(score >= 100, "Prefix match should score >=100, got {score}");
 }
 

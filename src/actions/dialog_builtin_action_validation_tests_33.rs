@@ -173,7 +173,7 @@ fn score_action_prefix_match_at_least_100() {
         None,
         ActionCategory::ScriptContext,
     );
-    let score = ActionsDialog::score_action(&action, "edit");
+    let score = ActionsDialog::score_action(&action, "script:edit");
     assert!(score >= 100, "Prefix match should be >= 100, got {}", score);
 }
 
@@ -185,7 +185,7 @@ fn score_action_contains_match_between_50_and_99() {
         None,
         ActionCategory::ScriptContext,
     );
-    let score = ActionsDialog::score_action(&action, "edit");
+    let score = ActionsDialog::score_action(&action, "script:edit");
     assert!(
         (50..100).contains(&score),
         "Contains match should be 50-99, got {}",
@@ -253,7 +253,7 @@ fn score_action_prefix_plus_description_bonus_stacks() {
         Some("Edit the script file".to_string()),
         ActionCategory::ScriptContext,
     );
-    let score = ActionsDialog::score_action(&action, "edit");
+    let score = ActionsDialog::score_action(&action, "script:edit");
     assert!(
         score >= 115,
         "Prefix (100) + desc bonus (15) should be >= 115, got {}",
@@ -522,28 +522,28 @@ fn command_bar_notes_close_flags_inherited() {
 #[test]
 fn ai_command_bar_paste_image_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let action = actions.iter().find(|a| a.id == "paste_image").unwrap();
+    let action = actions.iter().find(|a| a.id == "chat:paste_image").unwrap();
     assert_eq!(action.shortcut.as_ref().unwrap(), "⌘V");
 }
 
 #[test]
 fn ai_command_bar_paste_image_icon() {
     let actions = get_ai_command_bar_actions();
-    let action = actions.iter().find(|a| a.id == "paste_image").unwrap();
+    let action = actions.iter().find(|a| a.id == "chat:paste_image").unwrap();
     assert_eq!(action.icon, Some(IconName::File));
 }
 
 #[test]
 fn ai_command_bar_paste_image_section() {
     let actions = get_ai_command_bar_actions();
-    let action = actions.iter().find(|a| a.id == "paste_image").unwrap();
+    let action = actions.iter().find(|a| a.id == "chat:paste_image").unwrap();
     assert_eq!(action.section.as_deref(), Some("Attachments"));
 }
 
 #[test]
 fn ai_command_bar_paste_image_desc_mentions_clipboard() {
     let actions = get_ai_command_bar_actions();
-    let action = actions.iter().find(|a| a.id == "paste_image").unwrap();
+    let action = actions.iter().find(|a| a.id == "chat:paste_image").unwrap();
     assert!(action
         .description
         .as_ref()
@@ -718,7 +718,7 @@ fn clipboard_share_shortcut_is_shift_cmd_e() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let share = actions.iter().find(|a| a.id == "clipboard_share").unwrap();
+    let share = actions.iter().find(|a| a.id == "clip:clipboard_share").unwrap();
     assert_eq!(share.shortcut.as_ref().unwrap(), "⇧⌘E");
 }
 
@@ -733,7 +733,7 @@ fn clipboard_share_title_is_share() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let share = actions.iter().find(|a| a.id == "clipboard_share").unwrap();
+    let share = actions.iter().find(|a| a.id == "clip:clipboard_share").unwrap();
     assert_eq!(share.title, "Share...");
 }
 
@@ -748,7 +748,7 @@ fn clipboard_share_present_for_image() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_share"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_share"));
 }
 
 #[test]
@@ -762,13 +762,13 @@ fn clipboard_share_desc_mentions_share() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let share = actions.iter().find(|a| a.id == "clipboard_share").unwrap();
+    let share = actions.iter().find(|a| a.id == "clip:clipboard_share").unwrap();
     assert!(share
         .description
         .as_ref()
         .unwrap()
         .to_lowercase()
-        .contains("share"));
+        .contains("script:share"));
 }
 
 // =====================================================================

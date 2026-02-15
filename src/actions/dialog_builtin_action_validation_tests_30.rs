@@ -73,7 +73,7 @@ fn batch30_clipboard_text_no_ocr() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(!actions.iter().any(|a| a.id == "clipboard_ocr"));
+    assert!(!actions.iter().any(|a| a.id == "clip:clipboard_ocr"));
 }
 
 #[test]
@@ -87,7 +87,7 @@ fn batch30_clipboard_text_no_open_with() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(!actions.iter().any(|a| a.id == "clipboard_open_with"));
+    assert!(!actions.iter().any(|a| a.id == "clip:clipboard_open_with"));
 }
 
 #[test]
@@ -103,7 +103,7 @@ fn batch30_clipboard_text_no_annotate_cleanshot() {
     let actions = get_clipboard_history_context_actions(&entry);
     assert!(!actions
         .iter()
-        .any(|a| a.id == "clipboard_annotate_cleanshot"));
+        .any(|a| a.id == "clip:clipboard_annotate_cleanshot"));
 }
 
 #[test]
@@ -117,7 +117,7 @@ fn batch30_clipboard_text_no_upload_cleanshot() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(!actions.iter().any(|a| a.id == "clipboard_upload_cleanshot"));
+    assert!(!actions.iter().any(|a| a.id == "clip:clipboard_upload_cleanshot"));
 }
 
 // ---------------------------------------------------------------------------
@@ -134,7 +134,7 @@ fn batch30_clipboard_image_has_ocr() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_ocr"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_ocr"));
 }
 
 #[cfg(target_os = "macos")]
@@ -149,7 +149,7 @@ fn batch30_clipboard_image_has_open_with_macos() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_open_with"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_open_with"));
 }
 
 #[cfg(target_os = "macos")]
@@ -166,7 +166,7 @@ fn batch30_clipboard_image_has_annotate_cleanshot_macos() {
     let actions = get_clipboard_history_context_actions(&entry);
     assert!(actions
         .iter()
-        .any(|a| a.id == "clipboard_annotate_cleanshot"));
+        .any(|a| a.id == "clip:clipboard_annotate_cleanshot"));
 }
 
 #[cfg(target_os = "macos")]
@@ -183,7 +183,7 @@ fn batch30_clipboard_image_annotate_cleanshot_shortcut() {
     let actions = get_clipboard_history_context_actions(&entry);
     let a = actions
         .iter()
-        .find(|a| a.id == "clipboard_annotate_cleanshot")
+        .find(|a| a.id == "clip:clipboard_annotate_cleanshot")
         .unwrap();
     assert_eq!(a.shortcut.as_deref(), Some("⇧⌘A"));
 }
@@ -201,7 +201,7 @@ fn batch30_file_dir_no_quick_look() {
         is_dir: true,
     };
     let actions = get_file_context_actions(&info);
-    assert!(!actions.iter().any(|a| a.id == "quick_look"));
+    assert!(!actions.iter().any(|a| a.id == "file:quick_look"));
 }
 
 #[cfg(target_os = "macos")]
@@ -214,7 +214,7 @@ fn batch30_file_regular_has_quick_look() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "quick_look"));
+    assert!(actions.iter().any(|a| a.id == "file:quick_look"));
 }
 
 #[cfg(target_os = "macos")]
@@ -227,7 +227,7 @@ fn batch30_file_quick_look_shortcut_is_cmd_y() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&info);
-    let ql = actions.iter().find(|a| a.id == "quick_look").unwrap();
+    let ql = actions.iter().find(|a| a.id == "file:quick_look").unwrap();
     assert_eq!(ql.shortcut.as_deref(), Some("⌘Y"));
 }
 
@@ -240,8 +240,8 @@ fn batch30_file_dir_has_open_directory() {
         is_dir: true,
     };
     let actions = get_file_context_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "open_directory"));
-    assert!(!actions.iter().any(|a| a.id == "open_file"));
+    assert!(actions.iter().any(|a| a.id == "file:open_directory"));
+    assert!(!actions.iter().any(|a| a.id == "file:open_file"));
 }
 
 // ---------------------------------------------------------------------------
@@ -285,7 +285,7 @@ fn batch30_path_file_first_action_is_select_file() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&info);
-    assert_eq!(actions[0].id, "select_file");
+    assert_eq!(actions[0].id, "file:select_file");
 }
 
 #[test]
@@ -296,7 +296,7 @@ fn batch30_path_dir_first_action_is_open_directory() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&info);
-    assert_eq!(actions[0].id, "open_directory");
+    assert_eq!(actions[0].id, "file:open_directory");
 }
 
 // ---------------------------------------------------------------------------
@@ -310,7 +310,7 @@ fn batch30_path_open_in_terminal_shortcut() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&info);
-    let t = actions.iter().find(|a| a.id == "open_in_terminal").unwrap();
+    let t = actions.iter().find(|a| a.id == "file:open_in_terminal").unwrap();
     assert_eq!(t.shortcut.as_deref(), Some("⌘T"));
 }
 
@@ -322,7 +322,7 @@ fn batch30_path_open_in_terminal_desc_mentions_terminal() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&info);
-    let t = actions.iter().find(|a| a.id == "open_in_terminal").unwrap();
+    let t = actions.iter().find(|a| a.id == "file:open_in_terminal").unwrap();
     assert!(t
         .description
         .as_ref()
@@ -339,7 +339,7 @@ fn batch30_path_open_in_finder_shortcut() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&info);
-    let f = actions.iter().find(|a| a.id == "open_in_finder").unwrap();
+    let f = actions.iter().find(|a| a.id == "file:open_in_finder").unwrap();
     assert_eq!(f.shortcut.as_deref(), Some("⌘⇧F"));
 }
 
@@ -351,7 +351,7 @@ fn batch30_path_copy_path_shortcut() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&info);
-    let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
+    let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
     assert_eq!(cp.shortcut.as_deref(), Some("⌘⇧C"));
 }
 
@@ -403,28 +403,28 @@ fn batch30_ai_bar_all_have_icon() {
 #[test]
 fn batch30_ai_bar_branch_from_last_no_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let b = actions.iter().find(|a| a.id == "branch_from_last").unwrap();
+    let b = actions.iter().find(|a| a.id == "chat:branch_from_last").unwrap();
     assert!(b.shortcut.is_none());
 }
 
 #[test]
 fn batch30_ai_bar_change_model_no_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let cm = actions.iter().find(|a| a.id == "change_model").unwrap();
+    let cm = actions.iter().find(|a| a.id == "chat:change_model").unwrap();
     assert!(cm.shortcut.is_none());
 }
 
 #[test]
 fn batch30_ai_bar_branch_from_last_icon_arrowright() {
     let actions = get_ai_command_bar_actions();
-    let b = actions.iter().find(|a| a.id == "branch_from_last").unwrap();
+    let b = actions.iter().find(|a| a.id == "chat:branch_from_last").unwrap();
     assert_eq!(b.icon, Some(IconName::ArrowRight));
 }
 
 #[test]
 fn batch30_ai_bar_change_model_icon_settings() {
     let actions = get_ai_command_bar_actions();
-    let cm = actions.iter().find(|a| a.id == "change_model").unwrap();
+    let cm = actions.iter().find(|a| a.id == "chat:change_model").unwrap();
     assert_eq!(cm.icon, Some(IconName::Settings));
 }
 
@@ -448,7 +448,7 @@ fn batch30_chat_current_model_has_check() {
     let actions = get_chat_context_actions(&info);
     let m = actions
         .iter()
-        .find(|a| a.id == "select_model_gpt4")
+        .find(|a| a.id == "chat:select_model_gpt4")
         .unwrap();
     assert!(m.title.contains("✓"), "Current model title should have ✓");
 }
@@ -468,7 +468,7 @@ fn batch30_chat_non_current_model_no_check() {
     let actions = get_chat_context_actions(&info);
     let m = actions
         .iter()
-        .find(|a| a.id == "select_model_claude")
+        .find(|a| a.id == "chat:select_model_claude")
         .unwrap();
     assert!(!m.title.contains("✓"));
 }
@@ -488,7 +488,7 @@ fn batch30_chat_no_current_model_no_check() {
     let actions = get_chat_context_actions(&info);
     let m = actions
         .iter()
-        .find(|a| a.id == "select_model_gpt4")
+        .find(|a| a.id == "chat:select_model_gpt4")
         .unwrap();
     assert!(!m.title.contains("✓"));
 }
@@ -506,7 +506,7 @@ fn batch30_chat_model_desc_says_via_provider() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    let m = actions.iter().find(|a| a.id == "select_model_c3").unwrap();
+    let m = actions.iter().find(|a| a.id == "chat:select_model_c3").unwrap();
     assert_eq!(m.description.as_deref(), Some("via Anthropic"));
 }
 
@@ -521,7 +521,7 @@ fn batch30_notes_new_note_present_full_mode() {
         auto_sizing_enabled: true,
     };
     let actions = get_notes_command_bar_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "new_note"));
+    assert!(actions.iter().any(|a| a.id == "notes:new_note"));
 }
 
 #[test]
@@ -532,7 +532,7 @@ fn batch30_notes_new_note_present_in_trash() {
         auto_sizing_enabled: true,
     };
     let actions = get_notes_command_bar_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "new_note"));
+    assert!(actions.iter().any(|a| a.id == "notes:new_note"));
 }
 
 #[test]
@@ -543,7 +543,7 @@ fn batch30_notes_new_note_shortcut_cmd_n() {
         auto_sizing_enabled: true,
     };
     let actions = get_notes_command_bar_actions(&info);
-    let nn = actions.iter().find(|a| a.id == "new_note").unwrap();
+    let nn = actions.iter().find(|a| a.id == "notes:new_note").unwrap();
     assert_eq!(nn.shortcut.as_deref(), Some("⌘N"));
 }
 
@@ -555,7 +555,7 @@ fn batch30_notes_new_note_icon_plus() {
         auto_sizing_enabled: true,
     };
     let actions = get_notes_command_bar_actions(&info);
-    let nn = actions.iter().find(|a| a.id == "new_note").unwrap();
+    let nn = actions.iter().find(|a| a.id == "notes:new_note").unwrap();
     assert_eq!(nn.icon, Some(IconName::Plus));
 }
 
@@ -989,7 +989,7 @@ fn batch30_script_verb_desc_uses_verb() {
 fn batch30_deeplink_desc_contains_url() {
     let script = crate::actions::types::ScriptInfo::new("My Cool Script", "/p.ts");
     let actions = get_script_context_actions(&script);
-    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
     assert!(dl
         .description
         .as_ref()
@@ -1001,7 +1001,7 @@ fn batch30_deeplink_desc_contains_url() {
 fn batch30_deeplink_shortcut_is_cmd_shift_d() {
     let script = crate::actions::types::ScriptInfo::new("X", "/p.ts");
     let actions = get_script_context_actions(&script);
-    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
     assert_eq!(dl.shortcut.as_deref(), Some("⌘⇧D"));
 }
 
@@ -1009,7 +1009,7 @@ fn batch30_deeplink_shortcut_is_cmd_shift_d() {
 fn batch30_deeplink_desc_for_builtin() {
     let script = crate::actions::types::ScriptInfo::builtin("Clipboard History");
     let actions = get_script_context_actions(&script);
-    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
     assert!(dl
         .description
         .as_ref()
@@ -1089,16 +1089,16 @@ fn batch30_score_prefix_match_gte_100() {
         Some("Open in $EDITOR".into()),
         ActionCategory::ScriptContext,
     );
-    let score = ActionsDialog::score_action(&action, "edit");
+    let score = ActionsDialog::score_action(&action, "script:edit");
     assert!(score >= 100, "Prefix match should be ≥100, got {}", score);
 }
 
 #[test]
 fn batch30_score_contains_match_50_to_99() {
     let action = Action::new("c", "Copy Edit Path", None, ActionCategory::ScriptContext);
-    let score = ActionsDialog::score_action(&action, "edit");
+    let score = ActionsDialog::score_action(&action, "script:edit");
     assert!(
-        score >= 50 && score < 100,
+        (50..100).contains(&score),
         "Contains match should be 50..99, got {}",
         score
     );
@@ -1252,9 +1252,9 @@ fn batch30_clipboard_destructive_always_last_three() {
     let actions = get_clipboard_history_context_actions(&entry);
     let len = actions.len();
     assert!(len >= 3);
-    assert_eq!(actions[len - 3].id, "clipboard_delete");
-    assert_eq!(actions[len - 2].id, "clipboard_delete_multiple");
-    assert_eq!(actions[len - 1].id, "clipboard_delete_all");
+    assert_eq!(actions[len - 3].id, "clip:clipboard_delete");
+    assert_eq!(actions[len - 2].id, "clip:clipboard_delete_multiple");
+    assert_eq!(actions[len - 1].id, "clip:clipboard_delete_all");
 }
 
 #[test]
@@ -1270,9 +1270,9 @@ fn batch30_clipboard_image_destructive_also_last_three() {
     let actions = get_clipboard_history_context_actions(&entry);
     let len = actions.len();
     assert!(len >= 3);
-    assert_eq!(actions[len - 3].id, "clipboard_delete");
-    assert_eq!(actions[len - 2].id, "clipboard_delete_multiple");
-    assert_eq!(actions[len - 1].id, "clipboard_delete_all");
+    assert_eq!(actions[len - 3].id, "clip:clipboard_delete");
+    assert_eq!(actions[len - 2].id, "clip:clipboard_delete_multiple");
+    assert_eq!(actions[len - 1].id, "clip:clipboard_delete_all");
 }
 
 #[test]
@@ -1288,7 +1288,7 @@ fn batch30_clipboard_delete_all_desc_mentions_pinned() {
     let actions = get_clipboard_history_context_actions(&entry);
     let da = actions
         .iter()
-        .find(|a| a.id == "clipboard_delete_all")
+        .find(|a| a.id == "clip:clipboard_delete_all")
         .unwrap();
     assert!(da
         .description
@@ -1328,7 +1328,7 @@ fn batch30_agent_has_reveal_in_finder() {
     script.is_script = false;
     script.is_agent = true;
     let actions = get_script_context_actions(&script);
-    assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
+    assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
 }
 
 #[test]
@@ -1337,7 +1337,7 @@ fn batch30_agent_has_copy_path() {
     script.is_script = false;
     script.is_agent = true;
     let actions = get_script_context_actions(&script);
-    assert!(actions.iter().any(|a| a.id == "copy_path"));
+    assert!(actions.iter().any(|a| a.id == "file:copy_path"));
 }
 
 // ---------------------------------------------------------------------------

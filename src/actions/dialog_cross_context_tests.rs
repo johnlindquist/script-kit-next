@@ -110,7 +110,7 @@ fn primary_action_is_always_first_in_chat_context() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    assert_eq!(actions[0].id, "continue_in_chat");
+    assert_eq!(actions[0].id, "chat:continue_in_chat");
 }
 
 // ============================================================================
@@ -291,19 +291,19 @@ fn clipboard_text_unpinned_has_expected_action_set() {
     // Must have these core actions
     assert!(ids.contains(&"clip:clipboard_paste"));
     assert!(ids.contains(&"clip:clipboard_copy"));
-    assert!(ids.contains(&"clipboard_paste_keep_open"));
-    assert!(ids.contains(&"clipboard_share"));
-    assert!(ids.contains(&"clipboard_attach_to_ai"));
-    assert!(ids.contains(&"clipboard_pin")); // not pinned → pin
-    assert!(ids.contains(&"clipboard_save_snippet"));
-    assert!(ids.contains(&"clipboard_save_file"));
-    assert!(ids.contains(&"clipboard_delete"));
-    assert!(ids.contains(&"clipboard_delete_multiple"));
-    assert!(ids.contains(&"clipboard_delete_all"));
+    assert!(ids.contains(&"clip:clipboard_paste_keep_open"));
+    assert!(ids.contains(&"clip:clipboard_share"));
+    assert!(ids.contains(&"clip:clipboard_attach_to_ai"));
+    assert!(ids.contains(&"clip:clipboard_pin")); // not pinned → pin
+    assert!(ids.contains(&"clip:clipboard_save_snippet"));
+    assert!(ids.contains(&"clip:clipboard_save_file"));
+    assert!(ids.contains(&"clip:clipboard_delete"));
+    assert!(ids.contains(&"clip:clipboard_delete_multiple"));
+    assert!(ids.contains(&"clip:clipboard_delete_all"));
 
     // Must NOT have image-only actions
-    assert!(!ids.contains(&"clipboard_ocr"));
-    assert!(!ids.contains(&"clipboard_unpin"));
+    assert!(!ids.contains(&"clip:clipboard_ocr"));
+    assert!(!ids.contains(&"clip:clipboard_unpin"));
 }
 
 #[test]
@@ -320,9 +320,9 @@ fn clipboard_image_pinned_has_expected_action_set() {
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
 
     // Must have image-specific
-    assert!(ids.contains(&"clipboard_ocr"));
-    assert!(ids.contains(&"clipboard_unpin")); // pinned → unpin
-    assert!(!ids.contains(&"clipboard_pin")); // should NOT have pin
+    assert!(ids.contains(&"clip:clipboard_ocr"));
+    assert!(ids.contains(&"clip:clipboard_unpin")); // pinned → unpin
+    assert!(!ids.contains(&"clip:clipboard_pin")); // should NOT have pin
 
     // Paste title should include app name
     let paste = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
@@ -847,20 +847,20 @@ fn chat_context_with_multiple_models_marks_only_current() {
     // Only GPT-4 should have checkmark
     let gpt4 = actions
         .iter()
-        .find(|a| a.id == "select_model_gpt4")
+        .find(|a| a.id == "chat:select_model_gpt4")
         .unwrap();
     assert_eq!(gpt4.title, "GPT-4 ✓");
 
     let claude = actions
         .iter()
-        .find(|a| a.id == "select_model_claude")
+        .find(|a| a.id == "chat:select_model_claude")
         .unwrap();
     assert_eq!(claude.title, "Claude");
     assert!(!claude.title.contains('✓'));
 
     let gemini = actions
         .iter()
-        .find(|a| a.id == "select_model_gemini")
+        .find(|a| a.id == "chat:select_model_gemini")
         .unwrap();
     assert_eq!(gemini.title, "Gemini");
     assert!(!gemini.title.contains('✓'));
@@ -881,7 +881,7 @@ fn chat_context_model_description_shows_provider() {
     let actions = get_chat_context_actions(&info);
     let model = actions
         .iter()
-        .find(|a| a.id == "select_model_model1")
+        .find(|a| a.id == "chat:select_model_model1")
         .unwrap();
     assert_eq!(model.description.as_deref(), Some("via Anthropic"));
 }
@@ -902,7 +902,7 @@ fn chat_context_all_four_conditional_combos() {
         let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
 
         // continue_in_chat always present
-        assert!(ids.contains(&"continue_in_chat"));
+        assert!(ids.contains(&"chat:continue_in_chat"));
 
         // copy_response only when has_response
         assert_eq!(
@@ -914,7 +914,7 @@ fn chat_context_all_four_conditional_combos() {
 
         // clear_conversation only when has_messages
         assert_eq!(
-            ids.contains(&"clear_conversation"),
+            ids.contains(&"chat:clear_conversation"),
             has_messages,
             "clear_conversation presence should match has_messages={}",
             has_messages

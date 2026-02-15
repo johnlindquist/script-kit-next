@@ -406,7 +406,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let share = actions.iter().find(|a| a.id == "clipboard_share").unwrap();
+        let share = actions.iter().find(|a| a.id == "clip:clipboard_share").unwrap();
         assert_eq!(share.shortcut.as_deref(), Some("⇧⌘E"));
     }
 
@@ -421,7 +421,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let share = actions.iter().find(|a| a.id == "clipboard_share").unwrap();
+        let share = actions.iter().find(|a| a.id == "clip:clipboard_share").unwrap();
         assert_eq!(share.title, "Share...");
     }
 
@@ -438,11 +438,11 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let share_idx = actions
             .iter()
-            .position(|a| a.id == "clipboard_share")
+            .position(|a| a.id == "clip:clipboard_share")
             .unwrap();
         let paste_keep_idx = actions
             .iter()
-            .position(|a| a.id == "clipboard_paste_keep_open")
+            .position(|a| a.id == "clip:clipboard_paste_keep_open")
             .unwrap();
         assert!(share_idx > paste_keep_idx);
     }
@@ -458,7 +458,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let share = actions.iter().find(|a| a.id == "clipboard_share").unwrap();
+        let share = actions.iter().find(|a| a.id == "clip:clipboard_share").unwrap();
         assert!(share
             .description
             .as_ref()
@@ -486,7 +486,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let attach = actions
             .iter()
-            .find(|a| a.id == "clipboard_attach_to_ai")
+            .find(|a| a.id == "clip:clipboard_attach_to_ai")
             .unwrap();
         assert_eq!(attach.shortcut.as_deref(), Some("⌃⌘A"));
     }
@@ -504,7 +504,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let attach = actions
             .iter()
-            .find(|a| a.id == "clipboard_attach_to_ai")
+            .find(|a| a.id == "clip:clipboard_attach_to_ai")
             .unwrap();
         assert_eq!(attach.title, "Attach to AI Chat");
     }
@@ -522,7 +522,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let attach = actions
             .iter()
-            .find(|a| a.id == "clipboard_attach_to_ai")
+            .find(|a| a.id == "clip:clipboard_attach_to_ai")
             .unwrap();
         assert!(attach
             .description
@@ -543,7 +543,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(actions.iter().any(|a| a.id == "clipboard_attach_to_ai"));
+        assert!(actions.iter().any(|a| a.id == "clip:clipboard_attach_to_ai"));
     }
 
     // =========================================================================
@@ -562,7 +562,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(actions.iter().any(|a| a.id == "clipboard_open_with"));
+        assert!(actions.iter().any(|a| a.id == "clip:clipboard_open_with"));
     }
 
     #[cfg(target_os = "macos")]
@@ -577,7 +577,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(!actions.iter().any(|a| a.id == "clipboard_open_with"));
+        assert!(!actions.iter().any(|a| a.id == "clip:clipboard_open_with"));
     }
 
     #[cfg(target_os = "macos")]
@@ -594,7 +594,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let open_with = actions
             .iter()
-            .find(|a| a.id == "clipboard_open_with")
+            .find(|a| a.id == "clip:clipboard_open_with")
             .unwrap();
         assert_eq!(open_with.shortcut.as_deref(), Some("⌘O"));
     }
@@ -613,7 +613,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let annotate = actions
             .iter()
-            .find(|a| a.id == "clipboard_annotate_cleanshot")
+            .find(|a| a.id == "clip:clipboard_annotate_cleanshot")
             .unwrap();
         assert_eq!(annotate.shortcut.as_deref(), Some("⇧⌘A"));
     }
@@ -1098,28 +1098,28 @@ mod tests {
     #[test]
     fn ai_bar_delete_chat_shortcut() {
         let actions = get_ai_command_bar_actions();
-        let delete = actions.iter().find(|a| a.id == "delete_chat").unwrap();
+        let delete = actions.iter().find(|a| a.id == "chat:delete_chat").unwrap();
         assert_eq!(delete.shortcut.as_deref(), Some("⌘⌫"));
     }
 
     #[test]
     fn ai_bar_delete_chat_icon() {
         let actions = get_ai_command_bar_actions();
-        let delete = actions.iter().find(|a| a.id == "delete_chat").unwrap();
+        let delete = actions.iter().find(|a| a.id == "chat:delete_chat").unwrap();
         assert_eq!(delete.icon, Some(IconName::Trash));
     }
 
     #[test]
     fn ai_bar_delete_chat_section() {
         let actions = get_ai_command_bar_actions();
-        let delete = actions.iter().find(|a| a.id == "delete_chat").unwrap();
+        let delete = actions.iter().find(|a| a.id == "chat:delete_chat").unwrap();
         assert_eq!(delete.section.as_deref(), Some("Actions"));
     }
 
     #[test]
     fn ai_bar_delete_chat_desc_mentions_delete() {
         let actions = get_ai_command_bar_actions();
-        let delete = actions.iter().find(|a| a.id == "delete_chat").unwrap();
+        let delete = actions.iter().find(|a| a.id == "chat:delete_chat").unwrap();
         assert!(delete
             .description
             .as_ref()
@@ -1135,28 +1135,28 @@ mod tests {
     #[test]
     fn ai_bar_new_chat_shortcut() {
         let actions = get_ai_command_bar_actions();
-        let nc = actions.iter().find(|a| a.id == "new_chat").unwrap();
+        let nc = actions.iter().find(|a| a.id == "chat:new_chat").unwrap();
         assert_eq!(nc.shortcut.as_deref(), Some("⌘N"));
     }
 
     #[test]
     fn ai_bar_new_chat_icon() {
         let actions = get_ai_command_bar_actions();
-        let nc = actions.iter().find(|a| a.id == "new_chat").unwrap();
+        let nc = actions.iter().find(|a| a.id == "chat:new_chat").unwrap();
         assert_eq!(nc.icon, Some(IconName::Plus));
     }
 
     #[test]
     fn ai_bar_new_chat_section() {
         let actions = get_ai_command_bar_actions();
-        let nc = actions.iter().find(|a| a.id == "new_chat").unwrap();
+        let nc = actions.iter().find(|a| a.id == "chat:new_chat").unwrap();
         assert_eq!(nc.section.as_deref(), Some("Actions"));
     }
 
     #[test]
     fn ai_bar_new_chat_desc_mentions_conversation() {
         let actions = get_ai_command_bar_actions();
-        let nc = actions.iter().find(|a| a.id == "new_chat").unwrap();
+        let nc = actions.iter().find(|a| a.id == "chat:new_chat").unwrap();
         assert!(nc
             .description
             .as_ref()
@@ -1283,7 +1283,7 @@ mod tests {
         let actions = get_chat_context_actions(&info);
         let model_action = actions
             .iter()
-            .find(|a| a.id == "select_model_gpt4")
+            .find(|a| a.id == "chat:select_model_gpt4")
             .unwrap();
         assert!(model_action.title.contains("✓"));
     }
@@ -1303,7 +1303,7 @@ mod tests {
         let actions = get_chat_context_actions(&info);
         let model_action = actions
             .iter()
-            .find(|a| a.id == "select_model_gpt4")
+            .find(|a| a.id == "chat:select_model_gpt4")
             .unwrap();
         assert!(!model_action.title.contains("✓"));
     }
@@ -1323,7 +1323,7 @@ mod tests {
         let actions = get_chat_context_actions(&info);
         let model_action = actions
             .iter()
-            .find(|a| a.id == "select_model_gpt4")
+            .find(|a| a.id == "chat:select_model_gpt4")
             .unwrap();
         assert!(!model_action.title.contains("✓"));
     }
@@ -1343,7 +1343,7 @@ mod tests {
         let actions = get_chat_context_actions(&info);
         let model_action = actions
             .iter()
-            .find(|a| a.id == "select_model_claude")
+            .find(|a| a.id == "chat:select_model_claude")
             .unwrap();
         assert!(model_action
             .description
@@ -1379,15 +1379,15 @@ mod tests {
         let actions = get_chat_context_actions(&info);
         let continue_idx = actions
             .iter()
-            .position(|a| a.id == "continue_in_chat")
+            .position(|a| a.id == "chat:continue_in_chat")
             .unwrap();
         let model_a_idx = actions
             .iter()
-            .position(|a| a.id == "select_model_a")
+            .position(|a| a.id == "chat:select_model_a")
             .unwrap();
         let model_b_idx = actions
             .iter()
-            .position(|a| a.id == "select_model_b")
+            .position(|a| a.id == "chat:select_model_b")
             .unwrap();
         assert!(model_a_idx < continue_idx);
         assert!(model_b_idx < continue_idx);
@@ -1415,11 +1415,11 @@ mod tests {
         let actions = get_chat_context_actions(&info);
         let first_idx = actions
             .iter()
-            .position(|a| a.id == "select_model_first")
+            .position(|a| a.id == "chat:select_model_first")
             .unwrap();
         let second_idx = actions
             .iter()
-            .position(|a| a.id == "select_model_second")
+            .position(|a| a.id == "chat:select_model_second")
             .unwrap();
         assert!(first_idx < second_idx);
     }
@@ -1452,7 +1452,7 @@ mod tests {
         let actions = get_chat_context_actions(&info);
         // Only continue_in_chat
         assert_eq!(actions.len(), 1);
-        assert_eq!(actions[0].id, "continue_in_chat");
+        assert_eq!(actions[0].id, "chat:continue_in_chat");
     }
 
     // =========================================================================

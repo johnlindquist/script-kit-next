@@ -42,7 +42,7 @@ mod tests {
         get_note_switcher_actions, get_notes_command_bar_actions, get_path_context_actions,
         get_script_context_actions, get_scriptlet_context_actions_with_custom, to_deeplink_name,
         ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
-        NoteSwitcherNoteInfo, NotesInfo,
+        NotesInfo,
     };
     use crate::actions::dialog::{
         build_grouped_items_static, coerce_action_selection, ActionsDialog, GroupedActionItem,
@@ -85,26 +85,6 @@ mod tests {
         a
     }
 
-    fn make_note(
-        id: &str,
-        title: &str,
-        char_count: usize,
-        is_current: bool,
-        is_pinned: bool,
-        preview: &str,
-        relative_time: &str,
-    ) -> NoteSwitcherNoteInfo {
-        NoteSwitcherNoteInfo {
-            id: id.to_string(),
-            title: title.to_string(),
-            char_count,
-            is_current,
-            is_pinned,
-            preview: preview.to_string(),
-            relative_time: relative_time.to_string(),
-        }
-    }
-
     fn make_clipboard_entry(
         content_type: ContentType,
         pinned: bool,
@@ -137,7 +117,7 @@ mod tests {
     #[test]
     fn ai_command_bar_has_branch_from_last() {
         let actions = get_ai_command_bar_actions();
-        let branch = find_action(&actions, "branch_from_last");
+        let branch = find_action(&actions, "chat:branch_from_last");
         assert!(branch.is_some(), "Should have branch_from_last action");
         let branch = branch.unwrap();
         assert_eq!(branch.section, Some("Actions".to_string()));
@@ -150,7 +130,7 @@ mod tests {
     #[test]
     fn ai_command_bar_has_export_markdown() {
         let actions = get_ai_command_bar_actions();
-        let export = find_action(&actions, "export_markdown");
+        let export = find_action(&actions, "chat:export_markdown");
         assert!(export.is_some(), "Should have export_markdown action");
         let export = export.unwrap();
         assert_eq!(export.section, Some("Export".to_string()));
@@ -160,7 +140,7 @@ mod tests {
     #[test]
     fn ai_command_bar_has_toggle_shortcuts_help() {
         let actions = get_ai_command_bar_actions();
-        let help = find_action(&actions, "toggle_shortcuts_help");
+        let help = find_action(&actions, "chat:toggle_shortcuts_help");
         assert!(help.is_some(), "Should have toggle_shortcuts_help action");
         let help = help.unwrap();
         assert_eq!(help.section, Some("Help".to_string()));
@@ -251,7 +231,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_file_context_actions(&file_info);
-        let ql = find_action(&actions, "quick_look");
+        let ql = find_action(&actions, "file:quick_look");
         assert!(ql.is_some(), "File should have quick_look on macOS");
         assert_eq!(ql.unwrap().shortcut.as_deref(), Some("⌘Y"));
     }
@@ -267,7 +247,7 @@ mod tests {
         };
         let actions = get_file_context_actions(&file_info);
         assert!(
-            find_action(&actions, "quick_look").is_none(),
+            find_action(&actions, "file:quick_look").is_none(),
             "Directory should NOT have quick_look"
         );
     }
@@ -282,7 +262,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_file_context_actions(&file_info);
-        let ow = find_action(&actions, "open_with");
+        let ow = find_action(&actions, "file:open_with");
         assert!(ow.is_some(), "File should have open_with on macOS");
         assert_eq!(ow.unwrap().shortcut.as_deref(), Some("⌘O"));
     }
@@ -297,7 +277,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_file_context_actions(&file_info);
-        let si = find_action(&actions, "show_info");
+        let si = find_action(&actions, "file:show_info");
         assert!(si.is_some(), "File should have show_info on macOS");
         assert_eq!(si.unwrap().shortcut.as_deref(), Some("⌘I"));
         assert!(
@@ -320,7 +300,7 @@ mod tests {
         let entry = make_clipboard_entry(ContentType::Image, false, None);
         let actions = get_clipboard_history_context_actions(&entry);
         assert!(
-            find_action(&actions, "clipboard_open_with").is_some(),
+            find_action(&actions, "clip:clipboard_open_with").is_some(),
             "Image entry should have open_with on macOS"
         );
     }
@@ -330,7 +310,7 @@ mod tests {
     fn clipboard_image_has_annotate_cleanshot_on_macos() {
         let entry = make_clipboard_entry(ContentType::Image, false, None);
         let actions = get_clipboard_history_context_actions(&entry);
-        let annotate = find_action(&actions, "clipboard_annotate_cleanshot");
+        let annotate = find_action(&actions, "clip:clipboard_annotate_cleanshot");
         assert!(
             annotate.is_some(),
             "Image entry should have annotate_cleanshot on macOS"
@@ -343,7 +323,7 @@ mod tests {
     fn clipboard_image_has_upload_cleanshot_on_macos() {
         let entry = make_clipboard_entry(ContentType::Image, false, None);
         let actions = get_clipboard_history_context_actions(&entry);
-        let upload = find_action(&actions, "clipboard_upload_cleanshot");
+        let upload = find_action(&actions, "clip:clipboard_upload_cleanshot");
         assert!(
             upload.is_some(),
             "Image entry should have upload_cleanshot on macOS"
@@ -357,7 +337,7 @@ mod tests {
         let entry = make_clipboard_entry(ContentType::Text, false, None);
         let actions = get_clipboard_history_context_actions(&entry);
         assert!(
-            find_action(&actions, "clipboard_open_with").is_none(),
+            find_action(&actions, "clip:clipboard_open_with").is_none(),
             "Text entry should NOT have open_with"
         );
     }
@@ -367,7 +347,7 @@ mod tests {
     fn clipboard_has_quick_look_on_macos() {
         let entry = make_clipboard_entry(ContentType::Text, false, None);
         let actions = get_clipboard_history_context_actions(&entry);
-        let ql = find_action(&actions, "clipboard_quick_look");
+        let ql = find_action(&actions, "clip:clipboard_quick_look");
         assert!(ql.is_some(), "Clipboard should have quick_look on macOS");
         assert_eq!(ql.unwrap().shortcut.as_deref(), Some("␣"));
     }
@@ -761,8 +741,8 @@ mod tests {
         script.is_script = false;
         script.is_agent = true;
         let actions = get_script_context_actions(&script);
-        assert!(find_action(&actions, "reveal_in_finder").is_some());
-        assert!(find_action(&actions, "copy_path").is_some());
+        assert!(find_action(&actions, "file:reveal_in_finder").is_some());
+        assert!(find_action(&actions, "file:copy_path").is_some());
     }
 
     // ============================================================
@@ -773,23 +753,23 @@ mod tests {
     fn clipboard_text_has_save_snippet_and_file() {
         let entry = make_clipboard_entry(ContentType::Text, false, None);
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(find_action(&actions, "clipboard_save_snippet").is_some());
-        assert!(find_action(&actions, "clipboard_save_file").is_some());
+        assert!(find_action(&actions, "clip:clipboard_save_snippet").is_some());
+        assert!(find_action(&actions, "clip:clipboard_save_file").is_some());
     }
 
     #[test]
     fn clipboard_image_has_save_snippet_and_file() {
         let entry = make_clipboard_entry(ContentType::Image, false, None);
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(find_action(&actions, "clipboard_save_snippet").is_some());
-        assert!(find_action(&actions, "clipboard_save_file").is_some());
+        assert!(find_action(&actions, "clip:clipboard_save_snippet").is_some());
+        assert!(find_action(&actions, "clip:clipboard_save_file").is_some());
     }
 
     #[test]
     fn clipboard_save_snippet_shortcut() {
         let entry = make_clipboard_entry(ContentType::Text, false, None);
         let actions = get_clipboard_history_context_actions(&entry);
-        let snippet = find_action(&actions, "clipboard_save_snippet").unwrap();
+        let snippet = find_action(&actions, "clip:clipboard_save_snippet").unwrap();
         assert_eq!(snippet.shortcut.as_deref(), Some("⇧⌘S"));
     }
 
@@ -797,7 +777,7 @@ mod tests {
     fn clipboard_save_file_shortcut() {
         let entry = make_clipboard_entry(ContentType::Text, false, None);
         let actions = get_clipboard_history_context_actions(&entry);
-        let save = find_action(&actions, "clipboard_save_file").unwrap();
+        let save = find_action(&actions, "clip:clipboard_save_file").unwrap();
         assert_eq!(save.shortcut.as_deref(), Some("⌥⇧⌘S"));
     }
 
@@ -809,23 +789,23 @@ mod tests {
     fn clipboard_text_has_share_and_attach() {
         let entry = make_clipboard_entry(ContentType::Text, false, None);
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(find_action(&actions, "clipboard_share").is_some());
-        assert!(find_action(&actions, "clipboard_attach_to_ai").is_some());
+        assert!(find_action(&actions, "clip:clipboard_share").is_some());
+        assert!(find_action(&actions, "clip:clipboard_attach_to_ai").is_some());
     }
 
     #[test]
     fn clipboard_image_has_share_and_attach() {
         let entry = make_clipboard_entry(ContentType::Image, true, Some("Finder"));
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(find_action(&actions, "clipboard_share").is_some());
-        assert!(find_action(&actions, "clipboard_attach_to_ai").is_some());
+        assert!(find_action(&actions, "clip:clipboard_share").is_some());
+        assert!(find_action(&actions, "clip:clipboard_attach_to_ai").is_some());
     }
 
     #[test]
     fn clipboard_share_shortcut_value() {
         let entry = make_clipboard_entry(ContentType::Text, false, None);
         let actions = get_clipboard_history_context_actions(&entry);
-        let share = find_action(&actions, "clipboard_share").unwrap();
+        let share = find_action(&actions, "clip:clipboard_share").unwrap();
         assert_eq!(share.shortcut.as_deref(), Some("⇧⌘E"));
     }
 
@@ -833,7 +813,7 @@ mod tests {
     fn clipboard_attach_to_ai_shortcut_value() {
         let entry = make_clipboard_entry(ContentType::Text, false, None);
         let actions = get_clipboard_history_context_actions(&entry);
-        let attach = find_action(&actions, "clipboard_attach_to_ai").unwrap();
+        let attach = find_action(&actions, "clip:clipboard_attach_to_ai").unwrap();
         assert_eq!(attach.shortcut.as_deref(), Some("⌃⌘A"));
     }
 
@@ -849,7 +829,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&path);
-        let finder = find_action(&actions, "open_in_finder").unwrap();
+        let finder = find_action(&actions, "file:open_in_finder").unwrap();
         assert!(
             finder.description.as_ref().unwrap().contains("Finder"),
             "open_in_finder description should mention Finder"
@@ -864,7 +844,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&path);
-        let editor = find_action(&actions, "open_in_editor").unwrap();
+        let editor = find_action(&actions, "file:open_in_editor").unwrap();
         assert!(
             editor.description.as_ref().unwrap().contains("$EDITOR"),
             "open_in_editor description should mention $EDITOR"
@@ -879,7 +859,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&path);
-        let terminal = find_action(&actions, "open_in_terminal").unwrap();
+        let terminal = find_action(&actions, "file:open_in_terminal").unwrap();
         assert!(
             terminal.description.as_ref().unwrap().contains("terminal"),
             "open_in_terminal description should mention terminal"
@@ -894,7 +874,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&path);
-        let trash = find_action(&actions, "move_to_trash").unwrap();
+        let trash = find_action(&actions, "file:move_to_trash").unwrap();
         assert!(
             trash.description.as_ref().unwrap().contains("file"),
             "Trash description for file should say 'file'"
@@ -909,7 +889,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_path_context_actions(&path);
-        let trash = find_action(&actions, "move_to_trash").unwrap();
+        let trash = find_action(&actions, "file:move_to_trash").unwrap();
         assert!(
             trash.description.as_ref().unwrap().contains("folder"),
             "Trash description for dir should say 'folder'"
@@ -1045,7 +1025,7 @@ mod tests {
     #[test]
     fn score_action_multi_word_contains() {
         let action = Action::new(
-            "copy_path",
+            "file:copy_path",
             "Copy Path",
             Some("Copy the full path".to_string()),
             ActionCategory::ScriptContext,
@@ -1062,7 +1042,7 @@ mod tests {
     #[test]
     fn score_action_description_only_match() {
         let action = Action::new(
-            "reveal",
+            "script:reveal",
             "Reveal in Finder",
             Some("Show the file in your filesystem browser".to_string()),
             ActionCategory::ScriptContext,
@@ -1318,7 +1298,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_file_context_actions(&file_info);
-        let open = find_action(&actions, "open_file").unwrap();
+        let open = find_action(&actions, "file:open_file").unwrap();
         assert!(
             open.title.contains("report.pdf"),
             "Open title should include filename: {}",
@@ -1339,7 +1319,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_file_context_actions(&file_info);
-        let open = find_action(&actions, "open_directory").unwrap();
+        let open = find_action(&actions, "file:open_directory").unwrap();
         assert!(
             open.title.contains("Documents"),
             "Open title should include dirname: {}",
@@ -1361,7 +1341,7 @@ mod tests {
         };
         let actions = get_chat_context_actions(&info);
         assert!(
-            find_action(&actions, "continue_in_chat").is_some(),
+            find_action(&actions, "chat:continue_in_chat").is_some(),
             "continue_in_chat should always be present"
         );
     }
@@ -1375,7 +1355,7 @@ mod tests {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        let action = find_action(&actions, "continue_in_chat").unwrap();
+        let action = find_action(&actions, "chat:continue_in_chat").unwrap();
         assert_eq!(action.shortcut.as_deref(), Some("⌘↵"));
     }
 
@@ -1397,8 +1377,8 @@ mod tests {
         };
         let actions_no = get_chat_context_actions(&no_response);
         let actions_yes = get_chat_context_actions(&with_response);
-        assert!(find_action(&actions_no, "copy_response").is_none());
-        assert!(find_action(&actions_yes, "copy_response").is_some());
+        assert!(find_action(&actions_no, "chat:copy_response").is_none());
+        assert!(find_action(&actions_yes, "chat:copy_response").is_some());
     }
 
     #[test]
@@ -1417,8 +1397,8 @@ mod tests {
         };
         let actions_no = get_chat_context_actions(&no_messages);
         let actions_yes = get_chat_context_actions(&with_messages);
-        assert!(find_action(&actions_no, "clear_conversation").is_none());
-        assert!(find_action(&actions_yes, "clear_conversation").is_some());
+        assert!(find_action(&actions_no, "chat:clear_conversation").is_none());
+        assert!(find_action(&actions_yes, "chat:clear_conversation").is_some());
     }
 
     // ============================================================
@@ -1447,7 +1427,7 @@ mod tests {
     fn scriptlet_context_has_copy_deeplink() {
         let script = ScriptInfo::scriptlet("My Scriptlet", "/path/test.md", None, None);
         let actions = get_scriptlet_context_actions_with_custom(&script, None);
-        let deeplink = find_action(&actions, "copy_deeplink").unwrap();
+        let deeplink = find_action(&actions, "script:copy_deeplink").unwrap();
         assert!(
             deeplink
                 .description
@@ -1487,7 +1467,7 @@ mod tests {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        let new_note = find_action(&actions, "new_note").unwrap();
+        let new_note = find_action(&actions, "notes:new_note").unwrap();
         assert_eq!(new_note.icon, Some(IconName::Plus));
     }
 
@@ -1924,23 +1904,23 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let len = actions.len();
         assert!(len >= 3);
-        assert_eq!(actions[len - 3].id, "clipboard_delete");
-        assert_eq!(actions[len - 2].id, "clipboard_delete_multiple");
-        assert_eq!(actions[len - 1].id, "clipboard_delete_all");
+        assert_eq!(actions[len - 3].id, "clip:clipboard_delete");
+        assert_eq!(actions[len - 2].id, "clip:clipboard_delete_multiple");
+        assert_eq!(actions[len - 1].id, "clip:clipboard_delete_all");
     }
 
     #[test]
     fn clipboard_paste_always_first() {
         let entry = make_clipboard_entry(ContentType::Text, false, None);
         let actions = get_clipboard_history_context_actions(&entry);
-        assert_eq!(actions[0].id, "clipboard_paste");
+        assert_eq!(actions[0].id, "clip:clipboard_paste");
     }
 
     #[test]
     fn clipboard_copy_always_second() {
         let entry = make_clipboard_entry(ContentType::Text, false, None);
         let actions = get_clipboard_history_context_actions(&entry);
-        assert_eq!(actions[1].id, "clipboard_copy");
+        assert_eq!(actions[1].id, "clip:clipboard_copy");
     }
 
     // ============================================================

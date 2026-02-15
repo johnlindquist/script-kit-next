@@ -159,7 +159,7 @@ fn cat26_02_clipboard_share_shortcut() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let share = actions.iter().find(|a| a.id == "clipboard_share").unwrap();
+    let share = actions.iter().find(|a| a.id == "clip:clipboard_share").unwrap();
     assert_eq!(share.shortcut.as_deref(), Some("⇧⌘E"));
     assert_eq!(share.title, "Share...");
 }
@@ -177,7 +177,7 @@ fn cat26_02_clipboard_attach_to_ai_description_mentions_ai() {
     let actions = get_clipboard_history_context_actions(&entry);
     let attach = actions
         .iter()
-        .find(|a| a.id == "clipboard_attach_to_ai")
+        .find(|a| a.id == "clip:clipboard_attach_to_ai")
         .unwrap();
     assert!(attach
         .description
@@ -198,7 +198,7 @@ fn cat26_02_clipboard_share_present_for_image() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_share"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_share"));
 }
 
 #[test]
@@ -212,7 +212,7 @@ fn cat26_02_clipboard_attach_to_ai_present_for_image() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_attach_to_ai"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_attach_to_ai"));
 }
 
 // ─────────────────────────────────────────────
@@ -293,8 +293,8 @@ fn cat26_04_chat_two_models_same_provider_both_listed() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "select_model_gpt-4"));
-    assert!(actions.iter().any(|a| a.id == "select_model_gpt-3.5"));
+    assert!(actions.iter().any(|a| a.id == "chat:select_model_gpt-4"));
+    assert!(actions.iter().any(|a| a.id == "chat:select_model_gpt-3.5"));
 }
 
 #[test]
@@ -312,7 +312,7 @@ fn cat26_04_chat_current_model_has_checkmark() {
     let actions = get_chat_context_actions(&info);
     let model_action = actions
         .iter()
-        .find(|a| a.id == "select_model_gpt-4")
+        .find(|a| a.id == "chat:select_model_gpt-4")
         .unwrap();
     assert!(model_action.title.contains('✓'));
 }
@@ -332,7 +332,7 @@ fn cat26_04_chat_non_current_model_no_checkmark() {
     let actions = get_chat_context_actions(&info);
     let model_action = actions
         .iter()
-        .find(|a| a.id == "select_model_gpt-3.5")
+        .find(|a| a.id == "chat:select_model_gpt-3.5")
         .unwrap();
     assert!(!model_action.title.contains('✓'));
 }
@@ -352,7 +352,7 @@ fn cat26_04_chat_model_description_via_provider() {
     let actions = get_chat_context_actions(&info);
     let model_action = actions
         .iter()
-        .find(|a| a.id == "select_model_claude")
+        .find(|a| a.id == "chat:select_model_claude")
         .unwrap();
     assert_eq!(model_action.description.as_deref(), Some("via Anthropic"));
 }
@@ -385,7 +385,7 @@ fn cat26_05_ai_submit_action_section() {
 #[test]
 fn cat26_05_ai_new_chat_action_icon_plus() {
     let actions = get_ai_command_bar_actions();
-    let new_chat = actions.iter().find(|a| a.id == "new_chat").unwrap();
+    let new_chat = actions.iter().find(|a| a.id == "chat:new_chat").unwrap();
     assert_eq!(new_chat.icon, Some(IconName::Plus));
     assert_eq!(new_chat.shortcut.as_deref(), Some("⌘N"));
 }
@@ -393,7 +393,7 @@ fn cat26_05_ai_new_chat_action_icon_plus() {
 #[test]
 fn cat26_05_ai_delete_chat_action_icon_trash() {
     let actions = get_ai_command_bar_actions();
-    let delete = actions.iter().find(|a| a.id == "delete_chat").unwrap();
+    let delete = actions.iter().find(|a| a.id == "chat:delete_chat").unwrap();
     assert_eq!(delete.icon, Some(IconName::Trash));
     assert_eq!(delete.shortcut.as_deref(), Some("⌘⌫"));
 }
@@ -639,7 +639,7 @@ fn cat26_11_clipboard_pin_title_says_pin_entry() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let pin = actions.iter().find(|a| a.id == "clipboard_pin").unwrap();
+    let pin = actions.iter().find(|a| a.id == "clip:clipboard_pin").unwrap();
     assert_eq!(pin.title, "Pin Entry");
 }
 
@@ -654,7 +654,7 @@ fn cat26_11_clipboard_unpin_title_says_unpin_entry() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let unpin = actions.iter().find(|a| a.id == "clipboard_unpin").unwrap();
+    let unpin = actions.iter().find(|a| a.id == "clip:clipboard_unpin").unwrap();
     assert_eq!(unpin.title, "Unpin Entry");
 }
 
@@ -669,7 +669,7 @@ fn cat26_11_clipboard_pin_desc_mentions_prevent() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let pin = actions.iter().find(|a| a.id == "clipboard_pin").unwrap();
+    let pin = actions.iter().find(|a| a.id == "clip:clipboard_pin").unwrap();
     assert!(pin
         .description
         .as_ref()
@@ -1274,7 +1274,7 @@ fn cat26_25_paste_keep_open_desc_mentions_keep() {
     let actions = get_clipboard_history_context_actions(&entry);
     let keep = actions
         .iter()
-        .find(|a| a.id == "clipboard_paste_keep_open")
+        .find(|a| a.id == "clip:clipboard_paste_keep_open")
         .unwrap();
     assert!(keep
         .description
@@ -1373,28 +1373,28 @@ fn cat26_27_notes_find_in_note_shortcut() {
 #[test]
 fn cat26_28_ai_export_markdown_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let export = actions.iter().find(|a| a.id == "export_markdown").unwrap();
+    let export = actions.iter().find(|a| a.id == "chat:export_markdown").unwrap();
     assert_eq!(export.shortcut.as_deref(), Some("⇧⌘E"));
 }
 
 #[test]
 fn cat26_28_ai_export_markdown_icon() {
     let actions = get_ai_command_bar_actions();
-    let export = actions.iter().find(|a| a.id == "export_markdown").unwrap();
+    let export = actions.iter().find(|a| a.id == "chat:export_markdown").unwrap();
     assert_eq!(export.icon, Some(IconName::FileCode));
 }
 
 #[test]
 fn cat26_28_ai_export_markdown_section() {
     let actions = get_ai_command_bar_actions();
-    let export = actions.iter().find(|a| a.id == "export_markdown").unwrap();
+    let export = actions.iter().find(|a| a.id == "chat:export_markdown").unwrap();
     assert_eq!(export.section.as_deref(), Some("Export"));
 }
 
 #[test]
 fn cat26_28_ai_export_desc_mentions_markdown() {
     let actions = get_ai_command_bar_actions();
-    let export = actions.iter().find(|a| a.id == "export_markdown").unwrap();
+    let export = actions.iter().find(|a| a.id == "chat:export_markdown").unwrap();
     assert!(export
         .description
         .as_ref()

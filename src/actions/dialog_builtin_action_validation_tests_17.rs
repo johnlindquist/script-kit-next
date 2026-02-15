@@ -267,7 +267,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let pko = actions
             .iter()
-            .find(|a| a.id == "clipboard_paste_keep_open")
+            .find(|a| a.id == "clip:clipboard_paste_keep_open")
             .unwrap();
         assert!(pko.description.as_ref().unwrap().contains("keep"));
     }
@@ -279,14 +279,14 @@ mod tests {
     #[test]
     fn cat05_branch_from_last_has_no_shortcut() {
         let actions = get_ai_command_bar_actions();
-        let bfl = actions.iter().find(|a| a.id == "branch_from_last").unwrap();
+        let bfl = actions.iter().find(|a| a.id == "chat:branch_from_last").unwrap();
         assert!(bfl.shortcut.is_none());
     }
 
     #[test]
     fn cat05_change_model_has_no_shortcut() {
         let actions = get_ai_command_bar_actions();
-        let cm = actions.iter().find(|a| a.id == "change_model").unwrap();
+        let cm = actions.iter().find(|a| a.id == "chat:change_model").unwrap();
         assert!(cm.shortcut.is_none());
     }
 
@@ -300,7 +300,7 @@ mod tests {
     #[test]
     fn cat05_new_chat_has_shortcut_cmd_n() {
         let actions = get_ai_command_bar_actions();
-        let nc = actions.iter().find(|a| a.id == "new_chat").unwrap();
+        let nc = actions.iter().find(|a| a.id == "chat:new_chat").unwrap();
         assert_eq!(nc.shortcut.as_deref(), Some("⌘N"));
     }
 
@@ -429,7 +429,7 @@ mod tests {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "select_model_claude-3"));
+        assert!(actions.iter().any(|a| a.id == "chat:select_model_claude-3"));
     }
 
     #[test]
@@ -453,8 +453,8 @@ mod tests {
         };
         let actions = get_chat_context_actions(&info);
         let ids = action_ids(&actions);
-        assert!(ids.contains(&"select_model_m1".to_string()));
-        assert!(ids.contains(&"select_model_m2".to_string()));
+        assert!(ids.contains(&"chat:select_model_m1".to_string()));
+        assert!(ids.contains(&"chat:select_model_m2".to_string()));
     }
 
     #[test]
@@ -472,7 +472,7 @@ mod tests {
         let actions = get_chat_context_actions(&info);
         let model_action = actions
             .iter()
-            .find(|a| a.id == "select_model_claude-3")
+            .find(|a| a.id == "chat:select_model_claude-3")
             .unwrap();
         assert!(model_action.title.contains("✓"));
     }
@@ -494,7 +494,7 @@ mod tests {
         let actions = get_chat_context_actions(&info);
         let model_action = actions
             .iter()
-            .find(|a| a.id == "select_model_claude-3")
+            .find(|a| a.id == "chat:select_model_claude-3")
             .unwrap();
         assert!(!model_action.title.contains("✓"));
     }
@@ -821,8 +821,8 @@ mod tests {
         };
         let text_ids = action_ids(&get_clipboard_history_context_actions(&text_entry));
         let img_ids = action_ids(&get_clipboard_history_context_actions(&img_entry));
-        assert!(!text_ids.contains(&"clipboard_ocr".to_string()));
-        assert!(img_ids.contains(&"clipboard_ocr".to_string()));
+        assert!(!text_ids.contains(&"clip:clipboard_ocr".to_string()));
+        assert!(img_ids.contains(&"clip:clipboard_ocr".to_string()));
     }
 
     #[cfg(target_os = "macos")]
@@ -1280,7 +1280,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let unpin = actions.iter().find(|a| a.id == "clipboard_unpin").unwrap();
+        let unpin = actions.iter().find(|a| a.id == "clip:clipboard_unpin").unwrap();
         assert_eq!(unpin.title, "Unpin Entry");
     }
 
@@ -1295,7 +1295,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let unpin = actions.iter().find(|a| a.id == "clipboard_unpin").unwrap();
+        let unpin = actions.iter().find(|a| a.id == "clip:clipboard_unpin").unwrap();
         assert!(unpin.description.as_ref().unwrap().contains("pin"));
     }
 
@@ -1310,7 +1310,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let pin = actions.iter().find(|a| a.id == "clipboard_pin").unwrap();
+        let pin = actions.iter().find(|a| a.id == "clip:clipboard_pin").unwrap();
         assert_eq!(pin.title, "Pin Entry");
     }
 
@@ -1336,11 +1336,11 @@ mod tests {
         let unpinned_actions = get_clipboard_history_context_actions(&unpinned_entry);
         let unpin = pinned_actions
             .iter()
-            .find(|a| a.id == "clipboard_unpin")
+            .find(|a| a.id == "clip:clipboard_unpin")
             .unwrap();
         let pin = unpinned_actions
             .iter()
-            .find(|a| a.id == "clipboard_pin")
+            .find(|a| a.id == "clip:clipboard_pin")
             .unwrap();
         assert_eq!(unpin.shortcut, pin.shortcut);
         assert_eq!(pin.shortcut.as_deref(), Some("⇧⌘P"));
