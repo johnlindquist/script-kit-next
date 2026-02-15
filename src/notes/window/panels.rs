@@ -203,7 +203,7 @@ impl NotesApp {
                 self.editor_state.update(cx, |state, cx| {
                     state.focus(window, cx);
                 });
-                cx.dispatch_action(&Search);
+                window.dispatch_action(Box::new(Search), cx);
                 return; // Early return - already handled focus
             }
             NotesAction::CopyNoteAs => self.copy_note_as_markdown(),
