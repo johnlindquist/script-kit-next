@@ -1,1 +1,6 @@
-- ai chat layout clean up
+Build a nice ui/ux for searching in the notes window, currently it's just a placeholder box for testing functionality /Users/johnlindquist/Desktop/clipboard-1771184749.png
+Fix the up/down arrow key behavior in the notes window editor so that it moves the cursor up/down one line at a time as in a normal text editor. I'm not sure what it's currently doing as the text cursor just disappears when I press the up/down arrow keys. Shift up/down should select lines and all the other "normal" behaviors of text editors.
+When I press the main keyboard shortcut to open the main window, sometimes I'll get a flash of the previous state of the main window (like the clipboard history ui) before it reverts to the main window. When pressing the main keyboard shortcut, it should always instantly open to the main window in its default state.
+We need a "paste sequentially" built-in command that behaves exactly like the "paste sequentially" command from raycast.
+We need a "attach to ai chat" action in the clipboard history, search files, and other built-in commands that reference files. '/Users/johnlindquist/screenshots/CleanShot 2026-02-15 at 12.53.05@2x.png'
+We need a larger thumbnail in the preview in the search files. Also, let's be incredibly careful
