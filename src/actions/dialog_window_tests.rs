@@ -301,7 +301,7 @@ fn chat_model_description_shows_provider() {
         .iter()
         .find(|a| a.id == "chat:select_model_haiku")
         .unwrap();
-    assert_eq!(haiku.description, Some("via Anthropic".to_string()));
+    assert_eq!(haiku.description, Some("Uses Anthropic".to_string()));
 }
 
 // =========================================================================
@@ -318,7 +318,7 @@ fn notes_no_selection_no_trash_no_autosizing() {
     let actions = get_notes_command_bar_actions(&info);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
 
-    assert!(ids.contains(&"notes:new_note"));
+    assert!(ids.contains(&"new_note"));
     assert!(ids.contains(&"browse_notes"));
     assert!(ids.contains(&"enable_auto_sizing"));
     // No selection → no edit/copy/export actions
@@ -338,13 +338,13 @@ fn notes_with_selection_no_trash_no_autosizing() {
     let actions = get_notes_command_bar_actions(&info);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
 
-    assert!(ids.contains(&"notes:new_note"));
+    assert!(ids.contains(&"new_note"));
     assert!(ids.contains(&"browse_notes"));
     assert!(ids.contains(&"duplicate_note"));
     assert!(ids.contains(&"find_in_note"));
     assert!(ids.contains(&"format"));
     assert!(ids.contains(&"copy_note_as"));
-    assert!(ids.contains(&"script:copy_deeplink"));
+    assert!(ids.contains(&"copy_deeplink"));
     assert!(ids.contains(&"create_quicklink"));
     assert!(ids.contains(&"export"));
     assert!(ids.contains(&"enable_auto_sizing"));
@@ -387,7 +387,7 @@ fn notes_trash_view_with_selection_suppresses_edit_copy_export() {
     assert!(!ids.contains(&"export"));
 
     // Always-present actions remain
-    assert!(ids.contains(&"notes:new_note"));
+    assert!(ids.contains(&"new_note"));
     assert!(ids.contains(&"browse_notes"));
 }
 
@@ -402,7 +402,7 @@ fn notes_no_selection_trash_view() {
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
 
     // Minimal actions only
-    assert!(ids.contains(&"notes:new_note"));
+    assert!(ids.contains(&"new_note"));
     assert!(ids.contains(&"browse_notes"));
     assert!(!ids.contains(&"duplicate_note"));
     assert!(!ids.contains(&"enable_auto_sizing")); // auto-sizing already enabled
@@ -751,12 +751,12 @@ fn new_chat_preset_uses_custom_icon() {
 
 #[test]
 fn deeplink_name_empty_string() {
-    assert_eq!(to_deeplink_name(""), "");
+    assert_eq!(to_deeplink_name(""), "_unnamed");
 }
 
 #[test]
 fn deeplink_name_all_special_chars() {
-    assert_eq!(to_deeplink_name("!@#$%^&*()"), "");
+    assert_eq!(to_deeplink_name("!@#$%^&*()"), "_unnamed");
 }
 
 #[test]
@@ -807,10 +807,10 @@ fn agent_with_shortcut_alias_frecency() {
 
     // Agent-specific actions
     assert!(ids.contains(&"edit_script")); // title says "Edit Agent"
-    assert!(ids.contains(&"file:reveal_in_finder"));
-    assert!(ids.contains(&"file:copy_path"));
+    assert!(ids.contains(&"reveal_in_finder"));
+    assert!(ids.contains(&"copy_path"));
     assert!(ids.contains(&"copy_content"));
-    assert!(ids.contains(&"script:copy_deeplink"));
+    assert!(ids.contains(&"copy_deeplink"));
 
     // Should NOT have script-only or add variants
     assert!(!ids.contains(&"view_logs"));
@@ -964,7 +964,10 @@ fn path_trash_description_folder_vs_file() {
         .iter()
         .find(|a| a.id == "file:move_to_trash")
         .unwrap();
-    assert_eq!(dir_trash.description, Some("Delete folder".to_string()));
+    assert_eq!(
+        dir_trash.description,
+        Some("Moves this folder to the Trash".to_string())
+    );
 
     let file_path = PathInfo {
         name: "test.txt".to_string(),
@@ -976,7 +979,10 @@ fn path_trash_description_folder_vs_file() {
         .iter()
         .find(|a| a.id == "file:move_to_trash")
         .unwrap();
-    assert_eq!(file_trash.description, Some("Delete file".to_string()));
+    assert_eq!(
+        file_trash.description,
+        Some("Moves this file to the Trash".to_string())
+    );
 }
 
 // =========================================================================

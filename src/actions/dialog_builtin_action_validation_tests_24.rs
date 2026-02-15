@@ -50,7 +50,7 @@ fn batch24_agent_has_reveal_in_finder() {
     script.is_agent = true;
     script.is_script = false;
     let actions = get_script_context_actions(&script);
-    assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
+    assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
 }
 
 // ============================================================
@@ -73,7 +73,7 @@ fn batch24_agent_reveal_desc_mentions_agent() {
     script.is_agent = true;
     script.is_script = false;
     let actions = get_script_context_actions(&script);
-    let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
+    let reveal = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
     assert!(reveal.description.as_ref().unwrap().contains("agent"));
 }
 
@@ -83,7 +83,7 @@ fn batch24_agent_copy_path_desc_mentions_agent() {
     script.is_agent = true;
     script.is_script = false;
     let actions = get_script_context_actions(&script);
-    let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
+    let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
     assert!(cp.description.as_ref().unwrap().contains("agent"));
 }
 
@@ -259,7 +259,7 @@ fn batch24_chat_model_description_via_provider() {
     };
     let actions = get_chat_context_actions(&info);
     let m1 = actions.iter().find(|a| a.id == "chat:select_model_m1").unwrap();
-    assert_eq!(m1.description.as_ref().unwrap(), "via TestProvider");
+    assert_eq!(m1.description.as_ref().unwrap(), "Uses TestProvider");
 }
 
 // ============================================================
@@ -419,8 +419,8 @@ fn batch24_notes_trash_minimal_actions() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    // Trash: new_note, browse_notes, enable_auto_sizing (3)
-    assert_eq!(actions.len(), 3);
+    // Trash with selection: new_note, restore_note, permanently_delete_note, browse_notes, enable_auto_sizing (5)
+    assert_eq!(actions.len(), 5);
 }
 
 #[test]
@@ -431,7 +431,7 @@ fn batch24_notes_trash_has_new_note() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "notes:new_note"));
+    assert!(actions.iter().any(|a| a.id == "new_note"));
 }
 
 #[test]
@@ -522,7 +522,7 @@ fn batch24_notes_new_note_icon_plus() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    let new_note = actions.iter().find(|a| a.id == "notes:new_note").unwrap();
+    let new_note = actions.iter().find(|a| a.id == "new_note").unwrap();
     assert_eq!(new_note.icon, Some(IconName::Plus));
 }
 
@@ -897,7 +897,7 @@ fn batch24_new_chat_preset_no_description() {
         icon: IconName::Star,
     }];
     let actions = get_new_chat_actions(&[], &presets, &[]);
-    assert!(actions[0].description.is_none());
+    assert_eq!(actions[0].description.as_deref(), Some("Uses General preset"));
 }
 
 // ============================================================
@@ -1043,7 +1043,7 @@ fn batch24_deeplink_single_char() {
 
 #[test]
 fn batch24_deeplink_all_special_empty() {
-    assert_eq!(to_deeplink_name("!@#$%"), "");
+    assert_eq!(to_deeplink_name("!@#$%"), "_unnamed");
 }
 
 #[test]
@@ -1148,14 +1148,14 @@ fn batch24_score_prefix_match() {
         Some("Open editor".to_string()),
         ActionCategory::ScriptContext,
     );
-    let score = ActionsDialog::score_action(&action, "script:edit");
+    let score = ActionsDialog::score_action(&action, "edit");
     assert!(score >= 100);
 }
 
 #[test]
 fn batch24_score_contains_match() {
     let action = Action::new("id", "Copy Edit Path", None, ActionCategory::ScriptContext);
-    let score = ActionsDialog::score_action(&action, "script:edit");
+    let score = ActionsDialog::score_action(&action, "edit");
     assert!(score >= 50);
     assert!(score < 100);
 }
