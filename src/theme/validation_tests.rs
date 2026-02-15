@@ -76,6 +76,19 @@ fn test_validate_unknown_top_level_key() {
 }
 
 #[test]
+fn test_validate_allows_appearance_key_without_unknown_warning() {
+    let json = json!({
+        "appearance": "dark"
+    });
+    let diags = validate_theme_json(&json);
+
+    assert!(!diags
+        .diagnostics
+        .iter()
+        .any(|d| d.message.contains("Unknown key 'appearance'")));
+}
+
+#[test]
 fn test_validate_valid_color_number() {
     let json = json!({
         "colors": {
@@ -86,6 +99,23 @@ fn test_validate_valid_color_number() {
     });
     let diags = validate_theme_json(&json);
     assert!(diags.is_ok());
+}
+
+#[test]
+fn test_validate_allows_on_accent_text_key_without_unknown_warning() {
+    let json = json!({
+        "colors": {
+            "text": {
+                "on_accent": "#FFFFFF"
+            }
+        }
+    });
+    let diags = validate_theme_json(&json);
+
+    assert!(!diags
+        .diagnostics
+        .iter()
+        .any(|d| d.message.contains("Unknown key 'on_accent'")));
 }
 
 #[test]

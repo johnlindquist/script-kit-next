@@ -166,6 +166,7 @@ impl ThemeDiagnostics {
 
 // Known keys for validation
 const KNOWN_TOP_LEVEL_KEYS: &[&str] = &[
+    "appearance",
     "colors",
     "focus_aware",
     "opacity",
@@ -175,7 +176,14 @@ const KNOWN_TOP_LEVEL_KEYS: &[&str] = &[
 ];
 const KNOWN_COLOR_KEYS: &[&str] = &["background", "text", "accent", "ui", "terminal"];
 const KNOWN_BACKGROUND_KEYS: &[&str] = &["main", "title_bar", "search_box", "log_panel"];
-const KNOWN_TEXT_KEYS: &[&str] = &["primary", "secondary", "tertiary", "muted", "dimmed"];
+const KNOWN_TEXT_KEYS: &[&str] = &[
+    "primary",
+    "secondary",
+    "tertiary",
+    "muted",
+    "dimmed",
+    "on_accent",
+];
 const KNOWN_ACCENT_KEYS: &[&str] = &["selected", "selected_subtle"];
 const KNOWN_UI_KEYS: &[&str] = &["border", "success", "error", "warning", "info"];
 const KNOWN_OPACITY_KEYS: &[&str] = &[
