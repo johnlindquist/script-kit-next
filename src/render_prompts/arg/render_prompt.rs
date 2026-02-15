@@ -8,7 +8,7 @@
     ) -> AnyElement {
         let _theme = &self.theme;
         let _filtered = self.filtered_arg_choices();
-        let has_actions = actions.is_some() && !actions.as_ref().unwrap().is_empty();
+        let has_actions = actions.as_ref().is_some_and(|a| !a.is_empty());
         let has_choices = !choices.is_empty();
 
         // Use design tokens for GLOBAL theming - all prompts use current design
