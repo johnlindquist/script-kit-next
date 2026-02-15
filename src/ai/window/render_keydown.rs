@@ -11,7 +11,7 @@ impl AiApp {
         self.hide_mouse_cursor(cx);
 
         // Handle keyboard shortcuts
-        let key = event.keystroke.key.as_str();
+        let key = event.keystroke.key.to_lowercase();
         let modifiers = &event.keystroke.modifiers;
 
         let no_system_modifiers = !modifiers.platform && !modifiers.alt && !modifiers.control;
@@ -21,8 +21,8 @@ impl AiApp {
         let in_setup_mode = self.available_models.is_empty() && !self.showing_api_key_input;
 
         if no_system_modifiers && in_setup_mode {
-            match key {
-                "tab" | "Tab" => {
+            match key.as_str() {
+                "tab" => {
                     if modifiers.shift {
                         self.move_setup_button_focus(-1, cx);
                     } else {
@@ -44,7 +44,7 @@ impl AiApp {
                     cx.stop_propagation();
                     return;
                 }
-                "enter" | "return" | "Enter" => {
+                "enter" | "return" => {
                     match self.setup_button_focus_index {
                         0 => self.show_api_key_input(window, cx),
                         1 => self.enable_claude_code(window, cx),
@@ -62,7 +62,7 @@ impl AiApp {
         // This routes all relevant keys to the CommandBar
         // CRITICAL: Must stop propagation to prevent Input from consuming the keys
         if self.command_bar.is_open() {
-            match key {
+            match key.as_str() {
                 "up" | "arrowup" => {
                     self.command_bar_select_prev(cx);
                     cx.stop_propagation(); // Prevent Input from handling
@@ -109,7 +109,7 @@ impl AiApp {
 
         // Handle presets dropdown navigation
         if self.showing_presets_dropdown {
-            match key {
+            match key.as_str() {
                 "up" | "arrowup" => {
                     self.presets_select_prev(cx);
                     cx.stop_propagation();
@@ -136,7 +136,7 @@ impl AiApp {
 
         // Handle new chat dropdown navigation (Raycast-style CommandBar)
         if self.new_chat_command_bar.is_open() {
-            match key {
+            match key.as_str() {
                 "up" | "arrowup" => {
                     self.new_chat_command_bar_select_prev(cx);
                     cx.stop_propagation();
@@ -172,7 +172,7 @@ impl AiApp {
 
         // platform modifier = Cmd on macOS, Ctrl on Windows/Linux
         if modifiers.platform {
-            match key {
+            match key.as_str() {
                 // Cmd+K to toggle command bar (like Raycast)
                 "k" => {
                     if self.command_bar.is_open() {
