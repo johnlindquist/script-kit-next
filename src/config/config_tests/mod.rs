@@ -778,54 +778,6 @@ fn test_config_get_terminal_font_size_uses_default_for_invalid_values() {
 }
 
 #[test]
-fn test_config_get_ui_scale_default() {
-    let config = Config::default();
-    assert_eq!(config.get_ui_scale(), DEFAULT_UI_SCALE);
-}
-
-#[test]
-fn test_config_get_ui_scale_custom() {
-    let config = Config {
-        hotkey: HotkeyConfig {
-            modifiers: vec!["meta".to_string()],
-            key: "Semicolon".to_string(),
-        },
-        bun_path: None,
-        editor: None,
-        padding: None,
-        editor_font_size: None,
-        terminal_font_size: None,
-        ui_scale: Some(1.5),
-        built_ins: None,
-        process_limits: None,
-        clipboard_history_max_text_length: None,
-        suggested: None,
-        notes_hotkey: None,
-        ai_hotkey: None,
-        logs_hotkey: None,
-        ai_hotkey_enabled: None,
-        logs_hotkey_enabled: None,
-        watcher: None,
-        layout: None,
-        commands: None,
-        claude_code: None,
-    };
-
-    assert_eq!(config.get_ui_scale(), 1.5);
-}
-
-#[test]
-fn test_config_get_ui_scale_uses_default_for_invalid_values() {
-    for invalid in [0.0, -0.5, f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
-        let config = Config {
-            ui_scale: Some(invalid),
-            ..Config::default()
-        };
-        assert_eq!(config.get_ui_scale(), DEFAULT_UI_SCALE);
-    }
-}
-
-#[test]
 fn test_config_deserialization_with_ui_settings() {
     let json = r#"{
         "hotkey": {
@@ -852,7 +804,7 @@ fn test_config_deserialization_with_ui_settings() {
 
     assert_eq!(config.get_editor_font_size(), 16.0);
     assert_eq!(config.get_terminal_font_size(), 14.0);
-    assert_eq!(config.get_ui_scale(), 1.2);
+    assert_eq!(config.ui_scale, Some(1.2));
 }
 
 // --- merged from part_03.rs ---
@@ -878,7 +830,6 @@ fn test_config_deserialization_without_ui_settings() {
     assert_eq!(config.get_padding().top, DEFAULT_PADDING_TOP);
     assert_eq!(config.get_editor_font_size(), DEFAULT_EDITOR_FONT_SIZE);
     assert_eq!(config.get_terminal_font_size(), DEFAULT_TERMINAL_FONT_SIZE);
-    assert_eq!(config.get_ui_scale(), DEFAULT_UI_SCALE);
 }
 
 #[test]
@@ -1636,46 +1587,6 @@ fn test_config_deserialization_with_confirmation_required() {
     assert!(config.requires_confirmation("script/my-script"));
     // Other default commands still require it
     assert!(config.requires_confirmation("builtin-restart"));
-}
-
-// ============================================
-// DEEPLINK URL TESTS
-// ============================================
-
-#[test]
-fn test_command_id_to_deeplink_uses_scriptkit_scheme() {
-    use crate::config::types::command_id_to_deeplink;
-
-    // The app registers 'scriptkit' URL scheme, so deeplinks must use scriptkit://
-    let deeplink = command_id_to_deeplink("builtin/clipboard-history");
-    assert_eq!(deeplink, "scriptkit://commands/builtin/clipboard-history");
-
-    let deeplink = command_id_to_deeplink("script/hello-world");
-    assert_eq!(deeplink, "scriptkit://commands/script/hello-world");
-
-    let deeplink = command_id_to_deeplink("app/com.apple.Safari");
-    assert_eq!(deeplink, "scriptkit://commands/app/com.apple.Safari");
-
-    let deeplink = command_id_to_deeplink("scriptlet/my-snippet");
-    assert_eq!(deeplink, "scriptkit://commands/scriptlet/my-snippet");
-}
-
-#[test]
-fn test_command_id_to_deeplink_not_kit_scheme() {
-    use crate::config::types::command_id_to_deeplink;
-
-    // Verify we're NOT using the old incorrect 'kit://' scheme
-    let deeplink = command_id_to_deeplink("builtin/test");
-    assert!(
-        !deeplink.starts_with("kit://"),
-        "Deeplink should NOT use kit:// scheme, got: {}",
-        deeplink
-    );
-    assert!(
-        deeplink.starts_with("scriptkit://"),
-        "Deeplink should use scriptkit:// scheme, got: {}",
-        deeplink
-    );
 }
 
 #[test]
