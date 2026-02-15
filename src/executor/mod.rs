@@ -25,10 +25,6 @@ pub use auto_submit::{
 
 pub use errors::{extract_error_message, generate_suggestions, parse_stack_trace};
 
-// Infrastructure exports - available for future integration
-#[allow(unused_imports)]
-pub use errors::{generate_crash_suggestions, signal_to_name, CrashInfo};
-
 pub use runner::{execute_script_interactive, ScriptSession};
 
 // Additional runner exports for testing and backwards compatibility
