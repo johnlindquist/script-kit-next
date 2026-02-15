@@ -48,7 +48,7 @@ pub(crate) use tests::chat_tests;
 
 pub(super) const CHAT_LAYOUT_PADDING_X: f32 = 12.0;
 pub(super) const CHAT_LAYOUT_SECTION_PADDING_Y: f32 = 8.0;
-pub(super) const CHAT_LAYOUT_MESSAGES_PADDING_Y: f32 = 12.0;
+pub(super) const CHAT_LAYOUT_MESSAGES_PADDING_Y: f32 = CHAT_LAYOUT_SECTION_PADDING_Y;
 pub(super) const CHAT_LAYOUT_CARD_PADDING_X: f32 = 12.0;
 pub(super) const CHAT_LAYOUT_CARD_PADDING_Y: f32 = 10.0;
 pub(super) const CHAT_LAYOUT_BORDER_ALPHA: u32 = 0x40;

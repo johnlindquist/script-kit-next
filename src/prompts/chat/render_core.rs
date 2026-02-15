@@ -171,8 +171,6 @@ impl ChatPrompt {
             .flex_shrink_0()
             .overflow_hidden()
             .px(px(CHAT_LAYOUT_PADDING_X))
-            .pt(px(0.0))
-            .pb(px(2.0))
             .flex()
             .flex_row()
             .items_center()
@@ -306,7 +304,7 @@ impl Render for ChatPrompt {
         }
 
         self.ensure_conversation_turns_cache();
-        let colors = &self.prompt_colors;
+        let theme_colors = &self.theme.colors;
 
         let needs_setup = self.needs_setup;
         let on_configure = self.on_configure.clone();
@@ -439,7 +437,6 @@ impl Render for ChatPrompt {
 
         // If loading_providers, show a "Connecting to AI..." placeholder
         if self.loading_providers {
-            let colors = &self.prompt_colors;
             return div()
                 .id("chat-prompt-loading")
                 .flex()
@@ -462,13 +459,13 @@ impl Render for ChatPrompt {
                         .child(
                             div()
                                 .text_sm()
-                                .text_color(rgb(colors.text_secondary))
+                                .text_color(rgb(theme_colors.text.secondary))
                                 .child("Connecting to AI..."),
                         )
                         .child(
                             div()
                                 .text_xs()
-                                .text_color(rgb(colors.text_tertiary))
+                                .text_color(rgb(theme_colors.text.tertiary))
                                 .child("Loading providers and models"),
                         ),
                 )
@@ -485,7 +482,9 @@ impl Render for ChatPrompt {
             .flex_col()
             .gap(px(8.0))
             .border_b_1()
-            .border_color(rgba((colors.quote_border << 8) | CHAT_LAYOUT_BORDER_ALPHA))
+            .border_color(rgba(
+                (theme_colors.ui.border << 8) | CHAT_LAYOUT_BORDER_ALPHA,
+            ))
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _window, cx| {
                 this.handle_file_drop(paths, cx);
             }))
@@ -575,11 +574,11 @@ impl Render for ChatPrompt {
                                     .px(px(10.0))
                                     .py(px(5.0))
                                     .rounded_full()
-                                    .bg(rgba((colors.quote_border << 8) | 0xCC))
-                                    .text_color(rgb(colors.text_primary))
+                                    .bg(rgba((theme_colors.ui.border << 8) | 0xCC))
+                                    .text_color(rgb(theme_colors.text.primary))
                                     .text_xs()
                                     .cursor_pointer()
-                                    .hover(|d| d.bg(rgba((colors.quote_border << 8) | 0xFF)))
+                                    .hover(|d| d.bg(rgba((theme_colors.ui.border << 8) | 0xFF)))
                                     .on_click(cx.listener(|this, _event, _window, cx| {
                                         this.force_scroll_turns_to_bottom();
                                         cx.notify();
