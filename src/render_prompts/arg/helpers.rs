@@ -324,7 +324,7 @@ impl ScriptListApp {
                 self.submit_prompt_response(prompt_id.to_string(), Some(value), cx);
             }
             ArgSubmitOutcome::InvalidEmpty => {
-                self.show_hud("Type a value to continue".to_string(), Some(1500), cx);
+                self.show_hud("Type a value to continue".to_string(), Some(HUD_SHORT_MS), cx);
             }
         }
     }

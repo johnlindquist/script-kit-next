@@ -173,7 +173,7 @@ impl ScriptListApp {
         // Rebuild alias/shortcut registries and show HUD for any conflicts
         let conflicts = self.rebuild_registries();
         for conflict in conflicts {
-            self.show_hud(conflict, Some(4000), cx); // 4s for conflict messages
+            self.show_hud(conflict, Some(HUD_CONFLICT_MS), cx); // 4s for conflict messages
         }
 
         logging::log(
@@ -417,7 +417,7 @@ impl ScriptListApp {
         // Rebuild alias/shortcut registries for this file's scriptlets
         let conflicts = self.rebuild_registries();
         for conflict in conflicts {
-            self.show_hud(conflict, Some(4000), cx);
+            self.show_hud(conflict, Some(HUD_CONFLICT_MS), cx);
         }
 
         logging::log(

@@ -303,7 +303,7 @@ impl ScriptListApp {
                                     favorites_loaded_message(favorites.script_ids.len()),
                                     &self.theme,
                                 )
-                                .duration_ms(Some(2500)),
+                                .duration_ms(Some(HUD_2500_MS)),
                             );
                         }
                     }
@@ -314,7 +314,7 @@ impl ScriptListApp {
                                 format!("Failed to load favorites: {}", error),
                                 &self.theme,
                             )
-                            .duration_ms(Some(5000)),
+                            .duration_ms(Some(HUD_SLOW_MS)),
                         );
                     }
                 }
@@ -403,7 +403,7 @@ impl ScriptListApp {
                                 format!("Failed to list windows: {}", e),
                                 &self.theme,
                             )
-                            .duration_ms(Some(5000)),
+                            .duration_ms(Some(HUD_SLOW_MS)),
                         );
                     }
                 }
@@ -454,7 +454,7 @@ impl ScriptListApp {
                                         ai_open_failure_message(&e),
                                         &this.theme,
                                     )
-                                    .duration_ms(Some(5000)),
+                                    .duration_ms(Some(HUD_SLOW_MS)),
                                 );
                                 cx.notify();
                             });
@@ -477,7 +477,7 @@ impl ScriptListApp {
                             format!("Failed to open Notes: {}", e),
                             &self.theme,
                         )
-                        .duration_ms(Some(5000)),
+                        .duration_ms(Some(HUD_SLOW_MS)),
                     );
                     cx.notify();
                 }
@@ -567,7 +567,7 @@ impl ScriptListApp {
                                                     ),
                                                     &self.theme,
                                                 )
-                                                .duration_ms(Some(5000)),
+                                                .duration_ms(Some(HUD_SLOW_MS)),
                                             );
                                             cx.notify();
                                             return;
@@ -610,7 +610,7 @@ impl ScriptListApp {
                                                 format!("Failed to open quicklink: {}", error),
                                                 &self.theme,
                                             )
-                                            .duration_ms(Some(5000)),
+                                            .duration_ms(Some(HUD_SLOW_MS)),
                                         );
                                         cx.notify();
                                     }
@@ -649,7 +649,7 @@ impl ScriptListApp {
                                     format!("Failed to open Quicklinks: {}", error),
                                     &self.theme,
                                 )
-                                .duration_ms(Some(5000)),
+                                .duration_ms(Some(HUD_SLOW_MS)),
                             );
                             cx.notify();
                         }
@@ -666,7 +666,7 @@ impl ScriptListApp {
                             "Quicklinks currently requires macOS.",
                             &self.theme,
                         )
-                        .duration_ms(Some(3000)),
+                        .duration_ms(Some(HUD_LONG_MS)),
                     );
                     cx.notify();
                 }
@@ -698,7 +698,7 @@ impl ScriptListApp {
                                     format!("Menu action failed: {}", e),
                                     &self.theme,
                                 )
-                                .duration_ms(Some(5000)),
+                                .duration_ms(Some(HUD_SLOW_MS)),
                             );
                             cx.notify();
                         }
@@ -712,7 +712,7 @@ impl ScriptListApp {
                             "Menu bar actions are only supported on macOS",
                             &self.theme,
                         )
-                        .duration_ms(Some(3000)),
+                        .duration_ms(Some(HUD_LONG_MS)),
                     );
                     cx.notify();
                 }
@@ -763,7 +763,7 @@ impl ScriptListApp {
                                     "Confirmation test passed!",
                                     &self.theme,
                                 )
-                                .duration_ms(Some(3000)),
+                                .duration_ms(Some(HUD_LONG_MS)),
                             );
                             cx.notify();
                             return; // Don't hide window for test
@@ -815,7 +815,7 @@ impl ScriptListApp {
                             if let Some(message) = self.system_action_feedback_message(action_type)
                             {
                                 cx.notify();
-                                self.show_hud(message, Some(2000), cx);
+                                self.show_hud(message, Some(HUD_MEDIUM_MS), cx);
                                 self.hide_main_and_reset(cx);
                             } else {
                                 self.close_and_reset_window(cx);
@@ -828,7 +828,7 @@ impl ScriptListApp {
                                     format!("System action failed: {}", e),
                                     &self.theme,
                                 )
-                                .duration_ms(Some(5000)),
+                                .duration_ms(Some(HUD_SLOW_MS)),
                             );
                             cx.notify();
                         }
@@ -843,7 +843,7 @@ impl ScriptListApp {
                             "System actions are only supported on macOS",
                             &self.theme,
                         )
-                        .duration_ms(Some(3000)),
+                        .duration_ms(Some(HUD_LONG_MS)),
                     );
                     cx.notify();
                 }
@@ -880,7 +880,7 @@ impl ScriptListApp {
                             format!("Notes command failed: {}", e),
                             &self.theme,
                         )
-                        .duration_ms(Some(5000)),
+                        .duration_ms(Some(HUD_SLOW_MS)),
                     );
                     cx.notify();
                 }
@@ -912,7 +912,7 @@ impl ScriptListApp {
                                     ai_open_failure_message(&e),
                                     &self.theme,
                                 )
-                                .duration_ms(Some(5000)),
+                                .duration_ms(Some(HUD_SLOW_MS)),
                             );
                             cx.notify();
                         }
@@ -939,13 +939,13 @@ impl ScriptListApp {
                                             ),
                                             &self.theme,
                                         )
-                                        .duration_ms(Some(5000)),
+                                        .duration_ms(Some(HUD_SLOW_MS)),
                                     );
                                     cx.notify();
                                 } else {
                                     self.show_hud(
                                         "Cleared AI conversations".to_string(),
-                                        Some(2000),
+                                        Some(HUD_MEDIUM_MS),
                                         cx,
                                     );
                                 }
@@ -960,7 +960,7 @@ impl ScriptListApp {
                                         format!("Failed to clear AI conversations: {}", e),
                                         &self.theme,
                                     )
-                                    .duration_ms(Some(5000)),
+                                    .duration_ms(Some(HUD_SLOW_MS)),
                                 );
                                 cx.notify();
                             }
@@ -1000,7 +1000,7 @@ impl ScriptListApp {
                                             ai_open_failure_message(&e),
                                             &self.theme,
                                         )
-                                        .duration_ms(Some(5000)),
+                                        .duration_ms(Some(HUD_SLOW_MS)),
                                     );
                                     cx.notify();
                                 } else {
@@ -1015,7 +1015,7 @@ impl ScriptListApp {
                                         format!("Failed to capture screen: {}", e),
                                         &self.theme,
                                     )
-                                    .duration_ms(Some(5000)),
+                                    .duration_ms(Some(HUD_SLOW_MS)),
                                 );
                                 cx.notify();
                             }
@@ -1051,7 +1051,7 @@ impl ScriptListApp {
                                             ai_open_failure_message(&e),
                                             &self.theme,
                                         )
-                                        .duration_ms(Some(5000)),
+                                        .duration_ms(Some(HUD_SLOW_MS)),
                                     );
                                     cx.notify();
                                 } else {
@@ -1065,7 +1065,7 @@ impl ScriptListApp {
                                         format!("Failed to capture window: {}", e),
                                         &self.theme,
                                     )
-                                    .duration_ms(Some(5000)),
+                                    .duration_ms(Some(HUD_SLOW_MS)),
                                 );
                                 cx.notify();
                             }
@@ -1091,7 +1091,7 @@ impl ScriptListApp {
                                             ai_open_failure_message(&e),
                                             &self.theme,
                                         )
-                                        .duration_ms(Some(5000)),
+                                        .duration_ms(Some(HUD_SLOW_MS)),
                                     );
                                     cx.notify();
                                 } else {
@@ -1105,7 +1105,7 @@ impl ScriptListApp {
                                         "No text selected. Select some text first.",
                                         &self.theme,
                                     )
-                                    .duration_ms(Some(3000)),
+                                    .duration_ms(Some(HUD_LONG_MS)),
                                 );
                                 cx.notify();
                             }
@@ -1119,7 +1119,7 @@ impl ScriptListApp {
                                         format!("Failed to get selected text: {}", e),
                                         &self.theme,
                                     )
-                                    .duration_ms(Some(5000)),
+                                    .duration_ms(Some(HUD_SLOW_MS)),
                                 );
                                 cx.notify();
                             }
@@ -1142,7 +1142,7 @@ impl ScriptListApp {
                                             ai_open_failure_message(&e),
                                             &self.theme,
                                         )
-                                        .duration_ms(Some(5000)),
+                                        .duration_ms(Some(HUD_SLOW_MS)),
                                     );
                                     cx.notify();
                                 } else {
@@ -1156,7 +1156,7 @@ impl ScriptListApp {
                                         format!("Failed to get browser URL: {}", e),
                                         &self.theme,
                                     )
-                                    .duration_ms(Some(5000)),
+                                    .duration_ms(Some(HUD_SLOW_MS)),
                                 );
                                 cx.notify();
                             }
@@ -1171,7 +1171,7 @@ impl ScriptListApp {
                                 "Screen area selection coming soon. Use 'Send Screen to AI' for now.",
                                 &self.theme,
                             )
-                            .duration_ms(Some(3000)),
+                            .duration_ms(Some(HUD_LONG_MS)),
                         );
                         cx.notify();
                     }
@@ -1185,7 +1185,7 @@ impl ScriptListApp {
                                 "AI Presets feature coming soon!",
                                 &self.theme,
                             )
-                            .duration_ms(Some(3000)),
+                            .duration_ms(Some(HUD_LONG_MS)),
                         );
                         if let Err(e) = ai::open_ai_window(cx) {
                             logging::log("ERROR", &ai_open_failure_message(&e));
@@ -1194,7 +1194,7 @@ impl ScriptListApp {
                                     ai_open_failure_message(&e),
                                     &self.theme,
                                 )
-                                .duration_ms(Some(5000)),
+                                .duration_ms(Some(HUD_SLOW_MS)),
                             );
                         }
                         cx.notify();
@@ -1238,7 +1238,7 @@ impl ScriptListApp {
                                     "All permissions granted!",
                                     &self.theme,
                                 )
-                                .duration_ms(Some(3000)),
+                                .duration_ms(Some(HUD_LONG_MS)),
                             );
                         } else {
                             let missing: Vec<_> = status
@@ -1251,7 +1251,7 @@ impl ScriptListApp {
                                     format!("Missing permissions: {}", missing.join(", ")),
                                     &self.theme,
                                 )
-                                .duration_ms(Some(5000)),
+                                .duration_ms(Some(HUD_SLOW_MS)),
                             );
                         }
                         cx.notify();
@@ -1264,7 +1264,7 @@ impl ScriptListApp {
                                     "Accessibility permission granted!",
                                     &self.theme,
                                 )
-                                .duration_ms(Some(3000)),
+                                .duration_ms(Some(HUD_LONG_MS)),
                             );
                         } else {
                             self.toast_manager.push(
@@ -1272,7 +1272,7 @@ impl ScriptListApp {
                                     "Accessibility permission not granted. Some features may not work.",
                                     &self.theme,
                                 )
-                                .duration_ms(Some(5000)),
+                                .duration_ms(Some(HUD_SLOW_MS)),
                             );
                         }
                         cx.notify();
@@ -1288,7 +1288,7 @@ impl ScriptListApp {
                                     format!("Failed to open settings: {}", e),
                                     &self.theme,
                                 )
-                                .duration_ms(Some(5000)),
+                                .duration_ms(Some(HUD_SLOW_MS)),
                             );
                             cx.notify();
                         } else {
@@ -1320,7 +1320,7 @@ impl ScriptListApp {
                                     format!("Failed to clear suggested: {}", e),
                                     &self.theme,
                                 )
-                                .duration_ms(Some(5000)),
+                                .duration_ms(Some(HUD_SLOW_MS)),
                             );
                         } else {
                             logging::log("EXEC", "Cleared all suggested items");
@@ -1334,7 +1334,7 @@ impl ScriptListApp {
                                     "Suggested items cleared",
                                     &self.theme,
                                 )
-                                .duration_ms(Some(3000)),
+                                .duration_ms(Some(HUD_LONG_MS)),
                             );
                         }
                         // Note: cx.notify() is called by reset_to_script_list, but we still need it for error case
@@ -1370,7 +1370,7 @@ impl ScriptListApp {
                                 "Window positions reset - takes effect next open",
                                 &self.theme,
                             )
-                            .duration_ms(Some(3000)),
+                            .duration_ms(Some(HUD_LONG_MS)),
                         );
 
                         // Close and reset window - this hides the window which is required
@@ -1469,7 +1469,7 @@ impl ScriptListApp {
                         if process_count == 0 {
                             self.show_hud(
                                 "No running scripts. Process report copied.".to_string(),
-                                Some(2200),
+                                Some(HUD_2200_MS),
                                 cx,
                             );
                         } else {
@@ -1494,7 +1494,7 @@ impl ScriptListApp {
                         );
 
                         if process_count == 0 {
-                            self.show_hud("No running scripts to stop.".to_string(), Some(2200), cx);
+                            self.show_hud("No running scripts to stop.".to_string(), Some(HUD_2200_MS), cx);
                         } else {
                             crate::process_manager::PROCESS_MANAGER.kill_all_processes();
                             self.show_hud(
@@ -1528,7 +1528,7 @@ impl ScriptListApp {
                 };
 
                 self.toast_manager.push(
-                    components::toast::Toast::info(message, &self.theme).duration_ms(Some(3000)),
+                    components::toast::Toast::info(message, &self.theme).duration_ms(Some(HUD_LONG_MS)),
                 );
                 cx.notify();
             }

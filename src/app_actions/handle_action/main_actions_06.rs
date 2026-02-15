@@ -36,7 +36,7 @@
                                             );
                                             self.show_hud(
                                                 "Content copied to clipboard".to_string(),
-                                                Some(2000),
+                                                Some(HUD_MEDIUM_MS),
                                                 cx,
                                             );
                                         }
@@ -44,7 +44,7 @@
                                             logging::log("ERROR", &format!("pbcopy failed: {}", e));
                                             self.show_hud(
                                                 "Failed to copy content".to_string(),
-                                                Some(3000),
+                                                Some(HUD_LONG_MS),
                                                 cx,
                                             );
                                         }
@@ -65,7 +65,7 @@
                                             );
                                             self.show_hud(
                                                 "Content copied to clipboard".to_string(),
-                                                Some(2000),
+                                                Some(HUD_MEDIUM_MS),
                                                 cx,
                                             );
                                         }
@@ -76,7 +76,7 @@
                                             );
                                             self.show_hud(
                                                 "Failed to copy content".to_string(),
-                                                Some(3000),
+                                                Some(HUD_LONG_MS),
                                                 cx,
                                             );
                                         }
@@ -91,7 +91,7 @@
                                 );
                                 self.show_hud(
                                     format!("Failed to read file: {}", e),
-                                    Some(3000),
+                                    Some(HUD_LONG_MS),
                                     cx,
                                 );
                             }
@@ -99,14 +99,14 @@
                     } else {
                         self.show_hud(
                             "Cannot copy content for this item type".to_string(),
-                            Some(2000),
+                            Some(HUD_MEDIUM_MS),
                             cx,
                         );
                     }
                 } else {
                     self.show_hud(
                         selection_required_message_for_action(&action_id).to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                 }
@@ -132,7 +132,7 @@
                             logging::log("UI", &format!("Reset ranking for: {}", script_info.name));
                             self.show_hud(
                                 format!("Ranking reset for \"{}\"", script_info.name),
-                                Some(2000),
+                                Some(HUD_MEDIUM_MS),
                                 cx,
                             );
                         } else {
@@ -142,17 +142,17 @@
                             );
                             self.show_hud(
                                 "Item has no ranking to reset".to_string(),
-                                Some(2000),
+                                Some(HUD_MEDIUM_MS),
                                 cx,
                             );
                         }
                     } else {
-                        self.show_hud("Item has no ranking to reset".to_string(), Some(2000), cx);
+                        self.show_hud("Item has no ranking to reset".to_string(), Some(HUD_MEDIUM_MS), cx);
                     }
                 } else {
                     self.show_hud(
                         selection_required_message_for_action(&action_id).to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                 }
@@ -249,7 +249,7 @@
                                                     );
                                                     self.show_hud(
                                                         format!("Executed: {}", action.name),
-                                                        Some(2000),
+                                                        Some(HUD_MEDIUM_MS),
                                                         cx,
                                                     );
                                                 } else {
@@ -268,7 +268,7 @@
                                                     );
                                                     self.show_hud(
                                                         format!("Error: {}", error_msg),
-                                                        Some(3000),
+                                                        Some(HUD_LONG_MS),
                                                         cx,
                                                     );
                                                 }
@@ -283,7 +283,7 @@
                                                 );
                                                 self.show_hud(
                                                     format!("Error: {}", e),
-                                                    Some(3000),
+                                                    Some(HUD_LONG_MS),
                                                     cx,
                                                 );
                                             }
@@ -312,19 +312,19 @@
                                 "ERROR",
                                 &format!("Scriptlet action not found: {}", action_command),
                             );
-                            self.show_hud("Scriptlet action not found".to_string(), Some(2000), cx);
+                            self.show_hud("Scriptlet action not found".to_string(), Some(HUD_MEDIUM_MS), cx);
                         }
                     } else {
                         self.show_hud(
                             "Selected item is not a scriptlet".to_string(),
-                            Some(2000),
+                            Some(HUD_MEDIUM_MS),
                             cx,
                         );
                     }
                 } else {
                     self.show_hud(
                         selection_required_message_for_action(&action_id).to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                 }

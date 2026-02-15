@@ -609,7 +609,7 @@ impl ScriptListApp {
                 } else {
                     format!("Script Error: {}", error_message)
                 };
-                self.show_hud(hud_message, Some(5000), cx);
+                self.show_hud(hud_message, Some(HUD_SLOW_MS), cx);
 
                 // Also create in-app toast with expandable details (for when window is visible)
                 // Use stderr_output if available, otherwise use stack_trace
@@ -698,7 +698,7 @@ impl ScriptListApp {
                 );
 
                 let toast = Toast::warning(unhandled_message_warning(&message_type), &self.theme)
-                    .duration_ms(Some(5000));
+                    .duration_ms(Some(HUD_SLOW_MS));
 
                 self.toast_manager.push(toast);
                 cx.notify();

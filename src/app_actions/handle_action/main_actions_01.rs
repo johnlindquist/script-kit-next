@@ -12,7 +12,7 @@
                         }
                     }
                 });
-                self.show_hud("Opened scripts folder".to_string(), Some(1500), cx);
+                self.show_hud("Opened scripts folder".to_string(), Some(HUD_SHORT_MS), cx);
                 self.hide_main_and_reset(cx);
             }
             "run_script" => {
@@ -46,12 +46,12 @@
 
                 if let Some(path) = path_opt {
                     self.reveal_in_finder(&path);
-                    self.show_hud("Opened in Finder".to_string(), Some(1500), cx);
+                    self.show_hud("Opened in Finder".to_string(), Some(HUD_SHORT_MS), cx);
                     self.hide_main_and_reset(cx);
                 } else {
                     self.show_hud(
                         "Cannot reveal this item type in Finder".to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                 }
@@ -82,7 +82,7 @@
                     if path_opt.is_none() {
                         self.show_hud(
                             "Cannot copy path for this item type".to_string(),
-                            Some(2000),
+                            Some(HUD_MEDIUM_MS),
                             cx,
                         );
                     }
@@ -90,7 +90,7 @@
                 } else {
                     self.show_hud(
                         selection_required_message_for_action(&action_id).to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                     None
@@ -105,11 +105,11 @@
                                     "UI",
                                     &format!("Copied path to clipboard: {}", path_str),
                                 );
-                                self.show_hud(format!("Copied: {}", path_str), Some(2000), cx);
+                                self.show_hud(format!("Copied: {}", path_str), Some(HUD_MEDIUM_MS), cx);
                             }
                             Err(e) => {
                                 logging::log("ERROR", &format!("pbcopy failed: {}", e));
-                                self.show_hud("Failed to copy path".to_string(), Some(3000), cx);
+                                self.show_hud("Failed to copy path".to_string(), Some(HUD_LONG_MS), cx);
                             }
                         }
                     }
@@ -123,11 +123,11 @@
                                     "UI",
                                     &format!("Copied path to clipboard: {}", path_str),
                                 );
-                                self.show_hud(format!("Copied: {}", path_str), Some(2000), cx);
+                                self.show_hud(format!("Copied: {}", path_str), Some(HUD_MEDIUM_MS), cx);
                             }
                             Err(e) => {
                                 logging::log("ERROR", &format!("Failed to copy path: {}", e));
-                                self.show_hud("Failed to copy path".to_string(), Some(3000), cx);
+                                self.show_hud("Failed to copy path".to_string(), Some(HUD_LONG_MS), cx);
                             }
                         }
                     }
@@ -149,13 +149,13 @@
                                     "UI",
                                     &format!("Copied deeplink to clipboard: {}", deeplink_url),
                                 );
-                                self.show_hud(format!("Copied: {}", deeplink_url), Some(2000), cx);
+                                self.show_hud(format!("Copied: {}", deeplink_url), Some(HUD_MEDIUM_MS), cx);
                             }
                             Err(e) => {
                                 logging::log("ERROR", &format!("pbcopy failed: {}", e));
                                 self.show_hud(
                                     "Failed to copy deeplink".to_string(),
-                                    Some(3000),
+                                    Some(HUD_LONG_MS),
                                     cx,
                                 );
                             }
@@ -171,13 +171,13 @@
                                     "UI",
                                     &format!("Copied deeplink to clipboard: {}", deeplink_url),
                                 );
-                                self.show_hud(format!("Copied: {}", deeplink_url), Some(2000), cx);
+                                self.show_hud(format!("Copied: {}", deeplink_url), Some(HUD_MEDIUM_MS), cx);
                             }
                             Err(e) => {
                                 logging::log("ERROR", &format!("Failed to copy deeplink: {}", e));
                                 self.show_hud(
                                     "Failed to copy deeplink".to_string(),
-                                    Some(3000),
+                                    Some(HUD_LONG_MS),
                                     cx,
                                 );
                             }
@@ -187,7 +187,7 @@
                 } else {
                     self.show_hud(
                         selection_required_message_for_action(&action_id).to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                 }
@@ -232,7 +232,7 @@
                             self.show_hud(
                                 "Window shortcuts not supported - windows are transient"
                                     .to_string(),
-                                Some(2500),
+                                Some(HUD_2500_MS),
                                 cx,
                             );
                         }
@@ -254,7 +254,7 @@
                 } else {
                     self.show_hud(
                         selection_required_message_for_action(&action_id).to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                 }
@@ -298,7 +298,7 @@
                                     "SHORTCUT",
                                     &format!("Removed shortcut for: {}", command_id),
                                 );
-                                self.show_hud("Shortcut removed".to_string(), Some(2000), cx);
+                                self.show_hud("Shortcut removed".to_string(), Some(HUD_MEDIUM_MS), cx);
                                 // Refresh scripts to update shortcut display
                                 self.refresh_scripts(cx);
                             }
@@ -306,7 +306,7 @@
                                 logging::log("ERROR", &format!("Failed to remove shortcut: {}", e));
                                 self.show_hud(
                                     format!("Failed to remove shortcut: {}", e),
-                                    Some(3000),
+                                    Some(HUD_LONG_MS),
                                     cx,
                                 );
                             }
@@ -314,7 +314,7 @@
                     } else {
                         self.show_hud(
                             "Cannot remove shortcut for this item type".to_string(),
-                            Some(2000),
+                            Some(HUD_MEDIUM_MS),
                             cx,
                         );
                     }
@@ -322,7 +322,7 @@
                 } else {
                     self.show_hud(
                         selection_required_message_for_action(&action_id).to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                 }

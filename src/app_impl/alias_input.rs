@@ -82,11 +82,11 @@ impl ScriptListApp {
             match crate::aliases::remove_alias_override(&command_id) {
                 Ok(()) => {
                     logging::log("ALIAS", &format!("Removed alias for: {}", command_id));
-                    self.show_hud("Alias removed".to_string(), Some(2000), cx);
+                    self.show_hud("Alias removed".to_string(), Some(HUD_MEDIUM_MS), cx);
                 }
                 Err(e) => {
                     logging::log("ERROR", &format!("Failed to remove alias: {}", e));
-                    self.show_hud(format!("Failed to remove alias: {}", e), Some(4000), cx);
+                    self.show_hud(format!("Failed to remove alias: {}", e), Some(HUD_CONFLICT_MS), cx);
                 }
             }
         } else {
@@ -97,7 +97,7 @@ impl ScriptListApp {
             {
                 self.show_hud(
                     "Alias must contain only letters, numbers, hyphens, or underscores".to_string(),
-                    Some(4000),
+                    Some(HUD_CONFLICT_MS),
                     cx,
                 );
                 return;
@@ -116,7 +116,7 @@ impl ScriptListApp {
                     logging::log("ALIAS", "Alias saved to aliases.json");
                     self.show_hud(
                         format!("Alias set: {} → {}", alias_text, command_name),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                     // Refresh scripts to update the alias registry
@@ -124,7 +124,7 @@ impl ScriptListApp {
                 }
                 Err(e) => {
                     logging::log("ERROR", &format!("Failed to save alias: {}", e));
-                    self.show_hud(format!("Failed to save alias: {}", e), Some(4000), cx);
+                    self.show_hud(format!("Failed to save alias: {}", e), Some(HUD_CONFLICT_MS), cx);
                 }
             }
         }
