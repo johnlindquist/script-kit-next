@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-02-15T07:55:06.098Z",
+  "updatedAt": "2026-02-15T18:22:39.533Z",
   "agents": {
     "codex-actions-consistency": {
       "id": "codex-actions-consistency",
@@ -182,21 +182,6 @@
       "notes": "Recovered stale lock: process terminated by codex-destructive-confirm after prolonged idle lock hold",
       "pid": 7231
     },
-    "codex-label-consistency": {
-      "id": "codex-label-consistency",
-      "kind": "codex",
-      "mode": "exec",
-      "model": "gpt-5.3-codex",
-      "task": "Fix label inconsistencies across the actions system. The audit found: (1) Finder intent uses 3 different labels: 'Reveal in Finder' (script context), 'Show in Finder' (file context), 'Open in Finder' (path context). Normalize ALL to 'Reveal in Finder'. (2) 'Get Info' label uses ID 'show_info' - align the label. (3) In actions/builders.rs, ensure all action descriptions use consistent verb patterns: 'Open X', 'Copy X to Clipboard', 'Reveal X in Finder', etc. (4) The ActionsDialog in src/actions/dialog.rs renders only title+shortcut but not the action description. If there is a description field available, surface it as a second line in the action row UI so users get disambiguating context. Search for ActionsDialog, with_file, with_clipboard_entry, with_path, with_chat to find all action builder sites. Run cargo check && cargo clippy --all-targets -- -D warnings && cargo test after changes.",
-      "scope": "src/actions/builders.rs,src/actions/dialog.rs,src/actions/*.rs",
-      "status": "done",
-      "claims": [],
-      "createdAt": "2026-02-06T22:45:31.936Z",
-      "lastSeenAt": "2026-02-06T22:59:16.331Z",
-      "host": "johns.macbook.pro.lan",
-      "notes": "done. exit=0. final=.ai/logs/codex-label-consistency.final.md. See final message file.",
-      "pid": 18809
-    },
     "codex-remove-action-descriptions": {
       "id": "codex-remove-action-descriptions",
       "kind": "codex",
@@ -286,21 +271,6 @@
       "host": "johns.macbook.pro.lan",
       "notes": "done. exit=0. final=.ai/logs/codex-chat-ux-consistency.final.md. See final message file.",
       "pid": 60417
-    },
-    "codex-actions-ux": {
-      "id": "codex-actions-ux",
-      "kind": "codex",
-      "mode": "exec",
-      "model": "gpt-5.3-codex",
-      "task": "Improve the UX of the actions dialog/popup that appears for each script. Focus on: (1) Clean up action labels to be consistent verb-first imperative style (e.g., 'Edit Script', 'Copy Path', 'Remove'). (2) Group related actions visually with separators or sections (edit actions, share actions, destructive actions). (3) Add keyboard shortcut hints next to each action. (4) Ensure destructive actions like Remove are visually distinct (red/warning color) and positioned last. (5) The actions popup should feel snappy - fast open/close transitions. Look at src/actions/dialog.rs for the dialog implementation, src/actions/builders.rs for how actions are constructed, and src/components/button.rs and src/components/footer_button.rs for action triggers.",
-      "scope": "src/actions/dialog.rs,src/actions/builders.rs,src/actions/builders_tests.rs,src/components/button.rs,src/components/footer_button.rs,src/components/prompt_footer.rs",
-      "status": "done",
-      "claims": [],
-      "createdAt": "2026-02-06T23:56:16.306Z",
-      "lastSeenAt": "2026-02-08T17:35:35.838Z",
-      "host": "johns.macbook.pro.lan",
-      "notes": "done. exit=0. final=.ai/logs/codex-actions-ux.final.md. See final message file.",
-      "pid": 61746
     },
     "codex-run-experience-ux": {
       "id": "codex-run-experience-ux",
@@ -1486,21 +1456,6 @@
       "host": "johns.macbook.pro.lan",
       "notes": "done. exit=0. final=.ai/logs/impl-builtins.final.md. See final message file.",
       "pid": 60455
-    },
-    "impl-actions-dialog": {
-      "id": "impl-actions-dialog",
-      "kind": "codex",
-      "mode": "exec",
-      "model": "gpt-5.3-codex",
-      "task": "Read ./plans/actions-dialog-system.md and implement the recommended changes to src/actions/builders.rs and src/actions/dialog.rs. Focus on the highest-priority improvements. Run 'cargo check' to verify. Only modify files in your scope.",
-      "scope": "src/actions/builders.rs,src/actions/builders_tests.rs,src/actions/dialog.rs,src/actions/dialog_tests.rs",
-      "status": "done",
-      "claims": [],
-      "createdAt": "2026-02-07T05:52:46.902Z",
-      "lastSeenAt": "2026-02-07T06:06:32.305Z",
-      "host": "johns.macbook.pro.lan",
-      "notes": "done. exit=0. final=.ai/logs/impl-actions-dialog.final.md. See final message file.",
-      "pid": 63777
     },
     "impl-theme": {
       "id": "impl-theme",
@@ -3575,20 +3530,6 @@
       "lastSeenAt": "2026-02-08T00:48:32.632Z",
       "host": "johns.macbook.pro.lan",
       "notes": "done. exit=0. final=.ai/logs/codex-fix-part02-render-alignment.final.md. See final message file."
-    },
-    "codex-fix-exports-prelude": {
-      "id": "codex-fix-exports-prelude",
-      "kind": "codex",
-      "mode": "exec",
-      "model": "gpt-5.3-codex",
-      "task": "CONSISTENCY FIX: Review and fix module exports in src/actions/mod.rs and src/actions/prelude.rs. Ensure: (1) All public types needed by consumers are exported in prelude (2) No unnecessary pub items leak implementation details (3) Module structure is clean (no unused mod declarations) (4) Consistent visibility modifiers. After fix, run cargo check && cargo clippy --all-targets -- -D warnings",
-      "scope": "src/actions/mod.rs,src/actions/prelude.rs,src/actions/types.rs,src/actions/dialog.rs,src/actions/builders.rs,src/actions/window.rs,src/actions/command_bar.rs",
-      "status": "done",
-      "claims": [],
-      "createdAt": "2026-02-08T00:44:30.650Z",
-      "lastSeenAt": "2026-02-08T00:49:58.531Z",
-      "host": "johns.macbook.pro.lan",
-      "notes": "done. exit=0. final=.ai/logs/codex-fix-exports-prelude.final.md. See final message file."
     },
     "codex-clipboard-database": {
       "id": "codex-clipboard-database",

@@ -8,6 +8,10 @@ pub(super) mod types {
     pub use crate::actions::types::{Action, ActionCategory, ScriptInfo};
 }
 
+// Flat re-exports for test submodules that do `use super::*`.
+#[cfg(test)]
+pub(super) use crate::actions::types::{Action, ActionCategory, ScriptInfo};
+
 mod chat;
 mod clipboard;
 mod file_path;
