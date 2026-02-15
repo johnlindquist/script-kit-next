@@ -3,117 +3,23 @@
 //! These structs pre-compute theme values for efficient use in render closures.
 //! They implement Copy to avoid heap allocations when captured by closures.
 
-use gpui::{rgb, rgba, Hsla, Rgba};
+use gpui::{rgb, rgba, Rgba};
 use tracing::debug;
 
-use super::hex_color::TRANSPARENT;
 use super::types::{ColorScheme, Theme};
-
-/// Lightweight struct for list item rendering - Copy to avoid clone in closures
-///
-/// This struct pre-computes the exact colors needed for rendering list items,
-/// avoiding the need to clone the full ThemeColors struct into render closures.
-///
-#[allow(dead_code)]
-#[derive(Copy, Clone, Debug)]
-pub struct ListItemColors {
-    /// Normal item background (usually transparent)
-    pub background: Rgba,
-    /// Background when hovering over an item
-    pub background_hover: Rgba,
-    /// Background when item is selected
-    pub background_selected: Rgba,
-    /// Primary text color (for item names)
-    pub text: Rgba,
-    /// Secondary/muted text color (for descriptions when not selected)
-    pub text_secondary: Rgba,
-    /// Dimmed text color (for shortcuts, metadata)
-    pub text_dimmed: Rgba,
-    /// Accent text color (for descriptions when selected)
-    pub text_accent: Rgba,
-    /// Border color for separators
-    pub border: Rgba,
-    /// Warning background color (for confirmation overlays)
-    pub warning_bg: Rgba,
-    /// Text color for content displayed on accent/colored backgrounds
-    pub text_on_accent: Rgba,
-}
-
-#[allow(dead_code)]
-impl ListItemColors {
-    /// Create ListItemColors from a ColorScheme
-    ///
-    /// This extracts only the colors needed for list item rendering.
-    /// Note: The ColorScheme's `selected_subtle` is already theme-aware
-    /// (white for dark mode, black for light mode).
-    pub fn from_color_scheme(colors: &ColorScheme) -> Self {
-        // Pre-compute rgba colors with appropriate alpha values
-        // Background is transparent, hover/selected use subtle colors
-        // selected_subtle is theme-aware: white (0xffffff) for dark, black (0x000000) for light
-        let selected_subtle = colors.accent.selected_subtle;
-
-        #[cfg(debug_assertions)]
-        debug!(
-            selected_subtle = format!("#{:06x}", selected_subtle),
-            "Extracting list item colors"
-        );
-
-        ListItemColors {
-            background: rgba(TRANSPARENT), // Fully transparent
-            background_hover: rgba((selected_subtle << 8) | 0x12), // ~7% opacity - very subtle hover
-            background_selected: rgba((selected_subtle << 8) | 0x1f), // ~12% opacity - subtle selection like Raycast
-            text: rgb(colors.text.primary),
-            text_secondary: rgb(colors.text.secondary),
-            text_dimmed: rgb(colors.text.dimmed),
-            text_accent: rgb(colors.accent.selected),
-            border: rgb(colors.ui.border),
-            warning_bg: rgb(colors.ui.warning),
-            // For dark themes, white text on warning/accent backgrounds provides good contrast
-            // Theme default is 0xffffff (white) which works well on yellow/orange backgrounds
-            text_on_accent: rgb(colors.text.primary),
-        }
-    }
-
-    /// Create ListItemColors from a Theme (preferred method)
-    ///
-    /// This gives full access to theme settings including `is_dark_mode()`.
-    /// The resulting colors are already theme-aware through selected_subtle.
-    pub fn from_theme(theme: &Theme) -> Self {
-        Self::from_color_scheme(&theme.colors)
-    }
-
-    /// Convert a specific color to Hsla for advanced styling
-    pub fn text_as_hsla(&self) -> Hsla {
-        self.text.into()
-    }
-
-    /// Get description color based on selection state
-    pub fn description_color(&self, is_selected: bool) -> Rgba {
-        if is_selected {
-            self.text_accent
-        } else {
-            self.text_secondary
-        }
-    }
-
-    /// Get item text color based on selection state
-    pub fn item_text_color(&self, is_selected: bool) -> Rgba {
-        if is_selected {
-            self.text
-        } else {
-            self.text_secondary
-        }
-    }
-}
+pub use crate::list_item::ListItemColors;
 
 #[allow(dead_code)]
 impl ColorScheme {
     /// Extract only the colors needed for list item rendering
     ///
-    /// This creates a lightweight, Copy struct that can be efficiently
-    /// passed into closures without cloning the full ColorScheme.
+    /// Uses the canonical list item color struct from `crate::list_item`.
+    /// A temporary `Theme` is built to preserve the existing `ColorScheme` API.
     pub fn list_item_colors(&self) -> ListItemColors {
-        ListItemColors::from_color_scheme(self)
+        ListItemColors::from_theme(&Theme {
+            colors: self.clone(),
+            ..Theme::default()
+        })
     }
 }
 
@@ -269,4 +175,21 @@ pub fn hover_overlay_bg(theme: &Theme, opacity: u8) -> Rgba {
         0x000000u32 // black for light mode (darkens)
     };
     rgba((base_color << 8) | (opacity as u32))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ColorScheme;
+
+    #[test]
+    fn test_list_item_colors_text_on_accent_uses_text_on_accent_from_scheme() {
+        let mut colors = ColorScheme::dark_default();
+        colors.text.primary = 0x010203;
+        colors.text.on_accent = 0xa1b2c3;
+
+        let list_item_colors = colors.list_item_colors();
+
+        assert_eq!(list_item_colors.text_on_accent, 0xa1b2c3);
+        assert_ne!(list_item_colors.text_on_accent, list_item_colors.text_primary);
+    }
 }

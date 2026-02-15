@@ -488,15 +488,15 @@ fn test_list_item_colors_from_dark_scheme() {
     let scheme = ColorScheme::dark_default();
     let colors = scheme.list_item_colors();
 
-    // Verify background is transparent
-    assert_eq!(colors.background.a, 0.0);
+    // Canonical struct should preserve direct theme color mappings
+    assert_eq!(colors.background, scheme.background.main);
+    assert_eq!(colors.background_selected, scheme.accent.selected_subtle);
+    assert_eq!(colors.text_primary, scheme.text.primary);
+    assert_eq!(colors.text_secondary, scheme.text.secondary);
 
-    // Verify hover and selected have some opacity (not transparent)
-    assert!(colors.background_hover.a > 0.0);
-    assert!(colors.background_selected.a > 0.0);
-
-    // Verify selected has more opacity than hover
-    assert!(colors.background_selected.a > colors.background_hover.a);
+    // Selection state should remain stronger than hover
+    assert!(colors.hover_opacity > 0.0);
+    assert!(colors.selected_opacity > colors.hover_opacity);
 }
 
 #[test]
@@ -504,9 +504,10 @@ fn test_list_item_colors_from_light_scheme() {
     let scheme = ColorScheme::light_default();
     let colors = scheme.list_item_colors();
 
-    // Verify we get colors from light scheme
-    // Light scheme uses 0xe8e8e8 for selected_subtle
-    assert!(colors.background_selected.a > 0.0);
+    // Light scheme values should still map directly
+    assert_eq!(colors.background_selected, scheme.accent.selected_subtle);
+    assert_eq!(colors.warning_bg, scheme.ui.warning);
+    assert_eq!(colors.text_on_accent, scheme.text.on_accent);
 }
 
 #[test]
@@ -514,12 +515,10 @@ fn test_list_item_colors_description_color() {
     let scheme = ColorScheme::dark_default();
     let colors = scheme.list_item_colors();
 
-    let selected_desc = colors.description_color(true);
-    let unselected_desc = colors.description_color(false);
-
-    // Selected should use accent, unselected should use secondary
-    // These should be different colors
-    assert_ne!(selected_desc.r, unselected_desc.r);
+    // Canonical struct exposes selected and secondary description colors directly
+    assert_eq!(colors.accent_selected, scheme.accent.selected);
+    assert_eq!(colors.text_secondary, scheme.text.secondary);
+    assert_ne!(colors.accent_selected, colors.text_secondary);
 }
 
 #[test]
@@ -527,11 +526,9 @@ fn test_list_item_colors_item_text_color() {
     let scheme = ColorScheme::dark_default();
     let colors = scheme.list_item_colors();
 
-    let selected_text = colors.item_text_color(true);
-    let unselected_text = colors.item_text_color(false);
-
-    // For dark theme, selected should be primary (white), unselected secondary
-    assert!(selected_text.r >= unselected_text.r);
+    // Selected item text uses primary text; unselected uses secondary
+    assert_eq!(colors.text_primary, scheme.text.primary);
+    assert_eq!(colors.text_secondary, scheme.text.secondary);
 }
 
 #[test]
@@ -539,11 +536,8 @@ fn test_list_item_colors_text_as_hsla() {
     let scheme = ColorScheme::dark_default();
     let colors = scheme.list_item_colors();
 
-    let hsla = colors.text_as_hsla();
-
-    // Dark theme primary text is white (0xffffff)
-    // White should have high lightness
-    assert!(hsla.l > 0.9);
+    // Keep explicit coverage for text-on-accent mapping in canonical struct
+    assert_eq!(colors.text_on_accent, scheme.text.on_accent);
 }
 
 // ========================================================================
