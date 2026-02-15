@@ -102,6 +102,45 @@ fn test_validate_valid_color_hex_string() {
 }
 
 #[test]
+fn test_validate_valid_color_shorthand() {
+    let json = json!({
+        "colors": {
+            "background": {
+                "main": "#FFF"
+            }
+        }
+    });
+    let diags = validate_theme_json(&json);
+    assert!(diags.is_ok());
+}
+
+#[test]
+fn test_validate_valid_color_rgba_hex() {
+    let json = json!({
+        "colors": {
+            "background": {
+                "main": "#1E1E1EFF"
+            }
+        }
+    });
+    let diags = validate_theme_json(&json);
+    assert!(diags.is_ok());
+}
+
+#[test]
+fn test_validate_valid_color_shorthand_rgba() {
+    let json = json!({
+        "colors": {
+            "background": {
+                "main": "#FFFA"
+            }
+        }
+    });
+    let diags = validate_theme_json(&json);
+    assert!(diags.is_ok());
+}
+
+#[test]
 fn test_validate_invalid_color_string() {
     let json = json!({
         "colors": {

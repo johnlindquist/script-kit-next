@@ -62,6 +62,73 @@ fn test_hex_color_parse_white() {
 }
 
 #[test]
+fn test_hex_color_parse_shorthand_rgb() {
+    assert_eq!(
+        hex_color_serde::parse_color_string("#FFF").expect("expected #FFF to parse"),
+        0xFFFFFF
+    );
+    assert_eq!(
+        hex_color_serde::parse_color_string("FFF").expect("expected FFF to parse"),
+        0xFFFFFF
+    );
+    assert_eq!(
+        hex_color_serde::parse_color_string("#1e1").expect("expected #1e1 to parse"),
+        0x11EE11
+    );
+    assert_eq!(
+        hex_color_serde::parse_color_string("#000").expect("expected #000 to parse"),
+        0x000000
+    );
+}
+
+#[test]
+fn test_hex_color_parse_shorthand_rgba_ignores_alpha() {
+    assert_eq!(
+        hex_color_serde::parse_color_string("#FFFF").expect("expected #FFFF to parse"),
+        0xFFFFFF
+    );
+    assert_eq!(
+        hex_color_serde::parse_color_string("#FFFA").expect("expected #FFFA to parse"),
+        0xFFFFFF
+    );
+    assert_eq!(
+        hex_color_serde::parse_color_string("#0000").expect("expected #0000 to parse"),
+        0x000000
+    );
+}
+
+#[test]
+fn test_hex_color_parse_rrggbbaa_ignores_alpha() {
+    assert_eq!(
+        hex_color_serde::parse_color_string("#1E1E1EFF")
+            .expect("expected #1E1E1EFF to parse"),
+        0x1E1E1E
+    );
+    assert_eq!(
+        hex_color_serde::parse_color_string("1E1E1EFF").expect("expected 1E1E1EFF to parse"),
+        0x1E1E1E
+    );
+    assert_eq!(
+        hex_color_serde::parse_color_string("0x1E1E1EFF")
+            .expect("expected 0x1E1E1EFF to parse"),
+        0x1E1E1E
+    );
+    assert_eq!(
+        hex_color_serde::parse_color_string("#FFFFFF00")
+            .expect("expected #FFFFFF00 to parse"),
+        0xFFFFFF
+    );
+}
+
+#[test]
+fn test_hex_color_parse_invalid_lengths() {
+    assert!(hex_color_serde::parse_color_string("#12").is_err());
+    assert!(hex_color_serde::parse_color_string("#12345").is_err());
+    assert!(hex_color_serde::parse_color_string("#1234567").is_err());
+    assert!(hex_color_serde::parse_color_string("#123456789").is_err());
+}
+
+#[test]
 fn test_hex_color_parse_invalid() {
     assert!(hex_color_serde::parse_color_string("invalid").is_err());
     assert!(hex_color_serde::parse_color_string("#GGG").is_err());
