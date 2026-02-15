@@ -344,7 +344,7 @@ impl ScriptListApp {
                                             .border_color(if is_selected {
                                                 selected_outline
                                             } else {
-                                                rgba(0x00000000)
+                                                gpui::transparent_black().into()
                                             })
                                             .when(is_selected, |d| d.bg(selected_bg))
                                             .when(is_hovered && !is_selected, |d| d.bg(hover_bg))
@@ -584,7 +584,7 @@ mod emoji_picker_tests {
             "emoji cells should keep a 1px border for consistent layout"
         );
         assert!(
-            source.contains("rgba(0x00000000)"),
+            source.contains("gpui::transparent_black().into()"),
             "unselected emoji cells should keep transparent borders to avoid layout shift"
         );
         assert!(
