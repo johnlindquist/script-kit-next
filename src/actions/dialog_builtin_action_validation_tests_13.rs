@@ -554,7 +554,7 @@ mod tests {
         let info = make_chat_info(None, &[("m1", "Claude", "Anthropic")], false, false);
         let actions = get_chat_context_actions(&info);
         let desc = actions[0].description.as_ref().unwrap();
-        assert_eq!(desc, "via Anthropic");
+        assert_eq!(desc, "Uses Anthropic");
     }
 
     #[test]
@@ -812,11 +812,7 @@ mod tests {
         let s = ScriptInfo::with_action_verb("Safari", "/app", false, "Launch");
         let actions = get_script_context_actions(&s);
         let run = actions.iter().find(|a| a.id == "run_script").unwrap();
-        assert!(
-            run.title.starts_with("Launch "),
-            "Title should start with 'Launch ': {}",
-            run.title
-        );
+        assert_eq!(run.title, "Launch");
     }
 
     #[test]
@@ -824,7 +820,7 @@ mod tests {
         let s = ScriptInfo::with_action_verb("Window", "win:1", false, "Switch to");
         let actions = get_script_context_actions(&s);
         let run = actions.iter().find(|a| a.id == "run_script").unwrap();
-        assert!(run.title.starts_with("Switch to "), "Title: {}", run.title);
+        assert_eq!(run.title, "Switch To");
     }
 
     // =========================================================================
@@ -850,7 +846,7 @@ mod tests {
         s.is_agent = true;
         s.is_script = false;
         let actions = get_script_context_actions(&s);
-        assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
+        assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
     }
 
     #[test]
@@ -859,7 +855,7 @@ mod tests {
         s.is_agent = true;
         s.is_script = false;
         let actions = get_script_context_actions(&s);
-        assert!(actions.iter().any(|a| a.id == "file:copy_path"));
+        assert!(actions.iter().any(|a| a.id == "copy_path"));
     }
 
     #[test]
@@ -888,7 +884,7 @@ mod tests {
         let actions = get_script_context_actions(&s);
         let edit = actions.iter().find(|a| a.id == "edit_script").unwrap();
         assert!(edit.description.as_ref().unwrap().contains("agent"));
-        let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
+        let reveal = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
         assert!(reveal.description.as_ref().unwrap().contains("agent"));
     }
 
@@ -900,7 +896,7 @@ mod tests {
     fn cat13_scriptlet_deeplink_description_contains_url() {
         let s = ScriptInfo::scriptlet("My Script", "/p", None, None);
         let actions = get_scriptlet_context_actions_with_custom(&s, None);
-        let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+        let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
         let desc = dl.description.as_ref().unwrap();
         assert!(desc.contains("scriptkit://run/my-script"), "Desc: {}", desc);
     }
@@ -909,7 +905,7 @@ mod tests {
     fn cat13_script_deeplink_description_format() {
         let s = ScriptInfo::new("Hello World", "/p");
         let actions = get_script_context_actions(&s);
-        let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+        let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
         let desc = dl.description.as_ref().unwrap();
         assert!(
             desc.contains("scriptkit://run/hello-world"),
@@ -938,7 +934,7 @@ mod tests {
             "Should contain ascii part: {}",
             result
         );
-        assert!(result.contains("é"), "Should preserve unicode: {}", result);
+        assert!(result.contains("%C3%A9"), "Should preserve unicode: {}", result);
     }
 
     // =========================================================================
@@ -1154,13 +1150,13 @@ mod tests {
     #[test]
     fn cat17_prefix_match_100() {
         let a = Action::new("id", "Edit Script", None, ActionCategory::ScriptContext);
-        assert_eq!(ActionsDialog::score_action(&a, "script:edit"), 100);
+        assert_eq!(ActionsDialog::score_action(&a, "edit"), 100);
     }
 
     #[test]
     fn cat17_contains_match_50() {
         let a = Action::new("id", "Copy Edit Path", None, ActionCategory::ScriptContext);
-        assert_eq!(ActionsDialog::score_action(&a, "script:edit"), 50);
+        assert_eq!(ActionsDialog::score_action(&a, "edit"), 50);
     }
 
     #[test]
@@ -1208,8 +1204,8 @@ mod tests {
             Some("Edit the script file".into()),
             ActionCategory::ScriptContext,
         );
-        // "script:edit" is prefix (100) + description contains "script:edit" (15)
-        assert_eq!(ActionsDialog::score_action(&a, "script:edit"), 115);
+        // "edit" is prefix (100) + description contains "edit" (15)
+        assert_eq!(ActionsDialog::score_action(&a, "edit"), 115);
     }
 
     // =========================================================================
@@ -1399,10 +1395,7 @@ mod tests {
         let actions = get_new_chat_actions(&[], &presets, &[]);
         assert_eq!(actions.len(), 1);
         assert_eq!(actions[0].section.as_deref(), Some("Presets"));
-        assert!(
-            actions[0].description.is_none(),
-            "Presets have no description"
-        );
+        assert!(actions[0].description.as_deref().unwrap().contains("preset"));
     }
 
     #[test]
@@ -1417,7 +1410,7 @@ mod tests {
         assert_eq!(actions.len(), 1);
         assert_eq!(actions[0].section.as_deref(), Some("Models"));
         assert_eq!(actions[0].icon, Some(IconName::Settings));
-        assert_eq!(actions[0].description, Some("OpenAI".into()));
+        assert_eq!(actions[0].description, Some("Uses OpenAI".into()));
     }
 
     #[test]
