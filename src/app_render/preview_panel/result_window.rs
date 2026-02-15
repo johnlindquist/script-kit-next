@@ -1,4 +1,6 @@
                     scripts::SearchResult::Window(window_match) => {
+                        use super::{ALPHA_DIVIDER_DARK, ALPHA_SECTION_HEADER};
+
                         let window = &window_match.window;
 
                         // Window title header
@@ -21,7 +23,7 @@
                                     div()
                                         .text_size(px(11.0))
                                         .font_weight(gpui::FontWeight::SEMIBOLD)
-                                        .text_color(rgba((text_muted << 8) | 0xCC))
+                                        .text_color(rgba((text_muted << 8) | ALPHA_SECTION_HEADER))
                                         .pb(px(spacing.padding_xs))
                                         .child("APPLICATION"),
                                 )
@@ -43,7 +45,7 @@
                                     div()
                                         .text_size(px(11.0))
                                         .font_weight(gpui::FontWeight::SEMIBOLD)
-                                        .text_color(rgba((text_muted << 8) | 0xCC))
+                                        .text_color(rgba((text_muted << 8) | ALPHA_SECTION_HEADER))
                                         .pb(px(spacing.padding_xs))
                                         .child("POSITION & SIZE"),
                                 )
@@ -63,7 +65,7 @@
                             div()
                                 .w_full()
                                 .h(px(visual.border_thin))
-                                .bg(rgba((ui_border << 8) | 0x60))
+                                .bg(rgba((ui_border << 8) | ALPHA_DIVIDER_DARK))
                                 .my(px(spacing.padding_sm)),
                         );
 
@@ -76,7 +78,7 @@
                                     div()
                                         .text_size(px(11.0))
                                         .font_weight(gpui::FontWeight::SEMIBOLD)
-                                        .text_color(rgba((text_muted << 8) | 0xCC))
+                                        .text_color(rgba((text_muted << 8) | ALPHA_SECTION_HEADER))
                                         .pb(px(spacing.padding_xs))
                                         .child("TYPE"),
                                 )

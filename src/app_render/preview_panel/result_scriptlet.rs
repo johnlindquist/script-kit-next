@@ -1,4 +1,12 @@
                     scripts::SearchResult::Scriptlet(scriptlet_match) => {
+                        use super::{
+                            ALPHA_CODE_BG,
+                            ALPHA_DIVIDER_DARK,
+                            ALPHA_DIVIDER_LIGHT,
+                            ALPHA_MUTED_LABEL,
+                            ALPHA_SECTION_HEADER,
+                        };
+
                         let scriptlet = &scriptlet_match.scriptlet;
 
                         // Source indicator with match highlighting (e.g., "scriptlet: foo.md")
@@ -23,7 +31,7 @@
                                 .overflow_x_hidden()
                                 .child(
                                     div()
-                                        .text_color(rgba((text_muted << 8) | 0x99))
+                                        .text_color(rgba((text_muted << 8) | ALPHA_MUTED_LABEL))
                                         .child("scriptlet: "),
                                 );
 
@@ -31,7 +39,7 @@
                                 let color = if is_highlighted {
                                     rgb(accent_color)
                                 } else {
-                                    rgba((text_muted << 8) | 0x99)
+                                    rgba((text_muted << 8) | ALPHA_MUTED_LABEL)
                                 };
                                 path_div = path_div.child(div().text_color(color).child(text));
                             }
@@ -143,7 +151,7 @@
                                         div()
                                             .text_size(px(11.0))
                                             .font_weight(gpui::FontWeight::SEMIBOLD)
-                                            .text_color(rgba((text_muted << 8) | 0xCC))
+                                            .text_color(rgba((text_muted << 8) | ALPHA_SECTION_HEADER))
                                             .pb(px(spacing.padding_xs))
                                             .child("KEYBOARD SHORTCUT"),
                                     )
@@ -169,7 +177,14 @@
                             div()
                                 .w_full()
                                 .h(px(visual.border_thin))
-                                .bg(rgba((ui_border << 8) | if is_light_mode { 0x30 } else { 0x60 }))
+                                .bg(rgba(
+                                    (ui_border << 8)
+                                        | if is_light_mode {
+                                            ALPHA_DIVIDER_LIGHT
+                                        } else {
+                                            ALPHA_DIVIDER_DARK
+                                        },
+                                ))
                                 .my(px(spacing.padding_sm)),
                         );
 
@@ -178,7 +193,7 @@
                             div()
                                 .text_size(px(11.0))
                                 .font_weight(gpui::FontWeight::SEMIBOLD)
-                                .text_color(rgba((text_muted << 8) | 0xCC))
+                                .text_color(rgba((text_muted << 8) | ALPHA_SECTION_HEADER))
                                 .pb(px(spacing.padding_sm))
                                 .child("CONTENT PREVIEW"),
                         );
@@ -235,7 +250,7 @@
                             .min_w(px(280.))
                             .p(px(spacing.padding_md))
                             .rounded(px(border_radius))
-                            .bg(rgba((bg_search_box << 8) | 0x80))
+                            .bg(rgba((bg_search_box << 8) | ALPHA_CODE_BG))
                             .overflow_hidden()
                             .flex()
                             .flex_col();

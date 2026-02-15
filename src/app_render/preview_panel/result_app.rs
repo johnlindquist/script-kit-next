@@ -1,4 +1,6 @@
                     scripts::SearchResult::App(app_match) => {
+                        use super::{ALPHA_DIVIDER_DARK, ALPHA_SECTION_HEADER};
+
                         let app = &app_match.app;
 
                         // App name header — extra bottom padding for visual hierarchy
@@ -22,7 +24,7 @@
                                         div()
                                             .text_size(px(11.0))
                                             .font_weight(gpui::FontWeight::SEMIBOLD)
-                                            .text_color(rgba((text_muted << 8) | 0xCC))
+                                            .text_color(rgba((text_muted << 8) | ALPHA_SECTION_HEADER))
                                             .pb(px(spacing.padding_xs))
                                             .child("KEYBOARD SHORTCUT"),
                                     )
@@ -53,7 +55,7 @@
                                     div()
                                         .text_size(px(11.0))
                                         .font_weight(gpui::FontWeight::SEMIBOLD)
-                                        .text_color(rgba((text_muted << 8) | 0xCC))
+                                        .text_color(rgba((text_muted << 8) | ALPHA_SECTION_HEADER))
                                         .pb(px(spacing.padding_xs))
                                         .child("PATH"),
                                 )
@@ -77,7 +79,7 @@
                                         div()
                                             .text_size(px(11.0))
                                             .font_weight(gpui::FontWeight::SEMIBOLD)
-                                            .text_color(rgba((text_muted << 8) | 0xCC))
+                                            .text_color(rgba((text_muted << 8) | ALPHA_SECTION_HEADER))
                                             .pb(px(spacing.padding_xs))
                                             .child("BUNDLE ID"),
                                     )
@@ -96,7 +98,7 @@
                             div()
                                 .w_full()
                                 .h(px(visual.border_thin))
-                                .bg(rgba((ui_border << 8) | 0x60))
+                                .bg(rgba((ui_border << 8) | ALPHA_DIVIDER_DARK))
                                 .my(px(spacing.padding_sm)),
                         );
 
@@ -109,7 +111,7 @@
                                     div()
                                         .text_size(px(11.0))
                                         .font_weight(gpui::FontWeight::SEMIBOLD)
-                                        .text_color(rgba((text_muted << 8) | 0xCC))
+                                        .text_color(rgba((text_muted << 8) | ALPHA_SECTION_HEADER))
                                         .pb(px(spacing.padding_xs))
                                         .child("TYPE"),
                                 )
