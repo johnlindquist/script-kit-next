@@ -12,8 +12,9 @@
 /// 2. Moves window to active space
 /// 3. Positions at eye-line on the display containing the mouse
 /// 4. Configures as floating panel (first time only)
-/// 5. Activates the window and focuses the input
-/// 6. Resets resize debounce and handles NEEDS_RESET if set
+/// 5. If NEEDS_RESET is set, resets to script list before showing
+/// 6. Shows the window, activates it, and focuses the input
+/// 7. Resets resize debounce
 ///
 /// # Arguments
 /// * `window` - The main window handle (WindowHandle<Root>)
@@ -99,7 +100,22 @@ fn show_main_window_helper(
         PANEL_CONFIGURED.store(true, Ordering::SeqCst);
     }
 
-    // 6. Show window WITHOUT activating (floating panel behavior)
+    // 6. Handle NEEDS_RESET before showing.
+    // This avoids flashing stale UI (e.g. clipboard history) for one frame.
+    let needs_reset_before_show = NEEDS_RESET
+        .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
+        .is_ok();
+    if needs_reset_before_show {
+        logging::log(
+            "VISIBILITY",
+            "NEEDS_RESET was true - resetting to script list before showing window",
+        );
+        app_entity.update(cx, |view, ctx| {
+            view.reset_to_script_list(ctx);
+        });
+    }
+
+    // 7. Show window WITHOUT activating (floating panel behavior)
     // This allows the main menu to appear without stealing focus from other apps,
     // enabling features like "copy selected text from previous app" to work correctly.
     logging::bench_log("window_show_native_start");
@@ -109,11 +125,11 @@ fn show_main_window_helper(
     });
     logging::bench_log("window_activated");
 
-    // 7. Send AI window to back (if open) so it doesn't come forward with main menu
+    // 8. Send AI window to back (if open) so it doesn't come forward with main menu
     // The AI window should only come forward via Cmd+Tab or explicit user action
     platform::send_ai_window_to_back();
 
-    // 8. Focus input, reset resize debounce, and handle NEEDS_RESET
+    // 9. Focus input and reset resize debounce
     app_entity.update(cx, |view, ctx| {
         let focus_handle = view.focus_handle(ctx);
         let _ = window.update(ctx, |_root, win, _cx| {
@@ -123,18 +139,7 @@ fn show_main_window_helper(
         // Reset resize debounce to ensure proper window sizing
         reset_resize_debounce();
 
-        // Handle NEEDS_RESET: if set (e.g., script completed while hidden),
-        // reset to script list.
-        if NEEDS_RESET
-            .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
-            .is_ok()
-        {
-            logging::log(
-                "VISIBILITY",
-                "NEEDS_RESET was true - resetting to script list",
-            );
-            view.reset_to_script_list(ctx);
-        } else {
+        if !needs_reset_before_show {
             // FIX: Always ensure selection is at the first item when showing.
             // This fixes the bug where the main menu sometimes opened with a
             // random item selected (e.g., "Reset Window Positions" instead of "AI Chat").

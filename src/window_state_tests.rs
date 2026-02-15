@@ -222,6 +222,36 @@ mod tests {
         );
     }
 
+    /// Verify show_main_window_helper resolves NEEDS_RESET before native show.
+    #[test]
+    fn test_show_main_window_helper_resets_before_native_show_when_needs_reset() {
+        let content = read_source_file("main_sections/window_visibility.rs");
+
+        let needs_reset_index = content
+            .find("let needs_reset_before_show = NEEDS_RESET")
+            .expect("needs_reset_before_show marker not found in show_main_window_helper");
+        let native_show_index = content
+            .find("platform::show_main_window_without_activation();")
+            .expect("native show call not found in show_main_window_helper");
+        let reset_log_index = content
+            .find("resetting to script list before showing window")
+            .expect("pre-show reset log marker not found in show_main_window_helper");
+        let compare_exchange_count = count_occurrences(&content, "compare_exchange(true, false");
+
+        assert!(
+            needs_reset_index < native_show_index,
+            "NEEDS_RESET must be resolved before native show to avoid stale-view flash"
+        );
+        assert!(
+            reset_log_index < native_show_index,
+            "reset-to-script-list path must run before native show to avoid stale-view flash"
+        );
+        assert_eq!(
+            compare_exchange_count, 1,
+            "Expected a single NEEDS_RESET compare_exchange in window_visibility show flow"
+        );
+    }
+
     /// Document the valid patterns for hiding windows
     /// This test always passes but serves as documentation
     #[test]
