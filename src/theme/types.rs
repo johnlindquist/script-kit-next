@@ -9,10 +9,11 @@
 
 // --- merged from part_01.rs ---
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 /// Cache for system appearance detection to avoid spawning subprocesses on every render
 static APPEARANCE_CACHE: OnceLock<Mutex<AppearanceCache>> = OnceLock::new();
@@ -1366,6 +1367,18 @@ fn load_theme_from_user_preferences(correlation_id: &str) -> Option<Theme> {
     theme_from_user_preferences(&preferences, correlation_id)
 }
 
+fn log_theme_load_result(correlation_id: &str, source: &str, theme: &Theme) {
+    info!(
+        correlation_id = %correlation_id,
+        source,
+        appearance = ?theme.appearance,
+        has_dark_colors = theme.has_dark_colors(),
+        vibrancy_enabled = theme.is_vibrancy_enabled(),
+        focus_aware_present = theme.focus_aware.is_some(),
+        "Theme load completed"
+    );
+}
+
 /// Load theme from `<SK_PATH>/kit/theme.json` (or `~/.scriptkit/kit/theme.json`)
 ///
 /// Colors should be specified as decimal integers in the JSON file.
@@ -1406,6 +1419,7 @@ pub fn load_theme() -> Theme {
     let correlation_id = format!("theme_load:{}", uuid::Uuid::new_v4());
 
     if let Some(theme) = load_theme_from_user_preferences(&correlation_id) {
+        log_theme_load_result(&correlation_id, "user_preferences", &theme);
         log_theme_config(&theme);
         return theme;
     }
@@ -1420,6 +1434,7 @@ pub fn load_theme() -> Theme {
             "Theme file not found, using defaults based on system appearance"
         );
         let theme = default_theme_from_system_appearance();
+        log_theme_load_result(&correlation_id, "default_missing_theme_file", &theme);
         log_theme_config(&theme);
         return theme;
     }
@@ -1430,10 +1445,12 @@ pub fn load_theme() -> Theme {
             error!(
                 correlation_id = %correlation_id,
                 path = %theme_path.display(),
-                error = %e,
+                io_error_kind = ?e.kind(),
+                error = ?e,
                 "Failed to read theme file, using defaults"
             );
             let theme = default_theme_from_system_appearance();
+            log_theme_load_result(&correlation_id, "default_theme_file_read_error", &theme);
             log_theme_config(&theme);
             theme
         }
@@ -1480,6 +1497,7 @@ pub fn load_theme() -> Theme {
                     }
                 }
 
+                log_theme_load_result(&correlation_id, "theme_json", &theme);
                 log_theme_config(&theme);
                 theme
             }
@@ -1487,11 +1505,17 @@ pub fn load_theme() -> Theme {
                 error!(
                     correlation_id = %correlation_id,
                     path = %theme_path.display(),
-                    error = %e,
+                    parse_error = ?e,
+                    content_len = contents.len(),
                     "Failed to parse theme JSON, using defaults"
                 );
-                debug!(correlation_id = %correlation_id, content = %contents, "Malformed theme file content");
+                debug!(
+                    correlation_id = %correlation_id,
+                    content_len = contents.len(),
+                    "Malformed theme file content"
+                );
                 let theme = default_theme_from_system_appearance();
+                log_theme_load_result(&correlation_id, "default_theme_json_parse_error", &theme);
                 log_theme_config(&theme);
                 theme
             }
@@ -1576,6 +1600,14 @@ pub fn invalidate_theme_cache() {
 // End Lightweight Theme Extraction Helpers
 // ============================================================================
 
+struct Hex(u32);
+
+impl fmt::Display for Hex {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "0x{:06X}", self.0 & 0x00FF_FFFF)
+    }
+}
+
 /// Log theme configuration for debugging
 fn log_theme_config(theme: &Theme) {
     let opacity = theme.get_opacity();
@@ -1603,14 +1635,19 @@ fn log_theme_config(theme: &Theme) {
         "Theme vibrancy configured"
     );
     debug!(
-        selected = format!("#{:06x}", theme.colors.accent.selected),
-        selected_subtle = format!("#{:06x}", theme.colors.accent.selected_subtle),
+        selected = theme.colors.accent.selected,
+        selected_hex = %Hex(theme.colors.accent.selected),
+        selected_subtle = theme.colors.accent.selected_subtle,
+        selected_subtle_hex = %Hex(theme.colors.accent.selected_subtle),
         "Theme accent colors"
     );
     debug!(
-        error = format!("#{:06x}", theme.colors.ui.error),
-        warning = format!("#{:06x}", theme.colors.ui.warning),
-        info = format!("#{:06x}", theme.colors.ui.info),
+        status_error = theme.colors.ui.error,
+        status_error_hex = %Hex(theme.colors.ui.error),
+        status_warning = theme.colors.ui.warning,
+        status_warning_hex = %Hex(theme.colors.ui.warning),
+        status_info = theme.colors.ui.info,
+        status_info_hex = %Hex(theme.colors.ui.info),
         "Theme status colors"
     );
 }
