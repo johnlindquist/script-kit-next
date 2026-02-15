@@ -157,7 +157,7 @@ fn path_move_to_trash_file_desc_says_delete_file() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&path_info);
-    let trash = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+    let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
     assert!(trash.description.as_ref().unwrap().contains("file"));
 }
 
@@ -169,7 +169,7 @@ fn path_move_to_trash_dir_desc_says_delete_folder() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&path_info);
-    let trash = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+    let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
     assert!(trash.description.as_ref().unwrap().contains("folder"));
 }
 
@@ -181,7 +181,7 @@ fn path_move_to_trash_shortcut_is_cmd_delete() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&path_info);
-    let trash = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+    let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
     assert_eq!(trash.shortcut.as_deref(), Some("⌘⌫"));
 }
 
@@ -193,7 +193,7 @@ fn path_move_to_trash_is_last_action() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&path_info);
-    assert_eq!(actions.last().unwrap().id, "move_to_trash");
+    assert_eq!(actions.last().unwrap().id, "file:move_to_trash");
 }
 
 // =====================================================================
@@ -209,7 +209,7 @@ fn file_open_file_desc_says_default_application() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&file_info);
-    let open = actions.iter().find(|a| a.id == "open_file").unwrap();
+    let open = actions.iter().find(|a| a.id == "file:open_file").unwrap();
     assert!(open
         .description
         .as_ref()
@@ -226,7 +226,7 @@ fn file_reveal_desc_says_reveal_in_finder() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&file_info);
-    let reveal = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
+    let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
     assert!(reveal
         .description
         .as_ref()
@@ -243,7 +243,7 @@ fn file_copy_path_desc_says_full_path() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&file_info);
-    let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
+    let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
     assert!(cp.description.as_ref().unwrap().contains("full path"));
 }
 
@@ -256,7 +256,7 @@ fn file_copy_filename_desc_says_just_the_filename() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&file_info);
-    let cf = actions.iter().find(|a| a.id == "copy_filename").unwrap();
+    let cf = actions.iter().find(|a| a.id == "file:copy_filename").unwrap();
     assert!(cf.description.as_ref().unwrap().contains("filename"));
 }
 
@@ -507,7 +507,7 @@ fn chat_no_messages_no_response_has_only_models_and_continue() {
     let actions = get_chat_context_actions(&info);
     // 1 model + continue_in_chat = 2
     assert_eq!(actions.len(), 2);
-    assert!(!actions.iter().any(|a| a.id == "copy_response"));
+    assert!(!actions.iter().any(|a| a.id == "chat:copy_response"));
     assert!(!actions.iter().any(|a| a.id == "clear_conversation"));
 }
 
@@ -525,7 +525,7 @@ fn chat_has_messages_no_response_has_clear_no_copy() {
     };
     let actions = get_chat_context_actions(&info);
     assert!(actions.iter().any(|a| a.id == "clear_conversation"));
-    assert!(!actions.iter().any(|a| a.id == "copy_response"));
+    assert!(!actions.iter().any(|a| a.id == "chat:copy_response"));
 }
 
 #[test]
@@ -541,7 +541,7 @@ fn chat_no_messages_has_response_has_copy_no_clear() {
         has_response: true,
     };
     let actions = get_chat_context_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "copy_response"));
+    assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
     assert!(!actions.iter().any(|a| a.id == "clear_conversation"));
 }
 
@@ -558,7 +558,7 @@ fn chat_has_both_flags_has_copy_and_clear() {
         has_response: true,
     };
     let actions = get_chat_context_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "copy_response"));
+    assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
     assert!(actions.iter().any(|a| a.id == "clear_conversation"));
     // 1 model + continue + copy + clear = 4
     assert_eq!(actions.len(), 4);
@@ -641,7 +641,7 @@ fn chat_copy_response_shortcut_cmd_c() {
         has_response: true,
     };
     let actions = get_chat_context_actions(&info);
-    let cr = actions.iter().find(|a| a.id == "copy_response").unwrap();
+    let cr = actions.iter().find(|a| a.id == "chat:copy_response").unwrap();
     assert_eq!(cr.shortcut.as_deref(), Some("⌘C"));
 }
 
@@ -654,7 +654,7 @@ fn chat_copy_response_title() {
         has_response: true,
     };
     let actions = get_chat_context_actions(&info);
-    let cr = actions.iter().find(|a| a.id == "copy_response").unwrap();
+    let cr = actions.iter().find(|a| a.id == "chat:copy_response").unwrap();
     assert_eq!(cr.title, "Copy Last Response");
 }
 
@@ -667,7 +667,7 @@ fn chat_copy_response_desc_mentions_assistant() {
         has_response: true,
     };
     let actions = get_chat_context_actions(&info);
-    let cr = actions.iter().find(|a| a.id == "copy_response").unwrap();
+    let cr = actions.iter().find(|a| a.id == "chat:copy_response").unwrap();
     assert!(cr.description.as_ref().unwrap().contains("assistant"));
 }
 
@@ -1079,7 +1079,7 @@ fn agent_has_reveal_in_finder() {
     script.is_script = false;
     script.is_agent = true;
     let actions = get_script_context_actions(&script);
-    assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
+    assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
 }
 
 #[test]
@@ -1297,7 +1297,7 @@ fn path_open_in_editor_shortcut_cmd_e() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&path_info);
-    let editor = actions.iter().find(|a| a.id == "open_in_editor").unwrap();
+    let editor = actions.iter().find(|a| a.id == "file:open_in_editor").unwrap();
     assert_eq!(editor.shortcut.as_deref(), Some("⌘E"));
 }
 
@@ -1309,7 +1309,7 @@ fn path_open_in_editor_desc_mentions_editor() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&path_info);
-    let editor = actions.iter().find(|a| a.id == "open_in_editor").unwrap();
+    let editor = actions.iter().find(|a| a.id == "file:open_in_editor").unwrap();
     assert!(editor.description.as_ref().unwrap().contains("$EDITOR"));
 }
 
@@ -1321,7 +1321,7 @@ fn path_open_in_finder_shortcut_cmd_shift_f() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&path_info);
-    let finder = actions.iter().find(|a| a.id == "open_in_finder").unwrap();
+    let finder = actions.iter().find(|a| a.id == "file:open_in_finder").unwrap();
     assert_eq!(finder.shortcut.as_deref(), Some("⌘⇧F"));
 }
 
@@ -1333,7 +1333,7 @@ fn path_open_in_finder_desc_mentions_finder() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&path_info);
-    let finder = actions.iter().find(|a| a.id == "open_in_finder").unwrap();
+    let finder = actions.iter().find(|a| a.id == "file:open_in_finder").unwrap();
     assert!(finder.description.as_ref().unwrap().contains("Finder"));
 }
 

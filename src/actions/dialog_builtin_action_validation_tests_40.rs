@@ -263,7 +263,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert_eq!(actions[0].id, "clipboard_paste");
+        assert_eq!(actions[0].id, "clip:clipboard_paste");
     }
 
     #[test]
@@ -277,7 +277,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert_eq!(actions[1].id, "clipboard_copy");
+        assert_eq!(actions[1].id, "clip:clipboard_copy");
     }
 
     // =========================================================================
@@ -512,7 +512,7 @@ mod tests {
             file_type: FileType::Directory,
         };
         let actions = get_file_context_actions(&file_info);
-        assert!(!actions.iter().any(|a| a.id == "quick_look"));
+        assert!(!actions.iter().any(|a| a.id == "file:quick_look"));
     }
 
     #[test]
@@ -525,7 +525,7 @@ mod tests {
         };
         let actions = get_file_context_actions(&file_info);
         #[cfg(target_os = "macos")]
-        assert!(actions.iter().any(|a| a.id == "quick_look"));
+        assert!(actions.iter().any(|a| a.id == "file:quick_look"));
     }
 
     #[test]
@@ -538,7 +538,7 @@ mod tests {
         };
         let actions = get_file_context_actions(&file_info);
         #[cfg(target_os = "macos")]
-        assert!(actions.iter().any(|a| a.id == "open_with"));
+        assert!(actions.iter().any(|a| a.id == "file:open_with"));
     }
 
     #[test]
@@ -551,7 +551,7 @@ mod tests {
         };
         let actions = get_file_context_actions(&file_info);
         #[cfg(target_os = "macos")]
-        assert!(actions.iter().any(|a| a.id == "show_info"));
+        assert!(actions.iter().any(|a| a.id == "file:show_info"));
     }
 
     // =========================================================================
@@ -591,7 +591,7 @@ mod tests {
             file_type: FileType::File,
         };
         let actions = get_file_context_actions(&file_info);
-        assert_eq!(actions[0].id, "open_file");
+        assert_eq!(actions[0].id, "file:open_file");
     }
 
     #[test]
@@ -603,7 +603,7 @@ mod tests {
             file_type: FileType::Directory,
         };
         let actions = get_file_context_actions(&file_info);
-        assert_eq!(actions[0].id, "open_directory");
+        assert_eq!(actions[0].id, "file:open_directory");
     }
 
     // =========================================================================
@@ -678,7 +678,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&path_info);
-        let editor_action = actions.iter().find(|a| a.id == "open_in_editor").unwrap();
+        let editor_action = actions.iter().find(|a| a.id == "file:open_in_editor").unwrap();
         assert!(editor_action
             .description
             .as_ref()
@@ -694,7 +694,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&path_info);
-        let editor_action = actions.iter().find(|a| a.id == "open_in_editor").unwrap();
+        let editor_action = actions.iter().find(|a| a.id == "file:open_in_editor").unwrap();
         assert_eq!(editor_action.shortcut, Some("⌘E".to_string()));
     }
 
@@ -706,7 +706,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&path_info);
-        let finder_action = actions.iter().find(|a| a.id == "open_in_finder").unwrap();
+        let finder_action = actions.iter().find(|a| a.id == "file:open_in_finder").unwrap();
         assert_eq!(finder_action.shortcut, Some("⌘⇧F".to_string()));
     }
 
@@ -718,7 +718,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&path_info);
-        let trash_action = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+        let trash_action = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
         assert_eq!(trash_action.shortcut, Some("⌘⌫".to_string()));
     }
 
@@ -774,7 +774,7 @@ mod tests {
         assert!(ids.contains(&"run_script"));
         assert!(ids.contains(&"add_shortcut"));
         assert!(ids.contains(&"add_alias"));
-        assert!(ids.contains(&"copy_deeplink"));
+        assert!(ids.contains(&"script:copy_deeplink"));
     }
 
     #[test]
@@ -782,8 +782,8 @@ mod tests {
         let info = ScriptInfo::builtin("Clipboard History");
         let actions = get_script_context_actions(&info);
         assert!(!actions.iter().any(|a| a.id == "edit_script"));
-        assert!(!actions.iter().any(|a| a.id == "reveal_in_finder"));
-        assert!(!actions.iter().any(|a| a.id == "copy_path"));
+        assert!(!actions.iter().any(|a| a.id == "file:reveal_in_finder"));
+        assert!(!actions.iter().any(|a| a.id == "file:copy_path"));
     }
 
     #[test]
@@ -883,7 +883,7 @@ mod tests {
     fn scriptlet_copy_deeplink_uses_deeplink_name() {
         let script = ScriptInfo::scriptlet("Open GitHub", "/path/snippet.md", None, None);
         let actions = get_scriptlet_context_actions_with_custom(&script, None);
-        let deeplink = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+        let deeplink = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
         assert!(deeplink
             .description
             .as_ref()
@@ -895,7 +895,7 @@ mod tests {
     fn scriptlet_copy_deeplink_shortcut() {
         let script = ScriptInfo::scriptlet("Test", "/path", None, None);
         let actions = get_scriptlet_context_actions_with_custom(&script, None);
-        let deeplink = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+        let deeplink = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
         assert_eq!(deeplink.shortcut, Some("⌘⇧D".to_string()));
     }
 
@@ -1150,7 +1150,7 @@ mod tests {
             has_response: true,
         };
         let actions = get_chat_context_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "copy_response"));
+        assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
     }
 
     #[test]
@@ -1162,7 +1162,7 @@ mod tests {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert!(!actions.iter().any(|a| a.id == "copy_response"));
+        assert!(!actions.iter().any(|a| a.id == "chat:copy_response"));
     }
 
     #[test]
@@ -1174,7 +1174,7 @@ mod tests {
             has_response: true,
         };
         let actions = get_chat_context_actions(&info);
-        let copy = actions.iter().find(|a| a.id == "copy_response").unwrap();
+        let copy = actions.iter().find(|a| a.id == "chat:copy_response").unwrap();
         assert_eq!(copy.shortcut, Some("⌘C".to_string()));
     }
 
@@ -1187,7 +1187,7 @@ mod tests {
             has_response: true,
         };
         let actions = get_chat_context_actions(&info);
-        let copy = actions.iter().find(|a| a.id == "copy_response").unwrap();
+        let copy = actions.iter().find(|a| a.id == "chat:copy_response").unwrap();
         assert_eq!(copy.title, "Copy Last Response");
     }
 

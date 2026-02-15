@@ -78,7 +78,7 @@ fn clipboard_paste_title_with_app_name() {
         frontmost_app_name: Some("Safari".to_string()),
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let paste = actions.iter().find(|a| a.id == "clipboard_paste").unwrap();
+    let paste = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
     assert_eq!(paste.title, "Paste to Safari");
 }
 
@@ -93,7 +93,7 @@ fn clipboard_paste_title_without_app_name() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let paste = actions.iter().find(|a| a.id == "clipboard_paste").unwrap();
+    let paste = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
     assert_eq!(paste.title, "Paste to Active App");
 }
 
@@ -108,7 +108,7 @@ fn clipboard_paste_shortcut_is_enter() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let paste = actions.iter().find(|a| a.id == "clipboard_paste").unwrap();
+    let paste = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
     assert_eq!(paste.shortcut, Some("↵".to_string()));
 }
 
@@ -123,7 +123,7 @@ fn clipboard_paste_desc_mentions_paste() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let paste = actions.iter().find(|a| a.id == "clipboard_paste").unwrap();
+    let paste = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
     assert!(paste.description.as_ref().unwrap().contains("paste"));
 }
 
@@ -348,7 +348,7 @@ fn file_quick_look_present_for_file() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&file);
-    assert!(actions.iter().any(|a| a.id == "quick_look"));
+    assert!(actions.iter().any(|a| a.id == "file:quick_look"));
 }
 
 #[cfg(target_os = "macos")]
@@ -361,7 +361,7 @@ fn file_quick_look_shortcut() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&file);
-    let ql = actions.iter().find(|a| a.id == "quick_look").unwrap();
+    let ql = actions.iter().find(|a| a.id == "file:quick_look").unwrap();
     assert_eq!(ql.shortcut, Some("⌘Y".to_string()));
 }
 
@@ -375,7 +375,7 @@ fn file_quick_look_absent_for_dir() {
         is_dir: true,
     };
     let actions = get_file_context_actions(&dir);
-    assert!(!actions.iter().any(|a| a.id == "quick_look"));
+    assert!(!actions.iter().any(|a| a.id == "file:quick_look"));
 }
 
 #[cfg(target_os = "macos")]
@@ -388,7 +388,7 @@ fn file_quick_look_desc_mentions_preview() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&file);
-    let ql = actions.iter().find(|a| a.id == "quick_look").unwrap();
+    let ql = actions.iter().find(|a| a.id == "file:quick_look").unwrap();
     assert!(ql
         .description
         .as_ref()
@@ -408,7 +408,7 @@ fn file_copy_path_shortcut() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&file);
-    let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
+    let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
     assert_eq!(cp.shortcut, Some("⌘⇧C".to_string()));
 }
 
@@ -421,7 +421,7 @@ fn file_copy_path_title() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&file);
-    let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
+    let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
     assert_eq!(cp.title, "Copy Path");
 }
 
@@ -434,7 +434,7 @@ fn file_copy_path_desc_mentions_clipboard() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&file);
-    let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
+    let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
     assert!(cp.description.as_ref().unwrap().contains("clipboard"));
 }
 
@@ -447,7 +447,7 @@ fn file_copy_path_present_for_dir() {
         is_dir: true,
     };
     let actions = get_file_context_actions(&dir);
-    assert!(actions.iter().any(|a| a.id == "copy_path"));
+    assert!(actions.iter().any(|a| a.id == "file:copy_path"));
 }
 
 // --- merged from part_02.rs ---
@@ -488,7 +488,7 @@ fn path_file_primary_is_first() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&p);
-    assert_eq!(actions[0].id, "select_file");
+    assert_eq!(actions[0].id, "file:select_file");
 }
 
 #[test]
@@ -499,7 +499,7 @@ fn path_dir_primary_is_first() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&p);
-    assert_eq!(actions[0].id, "open_directory");
+    assert_eq!(actions[0].id, "file:open_directory");
 }
 
 // =========== 10. Script context: run_script title includes verb and quoted name ===========
@@ -542,7 +542,7 @@ fn script_run_shortcut_enter() {
 fn script_deeplink_desc_has_correct_url() {
     let s = ScriptInfo::new("My Cool Script", "/p");
     let actions = get_script_context_actions(&s);
-    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
     assert!(dl
         .description
         .as_ref()
@@ -554,7 +554,7 @@ fn script_deeplink_desc_has_correct_url() {
 fn script_deeplink_shortcut() {
     let s = ScriptInfo::new("X", "/p");
     let actions = get_script_context_actions(&s);
-    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
     assert_eq!(dl.shortcut, Some("⌘⇧D".to_string()));
 }
 
@@ -562,7 +562,7 @@ fn script_deeplink_shortcut() {
 fn script_deeplink_title() {
     let s = ScriptInfo::new("X", "/p");
     let actions = get_script_context_actions(&s);
-    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
     assert_eq!(dl.title, "Copy Deeplink");
 }
 
@@ -570,7 +570,7 @@ fn script_deeplink_title() {
 fn scriptlet_deeplink_desc_has_slugified_name() {
     let s = ScriptInfo::scriptlet("Open GitHub PR", "/path.md", None, None);
     let actions = get_script_context_actions(&s);
-    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
     assert!(dl.description.as_ref().unwrap().contains("open-github-pr"));
 }
 
@@ -592,7 +592,7 @@ fn agent_reveal_desc_mentions_agent() {
     s.is_script = false;
     s.is_agent = true;
     let actions = get_script_context_actions(&s);
-    let reveal = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
+    let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
     assert!(reveal.description.as_ref().unwrap().contains("agent"));
 }
 
@@ -602,7 +602,7 @@ fn agent_copy_path_desc_mentions_agent() {
     s.is_script = false;
     s.is_agent = true;
     let actions = get_script_context_actions(&s);
-    let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
+    let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
     assert!(cp.description.as_ref().unwrap().contains("agent"));
 }
 
@@ -758,28 +758,28 @@ fn ai_bar_copy_last_code_desc_mentions_code() {
 #[test]
 fn ai_bar_submit_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let sub = actions.iter().find(|a| a.id == "submit").unwrap();
+    let sub = actions.iter().find(|a| a.id == "chat:submit").unwrap();
     assert_eq!(sub.shortcut, Some("↵".to_string()));
 }
 
 #[test]
 fn ai_bar_submit_icon() {
     let actions = get_ai_command_bar_actions();
-    let sub = actions.iter().find(|a| a.id == "submit").unwrap();
+    let sub = actions.iter().find(|a| a.id == "chat:submit").unwrap();
     assert_eq!(sub.icon, Some(IconName::ArrowUp));
 }
 
 #[test]
 fn ai_bar_submit_section_actions() {
     let actions = get_ai_command_bar_actions();
-    let sub = actions.iter().find(|a| a.id == "submit").unwrap();
+    let sub = actions.iter().find(|a| a.id == "chat:submit").unwrap();
     assert_eq!(sub.section, Some("Actions".to_string()));
 }
 
 #[test]
 fn ai_bar_submit_desc_mentions_send() {
     let actions = get_ai_command_bar_actions();
-    let sub = actions.iter().find(|a| a.id == "submit").unwrap();
+    let sub = actions.iter().find(|a| a.id == "chat:submit").unwrap();
     assert!(sub
         .description
         .as_ref()

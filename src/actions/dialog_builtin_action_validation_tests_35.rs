@@ -280,7 +280,7 @@ fn path_file_primary_id_is_select_file() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&path_info);
-    assert_eq!(actions[0].id, "select_file");
+    assert_eq!(actions[0].id, "file:select_file");
 }
 
 #[test]
@@ -291,7 +291,7 @@ fn path_dir_primary_id_is_open_directory() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&path_info);
-    assert_eq!(actions[0].id, "open_directory");
+    assert_eq!(actions[0].id, "file:open_directory");
 }
 
 // =====================================================================
@@ -742,7 +742,7 @@ fn notes_trash_has_new_note() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "new_note"));
+    assert!(actions.iter().any(|a| a.id == "notes:new_note"));
 }
 
 #[test]
