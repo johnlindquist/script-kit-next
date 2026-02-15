@@ -8,8 +8,8 @@
 
 use crate::logging;
 use crate::process_manager::PROCESS_MANAGER;
-use crate::protocol::{serialize_message, JsonlReader, Message};
-use std::io::{BufReader, Write};
+use crate::protocol::JsonlReader;
+use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Stdio};
 use std::time::Instant;
@@ -492,76 +492,6 @@ impl SplitSession {
     }
 }
 
-#[allow(dead_code)]
-impl ScriptSession {
-    /// Send a message to the running script
-    pub fn send_message(&mut self, msg: &Message) -> Result<(), String> {
-        let json =
-            serialize_message(msg).map_err(|e| format!("Failed to serialize message: {}", e))?;
-        // Use truncated logging - avoids full payload (screenshots, clipboard, etc.)
-        logging::log_protocol_send(0, &json);
-        writeln!(self.stdin, "{}", json)
-            .map_err(|e| format!("Failed to write to script stdin: {}", e))?;
-        self.stdin
-            .flush()
-            .map_err(|e| format!("Failed to flush stdin: {}", e))?;
-        Ok(())
-    }
-
-    /// Receive a message from the running script (blocking)
-    pub fn receive_message(&mut self) -> Result<Option<Message>, String> {
-        let result = self
-            .stdout_reader
-            .next_message()
-            .map_err(|e| format!("Failed to read from script stdout: {}", e));
-        if let Ok(Some(ref msg)) = result {
-            // Use truncated logging - message Debug impl may contain large payloads
-            // Extract type name from Debug output: "Variant { ... }" -> "Variant"
-            let debug_str = format!("{:?}", msg);
-            let msg_type = debug_str.split_whitespace().next().unwrap_or("Unknown");
-            logging::log_protocol_recv(msg_type, std::mem::size_of_val(msg));
-        }
-        result
-    }
-
-    /// Check if the child process is still running
-    pub fn is_running(&mut self) -> bool {
-        match self.child.try_wait() {
-            Ok(None) => true,
-            Ok(Some(_)) => false,
-            Err(_) => false,
-        }
-    }
-
-    /// Wait for the child process to terminate and get its exit code
-    pub fn wait(&mut self) -> Result<i32, String> {
-        let status = self
-            .child
-            .wait()
-            .map_err(|e| format!("Failed to wait for script process: {}", e))?;
-        let code = status.code().unwrap_or(-1);
-        logging::log("EXEC", &format!("Script exited with code: {}", code));
-        Ok(code)
-    }
-
-    /// Kill the child process and its process group
-    pub fn kill(&mut self) -> Result<(), String> {
-        logging::log(
-            "EXEC",
-            &format!("ScriptSession::kill() for PID {}", self.process_handle.pid),
-        );
-        self.process_handle.kill();
-        // Also try the standard kill for good measure
-        let _ = self.child.kill();
-        Ok(())
-    }
-
-    /// Get the process ID
-    pub fn pid(&self) -> u32 {
-        self.process_handle.pid
-    }
-}
-
 #[derive(Debug)]
 struct RuntimeAttempt {
     name: &'static str,
@@ -940,7 +870,7 @@ mod env_scrub_tests {
         let _script_kit = EnvVarGuard::set("SCRIPT_KIT_ENV_SCRUB_SPAWN", "forwarded");
         let _private = EnvVarGuard::set("RUNNER_ENV_SCRUB_SPAWN_PRIVATE", "blocked");
 
-        let mut session = spawn_script(
+        let session = spawn_script(
             "sh",
             &[
                 "-c",
@@ -950,11 +880,13 @@ mod env_scrub_tests {
         )
         .expect("spawn_script should succeed");
 
-        let exit_code = session.wait().expect("wait should succeed");
+        let mut split = session.split();
+
+        let exit_code = split.wait().expect("wait should succeed");
         assert_eq!(exit_code, 0);
 
         let mut stderr = String::new();
-        let mut stderr_reader = session.stderr.take().expect("stderr should be captured");
+        let mut stderr_reader = split.stderr.take().expect("stderr should be captured");
         stderr_reader
             .read_to_string(&mut stderr)
             .expect("stderr should be readable");
