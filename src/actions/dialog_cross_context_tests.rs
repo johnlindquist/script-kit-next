@@ -52,7 +52,7 @@ fn primary_action_is_always_first_in_file_context_file() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&info);
-    assert_eq!(actions[0].id, "open_file");
+    assert_eq!(actions[0].id, "file:open_file");
     assert_eq!(actions[0].shortcut.as_deref(), Some("↵"));
 }
 
@@ -65,7 +65,7 @@ fn primary_action_is_always_first_in_file_context_dir() {
         is_dir: true,
     };
     let actions = get_file_context_actions(&info);
-    assert_eq!(actions[0].id, "open_directory");
+    assert_eq!(actions[0].id, "file:open_directory");
     assert_eq!(actions[0].shortcut.as_deref(), Some("↵"));
 }
 
@@ -73,7 +73,7 @@ fn primary_action_is_always_first_in_file_context_dir() {
 fn primary_action_is_always_first_in_path_context_file() {
     let info = PathInfo::new("file.txt", "/test/file.txt", false);
     let actions = get_path_context_actions(&info);
-    assert_eq!(actions[0].id, "select_file");
+    assert_eq!(actions[0].id, "file:select_file");
     assert_eq!(actions[0].shortcut.as_deref(), Some("↵"));
 }
 
@@ -81,7 +81,7 @@ fn primary_action_is_always_first_in_path_context_file() {
 fn primary_action_is_always_first_in_path_context_dir() {
     let info = PathInfo::new("dir", "/test/dir", true);
     let actions = get_path_context_actions(&info);
-    assert_eq!(actions[0].id, "open_directory");
+    assert_eq!(actions[0].id, "file:open_directory");
     assert_eq!(actions[0].shortcut.as_deref(), Some("↵"));
 }
 
@@ -96,7 +96,7 @@ fn primary_action_is_always_first_in_clipboard_context() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&info);
-    assert_eq!(actions[0].id, "clipboard_paste");
+    assert_eq!(actions[0].id, "clip:clipboard_paste");
     assert_eq!(actions[0].shortcut.as_deref(), Some("↵"));
 }
 
@@ -289,8 +289,8 @@ fn clipboard_text_unpinned_has_expected_action_set() {
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
 
     // Must have these core actions
-    assert!(ids.contains(&"clipboard_paste"));
-    assert!(ids.contains(&"clipboard_copy"));
+    assert!(ids.contains(&"clip:clipboard_paste"));
+    assert!(ids.contains(&"clip:clipboard_copy"));
     assert!(ids.contains(&"clipboard_paste_keep_open"));
     assert!(ids.contains(&"clipboard_share"));
     assert!(ids.contains(&"clipboard_attach_to_ai"));
@@ -325,7 +325,7 @@ fn clipboard_image_pinned_has_expected_action_set() {
     assert!(!ids.contains(&"clipboard_pin")); // should NOT have pin
 
     // Paste title should include app name
-    let paste = actions.iter().find(|a| a.id == "clipboard_paste").unwrap();
+    let paste = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
     assert_eq!(paste.title, "Paste to Preview");
 }
 
@@ -415,7 +415,7 @@ fn open_file_title_includes_filename() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&info);
-    let open = actions.iter().find(|a| a.id == "open_file").unwrap();
+    let open = actions.iter().find(|a| a.id == "file:open_file").unwrap();
     assert_eq!(open.title, "Open \"my document.pdf\"");
 }
 
@@ -428,7 +428,7 @@ fn open_directory_title_includes_dirname() {
         is_dir: true,
     };
     let actions = get_file_context_actions(&info);
-    let open = actions.iter().find(|a| a.id == "open_directory").unwrap();
+    let open = actions.iter().find(|a| a.id == "file:open_directory").unwrap();
     assert_eq!(open.title, "Open \"My Folder\"");
 }
 
@@ -436,7 +436,7 @@ fn open_directory_title_includes_dirname() {
 fn path_context_select_file_title_includes_name() {
     let info = PathInfo::new("report.csv", "/data/report.csv", false);
     let actions = get_path_context_actions(&info);
-    let select = actions.iter().find(|a| a.id == "select_file").unwrap();
+    let select = actions.iter().find(|a| a.id == "file:select_file").unwrap();
     assert_eq!(select.title, "Select \"report.csv\"");
 }
 
@@ -444,7 +444,7 @@ fn path_context_select_file_title_includes_name() {
 fn path_context_open_dir_title_includes_name() {
     let info = PathInfo::new("Documents", "/home/user/Documents", true);
     let actions = get_path_context_actions(&info);
-    let open = actions.iter().find(|a| a.id == "open_directory").unwrap();
+    let open = actions.iter().find(|a| a.id == "file:open_directory").unwrap();
     assert_eq!(open.title, "Open \"Documents\"");
 }
 
@@ -458,7 +458,7 @@ fn path_context_open_dir_title_includes_name() {
 fn deeplink_description_format_for_script() {
     let script = ScriptInfo::new("My Cool Script", "/path/script.ts");
     let actions = get_script_context_actions(&script);
-    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
     assert_eq!(
         dl.description.as_deref(),
         Some("Copy scriptkit://run/my-cool-script URL to clipboard")
@@ -469,7 +469,7 @@ fn deeplink_description_format_for_script() {
 fn deeplink_description_format_for_builtin() {
     let builtin = ScriptInfo::builtin("Clipboard History");
     let actions = get_script_context_actions(&builtin);
-    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
     assert_eq!(
         dl.description.as_deref(),
         Some("Copy scriptkit://run/clipboard-history URL to clipboard")
@@ -480,7 +480,7 @@ fn deeplink_description_format_for_builtin() {
 fn deeplink_description_format_for_scriptlet() {
     let scriptlet = ScriptInfo::scriptlet("Open GitHub", "/path/url.md", None, None);
     let actions = get_scriptlet_context_actions_with_custom(&scriptlet, None);
-    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
     assert_eq!(
         dl.description.as_deref(),
         Some("Copy scriptkit://run/open-github URL to clipboard")
@@ -502,8 +502,8 @@ fn agent_with_is_script_false_gets_agent_actions() {
     // Agent-specific
     let edit = actions.iter().find(|a| a.id == "edit_script").unwrap();
     assert_eq!(edit.title, "Edit Agent");
-    assert!(ids.contains(&"reveal_in_finder"));
-    assert!(ids.contains(&"copy_path"));
+    assert!(ids.contains(&"file:reveal_in_finder"));
+    assert!(ids.contains(&"file:copy_path"));
     assert!(ids.contains(&"copy_content"));
 
     // Must NOT have script-only actions
@@ -539,7 +539,7 @@ fn agent_with_all_flags_combined() {
     // Has agent actions
     let edit = actions.iter().find(|a| a.id == "edit_script").unwrap();
     assert_eq!(edit.title, "Edit Agent");
-    assert!(ids.contains(&"copy_deeplink"));
+    assert!(ids.contains(&"script:copy_deeplink"));
 }
 
 #[test]
@@ -578,7 +578,7 @@ fn notes_command_bar_sections_are_correct() {
     let actions = get_notes_command_bar_actions(&info);
 
     // Verify each action has the expected section
-    let new_note = actions.iter().find(|a| a.id == "new_note").unwrap();
+    let new_note = actions.iter().find(|a| a.id == "notes:new_note").unwrap();
     assert_eq!(new_note.section.as_deref(), Some("Notes"));
 
     let duplicate = actions.iter().find(|a| a.id == "duplicate_note").unwrap();
@@ -906,7 +906,7 @@ fn chat_context_all_four_conditional_combos() {
 
         // copy_response only when has_response
         assert_eq!(
-            ids.contains(&"copy_response"),
+            ids.contains(&"chat:copy_response"),
             has_response,
             "copy_response presence should match has_response={}",
             has_response
@@ -1416,7 +1416,7 @@ fn file_context_application_treated_as_file() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&info);
-    assert_eq!(actions[0].id, "open_file");
+    assert_eq!(actions[0].id, "file:open_file");
     assert_eq!(actions[0].title, "Open \"Safari.app\"");
 }
 
@@ -1429,11 +1429,11 @@ fn file_context_image_treated_as_file() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&info);
-    assert_eq!(actions[0].id, "open_file");
+    assert_eq!(actions[0].id, "file:open_file");
     #[cfg(target_os = "macos")]
     {
         let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
-        assert!(ids.contains(&"quick_look"));
+        assert!(ids.contains(&"file:quick_look"));
     }
 }
 

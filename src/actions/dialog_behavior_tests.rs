@@ -150,7 +150,7 @@ fn script_with_frecency_shortcut_alias_has_all_actions() {
     // Script-specific actions
     assert!(ids.contains(&"edit_script"));
     assert!(ids.contains(&"view_logs"));
-    assert!(ids.contains(&"copy_deeplink"));
+    assert!(ids.contains(&"script:copy_deeplink"));
 }
 
 // =========================================================================
@@ -193,8 +193,8 @@ fn agent_has_reveal_copy_path_copy_content() {
     agent.is_script = false;
     let actions = get_script_context_actions(&agent);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
-    assert!(ids.contains(&"reveal_in_finder"));
-    assert!(ids.contains(&"copy_path"));
+    assert!(ids.contains(&"file:reveal_in_finder"));
+    assert!(ids.contains(&"file:copy_path"));
     assert!(ids.contains(&"copy_content"));
 }
 
@@ -210,7 +210,7 @@ fn copy_deeplink_present_for_all_script_types() {
         .iter()
         .map(|a| a.id.clone())
         .collect();
-    assert!(ids.contains(&"copy_deeplink".to_string()));
+    assert!(ids.contains(&"script:copy_deeplink".to_string()));
 
     // Builtin
     let builtin = ScriptInfo::builtin("Clipboard History");
@@ -218,7 +218,7 @@ fn copy_deeplink_present_for_all_script_types() {
         .iter()
         .map(|a| a.id.clone())
         .collect();
-    assert!(ids.contains(&"copy_deeplink".to_string()));
+    assert!(ids.contains(&"script:copy_deeplink".to_string()));
 
     // Scriptlet
     let scriptlet = ScriptInfo::scriptlet("Open URL", "/path/url.md", None, None);
@@ -226,7 +226,7 @@ fn copy_deeplink_present_for_all_script_types() {
         .iter()
         .map(|a| a.id.clone())
         .collect();
-    assert!(ids.contains(&"copy_deeplink".to_string()));
+    assert!(ids.contains(&"script:copy_deeplink".to_string()));
 
     // Agent
     let mut agent = ScriptInfo::new("agent", "/agents/a.md");
@@ -235,14 +235,14 @@ fn copy_deeplink_present_for_all_script_types() {
         .iter()
         .map(|a| a.id.clone())
         .collect();
-    assert!(ids.contains(&"copy_deeplink".to_string()));
+    assert!(ids.contains(&"script:copy_deeplink".to_string()));
 }
 
 #[test]
 fn copy_deeplink_description_contains_formatted_name() {
     let script = ScriptInfo::new("My Cool Script", "/path/cool.ts");
     let actions = get_script_context_actions(&script);
-    let deeplink = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    let deeplink = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
 
     assert!(
         deeplink
@@ -631,7 +631,7 @@ fn file_context_directory_has_open_directory_primary() {
         file_type: crate::file_search::FileType::Directory,
     };
     let actions = get_file_context_actions(&dir);
-    assert_eq!(actions[0].id, "open_directory");
+    assert_eq!(actions[0].id, "file:open_directory");
     assert!(actions[0].title.contains("Documents"));
 }
 
@@ -644,7 +644,7 @@ fn file_context_file_has_open_file_primary() {
         file_type: crate::file_search::FileType::File,
     };
     let actions = get_file_context_actions(&file);
-    assert_eq!(actions[0].id, "open_file");
+    assert_eq!(actions[0].id, "file:open_file");
     assert!(actions[0].title.contains("readme.md"));
 }
 
@@ -660,7 +660,7 @@ fn path_context_directory_primary_is_open() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&path);
-    assert_eq!(actions[0].id, "open_directory");
+    assert_eq!(actions[0].id, "file:open_directory");
 }
 
 #[test]
@@ -671,7 +671,7 @@ fn path_context_file_primary_is_select() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&path);
-    assert_eq!(actions[0].id, "select_file");
+    assert_eq!(actions[0].id, "file:select_file");
 }
 
 // =========================================================================
@@ -688,13 +688,13 @@ fn builtin_has_only_run_shortcut_alias_deeplink() {
     assert!(ids.contains(&"run_script"));
     assert!(ids.contains(&"add_shortcut"));
     assert!(ids.contains(&"add_alias"));
-    assert!(ids.contains(&"copy_deeplink"));
+    assert!(ids.contains(&"script:copy_deeplink"));
 
     // Should NOT have script-only or scriptlet-only actions
     assert!(!ids.contains(&"edit_script"));
     assert!(!ids.contains(&"view_logs"));
-    assert!(!ids.contains(&"reveal_in_finder"));
-    assert!(!ids.contains(&"copy_path"));
+    assert!(!ids.contains(&"file:reveal_in_finder"));
+    assert!(!ids.contains(&"file:copy_path"));
     assert!(!ids.contains(&"copy_content"));
     assert!(!ids.contains(&"edit_scriptlet"));
 }
@@ -753,7 +753,7 @@ fn notes_command_bar_has_new_note_action() {
     let actions = get_notes_command_bar_actions(&info);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
     assert!(
-        ids.contains(&"new_note"),
+        ids.contains(&"notes:new_note"),
         "Notes command bar should always have new_note"
     );
 }
