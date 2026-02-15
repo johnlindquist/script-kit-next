@@ -104,6 +104,8 @@ struct ScriptListApp {
     // This is computed once when results change or filter changes (not in render)
     // Vec of indices into cached_file_results, sorted by match quality
     file_search_display_indices: Vec<usize>,
+    // Right-side preview panel thumbnail state for selected image files.
+    file_search_preview_thumbnail: FileSearchThumbnailPreviewState,
     // Actions popup overlay
     show_actions_popup: bool,
     // ActionsDialog entity for focus management

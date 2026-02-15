@@ -357,6 +357,7 @@ impl ScriptListApp {
             file_search_gen: 0,
             file_search_cancel: None,
             file_search_display_indices: Vec::new(),
+            file_search_preview_thumbnail: FileSearchThumbnailPreviewState::Idle,
             show_actions_popup: false,
             actions_dialog: None,
             cursor_visible: true,
