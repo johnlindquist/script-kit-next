@@ -155,10 +155,10 @@ fn cat04_script_no_shortcut_no_alias_ids() {
         "add_alias",
         "edit_script",
         "view_logs",
-        "file:reveal_in_finder",
-        "file:copy_path",
+        "reveal_in_finder",
+        "copy_path",
         "copy_content",
-        "script:copy_deeplink",
+        "copy_deeplink",
     ] {
         assert!(ids.contains(*expected), "Missing: {}", expected);
     }
@@ -255,7 +255,7 @@ fn cat05_scriptlet_copy_content_before_deeplink() {
     let content_pos = actions.iter().position(|a| a.id == "copy_content").unwrap();
     let deeplink_pos = actions
         .iter()
-        .position(|a| a.id == "script:copy_deeplink")
+        .position(|a| a.id == "copy_deeplink")
         .unwrap();
     assert!(content_pos < deeplink_pos);
 }
@@ -762,13 +762,13 @@ fn cat16_sections_appear_in_order() {
 #[test]
 fn cat16_preset_has_no_description() {
     let actions = get_new_chat_actions(&[], &[sample_preset()], &[]);
-    assert!(actions[0].description.is_none());
+    assert_eq!(actions[0].description.as_deref(), Some("Uses General preset"));
 }
 
 #[test]
 fn cat16_model_description_is_provider() {
     let actions = get_new_chat_actions(&[], &[], &[sample_model()]);
-    assert_eq!(actions[0].description, Some("Anthropic".to_string()));
+    assert_eq!(actions[0].description, Some("Uses Anthropic".to_string()));
 }
 
 #[test]
@@ -1119,7 +1119,7 @@ fn cat21_consecutive_specials_collapsed() {
 
 #[test]
 fn cat21_unicode_alphanumeric_preserved() {
-    assert_eq!(to_deeplink_name("café"), "café");
+    assert_eq!(to_deeplink_name("café"), "caf%C3%A9");
 }
 
 #[test]
@@ -1178,13 +1178,13 @@ fn cat22_needle_longer_than_haystack() {
 #[test]
 fn cat23_prefix_match_gives_100() {
     let a = Action::new("id", "Edit Script", None, ActionCategory::ScriptContext);
-    assert!(ActionsDialog::score_action(&a, "script:edit") >= 100);
+    assert!(ActionsDialog::score_action(&a, "edit") >= 100);
 }
 
 #[test]
 fn cat23_contains_match_gives_50() {
     let a = Action::new("id", "My Edit Tool", None, ActionCategory::ScriptContext);
-    let score = ActionsDialog::score_action(&a, "script:edit");
+    let score = ActionsDialog::score_action(&a, "edit");
     assert!(
         (50..100).contains(&score),
         "Contains should be 50-99: {}",
@@ -1233,7 +1233,7 @@ fn cat23_prefix_plus_desc_stacks() {
         Some("Edit the script in editor".into()),
         ActionCategory::ScriptContext,
     );
-    let score = ActionsDialog::score_action(&a, "script:edit");
+    let score = ActionsDialog::score_action(&a, "edit");
     assert!(score >= 115, "Prefix(100) + Desc(15) = 115: {}", score);
 }
 

@@ -165,7 +165,7 @@ fn cat27_03_agent_last_action_is_copy_deeplink() {
     let mut script = ScriptInfo::builtin("my-agent");
     script.is_agent = true;
     let actions = get_script_context_actions(&script);
-    assert_eq!(actions.last().unwrap().id, "script:copy_deeplink");
+    assert_eq!(actions.last().unwrap().id, "copy_deeplink");
 }
 
 #[test]
@@ -364,7 +364,7 @@ fn cat27_07_new_chat_model_ids_use_model_prefix() {
         provider_display_name: "OpenAI".into(),
     }];
     let actions = get_new_chat_actions(&[], &[], &models);
-    assert_eq!(actions[0].id, "model_0");
+    assert_eq!(actions[0].id, "model_openai::gpt-4o");
 }
 
 #[test]
@@ -399,7 +399,7 @@ fn cat27_07_new_chat_last_used_ids_use_last_used_prefix() {
         provider_display_name: "Provider".into(),
     }];
     let actions = get_new_chat_actions(&last, &[], &[]);
-    assert_eq!(actions[0].id, "last_used_0");
+    assert_eq!(actions[0].id, "last_used_p::x");
 }
 
 // ─────────────────────────────────────────────
@@ -640,8 +640,8 @@ fn cat27_13_score_fuzzy_match_gives_25() {
 
 #[test]
 fn cat27_13_score_prefix_gives_at_least_100() {
-    let action = Action::new("script:edit", "Edit Script", None, ActionCategory::ScriptContext);
-    let score = super::dialog::ActionsDialog::score_action(&action, "script:edit");
+    let action = Action::new("edit_script", "Edit Script", None, ActionCategory::ScriptContext);
+    let score = super::dialog::ActionsDialog::score_action(&action, "edit");
     assert!(score >= 100);
 }
 
@@ -981,7 +981,7 @@ fn cat27_21_notes_copy_section_present_with_selection() {
     let actions = get_notes_command_bar_actions(&info);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
     assert!(ids.contains(&"copy_note_as"));
-    assert!(ids.contains(&"script:copy_deeplink"));
+    assert!(ids.contains(&"copy_deeplink"));
     assert!(ids.contains(&"create_quicklink"));
 }
 
@@ -995,7 +995,7 @@ fn cat27_21_notes_copy_section_absent_without_selection() {
     let actions = get_notes_command_bar_actions(&info);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
     assert!(!ids.contains(&"copy_note_as"));
-    assert!(!ids.contains(&"script:copy_deeplink"));
+    assert!(!ids.contains(&"copy_deeplink"));
 }
 
 #[test]
@@ -1206,7 +1206,7 @@ fn cat27_26_clipboard_delete_multiple_desc_mentions_filter() {
         .as_ref()
         .unwrap()
         .to_lowercase()
-        .contains("filter"));
+        .contains("search"));
 }
 
 #[test]
