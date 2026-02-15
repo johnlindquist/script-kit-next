@@ -279,4 +279,38 @@ mod tests {
             "Expected main-thread stage, got: {error}"
         );
     }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_run_osascript_returns_stdout_when_script_succeeds() {
+        let output = run_osascript(
+            r#"return "osascript success""#,
+            "test_run_osascript_returns_stdout_when_script_succeeds",
+        )
+        .expect("Expected osascript to return output");
+
+        assert_eq!(output, "osascript success");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_run_osascript_includes_context_when_script_fails() {
+        let context = "test_run_osascript_includes_context_when_script_fails";
+        let error = run_osascript("this is not valid applescript syntax (((", context)
+            .expect_err("Expected invalid AppleScript syntax to fail")
+            .to_string();
+
+        assert!(
+            error.contains("platform_run_osascript_failed"),
+            "Expected structured error id, got: {error}"
+        );
+        assert!(
+            error.contains("stage=exit_status"),
+            "Expected exit-status stage, got: {error}"
+        );
+        assert!(
+            error.contains(context),
+            "Expected context in error, got: {error}"
+        );
+    }
 }
