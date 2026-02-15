@@ -240,7 +240,7 @@ fn cat26_03_notes_full_mode_has_copy_section_actions() {
     };
     let actions = get_notes_command_bar_actions(&info);
     assert!(actions.iter().any(|a| a.id == "copy_note_as"));
-    assert!(actions.iter().any(|a| a.id == "copy_deeplink"));
+    assert!(actions.iter().any(|a| a.id == "script:copy_deeplink"));
     assert!(actions.iter().any(|a| a.id == "create_quicklink"));
 }
 
@@ -364,21 +364,21 @@ fn cat26_04_chat_model_description_via_provider() {
 #[test]
 fn cat26_05_ai_submit_action_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let submit = actions.iter().find(|a| a.id == "submit").unwrap();
+    let submit = actions.iter().find(|a| a.id == "chat:submit").unwrap();
     assert_eq!(submit.shortcut.as_deref(), Some("↵"));
 }
 
 #[test]
 fn cat26_05_ai_submit_action_icon() {
     let actions = get_ai_command_bar_actions();
-    let submit = actions.iter().find(|a| a.id == "submit").unwrap();
+    let submit = actions.iter().find(|a| a.id == "chat:submit").unwrap();
     assert_eq!(submit.icon, Some(IconName::ArrowUp));
 }
 
 #[test]
 fn cat26_05_ai_submit_action_section() {
     let actions = get_ai_command_bar_actions();
-    let submit = actions.iter().find(|a| a.id == "submit").unwrap();
+    let submit = actions.iter().find(|a| a.id == "chat:submit").unwrap();
     assert_eq!(submit.section.as_deref(), Some("Actions"));
 }
 
@@ -411,7 +411,7 @@ fn cat26_06_file_context_open_desc_says_default_application() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&info);
-    let open = actions.iter().find(|a| a.id == "open_file").unwrap();
+    let open = actions.iter().find(|a| a.id == "file:open_file").unwrap();
     assert!(open
         .description
         .as_ref()
@@ -427,7 +427,7 @@ fn cat26_06_path_context_file_desc_says_submit() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&info);
-    let sel = actions.iter().find(|a| a.id == "select_file").unwrap();
+    let sel = actions.iter().find(|a| a.id == "file:select_file").unwrap();
     assert!(sel.description.as_ref().unwrap().contains("Submit"));
 }
 
@@ -440,7 +440,7 @@ fn cat26_06_file_dir_desc_says_folder() {
         is_dir: true,
     };
     let actions = get_file_context_actions(&info);
-    let open = actions.iter().find(|a| a.id == "open_directory").unwrap();
+    let open = actions.iter().find(|a| a.id == "file:open_directory").unwrap();
     assert!(open.description.as_ref().unwrap().contains("folder"));
 }
 
@@ -454,7 +454,7 @@ fn cat26_06_path_dir_desc_says_navigate() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&info);
-    let open = actions.iter().find(|a| a.id == "open_directory").unwrap();
+    let open = actions.iter().find(|a| a.id == "file:open_directory").unwrap();
     assert!(open.description.as_ref().unwrap().contains("Navigate"));
 }
 
@@ -927,21 +927,21 @@ fn cat26_16_agent_no_view_logs() {
 fn cat26_17_script_has_copy_deeplink() {
     let s = ScriptInfo::new("s", "/s.ts");
     let actions = get_script_context_actions(&s);
-    assert!(actions.iter().any(|a| a.id == "copy_deeplink"));
+    assert!(actions.iter().any(|a| a.id == "script:copy_deeplink"));
 }
 
 #[test]
 fn cat26_17_builtin_has_copy_deeplink() {
     let b = ScriptInfo::builtin("B");
     let actions = get_script_context_actions(&b);
-    assert!(actions.iter().any(|a| a.id == "copy_deeplink"));
+    assert!(actions.iter().any(|a| a.id == "script:copy_deeplink"));
 }
 
 #[test]
 fn cat26_17_scriptlet_has_copy_deeplink() {
     let s = ScriptInfo::scriptlet("S", "/s.md", None, None);
     let actions = get_script_context_actions(&s);
-    assert!(actions.iter().any(|a| a.id == "copy_deeplink"));
+    assert!(actions.iter().any(|a| a.id == "script:copy_deeplink"));
 }
 
 // ─────────────────────────────────────────────
@@ -957,7 +957,7 @@ fn cat26_18_file_reveal_always_present_file() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
+    assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
 }
 
 #[test]
@@ -969,7 +969,7 @@ fn cat26_18_file_reveal_always_present_dir() {
         is_dir: true,
     };
     let actions = get_file_context_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
+    assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
 }
 
 #[test]
@@ -981,7 +981,7 @@ fn cat26_18_file_reveal_shortcut() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&info);
-    let reveal = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
+    let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
     assert_eq!(reveal.shortcut.as_deref(), Some("⌘↵"));
 }
 
@@ -997,7 +997,7 @@ fn cat26_19_path_has_open_in_terminal_for_dir() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "open_in_terminal"));
+    assert!(actions.iter().any(|a| a.id == "file:open_in_terminal"));
 }
 
 #[test]
@@ -1008,7 +1008,7 @@ fn cat26_19_path_has_open_in_terminal_for_file() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "open_in_terminal"));
+    assert!(actions.iter().any(|a| a.id == "file:open_in_terminal"));
 }
 
 #[test]
@@ -1019,7 +1019,7 @@ fn cat26_19_path_has_open_in_editor_for_file() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "open_in_editor"));
+    assert!(actions.iter().any(|a| a.id == "file:open_in_editor"));
 }
 
 #[test]
@@ -1030,7 +1030,7 @@ fn cat26_19_path_open_in_editor_shortcut() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&info);
-    let editor = actions.iter().find(|a| a.id == "open_in_editor").unwrap();
+    let editor = actions.iter().find(|a| a.id == "file:open_in_editor").unwrap();
     assert_eq!(editor.shortcut.as_deref(), Some("⌘E"));
 }
 
@@ -1232,7 +1232,7 @@ fn cat26_25_paste_desc_mentions_clipboard() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let paste = actions.iter().find(|a| a.id == "clipboard_paste").unwrap();
+    let paste = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
     assert!(paste
         .description
         .as_ref()
@@ -1252,7 +1252,7 @@ fn cat26_25_copy_desc_mentions_clipboard() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let copy = actions.iter().find(|a| a.id == "clipboard_copy").unwrap();
+    let copy = actions.iter().find(|a| a.id == "clip:clipboard_copy").unwrap();
     assert!(copy
         .description
         .as_ref()

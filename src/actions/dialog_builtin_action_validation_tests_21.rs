@@ -125,7 +125,7 @@ fn batch21_file_open_title_contains_quoted_name() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&fi);
-    let open = actions.iter().find(|a| a.id == "open_file").unwrap();
+    let open = actions.iter().find(|a| a.id == "file:open_file").unwrap();
     assert!(open.title.contains("\"readme.md\""));
 }
 
@@ -138,7 +138,7 @@ fn batch21_dir_open_title_contains_quoted_name() {
         is_dir: true,
     };
     let actions = get_file_context_actions(&fi);
-    let open = actions.iter().find(|a| a.id == "open_directory").unwrap();
+    let open = actions.iter().find(|a| a.id == "file:open_directory").unwrap();
     assert!(open.title.contains("\"docs\""));
 }
 
@@ -151,7 +151,7 @@ fn batch21_file_open_title_starts_with_open() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&fi);
-    let open = actions.iter().find(|a| a.id == "open_file").unwrap();
+    let open = actions.iter().find(|a| a.id == "file:open_file").unwrap();
     assert!(open.title.starts_with("Open"));
 }
 
@@ -164,7 +164,7 @@ fn batch21_dir_open_title_starts_with_open() {
         is_dir: true,
     };
     let actions = get_file_context_actions(&fi);
-    let open = actions.iter().find(|a| a.id == "open_directory").unwrap();
+    let open = actions.iter().find(|a| a.id == "file:open_directory").unwrap();
     assert!(open.title.starts_with("Open"));
 }
 
@@ -180,7 +180,7 @@ fn batch21_path_dir_primary_is_open_directory() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&pi);
-    assert_eq!(actions[0].id, "open_directory");
+    assert_eq!(actions[0].id, "file:open_directory");
 }
 
 #[test]
@@ -191,7 +191,7 @@ fn batch21_path_file_primary_is_select_file() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&pi);
-    assert_eq!(actions[0].id, "select_file");
+    assert_eq!(actions[0].id, "file:select_file");
 }
 
 #[test]
@@ -458,7 +458,7 @@ fn batch21_chat_copy_response_shortcut() {
         has_response: true,
     };
     let actions = get_chat_context_actions(&info);
-    let a = actions.iter().find(|a| a.id == "copy_response").unwrap();
+    let a = actions.iter().find(|a| a.id == "chat:copy_response").unwrap();
     assert_eq!(a.shortcut.as_deref(), Some("⌘C"));
 }
 
@@ -534,7 +534,7 @@ fn batch21_notes_copy_deeplink_shortcut() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    let a = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    let a = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
     assert_eq!(a.shortcut.as_deref(), Some("⇧⌘D"));
 }
 
@@ -546,7 +546,7 @@ fn batch21_notes_copy_deeplink_section_copy() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    let a = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    let a = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
     assert_eq!(a.section.as_deref(), Some("Copy"));
 }
 
@@ -810,7 +810,7 @@ fn batch21_clipboard_copy_description_mentions_clipboard() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let a = actions.iter().find(|a| a.id == "clipboard_copy").unwrap();
+    let a = actions.iter().find(|a| a.id == "clip:clipboard_copy").unwrap();
     assert!(a
         .description
         .as_deref()
@@ -830,7 +830,7 @@ fn batch21_clipboard_paste_description_mentions_clipboard() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let a = actions.iter().find(|a| a.id == "clipboard_paste").unwrap();
+    let a = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
     assert!(a
         .description
         .as_deref()
@@ -902,7 +902,7 @@ fn batch21_clipboard_paste_empty_string_app() {
         frontmost_app_name: Some("".into()),
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let a = actions.iter().find(|a| a.id == "clipboard_paste").unwrap();
+    let a = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
     // Empty string still triggers Some branch: "Paste to "
     assert_eq!(a.title, "Paste to ");
 }
@@ -918,7 +918,7 @@ fn batch21_clipboard_paste_unicode_app() {
         frontmost_app_name: Some("Xcode \u{2013} Beta".into()),
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let a = actions.iter().find(|a| a.id == "clipboard_paste").unwrap();
+    let a = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
     assert_eq!(a.title, "Paste to Xcode \u{2013} Beta");
 }
 
@@ -1280,7 +1280,7 @@ fn batch21_file_file_primary_is_open_file() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&fi);
-    assert_eq!(actions[0].id, "open_file");
+    assert_eq!(actions[0].id, "file:open_file");
 }
 
 #[test]
@@ -1291,7 +1291,7 @@ fn batch21_path_file_primary_is_select_file_in_file_vs_path() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&pi);
-    assert_eq!(actions[0].id, "select_file");
+    assert_eq!(actions[0].id, "file:select_file");
 }
 
 #[test]
@@ -1325,7 +1325,7 @@ fn batch21_path_trash_last_for_dir() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&pi);
-    assert_eq!(actions.last().unwrap().id, "move_to_trash");
+    assert_eq!(actions.last().unwrap().id, "file:move_to_trash");
 }
 
 // --- merged from part_04.rs ---
@@ -1338,7 +1338,7 @@ fn batch21_path_trash_last_for_file() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&pi);
-    assert_eq!(actions.last().unwrap().id, "move_to_trash");
+    assert_eq!(actions.last().unwrap().id, "file:move_to_trash");
 }
 
 #[test]
@@ -1349,7 +1349,7 @@ fn batch21_path_trash_description_dir() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&pi);
-    let trash = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+    let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
     assert!(trash
         .description
         .as_deref()
@@ -1366,7 +1366,7 @@ fn batch21_path_trash_description_file() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&pi);
-    let trash = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+    let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
     assert!(trash
         .description
         .as_deref()
@@ -1518,7 +1518,7 @@ fn batch21_nonempty_id_title_file() {
 fn batch21_deeplink_url_format_script() {
     let s = ScriptInfo::new("My Script", "/p");
     let actions = get_script_context_actions(&s);
-    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
     let desc = dl.description.as_deref().unwrap();
     assert!(desc.contains("scriptkit://run/my-script"));
 }
@@ -1527,7 +1527,7 @@ fn batch21_deeplink_url_format_script() {
 fn batch21_deeplink_url_format_builtin() {
     let s = ScriptInfo::builtin("Clipboard History");
     let actions = get_script_context_actions(&s);
-    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
     let desc = dl.description.as_deref().unwrap();
     assert!(desc.contains("scriptkit://run/clipboard-history"));
 }
@@ -1536,7 +1536,7 @@ fn batch21_deeplink_url_format_builtin() {
 fn batch21_deeplink_url_format_scriptlet() {
     let s = ScriptInfo::scriptlet("Open GitHub", "/p", None, None);
     let actions = get_script_context_actions(&s);
-    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
     let desc = dl.description.as_deref().unwrap();
     assert!(desc.contains("scriptkit://run/open-github"));
 }

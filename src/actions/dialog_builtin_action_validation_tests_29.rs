@@ -364,7 +364,7 @@ fn cat29_08_agent_has_reveal_in_finder() {
     s.is_agent = true;
     s.is_script = false;
     let actions = get_script_context_actions(&s);
-    assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
+    assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
 }
 
 // =============================================================================
@@ -430,7 +430,7 @@ fn cat29_10_notes_new_note_always_present_full() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "new_note"));
+    assert!(actions.iter().any(|a| a.id == "notes:new_note"));
 }
 
 #[test]
@@ -441,7 +441,7 @@ fn cat29_10_notes_new_note_always_present_trash() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "new_note"));
+    assert!(actions.iter().any(|a| a.id == "notes:new_note"));
 }
 
 // --- merged from part_02.rs ---
@@ -454,7 +454,7 @@ fn cat29_10_notes_new_note_shortcut() {
         auto_sizing_enabled: true,
     };
     let actions = get_notes_command_bar_actions(&info);
-    let nn = actions.iter().find(|a| a.id == "new_note").unwrap();
+    let nn = actions.iter().find(|a| a.id == "notes:new_note").unwrap();
     assert_eq!(nn.shortcut.as_deref(), Some("⌘N"));
 }
 
@@ -466,7 +466,7 @@ fn cat29_10_notes_new_note_icon() {
         auto_sizing_enabled: true,
     };
     let actions = get_notes_command_bar_actions(&info);
-    let nn = actions.iter().find(|a| a.id == "new_note").unwrap();
+    let nn = actions.iter().find(|a| a.id == "notes:new_note").unwrap();
     assert_eq!(nn.icon, Some(IconName::Plus));
 }
 
@@ -551,7 +551,7 @@ fn cat29_12_ai_copy_last_code_desc_mentions_code() {
 #[test]
 fn cat29_13_ai_command_bar_copy_response_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let cr = actions.iter().find(|a| a.id == "copy_response").unwrap();
+    let cr = actions.iter().find(|a| a.id == "chat:copy_response").unwrap();
     assert_eq!(cr.shortcut.as_deref(), Some("⇧⌘C"));
 }
 
@@ -564,7 +564,7 @@ fn cat29_13_chat_context_copy_response_shortcut() {
         has_response: true,
     };
     let actions = get_chat_context_actions(&info);
-    let cr = actions.iter().find(|a| a.id == "copy_response").unwrap();
+    let cr = actions.iter().find(|a| a.id == "chat:copy_response").unwrap();
     assert_eq!(cr.shortcut.as_deref(), Some("⌘C"));
 }
 
@@ -578,10 +578,10 @@ fn cat29_13_ai_vs_chat_copy_response_different_shortcuts() {
         has_response: true,
     };
     let chat_actions = get_chat_context_actions(&info);
-    let ai_cr = ai_actions.iter().find(|a| a.id == "copy_response").unwrap();
+    let ai_cr = ai_actions.iter().find(|a| a.id == "chat:copy_response").unwrap();
     let chat_cr = chat_actions
         .iter()
-        .find(|a| a.id == "copy_response")
+        .find(|a| a.id == "chat:copy_response")
         .unwrap();
     assert_ne!(ai_cr.shortcut, chat_cr.shortcut);
 }
@@ -659,7 +659,7 @@ fn cat29_15_file_open_title_quotes_name() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&fi);
-    let open = actions.iter().find(|a| a.id == "open_file").unwrap();
+    let open = actions.iter().find(|a| a.id == "file:open_file").unwrap();
     assert!(open.title.contains("\"doc.pdf\""));
 }
 
@@ -672,7 +672,7 @@ fn cat29_15_file_dir_open_title_quotes_name() {
         is_dir: true,
     };
     let actions = get_file_context_actions(&fi);
-    let open = actions.iter().find(|a| a.id == "open_directory").unwrap();
+    let open = actions.iter().find(|a| a.id == "file:open_directory").unwrap();
     assert!(open.title.contains("\"Documents\""));
 }
 
@@ -685,7 +685,7 @@ fn cat29_15_file_open_desc_says_default_application() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&fi);
-    let open = actions.iter().find(|a| a.id == "open_file").unwrap();
+    let open = actions.iter().find(|a| a.id == "file:open_file").unwrap();
     assert!(open
         .description
         .as_ref()
@@ -703,7 +703,7 @@ fn cat29_15_file_dir_open_desc_says_folder() {
         is_dir: true,
     };
     let actions = get_file_context_actions(&fi);
-    let open = actions.iter().find(|a| a.id == "open_directory").unwrap();
+    let open = actions.iter().find(|a| a.id == "file:open_directory").unwrap();
     assert!(open
         .description
         .as_ref()
@@ -724,7 +724,7 @@ fn cat29_16_path_select_file_desc_says_submit() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&pi);
-    let sel = actions.iter().find(|a| a.id == "select_file").unwrap();
+    let sel = actions.iter().find(|a| a.id == "file:select_file").unwrap();
     assert!(sel
         .description
         .as_ref()
@@ -741,7 +741,7 @@ fn cat29_16_path_open_directory_desc_says_navigate() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&pi);
-    let od = actions.iter().find(|a| a.id == "open_directory").unwrap();
+    let od = actions.iter().find(|a| a.id == "file:open_directory").unwrap();
     assert!(od
         .description
         .as_ref()
@@ -758,7 +758,7 @@ fn cat29_16_path_file_has_no_open_directory() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&pi);
-    assert!(!actions.iter().any(|a| a.id == "open_directory"));
+    assert!(!actions.iter().any(|a| a.id == "file:open_directory"));
 }
 
 #[test]
@@ -769,7 +769,7 @@ fn cat29_16_path_dir_has_no_select_file() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&pi);
-    assert!(!actions.iter().any(|a| a.id == "select_file"));
+    assert!(!actions.iter().any(|a| a.id == "file:select_file"));
 }
 
 // =============================================================================
@@ -1276,7 +1276,7 @@ fn cat29_29_clipboard_first_is_paste() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert_eq!(actions[0].id, "clipboard_paste");
+    assert_eq!(actions[0].id, "clip:clipboard_paste");
 }
 
 #[test]
@@ -1287,7 +1287,7 @@ fn cat29_29_path_file_first_is_select_file() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&pi);
-    assert_eq!(actions[0].id, "select_file");
+    assert_eq!(actions[0].id, "file:select_file");
 }
 
 #[test]
@@ -1298,7 +1298,7 @@ fn cat29_29_path_dir_first_is_open_directory() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&pi);
-    assert_eq!(actions[0].id, "open_directory");
+    assert_eq!(actions[0].id, "file:open_directory");
 }
 
 #[test]
@@ -1310,7 +1310,7 @@ fn cat29_29_file_first_is_open() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&fi);
-    assert_eq!(actions[0].id, "open_file");
+    assert_eq!(actions[0].id, "file:open_file");
 }
 
 // =============================================================================
