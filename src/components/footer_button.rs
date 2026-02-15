@@ -156,12 +156,7 @@ impl RenderOnce for FooterButton {
             .child(label_element);
 
         if is_clickable {
-            button = button
-                .cursor_pointer()
-                .hover(move |s| s.bg(rgba(hover_bg)))
-                .on_mouse_move(|_: &MouseMoveEvent, _window, _cx| {
-                    crate::platform::claim_cursor_pointer();
-                });
+            button = button.cursor_pointer().hover(move |s| s.bg(rgba(hover_bg)));
         } else if disabled {
             button = button.opacity(0.5).cursor_default();
         } else if loading {
