@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-02-15T20:00:06.916Z",
+  "updatedAt": "2026-02-15T20:09:44.754Z",
   "agents": {
     "codex-actions-consistency": {
       "id": "codex-actions-consistency",
@@ -7176,6 +7176,22 @@
       "host": "johns.macbook.pro.lan",
       "startSha": "d8640f7114bde8f65f95d6b29e9a999046d14091",
       "notes": "[auto] timed out after 600s — task too broad"
+    },
+    "codex-notes-arrow-keys": {
+      "id": "codex-notes-arrow-keys",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "gpt-5.3-codex",
+      "task": "Fix up/down arrow key behavior in the notes window editor. Currently when pressing up/down arrow keys in the notes editor, the text cursor disappears instead of moving up/down one line at a time like a normal text editor. The notes editor likely has a keyboard event handler that intercepts arrow keys for list navigation or some other purpose, preventing normal text editor cursor movement.\n\nInvestigate the notes window code (likely in src/prompts/notes*.rs or similar) and find where keyboard events are handled. The issue is probably that up/down arrow key events are being consumed/intercepted before reaching the text editor component (likely a GPUI Editor or TextArea). Fix this so that:\n1. Up arrow moves cursor up one line in the editor\n2. Down arrow moves cursor down one line in the editor  \n3. Shift+Up selects text upward line by line\n4. Shift+Down selects text downward line by line\n5. All other normal text editor keyboard behaviors work (Home, End, Cmd+A, etc.)\n\nLook at how the notes window renders its editor component and how key events flow. The fix likely involves either:\n- Removing/modifying a key event handler that intercepts arrow keys\n- Letting the editor component handle arrow keys before the parent intercepts them\n- Adding proper cursor movement logic if the editor is custom\n\nFollow existing code patterns. Match keyboard key variants for both formats (e.g. 'up' | 'arrowup'). Use theme.colors.* not hardcoded colors. Use ? for error handling, never unwrap() in production code.\n\nAfter fixing, run: cargo check && cargo clippy --all-targets -- -D warnings && cargo test\nThen commit with a descriptive message and push.",
+      "scope": "src/prompts/notes*.rs,src/prompts/notes/**,src/render_prompts/**,src/app_impl.rs,src/prompt_manager/**",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-02-15T20:00:45.419Z",
+      "lastSeenAt": "2026-02-15T20:09:44.754Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "c34ea5a798ab814e5eda2a2714ec308a7f713d14",
+      "notes": "[policy] missing agent_report json"
     }
   }
 }
