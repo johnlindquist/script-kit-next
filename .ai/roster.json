@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-02-15T18:49:49.744Z",
+  "updatedAt": "2026-02-15T18:57:25.208Z",
   "agents": {
     "codex-actions-consistency": {
       "id": "codex-actions-consistency",
@@ -7063,6 +7063,22 @@
       "lastSeenAt": "2026-02-15T18:49:49.744Z",
       "host": "johns.macbook.pro.lan",
       "startSha": "56fd50f15ec9a7f76c0707fd411704974bc81477",
+      "notes": "[policy] missing agent_report json"
+    },
+    "codex-arrow-keys": {
+      "id": "codex-arrow-keys",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "gpt-5.3-codex",
+      "task": "Fix up/down arrow keys so they move the cursor up/down lines in the text editor/text area. Currently up/down arrow keys don't move the cursor between lines. This is a Rust GPUI app. Look at how keyboard events are handled in the editor or text area components — likely in src/ files related to editor, text input, or prompt handling. The project convention requires matching both variants of arrow keys: 'up' | 'arrowup' and 'down' | 'arrowdown'. Check if arrow key events are being intercepted/consumed by list navigation or other handlers before reaching the text editor, and fix so that when a multi-line text area has focus, up/down arrows move the cursor between lines instead of being swallowed. After fixing, run: cargo check && cargo clippy --all-targets -- -D warnings && cargo test. Then commit with a descriptive message and push.",
+      "scope": "src/**/*.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-02-15T18:51:48.683Z",
+      "lastSeenAt": "2026-02-15T18:57:25.208Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "b2311ce7ef4ebc2808c87db05fab88bd971ec8cb",
       "notes": "[policy] missing agent_report json"
     }
   }
