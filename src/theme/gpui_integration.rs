@@ -105,12 +105,11 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
             "map_scriptkit_to_gpui_theme vibrancy alpha resolved"
         );
 
-        crate::logging::log(
-            "THEME",
-            &format!(
-                "Root background alpha: {} (vibrancy_enabled={}, is_dark={})",
-                bg_alpha, vibrancy_enabled, is_dark
-            ),
+        debug!(
+            root_background_alpha = bg_alpha,
+            vibrancy_enabled,
+            is_dark,
+            "Root background alpha resolved"
         );
 
         let base = hex_to_hsla(colors.background.main);

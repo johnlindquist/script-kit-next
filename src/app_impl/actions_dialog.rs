@@ -305,6 +305,7 @@ impl ScriptListApp {
                 host
             ),
         );
+        cx.notify();
     }
 }
 
@@ -353,6 +354,28 @@ mod close_actions_popup_regression_tests {
         assert!(
             clear_dialog_pos < resync_pos,
             "close_actions_popup must resync filter input after clearing actions dialog state"
+        );
+    }
+
+    #[test]
+    fn test_close_actions_popup_notifies_after_focus_restore_paths() {
+        let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
+            .expect("Failed to read src/app_impl/actions_dialog.rs");
+        let close_fn_start = source
+            .find("pub(crate) fn close_actions_popup")
+            .expect("close_actions_popup function not found");
+        let close_fn = &source[close_fn_start..];
+
+        let fallback_focus_pos = close_fn
+            .find("window.focus(&self.focus_handle, cx);")
+            .expect("close_actions_popup must keep fallback root focus");
+        let notify_pos = close_fn
+            .find("cx.notify();")
+            .expect("close_actions_popup must notify after closing popup");
+
+        assert!(
+            fallback_focus_pos < notify_pos,
+            "close_actions_popup must notify after focus restore paths complete"
         );
     }
 }

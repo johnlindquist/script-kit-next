@@ -325,20 +325,6 @@ pub struct DropShadow {
     pub opacity: f32,
 }
 
-impl DropShadow {
-    /// Clamp opacity value to the valid 0.0-1.0 range
-    ///
-    /// This prevents invalid opacity values from config files from causing
-    /// rendering issues.
-    #[allow(dead_code)]
-    pub fn clamped(self) -> Self {
-        Self {
-            opacity: self.opacity.clamp(0.0, 1.0),
-            ..self
-        }
-    }
-}
-
 impl Default for DropShadow {
     fn default() -> Self {
         DropShadow {
@@ -595,29 +581,6 @@ impl TerminalColors {
         }
     }
 
-    /// Get color by ANSI index (0-15)
-    #[allow(dead_code)]
-    pub fn get(&self, index: u8) -> HexColor {
-        match index {
-            0 => self.black,
-            1 => self.red,
-            2 => self.green,
-            3 => self.yellow,
-            4 => self.blue,
-            5 => self.magenta,
-            6 => self.cyan,
-            7 => self.white,
-            8 => self.bright_black,
-            9 => self.bright_red,
-            10 => self.bright_green,
-            11 => self.bright_yellow,
-            12 => self.bright_blue,
-            13 => self.bright_magenta,
-            14 => self.bright_cyan,
-            15 => self.bright_white,
-            _ => self.black, // Fallback
-        }
-    }
 }
 
 /// Default error color (red-500)
@@ -1025,33 +988,6 @@ impl Theme {
     }
 }
 
-/// Background role for selecting the appropriate color and opacity
-///
-/// Use this enum with `Theme::background_rgba()` to get the correct
-/// color with opacity applied for each UI region. This is the preferred
-/// way to set background colors for vibrancy support.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
-pub enum BackgroundRole {
-    /// Main window background
-    Main,
-    /// Title bar background
-    TitleBar,
-    /// Search box / input field background
-    SearchBox,
-    /// Log panel background
-    LogPanel,
-}
-
-// --- merged from part_04.rs ---
-/// Convert a HexColor to RGBA components (0.0-1.0 range)
-fn hex_to_rgba_components(hex: HexColor, alpha: f32) -> (f32, f32, f32, f32) {
-    let r = ((hex >> 16) & 0xFF) as f32 / 255.0;
-    let g = ((hex >> 8) & 0xFF) as f32 / 255.0;
-    let b = (hex & 0xFF) as f32 / 255.0;
-    (r, g, b, alpha.clamp(0.0, 1.0))
-}
-
 #[allow(dead_code)]
 impl Theme {
     /// Get the appropriate color scheme based on window focus state
@@ -1136,34 +1072,6 @@ impl Theme {
         theme
     }
 
-    /// Get opacity adjusted for focus state
-    /// Unfocused windows are slightly more transparent
-    pub fn get_opacity_for_focus(&self, is_focused: bool) -> BackgroundOpacity {
-        let base = self.get_opacity();
-        if is_focused {
-            base
-        } else {
-            // Reduce opacity by 10% when unfocused
-            BackgroundOpacity {
-                main: (base.main * 0.9).clamp(0.0, 1.0),
-                title_bar: (base.title_bar * 0.9).clamp(0.0, 1.0),
-                search_box: (base.search_box * 0.9).clamp(0.0, 1.0),
-                log_panel: (base.log_panel * 0.9).clamp(0.0, 1.0),
-                selected: base.selected,
-                hover: base.hover,
-                preview: (base.preview * 0.9).clamp(0.0, 1.0),
-                dialog: (base.dialog * 0.9).clamp(0.0, 1.0),
-                input: (base.input * 0.9).clamp(0.0, 1.0),
-                panel: (base.panel * 0.9).clamp(0.0, 1.0),
-                input_inactive: (base.input_inactive * 0.9).clamp(0.0, 1.0),
-                input_active: (base.input_active * 0.9).clamp(0.0, 1.0),
-                border_inactive: (base.border_inactive * 0.9).clamp(0.0, 1.0),
-                border_active: (base.border_active * 0.9).clamp(0.0, 1.0),
-                vibrancy_background: base.vibrancy_background.map(|v| (v * 0.9).clamp(0.0, 1.0)),
-            }
-        }
-    }
-
     /// Get drop shadow configuration
     /// Returns the configured shadow or sensible defaults
     pub fn get_drop_shadow(&self) -> DropShadow {
@@ -1187,41 +1095,6 @@ impl Theme {
         self.fonts.clone().unwrap_or_default()
     }
 
-    /// Get background RGBA color for a specific role
-    ///
-    /// This is the single correct way to get background colors with opacity applied.
-    /// It combines the color from the color scheme with the appropriate opacity value,
-    /// ensuring consistent vibrancy support across the UI.
-    ///
-    /// # Arguments
-    /// * `role` - The background role (Main, TitleBar, SearchBox, LogPanel)
-    /// * `is_focused` - Whether the window is currently focused
-    ///
-    /// # Returns
-    /// A tuple of (r, g, b, a) with values in the 0.0-1.0 range
-    ///
-    /// # Example
-    /// ```ignore
-    /// let (r, g, b, a) = theme.background_rgba(BackgroundRole::Main, true);
-    /// div().bg(rgba(r, g, b, a))
-    /// ```
-    pub fn background_rgba(&self, role: BackgroundRole, is_focused: bool) -> (f32, f32, f32, f32) {
-        let colors = self.get_colors(is_focused);
-        let opacity = self.get_opacity_for_focus(is_focused).clamped();
-
-        match role {
-            BackgroundRole::Main => hex_to_rgba_components(colors.background.main, opacity.main),
-            BackgroundRole::TitleBar => {
-                hex_to_rgba_components(colors.background.title_bar, opacity.title_bar)
-            }
-            BackgroundRole::SearchBox => {
-                hex_to_rgba_components(colors.background.search_box, opacity.search_box)
-            }
-            BackgroundRole::LogPanel => {
-                hex_to_rgba_components(colors.background.log_panel, opacity.log_panel)
-            }
-        }
-    }
 }
 
 /// Detect system appearance preference on macOS (cached)
@@ -1526,8 +1399,7 @@ pub fn load_theme() -> Theme {
 /// Get a cached version of the theme for use in render functions
 ///
 /// This avoids file I/O on every render call by caching the loaded theme.
-/// The cache is automatically invalidated when `invalidate_theme_cache()` is called
-/// (typically by the theme file watcher).
+/// Use `reload_theme_cache()` when you need to refresh cached values.
 ///
 /// # Performance
 ///
@@ -1579,21 +1451,6 @@ pub fn reload_theme_cache() -> Theme {
 pub fn init_theme_cache() {
     reload_theme_cache();
     debug!("Theme cache initialized");
-}
-
-/// Invalidate the theme cache, forcing a reload on next access
-///
-/// Call this when the theme file changes to ensure the next call to
-/// `get_cached_theme()` or `reload_theme_cache()` loads fresh data.
-#[allow(dead_code)]
-pub fn invalidate_theme_cache() {
-    if let Some(cache) = THEME_CACHE.get() {
-        if let Ok(mut guard) = cache.lock() {
-            // Force reload on next access by setting old timestamp
-            guard.loaded_at = Instant::now() - Duration::from_secs(3600);
-            debug!("Theme cache invalidated");
-        }
-    }
 }
 
 // ============================================================================

@@ -136,17 +136,6 @@ fn test_opacity_defaults() {
 }
 
 #[test]
-fn test_get_opacity_for_focus_keeps_selection_and_hover_strength_when_unfocused() {
-    let theme = Theme::dark_default();
-    let focused = theme.get_opacity_for_focus(true);
-    let unfocused = theme.get_opacity_for_focus(false);
-
-    assert_eq!(unfocused.selected, focused.selected);
-    assert_eq!(unfocused.hover, focused.hover);
-    assert!(unfocused.main < focused.main);
-}
-
-#[test]
 fn test_dark_default_selected_and_hover_contrast_meets_visibility_thresholds() {
     let theme = Theme::dark_default();
     let opacity = theme.get_opacity();
@@ -312,19 +301,4 @@ fn test_opacity_clamping_overflow() {
     assert_eq!(clamped.search_box, 0.0);
     assert_eq!(clamped.log_panel, 1.0);
     assert_eq!(clamped.vibrancy_background, Some(1.0));
-}
-
-#[test]
-fn test_drop_shadow_opacity_clamping() {
-    let shadow = DropShadow {
-        enabled: true,
-        blur_radius: 20.0,
-        spread_radius: 0.0,
-        offset_x: 0.0,
-        offset_y: 8.0,
-        color: 0x000000,
-        opacity: 2.5, // Should clamp to 1.0
-    };
-    let clamped = shadow.clamped();
-    assert_eq!(clamped.opacity, 1.0);
 }

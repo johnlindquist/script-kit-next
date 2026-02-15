@@ -28,7 +28,7 @@
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use gpui::{App, Timer};
-use tracing::info;
+use tracing::{debug, info, warn};
 
 use crate::watcher::ThemeWatcher;
 use crate::windows;
@@ -69,10 +69,7 @@ pub fn theme_revision() -> u64 {
 /// Called internally when theme.json changes are detected.
 fn bump_theme_revision() {
     let old = THEME_REVISION.fetch_add(1, Ordering::SeqCst);
-    crate::logging::log(
-        "THEME",
-        &format!("Theme revision bumped: {} -> {}", old, old + 1),
-    );
+    debug!(old_revision = old, new_revision = old + 1, "Theme revision bumped");
 }
 
 /// Ensure the global theme service is running.
@@ -90,18 +87,17 @@ pub fn ensure_theme_service(cx: &mut App) {
     }
 
     info!("Starting global theme service");
-    crate::logging::log("THEME", "Starting global theme service");
 
     cx.spawn(async move |cx: &mut gpui::AsyncApp| {
         let (mut watcher, rx) = ThemeWatcher::new();
 
-        if watcher.start().is_err() {
-            crate::logging::log("THEME", "Failed to start theme file watcher");
+        if let Err(error) = watcher.start() {
+            warn!(error = ?error, "Failed to start theme file watcher");
             THEME_SERVICE_RUNNING.store(false, Ordering::SeqCst);
             return;
         }
 
-        crate::logging::log("THEME", "Theme file watcher started successfully");
+        info!("Theme file watcher started successfully");
 
         // Adaptive polling: starts at 200ms, increases to 2s when idle
         let mut idle_count = 0u32;
@@ -119,7 +115,6 @@ pub fn ensure_theme_service(cx: &mut App) {
             if rx.try_recv().is_ok() {
                 idle_count = 0; // Reset on activity
                 info!("Theme changed, syncing to all windows");
-                crate::logging::log("THEME", "Theme file changed, broadcasting to all windows");
 
                 // Reload the theme cache FIRST (before syncing)
                 // This ensures get_cached_theme() returns fresh data
@@ -137,8 +132,8 @@ pub fn ensure_theme_service(cx: &mut App) {
                 });
 
                 // If the update failed, the app may be shutting down
-                if update_result.is_err() {
-                    crate::logging::log("THEME", "App context gone, stopping theme service");
+                if let Err(error) = update_result {
+                    warn!(error = ?error, "App context gone, stopping theme service");
                     break;
                 }
             } else {
@@ -147,7 +142,7 @@ pub fn ensure_theme_service(cx: &mut App) {
         }
 
         THEME_SERVICE_RUNNING.store(false, Ordering::SeqCst);
-        crate::logging::log("THEME", "Theme service stopped");
+        info!("Theme service stopped");
     })
     .detach();
 }

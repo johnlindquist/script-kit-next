@@ -235,6 +235,18 @@ fn test_input_field_colors_from_scheme() {
 }
 
 #[test]
+fn test_input_field_colors_text_uses_text_primary_from_scheme() {
+    let mut scheme = ColorScheme::dark_default();
+    scheme.text.primary = 0x010203;
+    scheme.text.on_accent = 0xa1b2c3;
+
+    let colors = scheme.input_field_colors();
+
+    assert_eq!(colors.text, gpui::rgb(scheme.text.primary));
+    assert_ne!(colors.text, gpui::rgb(scheme.text.on_accent));
+}
+
+#[test]
 fn test_input_field_cursor_color() {
     let scheme = ColorScheme::dark_default();
     let colors = scheme.input_field_colors();

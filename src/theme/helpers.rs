@@ -50,7 +50,7 @@ impl InputFieldColors {
 
         InputFieldColors {
             background: rgba((colors.background.search_box << 8) | 0x80),
-            text: rgb(colors.text.on_accent),
+            text: rgb(colors.text.primary),
             placeholder: rgb(colors.text.muted),
             border: rgba((colors.ui.border << 8) | 0x60),
             // Use accent color for cursor - provides visual consistency with selection
@@ -202,15 +202,15 @@ mod tests {
     }
 
     #[test]
-    fn test_input_field_colors_text_uses_text_on_accent_from_scheme() {
+    fn test_input_field_colors_text_uses_text_primary_from_scheme() {
         let mut colors = ColorScheme::dark_default();
         colors.text.primary = 0x010203;
         colors.text.on_accent = 0xa1b2c3;
 
         let input_colors = InputFieldColors::from_color_scheme(&colors);
 
-        assert_eq!(input_colors.text, rgb(colors.text.on_accent));
-        assert_ne!(input_colors.text, rgb(colors.text.primary));
+        assert_eq!(input_colors.text, rgb(colors.text.primary));
+        assert_ne!(input_colors.text, rgb(colors.text.on_accent));
     }
 
     #[test]
