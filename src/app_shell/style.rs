@@ -36,28 +36,14 @@ impl ShellStyleCache {
     /// Create a new style cache from theme
     pub fn from_theme(theme: &Theme, revision: u64) -> Self {
         let colors = &theme.colors;
+        let opacity = theme.get_opacity();
 
         // Frame background with vibrancy opacity - use direct RGBA like POC
-        // This avoids HSLA conversion issues and matches the proven POC approach
-        // Dark mode: lower opacity (0.37) for better blur effect
-        // Light mode: higher opacity (0.85) for visibility like POC's rgba(0xFAFAFAD9)
-        let bg_alpha = if theme.has_dark_colors() {
-            // Dark mode: use theme opacity or dark default (0.30-0.37)
-            theme
-                .opacity
-                .as_ref()
-                .map(|o| o.main)
-                .unwrap_or(0.37)
-                .clamp(0.30, 0.50)
-        } else {
-            // Light mode: higher opacity like POC (0.85)
-            theme
-                .opacity
-                .as_ref()
-                .map(|o| o.main)
-                .unwrap_or(0.85)
-                .clamp(0.70, 0.90)
-        };
+        // Use theme opacity settings as the single source of truth.
+        let bg_alpha = opacity
+            .vibrancy_background
+            .unwrap_or(opacity.main)
+            .clamp(0.0, 1.0);
         let frame_bg = gpui::rgba(hex_to_rgba_with_opacity(colors.background.main, bg_alpha));
 
         // Shadows: DISABLED when vibrancy is enabled
