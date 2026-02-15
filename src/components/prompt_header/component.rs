@@ -1,4 +1,5 @@
 use gpui::*;
+use gpui_component::tooltip::Tooltip;
 use std::rc::Rc;
 
 use crate::components::{
@@ -81,13 +82,18 @@ impl PromptHeader {
 
         // Path prefix (if present)
         if let Some(ref prefix) = self.config.path_prefix {
+            let prefix_text = prefix.clone();
             input = input.child(
                 div()
+                    .id(ElementId::Name(SharedString::from(
+                        "prompt-header-path-prefix-ellipsis",
+                    )))
                     .max_w(px(HEADER_PATH_PREFIX_MAX_WIDTH_PX))
                     .overflow_hidden()
                     .whitespace_nowrap()
                     .text_ellipsis()
                     .text_color(colors.text_muted.to_rgb())
+                    .tooltip(move |window, cx| Tooltip::new(prefix_text.clone()).build(window, cx))
                     .child(prefix.clone()),
             );
         }

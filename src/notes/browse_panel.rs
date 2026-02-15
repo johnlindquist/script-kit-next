@@ -12,13 +12,15 @@
 //! - Filter notes as user types in search
 
 use gpui::{
-    div, prelude::*, px, rgba, App, Context, Entity, FocusHandle, Focusable, IntoElement,
-    KeyDownEvent, MouseButton, ParentElement, Render, Styled, Subscription, Window,
+    div, prelude::*, px, rgba, App, Context, ElementId, Entity, FocusHandle, Focusable,
+    IntoElement, KeyDownEvent, MouseButton, ParentElement, Render, SharedString, Styled,
+    Subscription, Window,
 };
 use gpui_component::{
     button::{Button, ButtonVariants},
     input::{Input, InputEvent, InputState},
     theme::ActiveTheme,
+    tooltip::Tooltip,
     IconName, Sizable,
 };
 
@@ -274,6 +276,7 @@ impl BrowsePanel {
         let is_selected = index == self.selected_index;
         let is_hovered = self.hovered_index == Some(index);
         let note_id = note.id;
+        let note_title = note.title.clone();
 
         // Row background based on state
         let bg_color = if is_selected {
@@ -321,11 +324,16 @@ impl BrowsePanel {
             // Title
             .child(
                 div()
+                    .id(ElementId::NamedInteger(
+                        SharedString::from("note-row-title-ellipsis"),
+                        index as u64,
+                    ))
                     .flex_1()
                     .overflow_hidden()
                     .text_ellipsis()
                     .text_sm()
                     .text_color(cx.theme().foreground)
+                    .tooltip(move |window, cx| Tooltip::new(note_title.clone()).build(window, cx))
                     .child(note.title.clone()),
             )
             // Character count
