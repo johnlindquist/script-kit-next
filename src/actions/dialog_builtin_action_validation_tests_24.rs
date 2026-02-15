@@ -1008,8 +1008,8 @@ fn batch24_file_context_macos_file_count() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&f);
-    // open_file, reveal, quick_look, open_with, show_info, copy_path, copy_filename = 7
-    assert_eq!(actions.len(), 7);
+    // open_file, reveal, attach_to_ai, quick_look, open_with, show_info, copy_path, copy_filename = 8
+    assert_eq!(actions.len(), 8);
 }
 
 #[cfg(target_os = "macos")]

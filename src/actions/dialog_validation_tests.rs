@@ -1499,7 +1499,7 @@ fn test_file_context_file_vs_dir_action_count() {
     // File should have Quick Look, dir should not (macOS)
     #[cfg(target_os = "macos")]
     {
-        assert_eq!(file_actions.len(), 7);
+        assert_eq!(file_actions.len(), 8);
         assert_eq!(dir_actions.len(), 6);
     }
 }

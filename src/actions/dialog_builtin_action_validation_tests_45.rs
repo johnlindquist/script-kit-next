@@ -410,7 +410,7 @@ fn file_context_file_has_7_actions() {
         file_type: FileType::File,
     };
     let actions = get_file_context_actions(&file_info);
-    assert_eq!(actions.len(), 7);
+    assert_eq!(actions.len(), 8);
 }
 
 #[test]
