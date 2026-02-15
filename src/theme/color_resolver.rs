@@ -51,7 +51,6 @@ use tracing::debug;
 /// routes to the correct source (theme or design tokens) based on the
 /// current design variant.
 #[derive(Debug, Clone, Copy)]
-#[allow(dead_code)] // Internal token cache; not all fields are consumed yet.
 pub struct ColorResolver {
     // Cached colors extracted from theme or design tokens
     // All colors are stored as u32 hex values (0xRRGGBB)
@@ -59,34 +58,18 @@ pub struct ColorResolver {
     // Background colors
     background: u32,
     background_secondary: u32,
-    background_tertiary: u32,
-    background_selected: u32,
-    background_hover: u32,
 
     // Text colors
     text_primary: u32,
-    text_secondary: u32,
     text_muted: u32,
-    text_dimmed: u32,
-    text_on_accent: u32,
 
     // Accent colors
     accent: u32,
-    accent_secondary: u32,
-    success: u32,
-    warning: u32,
-    error: u32,
 
     // Border colors
     border: u32,
-    border_subtle: u32,
-    border_focus: u32,
-
-    // Shadow
-    shadow: u32,
 }
 
-#[allow(dead_code)]
 impl ColorResolver {
     /// Create a new color resolver for the given theme and design variant
     ///
@@ -106,9 +89,6 @@ impl ColorResolver {
             text_primary = %format_args!("{:#08x}", resolver.text_primary),
             accent = %format_args!("{:#08x}", resolver.accent),
             border = %format_args!("{:#08x}", resolver.border),
-            success = %format_args!("{:#08x}", resolver.success),
-            warning = %format_args!("{:#08x}", resolver.warning),
-            error = %format_args!("{:#08x}", resolver.error),
             "ColorResolver initialized"
         );
 
@@ -121,27 +101,13 @@ impl ColorResolver {
         Self {
             background: colors.background.main,
             background_secondary: colors.background.title_bar,
-            background_tertiary: colors.background.search_box,
-            background_selected: colors.accent.selected_subtle,
-            background_hover: colors.accent.selected_subtle,
 
             text_primary: colors.text.primary,
-            text_secondary: colors.text.secondary,
             text_muted: colors.text.muted,
-            text_dimmed: colors.text.dimmed,
-            text_on_accent: colors.text.on_accent,
 
             accent: colors.accent.selected,
-            accent_secondary: colors.accent.selected,
-            success: colors.ui.success,
-            warning: colors.ui.warning,
-            error: colors.ui.error,
 
             border: colors.ui.border,
-            border_subtle: colors.ui.border,
-            border_focus: colors.accent.selected,
-
-            shadow: 0x00000040, // Default shadow
         }
     }
 
@@ -153,27 +119,13 @@ impl ColorResolver {
         Self {
             background: colors.background,
             background_secondary: colors.background_secondary,
-            background_tertiary: colors.background_tertiary,
-            background_selected: colors.background_selected,
-            background_hover: colors.background_hover,
 
             text_primary: colors.text_primary,
-            text_secondary: colors.text_secondary,
             text_muted: colors.text_muted,
-            text_dimmed: colors.text_dimmed,
-            text_on_accent: colors.text_on_accent,
 
             accent: colors.accent,
-            accent_secondary: colors.accent_secondary,
-            success: colors.success,
-            warning: colors.warning,
-            error: colors.error,
 
             border: colors.border,
-            border_subtle: colors.border_subtle,
-            border_focus: colors.border_focus,
-
-            shadow: colors.shadow,
         }
     }
 
@@ -189,19 +141,10 @@ impl ColorResolver {
         self.text_primary
     }
 
-    /// Get the secondary text color
-    pub fn secondary_text_color(&self) -> u32 {
-        self.text_secondary
-    }
-
     /// Get the main background color
+    #[cfg(test)]
     pub fn main_background(&self) -> u32 {
         self.background
-    }
-
-    /// Get the selection background color
-    pub fn selection_background(&self) -> u32 {
-        self.background_selected
     }
 
     /// Get the primary accent color
@@ -212,11 +155,6 @@ impl ColorResolver {
     /// Get the border color
     pub fn border_color(&self) -> u32 {
         self.border
-    }
-
-    /// Get the dimmed text color
-    pub fn dimmed_text_color(&self) -> u32 {
-        self.text_dimmed
     }
 
     /// Get the secondary background color
