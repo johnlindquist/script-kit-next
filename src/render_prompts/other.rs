@@ -159,6 +159,14 @@ impl ScriptListApp {
         self.render_simple_prompt_shell(entity, Self::other_prompt_shell_handle_key_default, cx)
     }
 
+    fn render_paste_sequential_prompt(
+        &mut self,
+        entity: Entity<prompts::PasteSequentialPrompt>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        self.render_simple_prompt_shell(entity, Self::other_prompt_shell_handle_key_default, cx)
+    }
+
     fn render_chat_prompt(
         &mut self,
         entity: Entity<prompts::ChatPrompt>,
@@ -267,9 +275,7 @@ impl ScriptListApp {
                 }
             }))
             .on_copy_path(Box::new(move |p, _window, cx| {
-                if let Err(e) =
-                    crate::platform::copy_text_to_clipboard(&p.to_string_lossy())
-                {
+                if let Err(e) = crate::platform::copy_text_to_clipboard(&p.to_string_lossy()) {
                     tracing::warn!(error = %e, "copy_text_to_clipboard failed");
                 } else if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
@@ -295,9 +301,7 @@ impl ScriptListApp {
         // Handle Enter/Escape to dismiss
         let handle_key = cx.listener(move |this, event: &gpui::KeyDownEvent, _window, cx| {
             let key = event.keystroke.key.as_str();
-            if crate::ui_foundation::is_key_escape(key)
-                || key.eq_ignore_ascii_case("enter")
-            {
+            if crate::ui_foundation::is_key_escape(key) || key.eq_ignore_ascii_case("enter") {
                 this.current_view = AppView::ScriptList;
                 this.request_script_list_main_filter_focus(cx);
                 cx.notify();

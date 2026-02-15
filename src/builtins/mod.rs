@@ -213,6 +213,8 @@ pub enum BuiltInGroup {
 pub enum BuiltInFeature {
     /// Clipboard history viewer/manager
     ClipboardHistory,
+    /// Paste multiple items one-by-one in sequence
+    PasteSequentially,
     /// Favorites list and quick access
     Favorites,
     /// Application launcher for opening installed apps (legacy, apps now in main search)
@@ -388,6 +390,16 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "📋",
             ));
             debug!("Added Clipboard History built-in entry");
+
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin-paste-sequentially",
+                "Paste Sequentially",
+                "Paste multiple clipboard items one at a time in sequence",
+                vec!["paste", "sequential", "clipboard", "batch", "paseq"],
+                BuiltInFeature::PasteSequentially,
+                "📌",
+            ));
+            debug!("Added Paste Sequentially built-in entry");
         }
 
         // Note: AppLauncher built-in removed - apps now appear directly in main search
@@ -1438,6 +1450,27 @@ mod tests {
         assert!(clipboard.keywords.contains(&"paste".to_string()));
         assert!(clipboard.keywords.contains(&"copy".to_string()));
 
+        // Check paste sequentially entry
+        let paste_sequentially = entries
+            .iter()
+            .find(|e| e.id == "builtin-paste-sequentially");
+        assert!(paste_sequentially.is_some());
+        let paste_sequentially = paste_sequentially.unwrap();
+        assert_eq!(paste_sequentially.name, "Paste Sequentially");
+        assert_eq!(
+            paste_sequentially.feature,
+            BuiltInFeature::PasteSequentially
+        );
+        assert!(paste_sequentially.keywords.contains(&"paste".to_string()));
+        assert!(paste_sequentially
+            .keywords
+            .contains(&"sequential".to_string()));
+        assert!(paste_sequentially
+            .keywords
+            .contains(&"clipboard".to_string()));
+        assert!(paste_sequentially.keywords.contains(&"batch".to_string()));
+        assert!(paste_sequentially.keywords.contains(&"paseq".to_string()));
+
         // Check window switcher entry
         let window_switcher = entries.iter().find(|e| e.id == "builtin-window-switcher");
         assert!(window_switcher.is_some());
@@ -1493,6 +1526,7 @@ mod tests {
 
         // Check that core entries exist (plus all the new command entries)
         assert!(entries.iter().any(|e| e.id == "builtin-clipboard-history"));
+        assert!(entries.iter().any(|e| e.id == "builtin-paste-sequentially"));
         assert!(entries.iter().any(|e| e.id == "builtin-ai-chat"));
         assert!(entries.iter().any(|e| e.id == "builtin-notes"));
         assert!(entries.iter().any(|e| e.id == "builtin-design-gallery"));
@@ -1517,6 +1551,7 @@ mod tests {
 
         // Clipboard history should NOT be present
         assert!(!entries.iter().any(|e| e.id == "builtin-clipboard-history"));
+        assert!(!entries.iter().any(|e| e.id == "builtin-paste-sequentially"));
     }
     #[test]
     fn test_get_builtin_entries_none_enabled() {
@@ -1534,6 +1569,7 @@ mod tests {
 
         // Clipboard history and window switcher should NOT be present
         assert!(!entries.iter().any(|e| e.id == "builtin-clipboard-history"));
+        assert!(!entries.iter().any(|e| e.id == "builtin-paste-sequentially"));
         assert!(!entries.iter().any(|e| e.id == "builtin-window-switcher"));
     }
     #[test]
@@ -1561,6 +1597,7 @@ mod tests {
 
         // Clipboard history should NOT be present
         assert!(!entries.iter().any(|e| e.id == "builtin-clipboard-history"));
+        assert!(!entries.iter().any(|e| e.id == "builtin-paste-sequentially"));
     }
     #[test]
     fn test_builtin_feature_equality() {
@@ -1578,6 +1615,10 @@ mod tests {
         assert_eq!(BuiltInFeature::Favorites, BuiltInFeature::Favorites);
         assert_eq!(BuiltInFeature::EmojiPicker, BuiltInFeature::EmojiPicker);
         assert_eq!(BuiltInFeature::Quicklinks, BuiltInFeature::Quicklinks);
+        assert_eq!(
+            BuiltInFeature::PasteSequentially,
+            BuiltInFeature::PasteSequentially
+        );
         assert_ne!(
             BuiltInFeature::ClipboardHistory,
             BuiltInFeature::AppLauncher
@@ -1589,6 +1630,10 @@ mod tests {
         assert_ne!(BuiltInFeature::AppLauncher, BuiltInFeature::WindowSwitcher);
         assert_ne!(
             BuiltInFeature::DesignGallery,
+            BuiltInFeature::ClipboardHistory
+        );
+        assert_ne!(
+            BuiltInFeature::PasteSequentially,
             BuiltInFeature::ClipboardHistory
         );
         assert_ne!(BuiltInFeature::AiChat, BuiltInFeature::ClipboardHistory);

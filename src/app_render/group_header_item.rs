@@ -21,6 +21,7 @@ fn preview_keyword_tags(keywords: &[String]) -> Vec<String> {
 fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
     match feature {
         builtins::BuiltInFeature::ClipboardHistory => "Clipboard History Manager".to_string(),
+        builtins::BuiltInFeature::PasteSequentially => "Paste Sequentially".to_string(),
         builtins::BuiltInFeature::Favorites => "Favorites".to_string(),
         builtins::BuiltInFeature::AppLauncher => "Application Launcher".to_string(),
         builtins::BuiltInFeature::App(name) => name.clone(),

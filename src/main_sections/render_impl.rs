@@ -211,6 +211,9 @@ impl Render for ScriptListApp {
             } => self
                 .render_clipboard_history(filter, selected_index, cx)
                 .into_any_element(),
+            AppView::PasteSequentiallyView { entity } => self
+                .render_paste_sequential_prompt(entity, cx)
+                .into_any_element(),
             AppView::EmojiPickerView {
                 filter,
                 selected_index,

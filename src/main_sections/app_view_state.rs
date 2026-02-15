@@ -84,6 +84,10 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
+    /// Showing paste sequential prompt
+    PasteSequentiallyView {
+        entity: Entity<prompts::PasteSequentialPrompt>,
+    },
     /// Showing app launcher
     /// P0 FIX: View state only - data comes from ScriptListApp.apps or app_launcher module
     AppLauncherView {
@@ -140,9 +144,7 @@ enum AppView {
     },
     /// Showing creation feedback with file path and quick actions after script/extension creation.
     /// Requires explicit dismiss (Enter/Escape/button) — non-dismissable by click-outside.
-    CreationFeedback {
-        path: std::path::PathBuf,
-    },
+    CreationFeedback { path: std::path::PathBuf },
 }
 
 /// Wrapper to hold a script session that can be shared across async boundaries

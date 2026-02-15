@@ -47,6 +47,10 @@ mod preview_panel_metadata_tests {
             )),
             "Quick Utility"
         );
+        assert_eq!(
+            builtin_feature_annotation(&BuiltInFeature::PasteSequentially),
+            "Paste Sequentially"
+        );
     }
 
     #[test]

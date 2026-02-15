@@ -25,6 +25,7 @@ mod drop;
 pub mod env;
 pub mod markdown;
 pub mod naming;
+pub mod paste_sequential;
 mod path;
 pub mod prelude;
 mod select;
@@ -50,6 +51,7 @@ pub use chat::{
 pub use creation_feedback::CreationFeedbackPanel;
 pub use div::{ContainerOptions, ContainerPadding, DivPrompt};
 pub use naming::{NamingPrompt, NamingPromptConfig, NamingSubmitResult, NamingTarget};
+pub use paste_sequential::PasteSequentialPrompt;
 #[cfg(target_os = "macos")]
 pub use webcam::WebcamPrompt;
 #[cfg(not(target_os = "macos"))]
