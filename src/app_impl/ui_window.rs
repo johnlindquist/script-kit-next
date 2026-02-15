@@ -172,7 +172,11 @@ impl ScriptListApp {
     /// during GPUI's render or event processing.
     ///
     /// Use this version when you have access to `window` and `cx`.
-    pub(crate) fn update_window_size_deferred(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn update_window_size_deferred(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if let Some((view_type, item_count)) = self.calculate_window_size_params() {
             crate::window_resize::defer_resize_to_view(view_type, item_count, window, &mut *cx);
         }
@@ -221,20 +225,7 @@ impl ScriptListApp {
                 query,
                 selected_index,
             } => {
-                // Check if query looks like a directory path
-                // If so, list directory contents instead of searching
-                let results = if crate::file_search::is_directory_path(&text) {
-                    crate::file_search::list_directory(
-                        &text,
-                        crate::file_search::DEFAULT_CACHE_LIMIT,
-                    )
-                } else {
-                    crate::file_search::search_files(
-                        &text,
-                        None,
-                        crate::file_search::DEFAULT_SEARCH_LIMIT,
-                    )
-                };
+                let results = ScriptListApp::resolve_file_search_results(&text);
                 logging::log(
                     "EXEC",
                     &format!(
@@ -243,9 +234,9 @@ impl ScriptListApp {
                         results.len()
                     ),
                 );
-                self.cached_file_results = results;
                 *query = text.clone();
                 *selected_index = 0;
+                self.update_file_search_results(results);
                 self.file_search_scroll_handle
                     .scroll_to_item(0, ScrollStrategy::Top);
                 // Mark that we need to sync the input text on next render
@@ -277,5 +268,4 @@ impl ScriptListApp {
             state.focus(window, cx);
         });
     }
-
 }

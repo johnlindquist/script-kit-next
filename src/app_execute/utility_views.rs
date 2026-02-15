@@ -1,4 +1,67 @@
 impl ScriptListApp {
+    fn resolve_file_search_results_with(
+        query: &str,
+        is_directory_path: impl Fn(&str) -> bool,
+        expand_path: impl Fn(&str) -> Option<String>,
+        list_directory: impl Fn(&str, usize) -> Vec<crate::file_search::FileResult>,
+        search_files: impl Fn(&str, Option<&str>, usize) -> Vec<crate::file_search::FileResult>,
+    ) -> Vec<crate::file_search::FileResult> {
+        if is_directory_path(query) {
+            logging::log(
+                "EXEC",
+                &format!("Detected directory path, listing: {}", query),
+            );
+
+            let expanded = expand_path(query);
+            let is_real_dir = expanded
+                .as_deref()
+                .map(|path| std::path::Path::new(path).is_dir())
+                .unwrap_or(false);
+
+            let directory_results = list_directory(query, crate::file_search::DEFAULT_CACHE_LIMIT);
+            if directory_results.is_empty() && !is_real_dir {
+                logging::log(
+                    "EXEC",
+                    "Path mode not a real directory; falling back to Spotlight search",
+                );
+                return search_files(query, None, crate::file_search::DEFAULT_SEARCH_LIMIT);
+            }
+
+            return directory_results;
+        }
+
+        search_files(query, None, crate::file_search::DEFAULT_SEARCH_LIMIT)
+    }
+
+    pub(crate) fn resolve_file_search_results(query: &str) -> Vec<crate::file_search::FileResult> {
+        Self::resolve_file_search_results_with(
+            query,
+            crate::file_search::is_directory_path,
+            crate::file_search::expand_path,
+            crate::file_search::list_directory,
+            crate::file_search::search_files,
+        )
+    }
+
+    pub(crate) fn update_file_search_results(
+        &mut self,
+        results: Vec<crate::file_search::FileResult>,
+    ) {
+        let previous_cached_count = self.cached_file_results.len();
+        self.cached_file_results = results;
+        self.file_search_display_indices.clear();
+        self.recompute_file_search_display_indices();
+        logging::log(
+            "SEARCH",
+            &format!(
+                "update_file_search_results: cached {} -> {} display={}",
+                previous_cached_count,
+                self.cached_file_results.len(),
+                self.file_search_display_indices.len()
+            ),
+        );
+    }
+
     /// Open a terminal with a specific command (for fallback "Run in Terminal")
     pub fn open_terminal_with_command(&mut self, command: String, cx: &mut Context<Self>) {
         logging::log(
@@ -121,42 +184,11 @@ impl ScriptListApp {
             &format!("Opening File Search with query: {}", query),
         );
 
-        // Perform initial search or directory listing
-        // Check if query looks like a directory path
-        let results = if file_search::is_directory_path(&query) {
-            logging::log(
-                "EXEC",
-                &format!("Detected directory path, listing: {}", query),
-            );
-            // Verify path is actually a directory before listing
-            let expanded = file_search::expand_path(&query);
-            let is_real_dir = expanded
-                .as_deref()
-                .map(|p| std::path::Path::new(p).is_dir())
-                .unwrap_or(false);
-
-            let dir_results = file_search::list_directory(&query, file_search::DEFAULT_CACHE_LIMIT);
-
-            // Fallback to Spotlight search if path looks like directory but isn't
-            if dir_results.is_empty() && !is_real_dir {
-                logging::log(
-                    "EXEC",
-                    "Path mode not a real directory; falling back to Spotlight search",
-                );
-                file_search::search_files(&query, None, file_search::DEFAULT_SEARCH_LIMIT)
-            } else {
-                dir_results
-            }
-        } else {
-            file_search::search_files(&query, None, file_search::DEFAULT_SEARCH_LIMIT)
-        };
+        let results = Self::resolve_file_search_results(&query);
         logging::log(
             "EXEC",
             &format!("File search found {} results", results.len()),
         );
-
-        // Cache the results
-        self.cached_file_results = results;
 
         // Set up the view state
         self.filter_text = query.clone();
@@ -180,10 +212,7 @@ impl ScriptListApp {
         // Initialize file search state for streaming
         self.file_search_gen = 0;
         self.file_search_cancel = None;
-        self.file_search_display_indices.clear();
-
-        // Compute initial display indices
-        self.recompute_file_search_display_indices();
+        self.update_file_search_results(results);
 
         cx.notify();
     }
@@ -325,7 +354,10 @@ impl ScriptListApp {
         let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
             std::sync::Arc::new(|_id: String, value: Option<String>| {
                 if let Some(data) = value {
-                    logging::log("EXEC", &format!("Webcam capture data: {} bytes", data.len()));
+                    logging::log(
+                        "EXEC",
+                        &format!("Webcam capture data: {} bytes", data.len()),
+                    );
                 }
             });
 
@@ -441,10 +473,7 @@ impl ScriptListApp {
 
         let entity = cx.new(|_| webcam_prompt);
         entity.update(cx, |prompt, cx| {
-            prompt.set_error(
-                "Webcam capture is only supported on macOS".to_string(),
-                cx,
-            );
+            prompt.set_error("Webcam capture is only supported on macOS".to_string(), cx);
         });
 
         self.toast_manager.push(
@@ -461,5 +490,79 @@ impl ScriptListApp {
         resize_to_view_sync(ViewType::DivPrompt, 0);
         cx.notify();
     }
+}
 
+#[cfg(test)]
+mod utility_views_file_search_tests {
+    use super::*;
+    use crate::file_search::{FileResult, FileType};
+
+    fn test_file_result(name: &str) -> FileResult {
+        FileResult {
+            path: format!("/tmp/{}", name),
+            name: name.to_string(),
+            size: 0,
+            modified: 0,
+            file_type: FileType::File,
+        }
+    }
+
+    #[test]
+    fn test_resolve_file_search_results_with_falls_back_when_directory_path_is_not_real_directory()
+    {
+        let results = ScriptListApp::resolve_file_search_results_with(
+            "~/missing-dir",
+            |_| true,
+            |_| Some("/definitely/not/a/real/dir".to_string()),
+            |_, _| Vec::new(),
+            |query, onlyin, limit| {
+                assert_eq!(query, "~/missing-dir");
+                assert!(onlyin.is_none());
+                assert_eq!(limit, crate::file_search::DEFAULT_SEARCH_LIMIT);
+                vec![test_file_result("fallback-result")]
+            },
+        );
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].name, "fallback-result");
+    }
+
+    #[test]
+    fn test_resolve_file_search_results_with_uses_directory_listing_when_results_exist() {
+        let results = ScriptListApp::resolve_file_search_results_with(
+            "~/dir",
+            |_| true,
+            |_| Some("/definitely/not/a/real/dir".to_string()),
+            |query, limit| {
+                assert_eq!(query, "~/dir");
+                assert_eq!(limit, crate::file_search::DEFAULT_CACHE_LIMIT);
+                vec![test_file_result("directory-result")]
+            },
+            |_, _, _| {
+                panic!("search_files should not be called when directory listing returns results")
+            },
+        );
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].name, "directory-result");
+    }
+
+    #[test]
+    fn test_resolve_file_search_results_with_uses_search_for_non_directory_queries() {
+        let results = ScriptListApp::resolve_file_search_results_with(
+            "invoice",
+            |_| false,
+            |_| None,
+            |_, _| panic!("list_directory should not be called for non-directory query"),
+            |query, onlyin, limit| {
+                assert_eq!(query, "invoice");
+                assert!(onlyin.is_none());
+                assert_eq!(limit, crate::file_search::DEFAULT_SEARCH_LIMIT);
+                vec![test_file_result("search-result")]
+            },
+        );
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].name, "search-result");
+    }
 }
