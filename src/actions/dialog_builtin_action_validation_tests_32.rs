@@ -60,7 +60,7 @@ fn batch32_agent_reveal_desc_mentions_agent_file() {
     script.is_agent = true;
     script.is_script = false;
     let actions = get_script_context_actions(&script);
-    let r = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
+    let r = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
     assert!(
         r.description.as_ref().unwrap().contains("agent"),
         "agent reveal desc should mention 'agent', got: {:?}",
@@ -74,7 +74,7 @@ fn batch32_agent_copy_path_desc_mentions_agent() {
     script.is_agent = true;
     script.is_script = false;
     let actions = get_script_context_actions(&script);
-    let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
+    let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
     assert!(
         cp.description.as_ref().unwrap().contains("agent"),
         "agent copy_path desc should mention 'agent', got: {:?}",
@@ -136,7 +136,7 @@ fn batch32_clipboard_empty_app_name_paste_title() {
         frontmost_app_name: Some("".to_string()),
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let paste = actions.iter().find(|a| a.id == "clipboard_paste").unwrap();
+    let paste = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
     // Empty string still goes through format!("Paste to {}", name) path
     assert_eq!(paste.title, "Paste to ");
 }
@@ -152,7 +152,7 @@ fn batch32_clipboard_long_app_name_paste_title() {
         frontmost_app_name: Some("Very Long Application Name Here".to_string()),
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let paste = actions.iter().find(|a| a.id == "clipboard_paste").unwrap();
+    let paste = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
     assert_eq!(paste.title, "Paste to Very Long Application Name Here");
 }
 
@@ -167,7 +167,7 @@ fn batch32_clipboard_none_app_name_paste_active_app() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let paste = actions.iter().find(|a| a.id == "clipboard_paste").unwrap();
+    let paste = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
     assert_eq!(paste.title, "Paste to Active App");
 }
 
@@ -246,7 +246,7 @@ fn batch32_file_reveal_in_finder_present_for_file() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
+    assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
 }
 
 #[test]
@@ -258,7 +258,7 @@ fn batch32_file_reveal_in_finder_present_for_dir() {
         is_dir: true,
     };
     let actions = get_file_context_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
+    assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
 }
 
 #[test]
@@ -270,7 +270,7 @@ fn batch32_file_reveal_in_finder_shortcut_is_cmd_enter() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&info);
-    let reveal = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
+    let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
     assert_eq!(reveal.shortcut.as_deref(), Some("⌘↵"));
 }
 
@@ -283,7 +283,7 @@ fn batch32_file_reveal_desc_says_reveal_in_finder() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&info);
-    let reveal = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
+    let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
     assert!(reveal.description.as_ref().unwrap().contains("Finder"));
 }
 
@@ -295,28 +295,28 @@ fn batch32_file_reveal_desc_says_reveal_in_finder() {
 fn batch32_path_file_second_action_is_copy_path() {
     let info = PathInfo::new("test.txt", "/p/test.txt", false);
     let actions = get_path_context_actions(&info);
-    assert_eq!(actions[1].id, "copy_path");
+    assert_eq!(actions[1].id, "file:copy_path");
 }
 
 #[test]
 fn batch32_path_dir_second_action_is_copy_path() {
     let info = PathInfo::new("mydir", "/p/mydir", true);
     let actions = get_path_context_actions(&info);
-    assert_eq!(actions[1].id, "copy_path");
+    assert_eq!(actions[1].id, "file:copy_path");
 }
 
 #[test]
 fn batch32_path_file_third_action_is_open_in_finder() {
     let info = PathInfo::new("test.txt", "/p/test.txt", false);
     let actions = get_path_context_actions(&info);
-    assert_eq!(actions[2].id, "open_in_finder");
+    assert_eq!(actions[2].id, "file:open_in_finder");
 }
 
 #[test]
 fn batch32_path_last_action_is_move_to_trash() {
     let info = PathInfo::new("test.txt", "/p/test.txt", false);
     let actions = get_path_context_actions(&info);
-    assert_eq!(actions.last().unwrap().id, "move_to_trash");
+    assert_eq!(actions.last().unwrap().id, "file:move_to_trash");
 }
 
 // ---------------------------------------------------------------------------
@@ -394,28 +394,28 @@ fn batch32_ai_export_markdown_desc_mentions_markdown() {
 #[test]
 fn batch32_ai_submit_icon_is_arrow_up() {
     let actions = get_ai_command_bar_actions();
-    let s = actions.iter().find(|a| a.id == "submit").unwrap();
+    let s = actions.iter().find(|a| a.id == "chat:submit").unwrap();
     assert_eq!(s.icon, Some(IconName::ArrowUp));
 }
 
 #[test]
 fn batch32_ai_submit_section_is_actions() {
     let actions = get_ai_command_bar_actions();
-    let s = actions.iter().find(|a| a.id == "submit").unwrap();
+    let s = actions.iter().find(|a| a.id == "chat:submit").unwrap();
     assert_eq!(s.section.as_deref(), Some("Actions"));
 }
 
 #[test]
 fn batch32_ai_submit_shortcut_is_enter() {
     let actions = get_ai_command_bar_actions();
-    let s = actions.iter().find(|a| a.id == "submit").unwrap();
+    let s = actions.iter().find(|a| a.id == "chat:submit").unwrap();
     assert_eq!(s.shortcut.as_deref(), Some("↵"));
 }
 
 #[test]
 fn batch32_ai_submit_desc_mentions_send() {
     let actions = get_ai_command_bar_actions();
-    let s = actions.iter().find(|a| a.id == "submit").unwrap();
+    let s = actions.iter().find(|a| a.id == "chat:submit").unwrap();
     assert!(
         s.description.as_ref().unwrap().contains("Send"),
         "submit desc should mention 'Send', got: {:?}",
@@ -490,7 +490,7 @@ fn batch32_chat_has_response_no_messages_has_copy_no_clear() {
         has_response: true,
     };
     let actions = get_chat_context_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "copy_response"));
+    assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
     assert!(!actions.iter().any(|a| a.id == "clear_conversation"));
 }
 
@@ -503,7 +503,7 @@ fn batch32_chat_has_messages_no_response_has_clear_no_copy() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    assert!(!actions.iter().any(|a| a.id == "copy_response"));
+    assert!(!actions.iter().any(|a| a.id == "chat:copy_response"));
     assert!(actions.iter().any(|a| a.id == "clear_conversation"));
 }
 
@@ -921,7 +921,7 @@ fn batch32_score_action_empty_search_returns_zero() {
 #[test]
 fn batch32_score_action_prefix_match_100_plus() {
     let action = Action::new(
-        "edit",
+        "script:edit",
         "Edit Script",
         Some("Open in editor".into()),
         ActionCategory::ScriptContext,
@@ -1144,7 +1144,7 @@ fn batch32_script_custom_verb_desc_uses_verb() {
 fn batch32_script_deeplink_url_format() {
     let script = crate::actions::types::ScriptInfo::new("My Script", "/p/my-script.ts");
     let actions = get_script_context_actions(&script);
-    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
     assert!(
         dl.description
             .as_ref()
@@ -1159,7 +1159,7 @@ fn batch32_script_deeplink_url_format() {
 fn batch32_script_deeplink_shortcut() {
     let script = crate::actions::types::ScriptInfo::new("Test", "/p/test.ts");
     let actions = get_script_context_actions(&script);
-    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
     assert_eq!(dl.shortcut.as_deref(), Some("⌘⇧D"));
 }
 
@@ -1167,7 +1167,7 @@ fn batch32_script_deeplink_shortcut() {
 fn batch32_builtin_deeplink_url_format() {
     let builtin = crate::actions::types::ScriptInfo::builtin("Clipboard History");
     let actions = get_script_context_actions(&builtin);
-    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
     assert!(dl
         .description
         .as_ref()

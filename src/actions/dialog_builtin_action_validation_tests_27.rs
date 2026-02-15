@@ -86,7 +86,7 @@ fn cat27_01_clipboard_paste_id_is_clipboard_paste() {
         frontmost_app_name: Some("Finder".into()),
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert_eq!(actions[0].id, "clipboard_paste");
+    assert_eq!(actions[0].id, "clip:clipboard_paste");
 }
 
 // ─────────────────────────────────────────────
@@ -165,7 +165,7 @@ fn cat27_03_agent_last_action_is_copy_deeplink() {
     let mut script = ScriptInfo::builtin("my-agent");
     script.is_agent = true;
     let actions = get_script_context_actions(&script);
-    assert_eq!(actions.last().unwrap().id, "copy_deeplink");
+    assert_eq!(actions.last().unwrap().id, "script:copy_deeplink");
 }
 
 #[test]
@@ -347,7 +347,7 @@ fn cat27_06_chat_response_without_messages() {
     // continue_in_chat + copy_response = 2
     assert_eq!(actions.len(), 2);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
-    assert!(ids.contains(&"copy_response"));
+    assert!(ids.contains(&"chat:copy_response"));
     assert!(!ids.contains(&"clear_conversation"));
 }
 
@@ -481,7 +481,7 @@ fn cat27_09_file_copy_filename_shortcut_is_cmd_c() {
         file_type: FileType::File,
     };
     let actions = get_file_context_actions(&file);
-    let copy_fn = actions.iter().find(|a| a.id == "copy_filename").unwrap();
+    let copy_fn = actions.iter().find(|a| a.id == "file:copy_filename").unwrap();
     assert_eq!(copy_fn.shortcut.as_deref(), Some("⌘C"));
 }
 
@@ -494,7 +494,7 @@ fn cat27_09_file_copy_path_shortcut_is_cmd_shift_c() {
         file_type: FileType::File,
     };
     let actions = get_file_context_actions(&file);
-    let copy_p = actions.iter().find(|a| a.id == "copy_path").unwrap();
+    let copy_p = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
     assert_eq!(copy_p.shortcut.as_deref(), Some("⌘⇧C"));
 }
 
@@ -507,7 +507,7 @@ fn cat27_09_file_dir_copy_filename_also_cmd_c() {
         file_type: FileType::Directory,
     };
     let actions = get_file_context_actions(&dir);
-    let copy_fn = actions.iter().find(|a| a.id == "copy_filename").unwrap();
+    let copy_fn = actions.iter().find(|a| a.id == "file:copy_filename").unwrap();
     assert_eq!(copy_fn.shortcut.as_deref(), Some("⌘C"));
 }
 
@@ -523,7 +523,7 @@ fn cat27_10_path_copy_filename_no_shortcut() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&path);
-    let copy_fn = actions.iter().find(|a| a.id == "copy_filename").unwrap();
+    let copy_fn = actions.iter().find(|a| a.id == "file:copy_filename").unwrap();
     assert!(copy_fn.shortcut.is_none());
 }
 
@@ -535,7 +535,7 @@ fn cat27_10_path_copy_path_has_shortcut() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&path);
-    let copy_p = actions.iter().find(|a| a.id == "copy_path").unwrap();
+    let copy_p = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
     assert_eq!(copy_p.shortcut.as_deref(), Some("⌘⇧C"));
 }
 
@@ -547,7 +547,7 @@ fn cat27_10_path_dir_copy_filename_still_no_shortcut() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&path);
-    let copy_fn = actions.iter().find(|a| a.id == "copy_filename").unwrap();
+    let copy_fn = actions.iter().find(|a| a.id == "file:copy_filename").unwrap();
     assert!(copy_fn.shortcut.is_none());
 }
 
@@ -640,7 +640,7 @@ fn cat27_13_score_fuzzy_match_gives_25() {
 
 #[test]
 fn cat27_13_score_prefix_gives_at_least_100() {
-    let action = Action::new("edit", "Edit Script", None, ActionCategory::ScriptContext);
+    let action = Action::new("script:edit", "Edit Script", None, ActionCategory::ScriptContext);
     let score = super::dialog::ActionsDialog::score_action(&action, "edit");
     assert!(score >= 100);
 }
@@ -981,7 +981,7 @@ fn cat27_21_notes_copy_section_present_with_selection() {
     let actions = get_notes_command_bar_actions(&info);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
     assert!(ids.contains(&"copy_note_as"));
-    assert!(ids.contains(&"copy_deeplink"));
+    assert!(ids.contains(&"script:copy_deeplink"));
     assert!(ids.contains(&"create_quicklink"));
 }
 
@@ -995,7 +995,7 @@ fn cat27_21_notes_copy_section_absent_without_selection() {
     let actions = get_notes_command_bar_actions(&info);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
     assert!(!ids.contains(&"copy_note_as"));
-    assert!(!ids.contains(&"copy_deeplink"));
+    assert!(!ids.contains(&"script:copy_deeplink"));
 }
 
 #[test]

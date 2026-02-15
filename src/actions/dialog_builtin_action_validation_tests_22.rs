@@ -324,7 +324,7 @@ fn batch22_agent_reveal_desc_mentions_agent() {
     s.is_agent = true;
     s.is_script = false;
     let actions = get_script_context_actions(&s);
-    let reveal = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
+    let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
     assert!(reveal
         .description
         .as_ref()
@@ -339,7 +339,7 @@ fn batch22_agent_copy_path_desc_mentions_agent() {
     s.is_agent = true;
     s.is_script = false;
     let actions = get_script_context_actions(&s);
-    let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
+    let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
     assert!(cp
         .description
         .as_ref()
@@ -1015,7 +1015,7 @@ fn batch22_file_context_file_primary_is_open_file() {
         file_type: FileType::File,
     };
     let actions = get_file_context_actions(&fi);
-    assert_eq!(actions[0].id, "open_file");
+    assert_eq!(actions[0].id, "file:open_file");
 }
 
 #[test]
@@ -1027,7 +1027,7 @@ fn batch22_file_context_dir_primary_is_open_directory() {
         file_type: FileType::Directory,
     };
     let actions = get_file_context_actions(&fi);
-    assert_eq!(actions[0].id, "open_directory");
+    assert_eq!(actions[0].id, "file:open_directory");
 }
 
 #[test]
@@ -1039,7 +1039,7 @@ fn batch22_file_context_always_has_reveal_in_finder() {
         file_type: FileType::File,
     };
     let actions = get_file_context_actions(&fi);
-    assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
+    assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
 }
 
 #[test]
@@ -1051,7 +1051,7 @@ fn batch22_file_context_always_has_copy_path() {
         file_type: FileType::File,
     };
     let actions = get_file_context_actions(&fi);
-    assert!(actions.iter().any(|a| a.id == "copy_path"));
+    assert!(actions.iter().any(|a| a.id == "file:copy_path"));
 }
 
 #[test]
@@ -1063,7 +1063,7 @@ fn batch22_file_context_copy_filename_has_shortcut() {
         file_type: FileType::File,
     };
     let actions = get_file_context_actions(&fi);
-    let cf = actions.iter().find(|a| a.id == "copy_filename").unwrap();
+    let cf = actions.iter().find(|a| a.id == "file:copy_filename").unwrap();
     assert_eq!(cf.shortcut.as_deref(), Some("⌘C"));
 }
 
@@ -1079,7 +1079,7 @@ fn batch22_path_dir_primary_is_open_directory() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&pi);
-    assert_eq!(actions[0].id, "open_directory");
+    assert_eq!(actions[0].id, "file:open_directory");
 }
 
 #[test]
@@ -1090,7 +1090,7 @@ fn batch22_path_file_primary_is_select_file() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&pi);
-    assert_eq!(actions[0].id, "select_file");
+    assert_eq!(actions[0].id, "file:select_file");
 }
 
 #[test]
@@ -1107,8 +1107,8 @@ fn batch22_path_trash_is_always_last() {
     };
     let da = get_path_context_actions(&pi_dir);
     let fa = get_path_context_actions(&pi_file);
-    assert_eq!(da.last().unwrap().id, "move_to_trash");
-    assert_eq!(fa.last().unwrap().id, "move_to_trash");
+    assert_eq!(da.last().unwrap().id, "file:move_to_trash");
+    assert_eq!(fa.last().unwrap().id, "file:move_to_trash");
 }
 
 #[test]
@@ -1119,7 +1119,7 @@ fn batch22_path_trash_desc_dir_says_folder() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&pi);
-    let trash = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+    let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
     assert!(trash.description.as_ref().unwrap().contains("folder"));
 }
 
@@ -1131,7 +1131,7 @@ fn batch22_path_trash_desc_file_says_file() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&pi);
-    let trash = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+    let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
     assert!(trash.description.as_ref().unwrap().contains("file"));
 }
 
@@ -1147,7 +1147,7 @@ fn batch22_path_copy_filename_no_shortcut() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&pi);
-    let cf = actions.iter().find(|a| a.id == "copy_filename").unwrap();
+    let cf = actions.iter().find(|a| a.id == "file:copy_filename").unwrap();
     assert!(cf.shortcut.is_none());
 }
 
@@ -1159,7 +1159,7 @@ fn batch22_path_open_in_terminal_shortcut() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&pi);
-    let ot = actions.iter().find(|a| a.id == "open_in_terminal").unwrap();
+    let ot = actions.iter().find(|a| a.id == "file:open_in_terminal").unwrap();
     assert_eq!(ot.shortcut.as_deref(), Some("⌘T"));
 }
 

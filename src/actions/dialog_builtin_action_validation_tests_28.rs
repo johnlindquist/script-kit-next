@@ -104,7 +104,7 @@ fn cat28_03_script_copy_content_shortcut() {
 fn cat28_03_script_copy_path_shortcut() {
     let script = ScriptInfo::new("my-script", "/path/test.ts");
     let actions = get_script_context_actions(&script);
-    let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
+    let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
     assert_eq!(cp.shortcut.as_deref(), Some("⌘⇧C"));
 }
 
@@ -120,7 +120,7 @@ fn cat28_03_script_edit_shortcut() {
 fn cat28_03_script_reveal_shortcut() {
     let script = ScriptInfo::new("my-script", "/path/test.ts");
     let actions = get_script_context_actions(&script);
-    let rv = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
+    let rv = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
     assert_eq!(rv.shortcut.as_deref(), Some("⌘⇧F"));
 }
 
@@ -312,7 +312,7 @@ fn cat28_07_clipboard_copy_desc_without_pasting() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let cc = actions.iter().find(|a| a.id == "clipboard_copy").unwrap();
+    let cc = actions.iter().find(|a| a.id == "clip:clipboard_copy").unwrap();
     assert!(cc
         .description
         .as_ref()
@@ -332,7 +332,7 @@ fn cat28_07_clipboard_paste_desc_mentions_paste() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let cp = actions.iter().find(|a| a.id == "clipboard_paste").unwrap();
+    let cp = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
     assert!(cp
         .description
         .as_ref()
@@ -374,7 +374,7 @@ fn cat28_08_file_open_title_quotes_name() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&file_info);
-    let open = actions.iter().find(|a| a.id == "open_file").unwrap();
+    let open = actions.iter().find(|a| a.id == "file:open_file").unwrap();
     assert!(open.title.contains("\"readme.txt\""));
 }
 
@@ -387,7 +387,7 @@ fn cat28_08_dir_open_title_quotes_name() {
         is_dir: true,
     };
     let actions = get_file_context_actions(&file_info);
-    let open = actions.iter().find(|a| a.id == "open_directory").unwrap();
+    let open = actions.iter().find(|a| a.id == "file:open_directory").unwrap();
     assert!(open.title.contains("\"Documents\""));
 }
 
@@ -400,7 +400,7 @@ fn cat28_08_file_open_desc_says_application() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&file_info);
-    let open = actions.iter().find(|a| a.id == "open_file").unwrap();
+    let open = actions.iter().find(|a| a.id == "file:open_file").unwrap();
     assert!(open
         .description
         .as_ref()
@@ -418,7 +418,7 @@ fn cat28_08_dir_open_desc_says_folder() {
         is_dir: true,
     };
     let actions = get_file_context_actions(&file_info);
-    let open = actions.iter().find(|a| a.id == "open_directory").unwrap();
+    let open = actions.iter().find(|a| a.id == "file:open_directory").unwrap();
     assert!(open
         .description
         .as_ref()
@@ -440,7 +440,7 @@ fn cat28_09_file_reveal_desc_mentions_finder() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&file_info);
-    let rv = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
+    let rv = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
     assert!(rv
         .description
         .as_ref()
@@ -460,7 +460,7 @@ fn cat28_09_file_copy_path_desc_mentions_clipboard() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&file_info);
-    let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
+    let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
     assert!(cp
         .description
         .as_ref()
@@ -478,7 +478,7 @@ fn cat28_09_file_copy_filename_desc_mentions_filename() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&file_info);
-    let cf = actions.iter().find(|a| a.id == "copy_filename").unwrap();
+    let cf = actions.iter().find(|a| a.id == "file:copy_filename").unwrap();
     assert!(cf
         .description
         .as_ref()
@@ -499,7 +499,7 @@ fn cat28_10_path_trash_desc_dir_says_folder() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&path_info);
-    let trash = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+    let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
     assert!(trash
         .description
         .as_ref()
@@ -516,7 +516,7 @@ fn cat28_10_path_trash_desc_file_says_file() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&path_info);
-    let trash = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+    let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
     assert!(trash
         .description
         .as_ref()
@@ -533,7 +533,7 @@ fn cat28_10_path_trash_shortcut() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&path_info);
-    let trash = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+    let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
     assert_eq!(trash.shortcut.as_deref(), Some("⌘⌫"));
 }
 
@@ -545,7 +545,7 @@ fn cat28_10_path_trash_title() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&path_info);
-    let trash = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+    let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
     assert_eq!(trash.title, "Move to Trash");
 }
 
@@ -561,7 +561,7 @@ fn cat28_11_path_select_file_title_quotes_name() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&path_info);
-    let sel = actions.iter().find(|a| a.id == "select_file").unwrap();
+    let sel = actions.iter().find(|a| a.id == "file:select_file").unwrap();
     assert!(sel.title.contains("\"report.pdf\""));
 }
 
@@ -573,7 +573,7 @@ fn cat28_11_path_open_dir_title_quotes_name() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&path_info);
-    let od = actions.iter().find(|a| a.id == "open_directory").unwrap();
+    let od = actions.iter().find(|a| a.id == "file:open_directory").unwrap();
     assert!(od.title.contains("\"Projects\""));
 }
 
@@ -585,7 +585,7 @@ fn cat28_11_path_select_desc_says_submit() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&path_info);
-    let sel = actions.iter().find(|a| a.id == "select_file").unwrap();
+    let sel = actions.iter().find(|a| a.id == "file:select_file").unwrap();
     assert!(sel
         .description
         .as_ref()
@@ -602,7 +602,7 @@ fn cat28_11_path_open_dir_desc_says_navigate() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&path_info);
-    let od = actions.iter().find(|a| a.id == "open_directory").unwrap();
+    let od = actions.iter().find(|a| a.id == "file:open_directory").unwrap();
     assert!(od
         .description
         .as_ref()
@@ -842,7 +842,7 @@ fn cat28_16_chat_copy_response_absent_when_no_response() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    assert!(!actions.iter().any(|a| a.id == "copy_response"));
+    assert!(!actions.iter().any(|a| a.id == "chat:copy_response"));
 }
 
 // =============================================================================

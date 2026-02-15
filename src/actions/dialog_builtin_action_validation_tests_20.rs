@@ -155,7 +155,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_path_context_actions(&path_info);
-        assert_eq!(actions[0].id, "open_directory");
+        assert_eq!(actions[0].id, "file:open_directory");
     }
 
     #[test]
@@ -166,7 +166,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&path_info);
-        assert_eq!(actions[0].id, "select_file");
+        assert_eq!(actions[0].id, "file:select_file");
     }
 
     #[test]
@@ -309,7 +309,7 @@ mod tests {
     #[test]
     fn cat05_submit_has_shortcut_enter() {
         let actions = get_ai_command_bar_actions();
-        let s = actions.iter().find(|a| a.id == "submit").unwrap();
+        let s = actions.iter().find(|a| a.id == "chat:submit").unwrap();
         assert_eq!(s.shortcut.as_ref().unwrap(), "↵");
     }
 
@@ -340,7 +340,7 @@ mod tests {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "new_note"));
+        assert!(actions.iter().any(|a| a.id == "notes:new_note"));
     }
 
     #[test]
@@ -351,7 +351,7 @@ mod tests {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "new_note"));
+        assert!(actions.iter().any(|a| a.id == "notes:new_note"));
     }
 
     #[test]
@@ -373,7 +373,7 @@ mod tests {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        let nn = actions.iter().find(|a| a.id == "new_note").unwrap();
+        let nn = actions.iter().find(|a| a.id == "notes:new_note").unwrap();
         assert_eq!(nn.shortcut.as_ref().unwrap(), "⌘N");
     }
 
@@ -1266,7 +1266,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_file_context_actions(&file_info);
-        assert!(!actions.iter().any(|a| a.id == "quick_look"));
+        assert!(!actions.iter().any(|a| a.id == "file:quick_look"));
     }
 
     #[cfg(target_os = "macos")]
@@ -1279,7 +1279,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_file_context_actions(&file_info);
-        assert!(actions.iter().any(|a| a.id == "quick_look"));
+        assert!(actions.iter().any(|a| a.id == "file:quick_look"));
     }
 
     #[cfg(target_os = "macos")]
@@ -1292,7 +1292,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_file_context_actions(&file_info);
-        assert!(actions.iter().any(|a| a.id == "open_with"));
+        assert!(actions.iter().any(|a| a.id == "file:open_with"));
     }
 
     #[cfg(target_os = "macos")]
@@ -1305,7 +1305,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_file_context_actions(&file_info);
-        assert!(actions.iter().any(|a| a.id == "show_info"));
+        assert!(actions.iter().any(|a| a.id == "file:show_info"));
     }
 
     // =========================================================================
@@ -1434,7 +1434,7 @@ mod tests {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        let nn = actions.iter().find(|a| a.id == "new_note").unwrap();
+        let nn = actions.iter().find(|a| a.id == "notes:new_note").unwrap();
         assert_eq!(nn.section.as_ref().unwrap(), "Notes");
     }
 
@@ -1493,14 +1493,14 @@ mod tests {
     #[test]
     fn cat26_copy_response_icon_copy() {
         let actions = get_ai_command_bar_actions();
-        let a = actions.iter().find(|a| a.id == "copy_response").unwrap();
+        let a = actions.iter().find(|a| a.id == "chat:copy_response").unwrap();
         assert_eq!(a.icon, Some(IconName::Copy));
     }
 
     #[test]
     fn cat26_submit_icon_arrow_up() {
         let actions = get_ai_command_bar_actions();
-        let a = actions.iter().find(|a| a.id == "submit").unwrap();
+        let a = actions.iter().find(|a| a.id == "chat:submit").unwrap();
         assert_eq!(a.icon, Some(IconName::ArrowUp));
     }
 

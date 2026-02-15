@@ -50,7 +50,7 @@ fn batch24_agent_has_reveal_in_finder() {
     script.is_agent = true;
     script.is_script = false;
     let actions = get_script_context_actions(&script);
-    assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
+    assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
 }
 
 // ============================================================
@@ -73,7 +73,7 @@ fn batch24_agent_reveal_desc_mentions_agent() {
     script.is_agent = true;
     script.is_script = false;
     let actions = get_script_context_actions(&script);
-    let reveal = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
+    let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
     assert!(reveal.description.as_ref().unwrap().contains("agent"));
 }
 
@@ -83,7 +83,7 @@ fn batch24_agent_copy_path_desc_mentions_agent() {
     script.is_agent = true;
     script.is_script = false;
     let actions = get_script_context_actions(&script);
-    let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
+    let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
     assert!(cp.description.as_ref().unwrap().contains("agent"));
 }
 
@@ -157,7 +157,7 @@ fn batch24_chat_response_only() {
     };
     let actions = get_chat_context_actions(&info);
     assert_eq!(actions.len(), 2);
-    assert!(actions.iter().any(|a| a.id == "copy_response"));
+    assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
     assert!(!actions.iter().any(|a| a.id == "clear_conversation"));
 }
 
@@ -171,7 +171,7 @@ fn batch24_chat_messages_only() {
     };
     let actions = get_chat_context_actions(&info);
     assert_eq!(actions.len(), 2);
-    assert!(!actions.iter().any(|a| a.id == "copy_response"));
+    assert!(!actions.iter().any(|a| a.id == "chat:copy_response"));
     assert!(actions.iter().any(|a| a.id == "clear_conversation"));
 }
 
@@ -185,7 +185,7 @@ fn batch24_chat_both_flags() {
     };
     let actions = get_chat_context_actions(&info);
     assert_eq!(actions.len(), 3);
-    assert!(actions.iter().any(|a| a.id == "copy_response"));
+    assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
     assert!(actions.iter().any(|a| a.id == "clear_conversation"));
 }
 
@@ -404,7 +404,7 @@ fn batch24_clipboard_image_no_dimensions_has_paste() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_paste"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_paste"));
 }
 
 // ============================================================
@@ -431,7 +431,7 @@ fn batch24_notes_trash_has_new_note() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "new_note"));
+    assert!(actions.iter().any(|a| a.id == "notes:new_note"));
 }
 
 #[test]
@@ -522,7 +522,7 @@ fn batch24_notes_new_note_icon_plus() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    let new_note = actions.iter().find(|a| a.id == "new_note").unwrap();
+    let new_note = actions.iter().find(|a| a.id == "notes:new_note").unwrap();
     assert_eq!(new_note.icon, Some(IconName::Plus));
 }
 
@@ -912,13 +912,13 @@ fn batch24_path_dir_action_ids_ordered() {
     assert_eq!(
         ids,
         vec![
-            "open_directory",
-            "copy_path",
-            "open_in_finder",
-            "open_in_editor",
-            "open_in_terminal",
-            "copy_filename",
-            "move_to_trash",
+            "file:open_directory",
+            "file:copy_path",
+            "file:open_in_finder",
+            "file:open_in_editor",
+            "file:open_in_terminal",
+            "file:copy_filename",
+            "file:move_to_trash",
         ]
     );
 }
@@ -931,13 +931,13 @@ fn batch24_path_file_action_ids_ordered() {
     assert_eq!(
         ids,
         vec![
-            "select_file",
-            "copy_path",
-            "open_in_finder",
-            "open_in_editor",
-            "open_in_terminal",
-            "copy_filename",
-            "move_to_trash",
+            "file:select_file",
+            "file:copy_path",
+            "file:open_in_finder",
+            "file:open_in_editor",
+            "file:open_in_terminal",
+            "file:copy_filename",
+            "file:move_to_trash",
         ]
     );
 }
@@ -958,7 +958,7 @@ fn batch24_path_always_7_actions() {
 fn batch24_path_copy_path_shortcut() {
     let p = PathInfo::new("f", "/f", false);
     let actions = get_path_context_actions(&p);
-    let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
+    let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
     assert_eq!(cp.shortcut.as_ref().unwrap(), "⌘⇧C");
 }
 
@@ -966,7 +966,7 @@ fn batch24_path_copy_path_shortcut() {
 fn batch24_path_open_in_finder_shortcut() {
     let p = PathInfo::new("f", "/f", false);
     let actions = get_path_context_actions(&p);
-    let f = actions.iter().find(|a| a.id == "open_in_finder").unwrap();
+    let f = actions.iter().find(|a| a.id == "file:open_in_finder").unwrap();
     assert_eq!(f.shortcut.as_ref().unwrap(), "⌘⇧F");
 }
 
@@ -974,7 +974,7 @@ fn batch24_path_open_in_finder_shortcut() {
 fn batch24_path_open_in_terminal_shortcut() {
     let p = PathInfo::new("f", "/f", false);
     let actions = get_path_context_actions(&p);
-    let t = actions.iter().find(|a| a.id == "open_in_terminal").unwrap();
+    let t = actions.iter().find(|a| a.id == "file:open_in_terminal").unwrap();
     assert_eq!(t.shortcut.as_ref().unwrap(), "⌘T");
 }
 
@@ -982,7 +982,7 @@ fn batch24_path_open_in_terminal_shortcut() {
 fn batch24_path_copy_filename_no_shortcut() {
     let p = PathInfo::new("f", "/f", false);
     let actions = get_path_context_actions(&p);
-    let cf = actions.iter().find(|a| a.id == "copy_filename").unwrap();
+    let cf = actions.iter().find(|a| a.id == "file:copy_filename").unwrap();
     assert!(cf.shortcut.is_none());
 }
 
@@ -990,7 +990,7 @@ fn batch24_path_copy_filename_no_shortcut() {
 fn batch24_path_move_to_trash_shortcut() {
     let p = PathInfo::new("f", "/f", false);
     let actions = get_path_context_actions(&p);
-    let trash = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+    let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
     assert_eq!(trash.shortcut.as_ref().unwrap(), "⌘⌫");
 }
 
