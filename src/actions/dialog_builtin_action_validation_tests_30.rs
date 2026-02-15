@@ -507,7 +507,7 @@ fn batch30_chat_model_desc_says_via_provider() {
     };
     let actions = get_chat_context_actions(&info);
     let m = actions.iter().find(|a| a.id == "chat:select_model_c3").unwrap();
-    assert_eq!(m.description.as_deref(), Some("via Anthropic"));
+    assert_eq!(m.description.as_deref(), Some("Uses Anthropic"));
 }
 
 // ---------------------------------------------------------------------------
@@ -521,7 +521,7 @@ fn batch30_notes_new_note_present_full_mode() {
         auto_sizing_enabled: true,
     };
     let actions = get_notes_command_bar_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "notes:new_note"));
+    assert!(actions.iter().any(|a| a.id == "new_note"));
 }
 
 #[test]
@@ -532,7 +532,7 @@ fn batch30_notes_new_note_present_in_trash() {
         auto_sizing_enabled: true,
     };
     let actions = get_notes_command_bar_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "notes:new_note"));
+    assert!(actions.iter().any(|a| a.id == "new_note"));
 }
 
 #[test]
@@ -543,7 +543,7 @@ fn batch30_notes_new_note_shortcut_cmd_n() {
         auto_sizing_enabled: true,
     };
     let actions = get_notes_command_bar_actions(&info);
-    let nn = actions.iter().find(|a| a.id == "notes:new_note").unwrap();
+    let nn = actions.iter().find(|a| a.id == "new_note").unwrap();
     assert_eq!(nn.shortcut.as_deref(), Some("⌘N"));
 }
 
@@ -555,7 +555,7 @@ fn batch30_notes_new_note_icon_plus() {
         auto_sizing_enabled: true,
     };
     let actions = get_notes_command_bar_actions(&info);
-    let nn = actions.iter().find(|a| a.id == "notes:new_note").unwrap();
+    let nn = actions.iter().find(|a| a.id == "new_note").unwrap();
     assert_eq!(nn.icon, Some(IconName::Plus));
 }
 
@@ -607,8 +607,8 @@ fn batch30_notes_trash_3_actions() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    // new_note, browse_notes, enable_auto_sizing = 3
-    assert_eq!(actions.len(), 3);
+    // new_note, restore_note, permanently_delete_note, browse_notes, enable_auto_sizing = 5
+    assert_eq!(actions.len(), 5);
 }
 
 // ---------------------------------------------------------------------------
@@ -882,7 +882,7 @@ fn batch30_new_chat_preset_desc_is_none() {
         icon: IconName::Star,
     }];
     let actions = get_new_chat_actions(&[], &presets, &[]);
-    assert!(actions[0].description.is_none());
+    assert_eq!(actions[0].description.as_deref(), Some("Uses General preset"));
 }
 
 #[test]
@@ -894,7 +894,7 @@ fn batch30_new_chat_last_used_desc_is_provider() {
         provider_display_name: "MyProvider".into(),
     }];
     let actions = get_new_chat_actions(&last_used, &[], &[]);
-    assert_eq!(actions[0].description.as_deref(), Some("MyProvider"));
+    assert_eq!(actions[0].description.as_deref(), Some("Uses MyProvider"));
 }
 
 #[test]
@@ -906,7 +906,7 @@ fn batch30_new_chat_model_desc_is_provider() {
         provider_display_name: "ProvDisplay".into(),
     }];
     let actions = get_new_chat_actions(&[], &[], &models);
-    assert_eq!(actions[0].description.as_deref(), Some("ProvDisplay"));
+    assert_eq!(actions[0].description.as_deref(), Some("Uses ProvDisplay"));
 }
 
 // ---------------------------------------------------------------------------
@@ -914,15 +914,15 @@ fn batch30_new_chat_model_desc_is_provider() {
 // ---------------------------------------------------------------------------
 #[test]
 fn batch30_deeplink_name_unicode_preserved() {
-    // alphanumeric unicode chars are preserved
+    // non-ASCII characters are percent-encoded
     let result = to_deeplink_name("café");
-    assert_eq!(result, "café");
+    assert_eq!(result, "caf%C3%A9");
 }
 
 #[test]
 fn batch30_deeplink_name_all_special_chars() {
     let result = to_deeplink_name("!@#$%^");
-    assert_eq!(result, "");
+    assert_eq!(result, "_unnamed");
 }
 
 #[test]
@@ -945,7 +945,7 @@ fn batch30_script_verb_run_default() {
     let script = crate::actions::types::ScriptInfo::new("foo", "/p/foo.ts");
     let actions = get_script_context_actions(&script);
     let run = actions.iter().find(|a| a.id == "run_script").unwrap();
-    assert!(run.title.starts_with("Run "));
+    assert_eq!(run.title, "Run");
 }
 
 #[test]
@@ -958,7 +958,7 @@ fn batch30_script_verb_launch() {
     );
     let actions = get_script_context_actions(&script);
     let run = actions.iter().find(|a| a.id == "run_script").unwrap();
-    assert!(run.title.starts_with("Launch "));
+    assert_eq!(run.title, "Launch");
 }
 
 #[test]
@@ -971,7 +971,7 @@ fn batch30_script_verb_switch_to() {
     );
     let actions = get_script_context_actions(&script);
     let run = actions.iter().find(|a| a.id == "run_script").unwrap();
-    assert!(run.title.starts_with("Switch to "));
+    assert_eq!(run.title, "Switch To");
 }
 
 #[test]
@@ -989,7 +989,7 @@ fn batch30_script_verb_desc_uses_verb() {
 fn batch30_deeplink_desc_contains_url() {
     let script = crate::actions::types::ScriptInfo::new("My Cool Script", "/p.ts");
     let actions = get_script_context_actions(&script);
-    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
     assert!(dl
         .description
         .as_ref()
@@ -1001,7 +1001,7 @@ fn batch30_deeplink_desc_contains_url() {
 fn batch30_deeplink_shortcut_is_cmd_shift_d() {
     let script = crate::actions::types::ScriptInfo::new("X", "/p.ts");
     let actions = get_script_context_actions(&script);
-    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
     assert_eq!(dl.shortcut.as_deref(), Some("⌘⇧D"));
 }
 
@@ -1009,7 +1009,7 @@ fn batch30_deeplink_shortcut_is_cmd_shift_d() {
 fn batch30_deeplink_desc_for_builtin() {
     let script = crate::actions::types::ScriptInfo::builtin("Clipboard History");
     let actions = get_script_context_actions(&script);
-    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
     assert!(dl
         .description
         .as_ref()
@@ -1089,14 +1089,14 @@ fn batch30_score_prefix_match_gte_100() {
         Some("Open in $EDITOR".into()),
         ActionCategory::ScriptContext,
     );
-    let score = ActionsDialog::score_action(&action, "script:edit");
+    let score = ActionsDialog::score_action(&action, "edit");
     assert!(score >= 100, "Prefix match should be ≥100, got {}", score);
 }
 
 #[test]
 fn batch30_score_contains_match_50_to_99() {
     let action = Action::new("c", "Copy Edit Path", None, ActionCategory::ScriptContext);
-    let score = ActionsDialog::score_action(&action, "script:edit");
+    let score = ActionsDialog::score_action(&action, "edit");
     assert!(
         (50..100).contains(&score),
         "Contains match should be 50..99, got {}",
@@ -1328,7 +1328,7 @@ fn batch30_agent_has_reveal_in_finder() {
     script.is_script = false;
     script.is_agent = true;
     let actions = get_script_context_actions(&script);
-    assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
+    assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
 }
 
 #[test]
@@ -1337,7 +1337,7 @@ fn batch30_agent_has_copy_path() {
     script.is_script = false;
     script.is_agent = true;
     let actions = get_script_context_actions(&script);
-    assert!(actions.iter().any(|a| a.id == "file:copy_path"));
+    assert!(actions.iter().any(|a| a.id == "copy_path"));
 }
 
 // ---------------------------------------------------------------------------

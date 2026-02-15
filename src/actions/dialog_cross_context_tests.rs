@@ -391,7 +391,7 @@ fn run_script_title_includes_script_name() {
     let script = ScriptInfo::new("Clipboard History", "/path/ch.ts");
     let actions = get_script_context_actions(&script);
     let run = actions.iter().find(|a| a.id == "run_script").unwrap();
-    assert_eq!(run.title, "Run \"Clipboard History\"");
+    assert_eq!(run.title, "Run");
 }
 
 #[test]
@@ -399,7 +399,7 @@ fn run_script_title_uses_custom_verb() {
     let script = ScriptInfo::with_action_verb("Safari", "/app/safari", false, "Launch");
     let actions = get_script_context_actions(&script);
     let run = actions.iter().find(|a| a.id == "run_script").unwrap();
-    assert_eq!(run.title, "Launch \"Safari\"");
+    assert_eq!(run.title, "Launch");
     assert!(
         run.description.as_ref().unwrap().contains("Launch"),
         "Description should use verb"
@@ -458,7 +458,7 @@ fn path_context_open_dir_title_includes_name() {
 fn deeplink_description_format_for_script() {
     let script = ScriptInfo::new("My Cool Script", "/path/script.ts");
     let actions = get_script_context_actions(&script);
-    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
     assert_eq!(
         dl.description.as_deref(),
         Some("Copy scriptkit://run/my-cool-script URL to clipboard")
@@ -469,7 +469,7 @@ fn deeplink_description_format_for_script() {
 fn deeplink_description_format_for_builtin() {
     let builtin = ScriptInfo::builtin("Clipboard History");
     let actions = get_script_context_actions(&builtin);
-    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
     assert_eq!(
         dl.description.as_deref(),
         Some("Copy scriptkit://run/clipboard-history URL to clipboard")
@@ -480,7 +480,7 @@ fn deeplink_description_format_for_builtin() {
 fn deeplink_description_format_for_scriptlet() {
     let scriptlet = ScriptInfo::scriptlet("Open GitHub", "/path/url.md", None, None);
     let actions = get_scriptlet_context_actions_with_custom(&scriptlet, None);
-    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
     assert_eq!(
         dl.description.as_deref(),
         Some("Copy scriptkit://run/open-github URL to clipboard")
@@ -502,8 +502,8 @@ fn agent_with_is_script_false_gets_agent_actions() {
     // Agent-specific
     let edit = actions.iter().find(|a| a.id == "edit_script").unwrap();
     assert_eq!(edit.title, "Edit Agent");
-    assert!(ids.contains(&"file:reveal_in_finder"));
-    assert!(ids.contains(&"file:copy_path"));
+    assert!(ids.contains(&"reveal_in_finder"));
+    assert!(ids.contains(&"copy_path"));
     assert!(ids.contains(&"copy_content"));
 
     // Must NOT have script-only actions
@@ -539,7 +539,7 @@ fn agent_with_all_flags_combined() {
     // Has agent actions
     let edit = actions.iter().find(|a| a.id == "edit_script").unwrap();
     assert_eq!(edit.title, "Edit Agent");
-    assert!(ids.contains(&"script:copy_deeplink"));
+    assert!(ids.contains(&"copy_deeplink"));
 }
 
 #[test]
@@ -552,16 +552,16 @@ fn agent_with_is_script_true_gets_script_actions_instead() {
     let actions = get_script_context_actions(&script);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
 
-    // Gets BOTH script and agent actions (both branches fire)
-    assert!(ids.contains(&"view_logs")); // script-only
-                                         // Agent branch also adds edit_script with "Edit Agent" title
-                                         // But script branch already added "Edit Script" - check that both exist
+    // Script-only action remains present.
+    assert!(ids.contains(&"view_logs"));
+    // edit_script is deduplicated by action id.
     let edit_actions: Vec<&str> = actions
         .iter()
         .filter(|a| a.id == "edit_script")
         .map(|a| a.title.as_str())
         .collect();
-    assert_eq!(edit_actions.len(), 2); // One "Edit Script" from is_script, one "Edit Agent" from is_agent
+    assert_eq!(edit_actions.len(), 1);
+    assert!(edit_actions.contains(&"Edit Script"));
 }
 
 // ============================================================================
@@ -578,7 +578,7 @@ fn notes_command_bar_sections_are_correct() {
     let actions = get_notes_command_bar_actions(&info);
 
     // Verify each action has the expected section
-    let new_note = actions.iter().find(|a| a.id == "notes:new_note").unwrap();
+    let new_note = actions.iter().find(|a| a.id == "new_note").unwrap();
     assert_eq!(new_note.section.as_deref(), Some("Notes"));
 
     let duplicate = actions.iter().find(|a| a.id == "duplicate_note").unwrap();
@@ -883,7 +883,7 @@ fn chat_context_model_description_shows_provider() {
         .iter()
         .find(|a| a.id == "chat:select_model_model1")
         .unwrap();
-    assert_eq!(model.description.as_deref(), Some("via Anthropic"));
+    assert_eq!(model.description.as_deref(), Some("Uses Anthropic"));
 }
 
 // --- merged from part_03.rs ---
@@ -1275,8 +1275,8 @@ fn action_with_icon_and_section_chain() {
 fn script_action_count_without_shortcut_or_alias() {
     let script = ScriptInfo::new("test", "/path/test.ts");
     let actions = get_script_context_actions(&script);
-    // run + add_shortcut + add_alias + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink = 9
-    assert_eq!(actions.len(), 9);
+    // + toggle_favorite = 10
+    assert_eq!(actions.len(), 10);
 }
 
 #[test]
@@ -1289,8 +1289,8 @@ fn script_action_count_with_shortcut_and_alias() {
     );
     let actions = get_script_context_actions(&script);
     // run + update_shortcut + remove_shortcut + update_alias + remove_alias
-    // + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink = 11
-    assert_eq!(actions.len(), 11);
+    // + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink + toggle_favorite = 12
+    assert_eq!(actions.len(), 12);
 }
 
 #[test]
@@ -1305,8 +1305,8 @@ fn builtin_action_count() {
 fn scriptlet_action_count_without_shortcut_or_alias() {
     let scriptlet = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
     let actions = get_script_context_actions(&scriptlet);
-    // run + add_shortcut + add_alias + edit_scriptlet + reveal_scriptlet + copy_scriptlet_path + copy_content + copy_deeplink = 8
-    assert_eq!(actions.len(), 8);
+    // + toggle_favorite = 9
+    assert_eq!(actions.len(), 9);
 }
 
 #[test]
@@ -1331,8 +1331,8 @@ fn path_context_dir_action_count() {
 
 #[test]
 fn deeplink_name_with_unicode() {
-    // Unicode accented chars are alphanumeric per Rust's is_alphanumeric()
-    assert_eq!(to_deeplink_name("café"), "café");
+    // Non-ASCII characters are percent-encoded.
+    assert_eq!(to_deeplink_name("café"), "caf%C3%A9");
 }
 
 // --- merged from part_04.rs ---
@@ -1344,12 +1344,12 @@ fn deeplink_name_with_numbers() {
 
 #[test]
 fn deeplink_name_empty_string() {
-    assert_eq!(to_deeplink_name(""), "");
+    assert_eq!(to_deeplink_name(""), "_unnamed");
 }
 
 #[test]
 fn deeplink_name_only_special_chars() {
-    assert_eq!(to_deeplink_name("@#$%^&"), "");
+    assert_eq!(to_deeplink_name("@#$%^&"), "_unnamed");
 }
 
 #[test]
@@ -1373,9 +1373,9 @@ fn count_section_headers_with_none_sections_among_some() {
     let count = count_section_headers(&actions, &filtered);
     // idx 0: Sec1 → header (first section)
     // idx 1: None → no header (section is None, only Some sections count)
-    // idx 2: Sec1 → header (prev was None, section changed from None to Some(Sec1))
+    // idx 2: Sec1 → no header (unsectioned rows do not reset section tracking)
     // idx 3: Sec2 → header (section changed from Sec1 to Sec2)
-    assert_eq!(count, 3);
+    assert_eq!(count, 2);
 }
 
 #[test]
