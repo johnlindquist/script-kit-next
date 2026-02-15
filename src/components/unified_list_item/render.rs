@@ -5,6 +5,7 @@
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;
+use gpui_component::tooltip::Tooltip;
 
 use crate::components::button::TRANSPARENT;
 use crate::designs::icon_variations::{icon_name_from_str, IconName};
@@ -360,7 +361,7 @@ fn render_text_content(
     base_color: Rgba,
     highlight_color: Rgba,
     is_title: bool,
-) -> Div {
+) -> AnyElement {
     let font_weight = if is_title {
         FontWeight::MEDIUM
     } else {
@@ -369,24 +370,14 @@ fn render_text_content(
     let line_height = if is_title { 18.0 } else { 14.0 };
 
     match content {
-        TextContent::Plain(text) => div()
-            .when(is_title, |d| d.text_sm())
-            .when(!is_title, |d| d.text_xs())
-            .font_weight(font_weight)
-            .text_color(base_color)
-            .overflow_hidden()
-            .text_ellipsis()
-            .whitespace_nowrap()
-            .line_height(px(line_height))
-            .child(text.clone()),
-
-        TextContent::Highlighted { .. } => {
-            let spans = render_highlight_fragments(
-                content.highlight_fragments().unwrap_or_default(),
-                base_color,
-                highlight_color,
-            );
+        TextContent::Plain(text) => {
+            let full_label = text.clone();
             div()
+                .id(ElementId::Name(SharedString::from(if is_title {
+                    "unified-list-item-title-ellipsis"
+                } else {
+                    "unified-list-item-subtitle-ellipsis"
+                })))
                 .when(is_title, |d| d.text_sm())
                 .when(!is_title, |d| d.text_xs())
                 .font_weight(font_weight)
@@ -395,12 +386,40 @@ fn render_text_content(
                 .text_ellipsis()
                 .whitespace_nowrap()
                 .line_height(px(line_height))
+                .tooltip(move |window, cx| Tooltip::new(full_label.clone()).build(window, cx))
+                .child(text.clone())
+                .into_any_element()
+        }
+
+        TextContent::Highlighted { text, .. } => {
+            let full_label = text.clone();
+            let spans = render_highlight_fragments(
+                content.highlight_fragments().unwrap_or_default(),
+                base_color,
+                highlight_color,
+            );
+            div()
+                .id(ElementId::Name(SharedString::from(if is_title {
+                    "unified-list-item-title-ellipsis"
+                } else {
+                    "unified-list-item-subtitle-ellipsis"
+                })))
+                .when(is_title, |d| d.text_sm())
+                .when(!is_title, |d| d.text_xs())
+                .font_weight(font_weight)
+                .text_color(base_color)
+                .overflow_hidden()
+                .text_ellipsis()
+                .whitespace_nowrap()
+                .line_height(px(line_height))
+                .tooltip(move |window, cx| Tooltip::new(full_label.clone()).build(window, cx))
                 .flex()
                 .flex_row()
                 .children(spans)
+                .into_any_element()
         }
 
-        TextContent::Custom(_) => div(),
+        TextContent::Custom(_) => div().into_any_element(),
     }
 }
 

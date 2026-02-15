@@ -26,6 +26,7 @@
 #![allow(dead_code)]
 
 use gpui::*;
+use gpui_component::tooltip::Tooltip;
 use std::rc::Rc;
 
 use crate::designs::DesignColors;
@@ -451,14 +452,21 @@ impl RenderOnce for PromptFooter {
         // Info label (e.g., "typescript", "5 items") - shown before buttons
         if let Some(ref info) = self.config.info_label {
             if should_render_footer_info_label(info) {
+                let info_text = info.clone();
                 right_side = right_side.child(
                     div()
+                        .id(ElementId::Name(SharedString::from(
+                            "prompt-footer-info-ellipsis",
+                        )))
                         .max_w(px(PROMPT_FOOTER_INFO_TEXT_MAX_WIDTH_PX))
                         .overflow_hidden()
                         .text_ellipsis()
                         .whitespace_nowrap()
                         .text_size(px(info_font_size))
                         .text_color(colors.text_muted.to_rgb())
+                        .tooltip(move |window, cx| {
+                            Tooltip::new(info_text.clone()).build(window, cx)
+                        })
                         .child(info.clone()),
                 );
             }
@@ -540,14 +548,19 @@ impl RenderOnce for PromptFooter {
 
         // Helper text (e.g., "Tab 1 of 2 · Tab to continue, Esc to exit")
         if let Some(ref helper) = self.config.helper_text {
+            let helper_text = helper.clone();
             left_side = left_side.child(
                 div()
+                    .id(ElementId::Name(SharedString::from(
+                        "prompt-footer-helper-ellipsis",
+                    )))
                     .max_w(px(PROMPT_FOOTER_HELPER_TEXT_MAX_WIDTH_PX))
                     .overflow_hidden()
                     .text_ellipsis()
                     .whitespace_nowrap()
                     .text_size(px(helper_font_size))
                     .text_color(colors.accent.to_rgb())
+                    .tooltip(move |window, cx| Tooltip::new(helper_text.clone()).build(window, cx))
                     .child(helper.clone()),
             );
         }

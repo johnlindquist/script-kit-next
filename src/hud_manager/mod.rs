@@ -13,9 +13,10 @@ use crate::components::button::{Button, ButtonColors, ButtonVariant};
 use crate::logging;
 use crate::theme;
 use gpui::{
-    div, point, prelude::*, px, rgb, size, App, Context, Pixels, Render, Timer, Window,
-    WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowOptions,
+    div, point, prelude::*, px, rgb, size, App, Context, ElementId, Pixels, Render, SharedString,
+    Timer, Window, WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowOptions,
 };
+use gpui_component::tooltip::Tooltip;
 use parking_lot::Mutex;
 use std::collections::VecDeque;
 use std::path::PathBuf;
@@ -253,6 +254,7 @@ impl Render for HudView {
 
         // Extract colors for use in closures (Copy trait)
         let colors = self.colors;
+        let hud_label_text = self.text.clone();
 
         // HUD pill styling: matches main window theme, minimal and clean
         // Similar to Raycast's HUD - simple, elegant, non-intrusive
@@ -272,10 +274,16 @@ impl Render for HudView {
             // Text styling - system font, smaller size, theme text color, centered
             .child(
                 div()
+                    .id(ElementId::Name(SharedString::from(
+                        "hud-pill-label-ellipsis",
+                    )))
                     .text_sm()
                     .text_color(rgb(colors.text_primary))
                     .overflow_hidden()
                     .text_ellipsis()
+                    .tooltip(move |window, cx| {
+                        Tooltip::new(hud_label_text.clone()).build(window, cx)
+                    })
                     .child(self.text.clone()),
             )
             // Action button (only if action is present)
