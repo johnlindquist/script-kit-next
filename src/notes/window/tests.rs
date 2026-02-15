@@ -39,6 +39,18 @@ fn formatting_replacement_inserts_and_positions_cursor() {
 }
 
 #[test]
+fn test_format_search_match_counter_uses_selected_position_when_available() {
+    let counter = NotesApp::format_search_match_counter(Some((3, 8)), 8);
+    assert_eq!(counter, "3/8");
+}
+
+#[test]
+fn test_format_search_match_counter_uses_zero_when_selection_missing() {
+    let counter = NotesApp::format_search_match_counter(None, 6);
+    assert_eq!(counter, "0/6");
+}
+
+#[test]
 fn test_resolve_selected_note_returns_none_when_selection_is_missing() {
     let notes = vec![Note::with_content("one"), Note::with_content("two")];
 
