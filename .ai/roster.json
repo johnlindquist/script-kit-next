@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-02-15T19:06:24.403Z",
+  "updatedAt": "2026-02-15T19:27:11.394Z",
   "agents": {
     "codex-actions-consistency": {
       "id": "codex-actions-consistency",
@@ -7095,6 +7095,70 @@
       "lastSeenAt": "2026-02-15T19:06:24.403Z",
       "host": "johns.macbook.pro.lan",
       "startSha": "5bc81ab70c683fc404857d4f88f2ebad801f8258",
+      "notes": "[policy] missing agent_report json"
+    },
+    "codex-ai-chat-layout": {
+      "id": "codex-ai-chat-layout",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "gpt-5.3-codex",
+      "task": "Clean up the AI chat layout in src/prompts/ai_chat.rs and any related rendering files. The task is 'ai chat layout clean up' which means: remove unnecessary spacing, fix alignment issues, ensure consistent padding/margins, clean up any redundant layout wrappers, and make the chat UI look polished. Use theme.colors.* for all colors (never hardcode rgb values). Ensure vibrancy shows through (no opaque backgrounds on prompts). After changes, run: cargo check && cargo clippy --all-targets -- -D warnings && cargo test. Then commit with a descriptive message.",
+      "scope": "src/prompts/ai_chat*.rs,src/prompts/mod.rs,src/render_prompts/*.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-02-15T19:08:14.264Z",
+      "lastSeenAt": "2026-02-15T19:18:14.324Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "100661aaf769d86d3db6eb46293d33f4a1d47831",
+      "notes": "[auto] timed out after 600s — task too broad"
+    },
+    "codex-chat-turns-layout": {
+      "id": "codex-chat-turns-layout",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "gpt-5.3-codex",
+      "task": "Clean up the AI chat message/turns layout in src/prompts/chat/render_turns.rs. Focus on: (1) Remove unnecessary spacing or redundant layout wrappers around chat messages/turns, (2) Ensure consistent padding and margins between messages, (3) Use theme.colors.* for all colors (never hardcode rgb values), (4) Ensure vibrancy shows through (no opaque backgrounds). Keep changes minimal and focused on layout cleanliness. After changes run: cargo check && cargo clippy --all-targets -- -D warnings && cargo test. Commit with descriptive message.",
+      "scope": "src/prompts/chat/render_turns.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-02-15T19:18:29.410Z",
+      "lastSeenAt": "2026-02-15T19:23:43.313Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "d175df1d3a5f66cf5e356925a4e677234fe1f0cb",
+      "notes": "[policy] missing agent_report json"
+    },
+    "codex-chat-input-layout": {
+      "id": "codex-chat-input-layout",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "gpt-5.3-codex",
+      "task": "Clean up the AI chat input area layout in src/prompts/chat/render_input.rs. Focus on: (1) Remove unnecessary spacing or redundant layout wrappers around the input area, (2) Ensure consistent padding and alignment, (3) Use theme.colors.* for all colors (never hardcode rgb values), (4) Ensure vibrancy shows through (no opaque backgrounds). Keep changes minimal and focused on layout cleanliness. After changes run: cargo check && cargo clippy --all-targets -- -D warnings && cargo test. Commit with descriptive message.",
+      "scope": "src/prompts/chat/render_input.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-02-15T19:20:30.268Z",
+      "lastSeenAt": "2026-02-15T19:24:31.259Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "d175df1d3a5f66cf5e356925a4e677234fe1f0cb",
+      "notes": "[policy] missing agent_report json"
+    },
+    "codex-chat-core-layout": {
+      "id": "codex-chat-core-layout",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "gpt-5.3-codex",
+      "task": "Clean up the AI chat core layout in src/prompts/chat/render_core.rs and src/prompts/chat/mod.rs. Focus on: (1) Remove unnecessary spacing or redundant layout wrappers in the main chat container, (2) Ensure consistent padding and margins for the overall chat structure, (3) Use theme.colors.* for all colors (never hardcode rgb values), (4) Ensure vibrancy shows through (no opaque backgrounds on prompts). Keep changes minimal and focused on layout cleanliness. After changes run: cargo check && cargo clippy --all-targets -- -D warnings && cargo test. Commit with descriptive message.",
+      "scope": "src/prompts/chat/render_core.rs,src/prompts/chat/mod.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-02-15T19:22:31.751Z",
+      "lastSeenAt": "2026-02-15T19:27:11.394Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "d175df1d3a5f66cf5e356925a4e677234fe1f0cb",
       "notes": "[policy] missing agent_report json"
     }
   }

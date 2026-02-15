@@ -1,2 +1,1 @@
-- it seems like the first item in the main menu (Clipboard History) sometimes auto-runs when I open the main menu
 - ai chat layout clean up
