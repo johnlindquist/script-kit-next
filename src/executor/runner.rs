@@ -91,7 +91,7 @@ static SDK_EXTRACTED: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock
 
 /// Find an executable, checking common locations that GUI apps might miss
 pub fn find_executable(name: &str) -> Option<PathBuf> {
-    logging::log("EXEC", &format!("Looking for executable: {}", name));
+    info!(category = "EXEC", executable = %name, "Looking for executable");
 
     // Common paths where executables might be installed
     let common_paths = [
@@ -112,14 +112,25 @@ pub fn find_executable(name: &str) -> Option<PathBuf> {
 
     for path in common_paths.iter().flatten() {
         let exe_path = path.join(name);
-        logging::log("EXEC", &format!("  Checking: {}", exe_path.display()));
+        info!(
+            category = "EXEC",
+            executable_path = %exe_path.display(),
+            "Checking executable path"
+        );
         if exe_path.exists() {
-            logging::log("EXEC", &format!("  FOUND: {}", exe_path.display()));
+            info!(
+                category = "EXEC",
+                executable_path = %exe_path.display(),
+                "Found executable"
+            );
             return Some(exe_path);
         }
     }
 
-    logging::log("EXEC", "  NOT FOUND in common paths, will try PATH");
+    info!(
+        category = "EXEC",
+        "Executable not found in common paths, will try PATH"
+    );
     None
 }
 
@@ -144,9 +155,9 @@ fn ensure_sdk_extracted() -> Option<PathBuf> {
 
             // Fallback: write embedded SDK if somehow missing
             // This shouldn't happen in normal operation since setup runs first
-            logging::log(
-                "EXEC",
-                "SDK not found at expected path, extracting embedded SDK",
+            info!(
+                category = "EXEC",
+                "SDK not found at expected path, extracting embedded SDK"
             );
 
             let kit_sdk = home.join(".scriptkit/sdk");
@@ -159,9 +170,10 @@ fn ensure_sdk_extracted() -> Option<PathBuf> {
             std::fs::write(&temp_path, EMBEDDED_SDK).ok()?;
             std::fs::rename(&temp_path, &sdk_path).ok()?;
 
-            logging::log(
-                "EXEC",
-                &format!("Extracted fallback SDK to {}", sdk_path.display()),
+            info!(
+                category = "EXEC",
+                sdk_path = %sdk_path.display(),
+                "Extracted fallback SDK"
             );
             Some(sdk_path)
         })
@@ -170,27 +182,33 @@ fn ensure_sdk_extracted() -> Option<PathBuf> {
 
 /// Find the SDK path, checking standard locations
 pub fn find_sdk_path() -> Option<PathBuf> {
-    logging::log("EXEC", "Looking for SDK...");
+    info!(category = "EXEC", "Looking for SDK");
 
     // 1. Check ~/.scriptkit/sdk/kit-sdk.ts (primary location)
     if let Some(home) = dirs::home_dir() {
         let kit_sdk = home.join(".scriptkit/sdk/kit-sdk.ts");
-        logging::log(
-            "EXEC",
-            &format!("  Checking kit sdk: {}", kit_sdk.display()),
+        info!(
+            category = "EXEC",
+            sdk_path = %kit_sdk.display(),
+            "Checking kit SDK path"
         );
         if kit_sdk.exists() {
-            logging::log("EXEC", &format!("  FOUND SDK (kit): {}", kit_sdk.display()));
+            info!(
+                category = "EXEC",
+                sdk_path = %kit_sdk.display(),
+                "Found SDK in kit directory"
+            );
             return Some(kit_sdk);
         }
     }
 
     // 2. Extract embedded SDK to ~/.scriptkit/sdk/kit-sdk.ts (production)
-    logging::log("EXEC", "  Trying to extract embedded SDK...");
+    info!(category = "EXEC", "Trying to extract embedded SDK");
     if let Some(sdk_path) = ensure_sdk_extracted() {
-        logging::log(
-            "EXEC",
-            &format!("  FOUND SDK (embedded): {}", sdk_path.display()),
+        info!(
+            category = "EXEC",
+            sdk_path = %sdk_path.display(),
+            "Found embedded SDK"
         );
         return Some(sdk_path);
     }
@@ -199,14 +217,16 @@ pub fn find_sdk_path() -> Option<PathBuf> {
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
             let sdk_path = exe_dir.join("kit-sdk.ts");
-            logging::log(
-                "EXEC",
-                &format!("  Checking exe dir: {}", sdk_path.display()),
+            info!(
+                category = "EXEC",
+                sdk_path = %sdk_path.display(),
+                "Checking SDK in executable directory"
             );
             if sdk_path.exists() {
-                logging::log(
-                    "EXEC",
-                    &format!("  FOUND SDK (exe dir): {}", sdk_path.display()),
+                info!(
+                    category = "EXEC",
+                    sdk_path = %sdk_path.display(),
+                    "Found SDK in executable directory"
                 );
                 return Some(sdk_path);
             }
@@ -215,16 +235,21 @@ pub fn find_sdk_path() -> Option<PathBuf> {
 
     // 4. Development fallback - project scripts directory
     let dev_sdk = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/kit-sdk.ts");
-    logging::log(
-        "EXEC",
-        &format!("  Checking dev path: {}", dev_sdk.display()),
+    info!(
+        category = "EXEC",
+        sdk_path = %dev_sdk.display(),
+        "Checking development SDK path"
     );
     if dev_sdk.exists() {
-        logging::log("EXEC", &format!("  FOUND SDK (dev): {}", dev_sdk.display()));
+        info!(
+            category = "EXEC",
+            sdk_path = %dev_sdk.display(),
+            "Found development SDK"
+        );
         return Some(dev_sdk);
     }
 
-    logging::log("EXEC", "  SDK NOT FOUND anywhere!");
+    info!(category = "EXEC", "SDK not found anywhere");
     None
 }
 
@@ -248,12 +273,11 @@ pub struct ProcessHandle {
 
 impl ProcessHandle {
     pub fn new(pid: u32, script_path: String) -> Self {
-        logging::log(
-            "EXEC",
-            &format!(
-                "ProcessHandle created for PID {} (script: {})",
-                pid, script_path
-            ),
+        info!(
+            category = "EXEC",
+            pid,
+            script_path = %script_path,
+            "ProcessHandle created"
         );
 
         // Register with global process manager for tracking
@@ -285,9 +309,10 @@ impl ProcessHandle {
         const POLL_INTERVAL_MS: u64 = 50;
 
         if self.killed {
-            logging::log(
-                "EXEC",
-                &format!("Process {} already killed, skipping", self.pid),
+            info!(
+                category = "EXEC",
+                pid = self.pid,
+                "Process already killed, skipping"
             );
             return;
         }
@@ -301,26 +326,33 @@ impl ProcessHandle {
             let pgid = self.pid;
 
             // Step 1: Send SIGTERM for graceful shutdown
-            logging::log(
-                "EXEC",
-                &format!(
-                    "Sending SIGTERM to process group PGID {} (graceful shutdown)",
-                    pgid
-                ),
+            info!(
+                category = "EXEC",
+                pgid,
+                signal = "SIGTERM",
+                "Sending graceful shutdown signal to process group"
             );
 
             match kill_process_group(pgid, SIGTERM) {
                 Ok(()) => {
-                    logging::log("EXEC", &format!("SIGTERM sent to PGID {}", pgid));
+                    info!(
+                        category = "EXEC",
+                        pgid,
+                        signal = "SIGTERM",
+                        "Signal sent to process group"
+                    );
                 }
                 Err("No such process group") => {
-                    logging::log("EXEC", &format!("Process group {} already exited", pgid));
+                    info!(category = "EXEC", pgid, "Process group already exited");
                     return;
                 }
                 Err(e) => {
-                    logging::log(
-                        "EXEC",
-                        &format!("Failed to send SIGTERM to PGID {}: {}", pgid, e),
+                    info!(
+                        category = "EXEC",
+                        pgid,
+                        signal = "SIGTERM",
+                        error = %e,
+                        "Failed to send signal to process group"
                     );
                     // Continue to try SIGKILL anyway
                 }
@@ -335,9 +367,11 @@ impl ProcessHandle {
                 // CRITICAL: Check if process GROUP is alive, not just the leader PID
                 // This prevents orphan processes when the leader exits but children remain
                 if !process_group_alive(pgid) {
-                    logging::log(
-                        "EXEC",
-                        &format!("Process group {} terminated gracefully after SIGTERM", pgid),
+                    info!(
+                        category = "EXEC",
+                        pgid,
+                        signal = "SIGTERM",
+                        "Process group terminated gracefully"
                     );
                     return;
                 }
@@ -345,38 +379,50 @@ impl ProcessHandle {
             }
 
             // Step 3: Process group didn't exit in time, escalate to SIGKILL
-            logging::log(
-                "EXEC",
-                &format!(
-                    "Process group {} did not exit after {}ms, escalating to SIGKILL",
-                    pgid, TERM_GRACE_MS
-                ),
+            info!(
+                category = "EXEC",
+                pgid,
+                grace_ms = TERM_GRACE_MS,
+                signal = "SIGKILL",
+                "Escalating to force kill after grace period"
             );
 
             match kill_process_group(pgid, SIGKILL) {
                 Ok(()) => {
-                    logging::log(
-                        "EXEC",
-                        &format!("Successfully killed process group {} with SIGKILL", pgid),
+                    info!(
+                        category = "EXEC",
+                        pgid,
+                        signal = "SIGKILL",
+                        "Process group killed"
                     );
                 }
                 Err("No such process group") => {
-                    logging::log(
-                        "EXEC",
-                        &format!("Process group {} exited just before SIGKILL", pgid),
+                    info!(
+                        category = "EXEC",
+                        pgid,
+                        signal = "SIGKILL",
+                        "Process group exited before force kill"
                     );
                 }
                 Err(e) => {
-                    logging::log("EXEC", &format!("SIGKILL failed for PGID {}: {}", pgid, e));
+                    info!(
+                        category = "EXEC",
+                        pgid,
+                        signal = "SIGKILL",
+                        error = %e,
+                        "Force kill failed"
+                    );
                 }
             }
         }
 
         #[cfg(not(unix))]
         {
-            logging::log(
-                "EXEC",
-                &format!("Non-Unix platform: process {} marked as killed", self.pid),
+            info!(
+                category = "EXEC",
+                pid = self.pid,
+                platform = "non_unix",
+                "Process marked as killed"
             );
             // On non-Unix platforms, we rely on the Child::kill() method being called separately
         }
@@ -395,10 +441,7 @@ impl ProcessHandle {
 
 impl Drop for ProcessHandle {
     fn drop(&mut self) {
-        logging::log(
-            "EXEC",
-            &format!("ProcessHandle dropping for PID {}", self.pid),
-        );
+        info!(category = "EXEC", pid = self.pid, "Dropping process handle");
 
         // Unregister from global process manager BEFORE killing
         PROCESS_MANAGER.unregister_process(self.pid);
@@ -435,12 +478,10 @@ impl ScriptSession {
     /// Split the session into separate read/write components
     /// This allows using separate threads for reading and writing
     pub fn split(self) -> SplitSession {
-        logging::log(
-            "EXEC",
-            &format!(
-                "Splitting ScriptSession for PID {}",
-                self.process_handle.pid
-            ),
+        info!(
+            category = "EXEC",
+            pid = self.process_handle.pid,
+            "Splitting script session"
         );
         SplitSession {
             stdin: self.stdin,
@@ -465,9 +506,10 @@ impl SplitSession {
 
     /// Kill the child process and its process group
     pub fn kill(&mut self) -> Result<(), String> {
-        logging::log(
-            "EXEC",
-            &format!("SplitSession::kill() for PID {}", self.process_handle.pid),
+        info!(
+            category = "EXEC",
+            pid = self.process_handle.pid,
+            "Killing split session process"
         );
         self.process_handle.kill();
         // Also try the standard kill for good measure
@@ -482,7 +524,7 @@ impl SplitSession {
             .wait()
             .map_err(|e| format!("Failed to wait for script process: {}", e))?;
         let code = status.code().unwrap_or(-1);
-        logging::log("EXEC", &format!("Script exited with code: {}", code));
+        info!(category = "EXEC", exit_code = code, "Script exited");
         Ok(code)
     }
 
@@ -508,11 +550,17 @@ fn run_fallback_chain<T>(
 ) -> Option<T> {
     for attempt in attempts {
         if attempt.args.is_empty() {
-            logging::log("EXEC", &format!("Trying: {}", attempt.cmd));
+            info!(
+                category = "EXEC",
+                command = %attempt.cmd,
+                "Trying runtime fallback command"
+            );
         } else {
-            logging::log(
-                "EXEC",
-                &format!("Trying: {} {}", attempt.cmd, attempt.args.join(" ")),
+            info!(
+                category = "EXEC",
+                command = %attempt.cmd,
+                args = ?attempt.args,
+                "Trying runtime fallback command"
             );
         }
         logging::bench_log(attempt.name);
@@ -527,12 +575,21 @@ fn run_fallback_chain<T>(
                     "Runtime fallback succeeded"
                 );
                 logging::bench_log(&format!("{} succeeded in {}ms", attempt.name, duration_ms));
-                logging::log("EXEC", &format!("SUCCESS: {}", attempt.label));
+                info!(
+                    category = "EXEC",
+                    runtime_label = %attempt.label,
+                    "Runtime fallback succeeded"
+                );
                 return Some(result);
             }
             Err(e) => {
                 debug!(error = %e, runtime = attempt.name, "Spawn attempt failed");
-                logging::log("EXEC", &format!("FAILED: {}: {}", attempt.label, e));
+                info!(
+                    category = "EXEC",
+                    runtime_label = %attempt.label,
+                    error = %e,
+                    "Runtime fallback failed"
+                );
             }
         }
     }
@@ -545,9 +602,10 @@ pub fn execute_script_interactive(path: &Path) -> Result<ScriptSession, String> 
     let start = Instant::now();
     logging::bench_log("execute_script_interactive_start");
     debug!(path = %path.display(), "Starting interactive script execution");
-    logging::log(
-        "EXEC",
-        &format!("execute_script_interactive: {}", path.display()),
+    info!(
+        category = "EXEC",
+        script_path = %path.display(),
+        "Starting execute_script_interactive"
     );
 
     let path_str = path
@@ -607,7 +665,11 @@ pub fn execute_script_interactive(path: &Path) -> Result<ScriptSession, String> 
         path = %path.display(),
         "All script execution methods failed"
     );
-    logging::log("EXEC", &format!("ALL METHODS FAILED: {}", err));
+    info!(
+        category = "EXEC",
+        error = %err,
+        "All interactive script execution methods failed"
+    );
     Err(err)
 }
 
@@ -620,7 +682,12 @@ pub fn spawn_script(cmd: &str, args: &[&str], script_path: &str) -> Result<Scrip
         .unwrap_or_else(|| cmd.to_string());
 
     debug!(executable = %executable, args = ?args, "Spawning script process");
-    logging::log("EXEC", &format!("spawn_script: {} {:?}", executable, args));
+    info!(
+        category = "EXEC",
+        executable = %executable,
+        args = ?args,
+        "Spawning script"
+    );
 
     let mut command = Command::new(&executable);
     command.env_clear();
@@ -645,22 +712,19 @@ pub fn spawn_script(cmd: &str, args: &[&str], script_path: &str) -> Result<Scrip
     #[cfg(unix)]
     {
         command.process_group(0);
-        logging::log("EXEC", "Using process group for child process");
+        info!(category = "EXEC", "Using process group for child process");
     }
 
     let mut child = command.spawn().map_err(|e| {
         error!(error = %e, executable = %executable, "Process spawn failed");
         let err = format!("Failed to spawn '{}': {}", executable, e);
-        logging::log("EXEC", &format!("SPAWN ERROR: {}", err));
+        info!(category = "EXEC", error = %err, "Script spawn failed");
         err
     })?;
 
     let pid = child.id();
     info!(pid = pid, pgid = pid, executable = %executable, "Process spawned");
-    logging::log(
-        "EXEC",
-        &format!("Process spawned with PID: {} (PGID: {})", pid, pid),
-    );
+    info!(category = "EXEC", pid, pgid = pid, "Process spawned");
 
     let stdin = child
         .stdin
@@ -674,10 +738,14 @@ pub fn spawn_script(cmd: &str, args: &[&str], script_path: &str) -> Result<Scrip
 
     // Capture stderr for error reporting
     let stderr = child.stderr.take();
-    logging::log("EXEC", &format!("Stderr captured: {}", stderr.is_some()));
+    info!(
+        category = "EXEC",
+        stderr_captured = stderr.is_some(),
+        "Captured stderr handle"
+    );
 
     let process_handle = ProcessHandle::new(pid, script_path.to_string());
-    logging::log("EXEC", "ScriptSession created successfully");
+    info!(category = "EXEC", pid, "ScriptSession created");
 
     Ok(ScriptSession {
         stdin,
