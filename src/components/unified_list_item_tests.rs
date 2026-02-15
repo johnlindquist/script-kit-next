@@ -19,7 +19,9 @@ fn highlighted_text_preserves_source_text_and_ranges() {
 #[should_panic(expected = "char boundary")]
 fn highlighted_text_rejects_invalid_utf8_boundaries() {
     // "a😀b" => valid boundaries are 0,1,5,6. Start=2 is invalid.
-    let _ = TextContent::highlighted("a😀b", vec![2..5]);
+    #[allow(clippy::single_range_in_vec_init)]
+    let ranges = vec![2..5];
+    let _ = TextContent::highlighted("a😀b", ranges);
 }
 
 #[test]

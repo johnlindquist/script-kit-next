@@ -43,5 +43,5 @@ use parse::parse_markdown;
 use render_blocks::build_markdown_elements;
 use scope::*;
 #[cfg(test)]
-pub(super) use test_support::*;
+use test_support::*;
 use types::*;

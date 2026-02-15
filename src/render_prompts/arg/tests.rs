@@ -55,9 +55,11 @@ mod arg_prompt_render_tests {
 
     #[test]
     fn prompt_footer_colors_use_selected_background_for_surface() {
-        let mut design_colors = DesignColors::default();
-        design_colors.background_secondary = 0x123456;
-        design_colors.background_selected = 0xabcdef;
+        let design_colors = DesignColors {
+            background_secondary: 0x123456,
+            background_selected: 0xabcdef,
+            ..DesignColors::default()
+        };
 
         let footer_colors = prompt_footer_colors_for_prompt(&design_colors, true);
 

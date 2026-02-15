@@ -25,6 +25,7 @@ pub mod presets;
 pub mod service;
 mod types;
 #[cfg(test)]
+#[allow(dead_code)]
 pub mod validation;
 
 // Re-export types used externally

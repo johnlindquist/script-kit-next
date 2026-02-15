@@ -140,95 +140,6 @@ fn build_terminal_command(program: &str, script_path: &Path) -> Result<String, S
     Ok(format!("{} {}", program, quote_terminal_arg(path_str)))
 }
 
-#[cfg(test)]
-mod builtin_command_window_visibility_tests {
-    use super::{
-        build_terminal_command, builtin_needs_main_window_for_command_id,
-        create_interactive_temp_script, InteractiveTempFileMode,
-    };
-    use std::path::Path;
-
-    #[test]
-    fn test_builtin_needs_main_window_false_for_open_ai_and_open_notes() {
-        assert!(!builtin_needs_main_window_for_command_id("builtin-open-ai"));
-        assert!(!builtin_needs_main_window_for_command_id(
-            "builtin-open-notes"
-        ));
-    }
-
-    #[test]
-    fn test_builtin_needs_main_window_true_for_unlisted_builtin() {
-        assert!(builtin_needs_main_window_for_command_id(
-            "builtin-refresh-scripts"
-        ));
-    }
-
-    #[test]
-    fn test_build_terminal_command_quotes_path_when_path_contains_single_quote() {
-        #[cfg(unix)]
-        {
-            let command = build_terminal_command("bash", Path::new("/tmp/it'works.sh"))
-                .expect("valid command");
-            assert_eq!(command, "bash '/tmp/it'\"'\"'works.sh'");
-        }
-    }
-
-    #[test]
-    fn test_build_terminal_command_rejects_unsafe_program_value() {
-        let err = build_terminal_command("bash;rm", Path::new("/tmp/script.sh"))
-            .expect_err("unsafe program should be rejected");
-        assert!(
-            err.contains("terminal_program_validation_failed"),
-            "expected validation error, got: {}",
-            err
-        );
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn test_create_interactive_temp_script_sets_mode_700_when_executable() {
-        use std::os::unix::fs::PermissionsExt;
-
-        let path = create_interactive_temp_script(
-            "echo secure-tempfiles",
-            ".sh",
-            InteractiveTempFileMode::Executable,
-        )
-        .expect("should create executable temp file");
-
-        let mode = std::fs::metadata(&path)
-            .expect("temp file metadata should exist")
-            .permissions()
-            .mode()
-            & 0o777;
-        assert_eq!(mode, 0o700, "expected secure executable mode 0o700");
-
-        std::fs::remove_file(&path).expect("test temp file should be removable");
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn test_create_interactive_temp_script_sets_mode_600_when_interpreter_fed() {
-        use std::os::unix::fs::PermissionsExt;
-
-        let path = create_interactive_temp_script(
-            "console.log('secure-tempfiles')",
-            ".ts",
-            InteractiveTempFileMode::InterpreterFed,
-        )
-        .expect("should create interpreter temp file");
-
-        let mode = std::fs::metadata(&path)
-            .expect("temp file metadata should exist")
-            .permissions()
-            .mode()
-            & 0o777;
-        assert_eq!(mode, 0o600, "expected secure interpreter mode 0o600");
-
-        std::fs::remove_file(&path).expect("test temp file should be removable");
-    }
-}
-
 impl ScriptListApp {
     pub(crate) fn execute_scriptlet(
         &mut self,
@@ -650,5 +561,94 @@ impl ScriptListApp {
         // Scripts typically need the main window for prompts
         self.execute_script_by_path(command_id, cx);
         true
+    }
+}
+
+#[cfg(test)]
+mod builtin_command_window_visibility_tests {
+    use super::{
+        build_terminal_command, builtin_needs_main_window_for_command_id,
+        create_interactive_temp_script, InteractiveTempFileMode,
+    };
+    use std::path::Path;
+
+    #[test]
+    fn test_builtin_needs_main_window_false_for_open_ai_and_open_notes() {
+        assert!(!builtin_needs_main_window_for_command_id("builtin-open-ai"));
+        assert!(!builtin_needs_main_window_for_command_id(
+            "builtin-open-notes"
+        ));
+    }
+
+    #[test]
+    fn test_builtin_needs_main_window_true_for_unlisted_builtin() {
+        assert!(builtin_needs_main_window_for_command_id(
+            "builtin-refresh-scripts"
+        ));
+    }
+
+    #[test]
+    fn test_build_terminal_command_quotes_path_when_path_contains_single_quote() {
+        #[cfg(unix)]
+        {
+            let command = build_terminal_command("bash", Path::new("/tmp/it'works.sh"))
+                .expect("valid command");
+            assert_eq!(command, "bash '/tmp/it'\"'\"'works.sh'");
+        }
+    }
+
+    #[test]
+    fn test_build_terminal_command_rejects_unsafe_program_value() {
+        let err = build_terminal_command("bash;rm", Path::new("/tmp/script.sh"))
+            .expect_err("unsafe program should be rejected");
+        assert!(
+            err.contains("terminal_program_validation_failed"),
+            "expected validation error, got: {}",
+            err
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_create_interactive_temp_script_sets_mode_700_when_executable() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = create_interactive_temp_script(
+            "echo secure-tempfiles",
+            ".sh",
+            InteractiveTempFileMode::Executable,
+        )
+        .expect("should create executable temp file");
+
+        let mode = std::fs::metadata(&path)
+            .expect("temp file metadata should exist")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o700, "expected secure executable mode 0o700");
+
+        std::fs::remove_file(&path).expect("test temp file should be removable");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_create_interactive_temp_script_sets_mode_600_when_interpreter_fed() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = create_interactive_temp_script(
+            "console.log('secure-tempfiles')",
+            ".ts",
+            InteractiveTempFileMode::InterpreterFed,
+        )
+        .expect("should create interpreter temp file");
+
+        let mode = std::fs::metadata(&path)
+            .expect("temp file metadata should exist")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o600, "expected secure interpreter mode 0o600");
+
+        std::fs::remove_file(&path).expect("test temp file should be removable");
     }
 }
