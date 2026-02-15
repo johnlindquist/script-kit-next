@@ -19,13 +19,11 @@ impl ScriptListApp {
     /// Show the mouse cursor (called when mouse moves).
     /// Also switches to Mouse input mode to re-enable hover effects.
     pub(crate) fn show_mouse_cursor(&mut self, cx: &mut Context<Self>) {
-        // Switch to mouse mode to re-enable hover effects
         self.input_mode = InputMode::Mouse;
-
         if self.mouse_cursor_hidden {
             self.mouse_cursor_hidden = false;
-            cx.notify();
         }
+        cx.notify();
     }
 
     /// Calculate view type and item count for window sizing.
