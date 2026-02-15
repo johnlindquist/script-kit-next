@@ -27,8 +27,8 @@ mod tests {
 
     #[test]
     fn test_footer_secondary_visibility_uses_has_actions() {
-        let content = fs::read_to_string("src/render_script_list/part_000.rs")
-            .expect("Failed to read src/render_script_list/part_000.rs");
+        let content = fs::read_to_string("src/render_script_list/mod.rs")
+            .expect("Failed to read src/render_script_list/mod.rs");
 
         assert!(
             content.contains("show_secondary(self.has_actions())"),
@@ -38,8 +38,8 @@ mod tests {
 
     #[test]
     fn test_cmd_k_requires_actions() {
-        let content = fs::read_to_string("src/render_script_list/part_000.rs")
-            .expect("Failed to read src/render_script_list/part_000.rs");
+        let content = fs::read_to_string("src/render_script_list/mod.rs")
+            .expect("Failed to read src/render_script_list/mod.rs");
 
         let cmdk_pos = content
             .find("Cmd+K")
@@ -56,12 +56,12 @@ mod tests {
 
     #[test]
     fn test_ask_ai_hint_is_non_clickable_visual_hint() {
-        let content = fs::read_to_string("src/render_script_list/part_000.rs")
-            .expect("Failed to read src/render_script_list/part_000.rs");
+        let content = fs::read_to_string("src/render_script_list/mod.rs")
+            .expect("Failed to read src/render_script_list/mod.rs");
 
         let ask_ai_pos = content
             .find(".id(\"ask-ai-button\")")
-            .expect("Ask AI hint container not found in src/render_script_list/part_000.rs");
+            .expect("Ask AI hint container not found in src/render_script_list/mod.rs");
         let ask_ai_section = &content[ask_ai_pos..content.len().min(ask_ai_pos + 1200)];
 
         assert!(

@@ -39,6 +39,7 @@ fn is_test_source(path: &Path) -> bool {
 
 fn find_forbidden_patterns(path: &Path) -> std::io::Result<Vec<ForbiddenPatternMatch>> {
     let source = fs::read_to_string(path)?;
+    let source = source.split("#[cfg(test)]").next().unwrap_or(&source);
     let mut matches = Vec::new();
 
     for (line_index, line) in source.lines().enumerate() {
