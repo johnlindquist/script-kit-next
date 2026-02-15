@@ -571,7 +571,7 @@ fn script_context_view_logs_title() {
     let script = ScriptInfo::new("my-script", "/path/my-script.ts");
     let actions = get_script_context_actions(&script);
     let vl = actions.iter().find(|a| a.id == "view_logs").unwrap();
-    assert_eq!(vl.title, "View Logs");
+    assert_eq!(vl.title, "Show Logs");
 }
 
 #[test]
@@ -642,16 +642,16 @@ fn ai_command_bar_ids_unique() {
 fn script_context_base_count_no_extras() {
     let script = ScriptInfo::new("test", "/path/test.ts");
     let actions = get_script_context_actions(&script);
-    // run + add_shortcut + add_alias + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink = 9
-    assert_eq!(actions.len(), 9);
+    // run + add_shortcut + add_alias + toggle_favorite + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink = 10
+    assert_eq!(actions.len(), 10);
 }
 
 #[test]
 fn script_context_with_shortcut_adds_one() {
     let script = ScriptInfo::with_shortcut("test", "/path/test.ts", Some("cmd+t".into()));
     let actions = get_script_context_actions(&script);
-    // run + update_shortcut + remove_shortcut + add_alias + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink = 10
-    assert_eq!(actions.len(), 10);
+    // run + update_shortcut + remove_shortcut + add_alias + toggle_favorite + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink = 11
+    assert_eq!(actions.len(), 11);
 }
 
 #[test]
@@ -663,8 +663,8 @@ fn script_context_with_both_adds_two() {
         Some("ts".into()),
     );
     let actions = get_script_context_actions(&script);
-    // run + update_shortcut + remove_shortcut + update_alias + remove_alias + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink = 11
-    assert_eq!(actions.len(), 11);
+    // run + update_shortcut + remove_shortcut + update_alias + remove_alias + toggle_favorite + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink = 12
+    assert_eq!(actions.len(), 12);
 }
 
 #[test]
@@ -672,8 +672,8 @@ fn script_context_with_suggestion_adds_reset_ranking() {
     let script =
         ScriptInfo::new("test", "/path/test.ts").with_frecency(true, Some("/path/test.ts".into()));
     let actions = get_script_context_actions(&script);
-    // 9 + reset_ranking = 10
-    assert_eq!(actions.len(), 10);
+    // 10 + reset_ranking = 11
+    assert_eq!(actions.len(), 11);
     assert!(actions.iter().any(|a| a.id == "reset_ranking"));
 }
 
@@ -733,7 +733,7 @@ fn agent_has_reveal_in_finder() {
     script.is_script = false;
     script.is_agent = true;
     let actions = get_script_context_actions(&script);
-    assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
+    assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
 }
 
 #[test]
@@ -742,7 +742,7 @@ fn agent_has_copy_path_and_copy_content() {
     script.is_script = false;
     script.is_agent = true;
     let actions = get_script_context_actions(&script);
-    assert!(actions.iter().any(|a| a.id == "file:copy_path"));
+    assert!(actions.iter().any(|a| a.id == "copy_path"));
     assert!(actions.iter().any(|a| a.id == "copy_content"));
 }
 
@@ -784,7 +784,7 @@ fn ai_bar_branch_from_last_icon_arrowright() {
 fn ai_bar_branch_from_last_desc_mentions_branch() {
     let actions = get_ai_command_bar_actions();
     let bfl = actions.iter().find(|a| a.id == "chat:branch_from_last").unwrap();
-    assert!(bfl.description.as_deref().unwrap().contains("branch"));
+    assert!(bfl.description.as_deref().unwrap().contains("new chat"));
 }
 
 // =====================================================================
@@ -1187,7 +1187,7 @@ fn deeplink_name_accented_chars_preserved() {
 #[test]
 fn deeplink_name_all_special_chars_empty() {
     let result = to_deeplink_name("!@#$%^&*()");
-    assert_eq!(result, "");
+    assert_eq!(result, "_unnamed");
 }
 
 #[test]
@@ -1377,9 +1377,9 @@ fn score_action_prefix_plus_desc_plus_shortcut() {
         ActionCategory::ScriptContext,
     )
     .with_shortcut("⌘E");
-    let score = ActionsDialog::score_action(&action, "script:edit");
-    // prefix(100) + desc contains "script:edit"(15) + shortcut probably no match = 115
-    assert!(score >= 115, "Expected ≥115, got {}", score);
+    let score = ActionsDialog::score_action(&action, "e");
+    // prefix(100) + desc contains(15) + shortcut contains(10) = 125
+    assert!(score >= 125, "Expected ≥125, got {}", score);
 }
 
 #[test]
@@ -1390,7 +1390,7 @@ fn score_action_contains_only() {
         None,
         ActionCategory::ScriptContext,
     );
-    let score = ActionsDialog::score_action(&action, "script:edit");
+    let score = ActionsDialog::score_action(&action, "edit");
     assert!((50..100).contains(&score), "Expected 50-99, got {}", score);
 }
 

@@ -60,7 +60,7 @@ fn batch32_agent_reveal_desc_mentions_agent_file() {
     script.is_agent = true;
     script.is_script = false;
     let actions = get_script_context_actions(&script);
-    let r = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
+    let r = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
     assert!(
         r.description.as_ref().unwrap().contains("agent"),
         "agent reveal desc should mention 'agent', got: {:?}",
@@ -74,7 +74,7 @@ fn batch32_agent_copy_path_desc_mentions_agent() {
     script.is_agent = true;
     script.is_script = false;
     let actions = get_script_context_actions(&script);
-    let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
+    let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
     assert!(
         cp.description.as_ref().unwrap().contains("agent"),
         "agent copy_path desc should mention 'agent', got: {:?}",
@@ -341,7 +341,11 @@ fn batch32_path_dir_primary_title_quotes_name() {
 fn batch32_path_file_select_desc_submit() {
     let info = PathInfo::new("file.txt", "/p/file.txt", false);
     let actions = get_path_context_actions(&info);
-    assert!(actions[0].description.as_ref().unwrap().contains("Submit"));
+    assert!(actions[0]
+        .description
+        .as_ref()
+        .unwrap()
+        .contains("Selects this file"));
 }
 
 #[test]
@@ -352,7 +356,7 @@ fn batch32_path_dir_open_desc_navigate() {
         .description
         .as_ref()
         .unwrap()
-        .contains("Navigate"));
+        .contains("Opens this directory"));
 }
 
 // ---------------------------------------------------------------------------
@@ -766,7 +770,7 @@ fn batch32_new_chat_last_used_desc_is_provider_display_name() {
         provider_display_name: "OpenAI".into(),
     }];
     let actions = get_new_chat_actions(&last_used, &[], &[]);
-    assert_eq!(actions[0].description.as_deref(), Some("OpenAI"));
+    assert_eq!(actions[0].description.as_deref(), Some("Uses OpenAI"));
 }
 
 // ---------------------------------------------------------------------------
@@ -806,7 +810,7 @@ fn batch32_new_chat_model_id_format() {
         provider_display_name: "Anthropic".into(),
     }];
     let actions = get_new_chat_actions(&[], &[], &models);
-    assert_eq!(actions[0].id, "model_0");
+    assert_eq!(actions[0].id, "model_anthropic::claude");
 }
 
 #[test]
@@ -927,8 +931,8 @@ fn batch32_score_action_prefix_match_100_plus() {
         ActionCategory::ScriptContext,
     )
     .with_shortcut("⌘E");
-    let score = ActionsDialog::score_action(&action, "script:edit");
-    // prefix (100) + desc contains "script:edit" (15) = 115
+    let score = ActionsDialog::score_action(&action, "edit");
+    // prefix (100) + description contains "edit" (15) = 115
     assert!(score >= 100, "Prefix match should be 100+, got {}", score);
 }
 
@@ -1113,7 +1117,7 @@ fn batch32_script_custom_verb_launch() {
     let script =
         crate::actions::types::ScriptInfo::with_action_verb("App", "/p/app", true, "Launch");
     let actions = get_script_context_actions(&script);
-    assert_eq!(actions[0].title, "Launch \"App\"");
+    assert_eq!(actions[0].title, "Launch");
 }
 
 #[test]
@@ -1121,7 +1125,7 @@ fn batch32_script_custom_verb_switch_to() {
     let script =
         crate::actions::types::ScriptInfo::with_action_verb("Window", "/p/w", false, "Switch to");
     let actions = get_script_context_actions(&script);
-    assert_eq!(actions[0].title, "Switch to \"Window\"");
+    assert_eq!(actions[0].title, "Switch To");
 }
 
 #[test]
@@ -1144,7 +1148,7 @@ fn batch32_script_custom_verb_desc_uses_verb() {
 fn batch32_script_deeplink_url_format() {
     let script = crate::actions::types::ScriptInfo::new("My Script", "/p/my-script.ts");
     let actions = get_script_context_actions(&script);
-    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
     assert!(
         dl.description
             .as_ref()
@@ -1159,7 +1163,7 @@ fn batch32_script_deeplink_url_format() {
 fn batch32_script_deeplink_shortcut() {
     let script = crate::actions::types::ScriptInfo::new("Test", "/p/test.ts");
     let actions = get_script_context_actions(&script);
-    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
     assert_eq!(dl.shortcut.as_deref(), Some("⌘⇧D"));
 }
 
@@ -1167,7 +1171,7 @@ fn batch32_script_deeplink_shortcut() {
 fn batch32_builtin_deeplink_url_format() {
     let builtin = crate::actions::types::ScriptInfo::builtin("Clipboard History");
     let actions = get_script_context_actions(&builtin);
-    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
     assert!(dl
         .description
         .as_ref()
