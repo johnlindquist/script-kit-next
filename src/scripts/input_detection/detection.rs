@@ -26,6 +26,13 @@ static MATH_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^[\d\s\+\-\*/%\^\(\)\.]+$").expect("Invalid math regex")
 });
 
+static CODE_FUNC_CALL_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\w+\s*\([^)]*\)").expect("Invalid code function call regex"));
+
+static CODE_IDENT_CALL_PREFIX_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"[a-zA-Z_]\w*\s*\(").expect("Invalid code identifier call prefix regex")
+});
+
 // Code keywords to detect
 const CODE_KEYWORDS: &[&str] = &[
     "function", "const ", "let ", "var ", "import ", "export ", "=>", "class ", "def ", "fn ",
@@ -242,16 +249,10 @@ pub fn is_code_snippet(input: &str) -> bool {
 
     // Function call pattern: word followed by parentheses
     // e.g., foo(), bar(1, 2)
-    if Regex::new(r"\w+\s*\([^)]*\)")
-        .map(|r| r.is_match(trimmed))
-        .unwrap_or(false)
-    {
+    if CODE_FUNC_CALL_REGEX.is_match(trimmed) {
         // But exclude math expressions like (1+2)
         // Only match if there's a word before the paren
-        if Regex::new(r"[a-zA-Z_]\w*\s*\(")
-            .map(|r| r.is_match(trimmed))
-            .unwrap_or(false)
-        {
+        if CODE_IDENT_CALL_PREFIX_REGEX.is_match(trimmed) {
             return true;
         }
     }
