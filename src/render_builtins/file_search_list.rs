@@ -90,7 +90,7 @@
                                 } else if is_hovered {
                                     rgba((list_hover << 8) | hover_alpha)
                                 } else {
-                                    rgba(0x00000000)
+                                    gpui::transparent_black().into()
                                 };
                                 let hover_bg = rgba((list_hover << 8) | hover_alpha);
                                 let is_mouse_mode = file_input_mode == InputMode::Mouse;
