@@ -13,6 +13,19 @@ use super::{
     should_search_scriptlets, should_search_scripts, window_passes_prefix_filter,
 };
 
+#[inline]
+fn result_type_order(r: &SearchResult) -> i32 {
+    match r {
+        SearchResult::BuiltIn(_) => 0, // Built-ins first
+        SearchResult::App(_) => 1,     // Apps second
+        SearchResult::Window(_) => 2,  // Windows third
+        SearchResult::Script(_) => 3,
+        SearchResult::Scriptlet(_) => 4,
+        SearchResult::Agent(_) => 5,
+        SearchResult::Fallback(_) => 6, // Fallbacks always last
+    }
+}
+
 /// Perform unified fuzzy search across scripts, scriptlets, and built-ins
 /// Returns combined and ranked results sorted by relevance
 /// Built-ins appear at the TOP of results (before scripts) when scores are equal
@@ -133,19 +146,8 @@ pub fn fuzzy_search_unified_all(
             Ordering::Equal => {
                 // Prefer builtins over apps over windows over scripts over scriptlets over agents when scores are equal
                 // Fallbacks always sort last (they have their own ordering by priority)
-                let type_order = |r: &SearchResult| -> i32 {
-                    match r {
-                        SearchResult::BuiltIn(_) => 0, // Built-ins first
-                        SearchResult::App(_) => 1,     // Apps second
-                        SearchResult::Window(_) => 2,  // Windows third
-                        SearchResult::Script(_) => 3,
-                        SearchResult::Scriptlet(_) => 4,
-                        SearchResult::Agent(_) => 5,
-                        SearchResult::Fallback(_) => 6, // Fallbacks always last
-                    }
-                };
-                let type_order_a = type_order(a);
-                let type_order_b = type_order(b);
+                let type_order_a = result_type_order(a);
+                let type_order_b = result_type_order(b);
                 match type_order_a.cmp(&type_order_b) {
                     Ordering::Equal => a.name().cmp(b.name()),
                     other => other,
@@ -247,19 +249,8 @@ pub fn fuzzy_search_unified_with_windows(
         match b.score().cmp(&a.score()) {
             Ordering::Equal => {
                 // Prefer builtins over apps over windows over scripts over scriptlets over agents when scores are equal
-                let type_order = |r: &SearchResult| -> i32 {
-                    match r {
-                        SearchResult::BuiltIn(_) => 0, // Built-ins first
-                        SearchResult::App(_) => 1,     // Apps second
-                        SearchResult::Window(_) => 2,  // Windows third
-                        SearchResult::Script(_) => 3,
-                        SearchResult::Scriptlet(_) => 4,
-                        SearchResult::Agent(_) => 5,
-                        SearchResult::Fallback(_) => 6, // Fallbacks always last
-                    }
-                };
-                let type_order_a = type_order(a);
-                let type_order_b = type_order(b);
+                let type_order_a = result_type_order(a);
+                let type_order_b = result_type_order(b);
                 match type_order_a.cmp(&type_order_b) {
                     Ordering::Equal => a.name().cmp(b.name()),
                     other => other,
