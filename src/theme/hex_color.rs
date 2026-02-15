@@ -119,6 +119,8 @@ pub mod hex_color_serde {
     }
 
     fn parse_hex(hex: &str) -> Result<HexColor, String> {
+        let hex = hex.trim();
+
         if !hex.chars().all(|c| c.is_ascii_hexdigit()) {
             return Err(format!("invalid hex color: {}", hex));
         }
@@ -158,7 +160,7 @@ pub mod hex_color_serde {
 
     #[cfg(test)]
     mod tests {
-        use super::parse_color_string;
+        use super::{parse_color_string, parse_hex};
 
         #[test]
         fn test_parse_color_string_expands_rgb_when_hex_len_is_3() {
@@ -200,6 +202,14 @@ pub mod hex_color_serde {
         #[test]
         fn test_parse_color_string_rejects_non_hex_chars_for_prefixed_hex() {
             assert!(parse_color_string("#112233GG").is_err());
+        }
+
+        #[test]
+        fn test_parse_hex_trims_whitespace_before_parsing() {
+            assert_eq!(
+                parse_hex(" 1E1E1E ").expect("hex parser should trim leading/trailing whitespace"),
+                0x1E1E1E
+            );
         }
     }
 }
