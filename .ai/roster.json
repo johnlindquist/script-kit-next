@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-02-15T20:09:44.754Z",
+  "updatedAt": "2026-02-15T20:16:10.342Z",
   "agents": {
     "codex-actions-consistency": {
       "id": "codex-actions-consistency",
@@ -7191,6 +7191,22 @@
       "lastSeenAt": "2026-02-15T20:09:44.754Z",
       "host": "johns.macbook.pro.lan",
       "startSha": "c34ea5a798ab814e5eda2a2714ec308a7f713d14",
+      "notes": "[policy] missing agent_report json"
+    },
+    "codex-reset-state-on-show": {
+      "id": "codex-reset-state-on-show",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "gpt-5.3-codex",
+      "task": "Fix: When the main keyboard shortcut is pressed to open the main window, the user sees a flash of the previous state (e.g. clipboard history UI) before it resets to the default main window. The fix: before showing/focusing the main window in response to the global shortcut, the app must synchronously reset to the default main view state FIRST, then show the window. Look at how the global keyboard shortcut handler triggers showing the main window — likely in the global shortcut registration code or the show/toggle handler. Find where the window is made visible and ensure the app state (AppView) is reset to the default prompt/main view BEFORE the window becomes visible. Check app_impl.rs, the shortcut handler, and the show logic. The key insight is: state reset must happen BEFORE window show, not after. Also check if there is a 'show' message type handler in the protocol/message handling code. After making changes, run: cargo check && cargo clippy --all-targets -- -D warnings && cargo test. Then commit with a descriptive message.",
+      "scope": "src/**/*.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-02-15T20:11:00.729Z",
+      "lastSeenAt": "2026-02-15T20:16:10.342Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "eeb5e12a25dc4ecf6f323f94ee01797e9064aaa8",
       "notes": "[policy] missing agent_report json"
     }
   }
