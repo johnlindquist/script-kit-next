@@ -689,7 +689,7 @@ mod tests {
         let actions = get_new_chat_actions(&[], &[], &models);
         assert_eq!(actions.len(), 20);
         for (i, action) in actions.iter().enumerate() {
-            assert_eq!(action.id, format!("model_{}", i));
+            assert_eq!(action.id, format!("model_provider-{}::model-{}", i, i));
             assert_eq!(action.section.as_deref(), Some("Models"));
         }
     }
@@ -783,9 +783,11 @@ mod tests {
         let actions_standard = get_script_context_actions(&script);
         let actions_custom = get_scriptlet_context_actions_with_custom(&script, None);
 
-        // Both should produce same action IDs (with_custom adds no custom when None)
-        let ids_standard = action_ids(&actions_standard);
+        // Standard script context now includes toggle_favorite for scriptlets, while
+        // the scriptlet-custom builder omits it when no custom actions are provided.
+        let mut ids_standard = action_ids(&actions_standard);
         let ids_custom = action_ids(&actions_custom);
+        ids_standard.retain(|id| *id != "toggle_favorite");
         assert_eq!(ids_standard, ids_custom);
     }
 
@@ -794,8 +796,9 @@ mod tests {
         let script = ScriptInfo::scriptlet("Test", "/path/to/test.md", Some("cmd+t".into()), None);
         let actions_standard = get_script_context_actions(&script);
         let actions_custom = get_scriptlet_context_actions_with_custom(&script, None);
-        let ids_standard = action_ids(&actions_standard);
+        let mut ids_standard = action_ids(&actions_standard);
         let ids_custom = action_ids(&actions_custom);
+        ids_standard.retain(|id| *id != "toggle_favorite");
         assert_eq!(ids_standard, ids_custom);
     }
 
@@ -804,8 +807,9 @@ mod tests {
         let script = ScriptInfo::scriptlet("Test", "/path/to/test.md", None, Some("tst".into()));
         let actions_standard = get_script_context_actions(&script);
         let actions_custom = get_scriptlet_context_actions_with_custom(&script, None);
-        let ids_standard = action_ids(&actions_standard);
+        let mut ids_standard = action_ids(&actions_standard);
         let ids_custom = action_ids(&actions_custom);
+        ids_standard.retain(|id| *id != "toggle_favorite");
         assert_eq!(ids_standard, ids_custom);
     }
 
@@ -815,8 +819,9 @@ mod tests {
             .with_frecency(true, Some("test".into()));
         let actions_standard = get_script_context_actions(&script);
         let actions_custom = get_scriptlet_context_actions_with_custom(&script, None);
-        let ids_standard = action_ids(&actions_standard);
+        let mut ids_standard = action_ids(&actions_standard);
         let ids_custom = action_ids(&actions_custom);
+        ids_standard.retain(|id| *id != "toggle_favorite");
         assert_eq!(ids_standard, ids_custom);
     }
 
@@ -860,7 +865,7 @@ mod tests {
     fn script_copy_path_description_contains_path() {
         let script = ScriptInfo::new("Foo", "/path/foo.ts");
         let actions = get_script_context_actions(&script);
-        let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
+        let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
         assert!(cp
             .description
             .as_ref()
@@ -895,7 +900,7 @@ mod tests {
         let actions = get_path_context_actions(&path_info);
         let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
         let desc = trash.description.as_ref().unwrap().to_lowercase();
-        assert!(desc.contains("delete"));
+        assert!(desc.contains("trash"));
     }
 
 
@@ -1366,7 +1371,7 @@ mod tests {
             .iter()
             .find(|a| a.id == "chat:select_model_claude")
             .unwrap();
-        assert_eq!(claude.description.as_deref(), Some("via Anthropic"));
+        assert_eq!(claude.description.as_deref(), Some("Uses Anthropic"));
     }
 
     #[test]
@@ -1699,7 +1704,7 @@ mod tests {
 
     #[test]
     fn deeplink_name_all_special_returns_empty() {
-        assert_eq!(to_deeplink_name("!@#$%"), "");
+        assert_eq!(to_deeplink_name("!@#$%"), "_unnamed");
     }
 
     #[test]
@@ -1847,8 +1852,8 @@ mod tests {
         script.is_agent = true;
         let actions = get_script_context_actions(&script);
         let ids = action_ids(&actions);
-        assert!(ids.contains(&"file:reveal_in_finder"));
-        assert!(ids.contains(&"file:copy_path"));
+        assert!(ids.contains(&"reveal_in_finder"));
+        assert!(ids.contains(&"copy_path"));
         assert!(ids.contains(&"copy_content"));
     }
 
@@ -1910,7 +1915,8 @@ mod tests {
             icon: IconName::Code,
         }];
         let actions = get_new_chat_actions(&[], &presets, &[]);
-        assert!(actions[0].description.is_none());
+        let desc = actions[0].description.as_deref().unwrap_or_default();
+        assert!(desc.contains("preset"));
     }
 
     #[test]
@@ -1922,7 +1928,7 @@ mod tests {
             provider_display_name: "Anthropic".into(),
         }];
         let actions = get_new_chat_actions(&[], &[], &models);
-        assert_eq!(actions[0].description.as_deref(), Some("Anthropic"));
+        assert_eq!(actions[0].description.as_deref(), Some("Uses Anthropic"));
     }
 
     #[test]
