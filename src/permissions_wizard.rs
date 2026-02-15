@@ -62,14 +62,6 @@ impl PermissionType {
         }
     }
 
-    /// Get the system settings path hint for this permission
-    #[allow(dead_code)]
-    pub fn settings_path(&self) -> &'static str {
-        match self {
-            PermissionType::Accessibility => "System Settings > Privacy & Security > Accessibility",
-        }
-    }
-
     /// Get the features that depend on this permission
     pub fn dependent_features(&self) -> &'static [&'static str] {
         match self {
@@ -170,28 +162,6 @@ impl PermissionStatus {
             missing.push(&self.accessibility);
         }
         missing
-    }
-
-    /// Get the count of granted permissions
-    #[allow(dead_code)]
-    pub fn granted_count(&self) -> usize {
-        if self.accessibility.granted {
-            1
-        } else {
-            0
-        }
-    }
-
-    /// Get the total count of required permissions
-    #[allow(dead_code)]
-    pub fn total_count(&self) -> usize {
-        1 // Currently only accessibility
-    }
-
-    /// Get all permission infos as a vector
-    #[allow(dead_code)]
-    pub fn all_permissions(&self) -> Vec<&PermissionInfo> {
-        vec![&self.accessibility]
     }
 }
 
@@ -314,13 +284,6 @@ mod tests {
     }
 
     #[test]
-    fn test_permission_type_settings_path() {
-        assert!(PermissionType::Accessibility
-            .settings_path()
-            .contains("Accessibility"));
-    }
-
-    #[test]
     fn test_permission_type_dependent_features() {
         let features = PermissionType::Accessibility.dependent_features();
         assert!(!features.is_empty());
@@ -344,8 +307,6 @@ mod tests {
         };
         assert!(status.all_granted());
         assert!(status.missing_permissions().is_empty());
-        assert_eq!(status.granted_count(), 1);
-        assert_eq!(status.total_count(), 1);
     }
 
     #[test]
@@ -355,18 +316,6 @@ mod tests {
         };
         assert!(!status.all_granted());
         assert_eq!(status.missing_permissions().len(), 1);
-        assert_eq!(status.granted_count(), 0);
-        assert_eq!(status.total_count(), 1);
-    }
-
-    #[test]
-    fn test_permission_status_all_permissions() {
-        let status = PermissionStatus {
-            accessibility: PermissionInfo::accessibility(true),
-        };
-        let all = status.all_permissions();
-        assert_eq!(all.len(), 1);
-        assert_eq!(all[0].permission_type, PermissionType::Accessibility);
     }
 
     #[test]
@@ -381,6 +330,9 @@ mod tests {
         // This test just verifies the function doesn't panic
         let status = check_all_permissions();
         // Status should always be valid
-        assert!(status.total_count() > 0);
+        assert_eq!(
+            status.accessibility.permission_type,
+            PermissionType::Accessibility
+        );
     }
 }

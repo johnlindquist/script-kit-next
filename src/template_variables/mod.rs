@@ -57,7 +57,6 @@
 //! `VariableContext` controls override and disable behavior:
 //! - Custom values always win when a name matches a built-in.
 //! - [`VariableContext::new`] enables built-in evaluation.
-//! - [`VariableContext::custom_only`] disables built-ins from the start.
 //! - [`VariableContext::with_builtins(false)`] disables built-ins while
 //!   preserving custom values already set in the context.
 //! - When built-ins are disabled and no custom value exists, placeholders
@@ -107,17 +106,6 @@ impl VariableContext {
         }
     }
 
-    /// Create a context with only custom variables (no built-ins).
-    ///
-    /// Equivalent behavior to `VariableContext::new().with_builtins(false)`.
-    #[allow(dead_code)]
-    pub fn custom_only() -> Self {
-        Self {
-            custom_vars: HashMap::new(),
-            evaluate_builtins: false,
-        }
-    }
-
     /// Set one custom variable value.
     ///
     /// This value overrides any built-in with the same name.
@@ -125,21 +113,6 @@ impl VariableContext {
     pub fn set(&mut self, name: &str, value: &str) -> &mut Self {
         self.custom_vars.insert(name.to_string(), value.to_string());
         self
-    }
-
-    /// Set multiple custom variable values.
-    ///
-    /// Entries in `vars` override existing custom values with the same name.
-    #[allow(dead_code)]
-    pub fn set_all(&mut self, vars: HashMap<String, String>) -> &mut Self {
-        self.custom_vars.extend(vars);
-        self
-    }
-
-    /// Get a custom variable value by name.
-    #[allow(dead_code)]
-    pub fn get(&self, name: &str) -> Option<&String> {
-        self.custom_vars.get(name)
     }
 
     /// Return whether built-in variable evaluation is enabled.
@@ -151,7 +124,6 @@ impl VariableContext {
     ///
     /// Disabling built-ins leaves placeholders unchanged unless a matching
     /// custom variable is present.
-    #[allow(dead_code)]
     pub fn with_builtins(mut self, enabled: bool) -> Self {
         self.evaluate_builtins = enabled;
         self
@@ -175,7 +147,7 @@ impl VariableContext {
 /// The content with all recognized variables substituted
 ///
 pub fn substitute_variables(content: &str) -> String {
-    let ctx = VariableContext::new();
+    let ctx = VariableContext::new().with_builtins(true);
     substitute_variables_with_context(content, &ctx)
 }
 /// Substitute template variables with a custom context.
@@ -225,29 +197,6 @@ pub fn substitute_variables_with_context(content: &str, ctx: &VariableContext) -
 
     result
 }
-/// Check if content contains any variable placeholders
-///
-/// Useful for optimization - skip substitution if no variables present
-#[allow(dead_code)]
-pub fn has_variables(content: &str) -> bool {
-    // Check for ${...} pattern
-    if content.contains("${") {
-        return true;
-    }
-
-    // Check for {{...}} pattern (but not {{{ which could be escaped)
-    let bytes = content.as_bytes();
-    for i in 0..bytes.len().saturating_sub(1) {
-        if bytes[i] == b'{' && bytes[i + 1] == b'{' {
-            // Make sure it's not a triple brace (escaped)
-            if i + 2 < bytes.len() && bytes[i + 2] != b'{' {
-                return true;
-            }
-        }
-    }
-
-    false
-}
 /// Extract variable names from template content.
 ///
 /// Returns a list of unique variable names found in the template.
@@ -256,7 +205,6 @@ pub fn has_variables(content: &str) -> bool {
 /// should be surfaced as user inputs. It intentionally excludes:
 /// - `${...}` names containing spaces or `(` (expression-like placeholders)
 /// - `{{...}}` control markers (`#...`, `/...`, and `else`)
-#[allow(dead_code)]
 pub fn extract_variable_names(content: &str) -> Vec<String> {
     let mut names = Vec::new();
     let mut seen = std::collections::HashSet::new();
@@ -460,7 +408,7 @@ mod tests {
 
     #[test]
     fn test_dollar_brace_syntax() {
-        let mut ctx = VariableContext::custom_only();
+        let mut ctx = VariableContext::new().with_builtins(false);
         ctx.set("name", "Alice");
 
         let result = substitute_variables_with_context("Hello ${name}!", &ctx);
@@ -469,7 +417,7 @@ mod tests {
 
     #[test]
     fn test_double_brace_syntax() {
-        let mut ctx = VariableContext::custom_only();
+        let mut ctx = VariableContext::new().with_builtins(false);
         ctx.set("name", "Bob");
 
         let result = substitute_variables_with_context("Hello {{name}}!", &ctx);
@@ -478,7 +426,7 @@ mod tests {
 
     #[test]
     fn test_mixed_syntax() {
-        let mut ctx = VariableContext::custom_only();
+        let mut ctx = VariableContext::new().with_builtins(false);
         ctx.set("first", "John");
         ctx.set("last", "Doe");
 
@@ -488,7 +436,7 @@ mod tests {
 
     #[test]
     fn test_multiple_same_variable() {
-        let mut ctx = VariableContext::custom_only();
+        let mut ctx = VariableContext::new().with_builtins(false);
         ctx.set("x", "test");
 
         let result = substitute_variables_with_context("${x} and {{x}} and ${x}", &ctx);
@@ -497,7 +445,7 @@ mod tests {
 
     #[test]
     fn test_unknown_variable_unchanged() {
-        let ctx = VariableContext::custom_only();
+        let ctx = VariableContext::new().with_builtins(false);
 
         let result = substitute_variables_with_context("Hello ${unknown}!", &ctx);
         assert_eq!(result, "Hello ${unknown}!");
@@ -505,7 +453,7 @@ mod tests {
 
     #[test]
     fn test_empty_variable_name() {
-        let ctx = VariableContext::custom_only();
+        let ctx = VariableContext::new().with_builtins(false);
 
         let result = substitute_variables_with_context("Hello ${}!", &ctx);
         assert_eq!(result, "Hello ${}!");
@@ -661,7 +609,7 @@ mod tests {
 
     #[test]
     fn test_custom_only_no_builtins() {
-        let ctx = VariableContext::custom_only();
+        let ctx = VariableContext::new().with_builtins(false);
 
         let result = substitute_variables_with_context("${date}", &ctx);
         // Should remain unchanged since builtins are disabled
@@ -673,31 +621,8 @@ mod tests {
         let mut ctx = VariableContext::new();
         ctx.set("a", "1").set("b", "2");
 
-        assert_eq!(ctx.get("a"), Some(&"1".to_string()));
-        assert_eq!(ctx.get("b"), Some(&"2".to_string()));
-    }
-
-    // ========================================
-    // Helper Function Tests
-    // ========================================
-
-    #[test]
-    fn test_has_variables_dollar() {
-        assert!(has_variables("Hello ${name}!"));
-        assert!(has_variables("${a} ${b}"));
-    }
-
-    #[test]
-    fn test_has_variables_braces() {
-        assert!(has_variables("Hello {{name}}!"));
-        assert!(has_variables("{{a}} {{b}}"));
-    }
-
-    #[test]
-    fn test_has_variables_none() {
-        assert!(!has_variables("Hello world!"));
-        assert!(!has_variables(""));
-        assert!(!has_variables("Just some text"));
+        let result = substitute_variables_with_context("${a}-${b}", &ctx);
+        assert_eq!(result, "1-2");
     }
 
     #[test]
@@ -753,7 +678,7 @@ mod tests {
 
     #[test]
     fn test_nested_braces() {
-        let mut ctx = VariableContext::custom_only();
+        let mut ctx = VariableContext::new().with_builtins(false);
         ctx.set("x", "value");
 
         // This is an edge case - nested braces
@@ -764,7 +689,7 @@ mod tests {
 
     #[test]
     fn test_unclosed_variable() {
-        let ctx = VariableContext::custom_only();
+        let ctx = VariableContext::new().with_builtins(false);
 
         // Unclosed variables should remain unchanged
         let result = substitute_variables_with_context("Hello ${name", &ctx);
@@ -779,7 +704,7 @@ mod tests {
 
     #[test]
     fn test_special_characters_in_value() {
-        let mut ctx = VariableContext::custom_only();
+        let mut ctx = VariableContext::new().with_builtins(false);
         ctx.set("special", "Hello ${{world}}!");
 
         let result = substitute_variables_with_context("Value: ${special}", &ctx);
@@ -788,7 +713,7 @@ mod tests {
 
     #[test]
     fn test_unicode_in_value() {
-        let mut ctx = VariableContext::custom_only();
+        let mut ctx = VariableContext::new().with_builtins(false);
         ctx.set("greeting", "こんにちは 🎉");
 
         let result = substitute_variables_with_context("${greeting}", &ctx);
@@ -797,7 +722,7 @@ mod tests {
 
     #[test]
     fn test_multiline_content() {
-        let mut ctx = VariableContext::custom_only();
+        let mut ctx = VariableContext::new().with_builtins(false);
         ctx.set("name", "World");
 
         let input = "Hello\n${name}\nGoodbye";
@@ -820,7 +745,7 @@ mod tests {
 
     #[test]
     fn test_realistic_email_template() {
-        let mut ctx = VariableContext::custom_only();
+        let mut ctx = VariableContext::new().with_builtins(false);
         ctx.set("name", "John Doe");
         ctx.set("date", "2024-01-15");
 
@@ -844,7 +769,7 @@ The Team"#;
 
     #[test]
     fn test_realistic_signature() {
-        let mut ctx = VariableContext::custom_only();
+        let mut ctx = VariableContext::new().with_builtins(false);
         ctx.set("clipboard", "Important message content here");
 
         let template = r#"Please review the following:
