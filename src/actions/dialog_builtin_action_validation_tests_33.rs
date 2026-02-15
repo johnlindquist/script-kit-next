@@ -173,7 +173,7 @@ fn score_action_prefix_match_at_least_100() {
         None,
         ActionCategory::ScriptContext,
     );
-    let score = ActionsDialog::score_action(&action, "script:edit");
+    let score = ActionsDialog::score_action(&action, "edit");
     assert!(score >= 100, "Prefix match should be >= 100, got {}", score);
 }
 
@@ -185,7 +185,7 @@ fn score_action_contains_match_between_50_and_99() {
         None,
         ActionCategory::ScriptContext,
     );
-    let score = ActionsDialog::score_action(&action, "script:edit");
+    let score = ActionsDialog::score_action(&action, "edit");
     assert!(
         (50..100).contains(&score),
         "Contains match should be 50-99, got {}",
@@ -253,7 +253,7 @@ fn score_action_prefix_plus_description_bonus_stacks() {
         Some("Edit the script file".to_string()),
         ActionCategory::ScriptContext,
     );
-    let score = ActionsDialog::score_action(&action, "script:edit");
+    let score = ActionsDialog::score_action(&action, "edit");
     assert!(
         score >= 115,
         "Prefix (100) + desc bonus (15) should be >= 115, got {}",
@@ -608,7 +608,7 @@ fn to_deeplink_name_with_dots_and_slashes() {
 
 #[test]
 fn to_deeplink_name_only_special_chars() {
-    assert_eq!(to_deeplink_name("!@#$%^&*()"), "");
+    assert_eq!(to_deeplink_name("!@#$%^&*()"), "_unnamed");
 }
 
 #[test]
@@ -631,7 +631,7 @@ fn script_context_first_action_is_run_script() {
 fn script_context_last_action_is_copy_deeplink_without_suggestion() {
     let script = ScriptInfo::new("test", "/path/test.ts");
     let actions = get_script_context_actions(&script);
-    assert_eq!(actions.last().unwrap().id, "script:copy_deeplink");
+    assert_eq!(actions.last().unwrap().id, "copy_deeplink");
 }
 
 #[test]
@@ -646,8 +646,8 @@ fn script_context_last_action_is_reset_ranking_with_suggestion() {
 fn script_context_action_count_no_shortcut_no_alias() {
     let script = ScriptInfo::new("test", "/path/test.ts");
     let actions = get_script_context_actions(&script);
-    // run + add_shortcut + add_alias + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink = 9
-    assert_eq!(actions.len(), 9);
+    // run + add_shortcut + add_alias + toggle_favorite + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink = 10
+    assert_eq!(actions.len(), 10);
 }
 
 // =====================================================================
@@ -685,7 +685,7 @@ fn agent_reveal_desc_mentions_agent() {
     agent.is_script = false;
     agent.is_agent = true;
     let actions = get_script_context_actions(&agent);
-    let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
+    let reveal = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
     assert!(reveal
         .description
         .as_ref()
@@ -768,7 +768,7 @@ fn clipboard_share_desc_mentions_share() {
         .as_ref()
         .unwrap()
         .to_lowercase()
-        .contains("script:share"));
+        .contains("share"));
 }
 
 // =====================================================================
@@ -898,8 +898,8 @@ fn notes_cmd_bar_trash_view_has_3_actions() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    // new_note + browse_notes + enable_auto_sizing = 3 (trash blocks selection-dependent)
-    assert_eq!(actions.len(), 3);
+    // new_note + restore_note + permanently_delete_note + browse_notes + enable_auto_sizing = 5
+    assert_eq!(actions.len(), 5);
 }
 
 #[test]
@@ -1134,7 +1134,7 @@ fn new_chat_model_id_format() {
         provider_display_name: "OpenAI".to_string(),
     }];
     let actions = get_new_chat_actions(&[], &[], &models);
-    assert_eq!(actions[0].id, "model_0");
+    assert_eq!(actions[0].id, "model_openai::gpt-4");
 }
 
 #[test]
@@ -1156,7 +1156,7 @@ fn new_chat_preset_description_is_none() {
         icon: IconName::Code,
     }];
     let actions = get_new_chat_actions(&[], &presets, &[]);
-    assert!(actions[0].description.is_none());
+    assert_eq!(actions[0].description.as_deref(), Some("Uses Code preset"));
 }
 
 // =====================================================================

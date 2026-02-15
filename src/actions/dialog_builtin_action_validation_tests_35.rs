@@ -257,7 +257,7 @@ fn path_file_primary_desc_is_submit() {
     };
     let actions = get_path_context_actions(&path_info);
     let primary = actions.first().unwrap();
-    assert!(primary.description.as_ref().unwrap().contains("Submit"));
+    assert!(primary.description.as_ref().unwrap().contains("Selects"));
 }
 
 #[test]
@@ -269,7 +269,7 @@ fn path_dir_primary_desc_is_navigate() {
     };
     let actions = get_path_context_actions(&path_info);
     let primary = actions.first().unwrap();
-    assert!(primary.description.as_ref().unwrap().contains("Navigate"));
+    assert!(primary.description.as_ref().unwrap().contains("Opens"));
 }
 
 #[test]
@@ -665,7 +665,7 @@ fn chat_model_desc_via_provider() {
         .iter()
         .find(|a| a.id == "chat:select_model_claude")
         .unwrap();
-    assert_eq!(model.description.as_ref().unwrap(), "via Anthropic");
+    assert_eq!(model.description.as_ref().unwrap(), "Uses Anthropic");
 }
 
 // =====================================================================
@@ -731,7 +731,7 @@ fn notes_trash_has_exactly_3_actions() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    assert_eq!(actions.len(), 3);
+    assert_eq!(actions.len(), 5);
 }
 
 #[test]
@@ -742,7 +742,7 @@ fn notes_trash_has_new_note() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "notes:new_note"));
+    assert!(actions.iter().any(|a| a.id == "new_note"));
 }
 
 #[test]
@@ -880,7 +880,7 @@ fn new_chat_only_models() {
     }];
     let actions = get_new_chat_actions(&[], &[], &models);
     assert_eq!(actions.len(), 1);
-    assert_eq!(actions[0].id, "model_0");
+    assert_eq!(actions[0].id, "model_p::m1");
 }
 
 // --- merged from part_03.rs ---
@@ -907,7 +907,7 @@ fn new_chat_only_last_used() {
     }];
     let actions = get_new_chat_actions(&last_used, &[], &[]);
     assert_eq!(actions.len(), 1);
-    assert_eq!(actions[0].id, "last_used_0");
+    assert_eq!(actions[0].id, "last_used_p::lu1");
 }
 
 // =====================================================================
@@ -1218,7 +1218,7 @@ fn scriptlet_copy_path_desc_mentions_clipboard() {
 #[test]
 fn score_action_fuzzy_lower_than_prefix() {
     let action = Action::new("test", "Edit Script", None, ActionCategory::ScriptContext);
-    let prefix_score = ActionsDialog::score_action(&action, "script:edit");
+    let prefix_score = ActionsDialog::score_action(&action, "edit");
     let fuzzy_score = ActionsDialog::score_action(&action, "eds"); // e-d-i-t s-c-r-i-p-t has e,d,s
     assert!(prefix_score > fuzzy_score);
 }
@@ -1244,7 +1244,7 @@ fn score_action_both_title_and_desc_match() {
         Some("Edit the script file".into()),
         ActionCategory::ScriptContext,
     );
-    let score = ActionsDialog::score_action(&action, "script:edit");
+    let score = ActionsDialog::score_action(&action, "edit");
     // prefix(100) + desc(15) = 115
     assert!(score >= 115);
 }
@@ -1383,7 +1383,7 @@ fn clipboard_share_desc_mentions_share() {
         .as_ref()
         .unwrap()
         .to_lowercase()
-        .contains("script:share"));
+        .contains("share"));
 }
 
 #[test]

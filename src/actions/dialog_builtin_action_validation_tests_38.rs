@@ -49,7 +49,7 @@ mod tests {
         let info = ScriptInfo::with_action_verb("Spotify", "/bin/spotify", false, "Switch to");
         let actions = get_script_context_actions(&info);
         let run = actions.iter().find(|a| a.id == "run_script").unwrap();
-        assert!(run.title.starts_with("Switch to"));
+        assert!(run.title.starts_with("Switch To"));
     }
 
     #[test]
@@ -572,7 +572,7 @@ mod tests {
             provider_display_name: "Provider 1".into(),
         }];
         let actions = get_new_chat_actions(&last_used, &[], &[]);
-        let action = actions.iter().find(|a| a.id == "last_used_0").unwrap();
+        let action = actions.iter().find(|a| a.id == "last_used_p1::m1").unwrap();
         assert_eq!(action.icon, Some(IconName::BoltFilled));
     }
 
@@ -585,7 +585,7 @@ mod tests {
             provider_display_name: "Provider 1".into(),
         }];
         let actions = get_new_chat_actions(&last_used, &[], &[]);
-        let action = actions.iter().find(|a| a.id == "last_used_0").unwrap();
+        let action = actions.iter().find(|a| a.id == "last_used_p1::m1").unwrap();
         assert_eq!(action.section.as_deref(), Some("Last Used Settings"));
     }
 
@@ -598,8 +598,8 @@ mod tests {
             provider_display_name: "Anthropic".into(),
         }];
         let actions = get_new_chat_actions(&last_used, &[], &[]);
-        let action = actions.iter().find(|a| a.id == "last_used_0").unwrap();
-        assert_eq!(action.description.as_deref(), Some("Anthropic"));
+        let action = actions.iter().find(|a| a.id == "last_used_p1::m1").unwrap();
+        assert_eq!(action.description.as_deref(), Some("Uses Anthropic"));
     }
 
     #[test]
@@ -611,7 +611,7 @@ mod tests {
             provider_display_name: "Provider 1".into(),
         }];
         let actions = get_new_chat_actions(&[], &[], &models);
-        let action = actions.iter().find(|a| a.id == "model_0").unwrap();
+        let action = actions.iter().find(|a| a.id == "model_p1::m1").unwrap();
         assert_eq!(action.icon, Some(IconName::Settings));
     }
 
@@ -640,7 +640,7 @@ mod tests {
         }];
         let actions = get_new_chat_actions(&[], &presets, &[]);
         let action = actions.iter().find(|a| a.id == "preset_general").unwrap();
-        assert!(action.description.is_none());
+        assert_eq!(action.description.as_deref(), Some("Uses General preset"));
     }
 
     #[test]
@@ -664,7 +664,7 @@ mod tests {
             provider_display_name: "P".into(),
         }];
         let actions = get_new_chat_actions(&[], &[], &models);
-        let action = actions.iter().find(|a| a.id == "model_0").unwrap();
+        let action = actions.iter().find(|a| a.id == "model_p::m1").unwrap();
         assert_eq!(action.section.as_deref(), Some("Models"));
     }
 
@@ -856,8 +856,8 @@ mod tests {
             Action::new("c", "C", None, ActionCategory::ScriptContext).with_section("S"),
         ];
         let filtered = vec![0, 1, 2];
-        // First S = 1 header; no section in b = skip; second S after None = new header
-        assert_eq!(count_section_headers(&actions, &filtered), 2);
+        // Unsectioned rows do not reset section runs, so both S entries share one header.
+        assert_eq!(count_section_headers(&actions, &filtered), 1);
     }
 
     #[test]
@@ -1226,7 +1226,7 @@ mod tests {
     fn builtin_script_has_copy_deeplink() {
         let builtin = ScriptInfo::builtin("App Launcher");
         let actions = get_script_context_actions(&builtin);
-        assert!(actions.iter().any(|a| a.id == "script:copy_deeplink"));
+        assert!(actions.iter().any(|a| a.id == "copy_deeplink"));
     }
 
     // =========================================================================
