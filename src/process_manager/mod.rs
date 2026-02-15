@@ -1,7 +1,6 @@
 //! Process Manager Module
 //!
 //! Centralized process tracking for bun script processes.
-#![allow(dead_code)] // Some methods reserved for future use
 //!
 //! This module provides:
 //! - PID file at ~/.scriptkit/script-kit.pid for main app
@@ -11,8 +10,6 @@
 //! - Bulk kill for graceful shutdown
 //!
 
-// --- merged from part_000.rs ---
-use crate::logging;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -22,6 +19,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{LazyLock, RwLock};
 use sysinfo::{Pid, System};
+use tracing::{debug, info, warn};
 /// Global singleton process manager
 pub static PROCESS_MANAGER: LazyLock<ProcessManager> = LazyLock::new(ProcessManager::new);
 /// Information about a tracked child process
@@ -71,9 +69,10 @@ impl ProcessManager {
     /// Returns an error if the PID file cannot be written.
     pub fn write_main_pid(&self) -> std::io::Result<()> {
         let pid = std::process::id();
-        logging::log(
-            "PROC",
-            &format!("Writing main PID {} to {:?}", pid, self.main_pid_path),
+        info!(
+            pid,
+            path = ?self.main_pid_path,
+            "process_manager.write_main_pid.start"
         );
 
         // Ensure parent directory exists
@@ -96,7 +95,7 @@ impl ProcessManager {
         }
         write!(file, "{}", pid)?;
 
-        logging::log("PROC", &format!("Main PID {} written successfully", pid));
+        info!(pid, "process_manager.write_main_pid.success");
         Ok(())
     }
 
@@ -106,14 +105,19 @@ impl ProcessManager {
     pub fn remove_main_pid(&self) {
         if self.main_pid_path.exists() {
             if let Err(e) = fs::remove_file(&self.main_pid_path) {
-                logging::log("PROC", &format!("Failed to remove main PID file: {}", e));
+                warn!(
+                    error = %e,
+                    path = ?self.main_pid_path,
+                    "process_manager.remove_main_pid.failed"
+                );
             } else {
-                logging::log("PROC", "Main PID file removed");
+                info!(path = ?self.main_pid_path, "process_manager.remove_main_pid.success");
             }
         }
     }
 
     /// Read the main PID from disk, if it exists
+    #[allow(dead_code)]
     pub fn read_main_pid(&self) -> Option<u32> {
         if !self.main_pid_path.exists() {
             return None;
@@ -128,6 +132,7 @@ impl ProcessManager {
     /// Check if the main PID is stale (process no longer running)
     ///
     /// Returns true if there's a PID file but the process is not running.
+    #[allow(dead_code)]
     pub fn is_main_pid_stale(&self) -> bool {
         if let Some(pid) = self.read_main_pid() {
             !self.is_process_running(pid)
@@ -146,13 +151,7 @@ impl ProcessManager {
             started_at: Utc::now(),
         };
 
-        logging::log(
-            "PROC",
-            &format!(
-                "Registering process PID {} for script: {}",
-                pid, script_path
-            ),
-        );
+        info!(pid, script_path, "process_manager.register_process.start");
 
         // Add to in-memory map
         if let Ok(mut processes) = self.active_processes.write() {
@@ -161,7 +160,12 @@ impl ProcessManager {
 
         // Persist to disk
         if let Err(e) = self.persist_active_pids() {
-            logging::log("PROC", &format!("Failed to persist active PIDs: {}", e));
+            warn!(
+                error = %e,
+                path = ?self.active_pids_path,
+                pid,
+                "process_manager.register_process.persist_failed"
+            );
         }
     }
 
@@ -169,7 +173,7 @@ impl ProcessManager {
     ///
     /// This removes the process from tracking when it exits normally.
     pub fn unregister_process(&self, pid: u32) {
-        logging::log("PROC", &format!("Unregistering process PID {}", pid));
+        info!(pid, "process_manager.unregister_process.start");
 
         // Remove from in-memory map
         if let Ok(mut processes) = self.active_processes.write() {
@@ -178,7 +182,12 @@ impl ProcessManager {
 
         // Persist to disk
         if let Err(e) = self.persist_active_pids() {
-            logging::log("PROC", &format!("Failed to persist active PIDs: {}", e));
+            warn!(
+                error = %e,
+                path = ?self.active_pids_path,
+                pid,
+                "process_manager.unregister_process.persist_failed"
+            );
         }
     }
 
@@ -247,13 +256,13 @@ impl ProcessManager {
         };
 
         if processes.is_empty() {
-            logging::log("PROC", "No active processes to kill");
+            debug!("process_manager.kill_all_processes.no_active_processes");
             return;
         }
 
-        logging::log(
-            "PROC",
-            &format!("Killing {} active process(es)", processes.len()),
+        info!(
+            process_count = processes.len(),
+            "process_manager.kill_all_processes.start"
         );
 
         for info in &processes {
@@ -268,18 +277,22 @@ impl ProcessManager {
         // Remove the active PIDs file
         if self.active_pids_path.exists() {
             if let Err(e) = fs::remove_file(&self.active_pids_path) {
-                logging::log("PROC", &format!("Failed to remove active PIDs file: {}", e));
+                warn!(
+                    error = %e,
+                    path = ?self.active_pids_path,
+                    "process_manager.kill_all_processes.remove_active_pids_failed"
+                );
             }
         }
 
-        logging::log("PROC", "All processes killed and tracking cleared");
+        info!("process_manager.kill_all_processes.success");
     }
 
     /// Kill a single process by PID
     ///
     /// Sends SIGKILL to the process group on Unix.
     pub fn kill_process(&self, pid: u32) {
-        logging::log("PROC", &format!("Killing process PID {}", pid));
+        debug!(pid, "process_manager.kill_process.start");
 
         #[cfg(unix)]
         {
@@ -288,34 +301,33 @@ impl ProcessManager {
             match Command::new("kill").args(["-9", &negative_pgid]).output() {
                 Ok(output) => {
                     if output.status.success() {
-                        logging::log(
-                            "PROC",
-                            &format!("Successfully killed process group {}", pid),
-                        );
+                        info!(pid, "process_manager.kill_process.success");
                     } else {
                         let stderr = String::from_utf8_lossy(&output.stderr);
                         if stderr.contains("No such process") {
-                            logging::log("PROC", &format!("Process {} already exited", pid));
+                            debug!(pid, "process_manager.kill_process.already_exited");
                         } else {
-                            logging::log(
-                                "PROC",
-                                &format!("Failed to kill process {}: {}", pid, stderr),
+                            warn!(
+                                pid,
+                                stderr = %stderr,
+                                "process_manager.kill_process.failed"
                             );
                         }
                     }
                 }
                 Err(e) => {
-                    logging::log("PROC", &format!("Failed to execute kill command: {}", e));
+                    warn!(
+                        pid,
+                        error = %e,
+                        "process_manager.kill_process.command_failed"
+                    );
                 }
             }
         }
 
         #[cfg(not(unix))]
         {
-            logging::log(
-                "PROC",
-                &format!("Non-Unix platform: cannot kill process {}", pid),
-            );
+            warn!(pid, "process_manager.kill_process.unsupported_platform");
         }
     }
 
@@ -333,52 +345,51 @@ impl ProcessManager {
     ///
     /// Returns the number of orphans killed.
     pub fn cleanup_orphans(&self) -> usize {
-        logging::log(
-            "PROC",
-            "Checking for orphaned processes from previous session",
-        );
+        debug!("process_manager.cleanup_orphans.start");
 
         let orphans = self.load_persisted_pids();
         if orphans.is_empty() {
-            logging::log("PROC", "No orphaned processes found");
+            debug!("process_manager.cleanup_orphans.none_found");
             return 0;
         }
 
-        logging::log(
-            "PROC",
-            &format!("Found {} potentially orphaned process(es)", orphans.len()),
+        info!(
+            orphan_count = orphans.len(),
+            "process_manager.cleanup_orphans.found_candidates"
         );
 
         let mut killed_count = 0;
 
         for info in &orphans {
             if self.is_process_running(info.pid) {
-                logging::log(
-                    "PROC",
-                    &format!(
-                        "Killing orphaned process PID {} (script: {})",
-                        info.pid, info.script_path
-                    ),
+                info!(
+                    pid = info.pid,
+                    script_path = info.script_path.as_str(),
+                    "process_manager.cleanup_orphans.kill_orphan"
                 );
                 self.kill_process(info.pid);
                 killed_count += 1;
             } else {
-                logging::log("PROC", &format!("Orphan PID {} already exited", info.pid));
+                debug!(
+                    pid = info.pid,
+                    "process_manager.cleanup_orphans.orphan_already_exited"
+                );
             }
         }
 
         // Clear the persisted file
         if self.active_pids_path.exists() {
             if let Err(e) = fs::remove_file(&self.active_pids_path) {
-                logging::log("PROC", &format!("Failed to remove orphan PIDs file: {}", e));
+                warn!(
+                    error = %e,
+                    path = ?self.active_pids_path,
+                    "process_manager.cleanup_orphans.remove_file_failed"
+                );
             }
         }
 
         if killed_count > 0 {
-            logging::log(
-                "PROC",
-                &format!("Cleaned up {} orphaned process(es)", killed_count),
-            );
+            info!(killed_count, "process_manager.cleanup_orphans.success");
         }
 
         killed_count
@@ -425,7 +436,11 @@ impl ProcessManager {
         let contents = match fs::read_to_string(&self.active_pids_path) {
             Ok(c) => c,
             Err(e) => {
-                logging::log("PROC", &format!("Failed to read active PIDs file: {}", e));
+                warn!(
+                    error = %e,
+                    path = ?self.active_pids_path,
+                    "process_manager.load_persisted_pids.read_failed"
+                );
                 return Vec::new();
             }
         };
@@ -433,7 +448,11 @@ impl ProcessManager {
         match serde_json::from_str(&contents) {
             Ok(pids) => pids,
             Err(e) => {
-                logging::log("PROC", &format!("Failed to parse active PIDs JSON: {}", e));
+                warn!(
+                    error = %e,
+                    path = ?self.active_pids_path,
+                    "process_manager.load_persisted_pids.parse_failed"
+                );
                 Vec::new()
             }
         }
@@ -444,11 +463,6 @@ impl Default for ProcessManager {
         Self::new()
     }
 }
-
-// --- merged from part_001.rs ---
-// =============================================================================
-// TESTS
-// =============================================================================
 
 #[cfg(test)]
 mod tests {
