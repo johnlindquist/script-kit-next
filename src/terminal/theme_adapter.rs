@@ -34,6 +34,56 @@ mod tests;
 use color_utils::dim_color;
 pub use color_utils::hex_to_rgb;
 
+// Dark ANSI palette defaults.
+pub(super) const ANSI_BLACK: u32 = 0x000000;
+pub(super) const ANSI_RED: u32 = 0xcd3131;
+pub(super) const ANSI_GREEN: u32 = 0x0dbc79;
+pub(super) const ANSI_YELLOW: u32 = 0xe5e510;
+pub(super) const ANSI_BLUE: u32 = 0x2472c8;
+pub(super) const ANSI_MAGENTA: u32 = 0xbc3fbc;
+pub(super) const ANSI_CYAN: u32 = 0x11a8cd;
+pub(super) const ANSI_WHITE: u32 = 0xe5e5e5;
+pub(super) const ANSI_BRIGHT_BLACK: u32 = 0x666666;
+pub(super) const ANSI_BRIGHT_RED: u32 = 0xf14c4c;
+pub(super) const ANSI_BRIGHT_GREEN: u32 = 0x23d18b;
+pub(super) const ANSI_BRIGHT_YELLOW: u32 = 0xf5f543;
+pub(super) const ANSI_BRIGHT_BLUE: u32 = 0x3b8eea;
+pub(super) const ANSI_BRIGHT_MAGENTA: u32 = 0xd670d6;
+pub(super) const ANSI_BRIGHT_CYAN: u32 = 0x29b8db;
+pub(super) const ANSI_BRIGHT_WHITE: u32 = 0xffffff;
+
+// Light ANSI palette defaults.
+pub(super) const LIGHT_ANSI_BLACK: u32 = ANSI_BLACK;
+pub(super) const LIGHT_ANSI_RED: u32 = ANSI_RED;
+pub(super) const LIGHT_ANSI_GREEN: u32 = 0x00bc00;
+pub(super) const LIGHT_ANSI_YELLOW: u32 = 0x949800;
+pub(super) const LIGHT_ANSI_BLUE: u32 = 0x0451a5;
+pub(super) const LIGHT_ANSI_MAGENTA: u32 = 0xbc05bc;
+pub(super) const LIGHT_ANSI_CYAN: u32 = 0x0598bc;
+pub(super) const LIGHT_ANSI_WHITE: u32 = 0x555555;
+pub(super) const LIGHT_ANSI_BRIGHT_BLACK: u32 = ANSI_BRIGHT_BLACK;
+pub(super) const LIGHT_ANSI_BRIGHT_RED: u32 = ANSI_RED;
+pub(super) const LIGHT_ANSI_BRIGHT_GREEN: u32 = 0x14ce14;
+pub(super) const LIGHT_ANSI_BRIGHT_YELLOW: u32 = 0xb5ba00;
+pub(super) const LIGHT_ANSI_BRIGHT_BLUE: u32 = LIGHT_ANSI_BLUE;
+pub(super) const LIGHT_ANSI_BRIGHT_MAGENTA: u32 = LIGHT_ANSI_MAGENTA;
+pub(super) const LIGHT_ANSI_BRIGHT_CYAN: u32 = LIGHT_ANSI_CYAN;
+pub(super) const LIGHT_ANSI_BRIGHT_WHITE: u32 = 0xa5a5a5;
+
+// Dark terminal defaults.
+pub(super) const DEFAULT_FG: u32 = 0xd4d4d4;
+pub(super) const DEFAULT_BG: u32 = 0x1e1e1e;
+pub(super) const DEFAULT_CURSOR: u32 = 0xffffff;
+pub(super) const DEFAULT_SELECTION_BG: u32 = 0x264f78;
+pub(super) const DEFAULT_SELECTION_FG: u32 = 0xffffff;
+
+// Light terminal defaults.
+pub(super) const LIGHT_DEFAULT_FG: u32 = 0x000000;
+pub(super) const LIGHT_DEFAULT_BG: u32 = 0xf5f5f5;
+pub(super) const LIGHT_DEFAULT_CURSOR: u32 = 0x000000;
+pub(super) const LIGHT_DEFAULT_SELECTION_BG: u32 = 0x0078d4;
+pub(super) const LIGHT_DEFAULT_SELECTION_FG: u32 = 0xffffff;
+
 /// Standard ANSI colors - used as fallback/base for the 16-color palette.
 ///
 /// These colors follow the standard ANSI color naming convention:
@@ -78,22 +128,22 @@ pub struct AnsiColors {
 impl Default for AnsiColors {
     fn default() -> Self {
         Self {
-            black: hex_to_rgb(0x000000),
-            red: hex_to_rgb(0xcd3131),
-            green: hex_to_rgb(0x0dbc79),
-            yellow: hex_to_rgb(0xe5e510),
-            blue: hex_to_rgb(0x2472c8),
-            magenta: hex_to_rgb(0xbc3fbc),
-            cyan: hex_to_rgb(0x11a8cd),
-            white: hex_to_rgb(0xe5e5e5),
-            bright_black: hex_to_rgb(0x666666),
-            bright_red: hex_to_rgb(0xf14c4c),
-            bright_green: hex_to_rgb(0x23d18b),
-            bright_yellow: hex_to_rgb(0xf5f543),
-            bright_blue: hex_to_rgb(0x3b8eea),
-            bright_magenta: hex_to_rgb(0xd670d6),
-            bright_cyan: hex_to_rgb(0x29b8db),
-            bright_white: hex_to_rgb(0xffffff),
+            black: hex_to_rgb(ANSI_BLACK),
+            red: hex_to_rgb(ANSI_RED),
+            green: hex_to_rgb(ANSI_GREEN),
+            yellow: hex_to_rgb(ANSI_YELLOW),
+            blue: hex_to_rgb(ANSI_BLUE),
+            magenta: hex_to_rgb(ANSI_MAGENTA),
+            cyan: hex_to_rgb(ANSI_CYAN),
+            white: hex_to_rgb(ANSI_WHITE),
+            bright_black: hex_to_rgb(ANSI_BRIGHT_BLACK),
+            bright_red: hex_to_rgb(ANSI_BRIGHT_RED),
+            bright_green: hex_to_rgb(ANSI_BRIGHT_GREEN),
+            bright_yellow: hex_to_rgb(ANSI_BRIGHT_YELLOW),
+            bright_blue: hex_to_rgb(ANSI_BRIGHT_BLUE),
+            bright_magenta: hex_to_rgb(ANSI_BRIGHT_MAGENTA),
+            bright_cyan: hex_to_rgb(ANSI_BRIGHT_CYAN),
+            bright_white: hex_to_rgb(ANSI_BRIGHT_WHITE),
         }
     }
 }
@@ -104,22 +154,22 @@ impl AnsiColors {
     /// These colors are designed for readability on light backgrounds.
     pub fn light_default() -> Self {
         Self {
-            black: hex_to_rgb(0x000000),
-            red: hex_to_rgb(0xcd3131),
-            green: hex_to_rgb(0x00bc00),
-            yellow: hex_to_rgb(0x949800),
-            blue: hex_to_rgb(0x0451a5),
-            magenta: hex_to_rgb(0xbc05bc),
-            cyan: hex_to_rgb(0x0598bc),
-            white: hex_to_rgb(0x555555),
-            bright_black: hex_to_rgb(0x666666),
-            bright_red: hex_to_rgb(0xcd3131),
-            bright_green: hex_to_rgb(0x14ce14),
-            bright_yellow: hex_to_rgb(0xb5ba00),
-            bright_blue: hex_to_rgb(0x0451a5),
-            bright_magenta: hex_to_rgb(0xbc05bc),
-            bright_cyan: hex_to_rgb(0x0598bc),
-            bright_white: hex_to_rgb(0xa5a5a5),
+            black: hex_to_rgb(LIGHT_ANSI_BLACK),
+            red: hex_to_rgb(LIGHT_ANSI_RED),
+            green: hex_to_rgb(LIGHT_ANSI_GREEN),
+            yellow: hex_to_rgb(LIGHT_ANSI_YELLOW),
+            blue: hex_to_rgb(LIGHT_ANSI_BLUE),
+            magenta: hex_to_rgb(LIGHT_ANSI_MAGENTA),
+            cyan: hex_to_rgb(LIGHT_ANSI_CYAN),
+            white: hex_to_rgb(LIGHT_ANSI_WHITE),
+            bright_black: hex_to_rgb(LIGHT_ANSI_BRIGHT_BLACK),
+            bright_red: hex_to_rgb(LIGHT_ANSI_BRIGHT_RED),
+            bright_green: hex_to_rgb(LIGHT_ANSI_BRIGHT_GREEN),
+            bright_yellow: hex_to_rgb(LIGHT_ANSI_BRIGHT_YELLOW),
+            bright_blue: hex_to_rgb(LIGHT_ANSI_BRIGHT_BLUE),
+            bright_magenta: hex_to_rgb(LIGHT_ANSI_BRIGHT_MAGENTA),
+            bright_cyan: hex_to_rgb(LIGHT_ANSI_BRIGHT_CYAN),
+            bright_white: hex_to_rgb(LIGHT_ANSI_BRIGHT_WHITE),
         }
     }
 

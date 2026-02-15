@@ -65,11 +65,11 @@ impl ThemeAdapter {
     /// - Foreground: #d4d4d4 (Light gray)
     /// - Cursor: #ffffff (White)
     pub fn dark_default() -> Self {
-        let foreground = hex_to_rgb(0xd4d4d4);
-        let background = hex_to_rgb(0x1e1e1e);
-        let cursor = hex_to_rgb(0xffffff);
-        let selection_background = hex_to_rgb(0x264f78);
-        let selection_foreground = hex_to_rgb(0xffffff);
+        let foreground = hex_to_rgb(DEFAULT_FG);
+        let background = hex_to_rgb(DEFAULT_BG);
+        let cursor = hex_to_rgb(DEFAULT_CURSOR);
+        let selection_background = hex_to_rgb(DEFAULT_SELECTION_BG);
+        let selection_foreground = hex_to_rgb(DEFAULT_SELECTION_FG);
         let ansi = AnsiColors::default();
 
         Self {
@@ -96,11 +96,11 @@ impl ThemeAdapter {
     /// - Foreground: #000000 (Black text for maximum contrast)
     /// - Cursor: #000000 (Black cursor visible on light background)
     pub fn light_default() -> Self {
-        let foreground = hex_to_rgb(0x000000);
-        let background = hex_to_rgb(0xf5f5f5);
-        let cursor = hex_to_rgb(0x000000);
-        let selection_background = hex_to_rgb(0x0078d4);
-        let selection_foreground = hex_to_rgb(0xffffff);
+        let foreground = hex_to_rgb(LIGHT_DEFAULT_FG);
+        let background = hex_to_rgb(LIGHT_DEFAULT_BG);
+        let cursor = hex_to_rgb(LIGHT_DEFAULT_CURSOR);
+        let selection_background = hex_to_rgb(LIGHT_DEFAULT_SELECTION_BG);
+        let selection_foreground = hex_to_rgb(LIGHT_DEFAULT_SELECTION_FG);
         let ansi = AnsiColors::light_default();
 
         Self {
