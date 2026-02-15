@@ -13,6 +13,7 @@
 
 use gpui::Hsla;
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 
 // ============================================================================
 // FocusAware<T> - Generic focus state wrapper
@@ -229,7 +230,7 @@ impl Default for SemanticColors {
 impl SemanticColors {
     /// Dark mode semantic colors (Script Kit default)
     pub fn dark() -> Self {
-        Self {
+        let colors = Self {
             // Backgrounds
             bg_primary: gpui::hsla(0.0, 0.0, 0.118, 1.0), // #1e1e1e
             bg_secondary: gpui::hsla(0.0, 0.0, 0.176, 1.0), // #2d2d30
@@ -263,12 +264,23 @@ impl SemanticColors {
             overlay_highlight: gpui::hsla(43.0 / 360.0, 0.96, 0.56, 0.2), // accent at 20%
             shadow_color: gpui::hsla(0.0, 0.0, 0.0, 0.25), // black at 25%
             focus_ring: gpui::hsla(43.0 / 360.0, 0.96, 0.56, 0.5), // accent at 50%
-        }
+        };
+
+        debug!(
+            mode = "dark",
+            base_hue = colors.bg_primary.h,
+            base_saturation = colors.bg_primary.s,
+            accent_hue = colors.text_accent.h,
+            accent_saturation = colors.text_accent.s,
+            "SemanticColors palette resolved"
+        );
+
+        colors
     }
 
     /// Light mode semantic colors
     pub fn light() -> Self {
-        Self {
+        let colors = Self {
             // Backgrounds
             bg_primary: gpui::hsla(0.0, 0.0, 1.0, 1.0), // #ffffff
             bg_secondary: gpui::hsla(0.0, 0.0, 0.953, 1.0), // #f3f3f3
@@ -302,15 +314,38 @@ impl SemanticColors {
             overlay_highlight: gpui::hsla(210.0 / 360.0, 1.0, 0.42, 0.15),
             shadow_color: gpui::hsla(0.0, 0.0, 0.0, 0.15),
             focus_ring: gpui::hsla(210.0 / 360.0, 1.0, 0.42, 0.4),
-        }
+        };
+
+        debug!(
+            mode = "light",
+            base_hue = colors.bg_primary.h,
+            base_saturation = colors.bg_primary.s,
+            accent_hue = colors.text_accent.h,
+            accent_saturation = colors.text_accent.s,
+            "SemanticColors palette resolved"
+        );
+
+        colors
     }
 
     /// Create a dimmed version of these colors (for unfocused state)
     pub fn dimmed(&self) -> Self {
+        const SATURATION_SCALE: f32 = 0.7;
+        const ALPHA_SCALE: f32 = 0.9;
+
         let dim = |c: Hsla| -> Hsla {
             // Reduce saturation and alpha slightly
-            gpui::hsla(c.h, c.s * 0.7, c.l, c.a * 0.9)
+            gpui::hsla(c.h, c.s * SATURATION_SCALE, c.l, c.a * ALPHA_SCALE)
         };
+
+        debug!(
+            mode = "dimmed",
+            saturation_scale = SATURATION_SCALE,
+            alpha_scale = ALPHA_SCALE,
+            base_hue = self.bg_primary.h,
+            base_saturation = self.bg_primary.s,
+            "SemanticColors dimmed palette generated"
+        );
 
         Self {
             bg_primary: dim(self.bg_primary),
