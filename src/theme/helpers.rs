@@ -50,7 +50,7 @@ impl InputFieldColors {
 
         InputFieldColors {
             background: rgba((colors.background.search_box << 8) | 0x80),
-            text: rgb(colors.text.primary),
+            text: rgb(colors.text.on_accent),
             placeholder: rgb(colors.text.muted),
             border: rgba((colors.ui.border << 8) | 0x60),
             // Use accent color for cursor - provides visual consistency with selection
@@ -186,7 +186,8 @@ pub fn hover_overlay_bg(theme: &Theme, opacity: u8) -> Rgba {
 
 #[cfg(test)]
 mod tests {
-    use super::{ColorScheme, PromptColors};
+    use super::{ColorScheme, InputFieldColors, PromptColors};
+    use gpui::rgb;
 
     #[test]
     fn test_list_item_colors_text_on_accent_uses_text_on_accent_from_scheme() {
@@ -198,6 +199,18 @@ mod tests {
 
         assert_eq!(list_item_colors.text_on_accent, 0xa1b2c3);
         assert_ne!(list_item_colors.text_on_accent, list_item_colors.text_primary);
+    }
+
+    #[test]
+    fn test_input_field_colors_text_uses_text_on_accent_from_scheme() {
+        let mut colors = ColorScheme::dark_default();
+        colors.text.primary = 0x010203;
+        colors.text.on_accent = 0xa1b2c3;
+
+        let input_colors = InputFieldColors::from_color_scheme(&colors);
+
+        assert_eq!(input_colors.text, rgb(colors.text.on_accent));
+        assert_ne!(input_colors.text, rgb(colors.text.primary));
     }
 
     #[test]
