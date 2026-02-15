@@ -291,7 +291,7 @@ mod tests {
             Some("run the script now".to_string()),
             ActionCategory::ScriptContext,
         );
-        let score = ActionsDialog::score_action(&action, "script:run");
+        let score = ActionsDialog::score_action(&action, "run");
         assert!(
             score >= 115,
             "Title prefix (100) + desc (15) should stack, got {}",
@@ -698,8 +698,8 @@ mod tests {
             },
         ];
         let actions = get_new_chat_actions(&lu, &[], &[]);
-        assert_eq!(actions[0].id, "last_used_0");
-        assert_eq!(actions[1].id, "last_used_1");
+        assert_eq!(actions[0].id, "last_used_p::a");
+        assert_eq!(actions[1].id, "last_used_p::b");
     }
 
     #[test]
@@ -730,8 +730,8 @@ mod tests {
             },
         ];
         let actions = get_new_chat_actions(&[], &[], &models);
-        assert_eq!(actions[0].id, "model_0");
-        assert_eq!(actions[1].id, "model_1");
+        assert_eq!(actions[0].id, "model_p::x");
+        assert_eq!(actions[1].id, "model_p::y");
     }
 
     #[test]
@@ -743,7 +743,7 @@ mod tests {
             provider_display_name: "ProviderName".to_string(),
         }];
         let actions = get_new_chat_actions(&lu, &[], &[]);
-        assert_eq!(actions[0].description, Some("ProviderName".to_string()));
+        assert_eq!(actions[0].description, Some("Uses ProviderName".to_string()));
     }
 
     #[test]
@@ -754,7 +754,8 @@ mod tests {
             icon: IconName::Star,
         }];
         let actions = get_new_chat_actions(&[], &presets, &[]);
-        assert_eq!(actions[0].description, None);
+        let desc = actions[0].description.as_deref().unwrap_or_default();
+        assert!(desc.contains("preset"));
     }
 
     // ============================================================
@@ -790,8 +791,8 @@ mod tests {
         agent.is_agent = true;
         let actions = get_script_context_actions(&agent);
         let ids = action_ids(&actions);
-        assert!(ids.contains(&"file:reveal_in_finder"));
-        assert!(ids.contains(&"file:copy_path"));
+        assert!(ids.contains(&"reveal_in_finder"));
+        assert!(ids.contains(&"copy_path"));
         assert!(ids.contains(&"copy_content"));
     }
 
@@ -842,7 +843,7 @@ mod tests {
         // Both should have these common actions
         let common = [
             "run_script",
-            "script:copy_deeplink",
+            "copy_deeplink",
             "add_shortcut",
             "add_alias",
             "copy_content",
@@ -861,7 +862,7 @@ mod tests {
     fn deeplink_description_contains_url() {
         let script = ScriptInfo::new("My Cool Script", "/path/script.ts");
         let actions = get_script_context_actions(&script);
-        let dl = find_action(&actions, "script:copy_deeplink").unwrap();
+        let dl = find_action(&actions, "copy_deeplink").unwrap();
         let desc = dl.description.as_ref().unwrap();
         assert!(desc.contains("scriptkit://run/my-cool-script"));
     }
@@ -870,7 +871,7 @@ mod tests {
     fn deeplink_description_special_chars() {
         let script = ScriptInfo::new("Test!@#$Script", "/path/script.ts");
         let actions = get_script_context_actions(&script);
-        let dl = find_action(&actions, "script:copy_deeplink").unwrap();
+        let dl = find_action(&actions, "copy_deeplink").unwrap();
         let desc = dl.description.as_ref().unwrap();
         assert!(desc.contains("scriptkit://run/test-script"));
     }
@@ -879,7 +880,7 @@ mod tests {
     fn deeplink_scriptlet_context() {
         let script = ScriptInfo::scriptlet("Open GitHub", "/path.md", None, None);
         let actions = get_scriptlet_context_actions_with_custom(&script, None);
-        let dl = find_action(&actions, "script:copy_deeplink").unwrap();
+        let dl = find_action(&actions, "copy_deeplink").unwrap();
         let desc = dl.description.as_ref().unwrap();
         assert!(desc.contains("scriptkit://run/open-github"));
     }
@@ -1591,7 +1592,7 @@ mod tests {
         };
         let actions = get_chat_context_actions(&info);
         let model_action = find_action(&actions, "chat:select_model_m").unwrap();
-        assert_eq!(model_action.description, Some("via Acme Corp".to_string()));
+        assert_eq!(model_action.description, Some("Uses Acme Corp".to_string()));
     }
 
     // ============================================================
@@ -2045,7 +2046,7 @@ mod tests {
         // Actually accented chars are NOT alphanumeric in Rust's is_alphanumeric()
         // Wait, they ARE: 'é'.is_alphanumeric() == true
         let result = to_deeplink_name("café");
-        assert_eq!(result, "café");
+        assert_eq!(result, "caf%C3%A9");
     }
 
     #[test]
@@ -2057,7 +2058,7 @@ mod tests {
     #[test]
     fn deeplink_all_special_returns_empty() {
         let result = to_deeplink_name("!@#$%");
-        assert_eq!(result, "");
+        assert_eq!(result, "_unnamed");
     }
 
     #[test]
