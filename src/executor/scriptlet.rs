@@ -36,6 +36,36 @@ fn apply_scriptlet_environment_allowlist(cmd: &mut Command) {
     }
 }
 
+fn format_template_content(
+    content: &str,
+    inputs: &HashMap<String, String>,
+    positional_args: &[String],
+    windows: bool,
+) -> String {
+    let mut result = content.to_string();
+
+    for (name, value) in inputs {
+        let placeholder = format!("{{{{{}}}}}", name);
+        result = result.replace(&placeholder, value);
+    }
+
+    if windows {
+        for (index, arg) in positional_args.iter().enumerate() {
+            let placeholder = format!("%{}", index + 1);
+            result = result.replace(&placeholder, arg);
+        }
+        result = result.replace("%*", &positional_args.join(" "));
+    } else {
+        for (index, arg) in positional_args.iter().enumerate() {
+            let placeholder = format!("${}", index + 1);
+            result = result.replace(&placeholder, arg);
+        }
+        result = result.replace("$@", &positional_args.join(" "));
+    }
+
+    result
+}
+
 /// Options for scriptlet execution
 #[derive(Debug, Clone, Default)]
 pub struct ScriptletExecOptions {
@@ -124,17 +154,20 @@ pub fn run_scriptlet(
     // Process conditionals and variable substitution
     let content = process_conditionals(&scriptlet.scriptlet_content, &options.flags);
     let is_windows = cfg!(target_os = "windows");
-    let content = format_scriptlet(
-        &content,
-        &options.inputs,
-        &options.positional_args,
-        is_windows,
-    );
+    let tool = scriptlet.tool.to_lowercase();
+    let content = if tool == "template" {
+        format_template_content(&content, &options.inputs, &options.positional_args, is_windows)
+    } else {
+        format_scriptlet(
+            &content,
+            &options.inputs,
+            &options.positional_args,
+            is_windows,
+        )
+    };
 
     // Apply prepend/append
     let content = build_final_content(&content, &options.prepend, &options.append);
-
-    let tool = scriptlet.tool.to_lowercase();
 
     let result = match tool.as_str() {
         // Shell tools
