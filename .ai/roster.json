@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-02-15T18:22:39.533Z",
+  "updatedAt": "2026-02-15T18:43:59.656Z",
   "agents": {
     "codex-actions-consistency": {
       "id": "codex-actions-consistency",
@@ -7032,6 +7032,22 @@
       "host": "johns.macbook.pro.lan",
       "startSha": "e8da494e445e18e1b94a3343d9b92796244b5bf5",
       "notes": "[policy] missing agent_report json"
+    },
+    "codex-theme-spacing": {
+      "id": "codex-theme-spacing",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "gpt-5.3-codex",
+      "task": "Fix the visual layout spacing in the theme selector/chooser UI. The theme selector shows a list of theme items and the spacing between items, padding, and overall layout needs improvement. Look at src/prompts/theme_chooser/ and src/render_prompts/ for the theme chooser rendering code. Recent commit c85d21a3 was 'fix(theme-chooser): improve theme row spacing' — check what it did and continue improving the visual layout. Key areas: item row height, vertical/horizontal padding, gaps between color swatches and text, overall list item spacing. Use theme.colors.* for any colors (never hardcode). After changes, run: cargo check && cargo clippy --all-targets -- -D warnings && cargo test. Then commit with a descriptive message and git push.",
+      "scope": "src/prompts/theme_chooser/**,src/render_prompts/**,src/theme/**",
+      "readonly": false,
+      "status": "needs_split",
+      "notes": "[policy] missing agent_report json",
+      "claims": [],
+      "createdAt": "2026-02-15T18:23:46.238Z",
+      "lastSeenAt": "2026-02-15T18:43:59.656Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "c85d21a3cb5e27f85fbfad95ac7155b80c72f47e"
     }
   }
 }
