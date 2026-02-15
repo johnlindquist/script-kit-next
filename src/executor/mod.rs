@@ -14,7 +14,7 @@ mod scriptlet;
 mod selected_text;
 mod stderr_buffer;
 
-// Re-export public items for external use and backwards compatibility
+// Re-export public items for external use
 // Allow unused imports - these are public API exports that may be used by external code
 // or will be used in the future (marked #[allow(dead_code)] in their source files)
 #[allow(unused_imports)]
@@ -27,16 +27,15 @@ pub use errors::{extract_error_message, generate_suggestions, parse_stack_trace}
 
 pub use runner::{execute_script_interactive, ScriptSession};
 
-// Additional runner exports for testing and backwards compatibility
-#[allow(unused_imports)]
-pub use runner::{
+#[cfg(test)]
+pub(crate) use runner::{
     find_executable, find_sdk_path, is_javascript, is_typescript, spawn_script, ProcessHandle,
     SplitSession,
 };
 
 pub use scriptlet::{run_scriptlet, ScriptletExecOptions};
 
-// Additional scriptlet exports for backwards compatibility
+// Additional scriptlet exports
 #[allow(unused_imports)]
 pub use scriptlet::{
     build_final_content, execute_applescript, execute_edit, execute_open, execute_paste,
@@ -53,6 +52,18 @@ pub use stderr_buffer::{spawn_stderr_reader, StderrBuffer, StderrCapture};
 // Re-export tool_extension only for tests
 #[cfg(test)]
 pub use scriptlet::tool_extension;
+
+#[cfg(test)]
+#[test]
+fn test_runner_helpers_available_for_executor_tests() {
+    let _ = find_executable;
+    let _ = find_sdk_path;
+    let _ = is_javascript;
+    let _ = is_typescript;
+    let _ = spawn_script;
+    let _ = std::mem::size_of::<ProcessHandle>();
+    let _ = std::mem::size_of::<SplitSession>();
+}
 
 #[cfg(test)]
 #[path = "../executor_tests.rs"]
