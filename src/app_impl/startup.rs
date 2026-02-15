@@ -168,9 +168,7 @@ impl ScriptListApp {
                             "APP",
                             &format!(
                                 "List state synced after app load: {} -> {} items (filter='{}')",
-                                old_count,
-                                new_count,
-                                app.computed_filter_text
+                                old_count, new_count, app.computed_filter_text
                             ),
                         );
                         cx.notify();
@@ -768,12 +766,76 @@ impl ScriptListApp {
                 let key = event.keystroke.key.as_str();
                 let is_up = crate::ui_foundation::is_key_up(key);
                 let is_down = crate::ui_foundation::is_key_down(key);
-                // Check for Up/Down arrow keys (no modifiers except shift for selection)
-                if (is_up || is_down)
-                    && !event.keystroke.modifiers.platform
+                let is_left = crate::ui_foundation::is_key_left(key);
+                let is_right = crate::ui_foundation::is_key_right(key);
+                let no_direction_modifiers = !event.keystroke.modifiers.platform
                     && !event.keystroke.modifiers.alt
-                    && !event.keystroke.modifiers.control
-                {
+                    && !event.keystroke.modifiers.control;
+
+                // Emoji picker uses Left/Right to navigate the grid and must consume
+                // those keys before the search input moves its text cursor.
+                if (is_left || is_right) && no_direction_modifiers {
+                    if let Some(app) = app_entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            // FIRST: If confirm dialog is open, route all arrow keys to it
+                            if crate::confirm::is_confirm_window_open()
+                                && crate::confirm::dispatch_confirm_key(key, cx)
+                            {
+                                cx.stop_propagation();
+                                return;
+                            }
+
+                            // Keep left/right from moving any focused input while actions popup is open.
+                            if this.show_actions_popup {
+                                cx.stop_propagation();
+                                return;
+                            }
+
+                            if let AppView::EmojiPickerView {
+                                selected_index,
+                                filter,
+                                selected_category,
+                            } = &mut this.current_view
+                            {
+                                let ordered = crate::emoji::filtered_ordered_emojis(
+                                    filter,
+                                    *selected_category,
+                                );
+                                let filtered_len = ordered.len();
+                                if filtered_len == 0 {
+                                    *selected_index = 0;
+                                    this.hovered_index = None;
+                                    cx.notify();
+                                    cx.stop_propagation();
+                                    return;
+                                }
+
+                                if *selected_index >= filtered_len {
+                                    *selected_index = filtered_len - 1;
+                                }
+
+                                let old_idx = *selected_index;
+                                *selected_index = if is_left {
+                                    old_idx.saturating_sub(1)
+                                } else {
+                                    (old_idx + 1).min(filtered_len.saturating_sub(1))
+                                };
+
+                                let row =
+                                    crate::emoji::compute_scroll_row(*selected_index, &ordered);
+                                this.emoji_scroll_handle
+                                    .scroll_to_item(row, gpui::ScrollStrategy::Nearest);
+
+                                this.input_mode = InputMode::Keyboard;
+                                this.hovered_index = None;
+                                cx.notify();
+                                cx.stop_propagation();
+                            }
+                        });
+                    }
+                }
+                // Check for Up/Down arrow keys (no modifiers except shift for selection)
+                if (is_up || is_down) && no_direction_modifiers {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
                             // FIRST: If confirm dialog is open, route all arrow keys to it
@@ -971,18 +1033,18 @@ impl ScriptListApp {
                                     const HISTORY: &str = "HISTORY";
                                     if is_up {
                                         let (grouped_items, _) = this.get_grouped_results_cached();
-                                        let first_item_position = grouped_items.iter().position(
-                                            |item| {
+                                        let first_item_position =
+                                            grouped_items.iter().position(|item| {
                                                 matches!(
                                                     item,
                                                     crate::list_item::GroupedListItem::Item(_)
                                                 )
-                                            },
-                                        );
+                                            });
                                         let at_top_of_list = first_item_position
                                             .map(|position| this.selected_index <= position)
                                             .unwrap_or(true);
-                                        let in_history = this.input_history.current_index().is_some();
+                                        let in_history =
+                                            this.input_history.current_index().is_some();
 
                                         if in_history || at_top_of_list {
                                             if let Some(text) = this.input_history.navigate_up() {
@@ -1469,6 +1531,5 @@ impl ScriptListApp {
         app.validate_selection_bounds(cx);
 
         app
-
     }
 }
