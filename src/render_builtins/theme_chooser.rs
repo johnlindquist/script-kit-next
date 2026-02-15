@@ -1,3 +1,14 @@
+const ALPHA_BADGE_BORDER: u32 = 0x40;
+const ALPHA_FOOTER_BORDER: u32 = 0x30;
+const ALPHA_TOGGLE_BG: u32 = 0x80;
+const MAX_ALPHA: u32 = 0xFF;
+const SELECTION_HOVER_GAP: u32 = 16;
+const HOVER_SELECTION_GAP: u32 = 8;
+const MIN_HOVER_ALPHA: f32 = 18.0;
+const THEME_LIST_PAGE_SIZE: usize = 5;
+const OPACITY_MATCH_TOLERANCE: f32 = 0.05;
+const FONT_SIZE_MATCH_TOLERANCE: f32 = 0.5;
+
 impl ScriptListApp {
     fn contains_ascii_case_insensitive(haystack: &str, needle: &str) -> bool {
         if needle.is_empty() {
@@ -44,18 +55,7 @@ impl ScriptListApp {
     }
 
     /// Accent color palette for theme customization
-    const ACCENT_PALETTE: &'static [(u32, &'static str)] = &[
-        (0xFBBF24, "Amber"),
-        (0x3B82F6, "Blue"),
-        (0x8B5CF6, "Violet"),
-        (0xEC4899, "Pink"),
-        (0xEF4444, "Red"),
-        (0xF97316, "Orange"),
-        (0x22C55E, "Green"),
-        (0x14B8A6, "Teal"),
-        (0x06B6D4, "Cyan"),
-        (0x6366F1, "Indigo"),
-    ];
+    const ACCENT_PALETTE: &'static [(u32, &'static str)] = theme::ACCENT_PALETTE;
 
     /// Opacity presets for quick selection
     const OPACITY_PRESETS: &'static [(f32, &'static str)] = &[
@@ -68,10 +68,19 @@ impl ScriptListApp {
 
     /// Compute on-accent text color based on accent luminance
     fn accent_on_text_color(accent: u32, bg_main: u32) -> u32 {
-        let r = ((accent >> 16) & 0xFF) as f32;
-        let g = ((accent >> 8) & 0xFF) as f32;
-        let b = (accent & 0xFF) as f32;
-        if (0.299 * r + 0.587 * g + 0.114 * b) > 128.0 {
+        let contrast_ratio = |a: f32, b: f32| {
+            let (lighter, darker) = if a >= b { (a, b) } else { (b, a) };
+            (lighter + 0.05) / (darker + 0.05)
+        };
+
+        let accent_luminance = theme::relative_luminance_srgb(accent);
+        let bg_luminance = theme::relative_luminance_srgb(bg_main);
+        let white_luminance = theme::relative_luminance_srgb(0xFFFFFF);
+
+        let contrast_with_background = contrast_ratio(accent_luminance, bg_luminance);
+        let contrast_with_white = contrast_ratio(accent_luminance, white_luminance);
+
+        if contrast_with_background >= contrast_with_white {
             bg_main
         } else {
             0xFFFFFF
@@ -100,15 +109,15 @@ impl ScriptListApp {
 
     /// Keep selected/active alpha visually stronger than hover alpha.
     fn resolve_interactive_alphas(selected_alpha: u32, hover_alpha: u32) -> (u32, u32) {
-        let mut selected = selected_alpha.min(0xFF);
-        let mut hover = hover_alpha.min(0xFF);
+        let mut selected = selected_alpha.min(MAX_ALPHA);
+        let mut hover = hover_alpha.min(MAX_ALPHA);
 
         if selected <= hover {
-            selected = (hover + 16).min(0xFF);
+            selected = (hover + SELECTION_HOVER_GAP).min(MAX_ALPHA);
         }
 
         if hover >= selected {
-            hover = selected.saturating_sub(8);
+            hover = selected.saturating_sub(HOVER_SELECTION_GAP);
         }
 
         (selected, hover)
@@ -153,8 +162,8 @@ impl ScriptListApp {
         let ui_warning = self.theme.colors.ui.warning;
         let ui_info = self.theme.colors.ui.info;
         let opacity = self.theme.get_opacity();
-        let selected_alpha = (opacity.selected * 255.0) as u32;
-        let hover_alpha = (opacity.hover * 255.0).max(18.0) as u32;
+        let selected_alpha = (opacity.selected * MAX_ALPHA as f32) as u32;
+        let hover_alpha = (opacity.hover * MAX_ALPHA as f32).max(MIN_HOVER_ALPHA) as u32;
         let presets = theme::presets::presets_cached();
         let preview_colors = theme::presets::preset_preview_colors_cached();
         let first_light = theme::presets::first_light_theme_index();
@@ -386,7 +395,7 @@ impl ScriptListApp {
                     ..
                 } = this.current_view
                 {
-                    let page_size: usize = 5;
+                    let page_size: usize = THEME_LIST_PAGE_SIZE;
                     match key_str.as_str() {
                         "up" | "arrowup" => {
                             if *selected_index > 0 {
@@ -489,7 +498,7 @@ impl ScriptListApp {
 
                         // Dark/light badge
                         let badge_text = if is_dark { "dark" } else { "light" };
-                        let badge_border = rgba((ui_border << 8) | 0x40);
+                        let badge_border = rgba((ui_border << 8) | ALPHA_BADGE_BORDER);
                         let badge = div()
                             .text_xs()
                             .text_color(rgb(text_dimmed))
@@ -501,7 +510,7 @@ impl ScriptListApp {
                             .border_color(badge_border)
                             .child(badge_text);
 
-                        let border_rgba = rgba((ui_border << 8) | 0x30);
+                        let border_rgba = rgba((ui_border << 8) | ALPHA_FOOTER_BORDER);
 
                         // Section label for light themes (only when unfiltered)
                         let section_label = if is_first_light {
@@ -717,7 +726,7 @@ impl ScriptListApp {
             });
 
         // ── Preview panel with customization controls ─────────────
-        let border_rgba = rgba((ui_border << 8) | 0x40);
+        let border_rgba = rgba((ui_border << 8) | ALPHA_BADGE_BORDER);
         let current_opacity_main = opacity.main;
         let vibrancy_enabled = self
             .theme
@@ -753,7 +762,8 @@ impl ScriptListApp {
                             .bg(rgb(color))
                             .when(is_current, |d| d.border_2().border_color(rgb(text_primary)))
                             .when(!is_current, |d| {
-                                d.border_1().border_color(rgba((ui_border << 8) | 0x40))
+                                d.border_1()
+                                    .border_color(rgba((ui_border << 8) | ALPHA_BADGE_BORDER))
                             }),
                     )
                     .on_click(
@@ -782,7 +792,7 @@ impl ScriptListApp {
             .iter()
             .enumerate()
             .map(|(i, &(value, label))| {
-                let is_current = (value - current_opacity_main).abs() < 0.05;
+                let is_current = (value - current_opacity_main).abs() < OPACITY_MATCH_TOLERANCE;
                 let click_entity = entity_handle_for_customize.clone();
                 div()
                     .id(ElementId::NamedInteger("opacity-btn".into(), i as u64))
@@ -859,7 +869,7 @@ impl ScriptListApp {
                     .h(px(14.0))
                     .rounded(px(7.0))
                     .when(vibrancy_enabled, |d| d.bg(rgb(accent_color)))
-                    .when(!vibrancy_enabled, |d| d.bg(rgba((ui_border << 8) | 0x80)))
+                    .when(!vibrancy_enabled, |d| d.bg(rgba((ui_border << 8) | ALPHA_TOGGLE_BG)))
                     .flex()
                     .items_center()
                     .child(
@@ -939,7 +949,7 @@ impl ScriptListApp {
             .iter()
             .enumerate()
             .map(|(i, &(size, label))| {
-                let is_current = (size - current_ui_font_size).abs() < 0.5;
+                let is_current = (size - current_ui_font_size).abs() < FONT_SIZE_MATCH_TOLERANCE;
                 let click_entity = entity_handle_for_customize.clone();
                 div()
                     .id(ElementId::NamedInteger("fontsize-btn".into(), i as u64))
@@ -1374,7 +1384,7 @@ impl ScriptListApp {
                         .child(label.to_string()),
                 )
         };
-        let footer_border = rgba((ui_border << 8) | 0x30);
+        let footer_border = rgba((ui_border << 8) | ALPHA_FOOTER_BORDER);
         let footer = div()
             .w_full()
             .px(px(design_spacing.padding_lg))
@@ -1496,5 +1506,23 @@ mod theme_chooser_filter_tests {
         let (selected, hover) = ScriptListApp::resolve_interactive_alphas(80, 32);
         assert_eq!(selected, 80);
         assert_eq!(hover, 32);
+    }
+
+    #[test]
+    fn test_accent_on_text_color_prefers_background_for_bright_accent() {
+        let bg_main = 0x1E1E1E;
+        assert_eq!(
+            ScriptListApp::accent_on_text_color(0xFBBF24, bg_main),
+            bg_main
+        );
+    }
+
+    #[test]
+    fn test_accent_on_text_color_prefers_white_for_dark_accent() {
+        let bg_main = 0x1E1E1E;
+        assert_eq!(
+            ScriptListApp::accent_on_text_color(0x312E81, bg_main),
+            0xFFFFFF
+        );
     }
 }
