@@ -378,20 +378,34 @@ impl NotesApp {
                     }
                 }
                 "up" | "arrowup" => {
-                    if modifiers.shift {
-                        self.select_first_note(window, cx);
-                    } else {
-                        self.select_prev_note(window, cx);
+                    let editor_is_focused = self
+                        .editor_state
+                        .read(cx)
+                        .focus_handle(cx)
+                        .is_focused(window);
+                    if !editor_is_focused {
+                        if modifiers.shift {
+                            self.select_first_note(window, cx);
+                        } else {
+                            self.select_prev_note(window, cx);
+                        }
+                        cx.stop_propagation();
                     }
-                    cx.stop_propagation();
                 }
                 "down" | "arrowdown" => {
-                    if modifiers.shift {
-                        self.select_last_note(window, cx);
-                    } else {
-                        self.select_next_note(window, cx);
+                    let editor_is_focused = self
+                        .editor_state
+                        .read(cx)
+                        .focus_handle(cx)
+                        .is_focused(window);
+                    if !editor_is_focused {
+                        if modifiers.shift {
+                            self.select_last_note(window, cx);
+                        } else {
+                            self.select_next_note(window, cx);
+                        }
+                        cx.stop_propagation();
                     }
-                    cx.stop_propagation();
                 }
                 "[" => {
                     self.navigate_back(window, cx);

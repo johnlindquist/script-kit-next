@@ -106,3 +106,17 @@ fn test_find_in_note_action_dispatches_search_on_window_when_action_executes() {
         "Notes Find in Note action should not dispatch Search through app context"
     );
 }
+
+#[test]
+fn test_platform_arrow_shortcuts_only_run_note_navigation_when_editor_not_focused() {
+    const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
+    assert!(
+        KEYBOARD_SOURCE.contains("focus_handle(cx)")
+            && KEYBOARD_SOURCE.contains(".is_focused(window);"),
+        "Platform arrow shortcuts must check editor focus before note navigation"
+    );
+    assert!(
+        KEYBOARD_SOURCE.contains("if !editor_is_focused {"),
+        "Platform arrow shortcuts must skip note navigation when editor is focused"
+    );
+}
