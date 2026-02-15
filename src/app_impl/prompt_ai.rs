@@ -1,9 +1,8 @@
 use super::*;
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
-enum AiScriptGenerationStage {
+pub(crate) enum AiScriptGenerationStage {
     SelectModel,
     ResolveProvider,
     RequestCompletion,
@@ -13,9 +12,8 @@ enum AiScriptGenerationStage {
     OpenEditor,
 }
 
-#[allow(dead_code)]
 impl AiScriptGenerationStage {
-    fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::SelectModel => "select_model",
             Self::ResolveProvider => "resolve_provider",
@@ -28,8 +26,7 @@ impl AiScriptGenerationStage {
     }
 }
 
-#[allow(dead_code)]
-const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You are ScriptKitScriptGenerator.
+pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You are ScriptKitScriptGenerator.
 Generate a complete Script Kit TypeScript script and return code only.
 Requirements:
 - Include metadata comments at the top:
@@ -42,16 +39,14 @@ Requirements:
 - For file tasks, prefer Script Kit helpers like home() and writeFile().
 - Return a full runnable script with practical defaults and no extra explanation."#;
 
-#[allow(dead_code)]
-fn build_ai_script_generation_user_prompt(description: &str) -> String {
+pub(crate) fn build_ai_script_generation_user_prompt(description: &str) -> String {
     format!(
         "Generate a complete Script Kit script for this request:\n\n{}\n\nReturn only the TypeScript script source.",
         description.trim()
     )
 }
 
-#[allow(dead_code)]
-fn select_default_ai_script_model(
+pub(crate) fn select_default_ai_script_model(
     registry: &crate::ai::ProviderRegistry,
 ) -> Option<crate::ai::ModelInfo> {
     let all_models = registry.get_all_models();
@@ -62,8 +57,7 @@ fn select_default_ai_script_model(
         .or_else(|| all_models.first().cloned())
 }
 
-#[allow(dead_code)]
-fn extract_generated_script_source(raw_response: &str) -> Option<String> {
+pub(crate) fn extract_generated_script_source(raw_response: &str) -> Option<String> {
     let trimmed = raw_response.trim();
     if trimmed.is_empty() {
         return None;
@@ -79,8 +73,7 @@ fn extract_generated_script_source(raw_response: &str) -> Option<String> {
     normalize_generated_script(trimmed.to_string())
 }
 
-#[allow(dead_code)]
-fn extract_first_fenced_block(response: &str, fence_start: &str) -> Option<String> {
+pub(crate) fn extract_first_fenced_block(response: &str, fence_start: &str) -> Option<String> {
     let start_index = response.find(fence_start)?;
     let after_fence = &response[start_index + fence_start.len()..];
     let after_newline = after_fence
@@ -91,8 +84,7 @@ fn extract_first_fenced_block(response: &str, fence_start: &str) -> Option<Strin
     Some(after_newline[..end_index].trim().to_string())
 }
 
-#[allow(dead_code)]
-fn normalize_generated_script(content: String) -> Option<String> {
+pub(crate) fn normalize_generated_script(content: String) -> Option<String> {
     let trimmed = content.trim();
     if trimmed.is_empty() {
         None
@@ -101,8 +93,7 @@ fn normalize_generated_script(content: String) -> Option<String> {
     }
 }
 
-#[allow(dead_code)]
-fn derive_script_name_from_description(description: &str) -> String {
+pub(crate) fn derive_script_name_from_description(description: &str) -> String {
     let mut slug = String::new();
     let mut last_was_dash = false;
 
