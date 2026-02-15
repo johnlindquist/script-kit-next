@@ -12,6 +12,7 @@ pub const DEFAULT_EDITOR_FONT_SIZE: f32 = 16.0;
 pub const DEFAULT_TERMINAL_FONT_SIZE: f32 = 14.0;
 
 /// Default UI scale
+#[cfg(test)]
 pub const DEFAULT_UI_SCALE: f32 = 1.0;
 
 /// Default launcher/layout heights (pixels)
