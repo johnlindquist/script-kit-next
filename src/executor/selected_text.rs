@@ -63,7 +63,11 @@ pub fn handle_selected_text_message(msg: &Message) -> SelectedTextHandleResult {
 /// Handle GET_SELECTED_TEXT request
 #[cfg(target_os = "macos")]
 fn handle_get_selected_text(request_id: &str) -> Message {
-    logging::log("EXEC", &format!("GetSelectedText request: {}", request_id));
+    info!(
+        category = "EXEC",
+        request_id = %request_id,
+        "GetSelectedText request"
+    );
     logging::bench_log("get_selected_text_handler_start");
 
     // NOTE: Window hiding must happen on the main thread (see platform::hide_main_window).
@@ -77,9 +81,11 @@ fn handle_get_selected_text(request_id: &str) -> Message {
     match result {
         Ok(text) => {
             info!(request_id = %request_id, text_len = text.len(), "Got selected text");
-            logging::log(
-                "EXEC",
-                &format!("GetSelectedText success: {} chars", text.len()),
+            info!(
+                category = "EXEC",
+                request_id = %request_id,
+                text_len = text.len(),
+                "GetSelectedText success"
             );
             // Return as Submit message so SDK pending map can match by id
             Message::Submit {
@@ -89,7 +95,12 @@ fn handle_get_selected_text(request_id: &str) -> Message {
         }
         Err(e) => {
             warn!(request_id = %request_id, error = %e, "Failed to get selected text");
-            logging::log("EXEC", &format!("GetSelectedText error: {}", e));
+            info!(
+                category = "EXEC",
+                request_id = %request_id,
+                error = %e,
+                "GetSelectedText error"
+            );
             // Return error prefixed with ERROR: so SDK can detect and reject
             Message::Submit {
                 id: request_id.to_string(),
@@ -101,12 +112,11 @@ fn handle_get_selected_text(request_id: &str) -> Message {
 
 #[cfg(not(target_os = "macos"))]
 fn handle_get_selected_text(request_id: &str) -> Message {
-    logging::log(
-        "EXEC",
-        &format!(
-            "GetSelectedText request: {} (not supported on this platform)",
-            request_id
-        ),
+    info!(
+        category = "EXEC",
+        request_id = %request_id,
+        platform = "non_macos",
+        "GetSelectedText not supported on this platform"
     );
     warn!(request_id = %request_id, "Selected text not supported on this platform");
     Message::Submit {
@@ -118,19 +128,21 @@ fn handle_get_selected_text(request_id: &str) -> Message {
 /// Handle SET_SELECTED_TEXT request
 #[cfg(target_os = "macos")]
 fn handle_set_selected_text(text: &str, request_id: &str) -> Message {
-    logging::log(
-        "EXEC",
-        &format!(
-            "SetSelectedText request: {} ({} chars)",
-            request_id,
-            text.len()
-        ),
+    info!(
+        category = "EXEC",
+        request_id = %request_id,
+        text_len = text.len(),
+        "SetSelectedText request"
     );
 
     match selected_text::set_selected_text(text) {
         Ok(()) => {
             info!(request_id = %request_id, "Set selected text successfully");
-            logging::log("EXEC", "SetSelectedText success");
+            info!(
+                category = "EXEC",
+                request_id = %request_id,
+                "SetSelectedText success"
+            );
             // Return success as Submit with empty value
             Message::Submit {
                 id: request_id.to_string(),
@@ -139,7 +151,12 @@ fn handle_set_selected_text(text: &str, request_id: &str) -> Message {
         }
         Err(e) => {
             warn!(request_id = %request_id, error = %e, "Failed to set selected text");
-            logging::log("EXEC", &format!("SetSelectedText error: {}", e));
+            info!(
+                category = "EXEC",
+                request_id = %request_id,
+                error = %e,
+                "SetSelectedText error"
+            );
             // Return error prefixed with ERROR: so SDK can detect and reject
             Message::Submit {
                 id: request_id.to_string(),
@@ -151,12 +168,11 @@ fn handle_set_selected_text(text: &str, request_id: &str) -> Message {
 
 #[cfg(not(target_os = "macos"))]
 fn handle_set_selected_text(_text: &str, request_id: &str) -> Message {
-    logging::log(
-        "EXEC",
-        &format!(
-            "SetSelectedText request: {} (not supported on this platform)",
-            request_id
-        ),
+    info!(
+        category = "EXEC",
+        request_id = %request_id,
+        platform = "non_macos",
+        "SetSelectedText not supported on this platform"
     );
     warn!(request_id = %request_id, "Selected text not supported on this platform");
     Message::Submit {
@@ -168,14 +184,20 @@ fn handle_set_selected_text(_text: &str, request_id: &str) -> Message {
 /// Handle CHECK_ACCESSIBILITY request
 #[cfg(target_os = "macos")]
 fn handle_check_accessibility(request_id: &str) -> Message {
-    logging::log(
-        "EXEC",
-        &format!("CheckAccessibility request: {}", request_id),
+    info!(
+        category = "EXEC",
+        request_id = %request_id,
+        "CheckAccessibility request"
     );
 
     let granted = selected_text::has_accessibility_permission();
     info!(request_id = %request_id, granted = granted, "Checked accessibility permission");
-    logging::log("EXEC", &format!("CheckAccessibility: granted={}", granted));
+    info!(
+        category = "EXEC",
+        request_id = %request_id,
+        granted,
+        "CheckAccessibility result"
+    );
 
     // Return as Submit with "true" or "false" string value
     Message::Submit {
@@ -186,12 +208,11 @@ fn handle_check_accessibility(request_id: &str) -> Message {
 
 #[cfg(not(target_os = "macos"))]
 fn handle_check_accessibility(request_id: &str) -> Message {
-    logging::log(
-        "EXEC",
-        &format!(
-            "CheckAccessibility request: {} (not supported on this platform)",
-            request_id
-        ),
+    info!(
+        category = "EXEC",
+        request_id = %request_id,
+        platform = "non_macos",
+        "CheckAccessibility not supported on this platform"
     );
     // On non-macOS, report as "not granted" since the feature isn't available
     Message::Submit {
@@ -203,16 +224,19 @@ fn handle_check_accessibility(request_id: &str) -> Message {
 /// Handle REQUEST_ACCESSIBILITY request
 #[cfg(target_os = "macos")]
 fn handle_request_accessibility(request_id: &str) -> Message {
-    logging::log(
-        "EXEC",
-        &format!("RequestAccessibility request: {}", request_id),
+    info!(
+        category = "EXEC",
+        request_id = %request_id,
+        "RequestAccessibility request"
     );
 
     let granted = selected_text::request_accessibility_permission();
     info!(request_id = %request_id, granted = granted, "Requested accessibility permission");
-    logging::log(
-        "EXEC",
-        &format!("RequestAccessibility: granted={}", granted),
+    info!(
+        category = "EXEC",
+        request_id = %request_id,
+        granted,
+        "RequestAccessibility result"
     );
 
     // Return as Submit with "true" or "false" string value
@@ -224,12 +248,11 @@ fn handle_request_accessibility(request_id: &str) -> Message {
 
 #[cfg(not(target_os = "macos"))]
 fn handle_request_accessibility(request_id: &str) -> Message {
-    logging::log(
-        "EXEC",
-        &format!(
-            "RequestAccessibility request: {} (not supported on this platform)",
-            request_id
-        ),
+    info!(
+        category = "EXEC",
+        request_id = %request_id,
+        platform = "non_macos",
+        "RequestAccessibility not supported on this platform"
     );
     // On non-macOS, can't request permissions
     Message::Submit {

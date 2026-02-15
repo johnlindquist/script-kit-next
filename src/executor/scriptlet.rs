@@ -3,7 +3,6 @@
 //! This module handles execution of scriptlets (small scripts embedded in markdown)
 //! with support for various tool types (shell, scripting languages, TypeScript, etc.)
 
-use crate::logging;
 use crate::scriptlets::{format_scriptlet, process_conditionals, Scriptlet, SHELL_TOOLS};
 use std::collections::HashMap;
 use std::io::Write;
@@ -143,12 +142,11 @@ pub fn run_scriptlet(
 ) -> Result<ScriptletResult, String> {
     let start = Instant::now();
     debug!(tool = %scriptlet.tool, name = %scriptlet.name, "Running scriptlet");
-    logging::log(
-        "EXEC",
-        &format!(
-            "run_scriptlet: {} (tool: {})",
-            scriptlet.name, scriptlet.tool
-        ),
+    info!(
+        category = "EXEC",
+        scriptlet_name = %scriptlet.name,
+        tool = %scriptlet.tool,
+        "Running scriptlet"
     );
 
     // Process conditionals and variable substitution
@@ -156,7 +154,12 @@ pub fn run_scriptlet(
     let is_windows = cfg!(target_os = "windows");
     let tool = scriptlet.tool.to_lowercase();
     let content = if tool == "template" {
-        format_template_content(&content, &options.inputs, &options.positional_args, is_windows)
+        format_template_content(
+            &content,
+            &options.inputs,
+            &options.positional_args,
+            is_windows,
+        )
     } else {
         format_scriptlet(
             &content,
@@ -229,19 +232,21 @@ pub fn run_scriptlet(
                 tool = %tool,
                 "Scriptlet execution complete"
             );
-            logging::log(
-                "EXEC",
-                &format!(
-                    "Scriptlet '{}' completed: exit={}, duration={}ms",
-                    scriptlet.name, r.exit_code, duration_ms
-                ),
+            info!(
+                category = "EXEC",
+                scriptlet_name = %scriptlet.name,
+                exit_code = r.exit_code,
+                duration_ms,
+                "Scriptlet completed"
             );
         }
         Err(e) => {
             error!(duration_ms = duration_ms, error = %e, tool = %tool, "Scriptlet execution failed");
-            logging::log(
-                "EXEC",
-                &format!("Scriptlet '{}' failed: {}", scriptlet.name, e),
+            info!(
+                category = "EXEC",
+                scriptlet_name = %scriptlet.name,
+                error = %e,
+                "Scriptlet failed"
             );
         }
     }
@@ -413,6 +418,7 @@ mod secure_tempfile_tests {
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod scriptlet_environment_allowlist_tests {
     use super::{apply_scriptlet_environment_allowlist, SAFE_SCRIPTLET_ENV_VARS};
     use std::process::Command;
@@ -467,7 +473,11 @@ pub fn execute_shell_scriptlet(
     content: &str,
     options: &ScriptletExecOptions,
 ) -> Result<ScriptletResult, String> {
-    logging::log("EXEC", &format!("Executing shell scriptlet with {}", shell));
+    info!(
+        category = "EXEC",
+        shell = %shell,
+        "Executing shell scriptlet"
+    );
 
     let temp_file = create_secure_temp_script(content, ".sh", TempScriptMode::Executable)?;
 
@@ -575,9 +585,10 @@ pub fn execute_with_interpreter(
     extension: &str,
     options: &ScriptletExecOptions,
 ) -> Result<ScriptletResult, String> {
-    logging::log(
-        "EXEC",
-        &format!("Executing with interpreter: {}", interpreter),
+    info!(
+        category = "EXEC",
+        interpreter = %interpreter,
+        "Executing script with interpreter"
     );
 
     // Create temp file with appropriate extension
@@ -614,7 +625,7 @@ pub fn execute_applescript(
     content: &str,
     options: &ScriptletExecOptions,
 ) -> Result<ScriptletResult, String> {
-    logging::log("EXEC", "Executing AppleScript");
+    info!(category = "EXEC", "Executing AppleScript");
 
     let mut cmd = Command::new("osascript");
     cmd.arg("-e").arg(content);
@@ -642,7 +653,7 @@ pub fn execute_typescript(
     content: &str,
     options: &ScriptletExecOptions,
 ) -> Result<ScriptletResult, String> {
-    logging::log("EXEC", "Executing TypeScript via bun");
+    info!(category = "EXEC", "Executing TypeScript via bun");
 
     let temp_file = create_secure_temp_script(content, ".ts", TempScriptMode::InterpreterFed)?;
 
@@ -689,7 +700,7 @@ pub fn execute_transform(
     content: &str,
     options: &ScriptletExecOptions,
 ) -> Result<ScriptletResult, String> {
-    logging::log("EXEC", "Executing transform scriptlet");
+    info!(category = "EXEC", "Executing transform scriptlet");
 
     // Get selected text
     let selected = selected_text::get_selected_text()
@@ -736,7 +747,11 @@ pub fn execute_open(
     content: &str,
     _options: &ScriptletExecOptions,
 ) -> Result<ScriptletResult, String> {
-    logging::log("EXEC", &format!("Opening: {}", content.trim()));
+    info!(
+        category = "EXEC",
+        target = %content.trim(),
+        "Opening target"
+    );
 
     let target = content.trim();
 
@@ -768,7 +783,11 @@ pub fn execute_edit(
     content: &str,
     _options: &ScriptletExecOptions,
 ) -> Result<ScriptletResult, String> {
-    logging::log("EXEC", &format!("Editing: {}", content.trim()));
+    info!(
+        category = "EXEC",
+        target = %content.trim(),
+        "Editing target"
+    );
 
     let file_path = content.trim();
 
@@ -801,7 +820,7 @@ pub fn execute_edit(
 /// Execute paste command (set selected text via clipboard)
 #[cfg(target_os = "macos")]
 pub fn execute_paste(content: &str) -> Result<ScriptletResult, String> {
-    logging::log("EXEC", "Executing paste scriptlet");
+    info!(category = "EXEC", "Executing paste scriptlet");
 
     let text = content.trim();
 
@@ -823,7 +842,7 @@ pub fn execute_paste(_content: &str) -> Result<ScriptletResult, String> {
 /// Execute type command (simulate keyboard typing)
 #[cfg(target_os = "macos")]
 pub fn execute_type(content: &str) -> Result<ScriptletResult, String> {
-    logging::log("EXEC", "Executing type scriptlet");
+    info!(category = "EXEC", "Executing type scriptlet");
 
     let text = content.trim();
 
@@ -857,7 +876,7 @@ pub fn execute_type(_content: &str) -> Result<ScriptletResult, String> {
 /// Execute submit command (paste + enter)
 #[cfg(target_os = "macos")]
 pub fn execute_submit(content: &str) -> Result<ScriptletResult, String> {
-    logging::log("EXEC", "Executing submit scriptlet");
+    info!(category = "EXEC", "Executing submit scriptlet");
 
     // First paste the text
     let paste_result = execute_paste(content)?;
