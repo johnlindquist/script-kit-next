@@ -1229,7 +1229,6 @@ impl AiProvider for VercelGatewayProvider {
                 true,
                 128000,
             ),
-            ModelInfo::new("openai/o3", "o3 (via Vercel)", "vercel", true, 200000),
             ModelInfo::new(
                 "openai/o3-mini",
                 "o3 mini (via Vercel)",
