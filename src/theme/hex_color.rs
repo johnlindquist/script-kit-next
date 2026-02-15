@@ -107,8 +107,8 @@ pub mod hex_color_serde {
             return Err("rgb() requires 3 values: r, g, b".to_string());
         }
 
-        // Try parsing as bare hex (6 characters)
-        if s.len() == 6 && s.chars().all(|c| c.is_ascii_hexdigit()) {
+        // Try parsing as bare hex
+        if s.chars().all(|c| c.is_ascii_hexdigit()) {
             return parse_hex(s);
         }
 
@@ -119,9 +119,87 @@ pub mod hex_color_serde {
     }
 
     fn parse_hex(hex: &str) -> Result<HexColor, String> {
-        if hex.len() != 6 {
-            return Err(format!("hex color must be 6 characters, got {}", hex.len()));
+        if !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Err(format!("invalid hex color: {}", hex));
         }
-        u32::from_str_radix(hex, 16).map_err(|_| format!("invalid hex color: {}", hex))
+
+        let normalized = match hex.len() {
+            3 => {
+                let mut expanded = String::with_capacity(6);
+                for ch in hex.chars() {
+                    expanded.push(ch);
+                    expanded.push(ch);
+                }
+                expanded
+            }
+            4 => {
+                let mut expanded = String::with_capacity(6);
+                for ch in hex.chars().take(3) {
+                    expanded.push(ch);
+                    expanded.push(ch);
+                }
+                expanded
+            }
+            6 => hex.to_string(),
+            8 => hex
+                .get(..6)
+                .ok_or_else(|| format!("invalid hex color: {}", hex))?
+                .to_string(),
+            _ => {
+                return Err(format!(
+                    "hex color must be 3, 4, 6, or 8 characters, got {}",
+                    hex.len()
+                ));
+            }
+        };
+
+        u32::from_str_radix(&normalized, 16).map_err(|_| format!("invalid hex color: {}", hex))
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::parse_color_string;
+
+        #[test]
+        fn test_parse_color_string_expands_rgb_when_hex_len_is_3() {
+            assert_eq!(
+                parse_color_string("fff").expect("3-digit hex should parse"),
+                0xFFFFFF
+            );
+        }
+
+        #[test]
+        fn test_parse_color_string_ignores_alpha_when_hex_len_is_4() {
+            assert_eq!(
+                parse_color_string("FFFA").expect("4-digit hex should parse as RGB"),
+                0xFFFFFF
+            );
+        }
+
+        #[test]
+        fn test_parse_color_string_parses_rgb_when_hex_len_is_6() {
+            assert_eq!(
+                parse_color_string("1E1E1E").expect("6-digit hex should parse"),
+                0x1E1E1E
+            );
+        }
+
+        #[test]
+        fn test_parse_color_string_ignores_alpha_when_hex_len_is_8() {
+            assert_eq!(
+                parse_color_string("1E1E1EFF").expect("8-digit hex should parse as RGB"),
+                0x1E1E1E
+            );
+        }
+
+        #[test]
+        fn test_parse_color_string_rejects_invalid_hex_length_when_bare_hex() {
+            assert!(parse_color_string("ABCDE").is_err());
+        }
+
+        #[test]
+        fn test_parse_color_string_rejects_non_hex_chars_for_prefixed_hex() {
+            assert!(parse_color_string("#112233GG").is_err());
+        }
     }
 }
