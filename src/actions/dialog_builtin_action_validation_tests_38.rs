@@ -228,7 +228,7 @@ mod tests {
             frontmost_app_name: Some("Safari".into()),
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let paste = actions.iter().find(|a| a.id == "clipboard_paste").unwrap();
+        let paste = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
         assert_eq!(paste.title, "Paste to Safari");
     }
 
@@ -243,7 +243,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let paste = actions.iter().find(|a| a.id == "clipboard_paste").unwrap();
+        let paste = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
         assert_eq!(paste.title, "Paste to Active App");
     }
 
@@ -258,7 +258,7 @@ mod tests {
             frontmost_app_name: Some("Visual Studio Code".into()),
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let paste = actions.iter().find(|a| a.id == "clipboard_paste").unwrap();
+        let paste = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
         assert_eq!(paste.title, "Paste to Visual Studio Code");
     }
 
@@ -273,7 +273,7 @@ mod tests {
             frontmost_app_name: Some("Terminal".into()),
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let paste = actions.iter().find(|a| a.id == "clipboard_paste").unwrap();
+        let paste = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
         assert_eq!(paste.shortcut.as_deref(), Some("↵"));
     }
 
@@ -470,28 +470,28 @@ mod tests {
     #[test]
     fn ai_bar_submit_shortcut() {
         let actions = get_ai_command_bar_actions();
-        let submit = actions.iter().find(|a| a.id == "submit").unwrap();
+        let submit = actions.iter().find(|a| a.id == "chat:submit").unwrap();
         assert_eq!(submit.shortcut.as_deref(), Some("↵"));
     }
 
     #[test]
     fn ai_bar_submit_icon() {
         let actions = get_ai_command_bar_actions();
-        let submit = actions.iter().find(|a| a.id == "submit").unwrap();
+        let submit = actions.iter().find(|a| a.id == "chat:submit").unwrap();
         assert_eq!(submit.icon, Some(IconName::ArrowUp));
     }
 
     #[test]
     fn ai_bar_submit_section_is_actions() {
         let actions = get_ai_command_bar_actions();
-        let submit = actions.iter().find(|a| a.id == "submit").unwrap();
+        let submit = actions.iter().find(|a| a.id == "chat:submit").unwrap();
         assert_eq!(submit.section.as_deref(), Some("Actions"));
     }
 
     #[test]
     fn ai_bar_submit_desc_mentions_send() {
         let actions = get_ai_command_bar_actions();
-        let submit = actions.iter().find(|a| a.id == "submit").unwrap();
+        let submit = actions.iter().find(|a| a.id == "chat:submit").unwrap();
         assert!(submit.description.as_ref().unwrap().contains("Send"));
     }
 
@@ -1118,7 +1118,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_file_context_actions(&file);
-        assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
+        assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
     }
 
     #[cfg(target_os = "macos")]
@@ -1131,7 +1131,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_file_context_actions(&dir);
-        assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
+        assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
     }
 
     #[cfg(target_os = "macos")]
@@ -1144,7 +1144,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_file_context_actions(&file);
-        let reveal = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
+        let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
         assert_eq!(reveal.shortcut.as_deref(), Some("⌘↵"));
     }
 
@@ -1158,7 +1158,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_file_context_actions(&file);
-        let reveal = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
+        let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
         assert!(reveal.description.as_ref().unwrap().contains("Finder"));
     }
 
@@ -1170,14 +1170,14 @@ mod tests {
     fn path_context_file_primary_is_select() {
         let info = PathInfo::new("readme.md", "/home/readme.md", false);
         let actions = get_path_context_actions(&info);
-        assert_eq!(actions[0].id, "select_file");
+        assert_eq!(actions[0].id, "file:select_file");
     }
 
     #[test]
     fn path_context_dir_primary_is_open_directory() {
         let info = PathInfo::new("docs", "/home/docs", true);
         let actions = get_path_context_actions(&info);
-        assert_eq!(actions[0].id, "open_directory");
+        assert_eq!(actions[0].id, "file:open_directory");
     }
 
     #[test]
@@ -1218,15 +1218,15 @@ mod tests {
     fn builtin_script_no_reveal_or_copy_path() {
         let builtin = ScriptInfo::builtin("App Launcher");
         let actions = get_script_context_actions(&builtin);
-        assert!(!actions.iter().any(|a| a.id == "reveal_in_finder"));
-        assert!(!actions.iter().any(|a| a.id == "copy_path"));
+        assert!(!actions.iter().any(|a| a.id == "file:reveal_in_finder"));
+        assert!(!actions.iter().any(|a| a.id == "file:copy_path"));
     }
 
     #[test]
     fn builtin_script_has_copy_deeplink() {
         let builtin = ScriptInfo::builtin("App Launcher");
         let actions = get_script_context_actions(&builtin);
-        assert!(actions.iter().any(|a| a.id == "copy_deeplink"));
+        assert!(actions.iter().any(|a| a.id == "script:copy_deeplink"));
     }
 
     // =========================================================================

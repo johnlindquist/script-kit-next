@@ -146,7 +146,7 @@ fn clipboard_text_first_action_is_paste() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert_eq!(actions[0].id, "clipboard_paste");
+    assert_eq!(actions[0].id, "clip:clipboard_paste");
 }
 
 #[test]
@@ -160,7 +160,7 @@ fn clipboard_text_second_action_is_copy() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert_eq!(actions[1].id, "clipboard_copy");
+    assert_eq!(actions[1].id, "clip:clipboard_copy");
 }
 
 #[test]
@@ -434,7 +434,7 @@ fn file_context_file_has_quick_look() {
         file_type: FileType::File,
     };
     let actions = get_file_context_actions(&file_info);
-    assert!(actions.iter().any(|a| a.id == "quick_look"));
+    assert!(actions.iter().any(|a| a.id == "file:quick_look"));
 }
 
 #[test]
@@ -446,7 +446,7 @@ fn file_context_dir_has_no_quick_look() {
         file_type: FileType::Directory,
     };
     let actions = get_file_context_actions(&file_info);
-    assert!(!actions.iter().any(|a| a.id == "quick_look"));
+    assert!(!actions.iter().any(|a| a.id == "file:quick_look"));
 }
 
 // --- merged from part_02.rs ---
@@ -519,7 +519,7 @@ fn path_file_primary_at_index_0() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&path_info);
-    assert_eq!(actions[0].id, "select_file");
+    assert_eq!(actions[0].id, "file:select_file");
 }
 
 #[test]
@@ -530,7 +530,7 @@ fn path_dir_primary_at_index_0() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&path_info);
-    assert_eq!(actions[0].id, "open_directory");
+    assert_eq!(actions[0].id, "file:open_directory");
 }
 
 #[test]
@@ -541,7 +541,7 @@ fn path_file_copy_path_at_index_1() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&path_info);
-    assert_eq!(actions[1].id, "copy_path");
+    assert_eq!(actions[1].id, "file:copy_path");
 }
 
 #[test]
@@ -552,7 +552,7 @@ fn path_dir_copy_path_at_index_1() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&path_info);
-    assert_eq!(actions[1].id, "copy_path");
+    assert_eq!(actions[1].id, "file:copy_path");
 }
 
 // =========== 12. Path context: dir has all 7 IDs ===========
@@ -565,7 +565,7 @@ fn path_dir_has_open_directory() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&path_info);
-    assert!(actions.iter().any(|a| a.id == "open_directory"));
+    assert!(actions.iter().any(|a| a.id == "file:open_directory"));
 }
 
 #[test]
@@ -576,8 +576,8 @@ fn path_dir_has_copy_path_and_copy_filename() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&path_info);
-    assert!(actions.iter().any(|a| a.id == "copy_path"));
-    assert!(actions.iter().any(|a| a.id == "copy_filename"));
+    assert!(actions.iter().any(|a| a.id == "file:copy_path"));
+    assert!(actions.iter().any(|a| a.id == "file:copy_filename"));
 }
 
 #[test]
@@ -588,8 +588,8 @@ fn path_dir_has_open_in_finder_and_editor() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&path_info);
-    assert!(actions.iter().any(|a| a.id == "open_in_finder"));
-    assert!(actions.iter().any(|a| a.id == "open_in_editor"));
+    assert!(actions.iter().any(|a| a.id == "file:open_in_finder"));
+    assert!(actions.iter().any(|a| a.id == "file:open_in_editor"));
 }
 
 #[test]
@@ -600,8 +600,8 @@ fn path_dir_has_terminal_and_trash() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&path_info);
-    assert!(actions.iter().any(|a| a.id == "open_in_terminal"));
-    assert!(actions.iter().any(|a| a.id == "move_to_trash"));
+    assert!(actions.iter().any(|a| a.id == "file:open_in_terminal"));
+    assert!(actions.iter().any(|a| a.id == "file:move_to_trash"));
 }
 
 // =========== 13. Script: shortcut+alias yields update+remove for both ===========
@@ -673,7 +673,7 @@ fn agent_has_copy_deeplink() {
     s.is_agent = true;
     s.is_script = false;
     let actions = get_script_context_actions(&s);
-    assert!(actions.iter().any(|a| a.id == "copy_deeplink"));
+    assert!(actions.iter().any(|a| a.id == "script:copy_deeplink"));
 }
 
 // =========== 15. Script: get_global_actions empty ===========
@@ -957,7 +957,7 @@ fn ai_bar_response_has_copy_response() {
         .iter()
         .filter(|a| a.section.as_deref() == Some("Response"))
         .collect();
-    assert!(response.iter().any(|a| a.id == "copy_response"));
+    assert!(response.iter().any(|a| a.id == "chat:copy_response"));
 }
 
 #[test]
@@ -1140,7 +1140,7 @@ fn chat_2_models_response_messages_has_copy_response() {
         has_response: true,
     };
     let actions = get_chat_context_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "copy_response"));
+    assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
 }
 
 #[test]
@@ -1409,8 +1409,8 @@ fn scriptlet_both_contexts_have_copy_deeplink() {
     let s = ScriptInfo::scriptlet("My Script", "/s.md", None, None);
     let script_actions = get_script_context_actions(&s);
     let custom_actions = get_scriptlet_context_actions_with_custom(&s, None);
-    assert!(script_actions.iter().any(|a| a.id == "copy_deeplink"));
-    assert!(custom_actions.iter().any(|a| a.id == "copy_deeplink"));
+    assert!(script_actions.iter().any(|a| a.id == "script:copy_deeplink"));
+    assert!(custom_actions.iter().any(|a| a.id == "script:copy_deeplink"));
 }
 
 // =========== 29. Dialog format_shortcut_hint: arrow key variants ===========

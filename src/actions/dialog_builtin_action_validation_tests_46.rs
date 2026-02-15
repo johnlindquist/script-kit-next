@@ -252,7 +252,7 @@ fn clipboard_copy_shortcut_is_cmd_enter() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let copy = actions.iter().find(|a| a.id == "clipboard_copy").unwrap();
+    let copy = actions.iter().find(|a| a.id == "clip:clipboard_copy").unwrap();
     assert_eq!(copy.shortcut.as_deref(), Some("⌘↵"));
 }
 
@@ -267,7 +267,7 @@ fn clipboard_copy_title() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let copy = actions.iter().find(|a| a.id == "clipboard_copy").unwrap();
+    let copy = actions.iter().find(|a| a.id == "clip:clipboard_copy").unwrap();
     assert_eq!(copy.title, "Copy to Clipboard");
 }
 
@@ -282,7 +282,7 @@ fn clipboard_copy_desc_mentions_without_pasting() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let copy = actions.iter().find(|a| a.id == "clipboard_copy").unwrap();
+    let copy = actions.iter().find(|a| a.id == "clip:clipboard_copy").unwrap();
     assert!(copy.description.as_ref().unwrap().contains("without"));
 }
 
@@ -297,7 +297,7 @@ fn clipboard_copy_present_for_image() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_copy"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_copy"));
 }
 
 // =========== 7. File context: copy_filename shortcut ⌘C ===========
@@ -311,7 +311,7 @@ fn file_context_copy_filename_shortcut() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&fi);
-    let cf = actions.iter().find(|a| a.id == "copy_filename").unwrap();
+    let cf = actions.iter().find(|a| a.id == "file:copy_filename").unwrap();
     assert_eq!(cf.shortcut.as_deref(), Some("⌘C"));
 }
 
@@ -324,7 +324,7 @@ fn file_context_copy_filename_title() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&fi);
-    let cf = actions.iter().find(|a| a.id == "copy_filename").unwrap();
+    let cf = actions.iter().find(|a| a.id == "file:copy_filename").unwrap();
     assert_eq!(cf.title, "Copy Filename");
 }
 
@@ -337,7 +337,7 @@ fn file_context_copy_filename_present_for_dir() {
         is_dir: true,
     };
     let actions = get_file_context_actions(&fi);
-    assert!(actions.iter().any(|a| a.id == "copy_filename"));
+    assert!(actions.iter().any(|a| a.id == "file:copy_filename"));
 }
 
 #[test]
@@ -349,7 +349,7 @@ fn file_context_copy_filename_desc_mentions_filename() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&fi);
-    let cf = actions.iter().find(|a| a.id == "copy_filename").unwrap();
+    let cf = actions.iter().find(|a| a.id == "file:copy_filename").unwrap();
     assert!(cf.description.as_ref().unwrap().contains("filename"));
 }
 
@@ -359,7 +359,7 @@ fn file_context_copy_filename_desc_mentions_filename() {
 fn path_context_open_in_editor_shortcut() {
     let pi = PathInfo::new("file.rs", "/src/file.rs", false);
     let actions = get_path_context_actions(&pi);
-    let oie = actions.iter().find(|a| a.id == "open_in_editor").unwrap();
+    let oie = actions.iter().find(|a| a.id == "file:open_in_editor").unwrap();
     assert_eq!(oie.shortcut.as_deref(), Some("⌘E"));
 }
 
@@ -367,7 +367,7 @@ fn path_context_open_in_editor_shortcut() {
 fn path_context_open_in_editor_title() {
     let pi = PathInfo::new("file.rs", "/src/file.rs", false);
     let actions = get_path_context_actions(&pi);
-    let oie = actions.iter().find(|a| a.id == "open_in_editor").unwrap();
+    let oie = actions.iter().find(|a| a.id == "file:open_in_editor").unwrap();
     assert_eq!(oie.title, "Open in Editor");
 }
 
@@ -375,7 +375,7 @@ fn path_context_open_in_editor_title() {
 fn path_context_open_in_editor_desc_mentions_editor() {
     let pi = PathInfo::new("file.rs", "/src/file.rs", false);
     let actions = get_path_context_actions(&pi);
-    let oie = actions.iter().find(|a| a.id == "open_in_editor").unwrap();
+    let oie = actions.iter().find(|a| a.id == "file:open_in_editor").unwrap();
     assert!(oie.description.as_ref().unwrap().contains("$EDITOR"));
 }
 
@@ -383,7 +383,7 @@ fn path_context_open_in_editor_desc_mentions_editor() {
 fn path_context_open_in_editor_present_for_dir() {
     let pi = PathInfo::new("src", "/project/src", true);
     let actions = get_path_context_actions(&pi);
-    assert!(actions.iter().any(|a| a.id == "open_in_editor"));
+    assert!(actions.iter().any(|a| a.id == "file:open_in_editor"));
 }
 
 // =========== 9. Path context: move_to_trash shortcut ⌘⌫ ===========
@@ -392,7 +392,7 @@ fn path_context_open_in_editor_present_for_dir() {
 fn path_context_move_to_trash_shortcut() {
     let pi = PathInfo::new("old.txt", "/tmp/old.txt", false);
     let actions = get_path_context_actions(&pi);
-    let mt = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+    let mt = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
     assert_eq!(mt.shortcut.as_deref(), Some("⌘⌫"));
 }
 
@@ -400,7 +400,7 @@ fn path_context_move_to_trash_shortcut() {
 fn path_context_move_to_trash_file_desc_says_file() {
     let pi = PathInfo::new("old.txt", "/tmp/old.txt", false);
     let actions = get_path_context_actions(&pi);
-    let mt = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+    let mt = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
     assert!(mt.description.as_ref().unwrap().contains("file"));
 }
 
@@ -408,7 +408,7 @@ fn path_context_move_to_trash_file_desc_says_file() {
 fn path_context_move_to_trash_dir_desc_says_folder() {
     let pi = PathInfo::new("old_dir", "/tmp/old_dir", true);
     let actions = get_path_context_actions(&pi);
-    let mt = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+    let mt = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
     assert!(mt.description.as_ref().unwrap().contains("folder"));
 }
 
@@ -416,7 +416,7 @@ fn path_context_move_to_trash_dir_desc_says_folder() {
 fn path_context_move_to_trash_title() {
     let pi = PathInfo::new("old.txt", "/tmp/old.txt", false);
     let actions = get_path_context_actions(&pi);
-    let mt = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+    let mt = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
     assert_eq!(mt.title, "Move to Trash");
 }
 
@@ -442,7 +442,7 @@ fn path_context_dir_action_count() {
 fn path_context_file_has_select_file() {
     let pi = PathInfo::new("file.rs", "/src/file.rs", false);
     let actions = get_path_context_actions(&pi);
-    assert!(actions.iter().any(|a| a.id == "select_file"));
+    assert!(actions.iter().any(|a| a.id == "file:select_file"));
 }
 
 // --- merged from part_02.rs ---
@@ -451,7 +451,7 @@ fn path_context_file_has_select_file() {
 fn path_context_dir_has_open_directory() {
     let pi = PathInfo::new("src", "/project/src", true);
     let actions = get_path_context_actions(&pi);
-    assert!(actions.iter().any(|a| a.id == "open_directory"));
+    assert!(actions.iter().any(|a| a.id == "file:open_directory"));
 }
 
 // =========== 11. Script: run_script title includes verb and quoted name ===========
@@ -494,7 +494,7 @@ fn script_run_desc_includes_verb() {
 fn script_copy_deeplink_url_contains_slugified_name() {
     let s = ScriptInfo::new("My Cool Script", "/path/script.ts");
     let actions = get_script_context_actions(&s);
-    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
     assert!(dl
         .description
         .as_ref()
@@ -506,7 +506,7 @@ fn script_copy_deeplink_url_contains_slugified_name() {
 fn script_copy_deeplink_shortcut() {
     let s = ScriptInfo::new("test", "/path/test.ts");
     let actions = get_script_context_actions(&s);
-    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
     assert_eq!(dl.shortcut.as_deref(), Some("⌘⇧D"));
 }
 
@@ -514,7 +514,7 @@ fn script_copy_deeplink_shortcut() {
 fn script_copy_deeplink_title() {
     let s = ScriptInfo::new("test", "/path/test.ts");
     let actions = get_script_context_actions(&s);
-    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
     assert_eq!(dl.title, "Copy Deeplink");
 }
 
@@ -522,7 +522,7 @@ fn script_copy_deeplink_title() {
 fn builtin_copy_deeplink_url_contains_slugified_name() {
     let s = ScriptInfo::builtin("Clipboard History");
     let actions = get_script_context_actions(&s);
-    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
     assert!(dl
         .description
         .as_ref()
@@ -927,7 +927,7 @@ fn chat_copy_response_present_when_has_response() {
         has_response: true,
     };
     let actions = get_chat_context_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "copy_response"));
+    assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
 }
 
 #[test]
@@ -939,7 +939,7 @@ fn chat_copy_response_absent_when_no_response() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    assert!(!actions.iter().any(|a| a.id == "copy_response"));
+    assert!(!actions.iter().any(|a| a.id == "chat:copy_response"));
 }
 
 #[test]
@@ -951,7 +951,7 @@ fn chat_copy_response_shortcut() {
         has_response: true,
     };
     let actions = get_chat_context_actions(&info);
-    let cr = actions.iter().find(|a| a.id == "copy_response").unwrap();
+    let cr = actions.iter().find(|a| a.id == "chat:copy_response").unwrap();
     assert_eq!(cr.shortcut.as_deref(), Some("⌘C"));
 }
 
@@ -964,7 +964,7 @@ fn chat_copy_response_title() {
         has_response: true,
     };
     let actions = get_chat_context_actions(&info);
-    let cr = actions.iter().find(|a| a.id == "copy_response").unwrap();
+    let cr = actions.iter().find(|a| a.id == "chat:copy_response").unwrap();
     assert_eq!(cr.title, "Copy Last Response");
 }
 

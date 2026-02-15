@@ -631,7 +631,7 @@ mod tests {
             file_type: FileType::File,
         };
         let actions = get_file_context_actions(&info);
-        assert_eq!(actions[0].id, "open_file");
+        assert_eq!(actions[0].id, "file:open_file");
     }
 
     #[test]
@@ -643,7 +643,7 @@ mod tests {
             file_type: FileType::Directory,
         };
         let actions = get_file_context_actions(&info);
-        assert_eq!(actions[0].id, "open_directory");
+        assert_eq!(actions[0].id, "file:open_directory");
     }
 
     #[test]
@@ -720,8 +720,8 @@ mod tests {
             file_type: FileType::File,
         };
         let actions = get_file_context_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "copy_path"));
-        assert!(actions.iter().any(|a| a.id == "copy_filename"));
+        assert!(actions.iter().any(|a| a.id == "file:copy_path"));
+        assert!(actions.iter().any(|a| a.id == "file:copy_filename"));
     }
 
     #[test]
@@ -740,10 +740,10 @@ mod tests {
         };
         assert!(get_file_context_actions(&file_info)
             .iter()
-            .any(|a| a.id == "reveal_in_finder"));
+            .any(|a| a.id == "file:reveal_in_finder"));
         assert!(get_file_context_actions(&dir_info)
             .iter()
-            .any(|a| a.id == "reveal_in_finder"));
+            .any(|a| a.id == "file:reveal_in_finder"));
     }
 
     // =========================================================================
@@ -758,7 +758,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_path_context_actions(&info);
-        let term = actions.iter().find(|a| a.id == "open_in_terminal").unwrap();
+        let term = actions.iter().find(|a| a.id == "file:open_in_terminal").unwrap();
         assert_eq!(term.shortcut.as_deref(), Some("⌘T"));
     }
 
@@ -770,7 +770,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_path_context_actions(&info);
-        let term = actions.iter().find(|a| a.id == "open_in_terminal").unwrap();
+        let term = actions.iter().find(|a| a.id == "file:open_in_terminal").unwrap();
         assert!(term
             .description
             .as_ref()
@@ -787,7 +787,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "open_in_terminal"));
+        assert!(actions.iter().any(|a| a.id == "file:open_in_terminal"));
     }
 
     #[test]
@@ -798,7 +798,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_path_context_actions(&info);
-        let term = actions.iter().find(|a| a.id == "open_in_terminal").unwrap();
+        let term = actions.iter().find(|a| a.id == "file:open_in_terminal").unwrap();
         assert_eq!(term.title, "Open in Terminal");
     }
 
@@ -814,7 +814,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&info);
-        let trash = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+        let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
         assert!(trash.description.as_ref().unwrap().contains("file"));
     }
 
@@ -826,7 +826,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_path_context_actions(&info);
-        let trash = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+        let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
         assert!(trash.description.as_ref().unwrap().contains("folder"));
     }
 
@@ -838,7 +838,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&info);
-        let trash = actions.iter().find(|a| a.id == "move_to_trash").unwrap();
+        let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
         assert_eq!(trash.shortcut.as_deref(), Some("⌘⌫"));
     }
 
@@ -850,7 +850,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&info);
-        assert_eq!(actions.last().unwrap().id, "move_to_trash");
+        assert_eq!(actions.last().unwrap().id, "file:move_to_trash");
     }
 
     // =========================================================================
@@ -961,7 +961,7 @@ mod tests {
         info.is_agent = true;
         info.is_script = false;
         let actions = get_script_context_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
+        assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
     }
 
     #[test]
@@ -970,7 +970,7 @@ mod tests {
         info.is_agent = true;
         info.is_script = false;
         let actions = get_script_context_actions(&info);
-        let reveal = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
+        let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
         assert!(reveal
             .description
             .as_ref()
@@ -1228,7 +1228,7 @@ mod tests {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "new_note"));
+        assert!(actions.iter().any(|a| a.id == "notes:new_note"));
     }
 
     #[test]

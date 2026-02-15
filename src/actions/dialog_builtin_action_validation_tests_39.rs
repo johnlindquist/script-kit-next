@@ -259,7 +259,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert_eq!(actions[0].id, "clipboard_paste");
+        assert_eq!(actions[0].id, "clip:clipboard_paste");
     }
 
     #[test]
@@ -273,7 +273,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert_eq!(actions[1].id, "clipboard_copy");
+        assert_eq!(actions[1].id, "clip:clipboard_copy");
     }
 
     #[test]
@@ -499,7 +499,7 @@ mod tests {
             file_type: FileType::Directory,
         };
         let actions = get_file_context_actions(&dir);
-        assert!(!actions.iter().any(|a| a.id == "quick_look"));
+        assert!(!actions.iter().any(|a| a.id == "file:quick_look"));
     }
 
     #[test]
@@ -518,10 +518,10 @@ mod tests {
         };
         assert!(get_file_context_actions(&file)
             .iter()
-            .any(|a| a.id == "reveal_in_finder"));
+            .any(|a| a.id == "file:reveal_in_finder"));
         assert!(get_file_context_actions(&dir)
             .iter()
-            .any(|a| a.id == "reveal_in_finder"));
+            .any(|a| a.id == "file:reveal_in_finder"));
     }
 
     #[test]
@@ -533,8 +533,8 @@ mod tests {
             file_type: FileType::File,
         };
         let actions = get_file_context_actions(&file);
-        assert!(actions.iter().any(|a| a.id == "copy_path"));
-        assert!(actions.iter().any(|a| a.id == "copy_filename"));
+        assert!(actions.iter().any(|a| a.id == "file:copy_path"));
+        assert!(actions.iter().any(|a| a.id == "file:copy_filename"));
     }
 
     // =========================================================================
@@ -550,7 +550,7 @@ mod tests {
             file_type: FileType::File,
         };
         let actions = get_file_context_actions(&file);
-        let cf = actions.iter().find(|a| a.id == "copy_filename").unwrap();
+        let cf = actions.iter().find(|a| a.id == "file:copy_filename").unwrap();
         assert_eq!(cf.shortcut.as_deref(), Some("⌘C"));
     }
 
@@ -562,7 +562,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&info);
-        let cf = actions.iter().find(|a| a.id == "copy_filename").unwrap();
+        let cf = actions.iter().find(|a| a.id == "file:copy_filename").unwrap();
         assert!(cf.shortcut.is_none());
     }
 
@@ -581,8 +581,8 @@ mod tests {
         };
         let fc = get_file_context_actions(&file);
         let pc = get_path_context_actions(&path);
-        let fcp = fc.iter().find(|a| a.id == "copy_path").unwrap();
-        let pcp = pc.iter().find(|a| a.id == "copy_path").unwrap();
+        let fcp = fc.iter().find(|a| a.id == "file:copy_path").unwrap();
+        let pcp = pc.iter().find(|a| a.id == "file:copy_path").unwrap();
         assert_eq!(fcp.shortcut, pcp.shortcut);
     }
 
@@ -595,7 +595,7 @@ mod tests {
             file_type: FileType::File,
         };
         let actions = get_file_context_actions(&file);
-        let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
+        let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
         assert_eq!(cp.shortcut.as_deref(), Some("⌘⇧C"));
     }
 
@@ -630,7 +630,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&info);
-        assert_eq!(actions[0].id, "select_file");
+        assert_eq!(actions[0].id, "file:select_file");
     }
 
     #[test]
@@ -641,7 +641,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_path_context_actions(&info);
-        assert_eq!(actions[0].id, "open_directory");
+        assert_eq!(actions[0].id, "file:open_directory");
     }
 
     #[test]
@@ -672,7 +672,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&info);
-        assert_eq!(actions.last().unwrap().id, "move_to_trash");
+        assert_eq!(actions.last().unwrap().id, "file:move_to_trash");
     }
 
     #[test]
@@ -683,7 +683,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_path_context_actions(&info);
-        assert_eq!(actions.last().unwrap().id, "move_to_trash");
+        assert_eq!(actions.last().unwrap().id, "file:move_to_trash");
     }
 
     #[test]
@@ -762,7 +762,7 @@ mod tests {
         info.is_agent = true;
         info.is_script = false;
         let actions = get_script_context_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "copy_path"));
+        assert!(actions.iter().any(|a| a.id == "file:copy_path"));
     }
 
     #[test]
@@ -771,7 +771,7 @@ mod tests {
         info.is_agent = true;
         info.is_script = false;
         let actions = get_script_context_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
+        assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
     }
 
     #[test]
@@ -1077,7 +1077,7 @@ mod tests {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        let nn = actions.iter().find(|a| a.id == "new_note").unwrap();
+        let nn = actions.iter().find(|a| a.id == "notes:new_note").unwrap();
         assert_eq!(nn.icon, Some(IconName::Plus));
     }
 
@@ -1172,7 +1172,7 @@ mod tests {
             .unwrap();
         let copy_pos = actions
             .iter()
-            .position(|a| a.id == "copy_response")
+            .position(|a| a.id == "chat:copy_response")
             .unwrap();
         assert!(copy_pos > cont_pos);
     }

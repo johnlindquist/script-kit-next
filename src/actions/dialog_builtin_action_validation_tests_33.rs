@@ -167,7 +167,12 @@ fn parse_shortcut_keycaps_lowercase_uppercased() {
 
 #[test]
 fn score_action_prefix_match_at_least_100() {
-    let action = Action::new("edit", "Edit Script", None, ActionCategory::ScriptContext);
+    let action = Action::new(
+        "script:edit",
+        "Edit Script",
+        None,
+        ActionCategory::ScriptContext,
+    );
     let score = ActionsDialog::score_action(&action, "edit");
     assert!(score >= 100, "Prefix match should be >= 100, got {}", score);
 }
@@ -190,7 +195,7 @@ fn score_action_contains_match_between_50_and_99() {
 
 #[test]
 fn score_action_no_match_returns_zero() {
-    let action = Action::new("run", "Run Script", None, ActionCategory::ScriptContext);
+    let action = Action::new("script:run", "Run Script", None, ActionCategory::ScriptContext);
     let score = ActionsDialog::score_action(&action, "zzznotfound");
     assert_eq!(score, 0, "No match should return 0");
 }
@@ -243,7 +248,7 @@ fn score_action_empty_search_gives_prefix_match() {
 #[test]
 fn score_action_prefix_plus_description_bonus_stacks() {
     let action = Action::new(
-        "edit",
+        "script:edit",
         "Edit Script",
         Some("Edit the script file".to_string()),
         ActionCategory::ScriptContext,
@@ -626,7 +631,7 @@ fn script_context_first_action_is_run_script() {
 fn script_context_last_action_is_copy_deeplink_without_suggestion() {
     let script = ScriptInfo::new("test", "/path/test.ts");
     let actions = get_script_context_actions(&script);
-    assert_eq!(actions.last().unwrap().id, "copy_deeplink");
+    assert_eq!(actions.last().unwrap().id, "script:copy_deeplink");
 }
 
 #[test]
@@ -680,7 +685,7 @@ fn agent_reveal_desc_mentions_agent() {
     agent.is_script = false;
     agent.is_agent = true;
     let actions = get_script_context_actions(&agent);
-    let reveal = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
+    let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
     assert!(reveal
         .description
         .as_ref()
@@ -953,7 +958,7 @@ fn path_context_file_first_is_select_file() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&path_info);
-    assert_eq!(actions[0].id, "select_file");
+    assert_eq!(actions[0].id, "file:select_file");
 }
 
 #[test]
@@ -964,7 +969,7 @@ fn path_context_dir_first_is_open_directory() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&path_info);
-    assert_eq!(actions[0].id, "open_directory");
+    assert_eq!(actions[0].id, "file:open_directory");
 }
 
 // =====================================================================
