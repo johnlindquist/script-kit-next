@@ -155,7 +155,7 @@ mod tests {
         let ids = action_ids(&actions);
         assert!(ids.contains(&"run_script".to_string()));
         assert!(ids.contains(&"edit_scriptlet".to_string()));
-        assert!(ids.contains(&"script:copy_deeplink".to_string()));
+        assert!(ids.contains(&"copy_deeplink".to_string()));
         assert!(!ids.iter().any(|id| id.starts_with("scriptlet_action:")));
     }
 
@@ -309,8 +309,8 @@ mod tests {
         script.is_agent = true;
         let actions = get_script_context_actions(&script);
         let ids = action_ids(&actions);
-        assert!(ids.contains(&"file:reveal_in_finder".to_string()));
-        assert!(ids.contains(&"file:copy_path".to_string()));
+        assert!(ids.contains(&"reveal_in_finder".to_string()));
+        assert!(ids.contains(&"copy_path".to_string()));
     }
 
     #[test]
@@ -329,7 +329,7 @@ mod tests {
         script.is_script = false;
         script.is_agent = true;
         let actions = get_script_context_actions(&script);
-        let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
+        let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
         assert_eq!(cp.shortcut.as_deref(), Some("⌘⇧C"));
     }
 
@@ -717,7 +717,7 @@ mod tests {
         }];
         let actions = get_new_chat_actions(&[], &presets, &[]);
         let preset_action = actions.iter().find(|a| a.id == "preset_code").unwrap();
-        assert!(preset_action.description.is_none());
+        assert!(preset_action.description.as_deref().unwrap().contains("preset"));
     }
 
     #[test]
@@ -729,8 +729,11 @@ mod tests {
             provider_display_name: "OpenAI".into(),
         }];
         let actions = get_new_chat_actions(&[], &[], &models);
-        let model_action = actions.iter().find(|a| a.id == "model_0").unwrap();
-        assert_eq!(model_action.description.as_deref(), Some("OpenAI"));
+        let model_action = actions
+            .iter()
+            .find(|a| a.id == "model_openai::gpt-4")
+            .unwrap();
+        assert_eq!(model_action.description.as_deref(), Some("Uses OpenAI"));
     }
 
     #[test]
@@ -742,7 +745,10 @@ mod tests {
             provider_display_name: "Anthropic".into(),
         }];
         let actions = get_new_chat_actions(&[], &[], &models);
-        let model = actions.iter().find(|a| a.id == "model_0").unwrap();
+        let model = actions
+            .iter()
+            .find(|a| a.id == "model_anthropic::claude")
+            .unwrap();
         assert_eq!(model.icon, Some(IconName::Settings));
     }
 
@@ -755,7 +761,10 @@ mod tests {
             provider_display_name: "OpenAI".into(),
         }];
         let actions = get_new_chat_actions(&last_used, &[], &[]);
-        let lu = actions.iter().find(|a| a.id == "last_used_0").unwrap();
+        let lu = actions
+            .iter()
+            .find(|a| a.id == "last_used_openai::gpt-4o")
+            .unwrap();
         assert_eq!(lu.icon, Some(IconName::BoltFilled));
     }
 
@@ -944,7 +953,7 @@ mod tests {
     #[test]
     fn cat13_score_prefix_beats_contains() {
         let action = Action::new("test", "Edit Script", None, ActionCategory::ScriptContext);
-        let prefix_score = ActionsDialog::score_action(&action, "script:edit");
+        let prefix_score = ActionsDialog::score_action(&action, "edit");
         let contains_score = ActionsDialog::score_action(&action, "script");
         assert!(
             prefix_score > contains_score,
@@ -1328,7 +1337,7 @@ mod tests {
         script.is_script = false;
         script.is_agent = true;
         let actions = get_script_context_actions(&script);
-        let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
+        let reveal = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
         assert_eq!(reveal.shortcut.as_deref(), Some("⌘⇧F"));
     }
 
@@ -1671,7 +1680,7 @@ mod tests {
         let script = ScriptInfo::new("My Script", "/p/my-script.ts");
         let actions = get_script_context_actions(&script);
         let run = actions.iter().find(|a| a.id == "run_script").unwrap();
-        assert_eq!(run.title, "Run \"My Script\"");
+        assert_eq!(run.title, "Run");
     }
 
     #[test]
@@ -1679,7 +1688,7 @@ mod tests {
         let script = ScriptInfo::with_action_verb("Safari", "/app", false, "Launch");
         let actions = get_script_context_actions(&script);
         let run = actions.iter().find(|a| a.id == "run_script").unwrap();
-        assert_eq!(run.title, "Launch \"Safari\"");
+        assert_eq!(run.title, "Launch");
     }
 
     #[test]
@@ -1687,7 +1696,7 @@ mod tests {
         let script = ScriptInfo::with_action_verb("Terminal", "window:1", false, "Switch to");
         let actions = get_script_context_actions(&script);
         let run = actions.iter().find(|a| a.id == "run_script").unwrap();
-        assert_eq!(run.title, "Switch to \"Terminal\"");
+        assert_eq!(run.title, "Switch To");
     }
 
     #[test]
@@ -1695,7 +1704,7 @@ mod tests {
         let builtin = ScriptInfo::builtin("Clipboard History");
         let actions = get_script_context_actions(&builtin);
         let run = actions.iter().find(|a| a.id == "run_script").unwrap();
-        assert_eq!(run.title, "Run \"Clipboard History\"");
+        assert_eq!(run.title, "Run");
     }
 
     #[test]

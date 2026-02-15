@@ -240,7 +240,7 @@ fn cat26_03_notes_full_mode_has_copy_section_actions() {
     };
     let actions = get_notes_command_bar_actions(&info);
     assert!(actions.iter().any(|a| a.id == "copy_note_as"));
-    assert!(actions.iter().any(|a| a.id == "script:copy_deeplink"));
+    assert!(actions.iter().any(|a| a.id == "copy_deeplink"));
     assert!(actions.iter().any(|a| a.id == "create_quicklink"));
 }
 
@@ -354,7 +354,7 @@ fn cat26_04_chat_model_description_via_provider() {
         .iter()
         .find(|a| a.id == "chat:select_model_claude")
         .unwrap();
-    assert_eq!(model_action.description.as_deref(), Some("via Anthropic"));
+    assert_eq!(model_action.description.as_deref(), Some("Uses Anthropic"));
 }
 
 // ─────────────────────────────────────────────
@@ -416,7 +416,7 @@ fn cat26_06_file_context_open_desc_says_default_application() {
         .description
         .as_ref()
         .unwrap()
-        .contains("default application"));
+        .contains("default app"));
 }
 
 #[test]
@@ -428,7 +428,7 @@ fn cat26_06_path_context_file_desc_says_submit() {
     };
     let actions = get_path_context_actions(&info);
     let sel = actions.iter().find(|a| a.id == "file:select_file").unwrap();
-    assert!(sel.description.as_ref().unwrap().contains("Submit"));
+    assert!(sel.description.as_ref().unwrap().contains("Selects"));
 }
 
 #[test]
@@ -455,7 +455,7 @@ fn cat26_06_path_dir_desc_says_navigate() {
     };
     let actions = get_path_context_actions(&info);
     let open = actions.iter().find(|a| a.id == "file:open_directory").unwrap();
-    assert!(open.description.as_ref().unwrap().contains("Navigate"));
+    assert!(open.description.as_ref().unwrap().contains("Opens this directory"));
 }
 
 // ─────────────────────────────────────────────
@@ -533,20 +533,20 @@ fn cat26_08_format_hint_option_alias() {
 #[test]
 fn cat26_09_deeplink_preserves_cjk() {
     let result = to_deeplink_name("日本語スクリプト");
-    assert!(result.contains("日本語スクリプト"));
+    assert!(result.contains("%E6%97%A5%E6%9C%AC"));
 }
 
 #[test]
 fn cat26_09_deeplink_preserves_accented() {
     let result = to_deeplink_name("café résumé");
-    assert!(result.contains("café"));
-    assert!(result.contains("résumé"));
+    assert!(result.contains("caf%C3%A9"));
+    assert!(result.contains("r%C3%A9sum%C3%A9"));
 }
 
 #[test]
 fn cat26_09_deeplink_mixed_alpha_special_unicode() {
     let result = to_deeplink_name("Hello 世界!");
-    assert_eq!(result, "hello-世界");
+    assert_eq!(result, "hello-%E4%B8%96%E7%95%8C");
 }
 
 #[test]
@@ -799,7 +799,7 @@ fn cat26_13_new_chat_last_used_description_is_provider_display_name() {
         provider_display_name: "My Provider".into(),
     }];
     let actions = get_new_chat_actions(&last_used, &[], &[]);
-    assert_eq!(actions[0].description.as_deref(), Some("My Provider"));
+    assert_eq!(actions[0].description.as_deref(), Some("Uses My Provider"));
 }
 
 #[test]
@@ -927,21 +927,21 @@ fn cat26_16_agent_no_view_logs() {
 fn cat26_17_script_has_copy_deeplink() {
     let s = ScriptInfo::new("s", "/s.ts");
     let actions = get_script_context_actions(&s);
-    assert!(actions.iter().any(|a| a.id == "script:copy_deeplink"));
+    assert!(actions.iter().any(|a| a.id == "copy_deeplink"));
 }
 
 #[test]
 fn cat26_17_builtin_has_copy_deeplink() {
     let b = ScriptInfo::builtin("B");
     let actions = get_script_context_actions(&b);
-    assert!(actions.iter().any(|a| a.id == "script:copy_deeplink"));
+    assert!(actions.iter().any(|a| a.id == "copy_deeplink"));
 }
 
 #[test]
 fn cat26_17_scriptlet_has_copy_deeplink() {
     let s = ScriptInfo::scriptlet("S", "/s.md", None, None);
     let actions = get_script_context_actions(&s);
-    assert!(actions.iter().any(|a| a.id == "script:copy_deeplink"));
+    assert!(actions.iter().any(|a| a.id == "copy_deeplink"));
 }
 
 // ─────────────────────────────────────────────
@@ -1464,14 +1464,14 @@ fn cat26_30_builtin_exactly_4_actions() {
 fn cat26_30_script_exactly_9_actions() {
     let s = ScriptInfo::new("s", "/s.ts");
     let actions = get_script_context_actions(&s);
-    assert_eq!(actions.len(), 9);
+    assert_eq!(actions.len(), 10);
 }
 
 #[test]
 fn cat26_30_scriptlet_exactly_8_actions() {
     let s = ScriptInfo::scriptlet("S", "/s.md", None, None);
     let actions = get_script_context_actions(&s);
-    assert_eq!(actions.len(), 8);
+    assert_eq!(actions.len(), 9);
 }
 
 #[test]

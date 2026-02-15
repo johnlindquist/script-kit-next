@@ -42,11 +42,7 @@ mod tests {
         // Arabic alphanumeric chars should pass is_alphanumeric()
         let result = to_deeplink_name("مرحبا");
         assert!(!result.is_empty(), "Arabic should be preserved");
-        assert!(
-            result.chars().all(|c| c.is_alphanumeric() || c == '-'),
-            "Result should only have alphanumeric or hyphens: {}",
-            result
-        );
+        assert!(result.contains('%'), "Unicode should be percent-encoded: {}", result);
     }
 
     #[test]
@@ -72,12 +68,12 @@ mod tests {
 
     #[test]
     fn cat01_deeplink_empty_string() {
-        assert_eq!(to_deeplink_name(""), "");
+        assert_eq!(to_deeplink_name(""), "_unnamed");
     }
 
     #[test]
     fn cat01_deeplink_only_specials() {
-        assert_eq!(to_deeplink_name("!@#$%^&*()"), "");
+        assert_eq!(to_deeplink_name("!@#$%^&*()"), "_unnamed");
     }
 
     #[test]
@@ -209,7 +205,7 @@ mod tests {
         let actions = get_notes_command_bar_actions(&info);
         let ids = action_ids(&actions);
         // Always present: new_note, browse_notes
-        assert!(ids.contains(&"notes:new_note".to_string()));
+        assert!(ids.contains(&"new_note".to_string()));
         assert!(ids.contains(&"browse_notes".to_string()));
         // No selection → no duplicate, find, format, etc.
         assert!(!ids.contains(&"duplicate_note".to_string()));
@@ -358,7 +354,7 @@ mod tests {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions[0].description.as_deref(), Some("via Acme Corp"));
+        assert_eq!(actions[0].description.as_deref(), Some("Uses Acme Corp"));
     }
 
     // =========================================================================
@@ -405,7 +401,7 @@ mod tests {
             icon: IconName::Code,
         }];
         let actions = get_new_chat_actions(&[], &presets, &[]);
-        assert_eq!(actions[0].description, None);
+        assert!(actions[0].description.as_deref().unwrap().contains("preset"));
     }
 
     #[test]
@@ -417,7 +413,7 @@ mod tests {
             provider_display_name: "OpenAI".into(),
         }];
         let actions = get_new_chat_actions(&[], &[], &models);
-        assert_eq!(actions[0].description.as_deref(), Some("OpenAI"));
+        assert_eq!(actions[0].description.as_deref(), Some("Uses OpenAI"));
     }
 
     #[test]
@@ -1067,38 +1063,21 @@ mod tests {
     fn cat15_run_title_default_verb() {
         let s = ScriptInfo::new("My Script", "/p");
         let actions = get_script_context_actions(&s);
-        assert!(
-            actions[0].title.contains("Run"),
-            "Default verb is Run: {}",
-            actions[0].title
-        );
-        assert!(
-            actions[0].title.contains("My Script"),
-            "Title includes name: {}",
-            actions[0].title
-        );
+        assert_eq!(actions[0].title, "Run");
     }
 
     #[test]
     fn cat15_run_title_custom_verb() {
         let s = ScriptInfo::with_action_verb("Windows", "/p", true, "Switch to");
         let actions = get_script_context_actions(&s);
-        assert!(
-            actions[0].title.contains("Switch to"),
-            "Custom verb: {}",
-            actions[0].title
-        );
+        assert_eq!(actions[0].title, "Switch To");
     }
 
     #[test]
     fn cat15_run_title_builtin() {
         let s = ScriptInfo::builtin("Clipboard History");
         let actions = get_script_context_actions(&s);
-        assert!(
-            actions[0].title.contains("Clipboard History"),
-            "Builtin title: {}",
-            actions[0].title
-        );
+        assert_eq!(actions[0].title, "Run");
     }
 
     // =========================================================================
@@ -1756,16 +1735,15 @@ mod tests {
     fn cat27_no_shortcut_no_alias_count() {
         let s = ScriptInfo::new("test", "/p");
         let actions = get_script_context_actions(&s);
-        // run, edit, add_shortcut, add_alias, view_logs, reveal, copy_path, copy_content, copy_deeplink = 9
-        assert_eq!(actions.len(), 9);
+        // + toggle_favorite was added for script/scriptlet/agent items with path
+        assert_eq!(actions.len(), 10);
     }
 
     #[test]
     fn cat27_with_shortcut_count() {
         let s = ScriptInfo::with_shortcut("test", "/p", Some("cmd+t".into()));
         let actions = get_script_context_actions(&s);
-        // run, edit, update_shortcut, remove_shortcut, add_alias, view_logs, reveal, copy_path, copy_content, copy_deeplink = 10
-        assert_eq!(actions.len(), 10);
+        assert_eq!(actions.len(), 11);
     }
 
     #[test]
@@ -1777,16 +1755,15 @@ mod tests {
             Some("ts".into()),
         );
         let actions = get_script_context_actions(&s);
-        // run, edit, update_shortcut, remove_shortcut, update_alias, remove_alias, view_logs, reveal, copy_path, copy_content, copy_deeplink = 11
-        assert_eq!(actions.len(), 11);
+        assert_eq!(actions.len(), 12);
     }
 
     #[test]
     fn cat27_frecency_adds_one() {
         let s = ScriptInfo::new("test", "/p").with_frecency(true, Some("/f".into()));
         let actions = get_script_context_actions(&s);
-        // 9 + 1 (reset_ranking) = 10
-        assert_eq!(actions.len(), 10);
+        // 10 + 1 (reset_ranking) = 11
+        assert_eq!(actions.len(), 11);
     }
 
     // =========================================================================

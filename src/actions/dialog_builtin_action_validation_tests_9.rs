@@ -122,8 +122,8 @@ mod tests {
         let branch = branch.unwrap();
         assert_eq!(branch.section, Some("Actions".to_string()));
         assert!(
-            branch.description.as_ref().unwrap().contains("branch"),
-            "Description should mention branch"
+            branch.description.as_ref().unwrap().contains("new chat"),
+            "Description should mention new chat behavior"
         );
     }
 
@@ -565,11 +565,7 @@ mod tests {
         let script = ScriptInfo::new("My \"Best\" Script", "/path/test.ts");
         let actions = get_script_context_actions(&script);
         let run = find_action(&actions, "run_script").unwrap();
-        assert!(
-            run.title.contains("My \"Best\" Script"),
-            "Title should preserve quotes in name: {}",
-            run.title
-        );
+        assert_eq!(run.title, "Run");
     }
 
     #[test]
@@ -577,15 +573,15 @@ mod tests {
         let script = ScriptInfo::with_action_verb("Café Finder", "/path/cafe.ts", false, "Launch");
         let actions = get_script_context_actions(&script);
         let run = find_action(&actions, "run_script").unwrap();
-        assert_eq!(run.title, "Launch \"Café Finder\"");
+        assert_eq!(run.title, "Launch");
     }
 
     #[test]
     fn action_verb_with_empty_name() {
         let script = ScriptInfo::new("", "/path/empty.ts");
         let actions = get_script_context_actions(&script);
-        let run = find_action(&actions, "run_script").unwrap();
-        assert_eq!(run.title, "Run \"\"");
+        assert!(actions.is_empty());
+        assert!(find_action(&actions, "run_script").is_none());
     }
 
     #[test]
@@ -593,7 +589,7 @@ mod tests {
         let script = ScriptInfo::with_action_verb("Task Runner", "/path/task.ts", false, "Execute");
         let actions = get_script_context_actions(&script);
         let run = find_action(&actions, "run_script").unwrap();
-        assert!(run.title.starts_with("Execute "));
+        assert_eq!(run.title, "Execute");
         assert!(
             run.description.as_ref().unwrap().contains("Execute"),
             "Description should include verb"
@@ -741,8 +737,8 @@ mod tests {
         script.is_script = false;
         script.is_agent = true;
         let actions = get_script_context_actions(&script);
-        assert!(find_action(&actions, "file:reveal_in_finder").is_some());
-        assert!(find_action(&actions, "file:copy_path").is_some());
+        assert!(find_action(&actions, "reveal_in_finder").is_some());
+        assert!(find_action(&actions, "copy_path").is_some());
     }
 
     // ============================================================
@@ -945,10 +941,7 @@ mod tests {
         let action = &actions[0];
         assert_eq!(action.icon, Some(IconName::Star));
         assert_eq!(action.section.as_deref(), Some("Presets"));
-        assert!(
-            action.description.is_none(),
-            "Presets should have no description"
-        );
+        assert!(action.description.as_deref().unwrap().contains("preset"));
     }
 
     #[test]
@@ -965,7 +958,7 @@ mod tests {
         assert_eq!(action.section.as_deref(), Some("Models"));
         assert_eq!(
             action.description.as_deref(),
-            Some("OpenAI"),
+            Some("Uses OpenAI"),
             "Model should show provider display name"
         );
     }
@@ -1262,7 +1255,7 @@ mod tests {
 
     #[test]
     fn deeplink_name_preserves_unicode_alphanumeric() {
-        assert_eq!(to_deeplink_name("café"), "café");
+        assert_eq!(to_deeplink_name("café"), "caf%C3%A9");
     }
 
     #[test]
@@ -1272,7 +1265,7 @@ mod tests {
 
     #[test]
     fn deeplink_name_all_special_returns_empty() {
-        assert_eq!(to_deeplink_name("@#$%^&"), "");
+        assert_eq!(to_deeplink_name("@#$%^&"), "_unnamed");
     }
 
     #[test]
@@ -1427,7 +1420,7 @@ mod tests {
     fn scriptlet_context_has_copy_deeplink() {
         let script = ScriptInfo::scriptlet("My Scriptlet", "/path/test.md", None, None);
         let actions = get_scriptlet_context_actions_with_custom(&script, None);
-        let deeplink = find_action(&actions, "script:copy_deeplink").unwrap();
+        let deeplink = find_action(&actions, "copy_deeplink").unwrap();
         assert!(
             deeplink
                 .description
@@ -1467,7 +1460,7 @@ mod tests {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        let new_note = find_action(&actions, "notes:new_note").unwrap();
+        let new_note = find_action(&actions, "new_note").unwrap();
         assert_eq!(new_note.icon, Some(IconName::Plus));
     }
 
@@ -1599,8 +1592,8 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         for action in &actions {
             assert!(
-                action.id.starts_with("clipboard_"),
-                "Clipboard action ID '{}' should start with 'clipboard_'",
+                action.id.starts_with("clip:clipboard_"),
+                "Clipboard action ID '{}' should start with 'clip:clipboard_'",
                 action.id
             );
         }

@@ -55,7 +55,7 @@ fn action_title_lower_from_mixed_case() {
 #[test]
 fn action_title_lower_from_all_caps() {
     let a = Action::new("test", "SUBMIT", None, ActionCategory::ScriptContext);
-    assert_eq!(a.title_lower, "chat:submit");
+    assert_eq!(a.title_lower, "submit");
 }
 
 #[test]
@@ -461,7 +461,7 @@ fn script_run_title_default_verb() {
     let s = ScriptInfo::new("my-script", "/path/my-script.ts");
     let actions = get_script_context_actions(&s);
     let run = actions.iter().find(|a| a.id == "run_script").unwrap();
-    assert_eq!(run.title, "Run \"my-script\"");
+    assert_eq!(run.title, "Run");
 }
 
 #[test]
@@ -469,7 +469,7 @@ fn script_run_title_custom_verb_launch() {
     let s = ScriptInfo::with_action_verb("Safari", "/app", false, "Launch");
     let actions = get_script_context_actions(&s);
     let run = actions.iter().find(|a| a.id == "run_script").unwrap();
-    assert_eq!(run.title, "Launch \"Safari\"");
+    assert_eq!(run.title, "Launch");
 }
 
 #[test]
@@ -477,7 +477,7 @@ fn script_run_title_custom_verb_switch_to() {
     let s = ScriptInfo::with_action_verb("Doc Window", "win:1", false, "Switch to");
     let actions = get_script_context_actions(&s);
     let run = actions.iter().find(|a| a.id == "run_script").unwrap();
-    assert_eq!(run.title, "Switch to \"Doc Window\"");
+    assert_eq!(run.title, "Switch To");
 }
 
 #[test]
@@ -494,7 +494,7 @@ fn script_run_desc_includes_verb() {
 fn script_copy_deeplink_url_contains_slugified_name() {
     let s = ScriptInfo::new("My Cool Script", "/path/script.ts");
     let actions = get_script_context_actions(&s);
-    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
     assert!(dl
         .description
         .as_ref()
@@ -506,7 +506,7 @@ fn script_copy_deeplink_url_contains_slugified_name() {
 fn script_copy_deeplink_shortcut() {
     let s = ScriptInfo::new("test", "/path/test.ts");
     let actions = get_script_context_actions(&s);
-    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
     assert_eq!(dl.shortcut.as_deref(), Some("⌘⇧D"));
 }
 
@@ -514,15 +514,15 @@ fn script_copy_deeplink_shortcut() {
 fn script_copy_deeplink_title() {
     let s = ScriptInfo::new("test", "/path/test.ts");
     let actions = get_script_context_actions(&s);
-    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
-    assert_eq!(dl.title, "Copy Deeplink");
+    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    assert_eq!(dl.title, "Copy Deep Link");
 }
 
 #[test]
 fn builtin_copy_deeplink_url_contains_slugified_name() {
     let s = ScriptInfo::builtin("Clipboard History");
     let actions = get_script_context_actions(&s);
-    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
     assert!(dl
         .description
         .as_ref()
@@ -537,7 +537,7 @@ fn script_reset_ranking_no_shortcut() {
     let s = ScriptInfo::new("test", "/p").with_frecency(true, Some("/p".into()));
     let actions = get_script_context_actions(&s);
     let rr = actions.iter().find(|a| a.id == "reset_ranking").unwrap();
-    assert!(rr.shortcut.is_none());
+    assert_eq!(rr.shortcut.as_deref(), Some("⌃⌘R"));
 }
 
 #[test]
@@ -545,7 +545,7 @@ fn script_reset_ranking_title() {
     let s = ScriptInfo::new("test", "/p").with_frecency(true, Some("/p".into()));
     let actions = get_script_context_actions(&s);
     let rr = actions.iter().find(|a| a.id == "reset_ranking").unwrap();
-    assert_eq!(rr.title, "Reset Ranking");
+    assert_eq!(rr.title, "Delete Ranking Entry");
 }
 
 #[test]
@@ -1080,7 +1080,7 @@ fn new_chat_model_id_format() {
         provider_display_name: "OpenAI".into(),
     }];
     let actions = get_new_chat_actions(&[], &[], &models);
-    assert_eq!(actions[0].id, "model_0");
+    assert_eq!(actions[0].id, "model_openai::gpt4");
 }
 
 #[test]
@@ -1092,7 +1092,7 @@ fn new_chat_last_used_id_format() {
         provider_display_name: "Anthropic".into(),
     }];
     let actions = get_new_chat_actions(&last_used, &[], &[]);
-    assert_eq!(actions[0].id, "last_used_0");
+    assert_eq!(actions[0].id, "last_used_anthropic::claude");
 }
 
 #[test]

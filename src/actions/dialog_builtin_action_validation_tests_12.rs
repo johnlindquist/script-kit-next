@@ -280,7 +280,7 @@ mod tests {
         assert!(ids.contains(&"reveal_scriptlet_in_finder".to_string()));
         assert!(ids.contains(&"copy_scriptlet_path".to_string()));
         assert!(ids.contains(&"copy_content".to_string()));
-        assert!(ids.contains(&"script:copy_deeplink".to_string()));
+        assert!(ids.contains(&"copy_deeplink".to_string()));
     }
 
     // =========================================================================
@@ -313,7 +313,7 @@ mod tests {
         script.is_agent = true;
         script.is_script = false;
         let actions = get_script_context_actions(&script);
-        let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
+        let reveal = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
         assert!(reveal.description.as_ref().unwrap().contains("agent"));
     }
 
@@ -323,7 +323,7 @@ mod tests {
         script.is_agent = true;
         script.is_script = false;
         let actions = get_script_context_actions(&script);
-        let cp = actions.iter().find(|a| a.id == "file:copy_path").unwrap();
+        let cp = actions.iter().find(|a| a.id == "copy_path").unwrap();
         assert!(cp.description.as_ref().unwrap().contains("agent"));
     }
 
@@ -709,7 +709,7 @@ mod tests {
             Some("Edit the script file".into()),
             ActionCategory::ScriptContext,
         );
-        let score = ActionsDialog::score_action(&action, "script:edit");
+        let score = ActionsDialog::score_action(&action, "edit");
         assert!(score >= 115, "prefix(100)+desc(15)={}", score);
     }
 
@@ -717,7 +717,7 @@ mod tests {
     fn cat09_prefix_plus_shortcut_stacks() {
         let action =
             Action::new("script:edit", "Edit", None, ActionCategory::ScriptContext).with_shortcut("script:edit");
-        let score = ActionsDialog::score_action(&action, "script:edit");
+        let score = ActionsDialog::score_action(&action, "edit");
         assert!(score >= 110, "prefix(100)+shortcut(10)={}", score);
     }
 
@@ -729,7 +729,7 @@ mod tests {
             Some("Edit mode".into()),
             ActionCategory::ScriptContext,
         );
-        let score = ActionsDialog::score_action(&action, "script:edit");
+        let score = ActionsDialog::score_action(&action, "edit");
         assert!(score >= 65, "contains(50)+desc(15)={}", score);
     }
 
@@ -1062,7 +1062,7 @@ mod tests {
         assert!(!ids.contains(&"edit_script".to_string()));
         assert!(!ids.contains(&"view_logs".to_string()));
         assert!(ids.contains(&"run_script".to_string()));
-        assert!(ids.contains(&"script:copy_deeplink".to_string()));
+        assert!(ids.contains(&"copy_deeplink".to_string()));
     }
 
     // =========================================================================
@@ -1072,21 +1072,21 @@ mod tests {
     #[test]
     fn cat15_deeplink_cjk_preserved() {
         let result = to_deeplink_name("日本語テスト");
-        assert!(result.contains('日'));
-        assert!(result.contains('語'));
+        assert!(result.contains("%E6%97%A5"));
+        assert!(result.contains("%E8%AA%9E"));
     }
 
     #[test]
     fn cat15_deeplink_mixed_ascii_and_accents() {
         let result = to_deeplink_name("Café Script");
         assert!(result.contains("caf"));
-        assert!(result.contains("é"));
+        assert!(result.contains("%C3%A9"));
     }
 
     #[test]
     fn cat15_deeplink_all_special_chars() {
         let result = to_deeplink_name("!@#$%^&*()");
-        assert_eq!(result, "");
+        assert_eq!(result, "_unnamed");
     }
 
     #[test]
@@ -1413,7 +1413,7 @@ mod tests {
             .filter(|a| a.section.as_deref() == Some("Notes"))
             .collect();
         let ids: Vec<_> = notes_section.iter().map(|a| a.id.as_str()).collect();
-        assert!(ids.contains(&"notes:new_note"));
+        assert!(ids.contains(&"new_note"));
         assert!(ids.contains(&"browse_notes"));
     }
 
@@ -1519,7 +1519,7 @@ mod tests {
     fn cat23_script_copy_deeplink_always_present() {
         let script = ScriptInfo::new("test", "/path/test.ts");
         let actions = get_script_context_actions(&script);
-        assert!(actions.iter().any(|a| a.id == "script:copy_deeplink"));
+        assert!(actions.iter().any(|a| a.id == "copy_deeplink"));
     }
 
     #[test]
@@ -1540,7 +1540,7 @@ mod tests {
     fn cat23_run_action_title_includes_verb_and_name() {
         let script = ScriptInfo::with_action_verb("Safari", "/app", false, "Launch");
         let actions = get_script_context_actions(&script);
-        assert_eq!(actions[0].title, "Launch \"Safari\"");
+        assert_eq!(actions[0].title, "Launch");
     }
 
     // =========================================================================

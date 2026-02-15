@@ -228,7 +228,7 @@ mod tests {
             .as_ref()
             .unwrap()
             .to_lowercase()
-            .contains("script:remove"));
+            .contains("removes"));
     }
 
     #[test]
@@ -340,7 +340,7 @@ mod tests {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "notes:new_note"));
+        assert!(actions.iter().any(|a| a.id == "new_note"));
     }
 
     #[test]
@@ -351,7 +351,7 @@ mod tests {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "notes:new_note"));
+        assert!(actions.iter().any(|a| a.id == "new_note"));
     }
 
     #[test]
@@ -373,7 +373,7 @@ mod tests {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        let nn = actions.iter().find(|a| a.id == "notes:new_note").unwrap();
+        let nn = actions.iter().find(|a| a.id == "new_note").unwrap();
         assert_eq!(nn.shortcut.as_ref().unwrap(), "⌘N");
     }
 
@@ -490,7 +490,7 @@ mod tests {
         };
         let actions = get_chat_context_actions(&info);
         let m = actions.iter().find(|a| a.id == "chat:select_model_m").unwrap();
-        assert_eq!(m.description.as_ref().unwrap(), "via Acme");
+        assert_eq!(m.description.as_ref().unwrap(), "Uses Acme");
     }
 
     // =========================================================================
@@ -664,13 +664,13 @@ mod tests {
     #[test]
     fn cat10_cjk_chars_preserved() {
         let result = to_deeplink_name("测试脚本");
-        assert!(result.contains("测试脚本"));
+        assert!(result.contains("%E6%B5%8B%E8%AF%95"));
     }
 
     #[test]
     fn cat10_accented_chars_preserved() {
         let result = to_deeplink_name("Résumé Editor");
-        assert!(result.contains("résumé"));
+        assert!(result.contains("r%C3%A9sum%C3%A9"));
     }
 
     #[test]
@@ -685,7 +685,7 @@ mod tests {
 
     #[test]
     fn cat10_empty_string() {
-        assert_eq!(to_deeplink_name(""), "");
+        assert_eq!(to_deeplink_name(""), "_unnamed");
     }
 
     // =========================================================================
@@ -735,14 +735,14 @@ mod tests {
     #[test]
     fn cat12_prefix_scores_100() {
         let action = Action::new("id", "Edit Script", None, ActionCategory::ScriptContext);
-        let score = ActionsDialog::score_action(&action, "script:edit");
+        let score = ActionsDialog::score_action(&action, "edit");
         assert_eq!(score, 100);
     }
 
     #[test]
     fn cat12_contains_scores_50() {
         let action = Action::new("id", "Copy Edit Path", None, ActionCategory::ScriptContext);
-        let score = ActionsDialog::score_action(&action, "script:edit");
+        let score = ActionsDialog::score_action(&action, "edit");
         assert_eq!(score, 50);
     }
 
@@ -1411,7 +1411,7 @@ mod tests {
         let script = ScriptInfo::with_action_verb("Window", "w:1", false, "Switch to");
         let actions = get_script_context_actions(&script);
         let run = actions.iter().find(|a| a.id == "run_script").unwrap();
-        assert!(run.title.starts_with("Switch to"));
+        assert!(run.title.starts_with("Switch To"));
     }
 
     #[test]
@@ -1419,7 +1419,7 @@ mod tests {
         let script = ScriptInfo::new("My Script", "/test.ts");
         let actions = get_script_context_actions(&script);
         let run = actions.iter().find(|a| a.id == "run_script").unwrap();
-        assert!(run.title.contains("\"My Script\""));
+        assert_eq!(run.title, "Run");
     }
 
     // =========================================================================
@@ -1434,7 +1434,7 @@ mod tests {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        let nn = actions.iter().find(|a| a.id == "notes:new_note").unwrap();
+        let nn = actions.iter().find(|a| a.id == "new_note").unwrap();
         assert_eq!(nn.section.as_ref().unwrap(), "Notes");
     }
 
