@@ -51,7 +51,10 @@ fn get_apps_db() -> Result<Arc<Mutex<Connection>>> {
         Ok(()) => Ok(db),
         Err(_) => {
             // Another thread initialized it first, use theirs
-            Ok(Arc::clone(APPS_DB.get().unwrap()))
+            APPS_DB
+                .get()
+                .map(Arc::clone)
+                .ok_or_else(|| anyhow::anyhow!("APPS_DB unexpectedly uninitialized"))
         }
     }
 }
