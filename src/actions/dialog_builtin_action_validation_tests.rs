@@ -740,7 +740,7 @@ fn clipboard_delete_all_has_description() {
 fn path_move_to_trash_has_description() {
     let path = PathInfo::new("test", "/test", false);
     let actions = get_path_context_actions(&path);
-    let trash = find_action(&actions, "move_to_trash").unwrap();
+    let trash = find_action(&actions, "file:move_to_trash").unwrap();
     assert!(
         trash.description.is_some(),
         "move_to_trash should have a description"
@@ -756,7 +756,7 @@ fn deeplink_present_for_script() {
     let script = ScriptInfo::new("test", "/path/test.ts");
     let actions = get_script_context_actions(&script);
     let ids = action_ids(&actions);
-    assert!(ids.contains(&"copy_deeplink"));
+    assert!(ids.contains(&"script:copy_deeplink"));
 }
 
 #[test]
@@ -764,7 +764,7 @@ fn deeplink_present_for_builtin() {
     let builtin = ScriptInfo::builtin("Clipboard History");
     let actions = get_script_context_actions(&builtin);
     let ids = action_ids(&actions);
-    assert!(ids.contains(&"copy_deeplink"));
+    assert!(ids.contains(&"script:copy_deeplink"));
 }
 
 #[test]
@@ -772,7 +772,7 @@ fn deeplink_present_for_scriptlet() {
     let scriptlet = ScriptInfo::scriptlet("Open URL", "/path/urls.md", None, None);
     let actions = get_scriptlet_context_actions_with_custom(&scriptlet, None);
     let ids = action_ids(&actions);
-    assert!(ids.contains(&"copy_deeplink"));
+    assert!(ids.contains(&"script:copy_deeplink"));
 }
 
 #[test]
@@ -782,7 +782,7 @@ fn deeplink_present_for_agent() {
     agent.is_script = false;
     let actions = get_script_context_actions(&agent);
     let ids = action_ids(&actions);
-    assert!(ids.contains(&"copy_deeplink"));
+    assert!(ids.contains(&"script:copy_deeplink"));
 }
 
 // =========================================================================
@@ -841,7 +841,7 @@ fn file_application_primary_is_open_file() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&app);
-    assert_eq!(actions[0].id, "open_file");
+    assert_eq!(actions[0].id, "file:open_file");
     assert!(actions[0].title.contains("Safari.app"));
 }
 
@@ -854,7 +854,7 @@ fn file_document_primary_is_open_file() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&doc);
-    assert_eq!(actions[0].id, "open_file");
+    assert_eq!(actions[0].id, "file:open_file");
 }
 
 #[test]
@@ -866,7 +866,7 @@ fn file_image_primary_is_open_file() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&img);
-    assert_eq!(actions[0].id, "open_file");
+    assert_eq!(actions[0].id, "file:open_file");
 }
 
 // =========================================================================
