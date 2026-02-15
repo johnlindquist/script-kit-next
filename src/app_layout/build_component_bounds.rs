@@ -41,6 +41,7 @@ impl ScriptListApp {
             AppView::TemplatePrompt { .. } => "TemplatePrompt",
             AppView::ChatPrompt { .. } => "ChatPrompt",
             AppView::ClipboardHistoryView { .. } => "ClipboardHistory",
+            AppView::PasteSequentiallyView { .. } => "PasteSequentially",
             AppView::AppLauncherView { .. } => "AppLauncher",
             AppView::WindowSwitcherView { .. } => "WindowSwitcher",
             AppView::DesignGalleryView { .. } => "DesignGallery",

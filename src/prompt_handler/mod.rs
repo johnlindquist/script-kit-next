@@ -907,6 +907,16 @@ impl ScriptListApp {
                             None,
                         )
                     }
+                    AppView::PasteSequentiallyView { .. } => (
+                        "pasteSequentially".to_string(),
+                        Some("builtin-paste-sequentially".to_string()),
+                        None,
+                        String::new(),
+                        0,
+                        0,
+                        -1,
+                        None,
+                    ),
                     // P0 FIX: View state only - data comes from self.apps
                     AppView::AppLauncherView {
                         filter,

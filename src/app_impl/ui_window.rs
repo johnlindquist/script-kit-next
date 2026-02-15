@@ -73,6 +73,7 @@ impl ScriptListApp {
                 };
                 Some((ViewType::ScriptList, filtered_count))
             }
+            AppView::PasteSequentiallyView { .. } => Some((ViewType::DivPrompt, 0)),
             AppView::EmojiPickerView {
                 filter,
                 selected_category,

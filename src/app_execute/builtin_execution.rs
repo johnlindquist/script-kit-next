@@ -33,7 +33,11 @@ fn applescript_list_literal(values: &[String]) -> String {
 }
 
 #[cfg(target_os = "macos")]
-fn choose_from_list(prompt: &str, ok_button: &str, values: &[String]) -> Result<Option<String>, String> {
+fn choose_from_list(
+    prompt: &str,
+    ok_button: &str,
+    values: &[String],
+) -> Result<Option<String>, String> {
     if values.is_empty() {
         return Ok(None);
     }
@@ -60,7 +64,11 @@ return item 1 of selectedItem"#,
 }
 
 #[cfg(target_os = "macos")]
-fn prompt_for_text(prompt: &str, default_value: &str, ok_button: &str) -> Result<Option<String>, String> {
+fn prompt_for_text(
+    prompt: &str,
+    default_value: &str,
+    ok_button: &str,
+) -> Result<Option<String>, String> {
     let script = format!(
         r#"try
 set dialogResult to display dialog "{prompt}" default answer "{default_value}" buttons {{"Cancel", "{ok_button}"}} default button "{ok_button}"
@@ -259,6 +267,23 @@ impl ScriptListApp {
                 // Focus the main filter input so cursor blinks and typing works
                 self.pending_focus = Some(FocusTarget::MainFilter);
                 self.focused_input = FocusedInput::MainFilter;
+                cx.notify();
+            }
+            builtins::BuiltInFeature::PasteSequentially => {
+                logging::log("EXEC", "Opening Paste Sequentially");
+                let prompt = prompts::PasteSequentialPrompt::new(
+                    "builtin-paste-sequentially".to_string(),
+                    self.focus_handle.clone(),
+                    Arc::clone(&self.theme),
+                );
+                let entity = cx.new(|_| prompt);
+
+                self.current_view = AppView::PasteSequentiallyView { entity };
+                self.hovered_index = None;
+                self.opened_from_main_menu = true;
+                self.pending_focus = Some(FocusTarget::AppRoot);
+                self.focused_input = FocusedInput::None;
+                resize_to_view_sync(ViewType::DivPrompt, 0);
                 cx.notify();
             }
             builtins::BuiltInFeature::Favorites => {
@@ -502,7 +527,8 @@ impl ScriptListApp {
                         quicklinks.iter().map(quicklink_picker_label).collect();
                     let default_query = self.filter_text.trim().to_string();
 
-                    match choose_from_list("Select a quicklink to open", "Open", &quicklink_labels) {
+                    match choose_from_list("Select a quicklink to open", "Open", &quicklink_labels)
+                    {
                         Ok(Some(selected_label)) => {
                             if let Some(index) = quicklink_labels
                                 .iter()
@@ -832,7 +858,6 @@ impl ScriptListApp {
             // =========================================================================
             // Notes Commands
             // =========================================================================
-
             builtins::BuiltInFeature::NotesCommand(cmd_type) => {
                 logging::log("EXEC", &format!("Executing notes command: {:?}", cmd_type));
 
@@ -1197,7 +1222,6 @@ impl ScriptListApp {
             // =========================================================================
             // Permission Commands
             // =========================================================================
-
             builtins::BuiltInFeature::PermissionCommand(cmd_type) => {
                 logging::log(
                     "EXEC",
@@ -1387,8 +1411,7 @@ impl ScriptListApp {
                         self.pending_filter_sync = true;
                         self.pending_placeholder = Some("Search themes...".to_string());
                         // Start at the currently active theme
-                        let start_index =
-                            theme::presets::find_current_preset_index(&self.theme);
+                        let start_index = theme::presets::find_current_preset_index(&self.theme);
                         self.current_view = AppView::ThemeChooserView {
                             filter: String::new(),
                             selected_index: start_index,
@@ -1471,7 +1494,11 @@ impl ScriptListApp {
                         );
 
                         if process_count == 0 {
-                            self.show_hud("No running scripts to stop.".to_string(), Some(HUD_2200_MS), cx);
+                            self.show_hud(
+                                "No running scripts to stop.".to_string(),
+                                Some(HUD_2200_MS),
+                                cx,
+                            );
                         } else {
                             crate::process_manager::PROCESS_MANAGER.kill_all_processes();
                             self.show_hud(
@@ -1505,7 +1532,8 @@ impl ScriptListApp {
                 };
 
                 self.toast_manager.push(
-                    components::toast::Toast::info(message, &self.theme).duration_ms(Some(HUD_LONG_MS)),
+                    components::toast::Toast::info(message, &self.theme)
+                        .duration_ms(Some(HUD_LONG_MS)),
                 );
                 cx.notify();
             }
@@ -1524,7 +1552,6 @@ impl ScriptListApp {
                 self.opened_from_main_menu = true;
                 self.open_file_search(String::new(), cx);
             }
-
         }
     }
 }
@@ -1578,10 +1605,7 @@ mod builtin_execution_ai_feedback_tests {
             icon: None,
         };
 
-        assert_eq!(
-            quicklink_picker_label(&quicklink),
-            "Docs  https://docs.rs"
-        );
+        assert_eq!(quicklink_picker_label(&quicklink), "Docs  https://docs.rs");
     }
 
     #[test]
