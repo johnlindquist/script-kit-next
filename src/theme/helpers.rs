@@ -107,10 +107,17 @@ impl PromptColors {
     /// Create PromptColors from a ColorScheme
     ///
     /// This extracts only the colors needed for rendering HTML prompts.
-    /// Note: `is_dark` defaults to true. Use `from_theme` for proper dark mode detection.
+    /// `is_dark` is derived from the scheme's background luminance.
     pub fn from_color_scheme(colors: &ColorScheme) -> Self {
         #[cfg(debug_assertions)]
         debug!("Extracting prompt colors");
+
+        // Keep dark/light detection aligned with Theme::has_dark_colors() semantics.
+        let bg = colors.background.main;
+        let r = ((bg >> 16) & 0xFF) as f32 / 255.0;
+        let g = ((bg >> 8) & 0xFF) as f32 / 255.0;
+        let b = (bg & 0xFF) as f32 / 255.0;
+        let is_dark = (0.2126 * r) + (0.7152 * g) + (0.0722 * b) < 0.5;
 
         PromptColors {
             text_primary: colors.text.primary,
@@ -120,7 +127,7 @@ impl PromptColors {
             code_bg: colors.background.search_box,
             quote_border: colors.ui.border,
             hr_color: colors.ui.border,
-            is_dark: true, // Default to dark mode; use from_theme for proper detection
+            is_dark,
         }
     }
 
@@ -179,7 +186,7 @@ pub fn hover_overlay_bg(theme: &Theme, opacity: u8) -> Rgba {
 
 #[cfg(test)]
 mod tests {
-    use super::ColorScheme;
+    use super::{ColorScheme, PromptColors};
 
     #[test]
     fn test_list_item_colors_text_on_accent_uses_text_on_accent_from_scheme() {
@@ -191,5 +198,17 @@ mod tests {
 
         assert_eq!(list_item_colors.text_on_accent, 0xa1b2c3);
         assert_ne!(list_item_colors.text_on_accent, list_item_colors.text_primary);
+    }
+
+    #[test]
+    fn test_prompt_colors_from_color_scheme_sets_is_dark_for_dark_scheme() {
+        let colors = PromptColors::from_color_scheme(&ColorScheme::dark_default());
+        assert!(colors.is_dark);
+    }
+
+    #[test]
+    fn test_prompt_colors_from_color_scheme_sets_is_dark_for_light_scheme() {
+        let colors = PromptColors::from_color_scheme(&ColorScheme::light_default());
+        assert!(!colors.is_dark);
     }
 }
