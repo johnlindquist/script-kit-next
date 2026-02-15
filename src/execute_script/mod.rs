@@ -136,9 +136,10 @@ impl ScriptListApp {
     fn execute_interactive(&mut self, script: &scripts::Script, cx: &mut Context<Self>) {
         // --- merged from part_001_body/execute_interactive_merged.rs ---
 {
-        logging::log(
-            "EXEC",
-            &format!("Starting interactive execution: {}", script.name),
+        tracing::info!(
+            category = "EXEC",
+            script_name = %script.name,
+            "Starting interactive execution"
         );
 
         // Store script path for error reporting in reader thread
@@ -146,12 +147,12 @@ impl ScriptListApp {
 
         match executor::execute_script_interactive(&script.path) {
             Ok(session) => {
-                logging::log("EXEC", "Interactive session started successfully");
+                tracing::info!(category = "EXEC", "Interactive session started successfully");
 
                 // Store PID for explicit cleanup (belt-and-suspenders approach)
                 let pid = session.process_handle.pid;
                 self.current_script_pid = Some(pid);
-                logging::log("EXEC", &format!("Stored script PID {} for cleanup", pid));
+                tracing::info!(category = "EXEC", pid, "Stored script PID for cleanup");
 
                 *self.script_session.lock() = Some(session);
 
@@ -164,11 +165,18 @@ impl ScriptListApp {
 
                 // Spawn event-driven listener for prompt messages (replaces 50ms polling)
                 cx.spawn(async move |this, cx| {
-                    logging::log("EXEC", "Prompt message listener started (event-driven)");
+                    tracing::info!(
+                        category = "EXEC",
+                        "Prompt message listener started (event-driven)"
+                    );
 
                     // Event-driven: recv().await yields until a message arrives
                     while let Ok(msg) = rx_for_listener.recv().await {
-                        logging::log("EXEC", &format!("Prompt message received: {:?}", msg));
+                        tracing::info!(
+                            category = "EXEC",
+                            prompt_message = ?msg,
+                            "Prompt message received"
+                        );
                         let _ = cx.update(|cx| {
                             this.update(cx, |app, cx| {
                                 app.handle_prompt_message(msg, cx);
@@ -176,7 +184,10 @@ impl ScriptListApp {
                         });
                     }
 
-                    logging::log("EXEC", "Prompt message listener exiting (channel closed)");
+                    tracing::info!(
+                        category = "EXEC",
+                        "Prompt message listener exiting (channel closed)"
+                    );
                 })
                 .detach();
 
@@ -191,7 +202,11 @@ impl ScriptListApp {
                 ) {
                     Ok(session) => session,
                     Err(error) => {
-                        logging::log("EXEC", &error);
+                        tracing::info!(
+                            category = "EXEC",
+                            error = %error,
+                            "Failed to take active script session"
+                        );
                         self.last_output = Some(SharedString::from(format!("✗ Error: {}", error)));
                         cx.notify();
                         return;
@@ -238,7 +253,7 @@ impl ScriptListApp {
 
                     // Log the stdin file descriptor for debugging
                     let fd = stdin.as_raw_fd();
-                    logging::log("EXEC", &format!("Writer thread started, stdin fd={}", fd));
+                    tracing::info!(category = "EXEC", fd, "Writer thread started");
 
                     // Check if fd is a valid pipe
                     #[cfg(unix)]
@@ -248,15 +263,13 @@ impl ScriptListApp {
                             libc::fstat(fd, &mut stat)
                         };
                         if stat_result == 0 {
-                            logging::log("EXEC", &format!("fd={} fstat succeeded", fd));
+                            tracing::info!(category = "EXEC", fd, "stdin fstat succeeded");
                         } else {
-                            logging::log(
-                                "EXEC",
-                                &format!(
-                                    "fd={} fstat FAILED: errno={}",
-                                    fd,
-                                    std::io::Error::last_os_error()
-                                ),
+                            tracing::info!(
+                                category = "EXEC",
+                                fd,
+                                os_error = %std::io::Error::last_os_error(),
+                                "stdin fstat failed"
                             );
                         }
                     }
@@ -267,9 +280,10 @@ impl ScriptListApp {
                                 let json = match protocol::serialize_message(&response) {
                                     Ok(j) => j,
                                     Err(e) => {
-                                        logging::log(
-                                            "EXEC",
-                                            &format!("Failed to serialize: {}", e),
+                                        tracing::info!(
+                                            category = "EXEC",
+                                            error = %e,
+                                            "Failed to serialize response"
                                         );
                                         continue;
                                     }
@@ -281,53 +295,55 @@ impl ScriptListApp {
 
                                 // Check fd validity before write
                                 let fcntl_result = unsafe { libc::fcntl(fd, libc::F_GETFD) };
-                                logging::log(
-                                    "EXEC",
-                                    &format!(
-                                        "Pre-write fcntl(F_GETFD) on fd={}: {}",
-                                        fd, fcntl_result
-                                    ),
+                                tracing::info!(
+                                    category = "EXEC",
+                                    fd,
+                                    fcntl_result,
+                                    "Pre-write fcntl(F_GETFD) completed"
                                 );
 
                                 match stdin.write_all(bytes.as_bytes()) {
                                     Ok(()) => {
-                                        logging::log(
-                                            "EXEC",
-                                            &format!(
-                                                "Write succeeded: {} bytes to fd={}",
-                                                bytes_len, fd
-                                            ),
+                                        tracing::info!(
+                                            category = "EXEC",
+                                            fd,
+                                            bytes_len,
+                                            "Write succeeded"
                                         );
                                     }
                                     Err(e) => {
-                                        logging::log(
-                                            "EXEC",
-                                            &format!(
-                                                "Failed to write {} bytes: {} (kind={:?})",
-                                                bytes_len,
-                                                e,
-                                                e.kind()
-                                            ),
+                                        tracing::info!(
+                                            category = "EXEC",
+                                            fd,
+                                            bytes_len,
+                                            error = %e,
+                                            error_kind = ?e.kind(),
+                                            "Failed to write to script stdin"
                                         );
                                         break;
                                     }
                                 }
                                 if let Err(e) = stdin.flush() {
-                                    logging::log(
-                                        "EXEC",
-                                        &format!("Failed to flush fd={}: {}", fd, e),
+                                    tracing::info!(
+                                        category = "EXEC",
+                                        fd,
+                                        error = %e,
+                                        "Failed to flush script stdin"
                                     );
                                     break;
                                 }
-                                logging::log("EXEC", &format!("Flush succeeded for fd={}", fd));
+                                tracing::info!(category = "EXEC", fd, "Flush succeeded");
                             }
                             Err(_) => {
-                                logging::log("EXEC", "Response channel closed, writer exiting");
+                                tracing::info!(
+                                    category = "EXEC",
+                                    "Response channel closed, writer exiting"
+                                );
                                 break;
                             }
                         }
                     }
-                    logging::log("EXEC", "Writer thread exiting");
+                    tracing::info!(category = "EXEC", "Writer thread exiting");
                 });
 
                 // Reader thread - handles receiving messages from script (blocking is OK here)
@@ -459,12 +475,10 @@ impl ScriptListApp {
                                             );
                                         }
                                         if let Err(e) = reader_response_tx.send(response) {
-                                            logging::log(
-                                                "EXEC",
-                                                &format!(
-                                                    "Failed to send selected text response: {}",
-                                                    e
-                                                ),
+                                            tracing::info!(
+                                                category = "EXEC",
+                                                error = %e,
+                                                "Failed to send selected text response"
                                             );
                                         }
                                         continue;
@@ -481,9 +495,11 @@ impl ScriptListApp {
                                     entry_id,
                                 } = &msg
                                 {
-                                    logging::log(
-                                        "EXEC",
-                                        &format!("ClipboardHistory request: {:?}", action),
+                                    tracing::info!(
+                                        category = "EXEC",
+                                        action = ?action,
+                                        request_id = %request_id,
+                                        "ClipboardHistory request"
                                     );
 
                                     let response = match action {
@@ -611,12 +627,10 @@ impl ScriptListApp {
                                     };
 
                                     if let Err(e) = reader_response_tx.send(response) {
-                                        logging::log(
-                                            "EXEC",
-                                            &format!(
-                                                "Failed to send clipboard history response: {}",
-                                                e
-                                            ),
+                                        tracing::info!(
+                                            category = "EXEC",
+                                            error = %e,
+                                            "Failed to send clipboard history response"
                                         );
                                     }
                                     continue;
@@ -630,12 +644,12 @@ impl ScriptListApp {
                                     content,
                                 } = &msg
                                 {
-                                    logging::log(
-                                        "EXEC",
-                                        &format!(
-                                            "Clipboard request: {:?} format: {:?}",
-                                            action, format
-                                        ),
+                                    tracing::info!(
+                                        category = "EXEC",
+                                        action = ?action,
+                                        format = ?format,
+                                        request_id = ?id,
+                                        "Clipboard request"
                                     );
 
                                     // If no request ID, we can't send a response, so just handle and continue
@@ -669,7 +683,11 @@ impl ScriptListApp {
                                                                     value: Some(text),
                                                                 },
                                                                 Err(e) => {
-                                                                    logging::log("EXEC", &format!("Clipboard read error: {}", e));
+                                                                    tracing::info!(
+                                                                        category = "EXEC",
+                                                                        error = %e,
+                                                                        "Clipboard read error"
+                                                                    );
                                                                     Message::Submit {
                                                                         id: req_id,
                                                                         value: Some(String::new()),
@@ -678,12 +696,10 @@ impl ScriptListApp {
                                                             }
                                                         }
                                                         Err(e) => {
-                                                            logging::log(
-                                                                "EXEC",
-                                                                &format!(
-                                                                    "Clipboard init error: {}",
-                                                                    e
-                                                                ),
+                                                            tracing::info!(
+                                                                category = "EXEC",
+                                                                error = %e,
+                                                                "Clipboard init error"
                                                             );
                                                             Message::Submit {
                                                                 id: req_id,
@@ -708,7 +724,11 @@ impl ScriptListApp {
                                                                     }
                                                                 }
                                                                 Err(e) => {
-                                                                    logging::log("EXEC", &format!("Clipboard read image error: {}", e));
+                                                                    tracing::info!(
+                                                                        category = "EXEC",
+                                                                        error = %e,
+                                                                        "Clipboard read image error"
+                                                                    );
                                                                     Message::Submit {
                                                                         id: req_id,
                                                                         value: Some(String::new()),
@@ -717,12 +737,10 @@ impl ScriptListApp {
                                                             }
                                                         }
                                                         Err(e) => {
-                                                            logging::log(
-                                                                "EXEC",
-                                                                &format!(
-                                                                    "Clipboard init error: {}",
-                                                                    e
-                                                                ),
+                                                            tracing::info!(
+                                                                category = "EXEC",
+                                                                error = %e,
+                                                                "Clipboard init error"
                                                             );
                                                             Message::Submit {
                                                                 id: req_id,
@@ -741,19 +759,21 @@ impl ScriptListApp {
                                                     if let Some(text) = content {
                                                         match clipboard.set_text(text.clone()) {
                                                             Ok(()) => {
-                                                                logging::log("EXEC", &format!("Clipboard write success: {} bytes", text.len()));
+                                                                tracing::info!(
+                                                                    category = "EXEC",
+                                                                    bytes_len = text.len(),
+                                                                    "Clipboard write success"
+                                                                );
                                                                 Message::Submit {
                                                                     id: req_id,
                                                                     value: Some("ok".to_string()),
                                                                 }
                                                             }
                                                             Err(e) => {
-                                                                logging::log(
-                                                                    "EXEC",
-                                                                    &format!(
-                                                                        "Clipboard write error: {}",
-                                                                        e
-                                                                    ),
+                                                                tracing::info!(
+                                                                    category = "EXEC",
+                                                                    error = %e,
+                                                                    "Clipboard write error"
                                                                 );
                                                                 Message::Submit {
                                                                     id: req_id,
@@ -762,9 +782,9 @@ impl ScriptListApp {
                                                             }
                                                         }
                                                     } else {
-                                                        logging::log(
-                                                            "EXEC",
-                                                            "Clipboard write: no content provided",
+                                                        tracing::info!(
+                                                            category = "EXEC",
+                                                            "Clipboard write: no content provided"
                                                         );
                                                         Message::Submit {
                                                             id: req_id,
@@ -773,9 +793,10 @@ impl ScriptListApp {
                                                     }
                                                 }
                                                 Err(e) => {
-                                                    logging::log(
-                                                        "EXEC",
-                                                        &format!("Clipboard init error: {}", e),
+                                                    tracing::info!(
+                                                        category = "EXEC",
+                                                        error = %e,
+                                                        "Clipboard init error"
                                                     );
                                                     Message::Submit {
                                                         id: req_id,
@@ -787,9 +808,10 @@ impl ScriptListApp {
                                     };
 
                                     if let Err(e) = reader_response_tx.send(response) {
-                                        logging::log(
-                                            "EXEC",
-                                            &format!("Failed to send clipboard response: {}", e),
+                                        tracing::info!(
+                                            category = "EXEC",
+                                            error = %e,
+                                            "Failed to send clipboard response"
                                         );
                                     }
                                     continue;
@@ -797,9 +819,10 @@ impl ScriptListApp {
 
                                 // Handle WindowList directly (no UI needed)
                                 if let Message::WindowList { request_id } = &msg {
-                                    logging::log(
-                                        "EXEC",
-                                        &format!("WindowList request: {}", request_id),
+                                    tracing::info!(
+                                        category = "EXEC",
+                                        request_id = %request_id,
+                                        "WindowList request"
                                     );
 
                                     let response = match window_control::list_windows() {
@@ -829,9 +852,11 @@ impl ScriptListApp {
                                             )
                                         }
                                         Err(e) => {
-                                            logging::log(
-                                                "EXEC",
-                                                &format!("WindowList error: {}", e),
+                                            tracing::info!(
+                                                category = "EXEC",
+                                                error = %e,
+                                                request_id = %request_id,
+                                                "WindowList error"
                                             );
                                             // Return empty list on error
                                             Message::window_list_result(request_id.clone(), vec![])
@@ -839,9 +864,10 @@ impl ScriptListApp {
                                     };
 
                                     if let Err(e) = reader_response_tx.send(response) {
-                                        logging::log(
-                                            "EXEC",
-                                            &format!("Failed to send window list response: {}", e),
+                                        tracing::info!(
+                                            category = "EXEC",
+                                            error = %e,
+                                            "Failed to send window list response"
                                         );
                                     }
                                     continue;
@@ -856,12 +882,12 @@ impl ScriptListApp {
                                     tile_position,
                                 } = &msg
                                 {
-                                    logging::log(
-                                        "EXEC",
-                                        &format!(
-                                            "WindowAction request: {:?} for window {:?}",
-                                            action, window_id
-                                        ),
+                                    tracing::info!(
+                                        category = "EXEC",
+                                        request_id = %request_id,
+                                        action = ?action,
+                                        window_id = ?window_id,
+                                        "WindowAction request"
                                     );
 
                                     let result = match action {
@@ -948,12 +974,10 @@ impl ScriptListApp {
                                     };
 
                                     if let Err(e) = reader_response_tx.send(response) {
-                                        logging::log(
-                                            "EXEC",
-                                            &format!(
-                                                "Failed to send window action response: {}",
-                                                e
-                                            ),
+                                        tracing::info!(
+                                            category = "EXEC",
+                                            error = %e,
+                                            "Failed to send window action response"
                                         );
                                     }
                                     continue;
@@ -961,9 +985,10 @@ impl ScriptListApp {
 
                                 // Handle DisplayList directly (no UI needed)
                                 if let Message::DisplayList { request_id } = &msg {
-                                    logging::log(
-                                        "EXEC",
-                                        &format!("DisplayList request: {}", request_id),
+                                    tracing::info!(
+                                        category = "EXEC",
+                                        request_id = %request_id,
+                                        "DisplayList request"
                                     );
 
                                     let response = match get_displays() {
@@ -972,9 +997,11 @@ impl ScriptListApp {
                                             displays,
                                         ),
                                         Err(e) => {
-                                            logging::log(
-                                                "ERROR",
-                                                &format!("Failed to get displays: {}", e),
+                                            tracing::error!(
+                                                category = "ERROR",
+                                                error = %e,
+                                                request_id = %request_id,
+                                                "Failed to get displays"
                                             );
                                             // Return empty list on error
                                             Message::display_list_result(request_id.clone(), vec![])
@@ -982,9 +1009,10 @@ impl ScriptListApp {
                                     };
 
                                     if let Err(e) = reader_response_tx.send(response) {
-                                        logging::log(
-                                            "EXEC",
-                                            &format!("Failed to send display list response: {}", e),
+                                        tracing::info!(
+                                            category = "EXEC",
+                                            error = %e,
+                                            "Failed to send display list response"
                                         );
                                     }
                                     continue;
@@ -992,9 +1020,10 @@ impl ScriptListApp {
 
                                 // Handle FrontmostWindow directly (no UI needed)
                                 if let Message::FrontmostWindow { request_id } = &msg {
-                                    logging::log(
-                                        "EXEC",
-                                        &format!("FrontmostWindow request: {}", request_id),
+                                    tracing::info!(
+                                        category = "EXEC",
+                                        request_id = %request_id,
+                                        "FrontmostWindow request"
                                     );
 
                                     let response =
@@ -1033,12 +1062,10 @@ impl ScriptListApp {
                                         };
 
                                     if let Err(e) = reader_response_tx.send(response) {
-                                        logging::log(
-                                            "EXEC",
-                                            &format!(
-                                                "Failed to send frontmost window response: {}",
-                                                e
-                                            ),
+                                        tracing::info!(
+                                            category = "EXEC",
+                                            error = %e,
+                                            "Failed to send frontmost window response"
                                         );
                                     }
                                     continue;
@@ -1051,20 +1078,21 @@ impl ScriptListApp {
                                     only_in,
                                 } = &msg
                                 {
-                                    logging::log(
-                                        "EXEC",
-                                        &format!(
-                                            "FileSearch request: query='{}', only_in={:?}",
-                                            query, only_in
-                                        ),
+                                    tracing::info!(
+                                        category = "EXEC",
+                                        request_id = %request_id,
+                                        query = %query,
+                                        only_in = ?only_in,
+                                        "FileSearch request"
                                     );
 
                                     // Check if query looks like a directory path
                                     // If so, list directory contents instead of searching
                                     let results = if file_search::is_directory_path(query) {
-                                        logging::log(
-                                            "EXEC",
-                                            &format!("Detected directory path, listing: {}", query),
+                                        tracing::info!(
+                                            category = "EXEC",
+                                            query = %query,
+                                            "Detected directory path, listing directory contents"
                                         );
                                         file_search::list_directory(
                                             query,
@@ -1101,9 +1129,10 @@ impl ScriptListApp {
                                     );
 
                                     if let Err(e) = reader_response_tx.send(response) {
-                                        logging::log(
-                                            "EXEC",
-                                            &format!("Failed to send file search response: {}", e),
+                                        tracing::info!(
+                                            category = "EXEC",
+                                            error = %e,
+                                            "Failed to send file search response"
                                         );
                                     }
                                     continue;
@@ -1111,9 +1140,10 @@ impl ScriptListApp {
 
                                 // Handle GetWindowBounds directly (no UI needed)
                                 if let Message::GetWindowBounds { request_id } = &msg {
-                                    logging::log(
-                                        "EXEC",
-                                        &format!("GetWindowBounds request: {}", request_id),
+                                    tracing::info!(
+                                        category = "EXEC",
+                                        request_id = %request_id,
+                                        "GetWindowBounds request"
                                     );
 
                                     #[cfg(target_os = "macos")]
@@ -1139,10 +1169,14 @@ impl ScriptListApp {
                                                     - frame.origin.y
                                                     - frame.size.height;
 
-                                                logging::log("EXEC", &format!(
-                                                    "Window bounds: x={:.0}, y={:.0}, width={:.0}, height={:.0}",
-                                                    frame.origin.x, flipped_y, frame.size.width, frame.size.height
-                                                ));
+                                                tracing::info!(
+                                                    category = "EXEC",
+                                                    x = frame.origin.x,
+                                                    y = flipped_y,
+                                                    width = frame.size.width,
+                                                    height = frame.size.height,
+                                                    "Window bounds"
+                                                );
 
                                                 // Create JSON string with bounds
                                                 format!(
@@ -1154,9 +1188,9 @@ impl ScriptListApp {
                                                 )
                                             }
                                         } else {
-                                            logging::log(
-                                                "EXEC",
-                                                "GetWindowBounds: Main window not registered",
+                                            tracing::info!(
+                                                category = "EXEC",
+                                                "GetWindowBounds: Main window not registered"
                                             );
                                             r#"{"error":"Main window not found"}"#.to_string()
                                         }
@@ -1170,17 +1204,17 @@ impl ScriptListApp {
                                         id: request_id.clone(),
                                         value: Some(bounds_json),
                                     };
-                                    logging::log(
-                                        "EXEC",
-                                        &format!("Sending window bounds response: {:?}", response),
+                                    tracing::info!(
+                                        category = "EXEC",
+                                        request_id = %request_id,
+                                        response = ?response,
+                                        "Sending window bounds response"
                                     );
                                     if let Err(e) = reader_response_tx.send(response) {
-                                        logging::log(
-                                            "EXEC",
-                                            &format!(
-                                                "Failed to send window bounds response: {}",
-                                                e
-                                            ),
+                                        tracing::info!(
+                                            category = "EXEC",
+                                            error = %e,
+                                            "Failed to send window bounds response"
                                         );
                                     }
                                     continue;
@@ -1188,14 +1222,16 @@ impl ScriptListApp {
 
                                 // Handle AI SDK messages that can be processed directly
                                 if let Some(response) = crate::ai::try_handle_ai_message(&msg) {
-                                    logging::log(
-                                        "EXEC",
-                                        &format!("AI SDK message handled: {:?}", msg),
+                                    tracing::info!(
+                                        category = "EXEC",
+                                        message = ?msg,
+                                        "AI SDK message handled"
                                     );
                                     if let Err(e) = reader_response_tx.send(response) {
-                                        logging::log(
-                                            "EXEC",
-                                            &format!("Failed to send AI SDK response: {}", e),
+                                        tracing::info!(
+                                            category = "EXEC",
+                                            error = %e,
+                                            "Failed to send AI SDK response"
                                         );
                                     }
                                     continue;
@@ -1203,17 +1239,18 @@ impl ScriptListApp {
 
                                 // Handle GetState - needs UI state, forward to UI thread
                                 if let Message::GetState { request_id } = &msg {
-                                    logging::log(
-                                        "EXEC",
-                                        &format!("GetState request: {}", request_id),
+                                    tracing::info!(
+                                        category = "EXEC",
+                                        request_id = %request_id,
+                                        "GetState request"
                                     );
                                     let prompt_msg = PromptMessage::GetState {
                                         request_id: request_id.clone(),
                                     };
                                     if tx.send_blocking(prompt_msg).is_err() {
-                                        logging::log(
-                                            "EXEC",
-                                            "Prompt channel closed, reader exiting",
+                                        tracing::info!(
+                                            category = "EXEC",
+                                            "Prompt channel closed, reader exiting"
                                         );
                                         break;
                                     }
@@ -1222,17 +1259,18 @@ impl ScriptListApp {
 
                                 // Handle GetLayoutInfo - needs UI state, forward to UI thread
                                 if let Message::GetLayoutInfo { request_id } = &msg {
-                                    logging::log(
-                                        "EXEC",
-                                        &format!("GetLayoutInfo request: {}", request_id),
+                                    tracing::info!(
+                                        category = "EXEC",
+                                        request_id = %request_id,
+                                        "GetLayoutInfo request"
                                     );
                                     let prompt_msg = PromptMessage::GetLayoutInfo {
                                         request_id: request_id.clone(),
                                     };
                                     if tx.send_blocking(prompt_msg).is_err() {
-                                        logging::log(
-                                            "EXEC",
-                                            "Prompt channel closed, reader exiting",
+                                        tracing::info!(
+                                            category = "EXEC",
+                                            "Prompt channel closed, reader exiting"
                                         );
                                         break;
                                     }
@@ -1515,9 +1553,10 @@ impl ScriptListApp {
                                             .unwrap_or(&msg_type)
                                             .trim()
                                             .to_string();
-                                        logging::log(
-                                            "WARN",
-                                            &format!("Unhandled message type: {}", type_name),
+                                        tracing::warn!(
+                                            category = "WARN",
+                                            message_type = %type_name,
+                                            "Unhandled message type"
                                         );
                                         Some(PromptMessage::UnhandledMessage {
                                             message_type: type_name,
@@ -1527,16 +1566,16 @@ impl ScriptListApp {
 
                                 if let Some(prompt_msg) = prompt_msg {
                                     if tx.send_blocking(prompt_msg).is_err() {
-                                        logging::log(
-                                            "EXEC",
-                                            "Prompt channel closed, reader exiting",
+                                        tracing::info!(
+                                            category = "EXEC",
+                                            "Prompt channel closed, reader exiting"
                                         );
                                         break;
                                     }
                                 }
                             }
                             Ok(None) => {
-                                logging::log("EXEC", "Script stdout closed (EOF)");
+                                tracing::info!(category = "EXEC", "Script stdout closed (EOF)");
 
                                 // Check if process exited with error
                                 let exit_code = match keep_alive_child.try_wait() {
@@ -1551,7 +1590,11 @@ impl ScriptListApp {
                                     Err(_) => None,
                                 };
 
-                                logging::log("EXEC", &format!("Script exit code: {:?}", exit_code));
+                                tracing::info!(
+                                    category = "EXEC",
+                                    exit_code = ?exit_code,
+                                    "Script exit code observed"
+                                );
 
                                 // If non-zero exit code, capture stderr and send error
                                 if let Some(code) = exit_code {
@@ -1570,12 +1613,10 @@ impl ScriptListApp {
                                             .filter(|s| !s.is_empty());
 
                                         if let Some(ref stderr_text) = stderr_output {
-                                            logging::log(
-                                                "EXEC",
-                                                &format!(
-                                                    "Captured stderr from buffer ({} bytes)",
-                                                    stderr_text.len()
-                                                ),
+                                            tracing::info!(
+                                                category = "EXEC",
+                                                bytes = stderr_text.len(),
+                                                "Captured stderr from buffer"
                                             );
 
                                             // Parse error info and generate suggestions
@@ -1620,7 +1661,11 @@ impl ScriptListApp {
                                 break;
                             }
                             Err(e) => {
-                                logging::log("EXEC", &format!("Error reading from script: {}", e));
+                                tracing::info!(
+                                    category = "EXEC",
+                                    error = %e,
+                                    "Error reading from script"
+                                );
 
                                 // FIX: Wait for stderr reader to complete before reading
                                 let stderr_output = stderr_capture
@@ -1654,9 +1699,9 @@ impl ScriptListApp {
                             }
                         }
                     }
-                    logging::log(
-                        "EXEC",
-                        "Reader thread exited, process handle will now be dropped",
+                    tracing::info!(
+                        category = "EXEC",
+                        "Reader thread exited, process handle will now be dropped"
                     );
                 });
 
@@ -1664,9 +1709,10 @@ impl ScriptListApp {
                 self.response_sender = Some(response_tx);
             }
             Err(e) => {
-                logging::log(
-                    "EXEC",
-                    &format!("Failed to start interactive session: {}", e),
+                tracing::info!(
+                    category = "EXEC",
+                    error = %e,
+                    "Failed to start interactive session"
                 );
                 self.last_output = Some(SharedString::from(format!("✗ Error: {}", e)));
                 cx.notify();
