@@ -328,30 +328,7 @@ fn validate_color_value(diags: &mut ThemeDiagnostics, path: &str, value: &Value)
 }
 
 fn is_valid_color_string(s: &str) -> bool {
-    let s = s.trim();
-    if let Some(hex) = s.strip_prefix('#') {
-        return hex.len() == 6 && hex.chars().all(|c| c.is_ascii_hexdigit());
-    }
-    if let Some(hex) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
-        return hex.len() == 6 && hex.chars().all(|c| c.is_ascii_hexdigit());
-    }
-    if s.len() == 6 && s.chars().all(|c| c.is_ascii_hexdigit()) {
-        return true;
-    }
-    if let Some(inner) = s.strip_prefix("rgb(").and_then(|s| s.strip_suffix(')')) {
-        let parts: Vec<&str> = inner.split(',').map(|p| p.trim()).collect();
-        if parts.len() == 3 {
-            return parts.iter().all(|p| p.parse::<u8>().is_ok());
-        }
-    }
-    if let Some(inner) = s.strip_prefix("rgba(").and_then(|s| s.strip_suffix(')')) {
-        let parts: Vec<&str> = inner.split(',').map(|p| p.trim()).collect();
-        if parts.len() == 4 {
-            return parts[0..3].iter().all(|p| p.parse::<u8>().is_ok())
-                && parts[3].parse::<f32>().is_ok();
-        }
-    }
-    false
+    crate::theme::hex_color::hex_color_serde::parse_color_string(s).is_ok()
 }
 
 fn validate_opacity(diags: &mut ThemeDiagnostics, path: &str, opacity: &Value) {
