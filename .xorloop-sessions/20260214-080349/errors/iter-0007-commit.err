@@ -1,0 +1,27 @@
+[0;36m🔗 Running local pre-commit hook...[0m
+🔍 Checking formatting...
+❌ Formatting check failed!
+
+Run 'cargo fmt' to fix, then stage and retry.
+
+Diff in /Users/johnlindquist/dev/script-kit-gpui/src/window_control/mod.rs:35:
+     close_window, focus_window, maximize_window, minimize_window, move_to_next_display,
+     move_to_previous_display, move_window, resize_window, tile_window,
+ };
+[31m-pub use query::{
+(B[m[31m-    get_frontmost_window_of_previous_app, has_accessibility_permission, list_windows,
+(B[m[31m-};
+(B[m[32m+pub use query::{get_frontmost_window_of_previous_app, has_accessibility_permission, list_windows};
+(B[m pub use types::*;
+ 
+Diff in /Users/johnlindquist/dev/script-kit-gpui/src/window_control/mod.rs:35:
+     close_window, focus_window, maximize_window, minimize_window, move_to_next_display,
+     move_to_previous_display, move_window, resize_window, tile_window,
+ };
+[31m-pub use query::{
+(B[m[31m-    get_frontmost_window_of_previous_app, has_accessibility_permission, list_windows,
+(B[m[31m-};
+(B[m[32m+pub use query::{get_frontmost_window_of_previous_app, has_accessibility_permission, list_windows};
+(B[m pub use types::*;
+ 
+[0;31m❌ Local pre-commit hook failed[0m

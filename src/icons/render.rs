@@ -210,28 +210,35 @@ mod tests {
     use super::*;
     use gpui::rgb;
 
+    const TEST_ICON_FOREGROUND: u32 = 0xffffff;
+    const TEST_ICON_MUTED: u32 = 0x888888;
+    const TEST_ICON_ACCENT: u32 = 0x0066ff;
+    const TEST_ICON_DANGER: u32 = 0xff0000;
+    const TEST_ICON_SUCCESS: u32 = 0x00ff00;
+    const TEST_ICON_WARNING: u32 = 0xffaa00;
+
     /// Simple theme for testing
     #[allow(dead_code)]
     struct TestTheme;
 
     impl ThemeColorProvider for TestTheme {
         fn foreground(&self) -> Hsla {
-            rgb(0xffffff).into()
+            rgb(TEST_ICON_FOREGROUND).into()
         }
         fn muted(&self) -> Hsla {
-            rgb(0x888888).into()
+            rgb(TEST_ICON_MUTED).into()
         }
         fn accent(&self) -> Hsla {
-            rgb(0x0066ff).into()
+            rgb(TEST_ICON_ACCENT).into()
         }
         fn danger(&self) -> Hsla {
-            rgb(0xff0000).into()
+            rgb(TEST_ICON_DANGER).into()
         }
         fn success(&self) -> Hsla {
-            rgb(0x00ff00).into()
+            rgb(TEST_ICON_SUCCESS).into()
         }
         fn warning(&self) -> Hsla {
-            rgb(0xffaa00).into()
+            rgb(TEST_ICON_WARNING).into()
         }
     }
 

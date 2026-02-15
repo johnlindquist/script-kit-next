@@ -104,10 +104,11 @@ impl EnvPrompt {
     }
 
     /// Submit the entered value
-    pub(super) fn submit(&mut self) {
+    pub(super) fn submit(&mut self, cx: &mut Context<Self>) {
         let text = self.input.text();
         if let Some(validation_error) = env_submit_validation_error(text) {
             self.validation_error = Some(validation_error.to_string());
+            cx.notify();
             logging::log(
                 "PROMPTS",
                 &format!(
@@ -125,6 +126,7 @@ impl EnvPrompt {
             if let Err(e) = secrets::set_secret(&self.key, text) {
                 self.validation_error =
                     Some("Failed to store secret. Check logs and try again.".to_string());
+                cx.notify();
                 logging::log(
                     "ERROR",
                     &format!(
@@ -160,7 +162,7 @@ impl EnvPrompt {
     }
 
     /// Delete the secret and close the prompt
-    pub(super) fn submit_delete(&mut self) {
+    pub(super) fn submit_delete(&mut self, cx: &mut Context<Self>) {
         let correlation_id = self.correlation_id();
         logging::log(
             "PROMPTS",
@@ -174,6 +176,7 @@ impl EnvPrompt {
         if let Err(e) = secrets::delete_secret(&self.key) {
             self.validation_error =
                 Some("Failed to delete stored value. Check logs and try again.".to_string());
+            cx.notify();
             logging::log(
                 "ERROR",
                 &format!(

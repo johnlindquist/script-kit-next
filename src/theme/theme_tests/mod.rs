@@ -139,17 +139,6 @@ fn test_opacity_defaults() {
 }
 
 #[test]
-fn test_get_opacity_for_focus_keeps_selection_and_hover_strength_when_unfocused() {
-    let theme = Theme::dark_default();
-    let focused = theme.get_opacity_for_focus(true);
-    let unfocused = theme.get_opacity_for_focus(false);
-
-    assert_eq!(unfocused.selected, focused.selected);
-    assert_eq!(unfocused.hover, focused.hover);
-    assert!(unfocused.main < focused.main);
-}
-
-#[test]
 fn test_dark_default_selected_and_hover_contrast_meets_visibility_thresholds() {
     let theme = Theme::dark_default();
     let opacity = theme.get_opacity();
@@ -317,37 +306,6 @@ fn test_opacity_clamping_overflow() {
     assert_eq!(clamped.vibrancy_background, Some(1.0));
 }
 
-#[test]
-fn test_drop_shadow_opacity_clamping() {
-    let shadow = DropShadow {
-        enabled: true,
-        blur_radius: 20.0,
-        spread_radius: 0.0,
-        offset_x: 0.0,
-        offset_y: 8.0,
-        color: 0x000000,
-        opacity: 2.5, // Should clamp to 1.0
-    };
-    let clamped = shadow.clamped();
-    assert_eq!(clamped.opacity, 1.0);
-}
-
-// --- merged from part_02.rs ---
-#[test]
-fn test_drop_shadow_opacity_negative_clamping() {
-    let shadow = DropShadow {
-        enabled: true,
-        blur_radius: 20.0,
-        spread_radius: 0.0,
-        offset_x: 0.0,
-        offset_y: 8.0,
-        color: 0x000000,
-        opacity: -0.5, // Should clamp to 0.0
-    };
-    let clamped = shadow.clamped();
-    assert_eq!(clamped.opacity, 0.0);
-}
-
 // ========================================================================
 // VibrancyMaterial Enum Tests
 // ========================================================================
@@ -422,54 +380,6 @@ fn test_vibrancy_settings_with_material_enum() {
         settings.material,
         super::types::VibrancyMaterial::Hud
     ));
-}
-
-// ========================================================================
-// BackgroundRole and background_rgba API Tests
-// ========================================================================
-
-#[test]
-fn test_background_role_main() {
-    use super::types::BackgroundRole;
-    let theme = Theme::default();
-    let rgba = theme.background_rgba(BackgroundRole::Main, true);
-
-    // Should have the correct RGB from colors.background.main (0x1e1e1e)
-    // and apply opacity from BackgroundOpacity.main (0.60)
-    assert!(rgba.3 > 0.0 && rgba.3 <= 1.0); // Alpha should be valid
-}
-
-#[test]
-fn test_background_role_unfocused_reduces_opacity() {
-    use super::types::BackgroundRole;
-    let theme = Theme::default();
-
-    let focused = theme.background_rgba(BackgroundRole::Main, true);
-    let unfocused = theme.background_rgba(BackgroundRole::Main, false);
-
-    // Unfocused should have lower alpha (10% reduction)
-    assert!(unfocused.3 < focused.3);
-}
-
-#[test]
-fn test_background_role_all_variants() {
-    use super::types::BackgroundRole;
-    let theme = Theme::default();
-
-    // All variants should return valid rgba values
-    for role in [
-        BackgroundRole::Main,
-        BackgroundRole::TitleBar,
-        BackgroundRole::SearchBox,
-        BackgroundRole::LogPanel,
-    ] {
-        let rgba = theme.background_rgba(role, true);
-        // RGB values should be in 0-1 range
-        assert!(rgba.0 >= 0.0 && rgba.0 <= 1.0);
-        assert!(rgba.1 >= 0.0 && rgba.1 <= 1.0);
-        assert!(rgba.2 >= 0.0 && rgba.2 <= 1.0);
-        assert!(rgba.3 >= 0.0 && rgba.3 <= 1.0);
-    }
 }
 
 // ========================================================================

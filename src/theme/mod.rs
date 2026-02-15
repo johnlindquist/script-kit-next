@@ -23,7 +23,6 @@ pub mod hex_color;
 pub mod prelude;
 #[allow(dead_code)]
 pub mod presets;
-pub mod semantic;
 pub mod service;
 mod types;
 pub mod validation;
@@ -41,10 +40,6 @@ pub use helpers::{
     hover_overlay_bg, modal_overlay_bg, InputFieldColors, ListItemColors, PromptColors,
 };
 
-// Re-export semantic types (allow unused - designed for incremental adoption)
-#[allow(unused_imports)]
-pub use semantic::{FocusAware, SemanticColors, Surface, SurfaceStyle};
-
 // Re-export color resolver for unified color access
 #[allow(unused_imports)]
 pub use color_resolver::{ColorResolver, SpacingResolver, TypographyResolver};
@@ -58,7 +53,7 @@ pub use types::load_theme;
 
 // Re-export cached theme access (use in render code instead of load_theme)
 #[allow(unused_imports)]
-pub use types::{get_cached_theme, init_theme_cache, invalidate_theme_cache, reload_theme_cache};
+pub use types::{get_cached_theme, init_theme_cache, reload_theme_cache};
 
 // Re-export appearance cache invalidation (called when system appearance changes)
 pub use types::invalidate_appearance_cache;
@@ -73,8 +68,7 @@ pub use hex_color::{hex_color_serde, HexColor};
 #[cfg(test)]
 #[allow(unused_imports)]
 pub use types::{
-    detect_system_appearance, AppearanceMode, BackgroundOpacity, BackgroundRole, DropShadow,
-    VibrancySettings,
+    detect_system_appearance, AppearanceMode, BackgroundOpacity, DropShadow, VibrancySettings,
 };
 
 #[cfg(test)]

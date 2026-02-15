@@ -263,8 +263,8 @@ impl Render for EnvPrompt {
                                                 .hover(|s| s.opacity(0.8))
                                                 .on_click(move |_event, _window, cx| {
                                                     if let Some(entity) = handle_delete.upgrade() {
-                                                        entity.update(cx, |this, _cx| {
-                                                            this.submit_delete();
+                                                        entity.update(cx, |this, cx| {
+                                                            this.submit_delete(cx);
                                                         });
                                                     }
                                                 })
@@ -296,8 +296,8 @@ impl Render for EnvPrompt {
                 PromptFooter::new(footer_config, footer_colors)
                     .on_primary_click(Box::new(move |_, _window, cx| {
                         if let Some(entity) = handle.upgrade() {
-                            entity.update(cx, |this, _cx| {
-                                this.submit();
+                            entity.update(cx, |this, cx| {
+                                this.submit(cx);
                             });
                         }
                     }))
@@ -328,7 +328,7 @@ impl Render for EnvPrompt {
                     let modifiers = &event.keystroke.modifiers;
 
                     if matches!(env_key_action(key), Some(EnvKeyAction::Submit)) {
-                        this.submit();
+                        this.submit(cx);
                         return;
                     }
 
