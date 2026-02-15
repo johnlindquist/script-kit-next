@@ -10,6 +10,7 @@ use crate::designs::icon_variations::{icon_name_from_str, IconName};
 use crate::logging;
 use crate::ui_foundation::HexColorExt;
 use gpui::*;
+use gpui_component::tooltip::Tooltip;
 use std::collections::HashSet;
 use std::sync::Arc;
 /// Icon type for list items - supports emoji strings, SVG icons, and pre-decoded images
@@ -919,6 +920,7 @@ impl RenderOnce for ListItem {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let colors = self.colors;
         let index = self.index;
+        let item_index = index.unwrap_or(0);
         let on_hover_callback = self.on_hover;
         let semantic_id = self.semantic_id;
 
@@ -1061,13 +1063,16 @@ impl RenderOnce for ListItem {
                 rgba((colors.text_muted << 8) | ALPHA_NAME_QUIET)
             };
 
-            let styled = StyledText::new(self.name.to_string()).with_highlights(highlights);
+            let full_name = self.name.to_string();
+            let styled = StyledText::new(full_name.clone()).with_highlights(highlights);
 
             div()
                 .text_size(px(NAME_FONT_SIZE))
                 .font_weight(name_weight)
                 .overflow_hidden()
                 .text_ellipsis()
+                .id(ElementId::NamedInteger("list-name".into(), item_index as u64))
+                .tooltip(move |window, cx| Tooltip::new(full_name.clone()).build(window, cx))
                 .whitespace_nowrap()
                 .line_height(px(NAME_LINE_HEIGHT))
                 .text_color(base_color)
@@ -1080,11 +1085,14 @@ impl RenderOnce for ListItem {
             } else {
                 rgba((colors.text_primary << 8) | ALPHA_NAME_QUIET)
             };
+            let full_name = self.name.to_string();
             div()
                 .text_size(px(NAME_FONT_SIZE))
                 .font_weight(name_weight)
                 .overflow_hidden()
                 .text_ellipsis()
+                .id(ElementId::NamedInteger("list-name".into(), item_index as u64))
+                .tooltip(move |window, cx| Tooltip::new(full_name.clone()).build(window, cx))
                 .whitespace_nowrap()
                 .line_height(px(NAME_LINE_HEIGHT))
                 .text_color(name_color)
@@ -1141,7 +1149,8 @@ impl RenderOnce for ListItem {
                         ALPHA_DESC_QUIET
                     };
                     let base_color = rgba((colors.text_secondary << 8) | base_alpha);
-                    let styled = StyledText::new(desc.clone()).with_highlights(highlights);
+                    let full_desc = desc.clone();
+                    let styled = StyledText::new(full_desc.clone()).with_highlights(highlights);
 
                     div()
                         .text_size(px(DESC_FONT_SIZE))
@@ -1149,15 +1158,20 @@ impl RenderOnce for ListItem {
                         .text_color(base_color)
                         .overflow_hidden()
                         .text_ellipsis()
+                        .id(ElementId::NamedInteger("list-desc".into(), item_index as u64))
+                        .tooltip(move |window, cx| Tooltip::new(full_desc.clone()).build(window, cx))
                         .whitespace_nowrap()
                         .child(styled)
                 } else {
+                    let full_desc = desc.clone();
                     div()
                         .text_size(px(DESC_FONT_SIZE))
                         .line_height(px(DESC_LINE_HEIGHT))
                         .text_color(desc_color)
                         .overflow_hidden()
                         .text_ellipsis()
+                        .id(ElementId::NamedInteger("list-desc".into(), item_index as u64))
+                        .tooltip(move |window, cx| Tooltip::new(full_desc.clone()).build(window, cx))
                         .whitespace_nowrap()
                         .child(desc)
                 };
@@ -1306,8 +1320,7 @@ impl RenderOnce for ListItem {
             ElementId::Name(sem_id.clone().into())
         } else {
             // Fall back to index-based ID
-            let element_idx = index.unwrap_or(0);
-            ElementId::NamedInteger("list-item".into(), element_idx as u64)
+            ElementId::NamedInteger("list-item".into(), item_index as u64)
         };
 
         // Accent bar: Use LEFT BORDER instead of child div because:
@@ -1410,7 +1423,12 @@ fn decode_png_to_render_image_internal(
 
     // Create Frame from buffer (now in BGRA order if converted)
     let buffer = image::RgbaImage::from_raw(width, height, rgba.into_raw())
-        .expect("Failed to create image buffer");
+        .ok_or_else(|| {
+            image::ImageError::IoError(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Failed to create image buffer",
+            ))
+        })?;
     let frame = image::Frame::new(buffer);
 
     // Create RenderImage
