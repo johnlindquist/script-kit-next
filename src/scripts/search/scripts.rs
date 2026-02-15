@@ -7,6 +7,32 @@ use super::{
     is_word_boundary_match, NucleoCtx, MIN_FUZZY_QUERY_LEN,
 };
 
+const SCORE_EXACT_NAME_MATCH: i32 = 500;
+const SCORE_NAME_PREFIX: i32 = 100;
+const SCORE_NAME_SUBSTRING: i32 = 75;
+const SCORE_WORD_BOUNDARY: i32 = 20;
+const SCORE_NAME_FUZZY_BASE: i32 = 50;
+const SCORE_NAME_FUZZY_DIV: u32 = 20;
+const SCORE_FILENAME_PREFIX: i32 = 60;
+const SCORE_FILENAME_SUBSTRING: i32 = 45;
+const SCORE_FILENAME_FUZZY_BASE: i32 = 35;
+const SCORE_FILENAME_FUZZY_DIV: u32 = 30;
+const SCORE_ALIAS_PREFIX: i32 = 80;
+const SCORE_ALIAS_SUBSTRING: i32 = 60;
+const SCORE_SHORTCUT_PREFIX: i32 = 80;
+const SCORE_SHORTCUT_SUBSTRING: i32 = 60;
+const SCORE_KIT_PREFIX: i32 = 30;
+const SCORE_KIT_SUBSTRING: i32 = 20;
+const SCORE_TAG_PREFIX: i32 = 40;
+const SCORE_TAG_SUBSTRING: i32 = 25;
+const SCORE_AUTHOR_PREFIX: i32 = 30;
+const SCORE_AUTHOR_SUBSTRING: i32 = 20;
+const SCORE_PROPERTY_KEYWORD: i32 = 35;
+const SCORE_DESC_SUBSTRING: i32 = 25;
+const SCORE_DESC_FUZZY_BASE: i32 = 15;
+const SCORE_DESC_FUZZY_DIV: u32 = 30;
+const SCORE_PATH_SUBSTRING: i32 = 10;
+
 /// Fuzzy search scripts by query string
 /// Searches across name, filename (e.g., "my-script.ts"), description, and path
 /// Returns results sorted by relevance score (highest first)
@@ -62,7 +88,7 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
             && script.name.is_ascii()
             && is_exact_name_match(&script.name, &query_lower)
         {
-            score += 500;
+            score += SCORE_EXACT_NAME_MATCH;
         }
 
         // Score by name match - highest priority
@@ -70,10 +96,14 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
         if query_is_ascii && script.name.is_ascii() {
             if let Some(pos) = find_ignore_ascii_case(&script.name, &query_lower) {
                 // Bonus for exact substring match at start of name
-                score += if pos == 0 { 100 } else { 75 };
+                score += if pos == 0 {
+                    SCORE_NAME_PREFIX
+                } else {
+                    SCORE_NAME_SUBSTRING
+                };
                 // Extra bonus for word-boundary matches (e.g., "new" in "New Tab")
                 if pos > 0 && is_word_boundary_match(&script.name, pos) {
-                    score += 20;
+                    score += SCORE_WORD_BOUNDARY;
                 }
             }
         }
@@ -83,7 +113,7 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
         if use_nucleo {
             if let Some(nucleo_s) = nucleo.score(&script.name) {
                 // Scale nucleo score (0-1000+) to match existing weights (~50 for fuzzy match)
-                score += 50 + (nucleo_s / 20) as i32;
+                score += SCORE_NAME_FUZZY_BASE + (nucleo_s / SCORE_NAME_FUZZY_DIV) as i32;
             }
         }
 
@@ -92,7 +122,11 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
         if query_is_ascii && filename.is_ascii() {
             if let Some(pos) = find_ignore_ascii_case(&filename, &query_lower) {
                 // Bonus for exact substring match at start of filename
-                score += if pos == 0 { 60 } else { 45 };
+                score += if pos == 0 {
+                    SCORE_FILENAME_PREFIX
+                } else {
+                    SCORE_FILENAME_SUBSTRING
+                };
             }
         }
 
@@ -100,7 +134,7 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
         if use_nucleo {
             if let Some(nucleo_s) = nucleo.score(&filename) {
                 // Scale nucleo score to match existing weights (~35 for filename fuzzy match)
-                score += 35 + (nucleo_s / 30) as i32;
+                score += SCORE_FILENAME_FUZZY_BASE + (nucleo_s / SCORE_FILENAME_FUZZY_DIV) as i32;
             }
         }
 
@@ -109,7 +143,11 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
             if query_is_ascii && alias.is_ascii() {
                 if let Some(pos) = find_ignore_ascii_case(alias, &query_lower) {
                     // Strong bonus for alias match (aliases are explicit shortcuts)
-                    score += if pos == 0 { 80 } else { 60 };
+                    score += if pos == 0 {
+                        SCORE_ALIAS_PREFIX
+                    } else {
+                        SCORE_ALIAS_SUBSTRING
+                    };
                 }
             }
         }
@@ -120,7 +158,11 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
             if query_is_ascii && shortcut.is_ascii() {
                 if let Some(pos) = find_ignore_ascii_case(shortcut, &query_lower) {
                     // Strong bonus for shortcut match (shortcuts are explicit bindings)
-                    score += if pos == 0 { 80 } else { 60 };
+                    score += if pos == 0 {
+                        SCORE_SHORTCUT_PREFIX
+                    } else {
+                        SCORE_SHORTCUT_SUBSTRING
+                    };
                 }
             }
         }
@@ -130,7 +172,11 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
             if kit_name != "main" && query_is_ascii && kit_name.is_ascii() {
                 if let Some(pos) = find_ignore_ascii_case(kit_name, &query_lower) {
                     // Moderate bonus for kit name match (helps find all scripts from a kit)
-                    score += if pos == 0 { 30 } else { 20 };
+                    score += if pos == 0 {
+                        SCORE_KIT_PREFIX
+                    } else {
+                        SCORE_KIT_SUBSTRING
+                    };
                 }
             }
         }
@@ -142,7 +188,11 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
                 if query_is_ascii && tag.is_ascii() {
                     if let Some(pos) = find_ignore_ascii_case(tag, &query_lower) {
                         // Moderate bonus for tag match (helps discover scripts by category)
-                        score += if pos == 0 { 40 } else { 25 };
+                        score += if pos == 0 {
+                            SCORE_TAG_PREFIX
+                        } else {
+                            SCORE_TAG_SUBSTRING
+                        };
                         break; // Only count best tag match once
                     }
                 }
@@ -156,7 +206,11 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
                 if query_is_ascii && author.is_ascii() {
                     if let Some(pos) = find_ignore_ascii_case(author, &query_lower) {
                         // Moderate bonus for author match
-                        score += if pos == 0 { 30 } else { 20 };
+                        score += if pos == 0 {
+                            SCORE_AUTHOR_PREFIX
+                        } else {
+                            SCORE_AUTHOR_SUBSTRING
+                        };
                     }
                 }
             }
@@ -172,22 +226,22 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
                     || contains_ignore_ascii_case("scheduled", ql)
                     || contains_ignore_ascii_case("schedule", ql))
             {
-                score += 35;
+                score += SCORE_PROPERTY_KEYWORD;
             }
             if typed_meta.background
                 && (contains_ignore_ascii_case("background", ql)
                     || contains_ignore_ascii_case("bg", ql))
             {
-                score += 35;
+                score += SCORE_PROPERTY_KEYWORD;
             }
             if typed_meta.system && contains_ignore_ascii_case("system", ql) {
-                score += 35;
+                score += SCORE_PROPERTY_KEYWORD;
             }
             if !typed_meta.watch.is_empty()
                 && (contains_ignore_ascii_case("watch", ql)
                     || contains_ignore_ascii_case("watching", ql))
             {
-                score += 35;
+                score += SCORE_PROPERTY_KEYWORD;
             }
         }
 
@@ -195,12 +249,12 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
         // Substring match + nucleo fuzzy for catching typos and partial matches
         if let Some(ref desc) = script.description {
             if query_is_ascii && desc.is_ascii() && contains_ignore_ascii_case(desc, &query_lower) {
-                score += 25;
+                score += SCORE_DESC_SUBSTRING;
             }
             // Fuzzy match on description using nucleo (catches typos and partial terms)
             if use_nucleo {
                 if let Some(nucleo_s) = nucleo.score(desc) {
-                    score += 15 + (nucleo_s / 30) as i32;
+                    score += SCORE_DESC_FUZZY_BASE + (nucleo_s / SCORE_DESC_FUZZY_DIV) as i32;
                 }
             }
         }
@@ -212,7 +266,7 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
             && path_str.is_ascii()
             && contains_ignore_ascii_case(&path_str, &query_lower)
         {
-            score += 10;
+            score += SCORE_PATH_SUBSTRING;
         }
 
         if score > 0 {

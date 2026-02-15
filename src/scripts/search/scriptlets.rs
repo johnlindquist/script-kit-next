@@ -7,6 +7,26 @@ use super::{
     is_exact_name_match, is_word_boundary_match, NucleoCtx, MIN_FUZZY_QUERY_LEN,
 };
 
+const SCORE_EXACT_NAME_MATCH: i32 = 500;
+const SCORE_NAME_PREFIX: i32 = 100;
+const SCORE_NAME_SUBSTRING: i32 = 75;
+const SCORE_WORD_BOUNDARY: i32 = 20;
+const SCORE_NAME_FUZZY_BASE: i32 = 50;
+const SCORE_NAME_FUZZY_DIV: u32 = 20;
+const SCORE_FILE_PATH_PREFIX: i32 = 60;
+const SCORE_FILE_PATH_SUBSTRING: i32 = 45;
+const SCORE_FILE_PATH_FUZZY_BASE: i32 = 35;
+const SCORE_FILE_PATH_FUZZY_DIV: u32 = 30;
+const SCORE_DESC_SUBSTRING: i32 = 25;
+const SCORE_DESC_FUZZY_BASE: i32 = 15;
+const SCORE_DESC_FUZZY_DIV: u32 = 30;
+const SCORE_CODE_SUBSTRING: i32 = 5;
+const SCORE_METADATA_PREFIX: i32 = 80;
+const SCORE_METADATA_SUBSTRING: i32 = 60;
+const SCORE_GROUP_PREFIX: i32 = 30;
+const SCORE_GROUP_SUBSTRING: i32 = 20;
+const SCORE_TOOL_TYPE: i32 = 10;
+
 /// Fuzzy search scriptlets by query string
 /// Searches across name, file_path with anchor (e.g., "url.md#open-github"), description, and code
 /// Returns results sorted by relevance score (highest first)
@@ -54,7 +74,7 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
             && scriptlet.name.is_ascii()
             && is_exact_name_match(&scriptlet.name, &query_lower)
         {
-            score += 500;
+            score += SCORE_EXACT_NAME_MATCH;
         }
 
         // Score by name match - highest priority
@@ -62,10 +82,14 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
         if query_is_ascii && scriptlet.name.is_ascii() {
             if let Some(pos) = find_ignore_ascii_case(&scriptlet.name, &query_lower) {
                 // Bonus for exact substring match at start of name
-                score += if pos == 0 { 100 } else { 75 };
+                score += if pos == 0 {
+                    SCORE_NAME_PREFIX
+                } else {
+                    SCORE_NAME_SUBSTRING
+                };
                 // Extra bonus for word-boundary matches (e.g., "new" in "New Tab")
                 if pos > 0 && is_word_boundary_match(&scriptlet.name, pos) {
-                    score += 20;
+                    score += SCORE_WORD_BOUNDARY;
                 }
             }
         }
@@ -75,7 +99,7 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
         if use_nucleo {
             if let Some(nucleo_s) = nucleo.score(&scriptlet.name) {
                 // Scale nucleo score to match existing weights (~50 for fuzzy match)
-                score += 50 + (nucleo_s / 20) as i32;
+                score += SCORE_NAME_FUZZY_BASE + (nucleo_s / SCORE_NAME_FUZZY_DIV) as i32;
             }
         }
 
@@ -85,7 +109,11 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
             if query_is_ascii && fp.is_ascii() {
                 if let Some(pos) = find_ignore_ascii_case(fp, &query_lower) {
                     // Bonus for exact substring match at start of file_path
-                    score += if pos == 0 { 60 } else { 45 };
+                    score += if pos == 0 {
+                        SCORE_FILE_PATH_PREFIX
+                    } else {
+                        SCORE_FILE_PATH_SUBSTRING
+                    };
                 }
             }
 
@@ -93,7 +121,8 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
             if use_nucleo {
                 if let Some(nucleo_s) = nucleo.score(fp) {
                     // Scale nucleo score to match existing weights (~35 for file_path fuzzy match)
-                    score += 35 + (nucleo_s / 30) as i32;
+                    score +=
+                        SCORE_FILE_PATH_FUZZY_BASE + (nucleo_s / SCORE_FILE_PATH_FUZZY_DIV) as i32;
                 }
             }
         }
@@ -102,12 +131,12 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
         // Substring match + nucleo fuzzy for catching typos and partial matches
         if let Some(ref desc) = scriptlet.description {
             if query_is_ascii && desc.is_ascii() && contains_ignore_ascii_case(desc, &query_lower) {
-                score += 25;
+                score += SCORE_DESC_SUBSTRING;
             }
             // Fuzzy match on description using nucleo (catches typos and partial terms)
             if use_nucleo {
                 if let Some(nucleo_s) = nucleo.score(desc) {
-                    score += 15 + (nucleo_s / 30) as i32;
+                    score += SCORE_DESC_FUZZY_BASE + (nucleo_s / SCORE_DESC_FUZZY_DIV) as i32;
                 }
             }
         }
@@ -122,7 +151,7 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
             && scriptlet.code.is_ascii()
             && contains_ignore_ascii_case(&scriptlet.code, &query_lower)
         {
-            score += 5;
+            score += SCORE_CODE_SUBSTRING;
         }
 
         // Bonus for keyword match - allows users to search by trigger keyword
@@ -131,7 +160,11 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
             if query_is_ascii && keyword.is_ascii() {
                 if let Some(pos) = find_ignore_ascii_case(keyword, &query_lower) {
                     // Strong bonus for keyword match (keywords are explicit triggers)
-                    score += if pos == 0 { 80 } else { 60 };
+                    score += if pos == 0 {
+                        SCORE_METADATA_PREFIX
+                    } else {
+                        SCORE_METADATA_SUBSTRING
+                    };
                 }
             }
         }
@@ -141,7 +174,11 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
             if query_is_ascii && alias.is_ascii() {
                 if let Some(pos) = find_ignore_ascii_case(alias, &query_lower) {
                     // Strong bonus for alias match (aliases are explicit shortcuts)
-                    score += if pos == 0 { 80 } else { 60 };
+                    score += if pos == 0 {
+                        SCORE_METADATA_PREFIX
+                    } else {
+                        SCORE_METADATA_SUBSTRING
+                    };
                 }
             }
         }
@@ -151,7 +188,11 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
             if query_is_ascii && shortcut.is_ascii() {
                 if let Some(pos) = find_ignore_ascii_case(shortcut, &query_lower) {
                     // Strong bonus for shortcut match (shortcuts are explicit bindings)
-                    score += if pos == 0 { 80 } else { 60 };
+                    score += if pos == 0 {
+                        SCORE_METADATA_PREFIX
+                    } else {
+                        SCORE_METADATA_SUBSTRING
+                    };
                 }
             }
         }
@@ -161,7 +202,11 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
             if group != "main" && query_is_ascii && group.is_ascii() {
                 if let Some(pos) = find_ignore_ascii_case(group, &query_lower) {
                     // Moderate bonus for group name match (helps find all snippets from a group)
-                    score += if pos == 0 { 30 } else { 20 };
+                    score += if pos == 0 {
+                        SCORE_GROUP_PREFIX
+                    } else {
+                        SCORE_GROUP_SUBSTRING
+                    };
                 }
             }
         }
@@ -172,7 +217,7 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
             && scriptlet.tool.is_ascii()
             && contains_ignore_ascii_case(&scriptlet.tool, &query_lower)
         {
-            score += 10;
+            score += SCORE_TOOL_TYPE;
         }
 
         if score > 0 {
