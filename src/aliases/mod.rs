@@ -21,10 +21,6 @@
 mod persistence;
 
 // Re-export persistence functions
-#[allow(unused_imports)]
-pub use persistence::default_aliases_path;
-#[allow(unused_imports)]
 pub use persistence::{
-    get_cached_alias_overrides, invalidate_alias_cache, load_alias_overrides,
-    remove_alias_override, save_alias_override,
+    get_cached_alias_overrides, load_alias_overrides, remove_alias_override, save_alias_override,
 };

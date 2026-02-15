@@ -33,12 +33,13 @@ const LINE_HEIGHT_MULTIPLIER: f32 = 1.3;
 /// Using 8.5px ensures we never tell the PTY we have more columns than can render.
 const BASE_CELL_WIDTH: f32 = 8.5; // Conservative value for Menlo 14pt (actual: 8.4287px)
 /// Default cell height at base font size (used for tests and static calculations)
+#[cfg(test)]
 const BASE_CELL_HEIGHT: f32 = BASE_FONT_SIZE * LINE_HEIGHT_MULTIPLIER; // 18.2px for 14pt
 
 // Aliases for backwards compatibility with tests
-#[allow(dead_code)]
+#[cfg(test)]
 const CELL_WIDTH: f32 = BASE_CELL_WIDTH;
-#[allow(dead_code)]
+#[cfg(test)]
 const CELL_HEIGHT: f32 = BASE_CELL_HEIGHT;
 /// Terminal refresh interval (ms) - 30fps is plenty for terminal output
 const REFRESH_INTERVAL_MS: u64 = 16; // ~60fps, matches modern GPU-accelerated terminals
@@ -98,19 +99,6 @@ pub struct TermPrompt {
 // --- merged from part_001.rs ---
 // --- merged from part_001_impl/methods_000.rs ---
 impl TermPrompt {
-    /// Create new terminal prompt
-    #[allow(dead_code)]
-    pub fn new(
-        id: String,
-        command: Option<String>,
-        focus_handle: FocusHandle,
-        on_submit: SubmitCallback,
-        theme: Arc<Theme>,
-        config: Arc<Config>,
-    ) -> anyhow::Result<Self> {
-        Self::with_height(id, command, focus_handle, on_submit, theme, config, None)
-    }
-
     /// Create new terminal prompt with explicit height
     ///
     /// This is necessary because GPUI entities don't inherit parent flex sizing.
@@ -161,12 +149,6 @@ impl TermPrompt {
             click_count: 0,
             suppress_keys: false,
         })
-    }
-
-    /// Set the content height (for dynamic resizing)
-    #[allow(dead_code)]
-    pub fn set_height(&mut self, height: Pixels) {
-        self.content_height = Some(height);
     }
 
     /// Execute a terminal action.

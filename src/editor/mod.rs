@@ -18,7 +18,9 @@ use gpui::{
     div, prelude::*, px, rgb, Context, Entity, FocusHandle, Focusable, IntoElement, Render,
     SharedString, Styled, Subscription, Window,
 };
-use gpui_component::input::{IndentInline, Input, InputEvent, InputState, OutdentInline, Position};
+#[cfg(test)]
+use gpui_component::input::Position;
+use gpui_component::input::{IndentInline, Input, InputEvent, InputState, OutdentInline};
 use std::sync::Arc;
 /// Convert a character offset to a byte offset.
 ///
@@ -43,7 +45,7 @@ fn char_offset_to_byte_offset(text: &str, char_offset: usize) -> usize {
 ///
 /// This is needed because gpui-component's InputState uses Position (line, column)
 /// for cursor placement, but our snippet parser tracks char offsets.
-#[allow(dead_code)]
+#[cfg(test)]
 fn char_offset_to_position(text: &str, char_offset: usize) -> Position {
     let mut line: u32 = 0;
     let mut col: u32 = 0;
@@ -125,7 +127,6 @@ pub struct EditorPrompt {
     focus_handle: FocusHandle,
     on_submit: SubmitCallback,
     theme: Arc<Theme>,
-    #[allow(dead_code)]
     config: Arc<Config>,
 
     // Layout - explicit height for proper sizing
@@ -373,7 +374,6 @@ impl EditorPrompt {
     }
 
     /// Get the language
-    #[allow(dead_code)]
     pub fn language(&self) -> &str {
         &self.language
     }
@@ -791,16 +791,6 @@ impl EditorPrompt {
         let content = self.content(cx);
         logging::log("EDITOR", &format!("Submit id={}", self.id));
         (self.on_submit)(self.id.clone(), Some(content));
-    }
-
-    /// Focus the editor
-    #[allow(dead_code)]
-    pub fn focus(&self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(ref editor_state) = self.editor_state {
-            editor_state.update(cx, |state, cx| {
-                state.focus(window, cx);
-            });
-        }
     }
 }
 
