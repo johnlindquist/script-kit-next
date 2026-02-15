@@ -22,19 +22,20 @@ mod tests {
         let _bg1 = colors.background;
         let _bg2 = colors.background; // Would fail if not Copy
 
-        // Colors should match theme (text is Rgba, primary is u32)
-        let expected_r = ((theme.colors.text.primary >> 16) & 0xFF) as f32 / 255.0;
-        assert!((colors.text.r - expected_r).abs() < 0.01);
+        // Colors should map directly to canonical list item color fields
+        assert_eq!(colors.text_primary, theme.colors.text.primary);
+        assert_eq!(colors.text_secondary, theme.colors.text.secondary);
+        assert_eq!(colors.text_on_accent, theme.colors.text.on_accent);
     }
 
     #[test]
     fn test_list_item_colors_struct_size() {
         use std::mem::size_of;
 
-        let _colors = ListItemColors::from_color_scheme(&load_theme().colors);
+        let _colors = load_theme().colors.list_item_colors();
 
         // Should be small enough for stack allocation
-        // 10 Rgba fields * 16 bytes each = 160 bytes (reasonable)
+        // Canonical list item colors are a compact set of primitive fields.
         let size = size_of::<ListItemColors>();
         assert!(
             size <= 256,
