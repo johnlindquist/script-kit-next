@@ -5,7 +5,6 @@
 
 #![allow(dead_code)]
 
-// --- merged from part_000.rs ---
 use crate::designs::icon_variations::{icon_name_from_str, IconName};
 use crate::logging;
 use crate::ui_foundation::HexColorExt;
@@ -503,7 +502,23 @@ mod icon_kind_tests {
         assert!(IconKind::from_icon_hint("unknown-icon-name").is_none());
     }
 }
-// --- merged from part_001.rs ---
+
+#[cfg(test)]
+mod list_item_colors_tests {
+    use super::ListItemColors;
+
+    #[test]
+    fn test_from_theme_sets_text_on_accent_from_theme_text_on_accent() {
+        let mut theme = crate::theme::Theme::default();
+        theme.colors.text.primary = 0x010203;
+        theme.colors.text.on_accent = 0xa1b2c3;
+
+        let colors = ListItemColors::from_theme(&theme);
+
+        assert_eq!(colors.text_on_accent, theme.colors.text.on_accent);
+        assert_ne!(colors.text_on_accent, theme.colors.text.primary);
+    }
+}
 impl ListItemColors {
     /// Create from theme reference
     pub fn from_theme(theme: &crate::theme::Theme) -> Self {
@@ -521,7 +536,7 @@ impl ListItemColors {
             hover_opacity: opacity.hover,
             warning_bg: theme.colors.ui.warning,
             // White text provides good contrast on warning/accent backgrounds in dark themes
-            text_on_accent: theme.colors.text.primary,
+            text_on_accent: theme.colors.text.on_accent,
         }
     }
 
@@ -915,7 +930,6 @@ impl ListItem {
         self
     }
 }
-// --- merged from part_002.rs ---
 impl RenderOnce for ListItem {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let colors = self.colors;
@@ -1039,7 +1053,7 @@ impl RenderOnce for ListItem {
             // Build StyledText with highlighted matched characters
             let index_set: HashSet<usize> = indices.iter().copied().collect();
             let highlight_color = if self.selected {
-                rgb(colors.text_primary)
+                rgb(colors.text_on_accent)
             } else {
                 rgba((colors.text_primary << 8) | ALPHA_MATCH_HIGHLIGHT)
             };
@@ -1084,7 +1098,7 @@ impl RenderOnce for ListItem {
             // Plain text rendering (no search active)
             // Mute non-selected names to let selected item stand out
             let name_color = if self.selected {
-                rgb(colors.text_primary)
+                rgb(colors.text_on_accent)
             } else {
                 rgba((colors.text_primary << 8) | ALPHA_NAME_QUIET)
             };
@@ -1131,7 +1145,7 @@ impl RenderOnce for ListItem {
                     // Build StyledText with highlighted matched characters in description
                     let index_set: HashSet<usize> = desc_indices.iter().copied().collect();
                     let highlight_color = if self.selected {
-                        rgba((colors.text_primary << 8) | ALPHA_MATCH_HIGHLIGHT)
+                        rgba((colors.text_on_accent << 8) | ALPHA_MATCH_HIGHLIGHT)
                     } else {
                         rgba((colors.text_secondary << 8) | ALPHA_HINT)
                     };
@@ -1413,7 +1427,6 @@ pub fn decode_png_to_render_image_with_bgra_conversion(
 ) -> Result<Arc<RenderImage>, image::ImageError> {
     decode_png_to_render_image_internal(png_data, true)
 }
-// --- merged from part_003.rs ---
 fn decode_png_to_render_image_internal(
     png_data: &[u8],
     convert_to_bgra: bool,

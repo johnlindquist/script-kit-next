@@ -156,7 +156,7 @@ impl<'a> DesignContext<'a> {
                 text_dimmed: theme.colors.text.dimmed,
                 accent: theme.colors.accent.selected,
                 bg_selected: theme.colors.accent.selected,
-                text_on_accent: theme.colors.text.primary, // Default uses primary on accent
+                text_on_accent: theme.colors.text.on_accent, // Default uses dedicated on-accent text
             }
         } else {
             // Use design tokens for non-Default variants
@@ -303,6 +303,18 @@ mod tests {
         assert_eq!(dc.c.text_primary, theme.colors.text.primary);
         assert_eq!(dc.c.accent, theme.colors.accent.selected);
         assert!(dc.is_default());
+    }
+
+    #[test]
+    fn test_resolved_colors_default_uses_theme_text_on_accent() {
+        let mut theme = theme::Theme::default();
+        theme.colors.text.primary = 0x010203;
+        theme.colors.text.on_accent = 0xa1b2c3;
+
+        let dc = DesignContext::new(&theme, DesignVariant::Default);
+
+        assert_eq!(dc.c.text_on_accent, theme.colors.text.on_accent);
+        assert_ne!(dc.c.text_on_accent, theme.colors.text.primary);
     }
 
     #[test]
