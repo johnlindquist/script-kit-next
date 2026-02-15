@@ -38,13 +38,17 @@ impl ScriptListApp {
                 match sender.try_send(response) {
                     Ok(()) => {}
                     Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                        logging::log(
-                            "WARN",
-                            &format!("Response channel full - {dropped_label} response dropped"),
+                        tracing::warn!(
+                            category = "WARN",
+                            dropped_label = %dropped_label,
+                            "Response channel full - response dropped"
                         );
                     }
                     Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                        logging::log("UI", "Response channel disconnected - script exited");
+                        tracing::info!(
+                            category = "UI",
+                            "Response channel disconnected - script exited"
+                        );
                     }
                 }
             }
@@ -60,9 +64,10 @@ impl ScriptListApp {
         // Clear NEEDS_RESET when receiving a UI prompt from an active script.
         // This prevents the window from resetting when shown.
         if NEEDS_RESET.swap(false, Ordering::SeqCst) {
-            logging::log(
-                log_target,
-                &format!("Cleared NEEDS_RESET - script is showing {prompt_kind} UI"),
+            tracing::info!(
+                category = log_target,
+                prompt_kind = %prompt_kind,
+                "Cleared NEEDS_RESET - script is showing prompt UI"
             );
         }
 
@@ -71,9 +76,10 @@ impl ScriptListApp {
             if !bench_marker.is_empty() {
                 logging::bench_log(bench_marker);
             }
-            logging::log(
-                log_target,
-                &format!("Window hidden - requesting show for {prompt_kind} UI"),
+            tracing::info!(
+                category = log_target,
+                prompt_kind = %prompt_kind,
+                "Window hidden - requesting show for prompt UI"
             );
             script_kit_gpui::set_main_window_visible(true);
             script_kit_gpui::request_show_main_window();
@@ -96,12 +102,12 @@ impl ScriptListApp {
                 if let Some(shortcut) = &action.shortcut {
                     let normalized = shortcuts::normalize_shortcut(shortcut);
                     if log_shortcuts {
-                        logging::log(
-                            log_target,
-                            &format!(
-                                "Registering action shortcut: '{}' -> '{}' (normalized: '{}')",
-                                shortcut, action.name, normalized
-                            ),
+                        tracing::info!(
+                            category = log_target,
+                            shortcut = %shortcut,
+                            action_name = %action.name,
+                            normalized = %normalized,
+                            "Registering action shortcut"
                         );
                     }
                     self.action_shortcuts
@@ -126,14 +132,12 @@ impl ScriptListApp {
             } => {
                 self.prepare_window_for_prompt("UI", "arg", "");
 
-                logging::log(
-                    "UI",
-                    &format!(
-                        "Showing arg prompt: {} with {} choices, {} actions",
-                        id,
-                        choices.len(),
-                        actions.as_ref().map(|a| a.len()).unwrap_or(0)
-                    ),
+                tracing::info!(
+                    category = "UI",
+                    id = %id,
+                    choice_count = choices.len(),
+                    action_count = actions.as_ref().map(|a| a.len()).unwrap_or(0),
+                    "Showing arg prompt"
                 );
                 let choice_count = choices.len();
 
@@ -181,7 +185,7 @@ impl ScriptListApp {
             } => {
                 self.prepare_window_for_prompt("UI", "div", "");
 
-                logging::log("UI", &format!("Showing div prompt: {}", id));
+                tracing::info!(category = "UI", id = %id, "Showing div prompt");
                 // Store SDK actions for the actions panel (Cmd+K)
                 self.sdk_actions = actions;
 
@@ -226,7 +230,7 @@ impl ScriptListApp {
                 cx.notify();
             }
             PromptMessage::ShowForm { id, html, actions } => {
-                logging::log("UI", &format!("Showing form prompt: {}", id));
+                tracing::info!(category = "UI", id = %id, "Showing form prompt");
 
                 // Store SDK actions for the actions panel (Cmd+K)
                 self.sdk_actions = actions;
@@ -257,9 +261,11 @@ impl ScriptListApp {
                 command,
                 actions,
             } => {
-                logging::log(
-                    "UI",
-                    &format!("Showing term prompt: {} (command: {:?})", id, command),
+                tracing::info!(
+                    category = "UI",
+                    id = %id,
+                    command = ?command,
+                    "Showing term prompt"
                 );
 
                 // Store SDK actions for the actions panel (Cmd+K)
@@ -296,8 +302,7 @@ impl ScriptListApp {
                         cx.notify();
                     }
                     Err(e) => {
-                        tracing::error!(error = %e, "Failed to create terminal");
-                        logging::log("ERROR", &format!("Failed to create terminal: {}", e));
+                        tracing::error!(category = "ERROR", error = %e, "Failed to create terminal");
                     }
                 }
             }
@@ -308,14 +313,12 @@ impl ScriptListApp {
                 template,
                 actions,
             } => {
-                logging::log(
-                    "UI",
-                    &format!(
-                        "Showing editor prompt: {} (language: {:?}, template: {})",
-                        id,
-                        language,
-                        template.is_some()
-                    ),
+                tracing::info!(
+                    category = "UI",
+                    id = %id,
+                    language = ?language,
+                    has_template = template.is_some(),
+                    "Showing editor prompt"
                 );
 
                 // Store SDK actions for the actions panel (Cmd+K)
@@ -357,9 +360,10 @@ impl ScriptListApp {
                     )
                 } else if has_tabstops {
                     // Auto-detect template in content
-                    logging::log(
-                        "UI",
-                        &format!("Auto-detected template in content: {}", content_str),
+                    tracing::info!(
+                        category = "UI",
+                        content = %content_str,
+                        "Auto-detected template in content"
                     );
                     EditorPrompt::with_template(
                         id.clone(),
@@ -403,34 +407,39 @@ impl ScriptListApp {
             }
 
             PromptMessage::ScriptExit => {
-                logging::log("VISIBILITY", "=== ScriptExit message received ===");
+                tracing::info!(
+                    category = "VISIBILITY",
+                    "=== ScriptExit message received ==="
+                );
                 let was_visible = script_kit_gpui::is_main_window_visible();
                 let script_hid_window = script_kit_gpui::script_requested_hide();
-                logging::log(
-                    "VISIBILITY",
-                    &format!(
-                        "WINDOW_VISIBLE was: {}, SCRIPT_REQUESTED_HIDE was: {}",
-                        was_visible, script_hid_window
-                    ),
+                tracing::info!(
+                    category = "VISIBILITY",
+                    was_visible,
+                    script_hid_window,
+                    "Window visibility state before script exit reset"
                 );
 
                 // Reset the script-requested-hide flag
                 script_kit_gpui::set_script_requested_hide(false);
-                logging::log("VISIBILITY", "SCRIPT_REQUESTED_HIDE reset to: false");
+                tracing::info!(
+                    category = "VISIBILITY",
+                    "SCRIPT_REQUESTED_HIDE reset to: false"
+                );
 
                 // Set flag so next hotkey show will reset to script list
                 NEEDS_RESET.store(true, Ordering::SeqCst);
-                logging::log("VISIBILITY", "NEEDS_RESET set to: true");
+                tracing::info!(category = "VISIBILITY", "NEEDS_RESET set to: true");
 
                 self.reset_to_script_list(cx);
-                logging::log("VISIBILITY", "reset_to_script_list() called");
+                tracing::info!(category = "VISIBILITY", "reset_to_script_list() called");
 
                 // If the script had hidden the window (e.g., for getSelectedText),
                 // request showing the main window so the menu comes back
                 if script_hid_window {
-                    logging::log(
-                        "VISIBILITY",
-                        "Script had hidden window - requesting show main window",
+                    tracing::info!(
+                        category = "VISIBILITY",
+                        "Script had hidden window - requesting show main window"
                     );
                     script_kit_gpui::request_show_main_window();
                 } else {
@@ -439,62 +448,81 @@ impl ScriptListApp {
                     // had shrunk the window
                     resize_to_view_sync(ViewType::ScriptList, 0);
                     script_kit_gpui::set_main_window_visible(false);
-                    logging::log(
-                        "VISIBILITY",
-                        "Script didn't hide window - restored height and keeping visibility state",
+                    tracing::info!(
+                        category = "VISIBILITY",
+                        "Script didn't hide window - restored height and keeping visibility state"
                     );
                 }
             }
             PromptMessage::HideWindow => {
-                logging::log("VISIBILITY", "=== HideWindow message received ===");
+                tracing::info!(
+                    category = "VISIBILITY",
+                    "=== HideWindow message received ==="
+                );
                 let was_visible = script_kit_gpui::is_main_window_visible();
-                logging::log(
-                    "VISIBILITY",
-                    &format!("WINDOW_VISIBLE was: {}", was_visible),
+                tracing::info!(
+                    category = "VISIBILITY",
+                    was_visible,
+                    "Window visibility state before hide request"
                 );
 
                 // CRITICAL: Update visibility state so hotkey toggle works correctly
                 script_kit_gpui::set_main_window_visible(false);
-                logging::log("VISIBILITY", "WINDOW_VISIBLE set to: false");
+                tracing::info!(category = "VISIBILITY", "WINDOW_VISIBLE set to: false");
 
                 // Mark that script requested hide - so ScriptExit knows to show window again
                 script_kit_gpui::set_script_requested_hide(true);
-                logging::log("VISIBILITY", "SCRIPT_REQUESTED_HIDE set to: true");
+                tracing::info!(
+                    category = "VISIBILITY",
+                    "SCRIPT_REQUESTED_HIDE set to: true"
+                );
 
                 // Set flag so next hotkey show will reset to script list
                 NEEDS_RESET.store(true, Ordering::SeqCst);
-                logging::log("VISIBILITY", "NEEDS_RESET set to: true");
+                tracing::info!(category = "VISIBILITY", "NEEDS_RESET set to: true");
 
                 // Hide main window only (not entire app) to keep HUD visible
                 platform::hide_main_window();
-                logging::log(
-                    "VISIBILITY",
-                    "platform::hide_main_window() called - main window hidden, HUDs remain visible",
+                tracing::info!(
+                    category = "VISIBILITY",
+                    "platform::hide_main_window() called - main window hidden, HUDs remain visible"
                 );
             }
             PromptMessage::OpenBrowser { url } => {
-                logging::log("UI", &format!("Opening browser: {}", url));
+                tracing::info!(category = "UI", url = %url, "Opening browser");
                 #[cfg(target_os = "macos")]
                 {
                     match std::process::Command::new("open").arg(&url).spawn() {
-                        Ok(_) => logging::log(
-                            "UI",
-                            &format!("Successfully opened URL in browser: {}", url),
+                        Ok(_) => tracing::info!(
+                            category = "UI",
+                            url = %url,
+                            "Successfully opened URL in browser"
                         ),
                         Err(e) => {
-                            logging::log("ERROR", &format!("Failed to open URL '{}': {}", url, e))
+                            tracing::error!(
+                                category = "ERROR",
+                                url = %url,
+                                error = %e,
+                                "Failed to open URL"
+                            )
                         }
                     }
                 }
                 #[cfg(target_os = "linux")]
                 {
                     match std::process::Command::new("xdg-open").arg(&url).spawn() {
-                        Ok(_) => logging::log(
-                            "UI",
-                            &format!("Successfully opened URL in browser: {}", url),
+                        Ok(_) => tracing::info!(
+                            category = "UI",
+                            url = %url,
+                            "Successfully opened URL in browser"
                         ),
                         Err(e) => {
-                            logging::log("ERROR", &format!("Failed to open URL '{}': {}", url, e))
+                            tracing::error!(
+                                category = "ERROR",
+                                url = %url,
+                                error = %e,
+                                "Failed to open URL"
+                            )
                         }
                     }
                 }
@@ -504,18 +532,24 @@ impl ScriptListApp {
                         .args(["/C", "start", &url])
                         .spawn()
                     {
-                        Ok(_) => logging::log(
-                            "UI",
-                            &format!("Successfully opened URL in browser: {}", url),
+                        Ok(_) => tracing::info!(
+                            category = "UI",
+                            url = %url,
+                            "Successfully opened URL in browser"
                         ),
                         Err(e) => {
-                            logging::log("ERROR", &format!("Failed to open URL '{}': {}", url, e))
+                            tracing::error!(
+                                category = "ERROR",
+                                url = %url,
+                                error = %e,
+                                "Failed to open URL"
+                            )
                         }
                     }
                 }
             }
             PromptMessage::RunScript { path } => {
-                logging::log("EXEC", &format!("RunScript command received: {}", path));
+                tracing::info!(category = "EXEC", path = %path, "RunScript command received");
 
                 // Create a Script struct from the path
                 let script_path = std::path::PathBuf::from(&path);
@@ -543,7 +577,11 @@ impl ScriptListApp {
                     kit_name: None,
                 };
 
-                logging::log("EXEC", &format!("Executing script: {}", script_name));
+                tracing::info!(
+                    category = "EXEC",
+                    script_name = %script_name,
+                    "Executing script"
+                );
                 self.execute_interactive(&script, cx);
             }
             PromptMessage::ScriptError {
@@ -554,12 +592,11 @@ impl ScriptListApp {
                 script_path,
                 suggestions,
             } => {
-                logging::log(
-                    "ERROR",
-                    &format!(
-                        "Script error received: {} (exit code: {:?})",
-                        error_message, exit_code
-                    ),
+                tracing::error!(
+                    category = "ERROR",
+                    error_message = %error_message,
+                    exit_code = ?exit_code,
+                    "Script error received"
                 );
 
                 // CRITICAL: Show error via HUD (highly visible floating window)
@@ -591,7 +628,7 @@ impl ScriptListApp {
                             use arboard::Clipboard;
                             if let Ok(mut clipboard) = Clipboard::new() {
                                 let _ = clipboard.set_text(trace_clone.clone());
-                                logging::log("UI", "Error copied to clipboard");
+                                tracing::info!(category = "UI", "Error copied to clipboard");
                             }
                         }),
                     ))
@@ -601,17 +638,20 @@ impl ScriptListApp {
 
                 // Log suggestions if present
                 if !suggestions.is_empty() {
-                    logging::log("ERROR", &format!("Suggestions: {:?}", suggestions));
+                    tracing::error!(
+                        category = "ERROR",
+                        suggestions = ?suggestions,
+                        "Script error suggestions"
+                    );
                 }
 
                 // Push toast to manager
                 let toast_id = self.toast_manager.push(toast);
-                logging::log(
-                    "UI",
-                    &format!(
-                        "Toast created for script error: {} (id: {})",
-                        script_path, toast_id
-                    ),
+                tracing::info!(
+                    category = "UI",
+                    script_path = %script_path,
+                    toast_id = %toast_id,
+                    "Toast created for script error"
                 );
 
                 cx.notify();
@@ -651,9 +691,10 @@ impl ScriptListApp {
                 cx.notify();
             }
             PromptMessage::UnhandledMessage { message_type } => {
-                logging::log(
-                    "WARN",
-                    &format!("Displaying unhandled message warning: {}", message_type),
+                tracing::warn!(
+                    category = "WARN",
+                    message_type = %message_type,
+                    "Displaying unhandled message warning"
                 );
 
                 let toast = Toast::warning(unhandled_message_warning(&message_type), &self.theme)
@@ -664,9 +705,10 @@ impl ScriptListApp {
             }
 
             PromptMessage::GetState { request_id } => {
-                logging::log(
-                    "UI",
-                    &format!("Collecting state for request: {}", request_id),
+                tracing::info!(
+                    category = "UI",
+                    request_id = %request_id,
+                    "Collecting state for request"
                 );
 
                 // Collect current UI state
@@ -1068,9 +1110,10 @@ impl ScriptListApp {
                     window_visible,
                 );
 
-                logging::log(
-                    "UI",
-                    &format!("Sending state result for request: {}", request_id),
+                tracing::info!(
+                    category = "UI",
+                    request_id = %request_id,
+                    "Sending state result for request"
                 );
 
                 // Send the response - use try_send to avoid blocking UI
@@ -1078,21 +1121,31 @@ impl ScriptListApp {
                     match sender.try_send(response) {
                         Ok(()) => {}
                         Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                            logging::log("WARN", "Response channel full - state result dropped");
+                            tracing::warn!(
+                                category = "WARN",
+                                "Response channel full - state result dropped"
+                            );
                         }
                         Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                            logging::log("UI", "Response channel disconnected - script exited");
+                            tracing::info!(
+                                category = "UI",
+                                "Response channel disconnected - script exited"
+                            );
                         }
                     }
                 } else {
-                    logging::log("ERROR", "No response sender available for state result");
+                    tracing::error!(
+                        category = "ERROR",
+                        "No response sender available for state result"
+                    );
                 }
             }
 
             PromptMessage::GetLayoutInfo { request_id } => {
-                logging::log(
-                    "UI",
-                    &format!("Collecting layout info for request: {}", request_id),
+                tracing::info!(
+                    category = "UI",
+                    request_id = %request_id,
+                    "Collecting layout info for request"
                 );
 
                 // Build layout info from current window state
@@ -1101,9 +1154,10 @@ impl ScriptListApp {
                 // Create the response
                 let response = Message::layout_info_result(request_id.clone(), layout_info);
 
-                logging::log(
-                    "UI",
-                    &format!("Sending layout info result for request: {}", request_id),
+                tracing::info!(
+                    category = "UI",
+                    request_id = %request_id,
+                    "Sending layout info result for request"
                 );
 
                 // Send the response - use try_send to avoid blocking UI
@@ -1111,23 +1165,30 @@ impl ScriptListApp {
                     match sender.try_send(response) {
                         Ok(()) => {}
                         Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                            logging::log("WARN", "Response channel full - layout info dropped");
+                            tracing::warn!(
+                                category = "WARN",
+                                "Response channel full - layout info dropped"
+                            );
                         }
                         Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                            logging::log("UI", "Response channel disconnected - script exited");
+                            tracing::info!(
+                                category = "UI",
+                                "Response channel disconnected - script exited"
+                            );
                         }
                     }
                 } else {
-                    logging::log(
-                        "ERROR",
-                        "No response sender available for layout info result",
+                    tracing::error!(
+                        category = "ERROR",
+                        "No response sender available for layout info result"
                     );
                 }
             }
             PromptMessage::ForceSubmit { value } => {
-                logging::log(
-                    "UI",
-                    &format!("ForceSubmit received with value: {:?}", value),
+                tracing::info!(
+                    category = "UI",
+                    value = ?value,
+                    "ForceSubmit received"
                 );
 
                 // Get the current prompt ID and submit the value
@@ -1149,18 +1210,17 @@ impl ScriptListApp {
                         other => other.to_string(),
                     };
 
-                    logging::log(
-                        "UI",
-                        &format!(
-                            "ForceSubmit: submitting '{}' for prompt '{}'",
-                            value_str, id
-                        ),
+                    tracing::info!(
+                        category = "UI",
+                        value = %value_str,
+                        prompt_id = %id,
+                        "ForceSubmit submitting value"
                     );
                     self.submit_prompt_response(id, Some(value_str), cx);
                 } else {
-                    logging::log(
-                        "WARN",
-                        "ForceSubmit received but no active prompt to submit to",
+                    tracing::warn!(
+                        category = "WARN",
+                        "ForceSubmit received but no active prompt to submit to"
                     );
                 }
             }
@@ -1172,23 +1232,22 @@ impl ScriptListApp {
                 start_path,
                 hint,
             } => {
-                logging::log(
-                    "UI",
-                    &format!(
-                        "Showing path prompt: {} (start: {:?}, hint: {:?})",
-                        id, start_path, hint
-                    ),
+                tracing::info!(
+                    category = "UI",
+                    id = %id,
+                    start_path = ?start_path,
+                    hint = ?hint,
+                    "Showing path prompt"
                 );
 
                 let path_submit_callback = self.make_submit_callback("path");
                 let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
                     std::sync::Arc::new(move |id, value| {
-                        logging::log(
-                            "UI",
-                            &format!(
-                                "PathPrompt submit_callback called: id={}, value={:?}",
-                                id, value
-                            ),
+                        tracing::info!(
+                            category = "UI",
+                            id = %id,
+                            value = ?value,
+                            "PathPrompt submit callback called"
                         );
                         path_submit_callback(id, value);
                     });
@@ -1219,17 +1278,18 @@ impl ScriptListApp {
                     &entity,
                     |this, _entity, event: &PathPromptEvent, cx| match event {
                         PathPromptEvent::ShowActions(path_info) => {
-                            logging::log(
-                                "UI",
-                                &format!(
-                                    "PathPromptEvent::ShowActions received for: {}",
-                                    path_info.path
-                                ),
+                            tracing::info!(
+                                category = "UI",
+                                path = %path_info.path,
+                                "PathPromptEvent::ShowActions received"
                             );
                             this.handle_show_path_actions(path_info.clone(), cx);
                         }
                         PathPromptEvent::CloseActions => {
-                            logging::log("UI", "PathPromptEvent::CloseActions received");
+                            tracing::info!(
+                                category = "UI",
+                                "PathPromptEvent::CloseActions received"
+                            );
                             this.handle_close_path_actions(cx);
                         }
                     },
@@ -1259,12 +1319,12 @@ impl ScriptListApp {
                 secret,
             } => {
                 tracing::info!(id, key, ?prompt, secret, "ShowEnv received");
-                logging::log(
-                    "UI",
-                    &format!(
-                        "ShowEnv prompt received: {} (key: {}, secret: {})",
-                        id, key, secret
-                    ),
+                tracing::info!(
+                    category = "UI",
+                    id = %id,
+                    key = %key,
+                    secret,
+                    "ShowEnv prompt received"
                 );
 
                 let submit_callback = self.make_submit_callback("env");
@@ -1296,7 +1356,10 @@ impl ScriptListApp {
 
                 // Check keyring first - if value exists, auto-submit without showing UI
                 if env_prompt.check_keyring_and_auto_submit() {
-                    logging::log("UI", "EnvPrompt: value found in keyring, auto-submitted");
+                    tracing::info!(
+                        category = "UI",
+                        "EnvPrompt value found in keyring, auto-submitted"
+                    );
                     // Don't switch view, the callback already submitted
                     cx.notify();
                     return;
@@ -1317,12 +1380,11 @@ impl ScriptListApp {
                 hint,
             } => {
                 tracing::info!(id, ?placeholder, ?hint, "ShowDrop received");
-                logging::log(
-                    "UI",
-                    &format!(
-                        "ShowDrop prompt received: {} (placeholder: {:?})",
-                        id, placeholder
-                    ),
+                tracing::info!(
+                    category = "UI",
+                    id = %id,
+                    placeholder = ?placeholder,
+                    "ShowDrop prompt received"
                 );
 
                 let submit_callback = self.make_submit_callback("drop");
@@ -1348,12 +1410,11 @@ impl ScriptListApp {
             }
             PromptMessage::ShowTemplate { id, template } => {
                 tracing::info!(id, template, "ShowTemplate received");
-                logging::log(
-                    "UI",
-                    &format!(
-                        "ShowTemplate prompt received: {} (template: {})",
-                        id, template
-                    ),
+                tracing::info!(
+                    category = "UI",
+                    id = %id,
+                    template = %template,
+                    "ShowTemplate prompt received"
                 );
 
                 let submit_callback = self.make_submit_callback("template");
@@ -1390,14 +1451,12 @@ impl ScriptListApp {
                     multiple,
                     "ShowSelect received"
                 );
-                logging::log(
-                    "UI",
-                    &format!(
-                        "ShowSelect prompt received: {} ({} choices, multiple: {})",
-                        id,
-                        choices.len(),
-                        multiple
-                    ),
+                tracing::info!(
+                    category = "UI",
+                    id = %id,
+                    choice_count = choices.len(),
+                    multiple,
+                    "ShowSelect prompt received"
                 );
 
                 let submit_callback = self.make_submit_callback("select");
@@ -1433,22 +1492,22 @@ impl ScriptListApp {
                 confirm_text,
                 cancel_text,
             } => {
-                logging::log(
-                    "CONFIRM",
-                    &format!("ShowConfirm prompt: id={}, message={:?}", id, message),
+                tracing::info!(
+                    category = "CONFIRM",
+                    id = %id,
+                    message = ?message,
+                    "ShowConfirm prompt"
                 );
 
                 // Create callback to send response and close the confirm window
                 let response_sender = self.response_sender.clone();
                 let prompt_id = id.clone();
                 let on_choice: ConfirmCallback = std::sync::Arc::new(move |confirmed: bool| {
-                    logging::log(
-                        "CONFIRM",
-                        &format!(
-                            "User choice: {} (id={})",
-                            if confirmed { "confirmed" } else { "cancelled" },
-                            prompt_id
-                        ),
+                    tracing::info!(
+                        category = "CONFIRM",
+                        prompt_id = %prompt_id,
+                        confirmed,
+                        "User choice received"
                     );
                     if let Some(ref sender) = response_sender {
                         let value = if confirmed {
@@ -1462,16 +1521,19 @@ impl ScriptListApp {
                         };
                         match sender.try_send(response) {
                             Ok(()) => {
-                                logging::log("CONFIRM", "Submit message sent");
+                                tracing::info!(category = "CONFIRM", "Submit message sent");
                             }
                             Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                                logging::log(
-                                    "WARN",
-                                    "Response channel full - confirm response dropped",
+                                tracing::warn!(
+                                    category = "WARN",
+                                    "Response channel full - confirm response dropped"
                                 );
                             }
                             Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                                logging::log("UI", "Response channel disconnected - script exited");
+                                tracing::info!(
+                                    category = "UI",
+                                    "Response channel disconnected - script exited"
+                                );
                             }
                         }
                     }
@@ -1520,12 +1582,13 @@ impl ScriptListApp {
                             on_choice_for_close,
                         ) {
                             Ok((_handle, _dialog)) => {
-                                logging::log("CONFIRM", "Confirm popup window opened");
+                                tracing::info!(category = "CONFIRM", "Confirm popup window opened");
                             }
                             Err(e) => {
-                                logging::log(
-                                    "ERROR",
-                                    &format!("Failed to open confirm window: {}", e),
+                                tracing::error!(
+                                    category = "ERROR",
+                                    error = %e,
+                                    "Failed to open confirm window"
                                 );
                             }
                         }
@@ -1562,16 +1625,14 @@ impl ScriptListApp {
                     use_builtin_ai,
                     "ShowChat received"
                 );
-                logging::log(
-                    "UI",
-                    &format!(
-                        "ShowChat prompt received: {} ({} messages, {} models, save={}, builtin_ai={})",
-                        id,
-                        messages.len(),
-                        models.len(),
-                        save_history,
-                        use_builtin_ai
-                    ),
+                tracing::info!(
+                    category = "UI",
+                    id = %id,
+                    message_count = messages.len(),
+                    model_count = models.len(),
+                    save_history,
+                    use_builtin_ai,
+                    "ShowChat prompt received"
                 );
 
                 // Store SDK actions for the actions panel (Cmd+K)
@@ -1587,15 +1648,15 @@ impl ScriptListApp {
                             match sender.try_send(response) {
                                 Ok(()) => {}
                                 Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                                    logging::log(
-                                        "WARN",
-                                        "Response channel full - chat response dropped",
+                                    tracing::warn!(
+                                        category = "WARN",
+                                        "Response channel full - chat response dropped"
                                     );
                                 }
                                 Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                                    logging::log(
-                                        "UI",
-                                        "Response channel disconnected - script exited",
+                                    tracing::info!(
+                                        category = "UI",
+                                        "Response channel disconnected - script exited"
                                     );
                                 }
                             }
@@ -1633,12 +1694,10 @@ impl ScriptListApp {
                     let registry =
                         ProviderRegistry::from_environment_with_config(Some(&self.config));
                     if registry.has_any_provider() {
-                        logging::log(
-                            "CHAT",
-                            &format!(
-                                "Enabling built-in AI with {} providers",
-                                registry.provider_ids().len()
-                            ),
+                        tracing::info!(
+                            category = "CHAT",
+                            provider_count = registry.provider_ids().len(),
+                            "Enabling built-in AI"
                         );
                         chat_prompt = chat_prompt.with_builtin_ai(registry, true);
                         // Auto-respond if there are initial user messages (scriptlets with pre-populated messages)
@@ -1647,22 +1706,25 @@ impl ScriptListApp {
                             .iter()
                             .any(|m| m.role == Some(crate::protocol::ChatMessageRole::User))
                         {
-                            logging::log(
-                                "CHAT",
-                                "Found user messages - enabling needs_initial_response",
+                            tracing::info!(
+                                category = "CHAT",
+                                "Found user messages - enabling needs_initial_response"
                             );
                             chat_prompt = chat_prompt.with_needs_initial_response(true);
                         }
                     } else {
-                        logging::log("CHAT", "Built-in AI requested but no providers configured");
+                        tracing::info!(
+                            category = "CHAT",
+                            "Built-in AI requested but no providers configured"
+                        );
 
                         // Create configure callback that signals via channel
                         let configure_sender = self.inline_chat_configure_sender.clone();
                         let configure_callback: crate::prompts::ChatConfigureCallback =
                             std::sync::Arc::new(move || {
-                                crate::logging::log(
-                                    "CHAT",
-                                    "Configure callback triggered - sending signal",
+                                tracing::info!(
+                                    category = "CHAT",
+                                    "Configure callback triggered - sending signal"
                                 );
                                 let _ = configure_sender.try_send(());
                             });
@@ -1671,9 +1733,9 @@ impl ScriptListApp {
                         let claude_code_sender = self.inline_chat_claude_code_sender.clone();
                         let claude_code_callback: crate::prompts::ChatClaudeCodeCallback =
                             std::sync::Arc::new(move || {
-                                crate::logging::log(
-                                    "CHAT",
-                                    "Claude Code callback triggered - sending signal",
+                                tracing::info!(
+                                    category = "CHAT",
+                                    "Claude Code callback triggered - sending signal"
                                 );
                                 let _ = claude_code_sender.try_send(());
                             });
@@ -1702,7 +1764,7 @@ impl ScriptListApp {
             }
 
             PromptMessage::ChatAddMessage { id, message } => {
-                logging::log("CHAT", &format!("ChatAddMessage for {}", id));
+                tracing::info!(category = "CHAT", id = %id, "ChatAddMessage");
                 if let AppView::ChatPrompt {
                     id: view_id,
                     entity,
@@ -1720,9 +1782,11 @@ impl ScriptListApp {
                 message_id,
                 position,
             } => {
-                logging::log(
-                    "CHAT",
-                    &format!("ChatStreamStart for {} msg={}", id, message_id),
+                tracing::info!(
+                    category = "CHAT",
+                    id = %id,
+                    message_id = %message_id,
+                    "ChatStreamStart"
                 );
                 if let AppView::ChatPrompt {
                     id: view_id,
@@ -1754,9 +1818,11 @@ impl ScriptListApp {
                 }
             }
             PromptMessage::ChatStreamComplete { id, message_id } => {
-                logging::log(
-                    "CHAT",
-                    &format!("ChatStreamComplete for {} msg={}", id, message_id),
+                tracing::info!(
+                    category = "CHAT",
+                    id = %id,
+                    message_id = %message_id,
+                    "ChatStreamComplete"
                 );
                 if let AppView::ChatPrompt {
                     id: view_id,
@@ -1771,7 +1837,7 @@ impl ScriptListApp {
                 }
             }
             PromptMessage::ChatClear { id } => {
-                logging::log("CHAT", &format!("ChatClear for {}", id));
+                tracing::info!(category = "CHAT", id = %id, "ChatClear");
                 if let AppView::ChatPrompt {
                     id: view_id,
                     entity,
@@ -1789,9 +1855,12 @@ impl ScriptListApp {
                 message_id,
                 error,
             } => {
-                logging::log(
-                    "CHAT",
-                    &format!("ChatSetError for {} msg={}: {}", id, message_id, error),
+                tracing::info!(
+                    category = "CHAT",
+                    id = %id,
+                    message_id = %message_id,
+                    error = %error,
+                    "ChatSetError"
                 );
                 if let AppView::ChatPrompt {
                     id: view_id,
@@ -1806,9 +1875,11 @@ impl ScriptListApp {
                 }
             }
             PromptMessage::ChatClearError { id, message_id } => {
-                logging::log(
-                    "CHAT",
-                    &format!("ChatClearError for {} msg={}", id, message_id),
+                tracing::info!(
+                    category = "CHAT",
+                    id = %id,
+                    message_id = %message_id,
+                    "ChatClearError"
                 );
                 if let AppView::ChatPrompt {
                     id: view_id,
@@ -1829,9 +1900,10 @@ impl ScriptListApp {
                 self.set_prompt_input(text, cx);
             }
             PromptMessage::SetActions { actions } => {
-                logging::log(
-                    "ACTIONS",
-                    &format!("Received setActions with {} actions", actions.len()),
+                tracing::info!(
+                    category = "ACTIONS",
+                    action_count = actions.len(),
+                    "Received setActions"
                 );
 
                 self.set_sdk_actions_and_shortcuts(actions.clone(), "ACTIONS", true);
@@ -1853,23 +1925,24 @@ impl ScriptListApp {
                 model_id,
                 no_response,
             } => {
-                logging::log(
-                    "AI",
-                    &format!(
-                        "AiStartChat request: {} (message: {} chars, system_prompt: {}, image: {}, model: {:?}, no_response: {})",
-                        request_id,
-                        message.len(),
-                        system_prompt.is_some(),
-                        image.is_some(),
-                        model_id,
-                        no_response
-                    ),
+                tracing::info!(
+                    category = "AI",
+                    request_id = %request_id,
+                    message_len = message.len(),
+                    has_system_prompt = system_prompt.is_some(),
+                    has_image = image.is_some(),
+                    model_id = ?model_id,
+                    no_response,
+                    "AiStartChat request"
                 );
 
                 // Open the AI window (creates new if not open, brings to front if open)
                 if let Err(e) = crate::ai::open_ai_window(cx) {
-                    tracing::error!(error = %e, "Failed to open AI window for AiStartChat");
-                    logging::log("ERROR", &format!("Failed to open AI window: {}", e));
+                    tracing::error!(
+                        category = "ERROR",
+                        error = %e,
+                        "Failed to open AI window for AiStartChat"
+                    );
                     // Still send response so SDK doesn't hang
                     if let Some(ref sender) = self.response_sender {
                         let _ = sender.try_send(Message::AiChatCreated {
@@ -1917,16 +1990,23 @@ impl ScriptListApp {
                     };
                     match sender.try_send(response) {
                         Ok(()) => {
-                            logging::log(
-                                "AI",
-                                &format!("AiChatCreated response sent for {}", request_id),
+                            tracing::info!(
+                                category = "AI",
+                                request_id = %request_id,
+                                "AiChatCreated response sent"
                             );
                         }
                         Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                            logging::log("WARN", "Response channel full - AiChatCreated dropped");
+                            tracing::warn!(
+                                category = "WARN",
+                                "Response channel full - AiChatCreated dropped"
+                            );
                         }
                         Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                            logging::log("UI", "Response channel disconnected - script exited");
+                            tracing::info!(
+                                category = "UI",
+                                "Response channel disconnected - script exited"
+                            );
                         }
                     }
                 }
@@ -1934,7 +2014,7 @@ impl ScriptListApp {
                 cx.notify();
             }
             PromptMessage::AiFocus { request_id } => {
-                logging::log("AI", &format!("AiFocus request: {}", request_id));
+                tracing::info!(category = "AI", request_id = %request_id, "AiFocus request");
 
                 // Check if window was already open before we open/focus it
                 let was_open = crate::ai::is_ai_window_open();
@@ -1942,12 +2022,15 @@ impl ScriptListApp {
                 // Open the AI window (creates new if not open, brings to front if open)
                 let success = match crate::ai::open_ai_window(cx) {
                     Ok(()) => {
-                        logging::log("AI", "AI window focused successfully");
+                        tracing::info!(category = "AI", "AI window focused successfully");
                         true
                     }
                     Err(e) => {
-                        tracing::error!(error = %e, "Failed to focus AI window");
-                        logging::log("ERROR", &format!("Failed to focus AI window: {}", e));
+                        tracing::error!(
+                            category = "ERROR",
+                            error = %e,
+                            "Failed to focus AI window"
+                        );
                         false
                     }
                 };
@@ -1961,13 +2044,23 @@ impl ScriptListApp {
                     };
                     match sender.try_send(response) {
                         Ok(()) => {
-                            logging::log("AI", &format!("AiFocusResult sent for {}", request_id));
+                            tracing::info!(
+                                category = "AI",
+                                request_id = %request_id,
+                                "AiFocusResult sent"
+                            );
                         }
                         Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                            logging::log("WARN", "Response channel full - AiFocusResult dropped");
+                            tracing::warn!(
+                                category = "WARN",
+                                "Response channel full - AiFocusResult dropped"
+                            );
                         }
                         Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                            logging::log("UI", "Response channel disconnected - script exited");
+                            tracing::info!(
+                                category = "UI",
+                                "Response channel disconnected - script exited"
+                            );
                         }
                     }
                 }
@@ -1975,23 +2068,20 @@ impl ScriptListApp {
                 cx.notify();
             }
             PromptMessage::ShowGrid { options } => {
-                logging::log(
-                    "DEBUG_GRID",
-                    &format!(
-                        "ShowGrid from script: size={}, bounds={}, box_model={}, guides={}",
-                        options.grid_size,
-                        options.show_bounds,
-                        options.show_box_model,
-                        options.show_alignment_guides
-                    ),
+                tracing::info!(
+                    category = "DEBUG_GRID",
+                    grid_size = options.grid_size,
+                    show_bounds = options.show_bounds,
+                    show_box_model = options.show_box_model,
+                    show_alignment_guides = options.show_alignment_guides,
+                    "ShowGrid from script"
                 );
                 self.show_grid(options, cx);
             }
             PromptMessage::HideGrid => {
-                logging::log("DEBUG_GRID", "HideGrid from script");
+                tracing::info!(category = "DEBUG_GRID", "HideGrid from script");
                 self.hide_grid(cx);
             }
-
         }
     }
 }
