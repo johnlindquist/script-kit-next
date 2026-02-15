@@ -68,3 +68,29 @@ fn test_resolve_selected_note_returns_note_when_selection_exists() {
         Some((selected_id, selected_id))
     );
 }
+
+#[test]
+fn test_cmd_f_dispatches_search_on_window_when_notes_shortcut_runs() {
+    const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
+    assert!(
+        KEYBOARD_SOURCE.contains("window.dispatch_action(Box::new(Search), cx);"),
+        "Notes cmd+f shortcut should dispatch Search through the current window"
+    );
+    assert!(
+        !KEYBOARD_SOURCE.contains("cx.dispatch_action(&Search);"),
+        "Notes cmd+f shortcut should not dispatch Search through app context"
+    );
+}
+
+#[test]
+fn test_find_in_note_action_dispatches_search_on_window_when_action_executes() {
+    const PANELS_SOURCE: &str = include_str!("panels.rs");
+    assert!(
+        PANELS_SOURCE.contains("window.dispatch_action(Box::new(Search), cx);"),
+        "Notes Find in Note action should dispatch Search through the current window"
+    );
+    assert!(
+        !PANELS_SOURCE.contains("cx.dispatch_action(&Search);"),
+        "Notes Find in Note action should not dispatch Search through app context"
+    );
+}

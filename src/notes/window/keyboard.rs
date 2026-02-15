@@ -252,7 +252,9 @@ impl NotesApp {
                         self.editor_state.update(cx, |state, cx| {
                             state.focus(window, cx);
                         });
-                        cx.dispatch_action(&Search);
+                        // Route Search directly through this window so Notes find works
+                        // even when other app windows are open.
+                        window.dispatch_action(Box::new(Search), cx);
                         cx.stop_propagation();
                     }
                 }
