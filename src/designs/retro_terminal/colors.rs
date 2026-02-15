@@ -12,6 +12,12 @@ pub(crate) const DIM_GREEN: u32 = 0x00aa00;
 /// Very dim green for scanlines/borders
 pub(crate) const SCANLINE_GREEN: u32 = 0x003300;
 
+/// Error red for log/error indicators
+pub(crate) const ERROR_RED: u32 = 0xff4444;
+
+/// Warning yellow for caution/warn indicators
+pub(crate) const WARNING_YELLOW: u32 = 0xffff00;
+
 /// Pre-computed colors for terminal rendering
 #[derive(Clone, Copy)]
 pub struct TerminalColors {
@@ -19,6 +25,8 @@ pub struct TerminalColors {
     pub background: u32,
     pub dim: u32,
     pub scanline: u32,
+    pub error: u32,
+    pub warning: u32,
 }
 
 impl Default for TerminalColors {
@@ -28,6 +36,8 @@ impl Default for TerminalColors {
             background: CRT_BLACK,
             dim: DIM_GREEN,
             scanline: SCANLINE_GREEN,
+            error: ERROR_RED,
+            warning: WARNING_YELLOW,
         }
     }
 }
