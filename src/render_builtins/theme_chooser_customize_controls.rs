@@ -289,7 +289,7 @@
                                 } else {
                                     return;
                                 };
-                            let presets = theme::presets::all_presets();
+                            let presets = theme::presets::presets_cached();
                             let filtered =
                                 Self::theme_chooser_filtered_indices(&current_filter);
                             if let AppView::ThemeChooserView {

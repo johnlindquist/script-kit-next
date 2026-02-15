@@ -147,7 +147,7 @@ impl ScriptListApp {
                 Some((ViewType::ScriptList, filtered_count))
             }
             AppView::ThemeChooserView { ref filter, .. } => {
-                let presets = theme::presets::all_presets();
+                let presets = theme::presets::presets_cached();
                 let filtered_count = if filter.is_empty() {
                     presets.len()
                 } else {
