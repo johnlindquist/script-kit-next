@@ -5,14 +5,16 @@ use crate::protocol::ProtocolAction;
 
 // --- merged from core_part_01.rs ---
 mod core_part_01 {
+    use super::*;
+
     #[test]
     fn test_actions_prelude_exports_core_types() {
-        let info = super::prelude::ScriptInfo::new("test", "/tmp/test.ts");
-        let action = super::prelude::Action::new(
+        let info = crate::actions::prelude::ScriptInfo::new("test", "/tmp/test.ts");
+        let action = crate::actions::prelude::Action::new(
             "id",
             "title",
             None,
-            super::prelude::ActionCategory::ScriptContext,
+            crate::actions::prelude::ActionCategory::ScriptContext,
         );
 
         assert_eq!(info.name, "test");
@@ -242,6 +244,8 @@ mod core_part_01 {
 
 // --- merged from core_part_02.rs ---
 mod core_part_02 {
+    use super::*;
+
     #[test]
     fn test_action_category_filtering() {
         // Test that different ScriptInfo types produce different action sets
