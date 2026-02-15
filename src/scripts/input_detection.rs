@@ -10,4 +10,7 @@ pub use detection::{
 };
 
 #[cfg(test)]
+pub(crate) use detection::is_code_snippet;
+
+#[cfg(test)]
 mod tests;

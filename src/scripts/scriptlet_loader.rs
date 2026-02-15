@@ -12,4 +12,9 @@ pub(crate) use loading::extract_kit_from_path;
 pub(crate) use parsing::parse_scriptlet_section;
 
 #[cfg(test)]
+pub(crate) use loading::build_scriptlet_file_path;
+#[cfg(test)]
+pub(crate) use parsing::{extract_code_block, extract_html_comment_metadata};
+
+#[cfg(test)]
 mod tests;
