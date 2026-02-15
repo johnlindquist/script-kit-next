@@ -962,7 +962,10 @@ fn ensure_tsconfig_paths(tsconfig_path: &Path, warnings: &mut Vec<String>) {
         config["compilerOptions"] = json!({});
     }
 
-    let compiler_options = config["compilerOptions"].as_object_mut().unwrap();
+    let Some(compiler_options) = config["compilerOptions"].as_object_mut() else {
+        warnings.push("tsconfig.json compilerOptions is not an object".to_string());
+        return;
+    };
     let mut changed = false;
 
     // Essential settings for Bun/TypeScript scripts (set if missing)
@@ -991,11 +994,13 @@ fn ensure_tsconfig_paths(tsconfig_path: &Path, warnings: &mut Vec<String>) {
     }
 
     // Always ensure @scriptkit/sdk path is correct
-    let paths = compiler_options
+    let Some(paths) = compiler_options
         .get_mut("paths")
-        .unwrap()
-        .as_object_mut()
-        .unwrap();
+        .and_then(|v| v.as_object_mut())
+    else {
+        warnings.push("tsconfig.json paths is not an object".to_string());
+        return;
+    };
     if paths.get("@scriptkit/sdk") != Some(&expected_sdk_path) {
         paths.insert("@scriptkit/sdk".to_string(), expected_sdk_path);
         changed = true;
