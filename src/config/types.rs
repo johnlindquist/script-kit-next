@@ -314,8 +314,8 @@ pub struct CommandConfig {
 /// - `app/` - macOS applications (by bundle identifier)
 /// - `script/` - User scripts (by filename)
 /// - `scriptlet/` - Inline scriptlets (by UUID or name)
-#[allow(dead_code)]
-pub fn is_valid_command_id(id: &str) -> bool {
+#[cfg(test)]
+fn is_valid_command_id(id: &str) -> bool {
     id.starts_with("builtin/")
         || id.starts_with("app/")
         || id.starts_with("script/")
@@ -326,8 +326,8 @@ pub fn is_valid_command_id(id: &str) -> bool {
 ///
 /// The deeplink format is: `scriptkit://commands/{commandId}`
 /// Note: The app registers 'scriptkit' URL scheme (not 'kit')
-#[allow(dead_code)]
-pub fn command_id_to_deeplink(command_id: &str) -> String {
+#[cfg(test)]
+fn command_id_to_deeplink(command_id: &str) -> String {
     format!("scriptkit://commands/{}", command_id)
 }
 
@@ -731,8 +731,8 @@ impl Config {
     }
 
     /// Returns the UI scale factor, or DEFAULT_UI_SCALE if not configured
-    #[allow(dead_code)] // Will be used for UI scaling
-    pub fn get_ui_scale(&self) -> f32 {
+    #[cfg(test)]
+    fn get_ui_scale(&self) -> f32 {
         sanitize_positive_f32(self.ui_scale, DEFAULT_UI_SCALE)
     }
 
@@ -812,8 +812,8 @@ impl Config {
     }
 
     /// Returns layout sizing config, or defaults.
-    #[allow(dead_code)]
-    pub fn get_layout(&self) -> LayoutConfig {
+    #[cfg(test)]
+    fn get_layout(&self) -> LayoutConfig {
         self.layout.clone().unwrap_or_default()
     }
 
@@ -824,8 +824,8 @@ impl Config {
     }
 
     /// Check if a command should be hidden from the main menu.
-    #[allow(dead_code)]
-    pub fn is_command_hidden(&self, command_id: &str) -> bool {
+    #[cfg(test)]
+    fn is_command_hidden(&self, command_id: &str) -> bool {
         self.get_command_config(command_id)
             .and_then(|c| c.hidden)
             .unwrap_or(false)
@@ -960,5 +960,134 @@ mod tests {
             key: "KeyJ".to_string(),
         };
         assert_eq!(config.to_shortcut_string(), "cmd+j");
+    }
+
+    #[test]
+    fn test_is_valid_command_id_accepts_supported_prefixes() {
+        assert!(is_valid_command_id("builtin/clipboard-history"));
+        assert!(is_valid_command_id("app/com.apple.Safari"));
+        assert!(is_valid_command_id("script/hello-world"));
+        assert!(is_valid_command_id("scriptlet/my-snippet"));
+    }
+
+    #[test]
+    fn test_is_valid_command_id_rejects_unsupported_prefixes() {
+        assert!(!is_valid_command_id("builtin-clipboard-history"));
+        assert!(!is_valid_command_id("foo/bar"));
+    }
+
+    #[test]
+    fn test_command_id_to_deeplink_uses_scriptkit_scheme() {
+        let deeplink = command_id_to_deeplink("builtin/clipboard-history");
+        assert_eq!(deeplink, "scriptkit://commands/builtin/clipboard-history");
+
+        let deeplink = command_id_to_deeplink("script/hello-world");
+        assert_eq!(deeplink, "scriptkit://commands/script/hello-world");
+
+        let deeplink = command_id_to_deeplink("app/com.apple.Safari");
+        assert_eq!(deeplink, "scriptkit://commands/app/com.apple.Safari");
+
+        let deeplink = command_id_to_deeplink("scriptlet/my-snippet");
+        assert_eq!(deeplink, "scriptkit://commands/scriptlet/my-snippet");
+    }
+
+    #[test]
+    fn test_command_id_to_deeplink_not_kit_scheme() {
+        let deeplink = command_id_to_deeplink("builtin/test");
+        assert!(
+            !deeplink.starts_with("kit://"),
+            "Deeplink should NOT use kit:// scheme, got: {}",
+            deeplink
+        );
+        assert!(
+            deeplink.starts_with("scriptkit://"),
+            "Deeplink should use scriptkit:// scheme, got: {}",
+            deeplink
+        );
+    }
+
+    #[test]
+    fn test_get_ui_scale_returns_default_when_unset() {
+        let config = Config::default();
+        assert_eq!(config.get_ui_scale(), DEFAULT_UI_SCALE);
+    }
+
+    #[test]
+    fn test_get_ui_scale_returns_configured_value_when_positive() {
+        let config = Config {
+            ui_scale: Some(1.5),
+            ..Config::default()
+        };
+        assert_eq!(config.get_ui_scale(), 1.5);
+    }
+
+    #[test]
+    fn test_get_ui_scale_returns_default_for_invalid_values() {
+        for invalid in [0.0, -0.5, f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            let config = Config {
+                ui_scale: Some(invalid),
+                ..Config::default()
+            };
+            assert_eq!(config.get_ui_scale(), DEFAULT_UI_SCALE);
+        }
+    }
+
+    #[test]
+    fn test_get_layout_returns_default_when_unset() {
+        let config = Config::default();
+        assert_eq!(
+            config.get_layout().standard_height,
+            DEFAULT_LAYOUT_STANDARD_HEIGHT
+        );
+        assert_eq!(config.get_layout().max_height, DEFAULT_LAYOUT_MAX_HEIGHT);
+    }
+
+    #[test]
+    fn test_get_layout_returns_configured_layout() {
+        let config = Config {
+            layout: Some(LayoutConfig {
+                standard_height: 420.0,
+                max_height: 840.0,
+            }),
+            ..Config::default()
+        };
+
+        let layout = config.get_layout();
+        assert_eq!(layout.standard_height, 420.0);
+        assert_eq!(layout.max_height, 840.0);
+    }
+
+    #[test]
+    fn test_is_command_hidden_returns_false_when_missing() {
+        let config = Config::default();
+        assert!(!config.is_command_hidden("script/missing"));
+    }
+
+    #[test]
+    fn test_is_command_hidden_returns_configured_hidden_value() {
+        let mut commands = HashMap::new();
+        commands.insert(
+            "script/hidden".to_string(),
+            CommandConfig {
+                shortcut: None,
+                hidden: Some(true),
+                confirmation_required: None,
+            },
+        );
+        commands.insert(
+            "script/visible".to_string(),
+            CommandConfig {
+                shortcut: None,
+                hidden: Some(false),
+                confirmation_required: None,
+            },
+        );
+
+        let config = Config {
+            commands: Some(commands),
+            ..Config::default()
+        };
+        assert!(config.is_command_hidden("script/hidden"));
+        assert!(!config.is_command_hidden("script/visible"));
     }
 }
