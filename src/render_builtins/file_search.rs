@@ -1,4 +1,275 @@
+const FILE_SEARCH_PREVIEW_THUMBNAIL_MAX_BYTES: u64 = 20 * 1024 * 1024;
+const FILE_SEARCH_PREVIEW_THUMBNAIL_MAX_DIMENSION: u32 = 8_000;
+const FILE_SEARCH_PREVIEW_THUMBNAIL_MAX_SIDE_PX: f32 = 280.0;
+
+#[derive(Debug)]
+struct FileSearchThumbnailPreviewImage {
+    image: Arc<gpui::RenderImage>,
+    width: u32,
+    height: u32,
+}
+
+#[derive(Debug)]
+enum FileSearchThumbnailLoadFailure {
+    FileTooLarge {
+        size_bytes: u64,
+    },
+    ResolutionTooLarge {
+        width: u32,
+        height: u32,
+        max_dimension: u32,
+    },
+    UnsupportedFormat,
+    UnableToGenerate {
+        reason: String,
+    },
+}
+
+impl FileSearchThumbnailLoadFailure {
+    fn preview_message(&self) -> String {
+        match self {
+            FileSearchThumbnailLoadFailure::FileTooLarge { size_bytes } => {
+                let size_mb = (*size_bytes as f64) / (1024.0 * 1024.0);
+                format!("File too large for thumbnail preview ({size_mb:.1} MB)")
+            }
+            FileSearchThumbnailLoadFailure::ResolutionTooLarge {
+                width,
+                height,
+                max_dimension,
+            } => {
+                format!(
+                    "Image resolution too large for preview ({}x{}, max {}x{})",
+                    width, height, max_dimension, max_dimension
+                )
+            }
+            FileSearchThumbnailLoadFailure::UnsupportedFormat => {
+                "Preview not available for this format".to_string()
+            }
+            FileSearchThumbnailLoadFailure::UnableToGenerate { reason } => {
+                format!("Unable to generate preview: {reason}")
+            }
+        }
+    }
+}
+
+fn file_search_thumbnail_extension(path: &str) -> Option<String> {
+    std::path::Path::new(path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(str::to_ascii_lowercase)
+}
+
+fn file_search_thumbnail_is_decodable_extension(path: &str) -> bool {
+    matches!(
+        file_search_thumbnail_extension(path).as_deref(),
+        Some("png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" | "tiff" | "tif" | "ico")
+    )
+}
+
+fn file_search_thumbnail_display_size(width: u32, height: u32, max_side_px: f32) -> (f32, f32) {
+    let width_f = width as f32;
+    let height_f = height as f32;
+
+    if width_f <= 0.0 || height_f <= 0.0 {
+        return (max_side_px, max_side_px);
+    }
+
+    let scale = (max_side_px / width_f).min(max_side_px / height_f).min(1.0);
+    (width_f * scale, height_f * scale)
+}
+
+fn load_file_search_thumbnail_preview(
+    path: &str,
+    max_bytes: u64,
+    max_dimension: u32,
+) -> Result<FileSearchThumbnailPreviewImage, FileSearchThumbnailLoadFailure> {
+    use anyhow::Context as _;
+    use image::GenericImageView as _;
+
+    if !file_search_thumbnail_is_decodable_extension(path) {
+        return Err(FileSearchThumbnailLoadFailure::UnsupportedFormat);
+    }
+
+    let metadata = std::fs::metadata(path)
+        .with_context(|| format!("failed to read metadata for '{}'", path))
+        .map_err(|error| FileSearchThumbnailLoadFailure::UnableToGenerate {
+            reason: error.to_string(),
+        })?;
+
+    let size_bytes = metadata.len();
+    if size_bytes > max_bytes {
+        return Err(FileSearchThumbnailLoadFailure::FileTooLarge { size_bytes });
+    }
+
+    let image_bytes = std::fs::read(path)
+        .with_context(|| format!("failed to read image bytes for '{}'", path))
+        .map_err(|error| FileSearchThumbnailLoadFailure::UnableToGenerate {
+            reason: error.to_string(),
+        })?;
+
+    let decoded_image = match image::load_from_memory(&image_bytes) {
+        Ok(image) => image,
+        Err(image_error) => {
+            if matches!(image_error, image::ImageError::Unsupported(_)) {
+                return Err(FileSearchThumbnailLoadFailure::UnsupportedFormat);
+            }
+
+            let reason = anyhow::Error::new(image_error)
+                .context(format!("failed to decode image data for '{}'", path))
+                .to_string();
+            return Err(FileSearchThumbnailLoadFailure::UnableToGenerate { reason });
+        }
+    };
+
+    let (width, height) = decoded_image.dimensions();
+    if width > max_dimension || height > max_dimension {
+        return Err(FileSearchThumbnailLoadFailure::ResolutionTooLarge {
+            width,
+            height,
+            max_dimension,
+        });
+    }
+
+    let mut bgra = decoded_image.to_rgba8();
+    for pixel in bgra.chunks_exact_mut(4) {
+        pixel.swap(0, 2);
+    }
+
+    let frame = image::Frame::new(bgra);
+    let render_image = gpui::RenderImage::new(smallvec::smallvec![frame]);
+
+    Ok(FileSearchThumbnailPreviewImage {
+        image: Arc::new(render_image),
+        width,
+        height,
+    })
+}
+
 impl ScriptListApp {
+    fn ensure_file_search_preview_thumbnail(
+        &mut self,
+        selected_file: Option<&file_search::FileResult>,
+        cx: &mut Context<Self>,
+    ) {
+        let thumbnail_path = selected_file
+            .filter(|file| file_search::is_thumbnail_preview_supported(&file.path))
+            .map(|file| file.path.clone());
+
+        let Some(path) = thumbnail_path else {
+            if !matches!(
+                self.file_search_preview_thumbnail,
+                FileSearchThumbnailPreviewState::Idle
+            ) {
+                tracing::debug!("file_search_thumbnail_preview_state_transition: idle");
+                self.file_search_preview_thumbnail = FileSearchThumbnailPreviewState::Idle;
+                cx.notify();
+            }
+            return;
+        };
+
+        let already_loaded_for_path = match &self.file_search_preview_thumbnail {
+            FileSearchThumbnailPreviewState::Loading { path: current_path }
+            | FileSearchThumbnailPreviewState::Ready {
+                path: current_path, ..
+            }
+            | FileSearchThumbnailPreviewState::Unavailable {
+                path: current_path, ..
+            } => current_path == &path,
+            FileSearchThumbnailPreviewState::Idle => false,
+        };
+
+        if already_loaded_for_path {
+            return;
+        }
+
+        tracing::debug!(
+            path = %path,
+            "file_search_thumbnail_preview_state_transition: loading"
+        );
+        self.file_search_preview_thumbnail = FileSearchThumbnailPreviewState::Loading {
+            path: path.clone(),
+        };
+        cx.notify();
+
+        cx.spawn(async move |this, cx| {
+            let (tx, rx) = std::sync::mpsc::channel();
+            let path_for_decode = path.clone();
+            std::thread::spawn(move || {
+                let result = load_file_search_thumbnail_preview(
+                    &path_for_decode,
+                    FILE_SEARCH_PREVIEW_THUMBNAIL_MAX_BYTES,
+                    FILE_SEARCH_PREVIEW_THUMBNAIL_MAX_DIMENSION,
+                );
+                let _ = tx.send(result);
+            });
+
+            let decode_result = loop {
+                Timer::after(std::time::Duration::from_millis(16)).await;
+                match rx.try_recv() {
+                    Ok(result) => break result,
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        break Err(FileSearchThumbnailLoadFailure::UnableToGenerate {
+                            reason: "thumbnail worker disconnected".to_string(),
+                        });
+                    }
+                }
+            };
+
+            let _ = cx.update(|cx| {
+                this.update(cx, |app, cx| {
+                    let is_still_current_request = matches!(
+                        &app.file_search_preview_thumbnail,
+                        FileSearchThumbnailPreviewState::Loading { path: current_path }
+                            if current_path == &path
+                    );
+
+                    if !is_still_current_request {
+                        tracing::debug!(
+                            path = %path,
+                            "file_search_thumbnail_preview_stale_result_ignored"
+                        );
+                        return;
+                    }
+
+                    match decode_result {
+                        Ok(loaded) => {
+                            tracing::debug!(
+                                path = %path,
+                                width = loaded.width,
+                                height = loaded.height,
+                                "file_search_thumbnail_preview_state_transition: ready"
+                            );
+                            app.file_search_preview_thumbnail =
+                                FileSearchThumbnailPreviewState::Ready {
+                                    path: path.clone(),
+                                    image: loaded.image,
+                                    width: loaded.width,
+                                    height: loaded.height,
+                                };
+                        }
+                        Err(error) => {
+                            let message = error.preview_message();
+                            tracing::warn!(
+                                path = %path,
+                                reason = %message,
+                                "file_search_thumbnail_preview_state_transition: unavailable"
+                            );
+                            app.file_search_preview_thumbnail =
+                                FileSearchThumbnailPreviewState::Unavailable {
+                                    path: path.clone(),
+                                    message,
+                                };
+                        }
+                    }
+
+                    cx.notify();
+                })
+            });
+        })
+        .detach();
+    }
+
     /// Render file search view with 50/50 split (list + preview)
     pub(crate) fn render_file_search(
         &mut self,
@@ -32,6 +303,17 @@ impl ScriptListApp {
         let selected_alpha = (opacity.selected * 255.0) as u32;
         let hover_alpha = (opacity.hover * 255.0) as u32;
 
+        // Get selected file for preview (if any)
+        // Use display indices to map visible index -> actual result index.
+        // Compute this before borrowing display_indices for the rest of render,
+        // so we can safely call ensure_file_search_preview_thumbnail(&mut self, ...).
+        let selected_file = self
+            .file_search_display_indices
+            .get(selected_index)
+            .and_then(|&result_idx| self.cached_file_results.get(result_idx))
+            .cloned();
+        self.ensure_file_search_preview_thumbnail(selected_file.as_ref(), cx);
+
         // Use pre-computed display indices instead of running Nucleo in render
         // This is CRITICAL for animation performance - render must be cheap
         // The display_indices are computed in recompute_file_search_display_indices()
@@ -64,13 +346,6 @@ impl ScriptListApp {
                 ),
             );
         }
-
-        // Get selected file for preview (if any)
-        // Use display_indices to map visible index -> actual result index
-        let selected_file = display_indices
-            .get(selected_index)
-            .and_then(|&result_idx| self.cached_file_results.get(result_idx))
-            .cloned();
 
         // Key handler for file search
         let handle_key = cx.listener(
@@ -480,6 +755,101 @@ impl ScriptListApp {
                 FileType::File => "File",
                 FileType::Other => "File",
             };
+            let preview_supports_thumbnail =
+                file_search::is_thumbnail_preview_supported(&file.path);
+            let thumbnail_section = if preview_supports_thumbnail {
+                let preview_body = match &self.file_search_preview_thumbnail {
+                    FileSearchThumbnailPreviewState::Ready {
+                        path,
+                        image,
+                        width,
+                        height,
+                    } if path == &file.path => {
+                        let (display_width, display_height) = file_search_thumbnail_display_size(
+                            *width,
+                            *height,
+                            FILE_SEARCH_PREVIEW_THUMBNAIL_MAX_SIDE_PX,
+                        );
+                        let image_for_render = image.clone();
+                        div()
+                            .w_full()
+                            .flex()
+                            .flex_col()
+                            .items_center()
+                            .justify_center()
+                            .gap(px(design_spacing.gap_sm))
+                            .child(
+                                gpui::img(move |_window: &mut Window, _cx: &mut App| {
+                                    Some(Ok(image_for_render.clone()))
+                                })
+                                .w(px(display_width))
+                                .h(px(display_height))
+                                .object_fit(gpui::ObjectFit::Contain)
+                                .rounded(px(design_visual.radius_sm)),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(rgb(text_muted))
+                                    .child(format!("{}×{} px", width, height)),
+                            )
+                            .into_any_element()
+                    }
+                    FileSearchThumbnailPreviewState::Unavailable { path, message }
+                        if path == &file.path =>
+                    {
+                        div()
+                            .w_full()
+                            .text_sm()
+                            .text_color(rgb(text_dimmed))
+                            .child(message.clone())
+                            .into_any_element()
+                    }
+                    FileSearchThumbnailPreviewState::Loading { path } if path == &file.path => {
+                        div()
+                            .w_full()
+                            .text_sm()
+                            .text_color(rgb(text_dimmed))
+                            .child("Loading thumbnail...")
+                            .into_any_element()
+                    }
+                    _ => div()
+                        .w_full()
+                        .text_sm()
+                        .text_color(rgb(text_dimmed))
+                        .child("Loading thumbnail...")
+                        .into_any_element(),
+                };
+
+                Some(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .pb(px(design_spacing.padding_md))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(rgb(text_muted))
+                                .pb(px(design_spacing.padding_xs / 2.0))
+                                .child("Preview"),
+                        )
+                        .child(
+                            div()
+                                .w_full()
+                                .min_h(px(FILE_SEARCH_PREVIEW_THUMBNAIL_MAX_SIDE_PX + 24.0))
+                                .p(px(design_spacing.padding_sm))
+                                .rounded(px(design_visual.radius_md))
+                                .bg(rgba((ui_border << 8) | 0x24))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .overflow_hidden()
+                                .child(preview_body),
+                        ),
+                )
+            } else {
+                None
+            };
 
             div()
                 .flex_1()
@@ -488,6 +858,7 @@ impl ScriptListApp {
                 .p(px(design_spacing.padding_lg))
                 .gap(px(design_spacing.gap_md))
                 .overflow_y_hidden()
+                .when_some(thumbnail_section, |container, section| container.child(section))
                 // Name section (labeled like main menu)
                 .child(
                     div()
@@ -742,5 +1113,81 @@ impl ScriptListApp {
             ))
             .into_any_element()
 
+    }
+}
+
+#[cfg(test)]
+mod file_search_thumbnail_tests {
+    use super::*;
+    use image::{Rgba, RgbaImage};
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_file_search_thumbnail_display_size_scales_longest_side_when_over_limit() {
+        let (width, height) = file_search_thumbnail_display_size(4000, 1000, 280.0);
+        assert!((width - 280.0).abs() < f32::EPSILON);
+        assert!((height - 70.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_file_search_thumbnail_is_decodable_extension_matches_supported_decoder_inputs() {
+        assert!(file_search_thumbnail_is_decodable_extension("/tmp/sample.png"));
+        assert!(file_search_thumbnail_is_decodable_extension("/tmp/sample.JPG"));
+        assert!(file_search_thumbnail_is_decodable_extension("/tmp/sample.webp"));
+        assert!(file_search_thumbnail_is_decodable_extension("/tmp/sample.tiff"));
+        assert!(file_search_thumbnail_is_decodable_extension("/tmp/sample.ico"));
+        assert!(!file_search_thumbnail_is_decodable_extension("/tmp/sample.svg"));
+    }
+
+    #[test]
+    fn test_load_file_search_thumbnail_preview_returns_file_too_large_when_size_exceeds_limit() {
+        let temp_dir = tempdir().expect("tempdir should be created");
+        let image_path = temp_dir.path().join("too-big.png");
+        std::fs::write(&image_path, vec![0_u8; 128]).expect("image bytes should be written");
+
+        let result = load_file_search_thumbnail_preview(
+            image_path
+                .to_str()
+                .expect("temp image path should be valid utf-8"),
+            32,
+            FILE_SEARCH_PREVIEW_THUMBNAIL_MAX_DIMENSION,
+        );
+
+        match result {
+            Err(FileSearchThumbnailLoadFailure::FileTooLarge { size_bytes }) => {
+                assert_eq!(size_bytes, 128);
+            }
+            other => panic!("Expected FileTooLarge error, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_load_file_search_thumbnail_preview_returns_resolution_too_large_when_dimension_exceeds_limit(
+    ) {
+        let temp_dir = tempdir().expect("tempdir should be created");
+        let image_path = temp_dir.path().join("oversized.png");
+        let img = RgbaImage::from_pixel(2, 2, Rgba([255, 0, 0, 255]));
+        img.save(&image_path).expect("test image should be written");
+
+        let result = load_file_search_thumbnail_preview(
+            image_path
+                .to_str()
+                .expect("temp image path should be valid utf-8"),
+            FILE_SEARCH_PREVIEW_THUMBNAIL_MAX_BYTES,
+            1,
+        );
+
+        match result {
+            Err(FileSearchThumbnailLoadFailure::ResolutionTooLarge {
+                width,
+                height,
+                max_dimension,
+            }) => {
+                assert_eq!(width, 2);
+                assert_eq!(height, 2);
+                assert_eq!(max_dimension, 1);
+            }
+            other => panic!("Expected ResolutionTooLarge error, got {:?}", other),
+        }
     }
 }
