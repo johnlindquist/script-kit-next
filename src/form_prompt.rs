@@ -29,8 +29,6 @@ pub struct FormPromptState {
     pub focused_index: usize,
     /// Focus handle for this form.
     pub focus_handle: FocusHandle,
-    /// Whether we've done initial focus.
-    pub did_initial_focus: bool,
 }
 
 impl FormPromptState {
@@ -90,7 +88,6 @@ impl FormPromptState {
             colors,
             focused_index: 0,
             focus_handle: cx.focus_handle(),
-            did_initial_focus: false,
         }
     }
 
@@ -209,19 +206,10 @@ impl Render for FormPromptState {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = self.colors;
 
-        // Focus the first field on initial render
-        if !self.did_initial_focus && !self.fields.is_empty() {
-            self.did_initial_focus = true;
-            if let Some(focus_handle) = self.current_focus_handle(cx) {
+        // Ensure the currently selected field is the keyboard focus target.
+        if let Some(focus_handle) = self.current_focus_handle(cx) {
+            if !focus_handle.is_focused(window) {
                 focus_handle.focus(window, cx);
-                let is_focused = focus_handle.is_focused(window);
-                logging::log(
-                    "FORM",
-                    &format!(
-                        "Initial focus set on first field (is_focused={})",
-                        is_focused
-                    ),
-                );
             }
         }
 
