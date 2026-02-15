@@ -43,6 +43,7 @@
 
 use crate::designs::{get_tokens, DesignVariant};
 use crate::theme::types::Theme;
+use tracing::debug;
 
 /// Unified color resolution that works with both theme and design tokens
 ///
@@ -92,11 +93,26 @@ impl ColorResolver {
     /// This automatically selects colors from either the theme (for Default variant)
     /// or from design tokens (for all other variants).
     pub fn new(theme: &Theme, variant: DesignVariant) -> Self {
-        if variant == DesignVariant::Default {
-            Self::from_theme(theme)
+        let (source, resolver) = if variant == DesignVariant::Default {
+            ("theme", Self::from_theme(theme))
         } else {
-            Self::from_design_tokens(variant)
-        }
+            ("design_tokens", Self::from_design_tokens(variant))
+        };
+
+        debug!(
+            variant = %variant.name(),
+            source,
+            background = %format_args!("{:#08x}", resolver.background),
+            text_primary = %format_args!("{:#08x}", resolver.text_primary),
+            accent = %format_args!("{:#08x}", resolver.accent),
+            border = %format_args!("{:#08x}", resolver.border),
+            success = %format_args!("{:#08x}", resolver.success),
+            warning = %format_args!("{:#08x}", resolver.warning),
+            error = %format_args!("{:#08x}", resolver.error),
+            "ColorResolver initialized"
+        );
+
+        resolver
     }
 
     /// Create a resolver from theme colors (Default variant)
