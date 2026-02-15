@@ -15,12 +15,11 @@ impl RenderOnce for Toast {
         let colors = self.colors;
         let variant = self.variant;
         let on_dismiss_callback = self.on_dismiss;
-        let transition = self.transition;
 
         // Check vibrancy to conditionally apply shadow
         let vibrancy_enabled = crate::theme::load_theme().is_vibrancy_enabled();
 
-        // Main toast container with transition support
+        // Main toast container
         // Apply shadow conditionally BEFORE .id() to avoid Stateful<Div> type issues
         let base_toast = div()
             .flex()
@@ -44,11 +43,7 @@ impl RenderOnce for Toast {
                 "toast-{}",
                 self.message
             ))))
-            .overflow_hidden()
-            // Apply transition opacity
-            .opacity(transition.opacity.value())
-            // Apply transition offset via top margin (positive y = down, negative = up)
-            .mt(px(transition.offset.y)); // Keep animation offset as px
+            .overflow_hidden();
 
         // Content row (icon, message, actions, dismiss)
         let content_row = div()

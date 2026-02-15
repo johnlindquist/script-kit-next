@@ -1,8 +1,6 @@
 use gpui::{IntoElement, SharedString};
 use std::rc::Rc;
 
-use crate::transitions::{AppearTransition, Opacity};
-
 use super::{ToastAction, ToastColors, ToastDismissCallback, ToastVariant};
 
 /// A reusable toast notification component
@@ -13,7 +11,6 @@ use super::{ToastAction, ToastColors, ToastDismissCallback, ToastVariant};
 /// - Dismissible mode with X button
 /// - Expandable details section
 /// - Action buttons (e.g., "Copy Error", "View Details")
-/// - Appear/dismiss transitions via `AppearTransition`
 ///
 #[derive(IntoElement)]
 pub struct Toast {
@@ -33,8 +30,6 @@ pub struct Toast {
     pub(super) actions: Vec<ToastAction>,
     /// Callback when toast is dismissed
     pub(super) on_dismiss: Option<Rc<ToastDismissCallback>>,
-    /// Transition state for appear/dismiss animations
-    pub(super) transition: AppearTransition,
 }
 
 impl Toast {
@@ -49,7 +44,6 @@ impl Toast {
             details: None,
             actions: Vec::new(),
             on_dismiss: None,
-            transition: AppearTransition::visible(), // Default to fully visible
         }
     }
 
@@ -100,31 +94,6 @@ impl Toast {
     pub fn persistent(mut self) -> Self {
         self.duration_ms = None;
         self
-    }
-
-    /// Set the transition state for appear/dismiss animations
-    ///
-    /// Use this to animate the toast by interpolating between states:
-    /// - `AppearTransition::hidden()` - Initial state (invisible, offset down)
-    /// - `AppearTransition::visible()` - Fully visible state
-    /// - `AppearTransition::dismissed()` - Dismiss state (invisible, offset up)
-    ///
-    pub fn with_transition(mut self, transition: AppearTransition) -> Self {
-        self.transition = transition;
-        self
-    }
-
-    /// Set just the opacity (convenience for simple fade effects)
-    ///
-    /// This sets the opacity without affecting slide offset.
-    pub fn with_opacity(mut self, opacity: Opacity) -> Self {
-        self.transition.opacity = opacity;
-        self
-    }
-
-    /// Get the current transition state
-    pub fn get_transition(&self) -> &AppearTransition {
-        &self.transition
     }
 
     /// Get the auto-dismiss duration
