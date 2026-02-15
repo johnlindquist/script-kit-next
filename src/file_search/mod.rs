@@ -318,6 +318,23 @@ pub fn file_type_icon(file_type: FileType) -> &'static str {
         FileType::Other => "📎",
     }
 }
+
+/// Return true when a file path supports inline thumbnail previews in file search rows.
+///
+/// This intentionally matches the product requirement for thumbnail-capable image
+/// extensions in the list UI.
+#[allow(dead_code)]
+pub fn is_thumbnail_preview_supported(path: &str) -> bool {
+    let extension = Path::new(path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(str::to_ascii_lowercase);
+
+    matches!(
+        extension.as_deref(),
+        Some("png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" | "bmp" | "ico" | "tiff")
+    )
+}
 /// Format file size in human-readable format (e.g., "1.2 MB", "456 KB")
 #[allow(dead_code)]
 pub fn format_file_size(bytes: u64) -> String {
@@ -674,6 +691,27 @@ mod tests {
         assert_eq!(file_type_icon(FileType::File), "📃");
         assert_eq!(file_type_icon(FileType::Other), "📎");
     }
+
+    #[test]
+    fn test_is_thumbnail_preview_supported_returns_true_for_supported_extensions() {
+        assert!(is_thumbnail_preview_supported("/tmp/photo.png"));
+        assert!(is_thumbnail_preview_supported("/tmp/photo.JPG"));
+        assert!(is_thumbnail_preview_supported("/tmp/photo.jpeg"));
+        assert!(is_thumbnail_preview_supported("/tmp/animation.gif"));
+        assert!(is_thumbnail_preview_supported("/tmp/icon.webp"));
+        assert!(is_thumbnail_preview_supported("/tmp/logo.svg"));
+        assert!(is_thumbnail_preview_supported("/tmp/picture.bmp"));
+        assert!(is_thumbnail_preview_supported("/tmp/favicon.ico"));
+        assert!(is_thumbnail_preview_supported("/tmp/scan.tiff"));
+    }
+
+    #[test]
+    fn test_is_thumbnail_preview_supported_returns_false_for_unsupported_extensions() {
+        assert!(!is_thumbnail_preview_supported("/tmp/photo.heic"));
+        assert!(!is_thumbnail_preview_supported("/tmp/document.pdf"));
+        assert!(!is_thumbnail_preview_supported("/tmp/README"));
+    }
+
     #[test]
     fn test_format_file_size() {
         // Bytes
