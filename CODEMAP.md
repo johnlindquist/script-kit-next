@@ -38,7 +38,7 @@
 
 ## Windows & System
 - `src/window_manager.rs`, `src/window_state.rs`, `src/window_resize.rs`, `src/window_ops.rs` Window management and sizing.
-- `src/panel.rs`, `src/window_control.rs` and `src/window_control_enhanced/` panel-level behavior and control.
+- `src/panel.rs` and `src/window_control.rs` panel-level behavior and control.
 - `src/platform.rs` OS-specific APIs (MacOS, window positioning).
 
 ## Data, Logging, and Config

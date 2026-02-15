@@ -152,8 +152,6 @@ ocr = []
 # Enables key event timing, scroll timing, and rate logging
 # Run with: cargo build --features perf
 perf = []
-# Internal enhanced window control prototype (disabled by default)
-window-control-enhanced = []
 
 [dev-dependencies]
 tree-sitter-highlight = "0.25.4"
