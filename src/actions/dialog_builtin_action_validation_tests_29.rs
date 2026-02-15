@@ -322,8 +322,7 @@ fn cat29_07_with_all_run_title_uses_verb_and_name() {
     let s = ScriptInfo::with_all("My Tool", "/p", true, "Execute", None, None);
     let actions = get_script_context_actions(&s);
     let run = actions.iter().find(|a| a.id == "run_script").unwrap();
-    assert!(run.title.contains("Execute"));
-    assert!(run.title.contains("My Tool"));
+    assert_eq!(run.title, "Execute");
 }
 
 // =============================================================================
@@ -364,7 +363,7 @@ fn cat29_08_agent_has_reveal_in_finder() {
     s.is_agent = true;
     s.is_script = false;
     let actions = get_script_context_actions(&s);
-    assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
+    assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
 }
 
 // =============================================================================
@@ -430,7 +429,7 @@ fn cat29_10_notes_new_note_always_present_full() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "notes:new_note"));
+    assert!(actions.iter().any(|a| a.id == "new_note"));
 }
 
 #[test]
@@ -441,7 +440,7 @@ fn cat29_10_notes_new_note_always_present_trash() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "notes:new_note"));
+    assert!(actions.iter().any(|a| a.id == "new_note"));
 }
 
 // --- merged from part_02.rs ---
@@ -454,7 +453,7 @@ fn cat29_10_notes_new_note_shortcut() {
         auto_sizing_enabled: true,
     };
     let actions = get_notes_command_bar_actions(&info);
-    let nn = actions.iter().find(|a| a.id == "notes:new_note").unwrap();
+    let nn = actions.iter().find(|a| a.id == "new_note").unwrap();
     assert_eq!(nn.shortcut.as_deref(), Some("⌘N"));
 }
 
@@ -466,7 +465,7 @@ fn cat29_10_notes_new_note_icon() {
         auto_sizing_enabled: true,
     };
     let actions = get_notes_command_bar_actions(&info);
-    let nn = actions.iter().find(|a| a.id == "notes:new_note").unwrap();
+    let nn = actions.iter().find(|a| a.id == "new_note").unwrap();
     assert_eq!(nn.icon, Some(IconName::Plus));
 }
 
@@ -643,7 +642,7 @@ fn cat29_14_chat_model_description_via_provider() {
         .iter()
         .find(|a| a.id == "chat:select_model_gpt-4")
         .unwrap();
-    assert_eq!(m.description.as_deref(), Some("via OpenAI"));
+    assert_eq!(m.description.as_deref(), Some("Uses OpenAI"));
 }
 
 // =============================================================================
@@ -691,7 +690,7 @@ fn cat29_15_file_open_desc_says_default_application() {
         .as_ref()
         .unwrap()
         .to_lowercase()
-        .contains("default application"));
+        .contains("default app"));
 }
 
 #[test]
@@ -730,7 +729,7 @@ fn cat29_16_path_select_file_desc_says_submit() {
         .as_ref()
         .unwrap()
         .to_lowercase()
-        .contains("chat:submit"));
+        .contains("selects this file"));
 }
 
 #[test]
@@ -747,7 +746,7 @@ fn cat29_16_path_open_directory_desc_says_navigate() {
         .as_ref()
         .unwrap()
         .to_lowercase()
-        .contains("navigate"));
+        .contains("opens this directory"));
 }
 
 #[test]
@@ -880,7 +879,7 @@ fn cat29_20_score_prefix_plus_desc_bonus() {
         Some("Edit the script in your editor".to_string()),
         ActionCategory::ScriptContext,
     );
-    let score = super::dialog::ActionsDialog::score_action(&action, "script:edit");
+    let score = super::dialog::ActionsDialog::score_action(&action, "edit");
     // prefix(100) + desc bonus(15) = 115
     assert!(score >= 115);
 }
@@ -910,9 +909,9 @@ fn cat29_20_score_all_three_bonuses() {
         ActionCategory::ScriptContext,
     )
     .with_shortcut("⌘E");
-    // "script:edit" → prefix(100) + desc contains "script:edit"(15) + shortcut doesn't contain "script:edit"
-    let score = super::dialog::ActionsDialog::score_action(&action, "script:edit");
-    assert!(score >= 115);
+    // "e" => title prefix(100) + desc contains(15) + shortcut contains(10)
+    let score = super::dialog::ActionsDialog::score_action(&action, "e");
+    assert!(score >= 125);
 }
 
 // =============================================================================

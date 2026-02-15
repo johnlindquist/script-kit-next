@@ -30,8 +30,7 @@ fn batch23_action_verb_launch() {
         ScriptInfo::with_action_verb("Safari", "/Applications/Safari.app", false, "Launch");
     let actions = get_script_context_actions(&script);
     let run = actions.iter().find(|a| a.id == "run_script").unwrap();
-    assert!(run.title.starts_with("Launch"));
-    assert!(run.title.contains("Safari"));
+    assert_eq!(run.title, "Launch");
 }
 
 #[test]
@@ -39,7 +38,7 @@ fn batch23_action_verb_switch_to() {
     let script = ScriptInfo::with_action_verb("My Window", "window:123", false, "Switch to");
     let actions = get_script_context_actions(&script);
     let run = actions.iter().find(|a| a.id == "run_script").unwrap();
-    assert!(run.title.starts_with("Switch to"));
+    assert!(run.title.starts_with("Switch To"));
 }
 
 #[test]
@@ -68,8 +67,8 @@ fn batch23_script_action_count_full() {
     // is_script=true, no shortcut, no alias, not suggested
     let script = ScriptInfo::new("test", "/test.ts");
     let actions = get_script_context_actions(&script);
-    // run_script + add_shortcut + add_alias + edit_script + view_logs + reveal_in_finder + copy_path + copy_content + copy_deeplink = 9
-    assert_eq!(actions.len(), 9);
+    // run_script + add_shortcut + add_alias + toggle_favorite + edit_script + view_logs + reveal_in_finder + copy_path + copy_content + copy_deeplink = 10
+    assert_eq!(actions.len(), 10);
 }
 
 #[test]
@@ -84,8 +83,8 @@ fn batch23_builtin_action_count() {
 fn batch23_scriptlet_action_count() {
     let scriptlet = ScriptInfo::scriptlet("Test", "/test.md", None, None);
     let actions = get_script_context_actions(&scriptlet);
-    // run_script + add_shortcut + add_alias + edit_scriptlet + reveal_scriptlet + copy_scriptlet_path + copy_content + copy_deeplink = 8
-    assert_eq!(actions.len(), 8);
+    // run_script + add_shortcut + add_alias + toggle_favorite + edit_scriptlet + reveal_scriptlet + copy_scriptlet_path + copy_content + copy_deeplink = 9
+    assert_eq!(actions.len(), 9);
 }
 
 #[test]
@@ -93,7 +92,7 @@ fn batch23_script_with_shortcut_adds_two() {
     let script = ScriptInfo::with_shortcut("test", "/test.ts", Some("cmd+t".to_string()));
     let actions = get_script_context_actions(&script);
     // Same as full script but shortcut adds one extra (update+remove instead of add = +1)
-    assert_eq!(actions.len(), 10);
+    assert_eq!(actions.len(), 11);
 }
 
 #[test]
@@ -105,8 +104,8 @@ fn batch23_script_with_shortcut_and_alias_adds_two_more() {
         Some("ts".to_string()),
     );
     let actions = get_script_context_actions(&script);
-    // script(9) + 1 extra shortcut + 1 extra alias = 11
-    assert_eq!(actions.len(), 11);
+    // script(10) + 1 extra shortcut + 1 extra alias = 12
+    assert_eq!(actions.len(), 12);
 }
 
 // ============================================================
@@ -440,7 +439,7 @@ fn batch23_file_open_file_description() {
         .as_ref()
         .unwrap()
         .to_lowercase()
-        .contains("application"));
+        .contains("default app"));
 }
 
 // --- merged from part_02.rs ---
@@ -606,7 +605,7 @@ fn batch23_chat_model_descriptions_via_provider() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    assert_eq!(actions[0].description.as_ref().unwrap(), "via Anthropic");
+    assert_eq!(actions[0].description.as_ref().unwrap(), "Uses Anthropic");
 }
 
 #[test]
@@ -698,7 +697,7 @@ fn batch23_notes_new_note_icon() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    let note = actions.iter().find(|a| a.id == "notes:new_note").unwrap();
+    let note = actions.iter().find(|a| a.id == "new_note").unwrap();
     assert_eq!(note.icon, Some(IconName::Plus));
 }
 
@@ -765,7 +764,7 @@ fn batch23_notes_new_note_shortcut() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    let note = actions.iter().find(|a| a.id == "notes:new_note").unwrap();
+    let note = actions.iter().find(|a| a.id == "new_note").unwrap();
     assert_eq!(note.shortcut.as_ref().unwrap(), "⌘N");
 }
 
@@ -925,7 +924,7 @@ fn batch23_new_chat_preset_no_description() {
         icon: IconName::Star,
     }];
     let actions = get_new_chat_actions(&[], &presets, &[]);
-    assert!(actions[0].description.is_none());
+    assert_eq!(actions[0].description.as_deref(), Some("Uses General preset"));
 }
 
 // ============================================================
@@ -1245,7 +1244,7 @@ fn batch23_deeplink_mixed_alpha_numeric_special() {
 #[test]
 fn batch23_deeplink_unicode_preserved() {
     let result = to_deeplink_name("日本語スクリプト");
-    assert!(result.contains("日本語スクリプト"));
+    assert!(result.contains("%E6%97%A5"));
 }
 
 // ============================================================

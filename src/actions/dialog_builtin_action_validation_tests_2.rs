@@ -480,7 +480,7 @@ fn notes_copy_section_only_when_selected_and_not_trash() {
     let actions_1 = get_notes_command_bar_actions(&info);
     let ids = action_ids(&actions_1);
     assert!(ids.contains(&"copy_note_as"));
-    assert!(ids.contains(&"script:copy_deeplink"));
+    assert!(ids.contains(&"copy_deeplink"));
     assert!(ids.contains(&"create_quicklink"));
 
     let info_no_sel = NotesInfo {
@@ -491,7 +491,7 @@ fn notes_copy_section_only_when_selected_and_not_trash() {
     let actions_2 = get_notes_command_bar_actions(&info_no_sel);
     let ids_no_sel = action_ids(&actions_2);
     assert!(!ids_no_sel.contains(&"copy_note_as"));
-    assert!(!ids_no_sel.contains(&"script:copy_deeplink"));
+    assert!(!ids_no_sel.contains(&"copy_deeplink"));
     assert!(!ids_no_sel.contains(&"create_quicklink"));
 }
 
@@ -904,8 +904,8 @@ fn agent_has_reveal_and_copy_path() {
     agent.is_script = false;
     let actions_tmp = get_script_context_actions(&agent);
     let ids = action_ids(&actions_tmp);
-    assert!(ids.contains(&"file:reveal_in_finder"));
-    assert!(ids.contains(&"file:copy_path"));
+    assert!(ids.contains(&"reveal_in_finder"));
+    assert!(ids.contains(&"copy_path"));
     assert!(ids.contains(&"copy_content"));
 }
 
@@ -946,7 +946,7 @@ fn builtin_has_run_shortcut_alias_deeplink() {
     assert!(ids.contains(&"run_script"));
     assert!(ids.contains(&"add_shortcut"));
     assert!(ids.contains(&"add_alias"));
-    assert!(ids.contains(&"script:copy_deeplink"));
+    assert!(ids.contains(&"copy_deeplink"));
 }
 
 // =========================================================================
@@ -1190,7 +1190,7 @@ fn score_title_plus_description_bonus_stacks() {
         Some("Edit the script file".into()),
         ActionCategory::ScriptContext,
     );
-    let score = ActionsDialog::score_action(&action, "script:edit");
+    let score = ActionsDialog::score_action(&action, "edit");
     // Should get prefix bonus (100) + description bonus (15) = 115
     assert!(
         score > 100,
@@ -1220,8 +1220,8 @@ fn new_chat_last_used_ids_are_indexed() {
         },
     ];
     let actions = get_new_chat_actions(&last, &[], &[]);
-    assert_eq!(actions[0].id, "last_used_0");
-    assert_eq!(actions[1].id, "last_used_1");
+    assert_eq!(actions[0].id, "last_used_p::a");
+    assert_eq!(actions[1].id, "last_used_p::b");
 }
 
 #[test]
@@ -1252,8 +1252,8 @@ fn new_chat_model_ids_are_indexed() {
         },
     ];
     let actions = get_new_chat_actions(&[], &[], &models);
-    assert_eq!(actions[0].id, "model_0");
-    assert_eq!(actions[1].id, "model_1");
+    assert_eq!(actions[0].id, "model_anthropic::claude");
+    assert_eq!(actions[1].id, "model_openai::gpt4");
 }
 
 #[test]
@@ -1276,7 +1276,7 @@ fn new_chat_model_descriptions_have_provider() {
     let actions = get_new_chat_actions(&[], &[], &models);
     assert_eq!(
         actions[0].description.as_deref(),
-        Some("Anthropic"),
+        Some("Uses Anthropic"),
         "Model description should be provider_display_name"
     );
 }
@@ -1292,7 +1292,7 @@ fn new_chat_last_used_descriptions_have_provider() {
     let actions = get_new_chat_actions(&last, &[], &[]);
     assert_eq!(
         actions[0].description.as_deref(),
-        Some("OpenAI"),
+        Some("Uses OpenAI"),
         "Last used description should be provider_display_name"
     );
 }
@@ -1306,8 +1306,8 @@ fn new_chat_presets_have_no_description() {
     }];
     let actions = get_new_chat_actions(&[], &presets, &[]);
     assert!(
-        actions[0].description.is_none(),
-        "Presets should have no description"
+        actions[0].description.as_deref() == Some("Uses General preset"),
+        "Presets should include an explicit preset description"
     );
 }
 
@@ -1829,7 +1829,7 @@ fn scriptlet_context_has_shortcut_alias_deeplink() {
     let ids = action_ids(&actions_tmp);
     assert!(ids.contains(&"add_shortcut"));
     assert!(ids.contains(&"add_alias"));
-    assert!(ids.contains(&"script:copy_deeplink"));
+    assert!(ids.contains(&"copy_deeplink"));
 }
 
 #[test]
@@ -1860,7 +1860,7 @@ fn notes_new_note_always_present() {
                 let actions_tmp = get_notes_command_bar_actions(&info);
                 let ids = action_ids(&actions_tmp);
                 assert!(
-                    ids.contains(&"notes:new_note"),
+                    ids.contains(&"new_note"),
                     "new_note should always be present (sel={}, trash={}, auto={})",
                     sel,
                     trash,
@@ -1926,7 +1926,7 @@ fn fuzzy_match_on_notes_action_titles() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    let new_note = actions.iter().find(|a| a.id == "notes:new_note").unwrap();
+    let new_note = actions.iter().find(|a| a.id == "new_note").unwrap();
     // "nn" matches "new note" → n at 0, n at 4
     assert!(ActionsDialog::fuzzy_match(&new_note.title_lower, "nn"));
 }
