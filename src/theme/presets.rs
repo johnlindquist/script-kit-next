@@ -256,6 +256,7 @@ pub fn first_light_theme_index() -> usize {
 }
 
 /// Pre-compute preview colors for all presets (avoids creating themes in render closures)
+#[cfg(test)]
 pub fn all_preset_preview_colors() -> Vec<PresetPreviewColors> {
     preset_preview_colors_cached().to_vec()
 }

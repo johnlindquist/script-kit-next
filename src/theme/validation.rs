@@ -108,9 +108,9 @@ impl ThemeDiagnostics {
     }
 
     pub fn has_warnings(&self) -> bool {
-        self.diagnostics.iter().any(|d| {
-            d.severity == DiagnosticSeverity::Warning || d.severity == DiagnosticSeverity::Error
-        })
+        self.diagnostics
+            .iter()
+            .any(|d| d.severity == DiagnosticSeverity::Warning)
     }
 
     pub fn error_count(&self) -> usize {

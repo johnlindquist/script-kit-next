@@ -1871,7 +1871,7 @@ impl Render for ActionsDialog {
                                                     selected_bg
                                                 }
                                             } else {
-                                                rgba(0x00000000)
+                                                gpui::transparent_black().into()
                                             })
                                             .hover(move |s| {
                                                 s.bg(if is_destructive {

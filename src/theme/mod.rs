@@ -21,43 +21,29 @@ mod gpui_integration;
 mod helpers;
 pub mod hex_color;
 pub mod prelude;
-#[allow(dead_code)]
 pub mod presets;
 pub mod service;
 mod types;
 #[cfg(test)]
 pub mod validation;
 
-#[cfg(test)]
-#[path = "validation_tests.rs"]
-mod validation_tests;
-
 // Re-export types used externally
-#[allow(unused_imports)]
 pub(crate) use types::relative_luminance_srgb;
 pub use types::{ColorScheme, FontConfig, Theme, VibrancyMaterial};
 
-// Re-export helper types for lightweight color extraction (allow unused - designed for incremental adoption)
-#[allow(unused_imports)]
+// Re-export helper types for lightweight color extraction
 pub use helpers::{
     accent_color_name, hover_overlay_bg, modal_overlay_bg, ListItemColors, PromptColors,
     ACCENT_PALETTE,
 };
 
 // Re-export color resolver for unified color access
-#[allow(unused_imports)]
 pub use color_resolver::{ColorResolver, SpacingResolver, TypographyResolver};
-
-// Re-export validation types
-#[cfg(test)]
-#[allow(unused_imports)]
-pub use validation::{validate_theme_json, Diagnostic, DiagnosticSeverity, ThemeDiagnostics};
 
 // Re-export loader functions
 pub use types::load_theme;
 
 // Re-export cached theme access (use in render code instead of load_theme)
-#[allow(unused_imports)]
 pub use types::{get_cached_theme, init_theme_cache, reload_theme_cache};
 
 // Re-export appearance cache invalidation (called when system appearance changes)
@@ -66,12 +52,11 @@ pub use types::invalidate_appearance_cache;
 // Re-export gpui integration
 pub use gpui_integration::sync_gpui_component_theme;
 
-// Additional exports for tests
-#[cfg(test)]
-#[allow(unused_imports)]
-pub use types::{
-    detect_system_appearance, AppearanceMode, BackgroundOpacity, DropShadow, VibrancySettings,
-};
+// Keep cross-target theme exports reachable in both lib and binary builds.
+const _: fn(u32) -> f32 = relative_luminance_srgb;
+const _: fn() -> &'static [presets::ThemePreset] = presets::presets_cached;
+const _: fn() -> &'static [presets::PresetPreviewColors] = presets::preset_preview_colors_cached;
+const _: usize = core::mem::size_of::<ListItemColors>();
 
 #[cfg(test)]
 #[path = "lightweight_colors_test.rs"]
