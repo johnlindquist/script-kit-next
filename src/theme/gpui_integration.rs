@@ -10,14 +10,47 @@ use gpui_component::highlighter::{
 use gpui_component::theme::{Theme as GpuiTheme, ThemeColor, ThemeMode};
 use serde_json::json;
 use std::sync::Arc;
-use tracing::debug;
+use tracing::{debug, warn};
 
-use super::types::{load_theme, Theme};
+use super::types::{load_theme, relative_luminance_srgb, Theme};
 
 /// Convert a u32 hex color to Hsla
 #[inline]
 pub fn hex_to_hsla(hex: u32) -> Hsla {
     rgb(hex).into()
+}
+
+#[inline]
+fn shift_lightness(hex: u32, delta: f32) -> Hsla {
+    let mut color = hex_to_hsla(hex);
+    color.l = (color.l + delta).clamp(0.0, 1.0);
+    color
+}
+
+#[inline]
+fn primary_interaction_color(hex: u32, is_dark: bool, amount: f32) -> Hsla {
+    let delta = if is_dark { amount } else { -amount };
+    shift_lightness(hex, delta)
+}
+
+#[inline]
+fn contrast_ratio(a: u32, b: u32) -> f32 {
+    let luminance_a = relative_luminance_srgb(a);
+    let luminance_b = relative_luminance_srgb(b);
+    let brighter = luminance_a.max(luminance_b);
+    let darker = luminance_a.min(luminance_b);
+    (brighter + 0.05) / (darker + 0.05)
+}
+
+#[inline]
+fn best_contrast_of_two(background: u32, option_a: u32, option_b: u32) -> u32 {
+    let contrast_a = contrast_ratio(background, option_a);
+    let contrast_b = contrast_ratio(background, option_b);
+    if contrast_a >= contrast_b {
+        option_a
+    } else {
+        option_b
+    }
 }
 
 /// Map Script Kit's ColorScheme to gpui-component's ThemeColor
@@ -107,9 +140,7 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
 
         debug!(
             root_background_alpha = bg_alpha,
-            vibrancy_enabled,
-            is_dark,
-            "Root background alpha resolved"
+            vibrancy_enabled, is_dark, "Root background alpha resolved"
         );
 
         let base = hex_to_hsla(colors.background.main);
@@ -123,7 +154,7 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
 
     // Accent colors (Script Kit yellow/gold) - keep opaque for visibility
     theme_color.accent = hex_to_hsla(colors.accent.selected);
-    theme_color.accent_foreground = hex_to_hsla(colors.text.primary);
+    theme_color.accent_foreground = hex_to_hsla(colors.text.on_accent);
 
     // Border - keep opaque
     theme_color.border = hex_to_hsla(colors.ui.border);
@@ -149,8 +180,8 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
     // Primary (accent-colored buttons) - keep opaque for visibility
     theme_color.primary = hex_to_hsla(colors.accent.selected);
     theme_color.primary_foreground = hex_to_hsla(colors.background.main);
-    theme_color.primary_hover = hex_to_hsla(colors.accent.selected);
-    theme_color.primary_active = hex_to_hsla(colors.accent.selected);
+    theme_color.primary_hover = primary_interaction_color(colors.accent.selected, is_dark, 0.06);
+    theme_color.primary_active = primary_interaction_color(colors.accent.selected, is_dark, 0.12);
 
     // Secondary (muted buttons) - TRANSPARENT when vibrancy enabled
     theme_color.secondary = if vibrancy_enabled {
@@ -188,14 +219,21 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
     theme_color.popover_foreground = hex_to_hsla(colors.text.primary);
 
     // Status colors
+    let status_foreground = |status_background: u32| {
+        best_contrast_of_two(
+            status_background,
+            colors.text.primary,
+            colors.background.main,
+        )
+    };
     theme_color.success = hex_to_hsla(colors.ui.success);
-    theme_color.success_foreground = hex_to_hsla(colors.text.primary);
+    theme_color.success_foreground = hex_to_hsla(status_foreground(colors.ui.success));
     theme_color.danger = hex_to_hsla(colors.ui.error);
-    theme_color.danger_foreground = hex_to_hsla(colors.text.primary);
+    theme_color.danger_foreground = hex_to_hsla(status_foreground(colors.ui.error));
     theme_color.warning = hex_to_hsla(colors.ui.warning);
-    theme_color.warning_foreground = hex_to_hsla(colors.text.primary);
+    theme_color.warning_foreground = hex_to_hsla(status_foreground(colors.ui.warning));
     theme_color.info = hex_to_hsla(colors.ui.info);
-    theme_color.info_foreground = hex_to_hsla(colors.text.primary);
+    theme_color.info_foreground = hex_to_hsla(status_foreground(colors.ui.info));
 
     // Scrollbar - track is transparent so it blends with any background
     theme_color.scrollbar = hsla(0.0, 0.0, 0.0, 0.0);
@@ -312,7 +350,8 @@ fn theme_style(
     color: Option<u32>,
     weight: Option<FontWeightContent>,
     style: Option<HighlightFontStyle>,
-) -> ThemeStyle {
+    fallback: Option<ThemeStyle>,
+) -> Option<ThemeStyle> {
     let mut map = serde_json::Map::new();
     if let Some(hex) = color {
         map.insert("color".to_string(), json!(format!("#{:06x}", hex)));
@@ -323,8 +362,13 @@ fn theme_style(
     if let Some(style) = style {
         map.insert("font_style".to_string(), json!(style));
     }
-    serde_json::from_value(serde_json::Value::Object(map))
-        .expect("ThemeStyle should deserialize from json map")
+    match serde_json::from_value(serde_json::Value::Object(map)) {
+        Ok(style) => Some(style),
+        Err(e) => {
+            warn!(error = %e, "ThemeStyle json deserialize failed; falling back");
+            fallback
+        }
+    }
 }
 
 pub(crate) fn build_markdown_highlight_theme(sk_theme: &Theme, is_dark: bool) -> HighlightTheme {
@@ -345,31 +389,152 @@ pub(crate) fn build_markdown_highlight_theme(sk_theme: &Theme, is_dark: bool) ->
         ThemeMode::Light
     };
 
-    highlight_theme.style.syntax.title = Some(theme_style(
+    highlight_theme.style.syntax.title = theme_style(
         Some(accent),
         Some(FontWeightContent::Bold),
         None,
-    ));
-    highlight_theme.style.syntax.emphasis =
-        Some(theme_style(None, None, Some(HighlightFontStyle::Italic)));
-    highlight_theme.style.syntax.emphasis_strong =
-        Some(theme_style(None, Some(FontWeightContent::Bold), None));
-    highlight_theme.style.syntax.text_literal = Some(theme_style(Some(secondary), None, None));
-    highlight_theme.style.syntax.link_text = Some(theme_style(
+        highlight_theme.style.syntax.title,
+    );
+    highlight_theme.style.syntax.emphasis = theme_style(
+        None,
+        None,
+        Some(HighlightFontStyle::Italic),
+        highlight_theme.style.syntax.emphasis,
+    );
+    highlight_theme.style.syntax.emphasis_strong = theme_style(
+        None,
+        Some(FontWeightContent::Bold),
+        None,
+        highlight_theme.style.syntax.emphasis_strong,
+    );
+    highlight_theme.style.syntax.text_literal = theme_style(
+        Some(secondary),
+        None,
+        None,
+        highlight_theme.style.syntax.text_literal,
+    );
+    highlight_theme.style.syntax.link_text = theme_style(
         Some(accent),
         Some(FontWeightContent::Medium),
         None,
-    ));
-    highlight_theme.style.syntax.link_uri = Some(theme_style(
+        highlight_theme.style.syntax.link_text,
+    );
+    highlight_theme.style.syntax.link_uri = theme_style(
         Some(accent),
         None,
         Some(HighlightFontStyle::Italic),
-    ));
-    highlight_theme.style.syntax.punctuation_list_marker = Some(theme_style(
+        highlight_theme.style.syntax.link_uri,
+    );
+    highlight_theme.style.syntax.punctuation_list_marker = theme_style(
         Some(accent),
         Some(FontWeightContent::Bold),
         None,
-    ));
-    highlight_theme.style.syntax.punctuation_special = Some(theme_style(Some(muted), None, None));
+        highlight_theme.style.syntax.punctuation_list_marker,
+    );
+    highlight_theme.style.syntax.punctuation_special = theme_style(
+        Some(muted),
+        None,
+        None,
+        highlight_theme.style.syntax.punctuation_special,
+    );
     highlight_theme
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_hsla_close(actual: Hsla, expected: Hsla) {
+        assert!((actual.h - expected.h).abs() < 1e-6);
+        assert!((actual.s - expected.s).abs() < 1e-6);
+        assert!((actual.l - expected.l).abs() < 1e-6);
+        assert!((actual.a - expected.a).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_shift_lightness_clamps_to_unit_interval() {
+        let lighter = shift_lightness(0xffffff, 0.12);
+        let darker = shift_lightness(0x000000, -0.12);
+
+        assert!((lighter.l - 1.0).abs() < 1e-6);
+        assert!((darker.l - 0.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_map_scriptkit_to_gpui_theme_derives_primary_interaction_states_by_mode() {
+        let dark_theme = Theme::dark_default();
+        let dark_mapped = map_scriptkit_to_gpui_theme(&dark_theme, true);
+        assert_hsla_close(
+            dark_mapped.primary_hover,
+            primary_interaction_color(dark_theme.colors.accent.selected, true, 0.06),
+        );
+        assert_hsla_close(
+            dark_mapped.primary_active,
+            primary_interaction_color(dark_theme.colors.accent.selected, true, 0.12),
+        );
+
+        let light_theme = Theme::light_default();
+        let light_mapped = map_scriptkit_to_gpui_theme(&light_theme, false);
+        assert_hsla_close(
+            light_mapped.primary_hover,
+            primary_interaction_color(light_theme.colors.accent.selected, false, 0.06),
+        );
+        assert_hsla_close(
+            light_mapped.primary_active,
+            primary_interaction_color(light_theme.colors.accent.selected, false, 0.12),
+        );
+    }
+
+    #[test]
+    fn test_map_scriptkit_to_gpui_theme_uses_text_on_accent_for_accent_foreground() {
+        let mut theme = Theme::dark_default();
+        theme.colors.text.primary = 0x010203;
+        theme.colors.text.on_accent = 0xfefefe;
+
+        let mapped = map_scriptkit_to_gpui_theme(&theme, true);
+        assert_hsla_close(
+            mapped.accent_foreground,
+            hex_to_hsla(theme.colors.text.on_accent),
+        );
+        assert_hsla_close(mapped.foreground, hex_to_hsla(theme.colors.text.primary));
+    }
+
+    #[test]
+    fn test_map_scriptkit_to_gpui_theme_status_foregrounds_choose_highest_contrast_option() {
+        let mut theme = Theme::dark_default();
+        theme.colors.text.primary = 0xffffff;
+        theme.colors.background.main = 0x000000;
+        theme.colors.ui.success = 0xf5f5f5;
+        theme.colors.ui.error = 0x101010;
+        theme.colors.ui.warning = 0xf8d65a;
+        theme.colors.ui.info = 0x1f3f7f;
+
+        let mapped = map_scriptkit_to_gpui_theme(&theme, true);
+
+        let success_expected = best_contrast_of_two(
+            theme.colors.ui.success,
+            theme.colors.text.primary,
+            theme.colors.background.main,
+        );
+        let danger_expected = best_contrast_of_two(
+            theme.colors.ui.error,
+            theme.colors.text.primary,
+            theme.colors.background.main,
+        );
+        let warning_expected = best_contrast_of_two(
+            theme.colors.ui.warning,
+            theme.colors.text.primary,
+            theme.colors.background.main,
+        );
+        let info_expected = best_contrast_of_two(
+            theme.colors.ui.info,
+            theme.colors.text.primary,
+            theme.colors.background.main,
+        );
+
+        assert_hsla_close(mapped.success_foreground, hex_to_hsla(success_expected));
+        assert_hsla_close(mapped.danger_foreground, hex_to_hsla(danger_expected));
+        assert_hsla_close(mapped.warning_foreground, hex_to_hsla(warning_expected));
+        assert_hsla_close(mapped.info_foreground, hex_to_hsla(info_expected));
+    }
 }

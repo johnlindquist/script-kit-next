@@ -523,7 +523,7 @@ impl OpenAiProvider {
             return None;
         }
 
-        let json_str = &line[6..]; // Skip "data: "
+        let json_str = &line["data: ".len()..]; // Skip "data: "
 
         // Check for stream end
         if json_str == "[DONE]" {
@@ -787,7 +787,7 @@ impl AnthropicProvider {
             return None;
         }
 
-        let json_str = &line[6..]; // Skip "data: "
+        let json_str = &line["data: ".len()..]; // Skip "data: "
 
         // Check for stream end
         if json_str == "[DONE]" {

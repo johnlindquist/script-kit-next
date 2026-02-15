@@ -6,6 +6,7 @@
 use serde::{Deserializer, Serializer};
 
 /// Transparent color constant (fully transparent black)
+#[cfg(test)]
 pub const TRANSPARENT: u32 = 0x00000000;
 
 /// Hex color representation (u32)
@@ -48,6 +49,9 @@ pub mod hex_color_serde {
             where
                 E: de::Error,
             {
+                if value > u64::from(u32::MAX) {
+                    return Err(de::Error::custom("color value exceeds u32::MAX"));
+                }
                 Ok(value as HexColor)
             }
 
@@ -55,7 +59,10 @@ pub mod hex_color_serde {
             where
                 E: de::Error,
             {
-                Ok(value as HexColor)
+                if value < 0 {
+                    return Err(de::Error::custom("color value cannot be negative"));
+                }
+                self.visit_u64(value as u64)
             }
 
             fn visit_str<E>(self, value: &str) -> Result<HexColor, E>
@@ -160,7 +167,44 @@ pub mod hex_color_serde {
 
     #[cfg(test)]
     mod tests {
-        use super::{parse_color_string, parse_hex};
+        use super::{parse_color_string, parse_hex, HexColor};
+        use serde::Deserialize;
+
+        #[derive(Debug, Deserialize)]
+        struct HexColorWrapper {
+            #[serde(deserialize_with = "super::deserialize")]
+            color: HexColor,
+        }
+
+        #[test]
+        fn test_deserialize_rejects_negative_i64_value_when_numeric_json() {
+            let error = serde_json::from_str::<HexColorWrapper>(r#"{"color":-1}"#)
+                .expect_err("negative color value should not wrap to 0xFFFFFFFF");
+
+            assert!(
+                error.to_string().contains("color value cannot be negative"),
+                "unexpected error: {error}"
+            );
+        }
+
+        #[test]
+        fn test_deserialize_accepts_u64_value_within_u32_range() {
+            let parsed = serde_json::from_str::<HexColorWrapper>(r#"{"color":16777215}"#)
+                .expect("value within u32 range should parse");
+
+            assert_eq!(parsed.color, 0xFFFFFF);
+        }
+
+        #[test]
+        fn test_deserialize_rejects_u64_value_when_above_u32_max() {
+            let error = serde_json::from_str::<HexColorWrapper>(r#"{"color":4294967296}"#)
+                .expect_err("value above u32::MAX should fail");
+
+            assert!(
+                error.to_string().contains("color value exceeds u32::MAX"),
+                "unexpected error: {error}"
+            );
+        }
 
         #[test]
         fn test_parse_color_string_expands_rgb_when_hex_len_is_3() {

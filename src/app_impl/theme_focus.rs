@@ -1,4 +1,5 @@
 use super::*;
+use tracing::{debug, info};
 
 impl ScriptListApp {
     pub(crate) fn cycle_design(&mut self, cx: &mut Context<Self>) {
@@ -14,30 +15,27 @@ impl ScriptListApp {
             .position(|&v| v == new_design)
             .unwrap_or(0);
 
-        logging::log(
-            "DESIGN",
-            &format!(
-                "Cycling design: {} ({}) -> {} ({}) [total: {}]",
-                old_design.name(),
-                old_idx,
-                new_design.name(),
-                new_idx,
-                all_designs.len()
-            ),
+        info!(
+            target: "DESIGN",
+            old_design = old_design.name(),
+            old_index = old_idx,
+            new_design = new_design.name(),
+            new_index = new_idx,
+            total_designs = all_designs.len(),
+            "Cycling design"
         );
-        logging::log(
-            "DESIGN",
-            &format!(
-                "Design '{}': {}",
-                new_design.name(),
-                new_design.description()
-            ),
+        info!(
+            target: "DESIGN",
+            design = new_design.name(),
+            description = new_design.description(),
+            "Design details"
         );
 
         self.current_design = new_design;
-        logging::log(
-            "DESIGN",
-            &format!("self.current_design is now: {:?}", self.current_design),
+        debug!(
+            target: "DESIGN",
+            current_design = ?self.current_design,
+            "Updated current design"
         );
         cx.notify();
     }
@@ -57,7 +55,7 @@ impl ScriptListApp {
             self.theme = std::sync::Arc::new(base_theme);
         }
 
-        logging::log("APP", "Theme reloaded based on system appearance");
+        info!(target: "APP", "Theme reloaded based on system appearance");
 
         // Propagate theme to open ActionsDialog (if any) for hot-reload support
         if let Some(ref dialog) = self.actions_dialog {
@@ -65,7 +63,7 @@ impl ScriptListApp {
             dialog.update(cx, |d, _| {
                 d.update_theme(theme_arc);
             });
-            logging::log("APP", "Theme propagated to ActionsDialog");
+            debug!(target: "APP", "Theme propagated to ActionsDialog");
         }
 
         cx.notify();
@@ -78,9 +76,10 @@ impl ScriptListApp {
         );
         // Hot-reload hotkeys from updated config
         hotkeys::update_hotkeys(&self.config);
-        logging::log(
-            "APP",
-            &format!("Config reloaded: padding={:?}", self.config.get_padding()),
+        info!(
+            target: "APP",
+            padding = ?self.config.get_padding(),
+            "Config reloaded"
         );
         cx.notify();
     }
@@ -93,7 +92,7 @@ impl ScriptListApp {
         // Only adjust if we're in light mode
         let base_theme = theme::load_theme();
         if base_theme.is_dark_mode() {
-            logging::log("APP", "Opacity adjustment only works in light mode");
+            debug!(target: "APP", "Opacity adjustment only works in light mode");
             return;
         }
 
@@ -105,12 +104,11 @@ impl ScriptListApp {
         self.theme = std::sync::Arc::new(adjusted_theme);
 
         let new_opacity = self.theme.get_opacity().main;
-        logging::log(
-            "APP",
-            &format!(
-                "Light opacity adjusted: offset={:.2}, main={:.2}",
-                self.light_opacity_offset, new_opacity
-            ),
+        info!(
+            target: "APP",
+            offset = self.light_opacity_offset,
+            main_opacity = new_opacity,
+            "Light opacity adjusted"
         );
 
         // Show toast with current opacity level
@@ -246,7 +244,7 @@ impl ScriptListApp {
         // to know what was focused before the overlay opened.
         self.focus_coordinator.take_pending();
 
-        logging::log("FOCUS", &format!("Applying pending focus: {:?}", target));
+        debug!(target: "FOCUS", focus_target = ?target, "Applying pending focus");
 
         match target {
             FocusTarget::MainFilter => {
@@ -270,9 +268,8 @@ impl ScriptListApp {
                     _ => None,
                 };
                 if let Some(entity) = entity {
-                    entity.update(cx, |editor, cx| {
-                        editor.focus(window, cx);
-                    });
+                    let fh = entity.read(cx).focus_handle(cx);
+                    window.focus(&fh, cx);
                     // EditorPrompt has its own cursor management
                     self.focused_input = FocusedInput::None;
                 }

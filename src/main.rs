@@ -54,8 +54,6 @@ mod executor;
 mod filter_coalescer;
 mod focus_coordinator;
 mod form_prompt;
-#[allow(dead_code)] // TODO: Re-enable once hotkey_pollers is updated for Root wrapper
-mod hotkey_pollers;
 mod hotkeys;
 #[cfg(test)]
 mod keyboard_routing_tests;
@@ -189,8 +187,6 @@ use crate::components::toast::{Toast, ToastAction};
 use crate::error::ErrorSeverity;
 use crate::filter_coalescer::FilterCoalescer;
 use crate::form_prompt::FormPromptState;
-// TODO: Re-enable when hotkey_pollers.rs is updated for Root wrapper
-// use crate::hotkey_pollers::start_hotkey_event_handler;
 use crate::navigation::{NavCoalescer, NavDirection};
 use crate::toast_manager::{PendingToast, ToastManager};
 use components::ToastVariant;

@@ -1018,7 +1018,13 @@ impl Theme {
     /// Get background opacity settings
     /// Returns the configured opacity or sensible defaults
     pub fn get_opacity(&self) -> BackgroundOpacity {
-        self.opacity.clone().unwrap_or_default()
+        self.opacity.clone().unwrap_or_else(|| {
+            if self.is_dark_mode() {
+                BackgroundOpacity::dark_default()
+            } else {
+                BackgroundOpacity::light_default()
+            }
+        })
     }
 
     /// Create a new theme with opacity adjusted by an offset
@@ -1644,5 +1650,22 @@ mod tests {
         merge_json(&mut base, serde_json::json!({ "opacity": null }));
 
         assert_eq!(base["opacity"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn test_get_opacity_uses_appearance_aware_defaults_when_opacity_missing() {
+        let mut light_theme = Theme::light_default();
+        light_theme.opacity = None;
+        assert_eq!(
+            light_theme.get_opacity().main,
+            BackgroundOpacity::light_default().main
+        );
+
+        let mut dark_theme = Theme::dark_default();
+        dark_theme.opacity = None;
+        assert_eq!(
+            dark_theme.get_opacity().main,
+            BackgroundOpacity::dark_default().main
+        );
     }
 }

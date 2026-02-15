@@ -35,6 +35,16 @@ fn test_diagnostics_has_errors() {
 }
 
 #[test]
+fn test_has_warnings_excludes_errors() {
+    let mut diags = ThemeDiagnostics::new();
+    diags.error("/bar", "An error");
+    assert!(!diags.has_warnings());
+
+    diags.warning("/foo", "A warning");
+    assert!(diags.has_warnings());
+}
+
+#[test]
 fn test_diagnostics_counts() {
     let mut diags = ThemeDiagnostics::new();
     diags.error("/a", "Error 1");
@@ -76,6 +86,19 @@ fn test_validate_unknown_top_level_key() {
 }
 
 #[test]
+fn test_validate_allows_appearance_key_without_unknown_warning() {
+    let json = json!({
+        "appearance": "dark"
+    });
+    let diags = validate_theme_json(&json);
+
+    assert!(!diags
+        .diagnostics
+        .iter()
+        .any(|d| d.message.contains("Unknown key 'appearance'")));
+}
+
+#[test]
 fn test_validate_valid_color_number() {
     let json = json!({
         "colors": {
@@ -86,6 +109,23 @@ fn test_validate_valid_color_number() {
     });
     let diags = validate_theme_json(&json);
     assert!(diags.is_ok());
+}
+
+#[test]
+fn test_validate_allows_on_accent_text_key_without_unknown_warning() {
+    let json = json!({
+        "colors": {
+            "text": {
+                "on_accent": "#FFFFFF"
+            }
+        }
+    });
+    let diags = validate_theme_json(&json);
+
+    assert!(!diags
+        .diagnostics
+        .iter()
+        .any(|d| d.message.contains("Unknown key 'on_accent'")));
 }
 
 #[test]

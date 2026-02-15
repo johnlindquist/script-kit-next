@@ -51,3 +51,6 @@ gpui-vibrancy-poc/
 credentials.json
 test-screenshots/
 .xpert
+.xorloop-sessions/
+.ai/
+TODOS.md

@@ -1,6 +1,6 @@
-use gpui::*;
 use crate::list_item::FONT_MONO;
 use crate::theme::get_cached_theme;
+use gpui::*;
 
 /// Container for story content
 pub fn story_container() -> Div {

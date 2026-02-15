@@ -29,21 +29,6 @@ impl ScriptListApp {
 
     /// Return a human-readable name for a hex accent color
     fn accent_color_name(color: u32) -> &'static str {
-        match color {
-            0xfbbf24 => "Yellow Gold",
-            0xf59e0b => "Amber",
-            0xf97316 => "Orange",
-            0xef4444 => "Red",
-            0xec4899 => "Pink",
-            0xa855f7 => "Purple",
-            0x6366f1 => "Indigo",
-            0x3b82f6 => "Blue",
-            0x0078d4 => "Blue",
-            0x0ea5e9 => "Sky",
-            0x14b8a6 => "Teal",
-            0x22c55e => "Green",
-            0x84cc16 => "Lime",
-            _ => "Custom",
-        }
+        theme::accent_color_name(color)
     }
 }

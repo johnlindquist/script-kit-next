@@ -53,7 +53,6 @@ mod tests {
 
         // Extract multiple color sets - should not clone theme
         let _list_colors = theme.colors.list_item_colors();
-        let _input_colors = theme.colors.input_field_colors();
         let _prompt_colors = theme.colors.prompt_colors();
 
         // All extractions happen in constant time, no heap allocations

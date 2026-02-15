@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 //! Global Theme Service
 //!
 //! Provides a singleton theme watcher that broadcasts changes to all windows,
@@ -69,7 +68,11 @@ pub fn theme_revision() -> u64 {
 /// Called internally when theme.json changes are detected.
 fn bump_theme_revision() {
     let old = THEME_REVISION.fetch_add(1, Ordering::SeqCst);
-    debug!(old_revision = old, new_revision = old + 1, "Theme revision bumped");
+    debug!(
+        old_revision = old,
+        new_revision = old + 1,
+        "Theme revision bumped"
+    );
 }
 
 /// Ensure the global theme service is running.
@@ -150,7 +153,8 @@ pub fn ensure_theme_service(cx: &mut App) {
 /// Check if the theme service is currently running.
 ///
 /// Mainly useful for debugging/testing.
-pub fn is_theme_service_running() -> bool {
+#[cfg(test)]
+fn is_theme_service_running() -> bool {
     THEME_SERVICE_RUNNING.load(Ordering::SeqCst)
 }
 

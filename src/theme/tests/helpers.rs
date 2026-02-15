@@ -207,64 +207,6 @@ fn test_list_item_colors_text_as_hsla() {
     assert_eq!(colors.text_on_accent, scheme.text.on_accent);
 }
 
-// ========================================================================
-// InputFieldColors Tests
-// ========================================================================
-
-#[test]
-fn test_input_field_colors_is_copy() {
-    // Compile-time verification that InputFieldColors implements Copy
-    fn assert_copy<T: Copy>() {}
-    assert_copy::<InputFieldColors>();
-}
-
-#[test]
-fn test_input_field_colors_from_scheme() {
-    let scheme = ColorScheme::dark_default();
-    let colors = scheme.input_field_colors();
-
-    // Background should have some alpha (semi-transparent)
-    assert!(colors.background.a > 0.0);
-    assert!(colors.background.a < 1.0);
-
-    // Border should have some alpha
-    assert!(colors.border.a > 0.0);
-
-    // Text should be fully opaque
-    assert_eq!(colors.text.a, 1.0);
-}
-
-#[test]
-fn test_input_field_colors_text_uses_text_primary_from_scheme() {
-    let mut scheme = ColorScheme::dark_default();
-    scheme.text.primary = 0x010203;
-    scheme.text.on_accent = 0xa1b2c3;
-
-    let colors = scheme.input_field_colors();
-
-    assert_eq!(colors.text, gpui::rgb(scheme.text.primary));
-    assert_ne!(colors.text, gpui::rgb(scheme.text.on_accent));
-}
-
-#[test]
-fn test_input_field_cursor_color() {
-    let scheme = ColorScheme::dark_default();
-    let colors = scheme.input_field_colors();
-
-    // Cursor should use accent color (0xfbbf24 - yellow/gold for Script Kit)
-    // This provides visual consistency with selection highlights
-    // Yellow/gold has r > 0.9, g > 0.7, b < 0.3
-    assert!(colors.cursor.r > 0.9, "cursor red channel should be high");
-    assert!(
-        colors.cursor.g > 0.7,
-        "cursor green channel should be moderately high"
-    );
-    assert!(
-        colors.cursor.b < 0.3,
-        "cursor blue channel should be low for gold/yellow"
-    );
-}
-
 #[test]
 fn test_markdown_highlight_theme_styles() {
     let sk_theme = Theme::dark_default();
