@@ -165,29 +165,6 @@ fn default_border_active_opacity() -> f32 {
     0.25 // 0x40 / 255 ≈ 0.25
 }
 
-impl BackgroundOpacity {
-    /// Clamp all opacity values to the valid 0.0-1.0 range
-    pub fn clamped(self) -> Self {
-        Self {
-            main: self.main.clamp(0.0, 1.0),
-            title_bar: self.title_bar.clamp(0.0, 1.0),
-            search_box: self.search_box.clamp(0.0, 1.0),
-            log_panel: self.log_panel.clamp(0.0, 1.0),
-            selected: self.selected.clamp(0.0, 1.0),
-            hover: self.hover.clamp(0.0, 1.0),
-            preview: self.preview.clamp(0.0, 1.0),
-            dialog: self.dialog.clamp(0.0, 1.0),
-            input: self.input.clamp(0.0, 1.0),
-            panel: self.panel.clamp(0.0, 1.0),
-            input_inactive: self.input_inactive.clamp(0.0, 1.0),
-            input_active: self.input_active.clamp(0.0, 1.0),
-            border_inactive: self.border_inactive.clamp(0.0, 1.0),
-            border_active: self.border_active.clamp(0.0, 1.0),
-            vibrancy_background: self.vibrancy_background.map(|v| v.clamp(0.0, 1.0)),
-        }
-    }
-}
-
 impl Default for BackgroundOpacity {
     fn default() -> Self {
         Self::dark_default()
@@ -580,7 +557,6 @@ impl TerminalColors {
             bright_white: 0xa5a5a5,
         }
     }
-
 }
 
 /// Default error color (red-500)
@@ -721,7 +697,6 @@ pub struct Theme {
     pub appearance: AppearanceMode,
 }
 
-#[allow(dead_code)]
 impl CursorStyle {
     /// Create a default blinking cursor style
     pub fn default_focused() -> Self {
@@ -732,7 +707,6 @@ impl CursorStyle {
     }
 }
 
-#[allow(dead_code)]
 impl FocusColorScheme {
     /// Convert to a standard ColorScheme
     pub fn to_color_scheme(&self) -> ColorScheme {
@@ -822,7 +796,6 @@ impl ColorScheme {
     }
 
     /// Create an unfocused (dimmed) version of this color scheme
-    #[allow(dead_code)]
     pub fn to_unfocused(&self) -> Self {
         fn darken_hex(color: HexColor) -> HexColor {
             // Reduce brightness by blending towards mid-gray
@@ -907,6 +880,26 @@ impl Default for Theme {
     }
 }
 
+/// Calculate relative luminance for an sRGB hex color using gamma-corrected channels.
+///
+/// Uses WCAG sRGB linearization per channel before weighting:
+/// `0.2126 * r + 0.7152 * g + 0.0722 * b`.
+pub(crate) fn relative_luminance_srgb(hex: u32) -> f32 {
+    let linearize = |offset: u32| {
+        let channel = ((hex >> offset) & 0xFF) as f32 / 255.0;
+        if channel <= 0.04045 {
+            channel / 12.92
+        } else {
+            ((channel + 0.055) / 1.055).powf(2.4)
+        }
+    };
+
+    let r = linearize(16);
+    let g = linearize(8);
+    let b = linearize(0);
+    (0.2126 * r) + (0.7152 * g) + (0.0722 * b)
+}
+
 impl Theme {
     /// Determine if the theme should render in dark mode
     ///
@@ -934,17 +927,7 @@ impl Theme {
     /// - `true` if background color luminance < 0.5 (dark colors)
     /// - `false` if background color luminance >= 0.5 (light colors)
     pub fn has_dark_colors(&self) -> bool {
-        // Extract RGB from main background color
-        let bg = self.colors.background.main;
-        let r = ((bg >> 16) & 0xFF) as f32 / 255.0;
-        let g = ((bg >> 8) & 0xFF) as f32 / 255.0;
-        let b = (bg & 0xFF) as f32 / 255.0;
-
-        // Calculate relative luminance (ITU-R BT.709)
-        let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-
-        // Dark if luminance < 0.5
-        luminance < 0.5
+        relative_luminance_srgb(self.colors.background.main) < 0.5
     }
 
     /// Determine if vibrancy should use dark appearance
@@ -988,7 +971,6 @@ impl Theme {
     }
 }
 
-#[allow(dead_code)]
 impl Theme {
     /// Get the appropriate color scheme based on window focus state
     ///
@@ -1094,7 +1076,6 @@ impl Theme {
     pub fn get_fonts(&self) -> FontConfig {
         self.fonts.clone().unwrap_or_default()
     }
-
 }
 
 /// Detect system appearance preference on macOS (cached)
@@ -1194,6 +1175,23 @@ fn default_theme_from_system_appearance() -> Theme {
         Theme::dark_default()
     } else {
         Theme::light_default()
+    }
+}
+
+fn merge_json(base: &mut serde_json::Value, overlay: serde_json::Value) {
+    match (base, overlay) {
+        (serde_json::Value::Object(base_map), serde_json::Value::Object(overlay_map)) => {
+            for (key, overlay_value) in overlay_map {
+                if let Some(base_value) = base_map.get_mut(&key) {
+                    merge_json(base_value, overlay_value);
+                } else {
+                    base_map.insert(key, overlay_value);
+                }
+            }
+        }
+        (base_value, overlay_value) => {
+            *base_value = overlay_value;
+        }
     }
 }
 
@@ -1327,52 +1325,106 @@ pub fn load_theme() -> Theme {
             log_theme_config(&theme);
             theme
         }
-        Ok(contents) => match serde_json::from_str::<Theme>(&contents) {
-            Ok(mut theme) => {
-                debug!(
-                    correlation_id = %correlation_id,
-                    path = %theme_path.display(),
-                    "Successfully loaded theme"
-                );
-
+        Ok(contents) => match serde_json::from_str::<serde_json::Value>(&contents) {
+            Ok(user_theme_json) => {
                 // Key behavior: When appearance is Auto, use system appearance to
                 // determine which color scheme to use (light or dark).
                 // This allows the app to follow macOS light/dark mode automatically.
                 let is_system_dark = detect_system_appearance();
-                let should_use_light = match theme.appearance {
+                let requested_appearance = user_theme_json
+                    .get("appearance")
+                    .cloned()
+                    .and_then(|appearance| {
+                        serde_json::from_value::<AppearanceMode>(appearance).ok()
+                    })
+                    .unwrap_or_default();
+                let should_use_light = match requested_appearance {
                     AppearanceMode::Light => true,
                     AppearanceMode::Dark => false,
                     AppearanceMode::Auto => !is_system_dark, // Follow system
                 };
 
-                if should_use_light {
-                    // System is in light mode (or explicitly set to light)
-                    // Use light color scheme, but preserve any non-color settings from theme.json
-                    let light_colors = ColorScheme::light_default();
-                    theme.colors = light_colors;
-                    theme.appearance = AppearanceMode::Light; // Mark as light for consistency
-
-                    // Use light opacity defaults
-                    if theme.opacity.is_none() {
-                        theme.opacity = Some(BackgroundOpacity::light_default());
-                    }
-
-                    debug!(
-                        correlation_id = %correlation_id,
-                        system_appearance = if is_system_dark { "dark" } else { "light" },
-                        "Using light theme colors (system is in light mode)"
-                    );
+                let mut merged_theme_json = match serde_json::to_value(if should_use_light {
+                    Theme::light_default()
                 } else {
-                    // System is in dark mode (or explicitly set to dark)
-                    // Use the colors from theme.json (which are dark)
-                    if theme.opacity.is_none() {
-                        theme.opacity = Some(BackgroundOpacity::dark_default());
+                    Theme::dark_default()
+                }) {
+                    Ok(default_theme_json) => default_theme_json,
+                    Err(e) => {
+                        error!(
+                            correlation_id = %correlation_id,
+                            serialize_error = ?e,
+                            "Failed to serialize default theme, using defaults"
+                        );
+                        let theme = default_theme_from_system_appearance();
+                        log_theme_load_result(
+                            &correlation_id,
+                            "default_theme_serialization_error",
+                            &theme,
+                        );
+                        log_theme_config(&theme);
+                        return theme;
+                    }
+                };
+
+                merge_json(&mut merged_theme_json, user_theme_json);
+
+                match serde_json::from_value::<Theme>(merged_theme_json) {
+                    Ok(mut theme) => {
+                        debug!(
+                            correlation_id = %correlation_id,
+                            path = %theme_path.display(),
+                            "Successfully loaded theme"
+                        );
+
+                        if should_use_light {
+                            // System is in light mode (or explicitly set to light)
+                            theme.appearance = AppearanceMode::Light; // Mark as light for consistency
+
+                            // Use light opacity defaults
+                            if theme.opacity.is_none() {
+                                theme.opacity = Some(BackgroundOpacity::light_default());
+                            }
+
+                            debug!(
+                                correlation_id = %correlation_id,
+                                system_appearance = if is_system_dark { "dark" } else { "light" },
+                                "Using light theme colors (system is in light mode)"
+                            );
+                        } else {
+                            // System is in dark mode (or explicitly set to dark)
+                            if theme.opacity.is_none() {
+                                theme.opacity = Some(BackgroundOpacity::dark_default());
+                            }
+                        }
+
+                        log_theme_load_result(&correlation_id, "theme_json", &theme);
+                        log_theme_config(&theme);
+                        theme
+                    }
+                    Err(e) => {
+                        error!(
+                            correlation_id = %correlation_id,
+                            path = %theme_path.display(),
+                            parse_error = ?e,
+                            content_len = contents.len(),
+                            "Failed to parse theme JSON, using defaults"
+                        );
+                        debug!(
+                            correlation_id = %correlation_id,
+                            content_len = contents.len(),
+                            "Malformed theme file content"
+                        );
+                        let theme = default_theme_from_system_appearance();
+                        log_theme_load_result(
+                            &correlation_id,
+                            "default_theme_json_parse_error",
+                            &theme,
+                        );
+                        log_theme_config(&theme);
+                        theme
                     }
                 }
-
-                log_theme_load_result(&correlation_id, "theme_json", &theme);
-                log_theme_config(&theme);
-                theme
             }
             Err(e) => {
                 error!(
@@ -1556,5 +1608,41 @@ mod tests {
     fn test_theme_from_user_preferences_returns_none_when_preset_unset() {
         let preferences = preferences_with_preset(None);
         assert!(theme_from_user_preferences(&preferences, "test-correlation").is_none());
+    }
+
+    #[test]
+    fn test_merge_json_preserves_user_light_colors_when_overlaying_defaults() {
+        let mut base = serde_json::to_value(Theme::light_default()).expect("serialize theme");
+        let overlay = serde_json::json!({
+            "appearance": "light",
+            "colors": {
+                "background": {
+                    "main": 1193046
+                }
+            }
+        });
+
+        merge_json(&mut base, overlay);
+        let merged_theme: Theme = serde_json::from_value(base).expect("deserialize merged theme");
+
+        assert_eq!(merged_theme.colors.background.main, 1_193_046);
+        assert_eq!(
+            merged_theme.colors.background.title_bar,
+            ColorScheme::light_default().background.title_bar
+        );
+    }
+
+    #[test]
+    fn test_merge_json_replaces_non_object_values_when_overlay_is_leaf() {
+        let mut base = serde_json::json!({
+            "opacity": {
+                "main": 0.85,
+                "title_bar": 0.85
+            }
+        });
+
+        merge_json(&mut base, serde_json::json!({ "opacity": null }));
+
+        assert_eq!(base["opacity"], serde_json::Value::Null);
     }
 }
