@@ -33,31 +33,6 @@ fn applescript_list_literal(values: &[String]) -> String {
 }
 
 #[cfg(target_os = "macos")]
-fn run_osascript(script: &str) -> Result<String, String> {
-    let output = std::process::Command::new("osascript")
-        .arg("-e")
-        .arg(script)
-        .output()
-        .map_err(|error| {
-            format!(
-                "failed to spawn osascript for builtin picker flow: {}",
-                error
-            )
-        })?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(format!(
-            "osascript exited with status {} for builtin picker flow: {}",
-            output.status,
-            stderr
-        ));
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-}
-
-#[cfg(target_os = "macos")]
 fn choose_from_list(prompt: &str, ok_button: &str, values: &[String]) -> Result<Option<String>, String> {
     if values.is_empty() {
         return Ok(None);
@@ -75,7 +50,8 @@ return item 1 of selectedItem"#,
         ok_button = crate::utils::escape_applescript_string(ok_button),
     );
 
-    let selected = run_osascript(&script)?;
+    let selected = crate::platform::run_osascript(&script, "builtin_picker_choose_from_list")
+        .map_err(|error| error.to_string())?;
     if selected.is_empty() {
         Ok(None)
     } else {
@@ -97,7 +73,8 @@ end try"#,
         ok_button = crate::utils::escape_applescript_string(ok_button),
     );
 
-    let value = run_osascript(&script)?;
+    let value = crate::platform::run_osascript(&script, "builtin_picker_prompt_for_text")
+        .map_err(|error| error.to_string())?;
     if value.is_empty() {
         Ok(None)
     } else {

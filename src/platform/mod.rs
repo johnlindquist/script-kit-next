@@ -27,5 +27,6 @@ include!("positioning.rs");
 include!("screenshots_window_open.rs");
 include!("path_actions.rs");
 include!("ai_commands.rs");
+include!("osascript.rs");
 include!("cursor.rs");
 include!("tests.rs");

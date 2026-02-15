@@ -147,16 +147,9 @@ end tell"#,
             escaped_path
         );
 
-        let status = std::process::Command::new("osascript")
-            .args(["-e", &script])
-            .status()
-            .map_err(|err| format!("failed to launch osascript: {err}"))?;
-
-        if status.success() {
-            Ok(())
-        } else {
-            Err(format!("osascript exited with status {}", status))
-        }
+        crate::platform::run_osascript(&script, "app_actions_move_path_to_trash")
+            .map(|_| ())
+            .map_err(|error| error.to_string())
     }
 
     #[cfg(not(target_os = "macos"))]
