@@ -34,8 +34,8 @@ pub use runner::{execute_script_interactive, ScriptSession};
 // Additional runner exports for testing and backwards compatibility
 #[allow(unused_imports)]
 pub use runner::{
-    execute_script, find_executable, find_sdk_path, is_javascript, is_typescript, run_command,
-    spawn_script, ProcessHandle, SplitSession,
+    find_executable, find_sdk_path, is_javascript, is_typescript, spawn_script, ProcessHandle,
+    SplitSession,
 };
 
 pub use scriptlet::{run_scriptlet, ScriptletExecOptions};

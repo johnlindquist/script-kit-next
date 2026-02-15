@@ -123,14 +123,6 @@ pub fn find_executable(name: &str) -> Option<PathBuf> {
     None
 }
 
-// Note: tsconfig.json path mapping is now handled by setup::ensure_kit_setup()
-// This function is kept for backward compatibility but is a no-op
-#[allow(dead_code)]
-fn ensure_tsconfig_paths(_tsconfig_path: &PathBuf) {
-    // Setup module now handles this at startup
-    // See setup::ensure_tsconfig_paths()
-}
-
 /// Get the SDK path - SDK extraction is now handled by setup::ensure_kit_setup() at startup
 /// This function just returns the expected path since setup has already done the work
 ///
@@ -766,151 +758,6 @@ pub fn spawn_script(cmd: &str, args: &[&str], script_path: &str) -> Result<Scrip
     })
 }
 
-/// Execute a script and return its output (non-interactive, for backwards compatibility)
-#[allow(dead_code)]
-#[instrument(skip_all, fields(script_path = %path.display()))]
-pub fn execute_script(path: &Path) -> Result<String, String> {
-    let start = Instant::now();
-    debug!(path = %path.display(), "Starting blocking script execution");
-    logging::log(
-        "EXEC",
-        &format!("execute_script (blocking): {}", path.display()),
-    );
-
-    let path_str = path
-        .to_str()
-        .ok_or_else(|| "Invalid path encoding".to_string())?;
-
-    // Find SDK for preloading globals
-    let sdk_path = find_sdk_path();
-    logging::log("EXEC", &format!("SDK path: {:?}", sdk_path));
-
-    let kit_path = "kit".to_string();
-    let bun_path = "bun".to_string();
-    let node_path = "node".to_string();
-
-    let mut attempts = vec![RuntimeAttempt {
-        name: "kit",
-        label: "kit".to_string(),
-        cmd: kit_path,
-        args: vec!["run".to_string(), path_str.to_string()],
-    }];
-
-    if is_typescript(path) {
-        if let Some(ref sdk) = sdk_path {
-            let sdk_str = sdk.to_string_lossy().into_owned();
-            attempts.push(RuntimeAttempt {
-                name: "bun",
-                label: "bun with preload".to_string(),
-                cmd: bun_path.clone(),
-                args: vec![
-                    "run".to_string(),
-                    "--preload".to_string(),
-                    sdk_str,
-                    path_str.to_string(),
-                ],
-            });
-        }
-
-        attempts.push(RuntimeAttempt {
-            name: "bun",
-            label: "bun without preload".to_string(),
-            cmd: bun_path,
-            args: vec!["run".to_string(), path_str.to_string()],
-        });
-    }
-
-    if is_javascript(path) {
-        attempts.push(RuntimeAttempt {
-            name: "node",
-            label: "node".to_string(),
-            cmd: node_path,
-            args: vec![path_str.to_string()],
-        });
-    }
-
-    if let Some(output) = run_fallback_chain(
-        &attempts,
-        &start,
-        |cmd, args, _| run_command(cmd, args),
-        path_str,
-    ) {
-        return Ok(output);
-    }
-
-    let err = format!(
-        "Failed to execute script '{}'. Make sure kit, bun, or node is installed.",
-        path.display()
-    );
-    error!(
-        duration_ms = start.elapsed().as_millis() as u64,
-        path = %path.display(),
-        "All script execution methods failed"
-    );
-    logging::log("EXEC", &format!("ALL METHODS FAILED: {}", err));
-    Err(err)
-}
-
-/// Run a command and capture its output
-#[allow(dead_code)]
-#[tracing::instrument(skip_all, fields(cmd = %cmd, args = ?args))]
-pub fn run_command(cmd: &str, args: &[&str]) -> Result<String, String> {
-    // Try to find the executable in common locations
-    let executable = find_executable(cmd)
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_else(|| cmd.to_string());
-
-    logging::log("EXEC", &format!("run_command: {} {:?}", executable, args));
-
-    let mut command = Command::new(&executable);
-    command.env_clear();
-    for key in SAFE_SCRIPT_ENV_VARS {
-        if let Some(value) = std::env::var_os(key) {
-            command.env(key, value);
-        }
-    }
-    for (key, value) in std::env::vars() {
-        if key.starts_with("SCRIPT_KIT") {
-            command.env(key, value);
-        }
-    }
-
-    let output = command.args(args).output().map_err(|e| {
-        let err = format!("Failed to run '{}': {}", executable, e);
-        logging::log("EXEC", &format!("COMMAND ERROR: {}", err));
-        err
-    })?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-
-    logging::log(
-        "EXEC",
-        &format!(
-            "Command status: {}, stdout: {} bytes, stderr: {} bytes",
-            output.status,
-            stdout.len(),
-            stderr.len()
-        ),
-    );
-
-    if output.status.success() {
-        if stdout.is_empty() {
-            Ok(stderr.into_owned())
-        } else {
-            Ok(stdout.into_owned())
-        }
-    } else {
-        let err = if stderr.is_empty() {
-            format!("Command '{}' failed with status: {}", cmd, output.status)
-        } else {
-            stderr.into_owned()
-        };
-        logging::log("EXEC", &format!("Command failed: {}", err));
-        Err(err)
-    }
-}
-
 /// Check if the path points to a TypeScript file
 pub fn is_typescript(path: &Path) -> bool {
     path.extension()
@@ -1053,7 +900,7 @@ mod runtime_fallback_tests {
 #[cfg(test)]
 #[cfg(unix)]
 mod env_scrub_tests {
-    use super::{run_command, spawn_script};
+    use super::spawn_script;
     use std::env;
     use std::ffi::OsString;
     use std::io::Read;
@@ -1085,24 +932,6 @@ mod env_scrub_tests {
                 env::remove_var(self.key);
             }
         }
-    }
-
-    #[test]
-    fn test_run_command_forwards_script_kit_vars_when_env_is_scrubbed() {
-        let _lock = env_lock().lock().expect("env lock should be available");
-        let _script_kit = EnvVarGuard::set("SCRIPT_KIT_ENV_SCRUB_RUN", "forwarded");
-        let _private = EnvVarGuard::set("RUNNER_ENV_SCRUB_RUN_PRIVATE", "blocked");
-
-        let output = run_command(
-            "sh",
-            &[
-                "-c",
-                "printf '%s|%s' \"${SCRIPT_KIT_ENV_SCRUB_RUN:-missing}\" \"${RUNNER_ENV_SCRUB_RUN_PRIVATE:-missing}\"",
-            ],
-        )
-        .expect("run_command should succeed");
-
-        assert_eq!(output, "forwarded|missing");
     }
 
     #[test]
