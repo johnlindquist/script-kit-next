@@ -8,6 +8,24 @@ const MIN_HOVER_ALPHA: f32 = 18.0;
 const THEME_LIST_PAGE_SIZE: usize = 5;
 const OPACITY_MATCH_TOLERANCE: f32 = 0.05;
 const FONT_SIZE_MATCH_TOLERANCE: f32 = 0.5;
+const LEGACY_THEME_ITEM_HEIGHT: f32 = 48.0;
+const THEME_ITEM_MIN_HEIGHT: f32 = 52.0;
+const THEME_ITEM_VERTICAL_PADDING_MIN: f32 = 4.0;
+const THEME_ITEM_VERTICAL_PADDING_MAX: f32 = 12.0;
+const THEME_ITEM_HORIZONTAL_PADDING_MIN: f32 = 12.0;
+const THEME_ITEM_HORIZONTAL_PADDING_MAX: f32 = 16.0;
+const THEME_ITEM_CONTENT_GAP_MIN: f32 = 8.0;
+const THEME_ITEM_CONTENT_GAP_MAX: f32 = 12.0;
+const THEME_ITEM_TEXT_GAP_MIN: f32 = 2.0;
+const THEME_ITEM_TEXT_GAP_MAX: f32 = 4.0;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct ThemeChooserRowLayout {
+    item_height: f32,
+    horizontal_padding: f32,
+    content_gap: f32,
+    text_gap: f32,
+}
 
 impl ScriptListApp {
     fn contains_ascii_case_insensitive(haystack: &str, needle: &str) -> bool {
@@ -136,6 +154,30 @@ impl ScriptListApp {
         )
     }
 
+    fn theme_chooser_row_layout(spacing: &designs::DesignSpacing) -> ThemeChooserRowLayout {
+        let vertical_padding = spacing.item_padding_y.clamp(
+            THEME_ITEM_VERTICAL_PADDING_MIN,
+            THEME_ITEM_VERTICAL_PADDING_MAX,
+        );
+        let item_height = (LEGACY_THEME_ITEM_HEIGHT + vertical_padding).max(THEME_ITEM_MIN_HEIGHT);
+        let horizontal_padding = spacing.padding_md.clamp(
+            THEME_ITEM_HORIZONTAL_PADDING_MIN,
+            THEME_ITEM_HORIZONTAL_PADDING_MAX,
+        );
+        let content_gap = spacing
+            .icon_text_gap
+            .clamp(THEME_ITEM_CONTENT_GAP_MIN, THEME_ITEM_CONTENT_GAP_MAX);
+        let text_gap =
+            (spacing.gap_sm / 2.0).clamp(THEME_ITEM_TEXT_GAP_MIN, THEME_ITEM_TEXT_GAP_MAX);
+
+        ThemeChooserRowLayout {
+            item_height,
+            horizontal_padding,
+            content_gap,
+            text_gap,
+        }
+    }
+
     /// Render the theme chooser with search, live preview, and preview panel
     pub(crate) fn render_theme_chooser(
         &mut self,
@@ -210,7 +252,7 @@ impl ScriptListApp {
             terminal.bright_black,
         ];
 
-        let theme_item_height: f32 = 48.0;
+        let row_layout = Self::theme_chooser_row_layout(&design_spacing);
         let entity_handle = cx.entity().downgrade();
 
         // ── Keyboard handler ───────────────────────────────────────
@@ -607,12 +649,12 @@ impl ScriptListApp {
                         let row = div()
                             .id(ix)
                             .w_full()
-                            .h(px(theme_item_height))
-                            .px(px(12.0))
+                            .h(px(row_layout.item_height))
+                            .px(px(row_layout.horizontal_padding))
                             .flex()
                             .flex_row()
                             .items_center()
-                            .gap(px(8.0))
+                            .gap(px(row_layout.content_gap))
                             .cursor_pointer()
                             .when(is_selected, |d| {
                                 d.bg(theme_row_selected_bg)
@@ -632,7 +674,7 @@ impl ScriptListApp {
                                     .flex()
                                     .flex_col()
                                     .overflow_hidden()
-                                    .gap(px(1.0))
+                                    .gap(px(row_layout.text_gap))
                                     .child(
                                         div()
                                             .text_sm()
@@ -869,7 +911,9 @@ impl ScriptListApp {
                     .h(px(14.0))
                     .rounded(px(7.0))
                     .when(vibrancy_enabled, |d| d.bg(rgb(accent_color)))
-                    .when(!vibrancy_enabled, |d| d.bg(rgba((ui_border << 8) | ALPHA_TOGGLE_BG)))
+                    .when(!vibrancy_enabled, |d| {
+                        d.bg(rgba((ui_border << 8) | ALPHA_TOGGLE_BG))
+                    })
                     .flex()
                     .items_center()
                     .child(
@@ -1524,5 +1568,33 @@ mod theme_chooser_filter_tests {
             ScriptListApp::accent_on_text_color(0x312E81, bg_main),
             0xFFFFFF
         );
+    }
+
+    #[test]
+    fn test_theme_chooser_row_layout_increases_spacing_when_default_tokens_used() {
+        let layout = ScriptListApp::theme_chooser_row_layout(&designs::DesignSpacing::default());
+
+        assert_eq!(layout.item_height, 56.0);
+        assert_eq!(layout.horizontal_padding, 12.0);
+        assert_eq!(layout.content_gap, 8.0);
+        assert_eq!(layout.text_gap, 2.0);
+    }
+
+    #[test]
+    fn test_theme_chooser_row_layout_clamps_extreme_spacing_tokens() {
+        let spacing = designs::DesignSpacing {
+            padding_md: 40.0,
+            gap_sm: 20.0,
+            item_padding_y: 40.0,
+            icon_text_gap: 32.0,
+            ..designs::DesignSpacing::default()
+        };
+
+        let layout = ScriptListApp::theme_chooser_row_layout(&spacing);
+
+        assert_eq!(layout.item_height, 60.0);
+        assert_eq!(layout.horizontal_padding, THEME_ITEM_HORIZONTAL_PADDING_MAX);
+        assert_eq!(layout.content_gap, THEME_ITEM_CONTENT_GAP_MAX);
+        assert_eq!(layout.text_gap, THEME_ITEM_TEXT_GAP_MAX);
     }
 }
