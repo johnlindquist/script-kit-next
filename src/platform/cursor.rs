@@ -24,15 +24,8 @@
 //
 // GPUI integration
 // ----------------
-// We keep the existing "claim then apply" API:
-//   - Interactive elements call `claim_cursor_pointer()` during on_mouse_move.
-//   - The root element calls `apply_default_cursor()` last (bubble phase).
-
-use std::cell::Cell;
-
-thread_local! {
-    static CURSOR_CLAIMED: Cell<bool> = const { Cell::new(false) };
-}
+// Keep the legacy dynamic-cursor API surface as no-ops. Cursor behavior is now
+// handled via static setup only (`install_cursor_tracking` + cursor rects).
 
 // ============================================================================
 // Layer 1 — WindowServer knobs (private)
@@ -79,12 +72,8 @@ mod macos_ws {
     // RTLD_DEFAULT is ((void *) -2) on macOS.
     const RTLD_DEFAULT: *mut c_void = (-2isize) as *mut c_void;
 
-    pub type SetWindowTagsFn = unsafe extern "C" fn(
-        CGSConnectionID,
-        CGWindowID,
-        *const CGSWindowTagBit,
-        usize,
-    ) -> CGError;
+    pub type SetWindowTagsFn =
+        unsafe extern "C" fn(CGSConnectionID, CGWindowID, *const CGSWindowTagBit, usize) -> CGError;
 
     fn load_set_window_tags_fn() -> Option<SetWindowTagsFn> {
         static FN: OnceLock<Option<SetWindowTagsFn>> = OnceLock::new();
@@ -126,8 +115,7 @@ mod macos_ws {
             return;
         }
 
-        let value: cocoa::base::id =
-            objc::msg_send![objc::class!(NSNumber), numberWithBool: YES];
+        let value: cocoa::base::id = objc::msg_send![objc::class!(NSNumber), numberWithBool: YES];
         if value.is_null() {
             crate::logging::log(
                 "CURSOR",
@@ -199,8 +187,12 @@ mod macos_ws {
 
             let wid: CGWindowID = wid_i32 as CGWindowID;
 
-            let err =
-                set_window_tags(connection_id, wid, tags.as_ptr(), K_CGS_REAL_MAXIMUM_TAG_SIZE);
+            let err = set_window_tags(
+                connection_id,
+                wid,
+                tags.as_ptr(),
+                K_CGS_REAL_MAXIMUM_TAG_SIZE,
+            );
             if err == 0 {
                 tagged += 1;
             } else {
@@ -259,8 +251,7 @@ fn install_cursor_rects() {
         let method_sel = sel!(resetCursorRects);
         #[allow(clippy::missing_transmute_annotations)]
         let new_imp: objc::runtime::Imp = std::mem::transmute::<_, objc::runtime::Imp>(
-            reset_cursor_rects_impl
-                as extern "C" fn(*mut std::ffi::c_void, objc::runtime::Sel),
+            reset_cursor_rects_impl as extern "C" fn(*mut std::ffi::c_void, objc::runtime::Sel),
         );
 
         // GPUI's view class already defines resetCursorRects, so class_addMethod
@@ -331,57 +322,6 @@ pub fn install_cursor_tracking() {
 // Layer 2 — Mouse-move cursor coordination (GPUI level)
 // ============================================================================
 
-/// Claim the pointer (finger) cursor for this mouse-move frame.
-///
-/// Call from interactive elements (buttons, links) in their `on_mouse_move`.
-/// This only sets a flag — the actual cursor change happens in
-/// [`apply_default_cursor`] which fires last (root element, bubble phase).
-pub fn claim_cursor_pointer() {
-    CURSOR_CLAIMED.with(|c| c.set(true));
-}
+pub fn claim_cursor_pointer() {}
 
-#[cfg(target_os = "macos")]
-fn set_cursor_pointing_hand() {
-    // SAFETY: [NSCursor pointingHandCursor] is a singleton. set is main-thread safe.
-    unsafe {
-        let cursor: cocoa::base::id =
-            objc::msg_send![objc::class!(NSCursor), pointingHandCursor];
-        let _: () = objc::msg_send![cursor, set];
-    }
-}
-
-#[cfg(target_os = "macos")]
-fn set_cursor_arrow() {
-    // SAFETY: [NSCursor arrowCursor] is a singleton. set is main-thread safe.
-    unsafe {
-        let cursor: cocoa::base::id = objc::msg_send![objc::class!(NSCursor), arrowCursor];
-        let _: () = objc::msg_send![cursor, set];
-    }
-}
-
-/// Apply the final cursor for this frame.
-///
-/// If an inner element claimed pointer via [`claim_cursor_pointer`], sets the
-/// pointing-hand cursor. Otherwise sets the arrow cursor.
-///
-/// Call from the root element's `on_mouse_move` handler. Since the root
-/// fires last in bubble phase, all inner claims are already recorded.
-pub fn apply_default_cursor() {
-    CURSOR_CLAIMED.with(|claimed| {
-        let is_claimed = claimed.get();
-        claimed.set(false);
-
-        #[cfg(target_os = "macos")]
-        {
-            if is_claimed {
-                set_cursor_pointing_hand();
-            } else {
-                set_cursor_arrow();
-            }
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            let _ = is_claimed;
-        }
-    });
-}
+pub fn apply_default_cursor() {}

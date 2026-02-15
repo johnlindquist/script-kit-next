@@ -329,14 +329,7 @@ impl RenderOnce for Button {
         // Apply hover styles unless disabled
         // Keep text color the same, just add subtle background lift
         if show_pointer {
-            button = button
-                .cursor_pointer()
-                .hover(move |s| s.bg(hover_bg))
-                // Bypass GPUI's cursor system for non-activating popup windows:
-                // directly set NSCursor via platform API on mouse move.
-                .on_mouse_move(|_: &MouseMoveEvent, _window, _cx| {
-                    crate::platform::claim_cursor_pointer();
-                });
+            button = button.cursor_pointer().hover(move |s| s.bg(hover_bg));
         } else if disabled {
             button = button.opacity(0.5).cursor_default();
         } else if loading {
