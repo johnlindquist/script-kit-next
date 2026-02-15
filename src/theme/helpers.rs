@@ -3,18 +3,51 @@
 //! These structs pre-compute theme values for efficient use in render closures.
 //! They implement Copy to avoid heap allocations when captured by closures.
 
-use gpui::{rgb, rgba, Rgba};
+use gpui::{rgba, Rgba};
 use tracing::debug;
 
-use super::types::{ColorScheme, Theme};
+use super::types::{relative_luminance_srgb, ColorScheme, Theme};
 pub use crate::list_item::ListItemColors;
 
-#[allow(dead_code)]
+/// Canonical accent palette used by theme customization UIs.
+pub const ACCENT_PALETTE: &[(u32, &str)] = &[
+    (0xFBBF24, "Amber"),
+    (0x3B82F6, "Blue"),
+    (0x8B5CF6, "Violet"),
+    (0xEC4899, "Pink"),
+    (0xEF4444, "Red"),
+    (0xF97316, "Orange"),
+    (0x22C55E, "Green"),
+    (0x14B8A6, "Teal"),
+    (0x06B6D4, "Cyan"),
+    (0x6366F1, "Indigo"),
+];
+
+/// Additional named accents recognized outside the chooser swatch palette.
+const ACCENT_NAME_ALIASES: &[(u32, &str)] = &[
+    (0xF59E0B, "Amber"),
+    (0xA855F7, "Purple"),
+    (0x0078D4, "Blue"),
+    (0x0EA5E9, "Sky"),
+    (0x84CC16, "Lime"),
+];
+
+/// Resolve a human-readable accent color name from canonical palette entries.
+pub fn accent_color_name(color: u32) -> &'static str {
+    ACCENT_PALETTE
+        .iter()
+        .chain(ACCENT_NAME_ALIASES.iter())
+        .find(|(accent, _)| *accent == color)
+        .map(|(_, name)| *name)
+        .unwrap_or("Custom")
+}
+
 impl ColorScheme {
     /// Extract only the colors needed for list item rendering
     ///
     /// Uses the canonical list item color struct from `crate::list_item`.
     /// A temporary `Theme` is built to preserve the existing `ColorScheme` API.
+    #[allow(dead_code)]
     pub fn list_item_colors(&self) -> ListItemColors {
         ListItemColors::from_theme(&Theme {
             colors: self.clone(),
@@ -23,54 +56,7 @@ impl ColorScheme {
     }
 }
 
-/// Lightweight struct for input field rendering
-///
-/// Pre-computes colors for search boxes, text inputs, etc.
-#[allow(dead_code)]
-#[derive(Copy, Clone, Debug)]
-pub struct InputFieldColors {
-    /// Background color of the input
-    pub background: Rgba,
-    /// Text color when typing
-    pub text: Rgba,
-    /// Placeholder text color
-    pub placeholder: Rgba,
-    /// Border color
-    pub border: Rgba,
-    /// Cursor color
-    pub cursor: Rgba,
-}
-
-#[allow(dead_code)]
-impl InputFieldColors {
-    /// Create InputFieldColors from a ColorScheme
-    pub fn from_color_scheme(colors: &ColorScheme) -> Self {
-        #[cfg(debug_assertions)]
-        debug!("Extracting input field colors");
-
-        InputFieldColors {
-            background: rgba((colors.background.search_box << 8) | 0x80),
-            text: rgb(colors.text.primary),
-            placeholder: rgb(colors.text.muted),
-            border: rgba((colors.ui.border << 8) | 0x60),
-            // Use accent color for cursor - provides visual consistency with selection
-            cursor: rgb(colors.accent.selected),
-        }
-    }
-
-    /// Create InputFieldColors from a Theme (preferred method)
-    pub fn from_theme(theme: &Theme) -> Self {
-        Self::from_color_scheme(&theme.colors)
-    }
-}
-
-#[allow(dead_code)]
 impl ColorScheme {
-    /// Extract colors for input field rendering
-    pub fn input_field_colors(&self) -> InputFieldColors {
-        InputFieldColors::from_color_scheme(self)
-    }
-
     /// Extract colors for prompt rendering (DivPrompt, etc.)
     pub fn prompt_colors(&self) -> PromptColors {
         PromptColors::from_color_scheme(self)
@@ -81,7 +67,6 @@ impl ColorScheme {
 ///
 /// Pre-computes colors needed for rendering HTML elements in prompts.
 /// Implements Copy to avoid heap allocations when captured by closures.
-#[allow(dead_code)]
 #[derive(Copy, Clone, Debug)]
 pub struct PromptColors {
     /// Primary text color (for headings, strong text)
@@ -102,7 +87,6 @@ pub struct PromptColors {
     pub is_dark: bool,
 }
 
-#[allow(dead_code)]
 impl PromptColors {
     /// Create PromptColors from a ColorScheme
     ///
@@ -113,11 +97,7 @@ impl PromptColors {
         debug!("Extracting prompt colors");
 
         // Keep dark/light detection aligned with Theme::has_dark_colors() semantics.
-        let bg = colors.background.main;
-        let r = ((bg >> 16) & 0xFF) as f32 / 255.0;
-        let g = ((bg >> 8) & 0xFF) as f32 / 255.0;
-        let b = (bg & 0xFF) as f32 / 255.0;
-        let is_dark = (0.2126 * r) + (0.7152 * g) + (0.0722 * b) < 0.5;
+        let is_dark = relative_luminance_srgb(colors.background.main) < 0.5;
 
         PromptColors {
             text_primary: colors.text.primary,
@@ -134,7 +114,7 @@ impl PromptColors {
     /// Create PromptColors from a Theme (preferred method)
     pub fn from_theme(theme: &Theme) -> Self {
         let mut colors = Self::from_color_scheme(&theme.colors);
-        colors.is_dark = theme.is_dark_mode();
+        colors.is_dark = theme.has_dark_colors();
         colors
     }
 }
@@ -174,7 +154,6 @@ pub fn modal_overlay_bg(theme: &Theme, opacity: u8) -> Rgba {
 ///
 /// # Returns
 /// A Rgba color suitable for use with `.bg()` on hover
-#[allow(dead_code)]
 pub fn hover_overlay_bg(theme: &Theme, opacity: u8) -> Rgba {
     let base_color = if theme.has_dark_colors() {
         0xffffffu32 // white for dark mode (brightens)
@@ -186,8 +165,7 @@ pub fn hover_overlay_bg(theme: &Theme, opacity: u8) -> Rgba {
 
 #[cfg(test)]
 mod tests {
-    use super::{ColorScheme, InputFieldColors, PromptColors};
-    use gpui::rgb;
+    use super::{accent_color_name, ColorScheme, PromptColors, ACCENT_PALETTE};
 
     #[test]
     fn test_list_item_colors_text_on_accent_uses_text_on_accent_from_scheme() {
@@ -198,19 +176,10 @@ mod tests {
         let list_item_colors = colors.list_item_colors();
 
         assert_eq!(list_item_colors.text_on_accent, 0xa1b2c3);
-        assert_ne!(list_item_colors.text_on_accent, list_item_colors.text_primary);
-    }
-
-    #[test]
-    fn test_input_field_colors_text_uses_text_primary_from_scheme() {
-        let mut colors = ColorScheme::dark_default();
-        colors.text.primary = 0x010203;
-        colors.text.on_accent = 0xa1b2c3;
-
-        let input_colors = InputFieldColors::from_color_scheme(&colors);
-
-        assert_eq!(input_colors.text, rgb(colors.text.primary));
-        assert_ne!(input_colors.text, rgb(colors.text.on_accent));
+        assert_ne!(
+            list_item_colors.text_on_accent,
+            list_item_colors.text_primary
+        );
     }
 
     #[test]
@@ -223,5 +192,19 @@ mod tests {
     fn test_prompt_colors_from_color_scheme_sets_is_dark_for_light_scheme() {
         let colors = PromptColors::from_color_scheme(&ColorScheme::light_default());
         assert!(!colors.is_dark);
+    }
+
+    #[test]
+    fn test_accent_color_name_uses_canonical_palette_names() {
+        assert!(ACCENT_PALETTE
+            .iter()
+            .any(|(color, name)| { *color == 0xFBBF24 && *name == "Amber" }));
+        assert_eq!(accent_color_name(0xFBBF24), "Amber");
+    }
+
+    #[test]
+    fn test_accent_color_name_maps_known_aliases() {
+        assert_eq!(accent_color_name(0xA855F7), "Purple");
+        assert_eq!(accent_color_name(0x0078D4), "Blue");
     }
 }

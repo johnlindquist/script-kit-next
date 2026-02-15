@@ -12,7 +12,6 @@ use std::{collections::HashMap, sync::OnceLock};
 
 /// A theme preset with metadata for the chooser UI
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct ThemePreset {
     /// Unique identifier for the preset (used in tests and for persistence)
     pub id: &'static str,
@@ -35,7 +34,6 @@ impl ThemePreset {
 
 /// Preview colors for rendering palette swatches in the theme chooser
 #[derive(Debug, Clone, Copy)]
-#[allow(dead_code)]
 pub struct PresetPreviewColors {
     pub bg: u32,
     pub accent: u32,
@@ -211,8 +209,7 @@ impl PresetsCache {
                 secondary: theme.colors.text.secondary,
                 border: theme.colors.ui.border,
             });
-            preset_index_by_bg_accent
-                .insert(preset_bg_accent_key(bg_main, accent_selected), index);
+            preset_index_by_bg_accent.insert(preset_bg_accent_key(bg_main, accent_selected), index);
         }
 
         Self {
@@ -254,13 +251,11 @@ pub fn find_current_preset_index(theme: &Theme) -> usize {
 }
 
 /// Index of the first light theme in all_presets() (used for section separator rendering)
-#[allow(dead_code)]
 pub fn first_light_theme_index() -> usize {
     presets_cache().first_light_theme_index
 }
 
 /// Pre-compute preview colors for all presets (avoids creating themes in render closures)
-#[allow(dead_code)]
 pub fn all_preset_preview_colors() -> Vec<PresetPreviewColors> {
     preset_preview_colors_cached().to_vec()
 }
@@ -1155,7 +1150,6 @@ fn theme_material_ocean() -> Theme {
 
 // --- merged from part_04.rs ---
 /// Write a theme to the user's theme.json file
-#[allow(dead_code)]
 pub fn write_theme_to_disk(theme: &Theme) -> Result<(), std::io::Error> {
     let theme_path =
         std::path::PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/theme.json").as_ref());
@@ -1281,7 +1275,9 @@ mod tests {
         let missing_bg = u32::MAX;
         let missing_accent = 1;
         let missing_key = preset_bg_accent_key(missing_bg, missing_accent);
-        assert!(!presets_cache().preset_index_by_bg_accent.contains_key(&missing_key));
+        assert!(!presets_cache()
+            .preset_index_by_bg_accent
+            .contains_key(&missing_key));
 
         theme.colors.background.main = missing_bg;
         theme.colors.accent.selected = missing_accent;
@@ -1291,7 +1287,10 @@ mod tests {
 
     #[test]
     fn test_first_light_theme_index_uses_cached_value() {
-        let expected = presets_cached().iter().position(|p| !p.is_dark).unwrap_or(0);
+        let expected = presets_cached()
+            .iter()
+            .position(|p| !p.is_dark)
+            .unwrap_or(0);
         assert_eq!(first_light_theme_index(), expected);
     }
 
@@ -1301,7 +1300,8 @@ mod tests {
         let cached_preview_colors = preset_preview_colors_cached();
         assert_eq!(all_preview_colors.len(), cached_preview_colors.len());
 
-        for (all_colors, cached_colors) in all_preview_colors.iter().zip(cached_preview_colors.iter())
+        for (all_colors, cached_colors) in
+            all_preview_colors.iter().zip(cached_preview_colors.iter())
         {
             assert_eq!(all_colors.bg, cached_colors.bg);
             assert_eq!(all_colors.accent, cached_colors.accent);
