@@ -793,18 +793,18 @@ fn clipboard_pinned_image_has_unpin_and_image_actions() {
 
     // Should have unpin (not pin)
     assert!(
-        ids.contains(&"clipboard_unpin"),
+        ids.contains(&"clip:clipboard_unpin"),
         "Should have unpin for pinned entry"
     );
     assert!(
-        !ids.contains(&"clipboard_pin"),
+        !ids.contains(&"clip:clipboard_pin"),
         "Should NOT have pin for pinned entry"
     );
 
     // Should have image-specific actions (macOS)
     #[cfg(target_os = "macos")]
     {
-        assert!(ids.contains(&"clipboard_ocr"), "Image should have OCR");
+        assert!(ids.contains(&"clip:clipboard_ocr"), "Image should have OCR");
     }
 }
 

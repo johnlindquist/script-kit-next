@@ -154,7 +154,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let save = actions
             .iter()
-            .find(|a| a.id == "clipboard_save_snippet")
+            .find(|a| a.id == "clip:clipboard_save_snippet")
             .unwrap();
         assert_eq!(save.shortcut.as_deref(), Some("⇧⌘S"));
     }
@@ -172,7 +172,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let save = actions
             .iter()
-            .find(|a| a.id == "clipboard_save_snippet")
+            .find(|a| a.id == "clip:clipboard_save_snippet")
             .unwrap();
         assert_eq!(save.title, "Save Text as Snippet");
     }
@@ -190,7 +190,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let save = actions
             .iter()
-            .find(|a| a.id == "clipboard_save_file")
+            .find(|a| a.id == "clip:clipboard_save_file")
             .unwrap();
         assert_eq!(save.shortcut.as_deref(), Some("⌥⇧⌘S"));
     }
@@ -208,7 +208,7 @@ mod tests {
         let actions = get_clipboard_history_context_actions(&entry);
         let save = actions
             .iter()
-            .find(|a| a.id == "clipboard_save_file")
+            .find(|a| a.id == "clip:clipboard_save_file")
             .unwrap();
         assert!(save.description.as_ref().unwrap().contains("file"));
     }
@@ -436,28 +436,28 @@ mod tests {
     #[test]
     fn ai_bar_export_markdown_shortcut() {
         let actions = get_ai_command_bar_actions();
-        let exp = actions.iter().find(|a| a.id == "export_markdown").unwrap();
+        let exp = actions.iter().find(|a| a.id == "chat:export_markdown").unwrap();
         assert_eq!(exp.shortcut.as_deref(), Some("⇧⌘E"));
     }
 
     #[test]
     fn ai_bar_export_markdown_icon() {
         let actions = get_ai_command_bar_actions();
-        let exp = actions.iter().find(|a| a.id == "export_markdown").unwrap();
+        let exp = actions.iter().find(|a| a.id == "chat:export_markdown").unwrap();
         assert_eq!(exp.icon, Some(IconName::FileCode));
     }
 
     #[test]
     fn ai_bar_export_markdown_section() {
         let actions = get_ai_command_bar_actions();
-        let exp = actions.iter().find(|a| a.id == "export_markdown").unwrap();
+        let exp = actions.iter().find(|a| a.id == "chat:export_markdown").unwrap();
         assert_eq!(exp.section.as_deref(), Some("Export"));
     }
 
     #[test]
     fn ai_bar_export_markdown_desc_mentions_markdown() {
         let actions = get_ai_command_bar_actions();
-        let exp = actions.iter().find(|a| a.id == "export_markdown").unwrap();
+        let exp = actions.iter().find(|a| a.id == "chat:export_markdown").unwrap();
         assert!(exp.description.as_ref().unwrap().contains("Markdown"));
     }
 
@@ -508,7 +508,7 @@ mod tests {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "continue_in_chat"));
+        assert!(actions.iter().any(|a| a.id == "chat:continue_in_chat"));
     }
 
     #[test]
@@ -536,7 +536,7 @@ mod tests {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "select_model_claude-3"));
+        assert!(actions.iter().any(|a| a.id == "chat:select_model_claude-3"));
     }
 
     #[test]
@@ -554,7 +554,7 @@ mod tests {
         let actions = get_chat_context_actions(&info);
         let model = actions
             .iter()
-            .find(|a| a.id == "select_model_claude-3")
+            .find(|a| a.id == "chat:select_model_claude-3")
             .unwrap();
         assert!(model.title.contains('✓'));
     }

@@ -359,7 +359,7 @@ mod tests {
         let actions = get_chat_context_actions(&info);
         let model_action = actions
             .iter()
-            .find(|a| a.id == "select_model_claude-3-5-sonnet")
+            .find(|a| a.id == "chat:select_model_claude-3-5-sonnet")
             .unwrap();
         assert!(model_action.title.contains('✓'));
     }
@@ -379,7 +379,7 @@ mod tests {
         let actions = get_chat_context_actions(&info);
         let model_action = actions
             .iter()
-            .find(|a| a.id == "select_model_claude-3-5-sonnet")
+            .find(|a| a.id == "chat:select_model_claude-3-5-sonnet")
             .unwrap();
         assert!(!model_action.title.contains('✓'));
     }
@@ -399,7 +399,7 @@ mod tests {
         let actions = get_chat_context_actions(&info);
         let model_action = actions
             .iter()
-            .find(|a| a.id == "select_model_gpt-4")
+            .find(|a| a.id == "chat:select_model_gpt-4")
             .unwrap();
         assert_eq!(model_action.description.as_ref().unwrap(), "via OpenAI");
     }
@@ -426,11 +426,11 @@ mod tests {
         let actions = get_chat_context_actions(&info);
         let m1_idx = actions
             .iter()
-            .position(|a| a.id == "select_model_m1")
+            .position(|a| a.id == "chat:select_model_m1")
             .unwrap();
         let m2_idx = actions
             .iter()
-            .position(|a| a.id == "select_model_m2")
+            .position(|a| a.id == "chat:select_model_m2")
             .unwrap();
         assert!(m1_idx < m2_idx);
     }

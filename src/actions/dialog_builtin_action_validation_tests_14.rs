@@ -57,7 +57,7 @@ mod tests {
             is_dir: true,
         };
         let actions = get_path_context_actions(&info);
-        assert_eq!(actions[0].id, "open_directory");
+        assert_eq!(actions[0].id, "file:open_directory");
     }
 
     #[test]
@@ -68,7 +68,7 @@ mod tests {
             is_dir: false,
         };
         let actions = get_path_context_actions(&info);
-        assert_eq!(actions[0].id, "select_file");
+        assert_eq!(actions[0].id, "file:select_file");
     }
 
     #[test]
@@ -82,7 +82,7 @@ mod tests {
             let actions = get_path_context_actions(&info);
             assert_eq!(
                 actions.last().unwrap().id,
-                "move_to_trash",
+                "file:move_to_trash",
                 "move_to_trash should be last for is_dir={}",
                 is_dir
             );
@@ -116,12 +116,12 @@ mod tests {
         };
         let ids = action_ids(&get_path_context_actions(&info));
         for expected in &[
-            "copy_path",
-            "open_in_finder",
-            "open_in_editor",
-            "open_in_terminal",
-            "copy_filename",
-            "move_to_trash",
+            "file:copy_path",
+            "file:open_in_finder",
+            "file:open_in_editor",
+            "file:open_in_terminal",
+            "file:copy_filename",
+            "file:move_to_trash",
         ] {
             assert!(
                 ids.contains(&expected.to_string()),
@@ -157,7 +157,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let ids = action_ids(&get_clipboard_history_context_actions(&entry));
-        assert!(!ids.contains(&"clipboard_ocr".to_string()));
+        assert!(!ids.contains(&"clip:clipboard_ocr".to_string()));
     }
 
     #[test]
@@ -171,7 +171,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let ids = action_ids(&get_clipboard_history_context_actions(&entry));
-        assert!(ids.contains(&"clipboard_ocr".to_string()));
+        assert!(ids.contains(&"clip:clipboard_ocr".to_string()));
     }
 
     #[test]
@@ -214,7 +214,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let ids = action_ids(&get_clipboard_history_context_actions(&entry));
-        assert!(!ids.contains(&"clipboard_open_with".to_string()));
+        assert!(!ids.contains(&"clip:clipboard_open_with".to_string()));
     }
 
     #[cfg(target_os = "macos")]
@@ -229,7 +229,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let ids = action_ids(&get_clipboard_history_context_actions(&entry));
-        assert!(ids.contains(&"clipboard_open_with".to_string()));
+        assert!(ids.contains(&"clip:clipboard_open_with".to_string()));
     }
 
     // =========================================================================
@@ -347,35 +347,35 @@ mod tests {
     #[test]
     fn cat04_ai_copy_response_icon_is_copy() {
         let actions = get_ai_command_bar_actions();
-        let a = actions.iter().find(|a| a.id == "copy_response").unwrap();
+        let a = actions.iter().find(|a| a.id == "chat:copy_response").unwrap();
         assert_eq!(a.icon, Some(IconName::Copy));
     }
 
     #[test]
     fn cat04_ai_submit_icon_is_arrowup() {
         let actions = get_ai_command_bar_actions();
-        let a = actions.iter().find(|a| a.id == "submit").unwrap();
+        let a = actions.iter().find(|a| a.id == "chat:submit").unwrap();
         assert_eq!(a.icon, Some(IconName::ArrowUp));
     }
 
     #[test]
     fn cat04_ai_new_chat_icon_is_plus() {
         let actions = get_ai_command_bar_actions();
-        let a = actions.iter().find(|a| a.id == "new_chat").unwrap();
+        let a = actions.iter().find(|a| a.id == "chat:new_chat").unwrap();
         assert_eq!(a.icon, Some(IconName::Plus));
     }
 
     #[test]
     fn cat04_ai_delete_chat_icon_is_trash() {
         let actions = get_ai_command_bar_actions();
-        let a = actions.iter().find(|a| a.id == "delete_chat").unwrap();
+        let a = actions.iter().find(|a| a.id == "chat:delete_chat").unwrap();
         assert_eq!(a.icon, Some(IconName::Trash));
     }
 
     #[test]
     fn cat04_ai_change_model_icon_is_settings() {
         let actions = get_ai_command_bar_actions();
-        let a = actions.iter().find(|a| a.id == "change_model").unwrap();
+        let a = actions.iter().find(|a| a.id == "chat:change_model").unwrap();
         assert_eq!(a.icon, Some(IconName::Settings));
     }
 
@@ -574,7 +574,7 @@ mod tests {
         };
         let actions = get_chat_context_actions(&info);
         assert_eq!(actions.len(), 1);
-        assert_eq!(actions[0].id, "continue_in_chat");
+        assert_eq!(actions[0].id, "chat:continue_in_chat");
     }
 
     #[test]
@@ -586,7 +586,7 @@ mod tests {
             has_response: false,
         };
         let ids = action_ids(&get_chat_context_actions(&info));
-        assert!(!ids.contains(&"copy_response".to_string()));
+        assert!(!ids.contains(&"chat:copy_response".to_string()));
     }
 
     #[test]
@@ -598,7 +598,7 @@ mod tests {
             has_response: true,
         };
         let ids = action_ids(&get_chat_context_actions(&info));
-        assert!(!ids.contains(&"clear_conversation".to_string()));
+        assert!(!ids.contains(&"chat:clear_conversation".to_string()));
     }
 
     #[test]
@@ -638,9 +638,9 @@ mod tests {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        let claude = actions.iter().find(|a| a.id == "select_model_m1").unwrap();
+        let claude = actions.iter().find(|a| a.id == "chat:select_model_m1").unwrap();
         assert!(claude.title.contains("✓"));
-        let gpt = actions.iter().find(|a| a.id == "select_model_m2").unwrap();
+        let gpt = actions.iter().find(|a| a.id == "chat:select_model_m2").unwrap();
         assert!(!gpt.title.contains("✓"));
     }
 
@@ -774,9 +774,9 @@ mod tests {
             is_dir: false,
         };
         let ids = action_ids(&get_file_context_actions(&info));
-        assert!(ids.contains(&"quick_look".to_string()));
-        assert!(ids.contains(&"open_with".to_string()));
-        assert!(ids.contains(&"show_info".to_string()));
+        assert!(ids.contains(&"file:quick_look".to_string()));
+        assert!(ids.contains(&"file:open_with".to_string()));
+        assert!(ids.contains(&"file:show_info".to_string()));
     }
 
     #[cfg(target_os = "macos")]
@@ -789,10 +789,10 @@ mod tests {
             is_dir: true,
         };
         let ids = action_ids(&get_file_context_actions(&info));
-        assert!(!ids.contains(&"quick_look".to_string()));
+        assert!(!ids.contains(&"file:quick_look".to_string()));
         // But still has open_with and show_info
-        assert!(ids.contains(&"open_with".to_string()));
-        assert!(ids.contains(&"show_info".to_string()));
+        assert!(ids.contains(&"file:open_with".to_string()));
+        assert!(ids.contains(&"file:show_info".to_string()));
     }
 
     #[cfg(target_os = "macos")]
@@ -1055,7 +1055,7 @@ mod tests {
     #[test]
     fn cat13_score_prefix_plus_desc_plus_shortcut() {
         let action = Action::new(
-            "copy_path",
+            "file:copy_path",
             "Copy Path",
             Some("Copy the full path".to_string()),
             ActionCategory::ScriptContext,
@@ -1380,9 +1380,9 @@ mod tests {
         };
         let actions = get_clipboard_history_context_actions(&entry);
         let len = actions.len();
-        assert_eq!(actions[len - 3].id, "clipboard_delete");
-        assert_eq!(actions[len - 2].id, "clipboard_delete_multiple");
-        assert_eq!(actions[len - 1].id, "clipboard_delete_all");
+        assert_eq!(actions[len - 3].id, "clip:clipboard_delete");
+        assert_eq!(actions[len - 2].id, "clip:clipboard_delete_multiple");
+        assert_eq!(actions[len - 1].id, "clip:clipboard_delete_all");
     }
 
     #[test]
@@ -1397,9 +1397,9 @@ mod tests {
         };
         let actions = get_clipboard_history_context_actions(&entry);
         let len = actions.len();
-        assert_eq!(actions[len - 3].id, "clipboard_delete");
-        assert_eq!(actions[len - 2].id, "clipboard_delete_multiple");
-        assert_eq!(actions[len - 1].id, "clipboard_delete_all");
+        assert_eq!(actions[len - 3].id, "clip:clipboard_delete");
+        assert_eq!(actions[len - 2].id, "clip:clipboard_delete_multiple");
+        assert_eq!(actions[len - 1].id, "clip:clipboard_delete_all");
     }
 
     #[test]
@@ -1420,7 +1420,7 @@ mod tests {
                 };
                 let actions = get_clipboard_history_context_actions(&entry);
                 assert_eq!(
-                    actions[0].id, "clipboard_paste",
+                    actions[0].id, "clip:clipboard_paste",
                     "Paste should be first for pinned={} type={:?}",
                     pinned, ct
                 );
@@ -1439,7 +1439,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert_eq!(actions[1].id, "clipboard_copy");
+        assert_eq!(actions[1].id, "clip:clipboard_copy");
     }
 
     // =========================================================================
@@ -1624,8 +1624,8 @@ mod tests {
         script.is_agent = true;
         script.is_script = false;
         let ids = action_ids(&get_script_context_actions(&script));
-        assert!(ids.contains(&"reveal_in_finder".to_string()));
-        assert!(ids.contains(&"copy_path".to_string()));
+        assert!(ids.contains(&"file:reveal_in_finder".to_string()));
+        assert!(ids.contains(&"file:copy_path".to_string()));
     }
 
     #[test]

@@ -179,7 +179,7 @@ fn cat29_05_clipboard_attach_to_ai_shortcut() {
     let actions = get_clipboard_history_context_actions(&entry);
     let ai = actions
         .iter()
-        .find(|a| a.id == "clipboard_attach_to_ai")
+        .find(|a| a.id == "clip:clipboard_attach_to_ai")
         .unwrap();
     assert_eq!(ai.shortcut.as_deref(), Some("⌃⌘A"));
 }
@@ -197,7 +197,7 @@ fn cat29_05_clipboard_attach_to_ai_title() {
     let actions = get_clipboard_history_context_actions(&entry);
     let ai = actions
         .iter()
-        .find(|a| a.id == "clipboard_attach_to_ai")
+        .find(|a| a.id == "clip:clipboard_attach_to_ai")
         .unwrap();
     assert_eq!(ai.title, "Attach to AI Chat");
 }
@@ -215,7 +215,7 @@ fn cat29_05_clipboard_attach_to_ai_desc_mentions_ai() {
     let actions = get_clipboard_history_context_actions(&entry);
     let ai = actions
         .iter()
-        .find(|a| a.id == "clipboard_attach_to_ai")
+        .find(|a| a.id == "clip:clipboard_attach_to_ai")
         .unwrap();
     assert!(ai
         .description
@@ -240,7 +240,7 @@ fn cat29_06_clipboard_share_present_for_text() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_share"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_share"));
 }
 
 #[test]
@@ -254,7 +254,7 @@ fn cat29_06_clipboard_share_present_for_image() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_share"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_share"));
 }
 
 #[test]
@@ -279,11 +279,11 @@ fn cat29_06_clipboard_share_shortcut_same_for_both() {
     let img_actions = get_clipboard_history_context_actions(&img_entry);
     let ts = text_actions
         .iter()
-        .find(|a| a.id == "clipboard_share")
+        .find(|a| a.id == "clip:clipboard_share")
         .unwrap();
     let is = img_actions
         .iter()
-        .find(|a| a.id == "clipboard_share")
+        .find(|a| a.id == "clip:clipboard_share")
         .unwrap();
     assert_eq!(ts.shortcut, is.shortcut);
 }
@@ -477,28 +477,28 @@ fn cat29_10_notes_new_note_icon() {
 #[test]
 fn cat29_11_ai_copy_chat_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let cc = actions.iter().find(|a| a.id == "copy_chat").unwrap();
+    let cc = actions.iter().find(|a| a.id == "chat:copy_chat").unwrap();
     assert_eq!(cc.shortcut.as_deref(), Some("⌥⇧⌘C"));
 }
 
 #[test]
 fn cat29_11_ai_copy_chat_icon() {
     let actions = get_ai_command_bar_actions();
-    let cc = actions.iter().find(|a| a.id == "copy_chat").unwrap();
+    let cc = actions.iter().find(|a| a.id == "chat:copy_chat").unwrap();
     assert_eq!(cc.icon, Some(IconName::Copy));
 }
 
 #[test]
 fn cat29_11_ai_copy_chat_section() {
     let actions = get_ai_command_bar_actions();
-    let cc = actions.iter().find(|a| a.id == "copy_chat").unwrap();
+    let cc = actions.iter().find(|a| a.id == "chat:copy_chat").unwrap();
     assert_eq!(cc.section.as_deref(), Some("Response"));
 }
 
 #[test]
 fn cat29_11_ai_copy_chat_desc_mentions_conversation() {
     let actions = get_ai_command_bar_actions();
-    let cc = actions.iter().find(|a| a.id == "copy_chat").unwrap();
+    let cc = actions.iter().find(|a| a.id == "chat:copy_chat").unwrap();
     assert!(cc
         .description
         .as_ref()
@@ -514,28 +514,28 @@ fn cat29_11_ai_copy_chat_desc_mentions_conversation() {
 #[test]
 fn cat29_12_ai_copy_last_code_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let clc = actions.iter().find(|a| a.id == "copy_last_code").unwrap();
+    let clc = actions.iter().find(|a| a.id == "chat:copy_last_code").unwrap();
     assert_eq!(clc.shortcut.as_deref(), Some("⌥⌘C"));
 }
 
 #[test]
 fn cat29_12_ai_copy_last_code_icon() {
     let actions = get_ai_command_bar_actions();
-    let clc = actions.iter().find(|a| a.id == "copy_last_code").unwrap();
+    let clc = actions.iter().find(|a| a.id == "chat:copy_last_code").unwrap();
     assert_eq!(clc.icon, Some(IconName::Code));
 }
 
 #[test]
 fn cat29_12_ai_copy_last_code_section() {
     let actions = get_ai_command_bar_actions();
-    let clc = actions.iter().find(|a| a.id == "copy_last_code").unwrap();
+    let clc = actions.iter().find(|a| a.id == "chat:copy_last_code").unwrap();
     assert_eq!(clc.section.as_deref(), Some("Response"));
 }
 
 #[test]
 fn cat29_12_ai_copy_last_code_desc_mentions_code() {
     let actions = get_ai_command_bar_actions();
-    let clc = actions.iter().find(|a| a.id == "copy_last_code").unwrap();
+    let clc = actions.iter().find(|a| a.id == "chat:copy_last_code").unwrap();
     assert!(clc
         .description
         .as_ref()
@@ -603,7 +603,7 @@ fn cat29_14_chat_model_id_format() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    assert!(actions.iter().any(|a| a.id == "select_model_claude-3-opus"));
+    assert!(actions.iter().any(|a| a.id == "chat:select_model_claude-3-opus"));
 }
 
 #[test]
@@ -621,7 +621,7 @@ fn cat29_14_chat_model_title_is_display_name() {
     let actions = get_chat_context_actions(&info);
     let m = actions
         .iter()
-        .find(|a| a.id == "select_model_gpt-4")
+        .find(|a| a.id == "chat:select_model_gpt-4")
         .unwrap();
     assert_eq!(m.title, "GPT-4");
 }
@@ -641,7 +641,7 @@ fn cat29_14_chat_model_description_via_provider() {
     let actions = get_chat_context_actions(&info);
     let m = actions
         .iter()
-        .find(|a| a.id == "select_model_gpt-4")
+        .find(|a| a.id == "chat:select_model_gpt-4")
         .unwrap();
     assert_eq!(m.description.as_deref(), Some("via OpenAI"));
 }
@@ -730,7 +730,7 @@ fn cat29_16_path_select_file_desc_says_submit() {
         .as_ref()
         .unwrap()
         .to_lowercase()
-        .contains("submit"));
+        .contains("chat:submit"));
 }
 
 #[test]
@@ -880,7 +880,7 @@ fn cat29_20_score_prefix_plus_desc_bonus() {
         Some("Edit the script in your editor".to_string()),
         ActionCategory::ScriptContext,
     );
-    let score = super::dialog::ActionsDialog::score_action(&action, "edit");
+    let score = super::dialog::ActionsDialog::score_action(&action, "script:edit");
     // prefix(100) + desc bonus(15) = 115
     assert!(score >= 115);
 }
@@ -910,8 +910,8 @@ fn cat29_20_score_all_three_bonuses() {
         ActionCategory::ScriptContext,
     )
     .with_shortcut("⌘E");
-    // "edit" → prefix(100) + desc contains "edit"(15) + shortcut doesn't contain "edit"
-    let score = super::dialog::ActionsDialog::score_action(&action, "edit");
+    // "script:edit" → prefix(100) + desc contains "script:edit"(15) + shortcut doesn't contain "script:edit"
+    let score = super::dialog::ActionsDialog::score_action(&action, "script:edit");
     assert!(score >= 115);
 }
 

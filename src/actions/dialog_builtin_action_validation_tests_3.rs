@@ -252,16 +252,16 @@ fn clipboard_ids_never_appear_in_file_context() {
 
     // Clipboard-specific action IDs
     let clipboard_only = [
-        "clipboard_paste",
-        "clipboard_copy",
-        "clipboard_pin",
-        "clipboard_unpin",
-        "clipboard_ocr",
-        "clipboard_delete",
-        "clipboard_delete_all",
-        "clipboard_save_snippet",
-        "clipboard_share",
-        "clipboard_attach_to_ai",
+        "clip:clipboard_paste",
+        "clip:clipboard_copy",
+        "clip:clipboard_pin",
+        "clip:clipboard_unpin",
+        "clip:clipboard_ocr",
+        "clip:clipboard_delete",
+        "clip:clipboard_delete_all",
+        "clip:clipboard_save_snippet",
+        "clip:clipboard_share",
+        "clip:clipboard_attach_to_ai",
     ];
 
     for id in &clipboard_only {
@@ -287,11 +287,11 @@ fn file_ids_never_appear_in_clipboard_context() {
     let clip_ids: HashSet<&str> = action_ids(&clip_actions).into_iter().collect();
 
     let file_only = [
-        "open_file",
-        "open_directory",
-        "open_with",
-        "show_info",
-        "copy_filename",
+        "file:open_file",
+        "file:open_directory",
+        "file:open_with",
+        "file:show_info",
+        "file:copy_filename",
     ];
 
     for id in &file_only {
@@ -319,7 +319,7 @@ fn script_ids_never_appear_in_path_context() {
         "view_logs",
         "add_shortcut",
         "add_alias",
-        "copy_deeplink",
+        "script:copy_deeplink",
         "reset_ranking",
     ];
 
@@ -698,7 +698,7 @@ fn path_file_has_enter_on_primary() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&path);
-    assert_eq!(actions[0].id, "select_file");
+    assert_eq!(actions[0].id, "file:select_file");
     assert_eq!(actions[0].shortcut.as_deref(), Some("↵"));
 }
 
@@ -710,7 +710,7 @@ fn path_dir_has_enter_on_primary() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&path);
-    assert_eq!(actions[0].id, "open_directory");
+    assert_eq!(actions[0].id, "file:open_directory");
     assert_eq!(actions[0].shortcut.as_deref(), Some("↵"));
 }
 
@@ -722,7 +722,7 @@ fn path_context_has_trash_shortcut() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&path);
-    let trash = find_action(&actions, "move_to_trash").unwrap();
+    let trash = find_action(&actions, "file:move_to_trash").unwrap();
     assert_eq!(trash.shortcut.as_deref(), Some("⌘⌫"));
 }
 
@@ -737,13 +737,13 @@ fn path_context_has_all_expected_actions() {
     let ids: HashSet<&str> = action_ids(&actions).into_iter().collect();
 
     let expected = [
-        "select_file",
-        "copy_path",
-        "open_in_finder",
-        "open_in_editor",
-        "open_in_terminal",
-        "copy_filename",
-        "move_to_trash",
+        "file:select_file",
+        "file:copy_path",
+        "file:open_in_finder",
+        "file:open_in_editor",
+        "file:open_in_terminal",
+        "file:copy_filename",
+        "file:move_to_trash",
     ];
     for id in &expected {
         assert!(
@@ -763,8 +763,8 @@ fn path_dir_context_has_open_directory_not_select_file() {
     };
     let actions = get_path_context_actions(&path);
     let ids: HashSet<&str> = action_ids(&actions).into_iter().collect();
-    assert!(ids.contains("open_directory"));
-    assert!(!ids.contains("select_file"));
+    assert!(ids.contains("file:open_directory"));
+    assert!(!ids.contains("file:select_file"));
 }
 
 // =========================================================================
@@ -782,7 +782,7 @@ fn clipboard_paste_always_first_text() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert_eq!(actions[0].id, "clipboard_paste");
+    assert_eq!(actions[0].id, "clip:clipboard_paste");
 }
 
 #[test]
@@ -796,7 +796,7 @@ fn clipboard_paste_always_first_image() {
         frontmost_app_name: Some("Figma".into()),
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert_eq!(actions[0].id, "clipboard_paste");
+    assert_eq!(actions[0].id, "clip:clipboard_paste");
 }
 
 #[test]
@@ -817,9 +817,9 @@ fn clipboard_delete_actions_always_last_three() {
     assert_eq!(
         last_three_ids,
         vec![
-            "clipboard_delete",
-            "clipboard_delete_multiple",
-            "clipboard_delete_all"
+            "clip:clipboard_delete",
+            "clip:clipboard_delete_multiple",
+            "clip:clipboard_delete_all"
         ],
         "Last 3 clipboard actions should be the destructive ones in order"
     );
@@ -842,9 +842,9 @@ fn clipboard_delete_actions_always_last_three_image() {
     assert_eq!(
         last_three_ids,
         vec![
-            "clipboard_delete",
-            "clipboard_delete_multiple",
-            "clipboard_delete_all"
+            "clip:clipboard_delete",
+            "clip:clipboard_delete_multiple",
+            "clip:clipboard_delete_all"
         ],
     );
 }
@@ -881,7 +881,7 @@ fn builtin_with_frecency_has_reset_ranking_and_no_edit() {
 
     assert!(ids.contains("reset_ranking"));
     assert!(ids.contains("run_script"));
-    assert!(ids.contains("copy_deeplink"));
+    assert!(ids.contains("script:copy_deeplink"));
     assert!(!ids.contains("edit_script"));
     assert!(!ids.contains("view_logs"));
 }
@@ -1098,7 +1098,7 @@ fn score_prefix_match_is_100() {
         Some("Open in editor".to_string()),
         ActionCategory::ScriptContext,
     );
-    let score = ActionsDialog::score_action(&action, "edit");
+    let score = ActionsDialog::score_action(&action, "script:edit");
     assert_eq!(
         score,
         100 + 15,
@@ -1109,7 +1109,7 @@ fn score_prefix_match_is_100() {
 #[test]
 fn score_contains_match_is_50() {
     let action = Action::new(
-        "copy_path",
+        "file:copy_path",
         "Copy Path",
         Some("Copy to clipboard".to_string()),
         ActionCategory::ScriptContext,
@@ -1126,7 +1126,7 @@ fn score_contains_match_is_50() {
 #[test]
 fn score_description_only_match() {
     let action = Action::new(
-        "open_file",
+        "file:open_file",
         "Open File",
         Some("Launch with default application".to_string()),
         ActionCategory::ScriptContext,
@@ -1169,7 +1169,7 @@ fn score_no_match_is_zero() {
 #[test]
 fn score_prefix_plus_description_stack() {
     let action = Action::new(
-        "copy_path",
+        "file:copy_path",
         "Copy Path",
         Some("Copy the full path to clipboard".to_string()),
         ActionCategory::ScriptContext,
@@ -1251,20 +1251,20 @@ fn chat_model_checkmark_on_current_only() {
     let actions = get_chat_context_actions(&info);
 
     // Claude 3 should have checkmark
-    let claude = find_action(&actions, "select_model_claude-3").unwrap();
+    let claude = find_action(&actions, "chat:select_model_claude-3").unwrap();
     assert!(
         claude.title.contains('✓'),
         "Current model should have checkmark"
     );
 
     // Others should not
-    let gpt = find_action(&actions, "select_model_gpt-4").unwrap();
+    let gpt = find_action(&actions, "chat:select_model_gpt-4").unwrap();
     assert!(
         !gpt.title.contains('✓'),
         "Non-current model should not have checkmark"
     );
 
-    let gemini = find_action(&actions, "select_model_gemini").unwrap();
+    let gemini = find_action(&actions, "chat:select_model_gemini").unwrap();
     assert!(
         !gemini.title.contains('✓'),
         "Non-current model should not have checkmark"
@@ -1292,7 +1292,7 @@ fn chat_no_current_model_no_checkmarks() {
     };
     let actions = get_chat_context_actions(&info);
     for a in &actions {
-        if a.id.starts_with("select_model_") {
+        if a.id.starts_with("chat:select_model_") {
             assert!(
                 !a.title.contains('✓'),
                 "No model should have checkmark when current_model is None"
@@ -1312,7 +1312,7 @@ fn chat_continue_in_chat_always_present() {
     };
     let actions = get_chat_context_actions(&info);
     assert!(
-        actions.iter().any(|a| a.id == "continue_in_chat"),
+        actions.iter().any(|a| a.id == "chat:continue_in_chat"),
         "continue_in_chat should always be present"
     );
 }
@@ -1329,7 +1329,7 @@ fn chat_copy_response_only_with_response() {
     };
     let actions_without = get_chat_context_actions(&without);
     assert!(
-        !actions_without.iter().any(|a| a.id == "copy_response"),
+        !actions_without.iter().any(|a| a.id == "chat:copy_response"),
         "copy_response should be absent without response"
     );
 
@@ -1341,7 +1341,7 @@ fn chat_copy_response_only_with_response() {
     };
     let actions_with = get_chat_context_actions(&with);
     assert!(
-        actions_with.iter().any(|a| a.id == "copy_response"),
+        actions_with.iter().any(|a| a.id == "chat:copy_response"),
         "copy_response should be present with response"
     );
 }
@@ -1355,7 +1355,7 @@ fn chat_clear_conversation_only_with_messages() {
         has_response: false,
     };
     let actions_without = get_chat_context_actions(&without);
-    assert!(!actions_without.iter().any(|a| a.id == "clear_conversation"),);
+    assert!(!actions_without.iter().any(|a| a.id == "chat:clear_conversation"),);
 
     let with = ChatPromptInfo {
         current_model: None,
@@ -1364,7 +1364,7 @@ fn chat_clear_conversation_only_with_messages() {
         has_response: false,
     };
     let actions_with = get_chat_context_actions(&with);
-    assert!(actions_with.iter().any(|a| a.id == "clear_conversation"));
+    assert!(actions_with.iter().any(|a| a.id == "chat:clear_conversation"));
 }
 
 // =========================================================================
@@ -1387,7 +1387,7 @@ fn notes_8_permutations_action_counts() {
 
                 // new_note and browse_notes always present
                 assert!(
-                    actions.iter().any(|a| a.id == "new_note"),
+                    actions.iter().any(|a| a.id == "notes:new_note"),
                     "new_note always present (sel={}, trash={}, auto={})",
                     sel,
                     trash,
@@ -1409,7 +1409,7 @@ fn notes_8_permutations_action_counts() {
                     "find_in_note",
                     "format",
                     "copy_note_as",
-                    "copy_deeplink",
+                    "script:copy_deeplink",
                     "create_quicklink",
                     "export",
                 ];
@@ -1850,7 +1850,7 @@ fn clipboard_text_has_attach_to_ai() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_attach_to_ai"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_attach_to_ai"));
 }
 
 #[test]
@@ -1864,7 +1864,7 @@ fn clipboard_image_has_attach_to_ai() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_attach_to_ai"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_attach_to_ai"));
 }
 
 // =========================================================================
@@ -1885,7 +1885,7 @@ fn scriptlet_context_has_expected_builtin_ids() {
         "reveal_scriptlet_in_finder",
         "copy_scriptlet_path",
         "copy_content",
-        "copy_deeplink",
+        "script:copy_deeplink",
     ];
     for id in &expected {
         assert!(ids.contains(id), "Scriptlet context should have '{}'", id);
@@ -1900,7 +1900,7 @@ fn scriptlet_context_action_order_run_before_builtin() {
 
     let run_idx = ids.iter().position(|id| *id == "run_script").unwrap();
     let edit_idx = ids.iter().position(|id| *id == "edit_scriptlet").unwrap();
-    let deeplink_idx = ids.iter().position(|id| *id == "copy_deeplink").unwrap();
+    let deeplink_idx = ids.iter().position(|id| *id == "script:copy_deeplink").unwrap();
 
     assert!(run_idx < edit_idx, "run should come before edit_scriptlet");
     assert!(
@@ -1921,7 +1921,7 @@ fn path_trash_description_says_file_for_file() {
         is_dir: false,
     };
     let actions = get_path_context_actions(&path);
-    let trash = find_action(&actions, "move_to_trash").unwrap();
+    let trash = find_action(&actions, "file:move_to_trash").unwrap();
     assert_eq!(trash.description.as_deref(), Some("Delete file"),);
 }
 
@@ -1933,7 +1933,7 @@ fn path_trash_description_says_folder_for_dir() {
         is_dir: true,
     };
     let actions = get_path_context_actions(&path);
-    let trash = find_action(&actions, "move_to_trash").unwrap();
+    let trash = find_action(&actions, "file:move_to_trash").unwrap();
     assert_eq!(trash.description.as_deref(), Some("Delete folder"),);
 }
 
@@ -2035,7 +2035,7 @@ fn clipboard_save_snippet_shortcut() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let save = find_action(&actions, "clipboard_save_snippet").unwrap();
+    let save = find_action(&actions, "clip:clipboard_save_snippet").unwrap();
     assert_eq!(save.shortcut.as_deref(), Some("⇧⌘S"));
 }
 
@@ -2050,7 +2050,7 @@ fn clipboard_save_file_shortcut() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    let save = find_action(&actions, "clipboard_save_file").unwrap();
+    let save = find_action(&actions, "clip:clipboard_save_file").unwrap();
     assert_eq!(save.shortcut.as_deref(), Some("⌥⇧⌘S"));
 }
 
@@ -2062,7 +2062,7 @@ fn clipboard_save_file_shortcut() {
 fn script_deeplink_description_contains_url() {
     let script = ScriptInfo::new("My Cool Script", "/path/script.ts");
     let actions = get_script_context_actions(&script);
-    let deeplink = find_action(&actions, "copy_deeplink").unwrap();
+    let deeplink = find_action(&actions, "script:copy_deeplink").unwrap();
     assert!(
         deeplink
             .description
@@ -2077,7 +2077,7 @@ fn script_deeplink_description_contains_url() {
 fn scriptlet_deeplink_description_contains_url() {
     let script = ScriptInfo::scriptlet("Open GitHub", "/path/url.md", None, None);
     let actions = get_scriptlet_context_actions_with_custom(&script, None);
-    let deeplink = find_action(&actions, "copy_deeplink").unwrap();
+    let deeplink = find_action(&actions, "script:copy_deeplink").unwrap();
     assert!(deeplink
         .description
         .as_ref()
@@ -2251,7 +2251,7 @@ fn ai_command_bar_has_exactly_12_actions() {
 #[test]
 fn score_fuzzy_match_subsequence() {
     let action = Action::new(
-        "reveal_in_finder",
+        "file:reveal_in_finder",
         "Reveal in Finder",
         Some("Reveal in Finder".to_string()),
         ActionCategory::ScriptContext,

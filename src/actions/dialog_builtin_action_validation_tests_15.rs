@@ -102,7 +102,7 @@ mod tests {
         };
         let actions = get_clipboard_history_context_actions(&entry);
         let ids = action_ids(&actions);
-        assert!(ids.contains(&"clipboard_open_with".to_string()));
+        assert!(ids.contains(&"clip:clipboard_open_with".to_string()));
     }
 
     #[cfg(target_os = "macos")]
@@ -118,7 +118,7 @@ mod tests {
         };
         let actions = get_clipboard_history_context_actions(&entry);
         let ids = action_ids(&actions);
-        assert!(ids.contains(&"clipboard_annotate_cleanshot".to_string()));
+        assert!(ids.contains(&"clip:clipboard_annotate_cleanshot".to_string()));
     }
 
     #[cfg(target_os = "macos")]
@@ -134,7 +134,7 @@ mod tests {
         };
         let actions = get_clipboard_history_context_actions(&entry);
         let ids = action_ids(&actions);
-        assert!(ids.contains(&"clipboard_upload_cleanshot".to_string()));
+        assert!(ids.contains(&"clip:clipboard_upload_cleanshot".to_string()));
     }
 
     #[cfg(target_os = "macos")]
@@ -150,8 +150,8 @@ mod tests {
         };
         let actions = get_clipboard_history_context_actions(&entry);
         let ids = action_ids(&actions);
-        assert!(!ids.contains(&"clipboard_annotate_cleanshot".to_string()));
-        assert!(!ids.contains(&"clipboard_upload_cleanshot".to_string()));
+        assert!(!ids.contains(&"clip:clipboard_annotate_cleanshot".to_string()));
+        assert!(!ids.contains(&"clip:clipboard_upload_cleanshot".to_string()));
     }
 
     #[cfg(target_os = "macos")]
@@ -175,8 +175,8 @@ mod tests {
         };
         let img_ids = action_ids(&get_clipboard_history_context_actions(&img));
         let txt_ids = action_ids(&get_clipboard_history_context_actions(&txt));
-        assert!(img_ids.contains(&"clipboard_ocr".to_string()));
-        assert!(!txt_ids.contains(&"clipboard_ocr".to_string()));
+        assert!(img_ids.contains(&"clip:clipboard_ocr".to_string()));
+        assert!(!txt_ids.contains(&"clip:clipboard_ocr".to_string()));
     }
 
     // =========================================================================
@@ -271,7 +271,7 @@ mod tests {
         let actions = get_chat_context_actions(&info);
         // Only continue_in_chat
         assert_eq!(actions.len(), 1);
-        assert_eq!(actions[0].id, "continue_in_chat");
+        assert_eq!(actions[0].id, "chat:continue_in_chat");
     }
 
     #[test]
@@ -300,7 +300,7 @@ mod tests {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions[0].id, "select_model_gpt-4o");
+        assert_eq!(actions[0].id, "chat:select_model_gpt-4o");
     }
 
     #[test]
@@ -597,7 +597,7 @@ mod tests {
             .collect();
         assert_eq!(
             response_ids,
-            vec!["chat:copy_response", "copy_chat", "copy_last_code"]
+            vec!["chat:copy_response", "chat:copy_chat", "chat:copy_last_code"]
         );
     }
 
@@ -611,7 +611,7 @@ mod tests {
             .collect();
         assert_eq!(
             action_ids,
-            vec!["chat:submit", "new_chat", "delete_chat", "branch_from_last"]
+            vec!["chat:submit", "chat:new_chat", "chat:delete_chat", "chat:branch_from_last"]
         );
     }
 
@@ -623,7 +623,7 @@ mod tests {
             .filter(|a| a.section.as_deref() == Some("Attachments"))
             .map(|a| a.id.as_str())
             .collect();
-        assert_eq!(att_ids, vec!["add_attachment", "paste_image"]);
+        assert_eq!(att_ids, vec!["chat:add_attachment", "chat:paste_image"]);
     }
 
     #[test]
@@ -634,7 +634,7 @@ mod tests {
             .filter(|a| a.section.as_deref() == Some("Export"))
             .map(|a| a.id.as_str())
             .collect();
-        assert_eq!(export_ids, vec!["export_markdown"]);
+        assert_eq!(export_ids, vec!["chat:export_markdown"]);
     }
 
     #[test]
@@ -645,7 +645,7 @@ mod tests {
             .filter(|a| a.section.as_deref() == Some("Help"))
             .map(|a| a.id.as_str())
             .collect();
-        assert_eq!(help_ids, vec!["toggle_shortcuts_help"]);
+        assert_eq!(help_ids, vec!["chat:toggle_shortcuts_help"]);
     }
 
     #[test]
@@ -656,7 +656,7 @@ mod tests {
             .filter(|a| a.section.as_deref() == Some("Settings"))
             .map(|a| a.id.as_str())
             .collect();
-        assert_eq!(settings_ids, vec!["change_model"]);
+        assert_eq!(settings_ids, vec!["chat:change_model"]);
     }
 
     // =========================================================================
@@ -1428,8 +1428,8 @@ mod tests {
         };
         let actions = get_clipboard_history_context_actions(&entry);
         let ids = action_ids(&actions);
-        assert!(ids.contains(&"clipboard_pin".to_string()));
-        assert!(!ids.contains(&"clipboard_unpin".to_string()));
+        assert!(ids.contains(&"clip:clipboard_pin".to_string()));
+        assert!(!ids.contains(&"clip:clipboard_unpin".to_string()));
     }
 
     #[test]
@@ -1444,8 +1444,8 @@ mod tests {
         };
         let actions = get_clipboard_history_context_actions(&entry);
         let ids = action_ids(&actions);
-        assert!(ids.contains(&"clipboard_unpin".to_string()));
-        assert!(!ids.contains(&"clipboard_pin".to_string()));
+        assert!(ids.contains(&"clip:clipboard_unpin".to_string()));
+        assert!(!ids.contains(&"clip:clipboard_pin".to_string()));
     }
 
     #[test]
@@ -1470,13 +1470,13 @@ mod tests {
         let unpin_actions = get_clipboard_history_context_actions(&unpin_entry);
         let pin_sc = pin_actions
             .iter()
-            .find(|a| a.id == "clipboard_pin")
+            .find(|a| a.id == "clip:clipboard_pin")
             .unwrap()
             .shortcut
             .as_deref();
         let unpin_sc = unpin_actions
             .iter()
-            .find(|a| a.id == "clipboard_unpin")
+            .find(|a| a.id == "clip:clipboard_unpin")
             .unwrap()
             .shortcut
             .as_deref();
@@ -1500,9 +1500,9 @@ mod tests {
         };
         let actions = get_clipboard_history_context_actions(&entry);
         let len = actions.len();
-        assert_eq!(actions[len - 3].id, "clipboard_delete");
-        assert_eq!(actions[len - 2].id, "clipboard_delete_multiple");
-        assert_eq!(actions[len - 1].id, "clipboard_delete_all");
+        assert_eq!(actions[len - 3].id, "clip:clipboard_delete");
+        assert_eq!(actions[len - 2].id, "clip:clipboard_delete_multiple");
+        assert_eq!(actions[len - 1].id, "clip:clipboard_delete_all");
     }
 
     #[test]
@@ -1517,9 +1517,9 @@ mod tests {
         };
         let actions = get_clipboard_history_context_actions(&entry);
         let len = actions.len();
-        assert_eq!(actions[len - 3].id, "clipboard_delete");
-        assert_eq!(actions[len - 2].id, "clipboard_delete_multiple");
-        assert_eq!(actions[len - 1].id, "clipboard_delete_all");
+        assert_eq!(actions[len - 3].id, "clip:clipboard_delete");
+        assert_eq!(actions[len - 2].id, "clip:clipboard_delete_multiple");
+        assert_eq!(actions[len - 1].id, "clip:clipboard_delete_all");
     }
 
     #[test]

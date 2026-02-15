@@ -186,7 +186,7 @@ fn batch32_clipboard_text_no_clipboard_open_with() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(!actions.iter().any(|a| a.id == "clipboard_open_with"));
+    assert!(!actions.iter().any(|a| a.id == "clip:clipboard_open_with"));
 }
 
 #[test]
@@ -202,7 +202,7 @@ fn batch32_clipboard_text_no_clipboard_annotate_cleanshot() {
     let actions = get_clipboard_history_context_actions(&entry);
     assert!(!actions
         .iter()
-        .any(|a| a.id == "clipboard_annotate_cleanshot"));
+        .any(|a| a.id == "clip:clipboard_annotate_cleanshot"));
 }
 
 #[test]
@@ -216,7 +216,7 @@ fn batch32_clipboard_text_no_clipboard_upload_cleanshot() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(!actions.iter().any(|a| a.id == "clipboard_upload_cleanshot"));
+    assert!(!actions.iter().any(|a| a.id == "clip:clipboard_upload_cleanshot"));
 }
 
 #[test]
@@ -230,7 +230,7 @@ fn batch32_clipboard_text_no_clipboard_ocr() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(!actions.iter().any(|a| a.id == "clipboard_ocr"));
+    assert!(!actions.iter().any(|a| a.id == "clip:clipboard_ocr"));
 }
 
 // ---------------------------------------------------------------------------
@@ -362,28 +362,28 @@ fn batch32_path_dir_open_desc_navigate() {
 #[test]
 fn batch32_ai_export_markdown_section_is_export() {
     let actions = get_ai_command_bar_actions();
-    let em = actions.iter().find(|a| a.id == "export_markdown").unwrap();
+    let em = actions.iter().find(|a| a.id == "chat:export_markdown").unwrap();
     assert_eq!(em.section.as_deref(), Some("Export"));
 }
 
 #[test]
 fn batch32_ai_export_markdown_icon_is_file_code() {
     let actions = get_ai_command_bar_actions();
-    let em = actions.iter().find(|a| a.id == "export_markdown").unwrap();
+    let em = actions.iter().find(|a| a.id == "chat:export_markdown").unwrap();
     assert_eq!(em.icon, Some(IconName::FileCode));
 }
 
 #[test]
 fn batch32_ai_export_markdown_shortcut() {
     let actions = get_ai_command_bar_actions();
-    let em = actions.iter().find(|a| a.id == "export_markdown").unwrap();
+    let em = actions.iter().find(|a| a.id == "chat:export_markdown").unwrap();
     assert_eq!(em.shortcut.as_deref(), Some("⇧⌘E"));
 }
 
 #[test]
 fn batch32_ai_export_markdown_desc_mentions_markdown() {
     let actions = get_ai_command_bar_actions();
-    let em = actions.iter().find(|a| a.id == "export_markdown").unwrap();
+    let em = actions.iter().find(|a| a.id == "chat:export_markdown").unwrap();
     assert!(em.description.as_ref().unwrap().contains("Markdown"));
 }
 
@@ -491,7 +491,7 @@ fn batch32_chat_has_response_no_messages_has_copy_no_clear() {
     };
     let actions = get_chat_context_actions(&info);
     assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
-    assert!(!actions.iter().any(|a| a.id == "clear_conversation"));
+    assert!(!actions.iter().any(|a| a.id == "chat:clear_conversation"));
 }
 
 #[test]
@@ -504,7 +504,7 @@ fn batch32_chat_has_messages_no_response_has_clear_no_copy() {
     };
     let actions = get_chat_context_actions(&info);
     assert!(!actions.iter().any(|a| a.id == "chat:copy_response"));
-    assert!(actions.iter().any(|a| a.id == "clear_conversation"));
+    assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
 }
 
 #[test]
@@ -517,7 +517,7 @@ fn batch32_chat_no_flags_only_continue() {
     };
     let actions = get_chat_context_actions(&info);
     assert_eq!(actions.len(), 1);
-    assert_eq!(actions[0].id, "continue_in_chat");
+    assert_eq!(actions[0].id, "chat:continue_in_chat");
 }
 
 // ---------------------------------------------------------------------------
@@ -927,8 +927,8 @@ fn batch32_score_action_prefix_match_100_plus() {
         ActionCategory::ScriptContext,
     )
     .with_shortcut("⌘E");
-    let score = ActionsDialog::score_action(&action, "edit");
-    // prefix (100) + desc contains "edit" (15) = 115
+    let score = ActionsDialog::score_action(&action, "script:edit");
+    // prefix (100) + desc contains "script:edit" (15) = 115
     assert!(score >= 100, "Prefix match should be 100+, got {}", score);
 }
 
@@ -1190,7 +1190,7 @@ fn batch32_clipboard_text_has_save_snippet() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_save_snippet"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_save_snippet"));
 }
 
 #[test]
@@ -1204,7 +1204,7 @@ fn batch32_clipboard_image_has_save_snippet() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_save_snippet"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_save_snippet"));
 }
 
 #[test]
@@ -1218,7 +1218,7 @@ fn batch32_clipboard_text_has_save_file() {
         frontmost_app_name: None,
     };
     let actions = get_clipboard_history_context_actions(&entry);
-    assert!(actions.iter().any(|a| a.id == "clipboard_save_file"));
+    assert!(actions.iter().any(|a| a.id == "clip:clipboard_save_file"));
 }
 
 // ---------------------------------------------------------------------------

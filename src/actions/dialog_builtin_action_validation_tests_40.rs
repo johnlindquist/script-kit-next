@@ -337,7 +337,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(actions.iter().any(|a| a.id == "clipboard_ocr"));
+        assert!(actions.iter().any(|a| a.id == "clip:clipboard_ocr"));
     }
 
     #[test]
@@ -351,7 +351,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(!actions.iter().any(|a| a.id == "clipboard_ocr"));
+        assert!(!actions.iter().any(|a| a.id == "clip:clipboard_ocr"));
     }
 
     // =========================================================================
@@ -369,8 +369,8 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(actions.iter().any(|a| a.id == "clipboard_unpin"));
-        assert!(!actions.iter().any(|a| a.id == "clipboard_pin"));
+        assert!(actions.iter().any(|a| a.id == "clip:clipboard_unpin"));
+        assert!(!actions.iter().any(|a| a.id == "clip:clipboard_pin"));
     }
 
     #[test]
@@ -384,7 +384,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let unpin = actions.iter().find(|a| a.id == "clipboard_unpin").unwrap();
+        let unpin = actions.iter().find(|a| a.id == "clip:clipboard_unpin").unwrap();
         assert_eq!(unpin.title, "Unpin Entry");
     }
 
@@ -399,7 +399,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let unpin = actions.iter().find(|a| a.id == "clipboard_unpin").unwrap();
+        let unpin = actions.iter().find(|a| a.id == "clip:clipboard_unpin").unwrap();
         assert_eq!(unpin.shortcut, Some("⇧⌘P".to_string()));
     }
 
@@ -414,7 +414,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(!actions.iter().any(|a| a.id == "clipboard_pin"));
+        assert!(!actions.iter().any(|a| a.id == "clip:clipboard_pin"));
     }
 
     // =========================================================================
@@ -432,8 +432,8 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(actions.iter().any(|a| a.id == "clipboard_pin"));
-        assert!(!actions.iter().any(|a| a.id == "clipboard_unpin"));
+        assert!(actions.iter().any(|a| a.id == "clip:clipboard_pin"));
+        assert!(!actions.iter().any(|a| a.id == "clip:clipboard_unpin"));
     }
 
     #[test]
@@ -447,7 +447,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let pin = actions.iter().find(|a| a.id == "clipboard_pin").unwrap();
+        let pin = actions.iter().find(|a| a.id == "clip:clipboard_pin").unwrap();
         assert_eq!(pin.title, "Pin Entry");
     }
 
@@ -462,7 +462,7 @@ mod tests {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        let pin = actions.iter().find(|a| a.id == "clipboard_pin").unwrap();
+        let pin = actions.iter().find(|a| a.id == "clip:clipboard_pin").unwrap();
         assert!(pin.description.as_ref().unwrap().contains("Pin"));
     }
 
@@ -490,11 +490,11 @@ mod tests {
         let unpinned_actions = get_clipboard_history_context_actions(&unpinned_entry);
         let unpin = pinned_actions
             .iter()
-            .find(|a| a.id == "clipboard_unpin")
+            .find(|a| a.id == "clip:clipboard_unpin")
             .unwrap();
         let pin = unpinned_actions
             .iter()
-            .find(|a| a.id == "clipboard_pin")
+            .find(|a| a.id == "clip:clipboard_pin")
             .unwrap();
         assert_eq!(unpin.shortcut, pin.shortcut);
     }
@@ -926,7 +926,7 @@ mod tests {
         let actions = get_ai_command_bar_actions();
         let help = actions
             .iter()
-            .find(|a| a.id == "toggle_shortcuts_help")
+            .find(|a| a.id == "chat:toggle_shortcuts_help")
             .unwrap();
         assert_eq!(help.shortcut, Some("⌘/".to_string()));
     }
@@ -936,7 +936,7 @@ mod tests {
         let actions = get_ai_command_bar_actions();
         let help = actions
             .iter()
-            .find(|a| a.id == "toggle_shortcuts_help")
+            .find(|a| a.id == "chat:toggle_shortcuts_help")
             .unwrap();
         assert_eq!(help.icon, Some(IconName::Star));
     }
@@ -946,7 +946,7 @@ mod tests {
         let actions = get_ai_command_bar_actions();
         let help = actions
             .iter()
-            .find(|a| a.id == "toggle_shortcuts_help")
+            .find(|a| a.id == "chat:toggle_shortcuts_help")
             .unwrap();
         assert_eq!(help.section, Some("Help".to_string()));
     }
@@ -956,7 +956,7 @@ mod tests {
         let actions = get_ai_command_bar_actions();
         let help = actions
             .iter()
-            .find(|a| a.id == "toggle_shortcuts_help")
+            .find(|a| a.id == "chat:toggle_shortcuts_help")
             .unwrap();
         assert_eq!(help.title, "Keyboard Shortcuts");
     }
@@ -968,28 +968,28 @@ mod tests {
     #[test]
     fn ai_bar_change_model_no_shortcut() {
         let actions = get_ai_command_bar_actions();
-        let model = actions.iter().find(|a| a.id == "change_model").unwrap();
+        let model = actions.iter().find(|a| a.id == "chat:change_model").unwrap();
         assert!(model.shortcut.is_none());
     }
 
     #[test]
     fn ai_bar_change_model_icon_settings() {
         let actions = get_ai_command_bar_actions();
-        let model = actions.iter().find(|a| a.id == "change_model").unwrap();
+        let model = actions.iter().find(|a| a.id == "chat:change_model").unwrap();
         assert_eq!(model.icon, Some(IconName::Settings));
     }
 
     #[test]
     fn ai_bar_change_model_section_settings() {
         let actions = get_ai_command_bar_actions();
-        let model = actions.iter().find(|a| a.id == "change_model").unwrap();
+        let model = actions.iter().find(|a| a.id == "chat:change_model").unwrap();
         assert_eq!(model.section, Some("Settings".to_string()));
     }
 
     #[test]
     fn ai_bar_branch_from_last_no_shortcut() {
         let actions = get_ai_command_bar_actions();
-        let branch = actions.iter().find(|a| a.id == "branch_from_last").unwrap();
+        let branch = actions.iter().find(|a| a.id == "chat:branch_from_last").unwrap();
         assert!(branch.shortcut.is_none());
     }
 
@@ -1204,7 +1204,7 @@ mod tests {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "clear_conversation"));
+        assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
     }
 
     #[test]
@@ -1216,7 +1216,7 @@ mod tests {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert!(!actions.iter().any(|a| a.id == "clear_conversation"));
+        assert!(!actions.iter().any(|a| a.id == "chat:clear_conversation"));
     }
 
     #[test]
@@ -1230,7 +1230,7 @@ mod tests {
         let actions = get_chat_context_actions(&info);
         let clear = actions
             .iter()
-            .find(|a| a.id == "clear_conversation")
+            .find(|a| a.id == "chat:clear_conversation")
             .unwrap();
         assert_eq!(clear.shortcut, Some("⌘⌫".to_string()));
     }
@@ -1244,7 +1244,7 @@ mod tests {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "continue_in_chat"));
+        assert!(actions.iter().any(|a| a.id == "chat:continue_in_chat"));
     }
 
     // =========================================================================
