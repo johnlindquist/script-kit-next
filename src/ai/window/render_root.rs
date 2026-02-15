@@ -96,6 +96,10 @@ impl AiApp {
                         );
                     }
                 }
+                AiCommand::AddAttachment { path } => {
+                    self.add_attachment(path.clone(), cx);
+                    crate::logging::log("AI", &format!("Added attachment: {}", path));
+                }
                 AiCommand::InitializeWithPendingChat => {
                     self.initialize_with_pending_chat(window, cx);
                 }

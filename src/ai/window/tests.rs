@@ -168,6 +168,29 @@ fn test_ai_window_queue_command_if_open_enqueues_only_when_window_is_open() {
 }
 
 #[test]
+fn test_ai_window_queue_command_if_open_enqueues_add_attachment_command() {
+    let mut pending_commands = Vec::new();
+    let path = "/tmp/notes.md".to_string();
+
+    let was_queued = ai_window_queue_command_if_open(
+        &mut pending_commands,
+        true,
+        AiCommand::AddAttachment { path: path.clone() },
+    );
+    assert!(
+        was_queued,
+        "Attachment command should queue when window is open"
+    );
+
+    match pending_commands.first() {
+        Some(AiCommand::AddAttachment { path: queued_path }) => {
+            assert_eq!(queued_path, &path);
+        }
+        _ => panic!("Expected queued command to be AiCommand::AddAttachment"),
+    }
+}
+
+#[test]
 fn test_should_retry_existing_user_turn_only_when_last_message_is_user() {
     let chat_id = ChatId::new();
 
