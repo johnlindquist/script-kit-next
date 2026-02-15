@@ -149,7 +149,7 @@ impl ScriptListApp {
                 logging::log("EXEC", "Interactive session started successfully");
 
                 // Store PID for explicit cleanup (belt-and-suspenders approach)
-                let pid = session.pid();
+                let pid = session.process_handle.pid;
                 self.current_script_pid = Some(pid);
                 logging::log("EXEC", &format!("Stored script PID {} for cleanup", pid));
 
