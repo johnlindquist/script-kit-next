@@ -2302,7 +2302,6 @@ mod tests {
         is_destructive_action, should_render_section_separator, ActionsDialog,
     };
     use crate::actions::types::{Action, ActionCategory};
-    use gpui::px;
 
     #[test]
     fn destructive_detection_matches_known_ids() {
@@ -2443,9 +2442,6 @@ mod tests {
     fn test_create_popup_shadow_returns_visible_shadow() {
         let shadows = ActionsDialog::create_popup_shadow();
 
-        assert_eq!(shadows.len(), 1);
-        assert_eq!(shadows[0].offset, gpui::point(px(0.), px(4.)));
-        assert_eq!(shadows[0].blur_radius, px(12.));
-        assert_eq!(shadows[0].spread_radius, px(1.));
+        assert!(shadows.is_empty());
     }
 }

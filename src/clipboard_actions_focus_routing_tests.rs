@@ -103,10 +103,7 @@ mod tests {
         let branch = &actions_section[anchor..(anchor + 700).min(actions_section.len())];
 
         assert!(
-            branch.contains("key == \"up\"")
-                && branch.contains("key == \"arrowup\"")
-                && branch.contains("key == \"down\"")
-                && branch.contains("key == \"arrowdown\""),
+            branch.contains("is_key_up(key)") && branch.contains("is_key_down(key)"),
             "actions_interceptor must skip arrow keys in non-FileSearch modal routing to avoid double-processing with arrow_interceptor."
         );
     }

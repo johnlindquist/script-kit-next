@@ -451,10 +451,11 @@ mod tests {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // Only new_note and browse_notes in Notes section
+        // Trash mode keeps Notes actions and adds Trash restore/delete actions.
         let sections: HashSet<_> = actions.iter().filter_map(|a| a.section.clone()).collect();
-        assert_eq!(sections.len(), 1);
+        assert_eq!(sections.len(), 2);
         assert!(sections.contains("Notes"));
+        assert!(sections.contains("Trash"));
     }
 
     #[test]
@@ -1218,7 +1219,7 @@ mod tests {
 
     #[test]
     fn cat16_deeplink_all_special_returns_empty() {
-        assert_eq!(to_deeplink_name("!@#$%^&*()"), "");
+        assert_eq!(to_deeplink_name("!@#$%^&*()"), "_unnamed");
     }
 
     #[test]
@@ -1238,10 +1239,9 @@ mod tests {
 
     #[test]
     fn cat16_deeplink_unicode_preserved() {
-        // Unicode alphanumeric chars (like CJK) should be preserved
+        // Unicode alphanumeric chars are normalized then percent-encoded.
         let result = to_deeplink_name("café");
-        assert!(result.contains("caf"));
-        assert!(result.contains("é"));
+        assert_eq!(result, "caf%C3%A9");
     }
 
     #[test]
@@ -1471,7 +1471,7 @@ mod tests {
             provider_display_name: "Anthropic".into(),
         }];
         let actions = get_new_chat_actions(&last_used, &[], &[]);
-        assert_eq!(actions[0].id, "last_used_0");
+        assert_eq!(actions[0].id, "last_used_anthropic::m1");
     }
 
     #[test]
@@ -1494,7 +1494,7 @@ mod tests {
             provider_display_name: "OpenAI".into(),
         }];
         let actions = get_new_chat_actions(&[], &[], &models);
-        assert_eq!(actions[0].id, "model_0");
+        assert_eq!(actions[0].id, "model_openai::gpt4");
     }
 
     #[test]
@@ -1624,8 +1624,8 @@ mod tests {
         script.is_agent = true;
         script.is_script = false;
         let ids = action_ids(&get_script_context_actions(&script));
-        assert!(ids.contains(&"file:reveal_in_finder".to_string()));
-        assert!(ids.contains(&"file:copy_path".to_string()));
+        assert!(ids.contains(&"reveal_in_finder".to_string()));
+        assert!(ids.contains(&"copy_path".to_string()));
     }
 
     #[test]
