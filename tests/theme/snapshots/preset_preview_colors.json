@@ -1,0 +1,192 @@
+[
+  {
+    "id": "script-kit-dark",
+    "name": "Script Kit Dark",
+    "is_dark": true,
+    "bg": "#1E1E1E",
+    "accent": "#FBBF24",
+    "text": "#FFFFFF",
+    "secondary": "#CCCCCC",
+    "border": "#464647"
+  },
+  {
+    "id": "dracula",
+    "name": "Dracula",
+    "is_dark": true,
+    "bg": "#282A36",
+    "accent": "#BD93F9",
+    "text": "#F8F8F2",
+    "secondary": "#BFBFBF",
+    "border": "#44475A"
+  },
+  {
+    "id": "nord",
+    "name": "Nord",
+    "is_dark": true,
+    "bg": "#2E3440",
+    "accent": "#88C0D0",
+    "text": "#ECEFF4",
+    "secondary": "#D8DEE9",
+    "border": "#4C566A"
+  },
+  {
+    "id": "catppuccin-mocha",
+    "name": "Catppuccin Mocha",
+    "is_dark": true,
+    "bg": "#1E1E2E",
+    "accent": "#CBA6F7",
+    "text": "#CDD6F4",
+    "secondary": "#BAC2DE",
+    "border": "#45475A"
+  },
+  {
+    "id": "one-dark",
+    "name": "One Dark",
+    "is_dark": true,
+    "bg": "#282C34",
+    "accent": "#61AFEF",
+    "text": "#ABB2BF",
+    "secondary": "#9DA5B4",
+    "border": "#3E4452"
+  },
+  {
+    "id": "tokyo-night",
+    "name": "Tokyo Night",
+    "is_dark": true,
+    "bg": "#1A1B26",
+    "accent": "#7AA2F7",
+    "text": "#C0CAF5",
+    "secondary": "#A9B1D6",
+    "border": "#3B4261"
+  },
+  {
+    "id": "gruvbox-dark",
+    "name": "Gruvbox Dark",
+    "is_dark": true,
+    "bg": "#282828",
+    "accent": "#FE8019",
+    "text": "#EBDBB2",
+    "secondary": "#D5C4A1",
+    "border": "#504945"
+  },
+  {
+    "id": "rose-pine",
+    "name": "Rosé Pine",
+    "is_dark": true,
+    "bg": "#191724",
+    "accent": "#EBBCBA",
+    "text": "#E0DEF4",
+    "secondary": "#C4A7E7",
+    "border": "#403D52"
+  },
+  {
+    "id": "solarized-dark",
+    "name": "Solarized Dark",
+    "is_dark": true,
+    "bg": "#002B36",
+    "accent": "#268BD2",
+    "text": "#FDF6E3",
+    "secondary": "#EEE8D5",
+    "border": "#586E75"
+  },
+  {
+    "id": "github-dark",
+    "name": "GitHub Dark",
+    "is_dark": true,
+    "bg": "#0D1117",
+    "accent": "#58A6FF",
+    "text": "#F0F6FC",
+    "secondary": "#C9D1D9",
+    "border": "#30363D"
+  },
+  {
+    "id": "monokai-pro",
+    "name": "Monokai Pro",
+    "is_dark": true,
+    "bg": "#2D2A2E",
+    "accent": "#FFD866",
+    "text": "#FCFCFA",
+    "secondary": "#C1C0C0",
+    "border": "#403E41"
+  },
+  {
+    "id": "everforest-dark",
+    "name": "Everforest Dark",
+    "is_dark": true,
+    "bg": "#2D353B",
+    "accent": "#A7C080",
+    "text": "#D3C6AA",
+    "secondary": "#9DA9A0",
+    "border": "#475258"
+  },
+  {
+    "id": "kanagawa",
+    "name": "Kanagawa",
+    "is_dark": true,
+    "bg": "#1F1F28",
+    "accent": "#7E9CD8",
+    "text": "#DCD7BA",
+    "secondary": "#C8C093",
+    "border": "#54546D"
+  },
+  {
+    "id": "ayu-dark",
+    "name": "Ayu Dark",
+    "is_dark": true,
+    "bg": "#0A0E14",
+    "accent": "#E6B450",
+    "text": "#B3B1AD",
+    "secondary": "#9A9892",
+    "border": "#1D2631"
+  },
+  {
+    "id": "material-ocean",
+    "name": "Material Ocean",
+    "is_dark": true,
+    "bg": "#0F111A",
+    "accent": "#84FFFF",
+    "text": "#EEFFFF",
+    "secondary": "#B0BEC5",
+    "border": "#1F2233"
+  },
+  {
+    "id": "script-kit-light",
+    "name": "Script Kit Light",
+    "is_dark": false,
+    "bg": "#FAFAFA",
+    "accent": "#0078D4",
+    "text": "#1A1A1A",
+    "secondary": "#4A4A4A",
+    "border": "#E0E0E0"
+  },
+  {
+    "id": "catppuccin-latte",
+    "name": "Catppuccin Latte",
+    "is_dark": false,
+    "bg": "#EFF1F5",
+    "accent": "#8839EF",
+    "text": "#4C4F69",
+    "secondary": "#5C5F77",
+    "border": "#BCC0CC"
+  },
+  {
+    "id": "solarized-light",
+    "name": "Solarized Light",
+    "is_dark": false,
+    "bg": "#FDF6E3",
+    "accent": "#268BD2",
+    "text": "#073642",
+    "secondary": "#586E75",
+    "border": "#93A1A1"
+  },
+  {
+    "id": "github-light",
+    "name": "GitHub Light",
+    "is_dark": false,
+    "bg": "#FFFFFF",
+    "accent": "#0969DA",
+    "text": "#1F2328",
+    "secondary": "#424A53",
+    "border": "#D0D7DE"
+  }
+]
