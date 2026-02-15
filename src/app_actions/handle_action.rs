@@ -1,5 +1,5 @@
 impl ScriptListApp {
-    fn hide_main_and_reset(&self, _cx: &mut Context<Self>) {
+    pub(crate) fn hide_main_and_reset(&self, _cx: &mut Context<Self>) {
         if let Some((x, y, w, h)) = platform::get_main_window_bounds() {
             let bounds = crate::window_state::PersistedWindowBounds::new(x, y, w, h);
             let displays = platform::get_macos_displays();

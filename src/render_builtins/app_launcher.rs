@@ -113,10 +113,7 @@ impl ScriptListApp {
                                     logging::log("ERROR", &format!("Failed to launch app: {}", e));
                                 } else {
                                     logging::log("EXEC", &format!("Launched: {}", app.name));
-                                    // Hide main window only (not entire app) to keep HUD visible
-                                    script_kit_gpui::set_main_window_visible(false);
-                                    platform::hide_main_window();
-                                    NEEDS_RESET.store(true, Ordering::SeqCst);
+                                    this.hide_main_and_reset(cx);
                                 }
                             }
                         }
@@ -238,12 +235,7 @@ impl ScriptListApp {
                                                     if app_launcher::launch_application(&app_info)
                                                         .is_ok()
                                                     {
-                                                        script_kit_gpui::set_main_window_visible(
-                                                            false,
-                                                        );
-                                                        platform::hide_main_window();
-                                                        NEEDS_RESET
-                                                            .store(true, Ordering::SeqCst);
+                                                        this.hide_main_and_reset(cx);
                                                     }
                                                 }
                                             }
