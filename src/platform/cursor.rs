@@ -317,11 +317,3 @@ pub fn install_cursor_tracking() {
 pub fn install_cursor_tracking() {
     // No-op on non-macOS platforms.
 }
-
-// ============================================================================
-// Layer 2 — Mouse-move cursor coordination (GPUI level)
-// ============================================================================
-
-pub fn claim_cursor_pointer() {}
-
-pub fn apply_default_cursor() {}
