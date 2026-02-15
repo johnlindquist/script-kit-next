@@ -33,6 +33,12 @@ use tracing::info;
 use crate::watcher::ThemeWatcher;
 use crate::windows;
 
+const FAST_POLL_MS: u64 = 200;
+const MEDIUM_POLL_MS: u64 = 500;
+const SLOW_POLL_MS: u64 = 2000;
+const FAST_POLL_IDLE_CUTOFF: u64 = 5;
+const MEDIUM_POLL_IDLE_CUTOFF: u64 = 10;
+
 /// Flag to track if the theme service is running
 static THEME_SERVICE_RUNNING: AtomicBool = AtomicBool::new(false);
 
@@ -101,12 +107,12 @@ pub fn ensure_theme_service(cx: &mut App) {
         let mut idle_count = 0u32;
         loop {
             // Adaptive polling: 200ms when active, up to 2000ms when idle
-            let poll_interval = if idle_count < 5 {
-                200
-            } else if idle_count < 10 {
-                500
+            let poll_interval = if u64::from(idle_count) < FAST_POLL_IDLE_CUTOFF {
+                FAST_POLL_MS
+            } else if u64::from(idle_count) < MEDIUM_POLL_IDLE_CUTOFF {
+                MEDIUM_POLL_MS
             } else {
-                2000
+                SLOW_POLL_MS
             };
             Timer::after(std::time::Duration::from_millis(poll_interval)).await;
 
