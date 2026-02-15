@@ -14,9 +14,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Write};
+use std::io::{ErrorKind, Read, Write};
 use std::path::PathBuf;
-use std::process::Command;
 use std::sync::{LazyLock, RwLock};
 use sysinfo::{Pid, System};
 use tracing::{debug, info, warn};
@@ -296,31 +295,17 @@ impl ProcessManager {
 
         #[cfg(unix)]
         {
-            // Kill the entire process group
-            let negative_pgid = format!("-{}", pid);
-            match Command::new("kill").args(["-9", &negative_pgid]).output() {
-                Ok(output) => {
-                    if output.status.success() {
-                        info!(pid, "process_manager.kill_process.success");
-                    } else {
-                        let stderr = String::from_utf8_lossy(&output.stderr);
-                        if stderr.contains("No such process") {
-                            debug!(pid, "process_manager.kill_process.already_exited");
-                        } else {
-                            warn!(
-                                pid,
-                                stderr = %stderr,
-                                "process_manager.kill_process.failed"
-                            );
-                        }
-                    }
-                }
-                Err(e) => {
-                    warn!(
-                        pid,
-                        error = %e,
-                        "process_manager.kill_process.command_failed"
-                    );
+            let pgid = -(pid as i32);
+            let ret = unsafe { libc::kill(pgid, libc::SIGKILL) };
+
+            if ret == 0 {
+                info!(pid, "killed process group");
+            } else if ret == -1 {
+                let err = std::io::Error::last_os_error();
+                if err.kind() == ErrorKind::NotFound {
+                    debug!(pid, "process already exited");
+                } else {
+                    warn!(pid, %err, "failed to kill process group");
                 }
             }
         }
