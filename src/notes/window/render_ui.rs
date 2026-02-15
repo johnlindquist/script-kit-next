@@ -1,40 +1,51 @@
 use super::*;
 
 impl NotesApp {
+    pub(super) fn format_search_match_counter(
+        note_position: Option<(usize, usize)>,
+        total_matches: usize,
+    ) -> String {
+        let current_match = note_position.map(|(position, _)| position).unwrap_or(0);
+        format!("{current_match}/{total_matches}")
+    }
+
     /// Render the search input bar (shown when Cmd+F is pressed)
     pub(super) fn render_search(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
-        let result_count = self.notes.len();
+        let sk_theme = crate::theme::get_cached_theme();
+        let opacity = sk_theme.get_opacity();
+        let total_matches = self.get_visible_notes().len();
+        let counter_text =
+            Self::format_search_match_counter(self.get_note_position(), total_matches);
+        let search_surface = rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
+            sk_theme.colors.background.search_box,
+            opacity.search_box,
+        ));
+        let counter_surface = rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
+            sk_theme.colors.accent.selected_subtle,
+            OPACITY_SUBTLE,
+        ));
 
-        div()
-            .w_full()
-            .px_3()
-            .py_1() // 4px — tighter to match toolbar density
-            .flex()
-            .items_center()
-            .gap_2()
-            .border_b_1()
-            .border_color(theme.border.opacity(OPACITY_SECTION_BORDER))
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(theme.muted_foreground.opacity(OPACITY_MUTED))
-                    .child("\u{2315}"), // ⌕ magnifying glass text char
-            )
-            .child(
-                div().flex_1().child(
-                    Input::new(&self.search_state)
-                        .w_full()
-                        .small()
-                        .appearance(false),
-                ),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(theme.muted_foreground.opacity(OPACITY_MUTED))
-                    .child(format!("{} notes", result_count)),
-            )
+        div().w_full().px_3().pt_2().pb_2().child(
+            Input::new(&self.search_state)
+                .w_full()
+                .small()
+                .prefix(IconName::Search)
+                .suffix(
+                    div()
+                        .h(px(18.))
+                        .px_2()
+                        .rounded_full()
+                        .bg(counter_surface)
+                        .flex()
+                        .items_center()
+                        .text_xs()
+                        .text_color(theme.muted_foreground.opacity(OPACITY_MUTED))
+                        .child(counter_text),
+                )
+                .bg(search_surface)
+                .border_color(theme.border.opacity(OPACITY_SECTION_BORDER)),
+        )
     }
 
     /// Render the formatting toolbar
