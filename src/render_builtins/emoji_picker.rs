@@ -53,8 +53,7 @@ impl ScriptListApp {
         let text_dimmed = self.theme.colors.text.dimmed;
         let ui_border = self.theme.colors.ui.border;
 
-        let ordered_emojis =
-            crate::emoji::filtered_ordered_emojis(&filter, selected_category);
+        let ordered_emojis = crate::emoji::filtered_ordered_emojis(&filter, selected_category);
         let cols = crate::emoji::GRID_COLS;
 
         #[derive(Clone)]
@@ -180,10 +179,12 @@ impl ScriptListApp {
                         }
                         "left" | "arrowleft" => {
                             this.navigate_emoji_picker_horizontal(-1, cx);
+                            cx.stop_propagation();
                             return;
                         }
                         "right" | "arrowright" => {
                             this.navigate_emoji_picker_horizontal(1, cx);
+                            cx.stop_propagation();
                             return;
                         }
                         "enter" | "return" => {
@@ -193,6 +194,7 @@ impl ScriptListApp {
                                 ));
                                 this.close_and_reset_window(cx);
                             }
+                            cx.stop_propagation();
                             return;
                         }
                         _ if key_raw == "Enter" => {
@@ -202,20 +204,18 @@ impl ScriptListApp {
                                 ));
                                 this.close_and_reset_window(cx);
                             }
+                            cx.stop_propagation();
                             return;
                         }
                         _ => return,
                     };
 
                     if navigated {
-                        let row = crate::emoji::compute_scroll_row(
-                            *selected_index,
-                            &ordered_emojis,
-                        );
-                        this.emoji_scroll_handle.scroll_to_item(
-                            row,
-                            gpui::ScrollStrategy::Nearest,
-                        );
+                        let row =
+                            crate::emoji::compute_scroll_row(*selected_index, &ordered_emojis);
+                        this.emoji_scroll_handle
+                            .scroll_to_item(row, gpui::ScrollStrategy::Nearest);
+                        cx.stop_propagation();
                     }
 
                     this.input_mode = InputMode::Keyboard;
@@ -311,16 +311,16 @@ impl ScriptListApp {
                                     .w_full()
                                     .flex()
                                     .px(px(design_spacing.padding_lg))
-                                    .gap(px(2.0))
+                                    .gap(px(1.0))
                                     .children((0..grid_cols).map(move |col| -> AnyElement {
                                         if col >= row_count {
                                             // Invisible spacer to maintain consistent cell width
-                                            return div().flex_1().h(px(44.0)).into_any_element();
+                                            return div().flex_1().h(px(40.0)).into_any_element();
                                         }
                                         let flat_emoji_index = row_start_index + col;
                                         let emoji = match emojis_for_row.get(flat_emoji_index) {
                                             Some(e) => e,
-                                            None => return div().flex_1().h(px(44.0)).into_any_element(),
+                                            None => return div().flex_1().h(px(40.0)).into_any_element(),
                                         };
                                         let is_selected = flat_emoji_index == selected;
                                         let is_hovered = hovered == Some(flat_emoji_index)
@@ -333,21 +333,11 @@ impl ScriptListApp {
                                         div()
                                             .id(flat_emoji_index)
                                             .flex_1()
-                                            .h(px(44.0))
+                                            .h(px(40.0))
                                             .flex()
                                             .items_center()
                                             .justify_center()
-                                            .rounded(px(6.0))
-                                            .text_size(px(26.0))
                                             .cursor_pointer()
-                                            .border_1()
-                                            .border_color(if is_selected {
-                                                selected_outline
-                                            } else {
-                                                gpui::transparent_black().into()
-                                            })
-                                            .when(is_selected, |d| d.bg(selected_bg))
-                                            .when(is_hovered && !is_selected, |d| d.bg(hover_bg))
                                             .on_click(
                                                 move |_event: &gpui::ClickEvent,
                                                       _window: &mut Window,
@@ -395,7 +385,24 @@ impl ScriptListApp {
                                                     }
                                                 },
                                             )
-                                            .child(emoji_display)
+                                            .child(
+                                                div()
+                                                    .size(px(34.0))
+                                                    .flex()
+                                                    .items_center()
+                                                    .justify_center()
+                                                    .rounded(px(6.0))
+                                                    .text_size(px(26.0))
+                                                    .border_1()
+                                                    .border_color(if is_selected {
+                                                        selected_outline
+                                                    } else {
+                                                        gpui::transparent_black().into()
+                                                    })
+                                                    .when(is_selected, |d| d.bg(selected_bg))
+                                                    .when(is_hovered && !is_selected, |d| d.bg(hover_bg))
+                                                    .child(emoji_display),
+                                            )
                                             .into_any_element()
                                     }))
                                     .into_any_element()
@@ -554,6 +561,33 @@ mod emoji_picker_tests {
     }
 
     #[test]
+    fn test_render_emoji_picker_consumes_horizontal_arrow_keys() {
+        let source = read_emoji_picker_source();
+
+        let left_arm = source
+            .find("\"left\" | \"arrowleft\" => {")
+            .expect("left arrow key arm should exist");
+        let left_section_end = (left_arm + 220).min(source.len());
+        let left_section = &source[left_arm..left_section_end];
+        assert!(
+            left_section.contains("this.navigate_emoji_picker_horizontal(-1, cx);")
+                && left_section.contains("cx.stop_propagation();"),
+            "left arrow key handling should navigate grid and stop propagation to Input"
+        );
+
+        let right_arm = source
+            .find("\"right\" | \"arrowright\" => {")
+            .expect("right arrow key arm should exist");
+        let right_section_end = (right_arm + 220).min(source.len());
+        let right_section = &source[right_arm..right_section_end];
+        assert!(
+            right_section.contains("this.navigate_emoji_picker_horizontal(1, cx);")
+                && right_section.contains("cx.stop_propagation();"),
+            "right arrow key handling should navigate grid and stop propagation to Input"
+        );
+    }
+
+    #[test]
     fn test_render_emoji_picker_uses_shared_input_focus_and_scroll_handles() {
         let source = read_emoji_picker_source();
 
@@ -590,6 +624,10 @@ mod emoji_picker_tests {
         assert!(
             source.contains(".when(is_selected, |d| d.bg(selected_bg))"),
             "selected emoji cell should apply subtle rounded background highlight"
+        );
+        assert!(
+            source.contains(".size(px(34.0))") && source.contains(".h(px(40.0))"),
+            "selected emoji indicator should use a tighter rounded square around the emoji"
         );
     }
 }
