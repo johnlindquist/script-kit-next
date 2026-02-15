@@ -1,6 +1,6 @@
             "clipboard_pin" | "clipboard_unpin" => {
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    self.show_hud("No clipboard entry selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
@@ -55,27 +55,27 @@
                         }
 
                         if let Some(message) = clipboard_pin_action_success_hud(&action_id) {
-                            self.show_hud(message.to_string(), Some(1500), cx);
+                            self.show_hud(message.to_string(), Some(HUD_SHORT_MS), cx);
                         }
                         cx.notify();
                     }
                     Err(e) => {
                         logging::log("ERROR", &format!("Failed to toggle clipboard pin: {}", e));
-                        self.show_hud(format!("Failed to update pin: {}", e), Some(3000), cx);
+                        self.show_hud(format!("Failed to update pin: {}", e), Some(HUD_LONG_MS), cx);
                     }
                 }
                 return;
             }
             "clipboard_share" => {
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    self.show_hud("No clipboard entry selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
                 let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
                     self.show_hud(
                         "Clipboard entry content unavailable".to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                     return;
@@ -109,15 +109,15 @@
                 };
 
                 match share_result {
-                    Ok(()) => self.show_hud("Share sheet opened".to_string(), Some(1500), cx),
-                    Err(message) => self.show_hud(message, Some(2000), cx),
+                    Ok(()) => self.show_hud("Share sheet opened".to_string(), Some(HUD_SHORT_MS), cx),
+                    Err(message) => self.show_hud(message, Some(HUD_MEDIUM_MS), cx),
                 }
                 return;
             }
             // Paste to active app and close window (Enter)
             "clipboard_paste" => {
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    self.show_hud("No clipboard entry selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
@@ -134,26 +134,26 @@
                             }
                         })
                         .detach();
-                        self.show_hud("Pasted".to_string(), Some(1000), cx);
+                        self.show_hud("Pasted".to_string(), Some(HUD_FLASH_MS), cx);
                         self.hide_main_and_reset(cx);
                     }
                     Err(e) => {
                         logging::log("ERROR", &format!("Failed to paste entry: {}", e));
-                        self.show_hud(format!("Failed to paste: {}", e), Some(2500), cx);
+                        self.show_hud(format!("Failed to paste: {}", e), Some(HUD_2500_MS), cx);
                     }
                 }
                 return;
             }
             "clipboard_attach_to_ai" => {
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    self.show_hud("No clipboard entry selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
                 let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
                     self.show_hud(
                         "Clipboard entry content unavailable".to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                     return;
@@ -171,7 +171,7 @@
                     clipboard_history::ContentType::Text => {
                         if let Err(e) = ai::open_ai_window(cx) {
                             logging::log("ERROR", &format!("Failed to open AI window: {}", e));
-                            self.show_hud("Failed to open AI window".to_string(), Some(2000), cx);
+                            self.show_hud("Failed to open AI window".to_string(), Some(HUD_MEDIUM_MS), cx);
                             return;
                         }
                         ai::set_ai_input(cx, &content, false);
@@ -181,7 +181,7 @@
                         else {
                             self.show_hud(
                                 "Failed to decode clipboard image".to_string(),
-                                Some(2000),
+                                Some(HUD_MEDIUM_MS),
                                 cx,
                             );
                             return;
@@ -193,21 +193,21 @@
 
                         if let Err(e) = ai::open_ai_window(cx) {
                             logging::log("ERROR", &format!("Failed to open AI window: {}", e));
-                            self.show_hud("Failed to open AI window".to_string(), Some(2000), cx);
+                            self.show_hud("Failed to open AI window".to_string(), Some(HUD_MEDIUM_MS), cx);
                             return;
                         }
                         ai::set_ai_input_with_image(cx, "", &base64_data, false);
                     }
                 }
 
-                self.show_hud("Attached to AI".to_string(), Some(1500), cx);
+                self.show_hud("Attached to AI".to_string(), Some(HUD_SHORT_MS), cx);
                 self.hide_main_and_reset(cx);
                 return;
             }
             // Copy to clipboard without pasting (Cmd+Enter)
             "clipboard_copy" => {
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    self.show_hud("No clipboard entry selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
@@ -218,12 +218,12 @@
                 match clipboard_history::copy_entry_to_clipboard(&entry.id) {
                     Ok(()) => {
                         logging::log("CLIPBOARD", "Entry copied to clipboard");
-                        self.show_hud("Copied to clipboard".to_string(), Some(1500), cx);
+                        self.show_hud("Copied to clipboard".to_string(), Some(HUD_SHORT_MS), cx);
                         // Keep the window open - do NOT call hide_main_and_reset
                     }
                     Err(e) => {
                         logging::log("ERROR", &format!("Failed to copy entry: {}", e));
-                        self.show_hud(format!("Failed to copy: {}", e), Some(2500), cx);
+                        self.show_hud(format!("Failed to copy: {}", e), Some(HUD_2500_MS), cx);
                     }
                 }
                 return;
@@ -231,7 +231,7 @@
             // Paste and keep window open (Opt+Enter)
             "clipboard_paste_keep_open" => {
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    self.show_hud("No clipboard entry selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
@@ -249,25 +249,25 @@
                             }
                         })
                         .detach();
-                        self.show_hud("Pasted".to_string(), Some(1000), cx);
+                        self.show_hud("Pasted".to_string(), Some(HUD_FLASH_MS), cx);
                         // Keep the window open - do NOT call hide_main_and_reset
                     }
                     Err(e) => {
                         logging::log("ERROR", &format!("Failed to copy entry: {}", e));
-                        self.show_hud(format!("Failed to paste: {}", e), Some(2500), cx);
+                        self.show_hud(format!("Failed to paste: {}", e), Some(HUD_2500_MS), cx);
                     }
                 }
                 return;
             }
             "clipboard_quick_look" => {
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    self.show_hud("No clipboard entry selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
                 if let Err(e) = clipboard_history::quick_look_entry(&entry) {
                     logging::log("ERROR", &format!("Quick Look failed: {}", e));
-                    self.show_hud(format!("Quick Look failed: {}", e), Some(2500), cx);
+                    self.show_hud(format!("Quick Look failed: {}", e), Some(HUD_2500_MS), cx);
                 }
                 return;
             }

@@ -26,7 +26,7 @@
                         scripts::SearchResult::Window(_) => {
                             self.show_hud(
                                 "Window aliases not supported - windows are transient".to_string(),
-                                Some(2500),
+                                Some(HUD_2500_MS),
                                 cx,
                             );
                             return;
@@ -40,7 +40,7 @@
                 } else {
                     self.show_hud(
                         selection_required_message_for_action(&action_id).to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                 }
@@ -84,7 +84,7 @@
                                     "ALIAS",
                                     &format!("Removed alias for: {}", command_id),
                                 );
-                                self.show_hud("Alias removed".to_string(), Some(2000), cx);
+                                self.show_hud("Alias removed".to_string(), Some(HUD_MEDIUM_MS), cx);
                                 // Refresh scripts to update alias display and registry
                                 self.refresh_scripts(cx);
                             }
@@ -92,7 +92,7 @@
                                 logging::log("ERROR", &format!("Failed to remove alias: {}", e));
                                 self.show_hud(
                                     format!("Failed to remove alias: {}", e),
-                                    Some(3000),
+                                    Some(HUD_LONG_MS),
                                     cx,
                                 );
                             }
@@ -100,7 +100,7 @@
                     } else {
                         self.show_hud(
                             "Cannot remove alias for this item type".to_string(),
-                            Some(2000),
+                            Some(HUD_MEDIUM_MS),
                             cx,
                         );
                     }
@@ -108,7 +108,7 @@
                 } else {
                     self.show_hud(
                         selection_required_message_for_action(&action_id).to_string(),
-                        Some(2000),
+                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                 }
@@ -130,27 +130,27 @@
                         self.edit_script(&path);
                         self.hide_main_and_reset(cx);
                     } else {
-                        self.show_hud("Cannot edit this item type".to_string(), Some(2000), cx);
+                        self.show_hud("Cannot edit this item type".to_string(), Some(HUD_MEDIUM_MS), cx);
                     }
                 } else {
-                    self.show_hud("No script selected".to_string(), Some(2000), cx);
+                    self.show_hud("No script selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                 }
             }
             "remove_script" | "delete_script" => {
                 logging::log("UI", &format!("{} action", action_id));
 
                 let Some(result) = self.get_selected_result() else {
-                    self.show_hud("No script selected".to_string(), Some(2000), cx);
+                    self.show_hud("No script selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
                 let Some(target) = script_removal_target_from_result(&result) else {
-                    self.show_hud("Cannot remove this item type".to_string(), Some(2500), cx);
+                    self.show_hud("Cannot remove this item type".to_string(), Some(HUD_2500_MS), cx);
                     return;
                 };
 
                 if !target.path.exists() {
-                    self.show_hud(format!("{} no longer exists", target.name), Some(2500), cx);
+                    self.show_hud(format!("{} no longer exists", target.name), Some(HUD_2500_MS), cx);
                     self.refresh_scripts(cx);
                     return;
                 }
@@ -214,7 +214,7 @@
                                 );
                                 this.show_hud(
                                     "Failed to open confirmation dialog".to_string(),
-                                    Some(2500),
+                                    Some(HUD_2500_MS),
                                     cx,
                                 );
                             })
@@ -245,7 +245,7 @@
                             this.refresh_scripts(cx);
                             this.show_hud(
                                 format!("Moved '{}' to Trash", target.name),
-                                Some(2200),
+                                Some(HUD_2200_MS),
                                 cx,
                             );
                             this.hide_main_and_reset(cx);
@@ -262,7 +262,7 @@
                                     e
                                 ),
                             );
-                            this.show_hud(format!("Failed to remove: {}", e), Some(3200), cx);
+                            this.show_hud(format!("Failed to remove: {}", e), Some(HUD_3200_MS), cx);
                         }
                     })
                     .ok();
@@ -273,7 +273,7 @@
             "reload_scripts" => {
                 logging::log("UI", "Reload scripts action");
                 self.refresh_scripts(cx);
-                self.show_hud("Scripts reloaded".to_string(), Some(1500), cx);
+                self.show_hud("Scripts reloaded".to_string(), Some(HUD_SHORT_MS), cx);
             }
             "settings" => {
                 logging::log("UI", "Settings action - opening config.ts");
@@ -321,7 +321,7 @@
 
                 self.show_hud(
                     format!("Opening config.ts in {}", editor_for_hud),
-                    Some(1500),
+                    Some(HUD_SHORT_MS),
                     cx,
                 );
                 self.hide_main_and_reset(cx);

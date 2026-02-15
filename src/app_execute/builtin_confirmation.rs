@@ -79,7 +79,7 @@ impl ScriptListApp {
                                     "Confirmation test passed!",
                                     &self.theme,
                                 )
-                                .duration_ms(Some(3000)),
+                                .duration_ms(Some(HUD_LONG_MS)),
                             );
                             cx.notify();
                             return;
@@ -164,7 +164,7 @@ impl ScriptListApp {
                             if let Some(message) = self.system_action_feedback_message(action_type)
                             {
                                 cx.notify();
-                                self.show_hud(message, Some(2000), cx);
+                                self.show_hud(message, Some(HUD_MEDIUM_MS), cx);
                                 self.hide_main_and_reset(cx);
                             } else {
                                 self.close_and_reset_window(cx);
@@ -180,7 +180,7 @@ impl ScriptListApp {
                                     format!("System action failed: {}", e),
                                     &self.theme,
                                 )
-                                .duration_ms(Some(5000)),
+                                .duration_ms(Some(HUD_SLOW_MS)),
                             );
                             cx.notify();
                         }
@@ -195,7 +195,7 @@ impl ScriptListApp {
                             "System actions are only supported on macOS",
                             &self.theme,
                         )
-                        .duration_ms(Some(3000)),
+                        .duration_ms(Some(HUD_LONG_MS)),
                     );
                     cx.notify();
                 }

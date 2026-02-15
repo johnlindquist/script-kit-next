@@ -2,9 +2,15 @@
 // This file is included via include!() macro in main.rs
 // Contains: handle_action, trigger_action_by_name
 
+pub(crate) const HUD_FLASH_MS: u64 = 1000;
 pub(crate) const HUD_SHORT_MS: u64 = 1500;
 pub(crate) const HUD_MEDIUM_MS: u64 = 2000;
+pub(crate) const HUD_2200_MS: u64 = 2200;
+pub(crate) const HUD_2500_MS: u64 = 2500;
 pub(crate) const HUD_LONG_MS: u64 = 3000;
+pub(crate) const HUD_3200_MS: u64 = 3200;
+pub(crate) const HUD_CONFLICT_MS: u64 = 4000;
+pub(crate) const HUD_SLOW_MS: u64 = 5000;
 
 fn select_clipboard_entry_meta<'a>(
     entries: &'a [clipboard_history::ClipboardEntryMeta],

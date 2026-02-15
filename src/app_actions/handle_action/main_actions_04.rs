@@ -7,7 +7,7 @@
                 if filter_text.is_empty() {
                     self.show_hud(
                         "Type in search first, then use Delete Entries...".to_string(),
-                        Some(2500),
+                        Some(HUD_2500_MS),
                         cx,
                     );
                     return;
@@ -22,7 +22,7 @@
                     .collect();
 
                 if ids_to_delete.is_empty() {
-                    self.show_hud("No matching entries to delete".to_string(), Some(2000), cx);
+                    self.show_hud("No matching entries to delete".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 }
 
@@ -86,7 +86,7 @@
                                 );
                                 this.show_hud(
                                     "Failed to open confirmation dialog".to_string(),
-                                    Some(2500),
+                                    Some(HUD_2500_MS),
                                     cx,
                                 );
                             })
@@ -135,11 +135,11 @@
                         cx.notify();
 
                         if failed == 0 {
-                            this.show_hud(format!("Deleted {} entries", deleted), Some(2500), cx);
+                            this.show_hud(format!("Deleted {} entries", deleted), Some(HUD_2500_MS), cx);
                         } else {
                             this.show_hud(
                                 format!("Deleted {}, failed {}", deleted, failed),
-                                Some(3000),
+                                Some(HUD_LONG_MS),
                                 cx,
                             );
                         }
@@ -151,7 +151,7 @@
             }
             "clipboard_delete" => {
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_hud("No clipboard entry selected".to_string(), Some(2000), cx);
+                    self.show_hud("No clipboard entry selected".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 };
 
@@ -195,12 +195,12 @@
                             }
                         }
 
-                        self.show_hud("Entry deleted".to_string(), Some(1500), cx);
+                        self.show_hud("Entry deleted".to_string(), Some(HUD_SHORT_MS), cx);
                         cx.notify();
                     }
                     Err(e) => {
                         logging::log("ERROR", &format!("Failed to delete clipboard entry: {}", e));
-                        self.show_hud(format!("Delete failed: {}", e), Some(3000), cx);
+                        self.show_hud(format!("Delete failed: {}", e), Some(HUD_LONG_MS), cx);
                     }
                 }
                 return;
@@ -214,7 +214,7 @@
                     .count();
 
                 if unpinned_count == 0 {
-                    self.show_hud("No unpinned entries to delete".to_string(), Some(2000), cx);
+                    self.show_hud("No unpinned entries to delete".to_string(), Some(HUD_MEDIUM_MS), cx);
                     return;
                 }
 
@@ -277,7 +277,7 @@
                                 );
                                 this.show_hud(
                                     "Failed to open confirmation dialog".to_string(),
-                                    Some(2500),
+                                    Some(HUD_2500_MS),
                                     cx,
                                 );
                             })
@@ -324,7 +324,7 @@
                                         "Deleted {} entries (pinned preserved)",
                                         unpinned_count
                                     ),
-                                    Some(2500),
+                                    Some(HUD_2500_MS),
                                     cx,
                                 );
                                 cx.notify();
@@ -334,7 +334,7 @@
                                     "ERROR",
                                     &format!("Failed to clear unpinned history: {}", e),
                                 );
-                                this.show_hud(format!("Delete failed: {}", e), Some(3000), cx);
+                                this.show_hud(format!("Delete failed: {}", e), Some(HUD_LONG_MS), cx);
                             }
                         }
                     })

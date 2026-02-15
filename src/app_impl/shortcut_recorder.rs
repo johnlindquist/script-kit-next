@@ -409,7 +409,7 @@ export default {
                         );
                         self.show_hud(
                             format!("Shortcut set: {} (active now)", shortcut.display()),
-                            Some(2000),
+                            Some(HUD_MEDIUM_MS),
                             cx,
                         );
                     }
@@ -421,7 +421,7 @@ export default {
                         );
                         self.show_hud(
                             format!("Shortcut set: {} (restart to activate)", shortcut.display()),
-                            Some(3000),
+                            Some(HUD_LONG_MS),
                             cx,
                         );
                     }
@@ -429,7 +429,7 @@ export default {
             }
             Err(e) => {
                 logging::log("ERROR", &format!("Failed to save shortcut: {}", e));
-                self.show_hud(format!("Failed to save shortcut: {}", e), Some(4000), cx);
+                self.show_hud(format!("Failed to save shortcut: {}", e), Some(HUD_CONFLICT_MS), cx);
             }
         }
 

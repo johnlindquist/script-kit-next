@@ -64,7 +64,7 @@ impl ScriptListApp {
                                     )));
                                     self.show_hud(
                                         format!("Copied path: {}", path_info.path),
-                                        Some(2000),
+                                        Some(HUD_MEDIUM_MS),
                                         cx,
                                     );
                                 } else {
@@ -73,7 +73,7 @@ impl ScriptListApp {
                                         Some(SharedString::from("Failed to copy path"));
                                     self.show_hud(
                                         "Failed to copy path".to_string(),
-                                        Some(2500),
+                                        Some(HUD_2500_MS),
                                         cx,
                                     );
                                 }
@@ -82,7 +82,7 @@ impl ScriptListApp {
                         Err(e) => {
                             logging::log("ERROR", &format!("Failed to spawn pbcopy: {}", e));
                             self.last_output = Some(SharedString::from("Failed to copy path"));
-                            self.show_hud(format!("Failed to copy path: {}", e), Some(2500), cx);
+                            self.show_hud(format!("Failed to copy path: {}", e), Some(HUD_2500_MS), cx);
                         }
                     }
                 }
@@ -101,7 +101,7 @@ impl ScriptListApp {
                                     Some(SharedString::from(format!("Copied: {}", path_info.path)));
                                 self.show_hud(
                                     format!("Copied path: {}", path_info.path),
-                                    Some(2000),
+                                    Some(HUD_MEDIUM_MS),
                                     cx,
                                 );
                             }
@@ -110,7 +110,7 @@ impl ScriptListApp {
                                 self.last_output = Some(SharedString::from("Failed to copy path"));
                                 self.show_hud(
                                     format!("Failed to copy path: {}", e),
-                                    Some(2500),
+                                    Some(HUD_2500_MS),
                                     cx,
                                 );
                             }
@@ -121,7 +121,7 @@ impl ScriptListApp {
                                 Some(SharedString::from("Failed to access clipboard"));
                             self.show_hud(
                                 format!("Failed to access clipboard: {}", e),
-                                Some(2500),
+                                Some(HUD_2500_MS),
                                 cx,
                             );
                         }
@@ -153,7 +153,7 @@ impl ScriptListApp {
                                     )));
                                     self.show_hud(
                                         format!("Copied filename: {}", path_info.name),
-                                        Some(2000),
+                                        Some(HUD_MEDIUM_MS),
                                         cx,
                                     );
                                 }
@@ -163,7 +163,7 @@ impl ScriptListApp {
                             logging::log("ERROR", &format!("Failed to spawn pbcopy: {}", e));
                             self.show_hud(
                                 format!("Failed to copy filename: {}", e),
-                                Some(2500),
+                                Some(HUD_2500_MS),
                                 cx,
                             );
                         }
@@ -177,14 +177,14 @@ impl ScriptListApp {
                         Ok(_) => {
                             self.show_hud(
                                 format!("Copied filename: {}", path_info.name),
-                                Some(2000),
+                                Some(HUD_MEDIUM_MS),
                                 cx,
                             );
                         }
                         Err(e) => {
                             self.show_hud(
                                 format!("Failed to copy filename: {}", e),
-                                Some(2500),
+                                Some(HUD_2500_MS),
                                 cx,
                             );
                         }
@@ -206,7 +206,7 @@ impl ScriptListApp {
                             "UI",
                             &format!("Revealed in {}: {}", file_manager, path_info.path),
                         );
-                        self.show_hud(format!("Opened in {}", file_manager), Some(1500), cx);
+                        self.show_hud(format!("Opened in {}", file_manager), Some(HUD_SHORT_MS), cx);
                         // Hide main window only (not entire app) to keep HUD visible
                         script_kit_gpui::set_main_window_visible(false);
                         NEEDS_RESET.store(true, Ordering::SeqCst);
@@ -219,7 +219,7 @@ impl ScriptListApp {
                         );
                         self.show_hud(
                             format!("Failed to open in {}: {}", file_manager, e),
-                            Some(2500),
+                            Some(HUD_2500_MS),
                             cx,
                         );
                     }
@@ -237,7 +237,7 @@ impl ScriptListApp {
                 match std::process::Command::new(&editor).arg(&path_str).spawn() {
                     Ok(_) => {
                         logging::log("UI", &format!("Opened in editor: {}", path_str));
-                        self.show_hud(format!("Opened in {}", editor), Some(1500), cx);
+                        self.show_hud(format!("Opened in {}", editor), Some(HUD_SHORT_MS), cx);
                         // Hide main window only (not entire app) to keep HUD visible
                         script_kit_gpui::set_main_window_visible(false);
                         NEEDS_RESET.store(true, Ordering::SeqCst);
@@ -247,7 +247,7 @@ impl ScriptListApp {
                         logging::log("ERROR", &format!("Failed to open in editor: {}", e));
                         self.show_hud(
                             format!("Failed to open in {}: {}", editor, e),
-                            Some(2500),
+                            Some(HUD_2500_MS),
                             cx,
                         );
                     }
@@ -259,7 +259,7 @@ impl ScriptListApp {
                         logging::log("UI", &format!("Opened terminal at: {}", terminal_path));
                         self.show_hud(
                             format!("Opened Terminal at {}", terminal_path),
-                            Some(1500),
+                            Some(HUD_SHORT_MS),
                             cx,
                         );
                         // Hide main window only (not entire app) to keep HUD visible
@@ -269,7 +269,7 @@ impl ScriptListApp {
                     }
                     Err(e) => {
                         logging::log("ERROR", &format!("Failed to open terminal: {}", e));
-                        self.show_hud(format!("Failed to open terminal: {}", e), Some(2500), cx);
+                        self.show_hud(format!("Failed to open terminal: {}", e), Some(HUD_2500_MS), cx);
                     }
                 }
             }
@@ -335,7 +335,7 @@ impl ScriptListApp {
                                 );
                                 this.show_hud(
                                     "Failed to open confirmation dialog".to_string(),
-                                    Some(2500),
+                                    Some(HUD_2500_MS),
                                     cx,
                                 );
                             })
@@ -361,7 +361,7 @@ impl ScriptListApp {
                                 logging::log("UI", &format!("Moved to trash: {}", path_str));
                                 this.last_output =
                                     Some(SharedString::from(format!("Moved to Trash: {}", name)));
-                                this.show_hud(format!("Moved to Trash: {}", name), Some(2000), cx);
+                                this.show_hud(format!("Moved to Trash: {}", name), Some(HUD_MEDIUM_MS), cx);
                                 // Refresh the path prompt to show the file is gone
                                 path_prompt_entity.update(cx, |prompt, cx| {
                                     let current = prompt.current_path.clone();
@@ -374,7 +374,7 @@ impl ScriptListApp {
                                     Some(SharedString::from("Failed to move to Trash"));
                                 this.show_hud(
                                     format!("Failed to move to Trash: {}", e),
-                                    Some(2500),
+                                    Some(HUD_2500_MS),
                                     cx,
                                 );
                             }

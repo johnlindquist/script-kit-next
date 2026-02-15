@@ -73,7 +73,7 @@ impl ScriptListApp {
                         };
                         if !validation_errors.is_empty() {
                             let message = form_submit_validation_message(&validation_errors);
-                            this.show_hud(message, Some(3000), cx);
+                            this.show_hud(message, Some(HUD_LONG_MS), cx);
                             return;
                         }
 

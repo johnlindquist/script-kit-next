@@ -143,7 +143,7 @@ impl ScriptListApp {
 
         let Some(pixel_buffer) = pixel_buffer else {
             cx.notify();
-            self.show_hud("No camera frame available yet".to_string(), Some(2000), cx);
+            self.show_hud("No camera frame available yet".to_string(), Some(HUD_MEDIUM_MS), cx);
             return false;
         };
 
@@ -152,7 +152,7 @@ impl ScriptListApp {
             Err(e) => {
                 logging::log("ERROR", &format!("Failed to capture webcam photo: {}", e));
                 cx.notify();
-                self.show_hud(format!("Failed to capture photo: {}", e), Some(3000), cx);
+                self.show_hud(format!("Failed to capture photo: {}", e), Some(HUD_LONG_MS), cx);
                 return false;
             }
         };
@@ -166,7 +166,7 @@ impl ScriptListApp {
             cx.notify();
             self.show_hud(
                 format!("Failed to create photo directory: {}", e),
-                Some(3000),
+                Some(HUD_LONG_MS),
                 cx,
             );
             return false;
@@ -196,7 +196,7 @@ impl ScriptListApp {
             Err(e) => {
                 logging::log("ERROR", &format!("Failed to save webcam photo: {}", e));
                 cx.notify();
-                self.show_hud(format!("Failed to save photo: {}", e), Some(3000), cx);
+                self.show_hud(format!("Failed to save photo: {}", e), Some(HUD_LONG_MS), cx);
                 false
             }
         }
@@ -211,7 +211,7 @@ impl ScriptListApp {
         cx.notify();
         self.show_hud(
             "Webcam capture is only supported on macOS".to_string(),
-            Some(2500),
+            Some(HUD_2500_MS),
             cx,
         );
         false
@@ -249,7 +249,7 @@ impl ScriptListApp {
             "close" => {
                 logging::log("ACTIONS", "execute_webcam_action: close");
                 cx.notify();
-                self.show_hud("Webcam closed".to_string(), Some(1500), cx);
+                self.show_hud("Webcam closed".to_string(), Some(HUD_SHORT_MS), cx);
                 self.hide_main_and_reset(cx);
             }
             _ => {

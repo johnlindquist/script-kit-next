@@ -22,7 +22,7 @@ impl ScriptListApp {
                 });
             }
             if let Some(model_name) = selected_model_name {
-                self.show_hud(format!("Model: {}", model_name), Some(1500), cx);
+                self.show_hud(format!("Model: {}", model_name), Some(HUD_SHORT_MS), cx);
             }
             return;
         }
@@ -41,7 +41,7 @@ impl ScriptListApp {
                     entity.update(cx, |chat, cx| {
                         chat.handle_copy_last_response(cx);
                     });
-                    self.show_hud("Copied response".to_string(), Some(1500), cx);
+                    self.show_hud("Copied response".to_string(), Some(HUD_SHORT_MS), cx);
                 }
             }
             "clear_conversation" => {
@@ -106,7 +106,7 @@ impl ScriptListApp {
                                 );
                                 this.show_hud(
                                     "Failed to open confirmation dialog".to_string(),
-                                    Some(2500),
+                                    Some(HUD_2500_MS),
                                     cx,
                                 );
                             })

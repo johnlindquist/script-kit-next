@@ -137,7 +137,7 @@ impl ScriptListApp {
                 .map(|calculator| calculator.formatted.clone())
             {
                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(formatted_value.clone()));
-                self.show_hud(format!("Copied: {}", formatted_value), Some(2000), cx);
+                self.show_hud(format!("Copied: {}", formatted_value), Some(HUD_MEDIUM_MS), cx);
                 self.close_and_reset_window(cx);
                 return;
             }
@@ -337,7 +337,7 @@ impl ScriptListApp {
                     logging::log("FALLBACK", &format!("Copy: {} chars", text.len()));
                     let item = gpui::ClipboardItem::new_string(text);
                     cx.write_to_clipboard(item);
-                    crate::hud_manager::show_hud("Copied to clipboard".to_string(), Some(1500), cx);
+                    crate::hud_manager::show_hud("Copied to clipboard".to_string(), Some(HUD_SHORT_MS), cx);
                 }
                 FallbackResult::OpenUrl { url } => {
                     logging::log("FALLBACK", &format!("OpenUrl: {}", url));
@@ -352,14 +352,14 @@ impl ScriptListApp {
                             cx.write_to_clipboard(item);
                             crate::hud_manager::show_hud(
                                 format!("{} = {}", expression, result),
-                                Some(3000),
+                                Some(HUD_LONG_MS),
                                 cx,
                             );
                         }
                         Err(e) => {
                             logging::log("FALLBACK", &format!("Calculate error: {}", e));
                             let message = calculate_fallback_error_message(&expression);
-                            crate::hud_manager::show_hud(message, Some(3000), cx);
+                            crate::hud_manager::show_hud(message, Some(HUD_LONG_MS), cx);
                         }
                     }
                 }

@@ -406,12 +406,12 @@ impl ScriptListApp {
                             }
                         })
                         .detach();
-                        self.show_hud("Pasted".to_string(), Some(1000), cx);
+                        self.show_hud("Pasted".to_string(), Some(HUD_FLASH_MS), cx);
                         self.hide_main_and_reset(cx);
                     }
                     Err(e) => {
                         tracing::error!(message = ? &format!("Failed to paste entry: {}", e));
-                        self.show_hud(format!("Failed to paste: {}", e), Some(2500), cx);
+                        self.show_hud(format!("Failed to paste: {}", e), Some(HUD_2500_MS), cx);
                     }
                 }
                 cx.notify();
@@ -498,7 +498,7 @@ impl ScriptListApp {
                     }
                     Err(e) => {
                         tracing::error!(message = ? &format!("Failed to copy entry: {}", e));
-                        self.show_hud(format!("Failed to copy: {}", e), Some(2500), cx);
+                        self.show_hud(format!("Failed to copy: {}", e), Some(HUD_2500_MS), cx);
                     }
                 }
                 return;
@@ -524,12 +524,12 @@ impl ScriptListApp {
                             }
                         })
                         .detach();
-                        self.show_hud("Pasted".to_string(), Some(1000), cx);
+                        self.show_hud("Pasted".to_string(), Some(HUD_FLASH_MS), cx);
                         // Keep the window open - do NOT call hide_main_and_reset
                     }
                     Err(e) => {
                         tracing::error!(message = ? &format!("Failed to copy entry: {}", e));
-                        self.show_hud(format!("Failed to paste: {}", e), Some(2500), cx);
+                        self.show_hud(format!("Failed to paste: {}", e), Some(HUD_2500_MS), cx);
                     }
                 }
                 return;
@@ -542,7 +542,7 @@ impl ScriptListApp {
 
                 if let Err(e) = clipboard_history::quick_look_entry(&entry) {
                     tracing::error!(message = ? &format!("Quick Look failed: {}", e));
-                    self.show_hud(format!("Quick Look failed: {}", e), Some(2500), cx);
+                    self.show_hud(format!("Quick Look failed: {}", e), Some(HUD_2500_MS), cx);
                 }
                 return;
             }
@@ -615,7 +615,7 @@ impl ScriptListApp {
                                 this.hide_main_and_reset(cx);
                             }
                             Err(message) => {
-                                this.show_hud(message, Some(2500), cx);
+                                this.show_hud(message, Some(HUD_2500_MS), cx);
                             }
                         })
                         .ok();
@@ -801,7 +801,7 @@ impl ScriptListApp {
                             self.show_hud(
                                 "Window shortcuts not supported - windows are transient"
                                     .to_string(),
-                                Some(2500),
+                                Some(HUD_2500_MS),
                                 cx,
                             );
                         }
@@ -926,7 +926,7 @@ impl ScriptListApp {
                         scripts::SearchResult::Window(_) => {
                             self.show_hud(
                                 "Window aliases not supported - windows are transient".to_string(),
-                                Some(2500),
+                                Some(HUD_2500_MS),
                                 cx,
                             );
                             return;
@@ -1061,12 +1061,12 @@ impl ScriptListApp {
                 };
 
                 let Some(target) = script_removal_target_from_result(&result) else {
-                    self.show_hud("Cannot remove this item type".to_string(), Some(2500), cx);
+                    self.show_hud("Cannot remove this item type".to_string(), Some(HUD_2500_MS), cx);
                     return;
                 };
 
                 if !target.path.exists() {
-                    self.show_hud(format!("{} no longer exists", target.name), Some(2500), cx);
+                    self.show_hud(format!("{} no longer exists", target.name), Some(HUD_2500_MS), cx);
                     self.refresh_scripts(cx);
                     cx.notify();
                     return;
@@ -1130,7 +1130,7 @@ impl ScriptListApp {
                                 );
                                 this.show_hud(
                                     "Failed to open confirmation dialog".to_string(),
-                                    Some(2500),
+                                    Some(HUD_2500_MS),
                                     cx,
                                 );
                             })
@@ -1160,7 +1160,7 @@ impl ScriptListApp {
                             this.refresh_scripts(cx);
                             this.show_hud(
                                 format!("Moved '{}' to Trash", target.name),
-                                Some(2200),
+                                Some(HUD_2200_MS),
                                 cx,
                             );
                             this.hide_main_and_reset(cx);
@@ -1176,7 +1176,7 @@ impl ScriptListApp {
                                     e
                                 ),
                             );
-                            this.show_hud(format!("Failed to remove: {}", e), Some(3200), cx);
+                            this.show_hud(format!("Failed to remove: {}", e), Some(HUD_3200_MS), cx);
                         }
                     })
                     .ok();
@@ -1588,7 +1588,7 @@ impl ScriptListApp {
                 if filter_text.is_empty() {
                     self.show_hud(
                         "Type in search first, then use Delete Entries...".to_string(),
-                        Some(2500),
+                        Some(HUD_2500_MS),
                         cx,
                     );
                     return;
@@ -1666,7 +1666,7 @@ impl ScriptListApp {
                                 );
                                 this.show_hud(
                                     "Failed to open confirmation dialog".to_string(),
-                                    Some(2500),
+                                    Some(HUD_2500_MS),
                                     cx,
                                 );
                             })
@@ -1714,7 +1714,7 @@ impl ScriptListApp {
                         cx.notify();
 
                         if failed == 0 {
-                            this.show_hud(format!("Deleted {} entries", deleted), Some(2500), cx);
+                            this.show_hud(format!("Deleted {} entries", deleted), Some(HUD_2500_MS), cx);
                         } else {
                             this.show_hud(
                                 format!("Deleted {}, failed {}", deleted, failed),
@@ -1855,7 +1855,7 @@ impl ScriptListApp {
                                 );
                                 this.show_hud(
                                     "Failed to open confirmation dialog".to_string(),
-                                    Some(2500),
+                                    Some(HUD_2500_MS),
                                     cx,
                                 );
                             })
@@ -1901,7 +1901,7 @@ impl ScriptListApp {
                                         "Deleted {} entries (pinned preserved)",
                                         unpinned_count
                                     ),
-                                    Some(2500),
+                                    Some(HUD_2500_MS),
                                     cx,
                                 );
                                 cx.notify();
@@ -2147,7 +2147,7 @@ impl ScriptListApp {
                                         this.hide_main_and_reset(cx);
                                     }
                                     Err(message) => {
-                                        this.show_hud(message, Some(2500), cx);
+                                        this.show_hud(message, Some(HUD_2500_MS), cx);
                                     }
                                 })
                                 .ok();

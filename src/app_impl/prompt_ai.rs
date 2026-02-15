@@ -686,7 +686,7 @@ impl ScriptListApp {
         if !registry.has_any_provider() {
             self.toast_manager.push(
                 components::toast::Toast::error("No AI providers configured for script generation", &self.theme)
-                    .duration_ms(Some(5000)),
+                    .duration_ms(Some(HUD_SLOW_MS)),
             );
             cx.notify();
             return;
@@ -708,7 +708,7 @@ impl ScriptListApp {
                         "No AI models available for script generation",
                         &self.theme,
                     )
-                    .duration_ms(Some(5000)),
+                    .duration_ms(Some(HUD_SLOW_MS)),
                 );
                 cx.notify();
                 return;
@@ -729,7 +729,7 @@ impl ScriptListApp {
                 prompt_description.len()
             ),
         );
-        self.show_hud("Generating script with AI...".to_string(), Some(1500), cx);
+        self.show_hud("Generating script with AI...".to_string(), Some(HUD_SHORT_MS), cx);
 
         std::thread::spawn(move || {
             logging::log(

@@ -184,7 +184,7 @@
                         if let Some(entry) = selected_entry {
                             if let Err(e) = clipboard_history::quick_look_entry(&entry) {
                                 logging::log("ERROR", &format!("Quick Look failed: {}", e));
-                                this.show_hud(format!("Quick Look failed: {}", e), Some(2500), cx);
+                                this.show_hud(format!("Quick Look failed: {}", e), Some(HUD_2500_MS), cx);
                             }
                         }
                         return;

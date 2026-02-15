@@ -76,7 +76,7 @@ fn execute_fallback_action(
                     } else {
                         hud_manager::show_hud(
                             "Text copied - paste into Notes".to_string(),
-                            Some(2000),
+                            Some(HUD_MEDIUM_MS),
                             cx,
                         );
                     }
@@ -111,11 +111,11 @@ fn execute_fallback_action(
                             let item = gpui::ClipboardItem::new_string(result_str.clone());
                             cx.write_to_clipboard(item);
                             // Show HUD with result
-                            hud_manager::show_hud(format!("= {}", result_str), Some(2000), cx);
+                            hud_manager::show_hud(format!("= {}", result_str), Some(HUD_MEDIUM_MS), cx);
                         }
                         Err(e) => {
                             logging::log("FALLBACK", &format!("Calculation error: {}", e));
-                            hud_manager::show_hud(format!("Error: {}", e), Some(3000), cx);
+                            hud_manager::show_hud(format!("Error: {}", e), Some(HUD_LONG_MS), cx);
                         }
                     }
                 }
