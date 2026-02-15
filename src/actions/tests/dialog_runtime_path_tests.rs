@@ -55,6 +55,7 @@ fn build_dialog_entity(
 }
 
 #[test]
+#[cfg_attr(target_os = "macos", ignore = "requires main thread (run via GPUI)")]
 fn test_submit_selected_does_emit_action_id_when_item_is_selected() {
     let selected_ids = Arc::new(Mutex::new(Vec::new()));
     let selected_ids_for_test = Arc::clone(&selected_ids);
@@ -85,6 +86,7 @@ fn test_submit_selected_does_emit_action_id_when_item_is_selected() {
 }
 
 #[test]
+#[cfg_attr(target_os = "macos", ignore = "requires main thread (run via GPUI)")]
 fn test_submit_cancel_does_emit_cancel_sentinel_when_cancel_is_triggered() {
     let selected_ids = Arc::new(Mutex::new(Vec::new()));
     let selected_ids_for_test = Arc::clone(&selected_ids);
@@ -111,6 +113,7 @@ fn test_submit_cancel_does_emit_cancel_sentinel_when_cancel_is_triggered() {
 }
 
 #[test]
+#[cfg_attr(target_os = "macos", ignore = "requires main thread (run via GPUI)")]
 fn test_move_navigation_does_skip_headers_when_moving_up_and_down() {
     run_headless_dialog_test(|cx| {
         let dialog = build_dialog_entity(
@@ -154,6 +157,7 @@ fn test_move_navigation_does_skip_headers_when_moving_up_and_down() {
 }
 
 #[test]
+#[cfg_attr(target_os = "macos", ignore = "requires main thread (run via GPUI)")]
 fn test_search_handlers_do_update_results_when_typing_and_backspacing() {
     run_headless_dialog_test(|cx| {
         let dialog = build_dialog_entity(
