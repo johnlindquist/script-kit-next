@@ -303,6 +303,11 @@ impl ScriptListApp {
                                 };
                                 let hover_bg = rgba((list_hover << 8) | hover_alpha);
                                 let is_mouse_mode = file_input_mode == InputMode::Mouse;
+                                let show_thumbnail =
+                                    file_search::is_thumbnail_preview_supported(&file.path);
+                                let thumbnail_path = file.path.clone();
+                                let fallback_icon =
+                                    file_search::file_type_icon(file.file_type).to_string();
 
                                 // Click handler: select on click, open file on double-click
                                 let click_entity = click_entity_handle.clone();
@@ -372,12 +377,47 @@ impl ScriptListApp {
                                     .when(is_mouse_mode, |d| d.hover(move |s| s.bg(hover_bg)))
                                     .on_click(click_handler)
                                     .on_hover(hover_handler)
-                                    .child(
+                                    .child(if show_thumbnail {
+                                        let fallback_icon = fallback_icon.clone();
                                         div()
+                                            .w(px(32.))
+                                            .h(px(32.))
+                                            .rounded(px(6.))
+                                            .overflow_hidden()
+                                            .bg(rgba((ui_border << 8) | 0x24))
+                                            .flex_shrink_0()
+                                            .child(
+                                                gpui::img(std::path::PathBuf::from(
+                                                    thumbnail_path,
+                                                ))
+                                                .w_full()
+                                                .h_full()
+                                                .object_fit(gpui::ObjectFit::Cover)
+                                                .with_fallback(move || {
+                                                    div()
+                                                        .w_full()
+                                                        .h_full()
+                                                        .flex()
+                                                        .items_center()
+                                                        .justify_center()
+                                                        .text_sm()
+                                                        .text_color(rgb(text_muted))
+                                                        .child(fallback_icon.clone())
+                                                        .into_any_element()
+                                                }),
+                                            )
+                                    } else {
+                                        div()
+                                            .w(px(32.))
+                                            .h(px(32.))
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
                                             .text_lg()
                                             .text_color(rgb(text_muted))
-                                            .child(file_search::file_type_icon(file.file_type)),
-                                    )
+                                            .flex_shrink_0()
+                                            .child(file_search::file_type_icon(file.file_type))
+                                    })
                                     .child(
                                         div()
                                             .flex_1()
