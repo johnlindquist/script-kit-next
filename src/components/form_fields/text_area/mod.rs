@@ -7,6 +7,68 @@ use super::{FormFieldColors, FormFieldState};
 
 mod render;
 
+#[derive(Clone, Copy)]
+enum VerticalCursorDirection {
+    Up,
+    Down,
+}
+
+fn line_start_for_char_position(value: &str, char_position: usize) -> usize {
+    let mut line_start = 0;
+    for (idx, ch) in value.chars().enumerate() {
+        if idx >= char_position {
+            break;
+        }
+        if ch == '\n' {
+            line_start = idx + 1;
+        }
+    }
+    line_start
+}
+
+fn line_end_for_line_start(value: &str, line_start: usize) -> usize {
+    let text_len = char_len(value);
+    for (idx, ch) in value.chars().enumerate().skip(line_start) {
+        if ch == '\n' {
+            return idx;
+        }
+    }
+    text_len
+}
+
+fn move_cursor_vertical_preserve_column(
+    value: &str,
+    cursor_position: usize,
+    direction: VerticalCursorDirection,
+) -> usize {
+    let text_len = char_len(value);
+    let cursor_position = cursor_position.min(text_len);
+    let current_line_start = line_start_for_char_position(value, cursor_position);
+    let current_column = cursor_position.saturating_sub(current_line_start);
+
+    match direction {
+        VerticalCursorDirection::Up => {
+            if current_line_start == 0 {
+                return cursor_position;
+            }
+            let previous_line_end = current_line_start.saturating_sub(1);
+            let previous_line_start = line_start_for_char_position(value, previous_line_end);
+            let previous_line_len = previous_line_end.saturating_sub(previous_line_start);
+            previous_line_start + current_column.min(previous_line_len)
+        }
+        VerticalCursorDirection::Down => {
+            let current_line_end = line_end_for_line_start(value, current_line_start);
+            if current_line_end >= text_len {
+                return cursor_position;
+            }
+            let next_line_start = current_line_end + 1;
+            let next_line_end = line_end_for_line_start(value, next_line_start);
+            let next_line_len = next_line_end.saturating_sub(next_line_start);
+            next_line_start + current_column.min(next_line_len)
+        }
+    }
+}
+
 pub struct FormTextArea {
     /// Field definition from protocol
     field: Field,
@@ -200,6 +262,48 @@ impl FormTextArea {
         }
     }
 
+    fn move_up(&mut self, extend_selection: bool) {
+        if !extend_selection {
+            if let Some((start, _)) = self.selection_range() {
+                self.cursor_position = start;
+                self.clear_selection();
+                return;
+            }
+        } else if self.selection_anchor.is_none() {
+            self.selection_anchor = Some(self.cursor_position);
+        }
+
+        self.cursor_position = move_cursor_vertical_preserve_column(
+            &self.value,
+            self.cursor_position,
+            VerticalCursorDirection::Up,
+        );
+        if !extend_selection {
+            self.clear_selection();
+        }
+    }
+
+    fn move_down(&mut self, extend_selection: bool) {
+        if !extend_selection {
+            if let Some((_, end)) = self.selection_range() {
+                self.cursor_position = end;
+                self.clear_selection();
+                return;
+            }
+        } else if self.selection_anchor.is_none() {
+            self.selection_anchor = Some(self.cursor_position);
+        }
+
+        self.cursor_position = move_cursor_vertical_preserve_column(
+            &self.value,
+            self.cursor_position,
+            VerticalCursorDirection::Down,
+        );
+        if !extend_selection {
+            self.clear_selection();
+        }
+    }
+
     // ───── Editing ─────
 
     fn insert_text_at_cursor(&mut self, text: &str) {
@@ -282,6 +386,16 @@ impl FormTextArea {
             cx.notify();
             return;
         }
+        if !cmd && (key.eq_ignore_ascii_case("up") || key.eq_ignore_ascii_case("arrowup")) {
+            self.move_up(shift);
+            cx.notify();
+            return;
+        }
+        if !cmd && (key.eq_ignore_ascii_case("down") || key.eq_ignore_ascii_case("arrowdown")) {
+            self.move_down(shift);
+            cx.notify();
+            return;
+        }
         if !cmd && key.eq_ignore_ascii_case("home") {
             self.move_home(shift);
             cx.notify();
@@ -352,6 +466,16 @@ impl FormTextArea {
             cx.notify();
             return;
         }
+        if !cmd && (key.eq_ignore_ascii_case("up") || key.eq_ignore_ascii_case("arrowup")) {
+            self.move_up(shift);
+            cx.notify();
+            return;
+        }
+        if !cmd && (key.eq_ignore_ascii_case("down") || key.eq_ignore_ascii_case("arrowdown")) {
+            self.move_down(shift);
+            cx.notify();
+            return;
+        }
         if !cmd && key.eq_ignore_ascii_case("home") {
             self.move_home(shift);
             cx.notify();
@@ -390,5 +514,38 @@ impl FormTextArea {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{move_cursor_vertical_preserve_column, VerticalCursorDirection};
+
+    #[test]
+    fn test_move_cursor_vertical_preserve_column_clamps_column_when_target_line_is_shorter() {
+        let text = "first line\ntiny\nlonger third";
+        let moved = move_cursor_vertical_preserve_column(text, 8, VerticalCursorDirection::Down);
+        assert_eq!(moved, 15);
+    }
+
+    #[test]
+    fn test_move_cursor_vertical_preserve_column_moves_to_previous_line_when_up_requested() {
+        let text = "first line\ntiny\nlonger third";
+        let moved = move_cursor_vertical_preserve_column(text, 20, VerticalCursorDirection::Up);
+        assert_eq!(moved, 15);
+    }
+
+    #[test]
+    fn test_move_cursor_vertical_preserve_column_keeps_cursor_when_moving_up_on_first_line() {
+        let text = "abc\ndef";
+        let moved = move_cursor_vertical_preserve_column(text, 2, VerticalCursorDirection::Up);
+        assert_eq!(moved, 2);
+    }
+
+    #[test]
+    fn test_move_cursor_vertical_preserve_column_keeps_cursor_when_moving_down_on_last_line() {
+        let text = "abc\ndef";
+        let moved = move_cursor_vertical_preserve_column(text, 6, VerticalCursorDirection::Down);
+        assert_eq!(moved, 6);
     }
 }
