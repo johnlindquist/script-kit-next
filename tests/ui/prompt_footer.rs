@@ -41,8 +41,8 @@ fn test_prompt_footer_surface_rgba_preserves_legacy_light_and_dark_behavior() {
 
     // Dark mode: background token at ~12% opacity.
     assert_eq!(footer_surface_rgba(dark), 0x1234561f);
-    // Light mode: always neutral warm gray.
-    assert_eq!(footer_surface_rgba(light), 0xf0eeefff);
+    // Light mode: uses the theme-derived surface token as opaque background.
+    assert_eq!(footer_surface_rgba(light), 0x1e1e1eff);
 }
 
 #[test]
