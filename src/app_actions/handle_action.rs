@@ -1252,25 +1252,42 @@ impl ScriptListApp {
                 self.file_search_actions_path = None;
             }
             // File search specific actions
-            "open_file" | "open_directory" | "quick_look" | "open_with" | "show_info" => {
+            "open_file"
+            | "open_directory"
+            | "quick_look"
+            | "open_with"
+            | "show_info"
+            | "attach_to_ai" => {
                 if let Some(path) = self.file_search_actions_path.clone() {
                     tracing::info!(category = "UI", message = ? &format!("File action '{}': {}", action_id, path));
 
-                    let result = match action_id {
+                    let result: Result<(), String> = match action_id {
                         "open_file" | "open_directory" => crate::file_search::open_file(&path),
                         "quick_look" => crate::file_search::quick_look(&path),
                         "open_with" => crate::file_search::open_with(&path),
                         "show_info" => crate::file_search::show_info(&path),
+                        "attach_to_ai" => {
+                            ai::open_ai_window(cx)
+                                .map_err(|error| error.to_string())
+                                .map(|_| {
+                                    ai::add_ai_attachment(cx, &path);
+                                })
+                        }
                         _ => Ok(()),
                     };
 
                     match result {
                         Ok(()) => {
-                            if let Some(message) = file_search_action_success_hud(action_id) {
+                            if action_id == "attach_to_ai" {
+                                self.show_hud("Attached to AI".to_string(), Some(HUD_SHORT_MS), cx);
+                            } else if let Some(message) = file_search_action_success_hud(action_id) {
                                 self.show_hud(message.to_string(), Some(HUD_SHORT_MS), cx);
                             }
                             self.file_search_actions_path = None;
-                            if action_id == "open_file" || action_id == "open_directory" {
+                            if action_id == "open_file"
+                                || action_id == "open_directory"
+                                || action_id == "attach_to_ai"
+                            {
                                 self.hide_main_and_reset(cx);
                             }
                         }
@@ -1281,8 +1298,12 @@ impl ScriptListApp {
                                     action_id, path, e
                                 ),
                             );
-                            let prefix = file_search_action_error_hud_prefix(action_id)
-                                .unwrap_or("Action failed");
+                            let prefix = if action_id == "attach_to_ai" {
+                                "Attach failed"
+                            } else {
+                                file_search_action_error_hud_prefix(action_id)
+                                    .unwrap_or("Action failed")
+                            };
                             self.show_hud(format!("{}: {}", prefix, e), Some(HUD_LONG_MS), cx);
                             self.file_search_actions_path = None;
                         }

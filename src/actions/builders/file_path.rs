@@ -70,6 +70,19 @@ pub fn get_file_context_actions(file_info: &FileInfo) -> Vec<Action> {
         .with_icon(IconName::FolderOpen),
     );
 
+    if !file_info.is_dir {
+        actions.push(
+            Action::new(
+                "file:attach_to_ai",
+                "Attach to AI Chat",
+                Some("Attaches this file to the AI chat window".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌃⌘A")
+            .with_icon(IconName::MessageCircle),
+        );
+    }
+
     #[cfg(target_os = "macos")]
     if !file_info.is_dir {
         actions.push(
@@ -328,6 +341,35 @@ mod namespace_tests {
         let actions = get_path_context_actions(&path_info);
 
         assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn test_get_file_context_actions_includes_attach_to_ai_for_files() {
+        let actions = get_file_context_actions(&sample_file_info(false));
+        let attach = actions
+            .iter()
+            .find(|action| action.id == "file:attach_to_ai")
+            .expect("missing file attach_to_ai action");
+
+        assert_eq!(attach.title, "Attach to AI Chat");
+        assert_eq!(
+            attach.description.as_deref(),
+            Some("Attaches this file to the AI chat window")
+        );
+        assert_eq!(attach.shortcut.as_deref(), Some("⌃⌘A"));
+        assert_eq!(attach.icon, Some(IconName::MessageCircle));
+    }
+
+    #[test]
+    fn test_get_file_context_actions_excludes_attach_to_ai_for_directories() {
+        let actions = get_file_context_actions(&sample_file_info(true));
+
+        assert!(
+            actions
+                .iter()
+                .all(|action| action.id != "file:attach_to_ai"),
+            "directories should not include attach_to_ai action"
+        );
     }
 
     #[test]

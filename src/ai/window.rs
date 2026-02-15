@@ -81,6 +81,7 @@ use platform::*;
 mod tests;
 
 pub use window_api::{
-    close_ai_window, is_ai_window, is_ai_window_open, open_ai_window, open_ai_window_with_chat,
-    set_ai_input, set_ai_input_with_image, set_ai_search, show_ai_command_bar, simulate_ai_key,
+    add_ai_attachment, close_ai_window, is_ai_window, is_ai_window_open, open_ai_window,
+    open_ai_window_with_chat, set_ai_input, set_ai_input_with_image, set_ai_search,
+    show_ai_command_bar, simulate_ai_key,
 };

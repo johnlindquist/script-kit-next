@@ -378,6 +378,10 @@ pub(super) enum AiCommand {
         image_base64: String,
         submit: bool,
     },
+    /// Add a file attachment to the pending attachment list
+    AddAttachment {
+        path: String,
+    },
     /// Initialize the chat with pending messages from open_ai_window_with_chat
     InitializeWithPendingChat,
     /// Show the command bar overlay (Cmd+K menu)
