@@ -39,6 +39,13 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
     let opacity = sk_theme.get_opacity();
     let vibrancy_enabled = sk_theme.is_vibrancy_enabled();
 
+    debug!(
+        is_dark,
+        vibrancy_enabled,
+        opacity_main = opacity.main,
+        "map_scriptkit_to_gpui_theme entry"
+    );
+
     // Get appropriate base theme based on appearance mode
     let mut theme_color = if is_dark {
         *ThemeColor::dark()
@@ -88,6 +95,15 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
                 .map(|v| v.max(0.85))
                 .unwrap_or(0.85)
         };
+
+        debug!(
+            is_dark,
+            vibrancy_enabled,
+            opacity_main = opacity.main,
+            vibrancy_background_config = ?opacity.vibrancy_background,
+            resolved_background_alpha = bg_alpha,
+            "map_scriptkit_to_gpui_theme vibrancy alpha resolved"
+        );
 
         crate::logging::log(
             "THEME",
@@ -206,9 +222,23 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
     theme_color.tab_bar = hex_to_hsla(colors.background.title_bar);
 
     debug!(
-        background = format!("#{:06x}", colors.background.main),
-        accent = format!("#{:06x}", colors.accent.selected),
-        "Script Kit theme mapped to gpui-component"
+        is_dark,
+        vibrancy_enabled,
+        opacity_main = opacity.main,
+        mapped_background_h = theme_color.background.h,
+        mapped_background_s = theme_color.background.s,
+        mapped_background_l = theme_color.background.l,
+        mapped_background_a = theme_color.background.a,
+        mapped_foreground_h = theme_color.foreground.h,
+        mapped_foreground_s = theme_color.foreground.s,
+        mapped_foreground_l = theme_color.foreground.l,
+        mapped_foreground_a = theme_color.foreground.a,
+        mapped_list_a = theme_color.list.a,
+        mapped_sidebar_a = theme_color.sidebar.a,
+        mapped_input_a = theme_color.input.a,
+        mapped_secondary_a = theme_color.secondary.a,
+        mapped_selection_a = theme_color.selection.a,
+        "map_scriptkit_to_gpui_theme exit"
     );
 
     theme_color
