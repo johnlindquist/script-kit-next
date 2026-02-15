@@ -384,37 +384,6 @@ pub fn delete_secret(key: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Check if a secret exists in the store
-///
-/// # Example
-/// ```ignore
-/// if has_secret("OPENAI_API_KEY") {
-///     // Key exists
-/// }
-/// ```
-#[allow(dead_code)]
-pub fn has_secret(key: &str) -> bool {
-    let secrets = get_cached_secrets();
-    secrets.contains_key(key)
-}
-
-/// List all secret keys (not values)
-///
-/// Returns the keys of all stored secrets. Useful for UI to show which
-/// secrets are configured.
-///
-/// # Example
-/// ```ignore
-/// for key in list_secret_keys() {
-///     println!("Have secret: {}", key);
-/// }
-/// ```
-#[allow(dead_code)]
-pub fn list_secret_keys() -> Vec<String> {
-    let secrets = get_cached_secrets();
-    secrets.keys().cloned().collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
