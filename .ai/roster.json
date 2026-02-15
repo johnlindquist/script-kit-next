@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-02-15T18:43:59.656Z",
+  "updatedAt": "2026-02-15T18:49:49.744Z",
   "agents": {
     "codex-actions-consistency": {
       "id": "codex-actions-consistency",
@@ -7048,6 +7048,22 @@
       "lastSeenAt": "2026-02-15T18:43:59.656Z",
       "host": "johns.macbook.pro.lan",
       "startSha": "c85d21a3cb5e27f85fbfad95ac7155b80c72f47e"
+    },
+    "codex-notes-find": {
+      "id": "codex-notes-find",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "gpt-5.3-codex",
+      "task": "Fix cmd+f (Find) in the Notes view. Currently pressing cmd+f in notes does nothing. The notes view is a built-in feature rendered via the BuiltInFeature enum / AppView pattern. Investigate how keyboard shortcuts are handled in the notes prompt (likely in src/prompts/notes*.rs or similar), check if cmd+f is intercepted or unhandled, and wire it up to show a find/search bar or text search within the notes editor. Follow existing keyboard handling patterns (match both 'f' variants). The notes component likely uses a GPUI editor - make sure the editor's built-in find action is properly bound to cmd+f. Check if there's an existing editor find/search action in GPUI that needs to be dispatched. Run: cargo check && cargo clippy --all-targets -- -D warnings && cargo test. Commit with a descriptive message.",
+      "scope": "src/prompts/notes*,src/prompts/mod.rs,src/render_prompts/*,src/app_impl*,src/built_in*",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-02-15T18:45:48.705Z",
+      "lastSeenAt": "2026-02-15T18:49:49.744Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "56fd50f15ec9a7f76c0707fd411704974bc81477",
+      "notes": "[policy] missing agent_report json"
     }
   }
 }

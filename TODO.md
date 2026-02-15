@@ -1,4 +1,3 @@
-- Theme selector needs to fix visual layout spacing in the items and such
 - cmd+f in the notes doesn't do anything and seems broken
 - up/down arrow keys don't move up/down lines
 - it seems like the first item in the main menu (Clipboard History) sometimes auto-runs when I open the main menu
