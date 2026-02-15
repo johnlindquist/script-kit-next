@@ -42,6 +42,9 @@ pub struct ProcessManager {
     active_pids_path: PathBuf,
 }
 impl ProcessManager {
+    const DIR_PERMISSIONS: u32 = 0o700;
+    const FILE_PERMISSIONS: u32 = 0o600;
+
     /// Create a new ProcessManager with default paths
     pub fn new() -> Self {
         let kit_dir = dirs::home_dir()
@@ -80,7 +83,7 @@ impl ProcessManager {
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
-                let perms = std::fs::Permissions::from_mode(0o700);
+                let perms = std::fs::Permissions::from_mode(Self::DIR_PERMISSIONS);
                 fs::set_permissions(parent, perms)?;
             }
         }
@@ -89,7 +92,7 @@ impl ProcessManager {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let perms = std::fs::Permissions::from_mode(0o600);
+            let perms = std::fs::Permissions::from_mode(Self::FILE_PERMISSIONS);
             file.set_permissions(perms)?;
         }
         write!(file, "{}", pid)?;
@@ -404,7 +407,7 @@ impl ProcessManager {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let perms = std::fs::Permissions::from_mode(0o600);
+            let perms = std::fs::Permissions::from_mode(Self::FILE_PERMISSIONS);
             file.set_permissions(perms)?;
         }
 
