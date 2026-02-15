@@ -211,12 +211,12 @@ pub fn render_terminal_log_panel(logs: &[String], colors: TerminalColors) -> imp
                         || log_entry.contains("ERROR")
                         || log_entry.contains("error")
                     {
-                        ("█", rgb(0xff4444)) // Red for errors
+                        ("█", rgb(colors.error))
                     } else if log_entry.contains("[WARN]")
                         || log_entry.contains("WARNING")
                         || log_entry.contains("warn")
                     {
-                        ("▒", rgb(0xffff00)) // Yellow for warnings
+                        ("▒", rgb(colors.warning))
                     } else {
                         ("░", rgb(colors.phosphor)) // Green for info
                     };
