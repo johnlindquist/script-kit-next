@@ -106,21 +106,23 @@ fn test_spawn_and_kill_process() {
     // Spawn a simple process that sleeps
     let result = spawn_script("sleep", &["10"], "[test:sleep]");
 
-    if let Ok(mut session) = result {
-        let pid = session.pid();
+    if let Ok(session) = result {
+        let mut split = session.split();
+        let pid = split.process_handle.pid;
         assert!(pid > 0);
 
         // Process should be running
-        assert!(session.is_running());
+        assert!(matches!(split.child.try_wait(), Ok(None)));
 
         // Kill it
-        session.kill().expect("kill should succeed");
+        split.process_handle.kill();
+        let _ = split.child.kill();
 
         // Wait a moment for the process to die
         std::thread::sleep(std::time::Duration::from_millis(100));
 
         // Process should no longer be running
-        assert!(!session.is_running());
+        assert!(!matches!(split.child.try_wait(), Ok(None)));
     }
     // If spawn failed (sleep not available), that's OK for this test
 }
@@ -132,7 +134,7 @@ fn test_drop_kills_process() {
     let result = spawn_script("sleep", &["30"], "[test:sleep]");
 
     if let Ok(session) = result {
-        let pid = session.pid();
+        let pid = session.process_handle.pid;
 
         // Drop the session - should kill the process
         drop(session);
@@ -177,7 +179,7 @@ fn test_split_session_kill() {
     let result = spawn_script("sleep", &["10"], "[test:sleep]");
 
     if let Ok(session) = result {
-        let pid = session.pid();
+        let pid = session.process_handle.pid;
         let mut split = session.split();
 
         assert_eq!(split.pid(), pid);
@@ -202,7 +204,7 @@ fn test_process_group_alive_check() {
     let result = spawn_script("sleep", &["10"], "[test:process_group]");
 
     if let Ok(session) = result {
-        let pid = session.pid();
+        let pid = session.process_handle.pid;
 
         // Process group should be alive
         // Note: ProcessHandle::is_alive() now checks the group, not just the leader
@@ -242,4 +244,3 @@ fn test_unix_process_group_functions() {
         "Non-existent process should not be alive"
     );
 }
-

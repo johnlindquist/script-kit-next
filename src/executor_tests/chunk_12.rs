@@ -29,7 +29,7 @@ fn test_sigterm_graceful_termination() {
     let result = spawn_script("sleep", &["60"], "[test:sigterm_graceful]");
 
     if let Ok(session) = result {
-        let pid = session.pid();
+        let pid = session.process_handle.pid;
         let start = Instant::now();
 
         // Process should be running
@@ -101,7 +101,7 @@ fn test_kill_idempotent() {
     let result = spawn_script("sleep", &["10"], "[test:kill_idempotent]");
 
     if let Ok(session) = result {
-        let pid = session.pid();
+        let pid = session.process_handle.pid;
         let mut split = session.split();
         let start = Instant::now();
 
@@ -278,7 +278,7 @@ fn test_split_session_pid() {
     let result = spawn_script("sleep", &["5"], "[test:split_session_pid]");
 
     if let Ok(session) = result {
-        let original_pid = session.pid();
+        let original_pid = session.process_handle.pid;
         let split = session.split();
 
         assert_eq!(
