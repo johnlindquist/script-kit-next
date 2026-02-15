@@ -13,14 +13,12 @@ use std::path::PathBuf;
 
 use crate::designs::DesignVariant;
 use crate::storybook::{all_categories, all_stories, StoryEntry};
-use crate::theme::Theme;
 
 /// Main browser view for the storybook
 pub struct StoryBrowser {
     stories: Vec<&'static StoryEntry>,
     selected_index: usize,
     filter: String,
-    current_theme: Theme,
     theme_name: String,
     design_variant: DesignVariant,
     focus_handle: FocusHandle,
@@ -41,7 +39,6 @@ impl StoryBrowser {
             stories,
             selected_index: 0,
             filter: String::new(),
-            current_theme: Theme::default(),
             theme_name: "Default".to_string(),
             design_variant: DesignVariant::Default,
             focus_handle: cx.focus_handle(),
@@ -50,7 +47,6 @@ impl StoryBrowser {
     }
 
     pub fn load_theme(&mut self, theme_name: &str) {
-        // TODO: Implement theme loading from theme registry
         // For now, just update the name
         self.theme_name = theme_name.to_string();
     }
@@ -233,12 +229,15 @@ impl StoryBrowser {
                             ),
                     )
                     .child(
-                        div().text_xs().text_color(rgb(theme.colors.text.dimmed)).child(
-                            self.stories
-                                .get(self.selected_index)
-                                .map(|s| format!("({})", s.story.category()))
-                                .unwrap_or_default(),
-                        ),
+                        div()
+                            .text_xs()
+                            .text_color(rgb(theme.colors.text.dimmed))
+                            .child(
+                                self.stories
+                                    .get(self.selected_index)
+                                    .map(|s| format!("({})", s.story.category()))
+                                    .unwrap_or_default(),
+                            ),
                     ),
             )
             .child(
@@ -445,7 +444,6 @@ impl StoryBrowser {
 impl Render for StoryBrowser {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = crate::theme::get_cached_theme();
-        let _current_theme = &self.current_theme;
         let filtered = self.filtered_stories();
 
         // Render the story preview - stories are stateless so no App context needed
