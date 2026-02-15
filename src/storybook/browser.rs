@@ -414,28 +414,32 @@ impl StoryBrowser {
                                     height,
                                     image::ExtendedColorType::Rgba8,
                                 ) {
-                                    eprintln!("[SCREENSHOT ERROR] PNG encode failed: {}", e);
+                                    tracing::error!(error = %e, "Screenshot PNG encode failed");
                                     return;
                                 }
 
                                 // Save to file
                                 if let Err(e) = fs::write(&filepath, &png_data) {
-                                    eprintln!("[SCREENSHOT ERROR] Save failed: {}", e);
+                                    tracing::error!(
+                                        error = %e,
+                                        path = %filepath.display(),
+                                        "Screenshot save failed"
+                                    );
                                 } else {
-                                    eprintln!("[SCREENSHOT] Saved: {}", filepath.display());
+                                    tracing::info!(path = %filepath.display(), "Screenshot saved");
                                 }
                                 return;
                             }
                             Err(e) => {
-                                eprintln!("[SCREENSHOT ERROR] Capture failed: {}", e);
+                                tracing::error!(error = %e, "Screenshot capture failed");
                             }
                         }
                     }
                 }
-                eprintln!("[SCREENSHOT ERROR] Storybook window not found");
+                tracing::error!("Storybook window not found for screenshot");
             }
             Err(e) => {
-                eprintln!("[SCREENSHOT ERROR] Failed to enumerate windows: {}", e);
+                tracing::error!(error = %e, "Failed to enumerate windows for screenshot");
             }
         }
     }
