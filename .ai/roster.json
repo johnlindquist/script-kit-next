@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-02-16T01:10:29.814Z",
+  "updatedAt": "2026-02-16T01:15:33.310Z",
   "agents": {
     "codex-actions-consistency": {
       "id": "codex-actions-consistency",
@@ -7351,6 +7351,22 @@
       "lastSeenAt": "2026-02-16T01:10:29.814Z",
       "host": "johns.macbook.pro.lan",
       "startSha": "e4d553a27bde55c60fb7cd48ae1d5b15533a6762",
+      "notes": "[policy] missing agent_report json"
+    },
+    "codex-webcam-footer": {
+      "id": "codex-webcam-footer",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "gpt-5.3-codex",
+      "task": "Clean up the webcam footer UI. Remove extra/unnecessary UI elements from the webcam prompt footer area while keeping essential webcam controls (like capture button, camera switching, etc.). Look at the webcam/camera prompt implementation in src/prompts/ and src/render_prompts/ directories. The webcam footer likely has extraneous elements that should be stripped out for a cleaner look. Use theme.colors.* for any colors (never hardcode rgb values). After mutations call cx.notify(). Run 'cargo check && cargo clippy --all-targets -- -D warnings && cargo test' to verify. Commit with a descriptive message.",
+      "scope": "src/prompts/webcam*.rs,src/prompts/camera*.rs,src/render_prompts/**/*.rs,src/prompts/mod.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-02-16T01:12:41.729Z",
+      "lastSeenAt": "2026-02-16T01:15:33.310Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "2ef969acc9155f796ac44c707653013f134837ee",
       "notes": "[policy] missing agent_report json"
     }
   }
