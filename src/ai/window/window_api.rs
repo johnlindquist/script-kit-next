@@ -1,4 +1,5 @@
 use super::*;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 fn ensure_theme_initialized(cx: &mut App) {
     // Use the shared theme sync function from src/theme/gpui_integration.rs
@@ -8,6 +9,7 @@ fn ensure_theme_initialized(cx: &mut App) {
 
 const AI_WINDOW_DEFAULT_WIDTH: f32 = 900.0;
 const AI_WINDOW_DEFAULT_HEIGHT: f32 = 700.0;
+static OPENING: AtomicBool = AtomicBool::new(false);
 
 fn centered_ai_window_bounds_on_cursor_display() -> gpui::Bounds<gpui::Pixels> {
     crate::platform::calculate_centered_bounds_on_mouse_display(size(
@@ -56,6 +58,10 @@ fn resolve_new_ai_window_bounds(
 pub fn open_ai_window(cx: &mut App) -> Result<()> {
     use crate::logging;
 
+    if OPENING.swap(true, Ordering::SeqCst) {
+        return Ok(());
+    }
+
     logging::log("AI", "open_ai_window called - checking state");
     ai_window_reference_legacy_per_display_apis();
 
@@ -98,6 +104,7 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
                 cx.notify();
             });
 
+            OPENING.store(false, Ordering::SeqCst);
             return Ok(());
         }
 
@@ -168,14 +175,20 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
         std::sync::Arc::new(std::sync::Mutex::new(None));
     let ai_app_holder_clone = ai_app_holder.clone();
 
-    let handle = cx.open_window(window_options, |window, cx| {
+    let handle = match cx.open_window(window_options, |window, cx| {
         let view = cx.new(|cx| AiApp::new(window, cx));
         // Store the AiApp entity temporarily for immediate focus after window creation
         *ai_app_holder_clone
             .lock()
             .unwrap_or_else(|e| e.into_inner()) = Some(view.clone());
         cx.new(|cx| Root::new(view, window, cx))
-    })?;
+    }) {
+        Ok(handle) => handle,
+        Err(err) => {
+            OPENING.store(false, Ordering::SeqCst);
+            return Err(err);
+        }
+    };
 
     // Activate the app and window so user can immediately start typing
     cx.activate(true);
@@ -200,6 +213,7 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
             *g = Some(handle);
         }
     }
+    OPENING.store(false, Ordering::SeqCst);
 
     // Switch to regular app mode so AI window appears in Cmd+Tab
     // This is unique to the AI window - other windows (main, notes) stay in accessory mode
@@ -602,5 +616,22 @@ mod tests {
         let actual = resolve_new_ai_window_bounds(None, &displays, fallback);
 
         assert_bounds_eq(actual, fallback);
+    }
+
+    #[test]
+    fn test_opening_guard_blocks_concurrent_open_until_reset() {
+        OPENING.store(false, Ordering::SeqCst);
+
+        let first_attempt = OPENING.swap(true, Ordering::SeqCst);
+        let second_attempt = OPENING.swap(true, Ordering::SeqCst);
+
+        assert!(!first_attempt);
+        assert!(second_attempt);
+
+        OPENING.store(false, Ordering::SeqCst);
+        let attempt_after_reset = OPENING.swap(true, Ordering::SeqCst);
+        assert!(!attempt_after_reset);
+
+        OPENING.store(false, Ordering::SeqCst);
     }
 }
