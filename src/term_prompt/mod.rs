@@ -777,7 +777,6 @@ impl TermPrompt {
                     .w(px(batch_width))
                     .h(px(cell_height))
                     .flex_shrink_0()
-                    .font_family(Self::terminal_output_font_family())
                     .when_some(bg_color, |d, bg| d.bg(bg)) // Only apply bg when needed
                     .text_color(fg_color)
                     .child(SharedString::from(batch_text));
@@ -789,6 +788,9 @@ impl TermPrompt {
                 if attrs.contains(CellAttributes::UNDERLINE) {
                     span = span.text_decoration_1();
                 }
+                // Keep monospace explicit after attribute transforms; some style setters can
+                // reset text style fields and otherwise fall back to the default sans-serif font.
+                span = span.font_family(Self::terminal_output_font_family());
 
                 row = row.child(span);
                 batch_start = batch_end;
@@ -1854,6 +1856,23 @@ mod tests {
     #[test]
     fn test_terminal_output_font_family_uses_font_mono() {
         assert_eq!(TermPrompt::terminal_output_font_family(), FONT_MONO);
+    }
+
+    #[test]
+    fn test_render_content_reapplies_monospace_font_after_terminal_attrs() {
+        const TERM_PROMPT_SOURCE: &str = include_str!("mod.rs");
+
+        let bold_style_idx = TERM_PROMPT_SOURCE
+            .find("span = span.font_weight(gpui::FontWeight::BOLD);")
+            .expect("bold style application should exist for terminal attributes");
+        let mono_reapply_idx = TERM_PROMPT_SOURCE
+            .find("span = span.font_family(Self::terminal_output_font_family());")
+            .expect("terminal span should explicitly reapply monospace font");
+
+        assert!(
+            mono_reapply_idx > bold_style_idx,
+            "terminal monospace font should be reapplied after bold/style transforms"
+        );
     }
     #[test]
     fn test_perf_timer_loop_iteration_count() {
