@@ -54,7 +54,7 @@ fn contrast_ratio(a: u32, b: u32) -> f32 {
 }
 
 #[inline]
-fn best_contrast_of_two(background: u32, option_a: u32, option_b: u32) -> u32 {
+pub(crate) fn best_contrast_of_two(background: u32, option_a: u32, option_b: u32) -> u32 {
     let contrast_a = contrast_ratio(background, option_a);
     let contrast_b = contrast_ratio(background, option_b);
     if contrast_a >= contrast_b {
