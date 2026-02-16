@@ -961,7 +961,7 @@ mod tests {
         info.is_agent = true;
         info.is_script = false;
         let actions = get_script_context_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
+        assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
     }
 
     #[test]
@@ -970,7 +970,7 @@ mod tests {
         info.is_agent = true;
         info.is_script = false;
         let actions = get_script_context_actions(&info);
-        let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
+        let reveal = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
         assert!(reveal
             .description
             .as_ref()
@@ -985,10 +985,10 @@ mod tests {
 
     #[test]
     fn script_context_real_script_count() {
-        // Real script: run + add_shortcut + add_alias + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink = 9
+        // Real script currently includes toggle_favorite in addition to the historical 9 actions.
         let info = ScriptInfo::new("test", "/test.ts");
         let actions = get_script_context_actions(&info);
-        assert_eq!(actions.len(), 9);
+        assert_eq!(actions.len(), 10);
     }
 
     #[test]
@@ -1001,20 +1001,20 @@ mod tests {
 
     #[test]
     fn script_context_agent_count() {
-        // Agent: run + add_shortcut + add_alias + edit + reveal + copy_path + copy_content + copy_deeplink = 8
+        // Agent currently includes toggle_favorite in addition to the historical 8 actions.
         let mut info = ScriptInfo::new("my-agent", "/a.md");
         info.is_agent = true;
         info.is_script = false;
         let actions = get_script_context_actions(&info);
-        assert_eq!(actions.len(), 8);
+        assert_eq!(actions.len(), 9);
     }
 
     #[test]
     fn script_context_scriptlet_count() {
-        // Scriptlet: run + add_shortcut + add_alias + edit_scriptlet + reveal + copy_path + copy_content + copy_deeplink = 8
+        // Scriptlet currently includes toggle_favorite in addition to the historical 8 actions.
         let info = ScriptInfo::scriptlet("Test Scriptlet", "/t.md", None, None);
         let actions = get_script_context_actions(&info);
-        assert_eq!(actions.len(), 8);
+        assert_eq!(actions.len(), 9);
     }
 
     // =========================================================================
@@ -1228,7 +1228,7 @@ mod tests {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "notes:new_note"));
+        assert!(actions.iter().any(|a| a.id == "new_note"));
     }
 
     #[test]

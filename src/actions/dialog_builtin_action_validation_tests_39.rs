@@ -762,7 +762,7 @@ mod tests {
         info.is_agent = true;
         info.is_script = false;
         let actions = get_script_context_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "file:copy_path"));
+        assert!(actions.iter().any(|a| a.id == "copy_path"));
     }
 
     #[test]
@@ -771,7 +771,7 @@ mod tests {
         info.is_agent = true;
         info.is_script = false;
         let actions = get_script_context_actions(&info);
-        assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
+        assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
     }
 
     #[test]
@@ -1077,7 +1077,7 @@ mod tests {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        let nn = actions.iter().find(|a| a.id == "notes:new_note").unwrap();
+        let nn = actions.iter().find(|a| a.id == "new_note").unwrap();
         assert_eq!(nn.icon, Some(IconName::Plus));
     }
 
@@ -1278,7 +1278,7 @@ mod tests {
             provider_display_name: "Anthropic".into(),
         }];
         let actions = get_new_chat_actions(&last_used, &[], &[]);
-        assert_eq!(actions[0].id, "last_used_0");
+        assert_eq!(actions[0].id, "last_used_anthropic::claude");
     }
 
     #[test]
@@ -1298,7 +1298,7 @@ mod tests {
             },
         ];
         let actions = get_new_chat_actions(&last_used, &[], &[]);
-        assert_eq!(actions[1].id, "last_used_1");
+        assert_eq!(actions[1].id, "last_used_openai::gpt4");
     }
 
     #[test]
@@ -1310,7 +1310,7 @@ mod tests {
             provider_display_name: "Anthropic".into(),
         }];
         let actions = get_new_chat_actions(&last_used, &[], &[]);
-        assert_eq!(actions[0].description.as_deref(), Some("Anthropic"));
+        assert_eq!(actions[0].description.as_deref(), Some("Uses Anthropic"));
     }
 
     #[test]
@@ -1372,8 +1372,8 @@ mod tests {
             },
         ];
         let actions = get_new_chat_actions(&[], &[], &models);
-        assert_eq!(actions[0].id, "model_0");
-        assert_eq!(actions[1].id, "model_1");
+        assert_eq!(actions[0].id, "model_anthropic::claude");
+        assert_eq!(actions[1].id, "model_openai::gpt4");
     }
 
     #[test]

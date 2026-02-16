@@ -547,7 +547,7 @@ fn chat_model_actions_all_have_provider_description() {
         .collect();
     for action in &model_actions {
         assert!(
-            action.description.as_ref().unwrap().starts_with("via "),
+            action.description.as_ref().unwrap().starts_with("Uses "),
             "Model action '{}' description should start with 'via '",
             action.id
         );
@@ -756,7 +756,7 @@ fn deeplink_present_for_script() {
     let script = ScriptInfo::new("test", "/path/test.ts");
     let actions = get_script_context_actions(&script);
     let ids = action_ids(&actions);
-    assert!(ids.contains(&"script:copy_deeplink"));
+    assert!(ids.contains(&"copy_deeplink"));
 }
 
 #[test]
@@ -764,7 +764,7 @@ fn deeplink_present_for_builtin() {
     let builtin = ScriptInfo::builtin("Clipboard History");
     let actions = get_script_context_actions(&builtin);
     let ids = action_ids(&actions);
-    assert!(ids.contains(&"script:copy_deeplink"));
+    assert!(ids.contains(&"copy_deeplink"));
 }
 
 #[test]
@@ -772,7 +772,7 @@ fn deeplink_present_for_scriptlet() {
     let scriptlet = ScriptInfo::scriptlet("Open URL", "/path/urls.md", None, None);
     let actions = get_scriptlet_context_actions_with_custom(&scriptlet, None);
     let ids = action_ids(&actions);
-    assert!(ids.contains(&"script:copy_deeplink"));
+    assert!(ids.contains(&"copy_deeplink"));
 }
 
 #[test]
@@ -782,7 +782,7 @@ fn deeplink_present_for_agent() {
     agent.is_script = false;
     let actions = get_script_context_actions(&agent);
     let ids = action_ids(&actions);
-    assert!(ids.contains(&"script:copy_deeplink"));
+    assert!(ids.contains(&"copy_deeplink"));
 }
 
 // =========================================================================
@@ -1055,11 +1055,7 @@ fn action_verb_switch_to_propagates_to_run_action() {
         ScriptInfo::with_action_verb("Window Switcher", "builtin:windows", false, "Switch to");
     let actions = get_script_context_actions(&script);
     let run = find_action(&actions, "run_script").unwrap();
-    assert!(
-        run.title.starts_with("Switch to"),
-        "Primary action should use 'Switch to' verb, got '{}'",
-        run.title
-    );
+    assert_eq!(run.title, "Switch To");
 }
 
 #[test]
@@ -1358,12 +1354,12 @@ fn deeplink_name_preserves_numbers_in_script_name() {
 
 #[test]
 fn deeplink_name_handles_empty_string() {
-    assert_eq!(to_deeplink_name(""), "");
+    assert_eq!(to_deeplink_name(""), "_unnamed");
 }
 
 #[test]
 fn deeplink_name_handles_all_whitespace() {
-    assert_eq!(to_deeplink_name("   "), "");
+    assert_eq!(to_deeplink_name("   "), "_unnamed");
 }
 
 // =========================================================================

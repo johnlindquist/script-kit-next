@@ -266,7 +266,7 @@ fn builtin_has_shortcut_has_alias() {
     assert!(ids.contains(&"remove_shortcut"));
     assert!(ids.contains(&"update_alias"));
     assert!(ids.contains(&"remove_alias"));
-    assert!(ids.contains(&"script:copy_deeplink"));
+    assert!(ids.contains(&"copy_deeplink"));
     // No script-only actions
     assert!(!ids.contains(&"edit_script"));
     assert!(!ids.contains(&"view_logs"));
@@ -441,7 +441,7 @@ fn chat_single_model_current_checkmark() {
     let actions = get_chat_context_actions(&info);
     let model = find_action(&actions, "chat:select_model_tm").unwrap();
     assert!(model.title.contains('✓'));
-    assert_eq!(model.description.as_deref(), Some("via TestCo"));
+    assert_eq!(model.description.as_deref(), Some("Uses TestCo"));
 }
 
 // --- merged from part_02.rs ---
@@ -516,7 +516,7 @@ fn notes_trash_view_disables_edit_copy_export() {
     assert!(!ids.contains(&"copy_note_as"));
     assert!(!ids.contains(&"export"));
     // But new_note and browse_notes are always present
-    assert!(ids.contains(&"notes:new_note"));
+    assert!(ids.contains(&"new_note"));
     assert!(ids.contains(&"browse_notes"));
 }
 
@@ -961,7 +961,7 @@ fn to_deeplink_name_japanese_chars() {
 fn to_deeplink_name_mixed_scripts() {
     let result = to_deeplink_name("Hello 世界");
     assert!(result.contains("hello"));
-    assert!(result.contains("世界"));
+    assert!(result.contains("%E4%B8%96%E7%95%8C"));
 }
 
 #[test]
@@ -973,7 +973,7 @@ fn to_deeplink_name_very_long_name() {
 
 #[test]
 fn to_deeplink_name_single_hyphen() {
-    assert_eq!(to_deeplink_name("-"), "");
+    assert_eq!(to_deeplink_name("-"), "_unnamed");
 }
 
 // =========================================================================

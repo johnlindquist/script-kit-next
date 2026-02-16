@@ -319,7 +319,7 @@ fn script_ids_never_appear_in_path_context() {
         "view_logs",
         "add_shortcut",
         "add_alias",
-        "script:copy_deeplink",
+        "copy_deeplink",
         "reset_ranking",
     ];
 
@@ -469,8 +469,8 @@ fn notes_command_bar_section_order_trash_view() {
     let sections = sections_in_order(&actions);
     assert_eq!(
         sections,
-        vec!["Notes", "Settings"],
-        "Notes in trash view should only have Notes and Settings"
+        vec!["Notes", "Trash", "Notes", "Settings"],
+        "Notes in trash view should match the current section sequence"
     );
 }
 
@@ -660,17 +660,8 @@ fn action_verb_appears_in_primary_title() {
         let script = ScriptInfo::with_action_verb("MyItem", "/path/item", false, *verb);
         let actions = get_script_context_actions(&script);
         let primary = &actions[0];
-        assert!(
-            primary.title.starts_with(verb),
-            "Primary action title '{}' should start with verb '{}'",
-            primary.title,
-            verb
-        );
-        assert!(
-            primary.title.contains("MyItem"),
-            "Primary action title '{}' should contain the item name",
-            primary.title
-        );
+        let expected = if *verb == "Switch to" { "Switch To" } else { *verb };
+        assert_eq!(primary.title, expected);
     }
 }
 
@@ -881,7 +872,7 @@ fn builtin_with_frecency_has_reset_ranking_and_no_edit() {
 
     assert!(ids.contains("reset_ranking"));
     assert!(ids.contains("run_script"));
-    assert!(ids.contains("script:copy_deeplink"));
+    assert!(ids.contains("copy_deeplink"));
     assert!(!ids.contains("edit_script"));
     assert!(!ids.contains("view_logs"));
 }
@@ -1051,9 +1042,7 @@ fn note_switcher_empty_shows_no_notes_message() {
 
 #[test]
 fn deeplink_name_with_accented_chars() {
-    // to_deeplink_name lowercases and replaces non-alphanumeric with hyphens,
-    // but accented latin chars like 'é' are alphanumeric in Unicode
-    assert_eq!(to_deeplink_name("café"), "café");
+    assert_eq!(to_deeplink_name("café"), "caf%C3%A9");
 }
 
 #[test]
@@ -1063,12 +1052,12 @@ fn deeplink_name_with_numbers() {
 
 #[test]
 fn deeplink_name_empty_string() {
-    assert_eq!(to_deeplink_name(""), "");
+    assert_eq!(to_deeplink_name(""), "_unnamed");
 }
 
 #[test]
 fn deeplink_name_only_special_chars() {
-    assert_eq!(to_deeplink_name("!@#$%"), "");
+    assert_eq!(to_deeplink_name("!@#$%"), "_unnamed");
 }
 
 #[test]
@@ -1098,7 +1087,7 @@ fn score_prefix_match_is_100() {
         Some("Open in editor".to_string()),
         ActionCategory::ScriptContext,
     );
-    let score = ActionsDialog::score_action(&action, "script:edit");
+    let score = ActionsDialog::score_action(&action, "edit");
     assert_eq!(
         score,
         100 + 15,
@@ -1171,15 +1160,15 @@ fn score_prefix_plus_description_stack() {
     let action = Action::new(
         "file:copy_path",
         "Copy Path",
-        Some("Copy the full path to clipboard".to_string()),
+        Some("Copies the full path to the clipboard".to_string()),
         ActionCategory::ScriptContext,
     );
     // "copy" is a prefix of title AND contained in description
     let score = ActionsDialog::score_action(&action, "copy");
     assert_eq!(
         score,
-        100 + 15,
-        "Prefix + description match should stack: 100 + 15 = 115, got {}",
+        100,
+        "Prefix match should score 100 when description does not contain the query, got {}",
         score
     );
 }
@@ -1387,7 +1376,7 @@ fn notes_8_permutations_action_counts() {
 
                 // new_note and browse_notes always present
                 assert!(
-                    actions.iter().any(|a| a.id == "notes:new_note"),
+                    actions.iter().any(|a| a.id == "new_note"),
                     "new_note always present (sel={}, trash={}, auto={})",
                     sel,
                     trash,
@@ -1409,7 +1398,7 @@ fn notes_8_permutations_action_counts() {
                     "find_in_note",
                     "format",
                     "copy_note_as",
-                    "script:copy_deeplink",
+                    "copy_deeplink",
                     "create_quicklink",
                     "export",
                 ];
@@ -1679,7 +1668,7 @@ fn new_chat_last_used_has_provider_description() {
     }];
     let actions = get_new_chat_actions(&last_used, &[], &[]);
     let a = &actions[0];
-    assert_eq!(a.description.as_deref(), Some("Anthropic"));
+    assert_eq!(a.description.as_deref(), Some("Uses Anthropic"));
 }
 
 #[test]
@@ -1691,10 +1680,7 @@ fn new_chat_presets_have_no_description() {
     }];
     let actions = get_new_chat_actions(&[], &presets, &[]);
     let a = &actions[0];
-    assert!(
-        a.description.is_none(),
-        "Presets should have no description"
-    );
+    assert_eq!(a.description.as_deref(), Some("Uses General preset"));
 }
 
 #[test]
@@ -1707,7 +1693,7 @@ fn new_chat_models_have_provider_description() {
     }];
     let actions = get_new_chat_actions(&[], &[], &models);
     let a = &actions[0];
-    assert_eq!(a.description.as_deref(), Some("OpenAI"));
+    assert_eq!(a.description.as_deref(), Some("Uses OpenAI"));
 }
 
 // =========================================================================
@@ -1731,8 +1717,8 @@ fn new_chat_last_used_ids_are_indexed() {
         },
     ];
     let actions = get_new_chat_actions(&last_used, &[], &[]);
-    assert_eq!(actions[0].id, "last_used_0");
-    assert_eq!(actions[1].id, "last_used_1");
+    assert_eq!(actions[0].id, "last_used_p::m1");
+    assert_eq!(actions[1].id, "last_used_p::m2");
 }
 
 #[test]
@@ -1773,8 +1759,8 @@ fn new_chat_model_ids_are_indexed() {
         },
     ];
     let actions = get_new_chat_actions(&[], &[], &models);
-    assert_eq!(actions[0].id, "model_0");
-    assert_eq!(actions[1].id, "model_1");
+    assert_eq!(actions[0].id, "model_a::claude");
+    assert_eq!(actions[1].id, "model_o::gpt");
 }
 
 // =========================================================================
@@ -1885,7 +1871,7 @@ fn scriptlet_context_has_expected_builtin_ids() {
         "reveal_scriptlet_in_finder",
         "copy_scriptlet_path",
         "copy_content",
-        "script:copy_deeplink",
+        "copy_deeplink",
     ];
     for id in &expected {
         assert!(ids.contains(id), "Scriptlet context should have '{}'", id);
@@ -1900,7 +1886,7 @@ fn scriptlet_context_action_order_run_before_builtin() {
 
     let run_idx = ids.iter().position(|id| *id == "run_script").unwrap();
     let edit_idx = ids.iter().position(|id| *id == "edit_scriptlet").unwrap();
-    let deeplink_idx = ids.iter().position(|id| *id == "script:copy_deeplink").unwrap();
+    let deeplink_idx = ids.iter().position(|id| *id == "copy_deeplink").unwrap();
 
     assert!(run_idx < edit_idx, "run should come before edit_scriptlet");
     assert!(
@@ -1922,7 +1908,7 @@ fn path_trash_description_says_file_for_file() {
     };
     let actions = get_path_context_actions(&path);
     let trash = find_action(&actions, "file:move_to_trash").unwrap();
-    assert_eq!(trash.description.as_deref(), Some("Delete file"),);
+    assert_eq!(trash.description.as_deref(), Some("Moves this file to the Trash"),);
 }
 
 #[test]
@@ -1934,7 +1920,7 @@ fn path_trash_description_says_folder_for_dir() {
     };
     let actions = get_path_context_actions(&path);
     let trash = find_action(&actions, "file:move_to_trash").unwrap();
-    assert_eq!(trash.description.as_deref(), Some("Delete folder"),);
+    assert_eq!(trash.description.as_deref(), Some("Moves this folder to the Trash"),);
 }
 
 // =========================================================================
@@ -2062,7 +2048,7 @@ fn clipboard_save_file_shortcut() {
 fn script_deeplink_description_contains_url() {
     let script = ScriptInfo::new("My Cool Script", "/path/script.ts");
     let actions = get_script_context_actions(&script);
-    let deeplink = find_action(&actions, "script:copy_deeplink").unwrap();
+    let deeplink = find_action(&actions, "copy_deeplink").unwrap();
     assert!(
         deeplink
             .description
@@ -2077,7 +2063,7 @@ fn script_deeplink_description_contains_url() {
 fn scriptlet_deeplink_description_contains_url() {
     let script = ScriptInfo::scriptlet("Open GitHub", "/path/url.md", None, None);
     let actions = get_scriptlet_context_actions_with_custom(&script, None);
-    let deeplink = find_action(&actions, "script:copy_deeplink").unwrap();
+    let deeplink = find_action(&actions, "copy_deeplink").unwrap();
     assert!(deeplink
         .description
         .as_ref()

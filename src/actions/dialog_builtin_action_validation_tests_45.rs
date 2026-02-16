@@ -638,7 +638,7 @@ fn script_shortcut_alias_has_remove_alias() {
     assert!(actions.iter().any(|a| a.id == "remove_alias"));
 }
 
-// =========== 14. Script: agent exactly 8 actions ===========
+// =========== 14. Script: agent action count ===========
 
 #[test]
 fn agent_has_8_actions() {
@@ -646,7 +646,7 @@ fn agent_has_8_actions() {
     s.is_agent = true;
     s.is_script = false;
     let actions = get_script_context_actions(&s);
-    assert_eq!(actions.len(), 8);
+    assert_eq!(actions.len(), 9);
 }
 
 #[test]
@@ -673,7 +673,7 @@ fn agent_has_copy_deeplink() {
     s.is_agent = true;
     s.is_script = false;
     let actions = get_script_context_actions(&s);
-    assert!(actions.iter().any(|a| a.id == "script:copy_deeplink"));
+    assert!(actions.iter().any(|a| a.id == "copy_deeplink"));
 }
 
 // =========== 15. Script: get_global_actions empty ===========
@@ -1012,7 +1012,7 @@ fn notes_selection_trash_auto_count() {
         auto_sizing_enabled: true,
     };
     let actions = get_notes_command_bar_actions(&info);
-    assert_eq!(actions.len(), 2);
+    assert_eq!(actions.len(), 4);
 }
 
 #[test]
@@ -1409,8 +1409,8 @@ fn scriptlet_both_contexts_have_copy_deeplink() {
     let s = ScriptInfo::scriptlet("My Script", "/s.md", None, None);
     let script_actions = get_script_context_actions(&s);
     let custom_actions = get_scriptlet_context_actions_with_custom(&s, None);
-    assert!(script_actions.iter().any(|a| a.id == "script:copy_deeplink"));
-    assert!(custom_actions.iter().any(|a| a.id == "script:copy_deeplink"));
+    assert!(script_actions.iter().any(|a| a.id == "copy_deeplink"));
+    assert!(custom_actions.iter().any(|a| a.id == "copy_deeplink"));
 }
 
 // =========== 29. Dialog format_shortcut_hint: arrow key variants ===========

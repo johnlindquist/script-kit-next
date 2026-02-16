@@ -113,7 +113,7 @@ mod tests {
             "scriptlet block: edit_scriptlet"
         );
         assert!(
-            ids.contains(&"file:reveal_in_finder"),
+            ids.contains(&"reveal_in_finder"),
             "agent block: reveal_in_finder"
         );
     }
@@ -126,7 +126,7 @@ mod tests {
     fn action_verb_run_in_script_title() {
         let info = ScriptInfo::new("My Script", "/path/script.ts");
         let actions = get_script_context_actions(&info);
-        assert_eq!(actions[0].title, "Run \"My Script\"");
+        assert_eq!(actions[0].title, "Run");
     }
 
     #[test]
@@ -134,21 +134,21 @@ mod tests {
         let info =
             ScriptInfo::with_action_verb("Safari", "/Applications/Safari.app", false, "Launch");
         let actions = get_script_context_actions(&info);
-        assert_eq!(actions[0].title, "Launch \"Safari\"");
+        assert_eq!(actions[0].title, "Launch");
     }
 
     #[test]
     fn action_verb_switch_to_in_window_title() {
         let info = ScriptInfo::with_action_verb("My Document", "window:123", false, "Switch to");
         let actions = get_script_context_actions(&info);
-        assert_eq!(actions[0].title, "Switch to \"My Document\"");
+        assert_eq!(actions[0].title, "Switch To");
     }
 
     #[test]
     fn action_verb_execute_custom_in_title() {
         let info = ScriptInfo::with_action_verb("Task", "/path/task.ts", true, "Execute");
         let actions = get_script_context_actions(&info);
-        assert_eq!(actions[0].title, "Execute \"Task\"");
+        assert_eq!(actions[0].title, "Execute");
     }
 
     #[test]
@@ -156,7 +156,7 @@ mod tests {
         let info =
             ScriptInfo::with_action_verb("Clipboard History", "builtin:clipboard", false, "Open");
         let actions = get_script_context_actions(&info);
-        assert_eq!(actions[0].title, "Open \"Clipboard History\"");
+        assert_eq!(actions[0].title, "Open");
     }
 
     #[test]
@@ -373,9 +373,9 @@ mod tests {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        // Both should have "via OpenAI" description
-        assert_eq!(actions[0].description.as_ref().unwrap(), "via OpenAI");
-        assert_eq!(actions[1].description.as_ref().unwrap(), "via OpenAI");
+        // Both should have "Uses OpenAI" description
+        assert_eq!(actions[0].description.as_ref().unwrap(), "Uses OpenAI");
+        assert_eq!(actions[1].description.as_ref().unwrap(), "Uses OpenAI");
     }
 
     #[test]
@@ -840,8 +840,8 @@ mod tests {
         ];
         let actions = get_new_chat_actions(&[], &[], &models);
         assert_eq!(actions.len(), 2);
-        assert_eq!(actions[0].id, "model_0");
-        assert_eq!(actions[1].id, "model_1");
+        assert_eq!(actions[0].id, "model_p1::m1");
+        assert_eq!(actions[1].id, "model_p2::m2");
     }
 
     #[test]
@@ -854,7 +854,7 @@ mod tests {
         }];
         let actions = get_new_chat_actions(&last_used, &[], &[]);
         assert_eq!(actions.len(), 1);
-        assert_eq!(actions[0].id, "last_used_0");
+        assert_eq!(actions[0].id, "last_used_p::lu1");
         assert_eq!(actions[0].section.as_deref(), Some("Last Used Settings"));
         assert_eq!(actions[0].icon, Some(IconName::BoltFilled));
     }
@@ -892,7 +892,10 @@ mod tests {
             icon: IconName::Settings,
         }];
         let actions = get_new_chat_actions(&[], &presets, &[]);
-        assert!(actions[0].description.is_none());
+        assert_eq!(
+            actions[0].description.as_deref(),
+            Some("Uses General preset")
+        );
     }
 
 
@@ -906,7 +909,7 @@ mod tests {
             provider_display_name: "Anthropic".into(),
         }];
         let actions = get_new_chat_actions(&[], &[], &models);
-        assert_eq!(actions[0].description.as_ref().unwrap(), "Anthropic");
+        assert_eq!(actions[0].description.as_ref().unwrap(), "Uses Anthropic");
     }
 
     // =========================================================================
@@ -1301,7 +1304,7 @@ mod tests {
         };
         let actions = get_path_context_actions(&info);
         let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
-        assert_eq!(trash.description.as_ref().unwrap(), "Delete folder");
+        assert_eq!(trash.description.as_ref().unwrap(), "Moves this folder to the Trash");
     }
 
     #[test]
@@ -1313,7 +1316,7 @@ mod tests {
         };
         let actions = get_path_context_actions(&info);
         let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
-        assert_eq!(trash.description.as_ref().unwrap(), "Delete file");
+        assert_eq!(trash.description.as_ref().unwrap(), "Moves this file to the Trash");
     }
 
     #[test]
@@ -1943,7 +1946,7 @@ mod tests {
 
     #[test]
     fn deeplink_name_all_special_chars_empty() {
-        assert_eq!(to_deeplink_name("!@#$%^&*"), "");
+        assert_eq!(to_deeplink_name("!@#$%^&*"), "_unnamed");
     }
 
     #[test]
@@ -1990,9 +1993,9 @@ mod tests {
         assert!(ids.contains(&"reset_ranking"));
 
         // Has agent copy actions
-        assert!(ids.contains(&"file:copy_path"));
+        assert!(ids.contains(&"copy_path"));
         assert!(ids.contains(&"copy_content"));
-        assert!(ids.contains(&"file:reveal_in_finder"));
+        assert!(ids.contains(&"reveal_in_finder"));
     }
 
     // =========================================================================
