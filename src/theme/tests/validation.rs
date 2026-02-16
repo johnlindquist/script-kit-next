@@ -99,6 +99,22 @@ fn test_validate_allows_appearance_key_without_unknown_warning() {
 }
 
 #[test]
+fn test_validate_allows_focus_aware_key_without_unknown_warning() {
+    let json = json!({
+        "focus_aware": {
+            "focused": {},
+            "unfocused": {}
+        }
+    });
+    let diags = validate_theme_json(&json);
+
+    assert!(!diags
+        .diagnostics
+        .iter()
+        .any(|d| d.message.contains("Unknown key 'focus_aware'")));
+}
+
+#[test]
 fn test_validate_valid_color_number() {
     let json = json!({
         "colors": {
