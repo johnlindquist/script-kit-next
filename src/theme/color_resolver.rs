@@ -173,12 +173,31 @@ pub struct TypographyResolver {
 
 impl TypographyResolver {
     /// Create a new typography resolver for the given theme and design variant
-    pub fn new(theme: &Theme, _variant: DesignVariant) -> Self {
+    pub fn new(theme: &Theme, variant: DesignVariant) -> Self {
+        match variant {
+            DesignVariant::Default => Self::from_theme(theme),
+            _ => Self::from_design_tokens(variant),
+        }
+    }
+
+    /// Create a resolver from theme fonts (Default variant)
+    fn from_theme(theme: &Theme) -> Self {
         let fonts = theme.get_fonts();
         Self {
             font_family: fonts.ui_family,
             font_family_mono: fonts.mono_family,
             font_size_xl: (fonts.ui_size * 1.25).clamp(1.0, 200.0),
+        }
+    }
+
+    /// Create a resolver from design tokens (all other variants)
+    fn from_design_tokens(variant: DesignVariant) -> Self {
+        let t = get_tokens(variant).typography();
+
+        Self {
+            font_family: t.font_family.to_string(),
+            font_family_mono: t.font_family_mono.to_string(),
+            font_size_xl: t.font_size_xl,
         }
     }
 
@@ -279,8 +298,24 @@ mod tests {
 
         assert_eq!(default_resolver.primary_font(), fonts.ui_family.as_str());
         assert_eq!(default_resolver.mono_font(), fonts.mono_family.as_str());
-        assert_eq!(retro_resolver.primary_font(), fonts.ui_family.as_str());
-        assert_eq!(retro_resolver.mono_font(), fonts.mono_family.as_str());
+        assert_eq!(retro_resolver.primary_font(), "Menlo");
+        assert_eq!(retro_resolver.mono_font(), "Menlo");
+    }
+
+    #[test]
+    fn test_typography_resolver_paper() {
+        let theme = Theme::default();
+        let paper_resolver = TypographyResolver::new(&theme, DesignVariant::Paper);
+
+        assert_eq!(paper_resolver.primary_font(), "Georgia");
+    }
+
+    #[test]
+    fn test_typography_resolver_brutalist() {
+        let theme = Theme::default();
+        let brutalist_resolver = TypographyResolver::new(&theme, DesignVariant::Brutalist);
+
+        assert_eq!(brutalist_resolver.primary_font(), "Helvetica Neue");
     }
 
     #[test]
