@@ -766,21 +766,21 @@ use crate::actions::{
 
         let export = actions
             .iter()
-            .find(|a| a.id == "export_markdown")
+            .find(|a| a.id == "chat:export_markdown")
             .expect("missing export_markdown action");
         assert_eq!(export.section.as_deref(), Some("Export"));
         assert!(export.icon.is_some());
 
         let branch = actions
             .iter()
-            .find(|a| a.id == "branch_from_last")
+            .find(|a| a.id == "chat:branch_from_last")
             .expect("missing branch_from_last action");
         assert_eq!(branch.section.as_deref(), Some("Actions"));
         assert!(branch.icon.is_some());
 
         let help = actions
             .iter()
-            .find(|a| a.id == "toggle_shortcuts_help")
+            .find(|a| a.id == "chat:toggle_shortcuts_help")
             .expect("missing toggle_shortcuts_help action");
         assert_eq!(help.section.as_deref(), Some("Help"));
         assert_eq!(help.shortcut.as_deref(), Some("⌘/"));
@@ -796,8 +796,7 @@ use crate::actions::{
             .find(|a| a.id == "run_script")
             .expect("run_script action should exist");
 
-        assert_eq!(run_action.title, "Switch to \"Window Switcher\"");
+        assert_eq!(run_action.title, "Switch To");
         assert_eq!(run_action.description.as_deref(), Some("Switch to this item"));
     }
 }
-

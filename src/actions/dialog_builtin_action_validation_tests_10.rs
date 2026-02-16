@@ -173,16 +173,16 @@ mod tests {
     fn script_no_shortcut_no_alias_action_count() {
         let script = ScriptInfo::new("test", "/path/test.ts");
         let actions = get_script_context_actions(&script);
-        // run, add_shortcut, add_alias, edit, view_logs, reveal, copy_path, copy_content, copy_deeplink = 9
-        assert_eq!(actions.len(), 9);
+        // run, add_shortcut, add_alias, toggle_favorite, edit, view_logs, reveal, copy_path, copy_content, copy_deeplink = 10
+        assert_eq!(actions.len(), 10);
     }
 
     #[test]
     fn script_with_shortcut_action_count() {
         let script = ScriptInfo::with_shortcut("test", "/path/test.ts", Some("cmd+t".to_string()));
         let actions = get_script_context_actions(&script);
-        // run, update_shortcut, remove_shortcut, add_alias, edit, view_logs, reveal, copy_path, copy_content, copy_deeplink = 10
-        assert_eq!(actions.len(), 10);
+        // run, update_shortcut, remove_shortcut, add_alias, toggle_favorite, edit, view_logs, reveal, copy_path, copy_content, copy_deeplink = 11
+        assert_eq!(actions.len(), 11);
     }
 
     #[test]
@@ -194,8 +194,8 @@ mod tests {
             Some("ts".to_string()),
         );
         let actions = get_script_context_actions(&script);
-        // run, update_shortcut, remove_shortcut, update_alias, remove_alias, edit, view_logs, reveal, copy_path, copy_content, copy_deeplink = 11
-        assert_eq!(actions.len(), 11);
+        // run, update_shortcut, remove_shortcut, update_alias, remove_alias, toggle_favorite, edit, view_logs, reveal, copy_path, copy_content, copy_deeplink = 12
+        assert_eq!(actions.len(), 12);
     }
 
     #[test]
@@ -210,8 +210,8 @@ mod tests {
     fn scriptlet_no_shortcut_no_alias_action_count() {
         let scriptlet = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
         let actions = get_script_context_actions(&scriptlet);
-        // run, add_shortcut, add_alias, edit_scriptlet, reveal_scriptlet, copy_scriptlet_path, copy_content, copy_deeplink = 8
-        assert_eq!(actions.len(), 8);
+        // run, add_shortcut, add_alias, toggle_favorite, edit_scriptlet, reveal_scriptlet, copy_scriptlet_path, copy_content, copy_deeplink = 9
+        assert_eq!(actions.len(), 9);
     }
 
     #[test]
@@ -220,8 +220,8 @@ mod tests {
         agent.is_script = false;
         agent.is_agent = true;
         let actions = get_script_context_actions(&agent);
-        // run, add_shortcut, add_alias, edit(agent), reveal, copy_path, copy_content, copy_deeplink = 8
-        assert_eq!(actions.len(), 8);
+        // run, add_shortcut, add_alias, toggle_favorite, edit(agent), reveal, copy_path, copy_content, copy_deeplink = 9
+        assert_eq!(actions.len(), 9);
     }
 
     #[test]
@@ -296,7 +296,7 @@ mod tests {
         let copy_idx = actions.iter().position(|a| a.id == "copy_content").unwrap();
         let deeplink_idx = actions
             .iter()
-            .position(|a| a.id == "script:copy_deeplink")
+            .position(|a| a.id == "copy_deeplink")
             .unwrap();
         assert!(copy_idx < deeplink_idx);
     }
@@ -308,7 +308,7 @@ mod tests {
         let actions = get_scriptlet_context_actions_with_custom(&script, None);
         let deeplink_idx = actions
             .iter()
-            .position(|a| a.id == "script:copy_deeplink")
+            .position(|a| a.id == "copy_deeplink")
             .unwrap();
         let reset_idx = actions
             .iter()
@@ -396,7 +396,7 @@ mod tests {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        let a = find_action(&actions, "notes:new_note").unwrap();
+        let a = find_action(&actions, "new_note").unwrap();
         assert_eq!(a.icon, Some(IconName::Plus));
     }
 
@@ -456,7 +456,7 @@ mod tests {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        let a = find_action(&actions, "script:copy_deeplink").unwrap();
+        let a = find_action(&actions, "copy_deeplink").unwrap();
         assert_eq!(a.icon, Some(IconName::ArrowRight));
     }
 
@@ -590,7 +590,7 @@ mod tests {
         let a = find_action(&actions, "file:open_file").unwrap();
         assert_eq!(
             a.description.as_deref(),
-            Some("Open with default application")
+            Some("Opens with the default app")
         );
     }
 
@@ -604,7 +604,7 @@ mod tests {
         };
         let actions = get_file_context_actions(&fi);
         let a = find_action(&actions, "file:open_directory").unwrap();
-        assert_eq!(a.description.as_deref(), Some("Open this folder"));
+        assert_eq!(a.description.as_deref(), Some("Opens this folder"));
     }
 
     #[test]
@@ -617,7 +617,7 @@ mod tests {
         };
         let actions = get_file_context_actions(&fi);
         let a = find_action(&actions, "file:reveal_in_finder").unwrap();
-        assert_eq!(a.description.as_deref(), Some("Reveal in Finder"));
+        assert_eq!(a.description.as_deref(), Some("Shows this item in Finder"));
     }
 
     #[test]
@@ -632,7 +632,7 @@ mod tests {
         let a = find_action(&actions, "file:copy_path").unwrap();
         assert_eq!(
             a.description.as_deref(),
-            Some("Copy the full path to clipboard")
+            Some("Copies the full path to the clipboard")
         );
     }
 
@@ -648,7 +648,7 @@ mod tests {
         let a = find_action(&actions, "file:copy_filename").unwrap();
         assert_eq!(
             a.description.as_deref(),
-            Some("Copy just the filename to clipboard")
+            Some("Copies only the filename to the clipboard")
         );
     }
 
@@ -857,7 +857,7 @@ mod tests {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions[0].description.as_deref(), Some("via Anthropic"));
+        assert_eq!(actions[0].description.as_deref(), Some("Uses Anthropic"));
     }
 
     #[test]
@@ -906,7 +906,7 @@ mod tests {
             &[],
             &[],
         );
-        assert_eq!(actions[0].description.as_deref(), Some("My Provider"));
+        assert_eq!(actions[0].description.as_deref(), Some("Uses My Provider"));
     }
 
 
@@ -923,7 +923,7 @@ mod tests {
                 provider_display_name: "Anthropic AI".to_string(),
             }],
         );
-        assert_eq!(actions[0].description.as_deref(), Some("Anthropic AI"));
+        assert_eq!(actions[0].description.as_deref(), Some("Uses Anthropic AI"));
     }
 
     #[test]
@@ -937,7 +937,7 @@ mod tests {
             }],
             &[],
         );
-        assert!(actions[0].description.is_none());
+        assert_eq!(actions[0].description.as_deref(), Some("Uses General preset"));
     }
 
     #[test]
@@ -991,7 +991,7 @@ mod tests {
         let a = find_action(&actions, "clip:clipboard_paste").unwrap();
         assert_eq!(
             a.description.as_deref(),
-            Some("Copy to clipboard and paste to focused app")
+            Some("Copies to clipboard and pastes to the focused app")
         );
     }
 
@@ -1002,7 +1002,7 @@ mod tests {
         let a = find_action(&actions, "clip:clipboard_copy").unwrap();
         assert_eq!(
             a.description.as_deref(),
-            Some("Copy entry to clipboard without pasting")
+            Some("Copies the entry to clipboard without pasting")
         );
     }
 
@@ -1043,7 +1043,7 @@ mod tests {
         let entry = make_clipboard_entry(ContentType::Text, false, None);
         let actions = get_clipboard_history_context_actions(&entry);
         let a = find_action(&actions, "clip:clipboard_delete_multiple").unwrap();
-        assert!(a.description.as_ref().unwrap().contains("filter"));
+        assert!(a.description.as_ref().unwrap().contains("search"));
     }
 
     #[test]
@@ -1064,8 +1064,7 @@ mod tests {
             ScriptInfo::with_action_verb("Safari", "/Applications/Safari.app", false, "Launch");
         let actions = get_script_context_actions(&script);
         let run = find_action(&actions, "run_script").unwrap();
-        assert!(run.title.starts_with("Launch"));
-        assert!(run.title.contains("Safari"));
+        assert_eq!(run.title, "Launch");
     }
 
     #[test]
@@ -1073,7 +1072,7 @@ mod tests {
         let script = ScriptInfo::with_action_verb("My Window", "window:123", false, "Switch to");
         let actions = get_script_context_actions(&script);
         let run = find_action(&actions, "run_script").unwrap();
-        assert!(run.title.starts_with("Switch to"));
+        assert_eq!(run.title, "Switch To");
     }
 
     #[test]
@@ -1082,7 +1081,7 @@ mod tests {
             ScriptInfo::with_action_verb("App Launcher", "builtin:launcher", false, "Open");
         let actions = get_script_context_actions(&script);
         let run = find_action(&actions, "run_script").unwrap();
-        assert_eq!(run.title, "Open \"App Launcher\"");
+        assert_eq!(run.title, "Open");
     }
 
     #[test]
@@ -1185,7 +1184,7 @@ mod tests {
         agent.is_script = false;
         agent.is_agent = true;
         let actions = get_script_context_actions(&agent);
-        let a = find_action(&actions, "file:reveal_in_finder").unwrap();
+        let a = find_action(&actions, "reveal_in_finder").unwrap();
         assert!(a.description.as_ref().unwrap().contains("agent"));
     }
 
@@ -1195,7 +1194,7 @@ mod tests {
         agent.is_script = false;
         agent.is_agent = true;
         let actions = get_script_context_actions(&agent);
-        let a = find_action(&actions, "file:copy_path").unwrap();
+        let a = find_action(&actions, "copy_path").unwrap();
         assert!(a.description.as_ref().unwrap().contains("agent"));
     }
 
@@ -1269,7 +1268,7 @@ mod tests {
     fn script_reveal_shortcut_cmd_shift_f() {
         let script = ScriptInfo::new("t", "/p/t.ts");
         let actions = get_script_context_actions(&script);
-        let a = find_action(&actions, "file:reveal_in_finder").unwrap();
+        let a = find_action(&actions, "reveal_in_finder").unwrap();
         assert_eq!(a.shortcut.as_deref(), Some("⌘⇧F"));
     }
 
@@ -1277,7 +1276,7 @@ mod tests {
     fn script_copy_path_shortcut_cmd_shift_c() {
         let script = ScriptInfo::new("t", "/p/t.ts");
         let actions = get_script_context_actions(&script);
-        let a = find_action(&actions, "file:copy_path").unwrap();
+        let a = find_action(&actions, "copy_path").unwrap();
         assert_eq!(a.shortcut.as_deref(), Some("⌘⇧C"));
     }
 
@@ -1346,7 +1345,7 @@ mod tests {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        let a = find_action(&actions, "notes:new_note").unwrap();
+        let a = find_action(&actions, "new_note").unwrap();
         assert_eq!(a.shortcut.as_deref(), Some("⌘N"));
     }
 
@@ -1603,19 +1602,19 @@ mod tests {
     #[test]
     fn score_prefix_match_100() {
         let a = Action::new("id", "Edit Script", None, ActionCategory::ScriptContext);
-        assert!(ActionsDialog::score_action(&a, "script:edit") >= 100);
+        assert!(ActionsDialog::score_action(&a, "edit") >= 100);
     }
 
     #[test]
     fn score_contains_match_50() {
         let a = Action::new("id", "Quick Edit", None, ActionCategory::ScriptContext);
-        let s = ActionsDialog::score_action(&a, "script:edit");
+        let s = ActionsDialog::score_action(&a, "edit");
         assert!((50..100).contains(&s));
     }
 
     #[test]
     fn score_fuzzy_match_25() {
-        // "et" subsequence in "script:edit" => e...t
+        // "et" subsequence in "edit" => e...t
         let a = Action::new("id", "Edit Script", None, ActionCategory::ScriptContext);
         let s = ActionsDialog::score_action(&a, "eit");
         // 'e','i','t' are subsequence of "edit script"
@@ -1716,19 +1715,19 @@ mod tests {
     #[test]
     fn deeplink_cjk_characters_preserved() {
         let result = to_deeplink_name("测试脚本");
-        assert_eq!(result, "测试脚本");
+        assert_eq!(result, "%E6%B5%8B%E8%AF%95%E8%84%9A%E6%9C%AC");
     }
 
     #[test]
     fn deeplink_mixed_ascii_unicode() {
         let result = to_deeplink_name("My 脚本 Script");
-        assert_eq!(result, "my-脚本-script");
+        assert_eq!(result, "my-%E8%84%9A%E6%9C%AC-script");
     }
 
     #[test]
     fn deeplink_accented_preserved() {
         let result = to_deeplink_name("café résumé");
-        assert_eq!(result, "café-résumé");
+        assert_eq!(result, "caf%C3%A9-r%C3%A9sum%C3%A9");
     }
 
     #[test]
@@ -1805,7 +1804,7 @@ mod tests {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        let a = find_action(&actions, "notes:new_note").unwrap();
+        let a = find_action(&actions, "new_note").unwrap();
         assert_eq!(a.section.as_deref(), Some("Notes"));
     }
 
