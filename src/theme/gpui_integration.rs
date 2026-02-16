@@ -12,7 +12,12 @@ use serde_json::json;
 use std::sync::Arc;
 use tracing::{debug, warn};
 
-use super::types::{load_theme, relative_luminance_srgb, Theme};
+use super::types::{get_cached_theme, relative_luminance_srgb, Theme};
+
+const SECONDARY_VIBRANCY_ALPHA: f32 = 0.08;
+const SECONDARY_VIBRANCY_HOVER_ALPHA: f32 = 0.14;
+const SECONDARY_VIBRANCY_ACTIVE_ALPHA: f32 = 0.22;
+const MUTED_VIBRANCY_ALPHA: f32 = 0.06;
 
 /// Convert a u32 hex color to Hsla
 #[inline]
@@ -94,6 +99,10 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
         } else {
             hex_to_hsla(hex)
         }
+    };
+    let subtle_overlay = |alpha: f32| -> Hsla {
+        let base = hex_to_hsla(colors.accent.selected_subtle);
+        hsla(base.h, base.s, base.l, alpha.clamp(0.0, 1.0))
     };
 
     // ╔════════════════════════════════════════════════════════════════════════════╗
@@ -185,26 +194,25 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
 
     // Secondary (muted buttons) - TRANSPARENT when vibrancy enabled
     theme_color.secondary = if vibrancy_enabled {
-        hsla(0.0, 0.0, 0.0, 0.0)
+        subtle_overlay(SECONDARY_VIBRANCY_ALPHA)
     } else {
         with_vibrancy(colors.background.search_box, 0.15)
     };
     theme_color.secondary_foreground = hex_to_hsla(colors.text.primary);
     theme_color.secondary_hover = if vibrancy_enabled {
-        // Very subtle hover effect
-        hsla(0.0, 0.0, if is_dark { 1.0 } else { 0.0 }, 0.05)
+        subtle_overlay(SECONDARY_VIBRANCY_HOVER_ALPHA)
     } else {
         with_vibrancy(colors.background.title_bar, 0.2)
     };
     theme_color.secondary_active = if vibrancy_enabled {
-        hsla(0.0, 0.0, if is_dark { 1.0 } else { 0.0 }, 0.1)
+        subtle_overlay(SECONDARY_VIBRANCY_ACTIVE_ALPHA)
     } else {
         with_vibrancy(colors.background.title_bar, 0.25)
     };
 
     // Muted (disabled states, subtle elements) - transparent when vibrancy
     theme_color.muted = if vibrancy_enabled {
-        hsla(0.0, 0.0, 0.0, 0.0)
+        subtle_overlay(MUTED_VIBRANCY_ALPHA)
     } else {
         with_vibrancy(colors.background.search_box, 0.1)
     };
@@ -292,7 +300,7 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
 /// 3. When theme.json is reloaded
 pub fn sync_gpui_component_theme(cx: &mut App) {
     // Load Script Kit's theme
-    let sk_theme = load_theme();
+    let sk_theme = get_cached_theme();
 
     // Determine if we're in dark mode based on SYSTEM appearance (not theme colors)
     // This ensures correct rendering when user switches between light/dark mode in macOS
@@ -536,5 +544,22 @@ mod tests {
         assert_hsla_close(mapped.danger_foreground, hex_to_hsla(danger_expected));
         assert_hsla_close(mapped.warning_foreground, hex_to_hsla(warning_expected));
         assert_hsla_close(mapped.info_foreground, hex_to_hsla(info_expected));
+    }
+
+    #[test]
+    fn test_map_scriptkit_to_gpui_theme_vibrancy_secondary_and_muted_alpha_are_perceptible() {
+        let dark_theme = Theme::dark_default();
+        let dark_mapped = map_scriptkit_to_gpui_theme(&dark_theme, true);
+        assert!(dark_mapped.secondary.a > 0.0);
+        assert!(dark_mapped.secondary_hover.a > dark_mapped.secondary.a);
+        assert!(dark_mapped.secondary_active.a > dark_mapped.secondary_hover.a);
+        assert!(dark_mapped.muted.a > 0.0);
+
+        let light_theme = Theme::light_default();
+        let light_mapped = map_scriptkit_to_gpui_theme(&light_theme, false);
+        assert!(light_mapped.secondary.a > 0.0);
+        assert!(light_mapped.secondary_hover.a > light_mapped.secondary.a);
+        assert!(light_mapped.secondary_active.a > light_mapped.secondary_hover.a);
+        assert!(light_mapped.muted.a > 0.0);
     }
 }
