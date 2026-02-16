@@ -145,13 +145,13 @@ impl NotesApp {
                     auto_sizing_enabled: true,
                 }),
                 CommandBarConfig::notes_style(),
-                std::sync::Arc::new(theme::load_theme()),
+                std::sync::Arc::new(theme::get_cached_theme()),
             ),
             // Initialize note switcher CommandBar (Cmd+P) with note list
             note_switcher: CommandBar::new(
                 note_switcher_actions,
                 CommandBarConfig::notes_style(),
-                std::sync::Arc::new(theme::load_theme()),
+                std::sync::Arc::new(theme::get_cached_theme()),
             ),
             browse_panel: None,
             pending_action: Arc::new(Mutex::new(None)),
