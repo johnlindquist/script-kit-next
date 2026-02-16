@@ -1267,27 +1267,47 @@ impl ScriptListApp {
                         "open_with" => crate::file_search::open_with(&path),
                         "show_info" => crate::file_search::show_info(&path),
                         "attach_to_ai" => {
-                            ai::open_ai_window(cx)
-                                .map_err(|error| error.to_string())
-                                .map(|_| {
-                                    ai::add_ai_attachment(cx, &path);
+                            let deferred_path = path.clone();
+                            self.hide_main_and_reset(cx);
+
+                            cx.spawn(async move |this, cx| {
+                                Timer::after(std::time::Duration::from_millis(1)).await;
+                                this.update(cx, |this, cx| {
+                                    if let Err(error) = ai::open_ai_window(cx) {
+                                        tracing::error!(
+                                            message = ? &format!("Failed to open AI window: {}", error)
+                                        );
+                                        this.show_hud(
+                                            "Failed to open AI window".to_string(),
+                                            Some(HUD_MEDIUM_MS),
+                                            cx,
+                                        );
+                                        cx.notify();
+                                        return;
+                                    }
+
+                                    ai::add_ai_attachment(cx, &deferred_path);
+                                    this.show_hud("Attached to AI".to_string(), Some(HUD_SHORT_MS), cx);
+                                    cx.notify();
                                 })
+                                .ok();
+                            })
+                            .detach();
+
+                            Ok(())
                         }
                         _ => Ok(()),
                     };
 
                     match result {
                         Ok(()) => {
-                            if action_id == "attach_to_ai" {
-                                self.show_hud("Attached to AI".to_string(), Some(HUD_SHORT_MS), cx);
-                            } else if let Some(message) = file_search_action_success_hud(action_id) {
-                                self.show_hud(message.to_string(), Some(HUD_SHORT_MS), cx);
+                            if action_id != "attach_to_ai" {
+                                if let Some(message) = file_search_action_success_hud(action_id) {
+                                    self.show_hud(message.to_string(), Some(HUD_SHORT_MS), cx);
+                                }
                             }
                             self.file_search_actions_path = None;
-                            if action_id == "open_file"
-                                || action_id == "open_directory"
-                                || action_id == "attach_to_ai"
-                            {
+                            if action_id == "open_file" || action_id == "open_directory" {
                                 self.hide_main_and_reset(cx);
                             }
                         }

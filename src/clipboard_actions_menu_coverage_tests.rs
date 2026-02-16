@@ -60,4 +60,28 @@ mod tests {
             missing
         );
     }
+
+    #[test]
+    fn file_attach_to_ai_hides_main_before_opening_ai_window() {
+        let handler = app_action_handler_region();
+        let branch_start = handler
+            .find("\"attach_to_ai\" => {")
+            .expect("Expected attach_to_ai handler branch");
+        let branch = &handler[branch_start..];
+
+        let hide_index = branch
+            .find("self.hide_main_and_reset(cx);")
+            .expect("Expected attach_to_ai to hide main window first");
+        let spawn_index = branch
+            .find("cx.spawn(async move |this, cx| {")
+            .expect("Expected attach_to_ai to defer AI open via spawn");
+        let open_index = branch
+            .find("ai::open_ai_window(cx)")
+            .expect("Expected attach_to_ai to open AI window");
+
+        assert!(
+            hide_index < spawn_index && spawn_index < open_index,
+            "attach_to_ai should hide main, then defer open_ai_window via cx.spawn"
+        );
+    }
 }
