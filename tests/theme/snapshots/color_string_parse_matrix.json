@@ -72,17 +72,17 @@
   {
     "input": "0x12345",
     "parsed": null,
-    "error": "hex color must be 3, 4, 6, or 8 characters, got 5"
+    "error": "hex color must be 3, 6, or 8 characters, got 5"
   },
   {
     "input": "1234567",
     "parsed": null,
-    "error": "hex color must be 3, 4, 6, or 8 characters, got 7"
+    "error": "hex color must be 3, 6, or 8 characters, got 7"
   },
   {
     "input": "",
     "parsed": null,
-    "error": "hex color must be 3, 4, 6, or 8 characters, got 0"
+    "error": "hex color must be 3, 6, or 8 characters, got 0"
   },
   {
     "input": "hello",
