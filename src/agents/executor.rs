@@ -672,9 +672,10 @@ mod tests {
 
             let error = build_terminal_command(&agent)
                 .expect_err("paths with parent dir segments should be rejected");
+            let error_chain = format!("{error:#}");
             assert!(
-                error.to_string().contains("reason=parent_dir_segment"),
-                "error should include parent_dir_segment reason"
+                error_chain.contains("reason=parent_dir_segment"),
+                "error chain should include parent_dir_segment reason: {error_chain}"
             );
         });
     }
