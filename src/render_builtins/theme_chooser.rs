@@ -1,3 +1,5 @@
+use crate::theme::gpui_integration::best_contrast_of_two;
+
 const ALPHA_BADGE_BORDER: u32 = 0x40;
 const ALPHA_FOOTER_BORDER: u32 = 0x30;
 const ALPHA_TOGGLE_BG: u32 = 0x80;
@@ -96,27 +98,6 @@ impl ScriptListApp {
         (0.80, "80%"),
         (1.00, "100%"),
     ];
-
-    /// Compute on-accent text color based on accent luminance
-    fn accent_on_text_color(accent: u32, bg_main: u32) -> u32 {
-        let contrast_ratio = |a: f32, b: f32| {
-            let (lighter, darker) = if a >= b { (a, b) } else { (b, a) };
-            (lighter + 0.05) / (darker + 0.05)
-        };
-
-        let accent_luminance = theme::relative_luminance_srgb(accent);
-        let bg_luminance = theme::relative_luminance_srgb(bg_main);
-        let white_luminance = theme::relative_luminance_srgb(0xFFFFFF);
-
-        let contrast_with_background = contrast_ratio(accent_luminance, bg_luminance);
-        let contrast_with_white = contrast_ratio(accent_luminance, white_luminance);
-
-        if contrast_with_background >= contrast_with_white {
-            bg_main
-        } else {
-            0xFFFFFF
-        }
-    }
 
     /// Find the closest accent palette index for a given accent color
     fn find_accent_palette_index(accent: u32) -> Option<usize> {
@@ -331,8 +312,11 @@ impl ScriptListApp {
                     let (new_accent, _) = Self::ACCENT_PALETTE[new_idx];
                     let mut modified = (*this.theme).clone();
                     modified.colors.accent.selected = new_accent;
-                    modified.colors.text.on_accent =
-                        Self::accent_on_text_color(new_accent, modified.colors.background.main);
+                    modified.colors.text.on_accent = best_contrast_of_two(
+                        new_accent,
+                        0xFFFFFF,
+                        modified.colors.background.main,
+                    );
                     this.theme = std::sync::Arc::new(modified);
                     theme::sync_gpui_component_theme(cx);
                     cx.notify();
@@ -345,8 +329,11 @@ impl ScriptListApp {
                     let (new_accent, _) = Self::ACCENT_PALETTE[new_idx];
                     let mut modified = (*this.theme).clone();
                     modified.colors.accent.selected = new_accent;
-                    modified.colors.text.on_accent =
-                        Self::accent_on_text_color(new_accent, modified.colors.background.main);
+                    modified.colors.text.on_accent = best_contrast_of_two(
+                        new_accent,
+                        0xFFFFFF,
+                        modified.colors.background.main,
+                    );
                     this.theme = std::sync::Arc::new(modified);
                     theme::sync_gpui_component_theme(cx);
                     cx.notify();
@@ -849,7 +836,7 @@ impl ScriptListApp {
                                     let mut modified = (*this.theme).clone();
                                     modified.colors.accent.selected = color;
                                     modified.colors.text.on_accent =
-                                        Self::accent_on_text_color(color, swatch_bg_main);
+                                        best_contrast_of_two(color, 0xFFFFFF, swatch_bg_main);
                                     this.theme = std::sync::Arc::new(modified);
                                     theme::sync_gpui_component_theme(cx);
                                     cx.notify();
@@ -1593,19 +1580,13 @@ mod theme_chooser_filter_tests {
     #[test]
     fn test_accent_on_text_color_prefers_background_for_bright_accent() {
         let bg_main = 0x1E1E1E;
-        assert_eq!(
-            ScriptListApp::accent_on_text_color(0xFBBF24, bg_main),
-            bg_main
-        );
+        assert_eq!(best_contrast_of_two(0xFBBF24, 0xFFFFFF, bg_main), bg_main);
     }
 
     #[test]
     fn test_accent_on_text_color_prefers_white_for_dark_accent() {
         let bg_main = 0x1E1E1E;
-        assert_eq!(
-            ScriptListApp::accent_on_text_color(0x312E81, bg_main),
-            0xFFFFFF
-        );
+        assert_eq!(best_contrast_of_two(0x312E81, 0xFFFFFF, bg_main), 0xFFFFFF);
     }
 
     #[test]

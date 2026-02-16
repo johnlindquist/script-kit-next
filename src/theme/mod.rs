@@ -16,7 +16,7 @@
 //! - `service` - Global theme watcher service
 
 mod color_resolver;
-mod gpui_integration;
+pub(crate) mod gpui_integration;
 mod helpers;
 pub mod hex_color;
 pub mod prelude;
