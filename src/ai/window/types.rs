@@ -63,16 +63,6 @@ pub(super) const OP_MSG_BORDER: f32 = 0.45; // left-border on user bubbles
 // -- Dot separator --
 pub(super) const DOT_SIZE: gpui::Pixels = px(3.);
 
-/// Events from the streaming thread
-pub(super) enum StreamingEvent {
-    /// A chunk of text received
-    Chunk(String),
-    /// Streaming completed successfully
-    Done,
-    /// An error occurred
-    Error(String),
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct StreamingSessionKey {
     pub(super) chat_id: ChatId,
