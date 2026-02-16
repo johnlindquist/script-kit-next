@@ -36,8 +36,8 @@
   },
   {
     "input": "#fff",
-    "parsed": null,
-    "error": "hex color must be 6 characters, got 3"
+    "parsed": "#FFFFFF",
+    "error": null
   },
   {
     "input": "#1E1E1G",
@@ -72,17 +72,17 @@
   {
     "input": "0x12345",
     "parsed": null,
-    "error": "hex color must be 6 characters, got 5"
+    "error": "hex color must be 3, 4, 6, or 8 characters, got 5"
   },
   {
     "input": "1234567",
     "parsed": null,
-    "error": "invalid color format '1234567' - use #RRGGBB, rgba(r,g,b,a), or a number"
+    "error": "hex color must be 3, 4, 6, or 8 characters, got 7"
   },
   {
     "input": "",
     "parsed": null,
-    "error": "invalid color format '' - use #RRGGBB, rgba(r,g,b,a), or a number"
+    "error": "hex color must be 3, 4, 6, or 8 characters, got 0"
   },
   {
     "input": "hello",
