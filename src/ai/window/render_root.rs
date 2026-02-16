@@ -134,11 +134,20 @@ impl Render for AiApp {
 
         // Capture mouse_cursor_hidden for use in div builder.
         let mouse_cursor_hidden = self.mouse_cursor_hidden;
+        let title_text = if let Some(chat) = self.get_selected_chat() {
+            if chat.title.is_empty() {
+                "New Chat".to_string()
+            } else {
+                chat.title.clone()
+            }
+        } else {
+            "AI Chat".to_string()
+        };
 
         div()
-            .relative() // Required for absolutely positioned sidebar toggle
+            .relative() // Keep relative positioning for overlay dropdowns
             .flex()
-            .flex_row()
+            .flex_col()
             .size_full()
             // Apply vibrancy background like POC does - Root no longer provides this
             .bg(vibrancy_bg)
@@ -155,89 +164,94 @@ impl Render for AiApp {
             .capture_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 this.handle_root_key_down(event, window, cx);
             }))
-            .child(self.render_sidebar(cx))
-            .child(self.render_main_panel(cx))
-            // Absolutely positioned sidebar toggle - stays fixed regardless of sidebar state (like Raycast)
             .child(
                 div()
-                    .absolute()
-                    .top(px(4.)) // Align with traffic lights (~8px) and title center
-                    .left(px(78.)) // After traffic lights (~70px) + small gap
-                    .child(self.render_sidebar_toggle(cx)),
-            )
-            // Absolutely positioned CENTERED title - centered within main panel area.
-            .child(
-                div()
-                    .id("ai-centered-title")
-                    .absolute()
-                    .top_0()
-                    // Offset left by sidebar width when sidebar is open
-                    .when(self.sidebar_collapsed, |d| d.left_0())
-                    .when(!self.sidebar_collapsed, |d| d.left(px(240.))) // Sidebar width
-                    .right_0()
-                    .h(px(36.))
+                    .id("ai-titlebar")
+                    .w_full()
+                    .h(TITLEBAR_H)
                     .flex()
+                    .flex_row()
                     .items_center()
-                    .justify_center()
+                    .border_b_1()
+                    .border_color(cx.theme().border)
                     .child(
                         div()
-                            .text_sm()
-                            .font_weight(gpui::FontWeight::MEDIUM)
-                            .text_color(cx.theme().muted_foreground.opacity(0.7))
-                            .child(
-                                self.get_selected_chat()
-                                    .map(|c| {
-                                        if c.title.is_empty() {
-                                            "New Chat".to_string()
-                                        } else {
-                                            c.title.clone()
-                                        }
-                                    })
-                                    .unwrap_or_else(|| "AI Chat".to_string()),
-                            ),
-                    ),
-            )
-            // Absolutely positioned right-side icons in header
-            .child(
-                div()
-                    .absolute()
-                    .top(px(10.)) // Vertically centered in 36px header
-                    .right(px(12.))
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    // Plus icon for new chat (using SVG for reliable rendering)
+                            .flex_1()
+                            .h_full()
+                            .flex()
+                            .items_center()
+                            .px(S4)
+                            .child(self.render_sidebar_toggle(cx)),
+                    )
                     .child(
                         div()
-                            .id("ai-new-chat-icon-global")
-                            .cursor_pointer()
-                            .hover(|s| s.opacity(1.0))
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.create_chat(window, cx);
-                            }))
+                            .id("ai-centered-title")
+                            .h_full()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .px(S2)
                             .child(
-                                svg()
-                                    .external_path(LocalIconName::Plus.external_path())
-                                    .size(px(16.))
-                                    .text_color(cx.theme().muted_foreground.opacity(0.7)),
+                                div()
+                                    .text_sm()
+                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .text_color(cx.theme().muted_foreground.opacity(0.7))
+                                    .child(title_text),
                             ),
                     )
-                    // Dropdown chevron icon (using SVG for reliable rendering)
                     .child(
                         div()
-                            .id("ai-menu-icon-global")
-                            .cursor_pointer()
-                            .hover(|s| s.opacity(1.0))
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.toggle_new_chat_command_bar(window, cx);
-                            }))
+                            .flex_1()
+                            .h_full()
+                            .flex()
+                            .items_center()
+                            .justify_end()
+                            .gap(S2)
+                            .px(S4)
+                            // Plus icon for new chat (using SVG for reliable rendering)
                             .child(
-                                svg()
-                                    .external_path(LocalIconName::ChevronDown.external_path())
-                                    .size(px(16.))
-                                    .text_color(cx.theme().muted_foreground.opacity(0.7)),
+                                div()
+                                    .id("ai-new-chat-icon-global")
+                                    .cursor_pointer()
+                                    .hover(|s| s.opacity(1.0))
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.create_chat(window, cx);
+                                    }))
+                                    .child(
+                                        svg()
+                                            .external_path(LocalIconName::Plus.external_path())
+                                            .size(px(16.))
+                                            .text_color(cx.theme().muted_foreground.opacity(0.7)),
+                                    ),
+                            )
+                            // Dropdown chevron icon (using SVG for reliable rendering)
+                            .child(
+                                div()
+                                    .id("ai-menu-icon-global")
+                                    .cursor_pointer()
+                                    .hover(|s| s.opacity(1.0))
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.toggle_new_chat_command_bar(window, cx);
+                                    }))
+                                    .child(
+                                        svg()
+                                            .external_path(
+                                                LocalIconName::ChevronDown.external_path(),
+                                            )
+                                            .size(px(16.))
+                                            .text_color(cx.theme().muted_foreground.opacity(0.7)),
+                                    ),
                             ),
                     ),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .flex_1()
+                    .flex()
+                    .flex_row()
+                    .child(self.render_sidebar(cx))
+                    .child(self.render_main_panel(cx)),
             )
             // Overlay dropdowns (only one at a time)
             .when(self.showing_presets_dropdown, |el| {

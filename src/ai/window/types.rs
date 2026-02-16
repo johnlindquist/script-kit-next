@@ -1,37 +1,58 @@
 use super::*;
+use gpui::Pixels;
 
-pub(super) const SP_1: gpui::Pixels = px(2.);
-pub(super) const SP_2: gpui::Pixels = px(4.);
-pub(super) const SP_3: gpui::Pixels = px(6.);
-pub(super) const SP_4: gpui::Pixels = px(8.);
-pub(super) const SP_5: gpui::Pixels = px(10.);
-pub(super) const SP_6: gpui::Pixels = px(12.);
-pub(super) const SP_7: gpui::Pixels = px(14.);
-pub(super) const SP_8: gpui::Pixels = px(16.);
-pub(super) const SP_9: gpui::Pixels = px(20.);
-pub(super) const SP_10: gpui::Pixels = px(24.);
+pub(super) const SP_1: Pixels = px(2.);
+pub(super) const SP_2: Pixels = px(4.);
+pub(super) const SP_3: Pixels = px(6.);
+pub(super) const SP_4: Pixels = px(8.);
+pub(super) const SP_5: Pixels = px(10.);
+pub(super) const SP_6: Pixels = px(12.);
+pub(super) const SP_7: Pixels = px(14.);
+pub(super) const SP_8: Pixels = px(16.);
+pub(super) const SP_9: Pixels = px(20.);
+pub(super) const SP_10: Pixels = px(24.);
+
+pub(super) const S0: Pixels = px(0.);
+pub(super) const S1: Pixels = px(4.);
+pub(super) const S2: Pixels = px(8.);
+pub(super) const S3: Pixels = px(12.);
+pub(super) const S4: Pixels = px(16.);
+pub(super) const S5: Pixels = px(20.);
+pub(super) const S6: Pixels = px(24.);
+pub(super) const S7: Pixels = px(32.);
+pub(super) const S8: Pixels = px(40.);
+pub(super) const S9: Pixels = px(48.);
 
 // -- Border radii --
-pub(super) const RADIUS_XS: gpui::Pixels = px(3.);
-pub(super) const RADIUS_SM: gpui::Pixels = px(4.);
-pub(super) const RADIUS_MD: gpui::Pixels = px(6.);
-pub(super) const RADIUS_LG: gpui::Pixels = px(10.);
+pub(super) const RADIUS_XS: Pixels = px(3.);
+pub(super) const RADIUS_SM: Pixels = px(4.);
+pub(super) const RADIUS_MD: Pixels = px(6.);
+pub(super) const RADIUS_LG: Pixels = px(10.);
+pub(super) const R_SM: Pixels = px(8.);
+pub(super) const R_MD: Pixels = px(10.);
+pub(super) const R_LG: Pixels = px(12.);
+pub(super) const R_XL: Pixels = px(16.);
 
 // -- Icon sizes --
-pub(super) const ICON_XS: gpui::Pixels = px(12.);
-pub(super) const ICON_SM: gpui::Pixels = px(14.);
-pub(super) const ICON_MD: gpui::Pixels = px(16.);
+pub(super) const ICON_XS: Pixels = px(12.);
+pub(super) const ICON_SM: Pixels = px(14.);
+pub(super) const ICON_MD: Pixels = px(16.);
 
 // -- Layout constants --
-pub(super) const SIDEBAR_W: gpui::Pixels = px(240.);
-pub(super) const TITLEBAR_H: gpui::Pixels = px(36.);
+pub(super) const SIDEBAR_W: Pixels = px(240.);
+pub(super) const TITLEBAR_H: Pixels = px(48.);
+pub(super) const SIDEBAR_ROW_H: Pixels = px(52.);
+pub(super) const COMPOSER_H: Pixels = px(36.);
+pub(super) const SEARCH_H: Pixels = px(36.);
+pub(super) const SIDEBAR_INSET_X: Pixels = S3;
+pub(super) const PANEL_INSET_X: Pixels = S4;
 
 // -- Message bubble tokens --
-pub(super) const MSG_PX: gpui::Pixels = SP_9;
-pub(super) const MSG_PY: gpui::Pixels = SP_7;
-pub(super) const MSG_RADIUS: gpui::Pixels = px(10.);
-pub(super) const MSG_GAP: gpui::Pixels = SP_9;
-pub(super) const MSG_GAP_CONTINUATION: gpui::Pixels = SP_3;
+pub(super) const MSG_PX: Pixels = SP_9;
+pub(super) const MSG_PY: Pixels = SP_7;
+pub(super) const MSG_RADIUS: Pixels = px(10.);
+pub(super) const MSG_GAP: Pixels = SP_9;
+pub(super) const MSG_GAP_CONTINUATION: Pixels = SP_3;
 
 #[cfg(test)]
 mod message_spacing_tests {
@@ -44,6 +65,37 @@ mod message_spacing_tests {
         assert_eq!(MSG_GAP, SP_9);
         assert_eq!(MSG_GAP_CONTINUATION, SP_3);
         assert!(MSG_GAP / MSG_GAP_CONTINUATION > 1.0);
+    }
+}
+
+#[cfg(test)]
+mod layout_token_tests {
+    use super::*;
+
+    #[test]
+    fn test_layout_tokens_define_expected_4px_grid_and_component_sizing() {
+        assert_eq!(S0, px(0.));
+        assert_eq!(S1, px(4.));
+        assert_eq!(S2, px(8.));
+        assert_eq!(S3, px(12.));
+        assert_eq!(S4, px(16.));
+        assert_eq!(S5, px(20.));
+        assert_eq!(S6, px(24.));
+        assert_eq!(S7, px(32.));
+        assert_eq!(S8, px(40.));
+        assert_eq!(S9, px(48.));
+
+        assert_eq!(R_SM, px(8.));
+        assert_eq!(R_MD, px(10.));
+        assert_eq!(R_LG, px(12.));
+        assert_eq!(R_XL, px(16.));
+
+        assert_eq!(SIDEBAR_ROW_H, px(52.));
+        assert_eq!(COMPOSER_H, px(36.));
+        assert_eq!(SEARCH_H, px(36.));
+        assert_eq!(SIDEBAR_INSET_X, S3);
+        assert_eq!(PANEL_INSET_X, S4);
+        assert_eq!(TITLEBAR_H, px(48.));
     }
 }
 
@@ -61,7 +113,7 @@ pub(super) const OP_ASSISTANT_MSG_BG: f32 = 0.10; // assistant bubble tint (mute
 pub(super) const OP_MSG_BORDER: f32 = 0.45; // left-border on user bubbles
 
 // -- Dot separator --
-pub(super) const DOT_SIZE: gpui::Pixels = px(3.);
+pub(super) const DOT_SIZE: Pixels = px(3.);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct StreamingSessionKey {
