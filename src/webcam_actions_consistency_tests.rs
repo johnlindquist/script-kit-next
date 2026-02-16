@@ -186,14 +186,8 @@ mod tests {
 
     #[test]
     fn webcam_camera_module_uses_typed_startup_error_taxonomy() {
-        let content = format!(
-            "{}\n{}\n{}",
-            fs::read_to_string("src/camera/mod.rs").expect("Failed to read src/camera/mod.rs"),
-            fs::read_to_string("src/camera/part_000.rs")
-                .expect("Failed to read src/camera/part_000.rs"),
-            fs::read_to_string("src/camera/part_001.rs")
-                .expect("Failed to read src/camera/part_001.rs"),
-        );
+        let content =
+            fs::read_to_string("src/camera/mod.rs").expect("Failed to read src/camera/mod.rs");
 
         assert!(
             content.contains("pub enum WebcamStartError"),
