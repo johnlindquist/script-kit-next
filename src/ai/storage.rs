@@ -5,12 +5,13 @@
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 use tracing::{debug, info};
 
-use super::model::{Chat, ChatId, ChatSource, Message, MessageRole};
+use super::model::{Chat, ChatId, ChatSource, ImageAttachment, Message, MessageRole};
 
 /// Global database connection for AI chats
 static AI_DB: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
@@ -96,6 +97,18 @@ pub fn init_ai_db() -> Result<()> {
 
         CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);
         CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
+
+        -- Image attachments for multimodal messages
+        CREATE TABLE IF NOT EXISTS message_images (
+            message_id TEXT NOT NULL,
+            idx INTEGER NOT NULL,
+            data TEXT NOT NULL,
+            media_type TEXT NOT NULL,
+            PRIMARY KEY (message_id, idx),
+            FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_message_images_message_id ON message_images(message_id);
 
         -- Full-text search support for chats (searches titles and message content)
         CREATE VIRTUAL TABLE IF NOT EXISTS chats_fts USING fts5(
@@ -553,6 +566,39 @@ fn save_message_internal(message: &Message, update_chat_timestamp: bool) -> Resu
     )
     .context("Failed to save message")?;
 
+    tx.execute(
+        "DELETE FROM message_images WHERE message_id = ?1",
+        params![message.id.as_str()],
+    )
+    .with_context(|| format!("Failed to clear existing images for message {}", message.id))?;
+
+    if !message.images.is_empty() {
+        let mut image_stmt = tx
+            .prepare(
+                r#"
+                INSERT INTO message_images (message_id, idx, data, media_type)
+                VALUES (?1, ?2, ?3, ?4)
+                "#,
+            )
+            .context("Failed to prepare image insert statement")?;
+
+        for (idx, image) in message.images.iter().enumerate() {
+            image_stmt
+                .execute(params![
+                    message.id.as_str(),
+                    idx as i64,
+                    image.data.as_str(),
+                    image.media_type.as_str(),
+                ])
+                .with_context(|| {
+                    format!(
+                        "Failed to save image idx={} for message {}",
+                        idx, message.id
+                    )
+                })?;
+        }
+    }
+
     // Update the chat's updated_at timestamp (unless explicitly skipped for mock data)
     if update_chat_timestamp {
         let now = Utc::now().to_rfc3339();
@@ -570,6 +616,7 @@ fn save_message_internal(message: &Message, update_chat_timestamp: bool) -> Resu
         message_id = %message.id,
         chat_id = %message.chat_id,
         role = %message.role,
+        image_count = message.images.len(),
         "Message saved"
     );
     Ok(())
@@ -586,6 +633,53 @@ pub fn delete_message(message_id: &str) -> Result<()> {
         .context("Failed to delete message")?;
 
     debug!(message_id = %message_id, "Message deleted");
+    Ok(())
+}
+
+/// Delete multiple messages atomically.
+///
+/// If any message ID is missing or cannot be deleted, the transaction is
+/// rolled back and no messages are deleted.
+pub fn delete_messages_batch(message_ids: &[String]) -> Result<()> {
+    if message_ids.is_empty() {
+        return Ok(());
+    }
+
+    let db = get_db()?;
+    let mut conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+
+    let tx = conn
+        .transaction()
+        .context("Failed to start batch delete transaction")?;
+
+    let mut delete_stmt = tx
+        .prepare("DELETE FROM messages WHERE id = ?1")
+        .context("Failed to prepare batch message delete statement")?;
+
+    for message_id in message_ids {
+        let rows_deleted = delete_stmt
+            .execute(params![message_id])
+            .with_context(|| format!("Failed to delete message {} in batch", message_id))?;
+
+        if rows_deleted != 1 {
+            drop(delete_stmt);
+            tx.rollback()
+                .context("Failed to rollback batch delete after mismatch")?;
+            return Err(anyhow::anyhow!(
+                "Batch delete mismatch for message {}: expected 1 row deleted, got {}",
+                message_id,
+                rows_deleted
+            ));
+        }
+    }
+
+    drop(delete_stmt);
+    tx.commit()
+        .context("Failed to commit batch message delete transaction")?;
+
+    debug!(count = message_ids.len(), "Batch messages deleted");
     Ok(())
 }
 
@@ -607,11 +701,14 @@ pub fn get_chat_messages(chat_id: &ChatId) -> Result<Vec<Message>> {
         )
         .context("Failed to prepare get_chat_messages query")?;
 
-    let messages = stmt
+    let mut messages = stmt
         .query_map(params![chat_id.as_str()], row_to_message)
         .context("Failed to query messages")?
         .collect::<Result<Vec<_>, _>>()
         .context("Failed to collect messages")?;
+
+    populate_message_images(&conn, &mut messages)
+        .with_context(|| format!("Failed to populate images for chat {}", chat_id))?;
 
     debug!(chat_id = %chat_id, count = messages.len(), "Retrieved chat messages");
     Ok(messages)
@@ -645,12 +742,72 @@ pub fn get_recent_messages(chat_id: &ChatId, limit: usize) -> Result<Vec<Message
     // Reverse to get chronological order
     messages.reverse();
 
+    populate_message_images(&conn, &mut messages).with_context(|| {
+        format!(
+            "Failed to populate images for recent messages in chat {}",
+            chat_id
+        )
+    })?;
+
     Ok(messages)
 }
 
 // ============================================================================
 // Row Converters
 // ============================================================================
+
+/// Populate message image attachments in-place for a batch of messages.
+fn populate_message_images(conn: &Connection, messages: &mut [Message]) -> Result<()> {
+    if messages.is_empty() {
+        return Ok(());
+    }
+
+    // Keep below SQLite parameter limits with headroom for future query changes.
+    const MESSAGE_IMAGE_QUERY_CHUNK_SIZE: usize = 900;
+    let message_ids: Vec<&str> = messages.iter().map(|m| m.id.as_str()).collect();
+    let mut images_by_message_id: HashMap<String, Vec<ImageAttachment>> = HashMap::new();
+
+    for message_id_chunk in message_ids.chunks(MESSAGE_IMAGE_QUERY_CHUNK_SIZE) {
+        let placeholders = vec!["?"; message_id_chunk.len()].join(", ");
+        let sql = format!(
+            "SELECT message_id, data, media_type
+             FROM message_images
+             WHERE message_id IN ({})
+             ORDER BY message_id ASC, idx ASC",
+            placeholders
+        );
+
+        let mut stmt = conn
+            .prepare(&sql)
+            .context("Failed to prepare message image query")?;
+
+        let image_rows = stmt
+            .query_map(params_from_iter(message_id_chunk.iter().copied()), |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    ImageAttachment {
+                        data: row.get(1)?,
+                        media_type: row.get(2)?,
+                    },
+                ))
+            })
+            .context("Failed to query message images")?;
+
+        for image_row in image_rows {
+            let (message_id, image) = image_row.context("Failed to read message image row")?;
+            images_by_message_id
+                .entry(message_id)
+                .or_default()
+                .push(image);
+        }
+    }
+
+    for message in messages {
+        message.images = images_by_message_id.remove(&message.id).unwrap_or_default();
+    }
+
+    Ok(())
+}
 
 /// Convert a database row to a Chat
 fn row_to_chat(row: &rusqlite::Row) -> rusqlite::Result<Chat> {
@@ -1429,5 +1586,127 @@ mod tests {
             "AI DB should have busy_timeout >= 1000ms, got {}",
             busy_timeout
         );
+    }
+
+    #[test]
+    fn test_save_message_persists_images_and_getters_populate_them() {
+        let _ = init_ai_db();
+
+        let chat = Chat::new("test-model-images", "test-provider-images");
+        create_chat(&chat).expect("Should create chat");
+
+        let mut message = Message::user(chat.id, "user message with image attachments");
+        message.images = vec![
+            ImageAttachment::png("base64-image-1".to_string()),
+            ImageAttachment::jpeg("base64-image-2".to_string()),
+        ];
+
+        save_message(&message).expect("Should save message with images");
+
+        let all_messages = get_chat_messages(&chat.id).expect("Should fetch chat messages");
+        let stored_message = all_messages
+            .iter()
+            .find(|m| m.id == message.id)
+            .expect("Saved message should exist in full chat query");
+
+        assert_eq!(stored_message.images.len(), 2);
+        assert_eq!(stored_message.images[0].data, "base64-image-1");
+        assert_eq!(stored_message.images[0].media_type, "image/png");
+        assert_eq!(stored_message.images[1].data, "base64-image-2");
+        assert_eq!(stored_message.images[1].media_type, "image/jpeg");
+
+        let recent_messages =
+            get_recent_messages(&chat.id, 1).expect("Should fetch recent message");
+        assert_eq!(recent_messages.len(), 1);
+        assert_eq!(recent_messages[0].id, message.id);
+        assert_eq!(recent_messages[0].images.len(), 2);
+
+        delete_chat_permanently(&chat.id).expect("Should cleanup test chat");
+    }
+
+    #[test]
+    fn test_save_message_replaces_existing_images_on_upsert() {
+        let _ = init_ai_db();
+
+        let chat = Chat::new("test-model-image-upsert", "test-provider-image-upsert");
+        create_chat(&chat).expect("Should create chat");
+
+        let mut message = Message::user(chat.id, "first revision");
+        message.images = vec![ImageAttachment::png("stale-base64".to_string())];
+        save_message(&message).expect("Should save initial message image");
+
+        message.content = "second revision".to_string();
+        message.images = vec![
+            ImageAttachment::jpeg("fresh-base64-1".to_string()),
+            ImageAttachment::png("fresh-base64-2".to_string()),
+        ];
+        save_message(&message).expect("Should replace message image attachments");
+
+        let stored_messages = get_chat_messages(&chat.id).expect("Should read back chat messages");
+        let stored = stored_messages
+            .iter()
+            .find(|m| m.id == message.id)
+            .expect("Updated message should exist");
+
+        assert_eq!(stored.images.len(), 2);
+        assert_eq!(stored.images[0].data, "fresh-base64-1");
+        assert_eq!(stored.images[0].media_type, "image/jpeg");
+        assert_eq!(stored.images[1].data, "fresh-base64-2");
+        assert_eq!(stored.images[1].media_type, "image/png");
+
+        delete_chat_permanently(&chat.id).expect("Should cleanup test chat");
+    }
+
+    #[test]
+    fn test_delete_messages_batch_rolls_back_when_any_message_missing() {
+        let _ = init_ai_db();
+
+        let chat = Chat::new("test-model-batch-delete", "test-provider-batch-delete");
+        create_chat(&chat).expect("Should create chat");
+
+        let mut first = Message::user(chat.id, "first");
+        first.images = vec![ImageAttachment::png("rollback-image".to_string())];
+        let second = Message::assistant(chat.id, "second");
+
+        save_message(&first).expect("Should save first message");
+        save_message(&second).expect("Should save second message");
+
+        let missing_id = format!("missing-{}", ChatId::new());
+        let failed_delete =
+            delete_messages_batch(&[first.id.clone(), missing_id.clone(), second.id.clone()]);
+        assert!(
+            failed_delete.is_err(),
+            "Batch delete should fail when any message id is missing"
+        );
+
+        let still_present = get_chat_messages(&chat.id).expect("Should read chat after rollback");
+        assert!(
+            still_present.iter().any(|m| m.id == first.id),
+            "Rollback should preserve first message when batch delete mismatches"
+        );
+        assert!(
+            still_present.iter().any(|m| m.id == second.id),
+            "Rollback should preserve second message when batch delete mismatches"
+        );
+        let first_after_rollback = still_present
+            .iter()
+            .find(|m| m.id == first.id)
+            .expect("First message should be present after rollback");
+        assert_eq!(
+            first_after_rollback.images.len(),
+            1,
+            "Rollback should also preserve image attachments"
+        );
+
+        delete_messages_batch(&[first.id.clone(), second.id.clone()])
+            .expect("Batch delete should succeed when all ids exist");
+        let after_success =
+            get_chat_messages(&chat.id).expect("Should read chat after successful delete");
+        assert!(
+            after_success.is_empty(),
+            "All messages should be removed after successful batch delete"
+        );
+
+        delete_chat_permanently(&chat.id).expect("Should cleanup test chat");
     }
 }

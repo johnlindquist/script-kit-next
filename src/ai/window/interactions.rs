@@ -334,16 +334,20 @@ impl AiApp {
                 .map(|m| m.id.clone())
                 .collect();
 
-            for mid in &to_delete {
-                if let Err(error) = storage::delete_message(mid) {
-                    tracing::error!(
-                        error = %error,
-                        message_id = %mid,
-                        edit_message_id = %edit_id,
-                        "Failed to delete message while submitting edit; aborting resubmit"
-                    );
-                    return;
-                }
+            if let Err(error) = storage::delete_messages_batch(&to_delete) {
+                let user_error = format!(
+                    "Failed to edit message because history cleanup failed: {}",
+                    error
+                );
+                tracing::error!(
+                    error = %error,
+                    edit_message_id = %edit_id,
+                    delete_count = to_delete.len(),
+                    "Failed to delete message batch while submitting edit; aborting resubmit"
+                );
+                self.streaming_error = Some(user_error);
+                cx.notify();
+                return;
             }
 
             self.current_messages.truncate(idx);
@@ -417,10 +421,18 @@ impl AiApp {
         if let Some(chat_id) = self.renaming_chat_id.take() {
             let new_title = self.rename_input_state.read(cx).value().to_string();
             if !new_title.is_empty() {
-                if let Some(chat) = self.chats.iter_mut().find(|c| c.id == chat_id) {
+                if let Err(error) = storage::update_chat_title(&chat_id, &new_title) {
+                    let user_error = format!("Failed to rename chat: {}", error);
+                    tracing::error!(
+                        error = %error,
+                        chat_id = %chat_id,
+                        title = %new_title,
+                        "Failed to persist chat rename"
+                    );
+                    self.streaming_error = Some(user_error);
+                } else if let Some(chat) = self.chats.iter_mut().find(|c| c.id == chat_id) {
                     chat.set_title(new_title.clone());
                 }
-                let _ = storage::update_chat_title(&chat_id, &new_title);
             }
         }
         cx.notify();
