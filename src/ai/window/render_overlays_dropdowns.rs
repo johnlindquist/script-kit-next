@@ -23,13 +23,13 @@ impl AiApp {
 
                 div()
                     .id(SharedString::from(format!("preset-{}", idx)))
-                    .px_3()
-                    .py_2()
-                    .mx_1()
-                    .rounded_md()
+                    .px(S3)
+                    .py(S2)
+                    .mx(S1)
+                    .rounded(R_MD)
                     .flex()
                     .items_center()
-                    .gap_3()
+                    .gap(S3)
                     .cursor_pointer()
                     .when(is_selected, |el| el.bg(accent))
                     .when(!is_selected, |el| el.hover(|el| el.bg(accent.opacity(0.5))))
@@ -41,7 +41,7 @@ impl AiApp {
                     .child(
                         svg()
                             .external_path(icon.external_path())
-                            .size(px(18.))
+                            .size(ICON_MD)
                             .text_color(if is_selected { accent_fg } else { muted_fg }),
                     )
                     // Name and description
@@ -81,8 +81,8 @@ impl AiApp {
             .flex()
             .items_start()
             .justify_start()
-            .pt_12()
-            .pl_4()
+            .pt(S9)
+            .pl(S4)
             .on_click(cx.listener(|this, _, _, cx| {
                 this.hide_presets_dropdown(cx);
             }))
@@ -94,7 +94,7 @@ impl AiApp {
                     .bg(bg_color)
                     .border_1()
                     .border_color(border_color)
-                    .rounded_lg()
+                    .rounded(R_LG)
                     // Shadow disabled for vibrancy - shadows on transparent elements cause gray fill
                     .overflow_hidden()
                     .flex()
@@ -103,8 +103,8 @@ impl AiApp {
                     // Header
                     .child(
                         div()
-                            .px_3()
-                            .py_2()
+                            .px(S3)
+                            .py(S2)
                             .border_b_1()
                             .border_color(border_color)
                             .text_sm()
@@ -118,14 +118,14 @@ impl AiApp {
                             .id("preset-list")
                             .flex_1()
                             .overflow_y_scroll()
-                            .p_1()
+                            .p(S1)
                             .children(preset_items),
                     )
                     // Footer hint
                     .child(
                         div()
-                            .px_3()
-                            .py_2()
+                            .px(S3)
+                            .py(S2)
                             .border_t_1()
                             .border_color(border_color)
                             .text_xs()
@@ -164,10 +164,10 @@ impl AiApp {
 
                 div()
                     .id(SharedString::from(format!("last-used-{}", idx)))
-                    .px_3()
-                    .py_2()
-                    .mx_1()
-                    .rounded_md()
+                    .px(S3)
+                    .py(S2)
+                    .mx(S1)
+                    .rounded(R_MD)
                     .flex()
                     .items_center()
                     .justify_between()
@@ -216,13 +216,13 @@ impl AiApp {
 
                 div()
                     .id(SharedString::from(format!("ncd-preset-{}", idx)))
-                    .px_3()
-                    .py_2()
-                    .mx_1()
-                    .rounded_md()
+                    .px(S3)
+                    .py(S2)
+                    .mx(S1)
+                    .rounded(R_MD)
                     .flex()
                     .items_center()
-                    .gap_2()
+                    .gap(S2)
                     .cursor_pointer()
                     .when(is_selected, |el| el.bg(accent))
                     .when(!is_selected, |el| el.hover(|el| el.bg(accent.opacity(0.5))))
@@ -234,7 +234,7 @@ impl AiApp {
                     .child(
                         svg()
                             .external_path(icon.external_path())
-                            .size(px(14.))
+                            .size(ICON_SM)
                             .text_color(if is_selected { accent_fg } else { muted_fg }),
                     )
                     .child(
@@ -270,10 +270,10 @@ impl AiApp {
 
                 div()
                     .id(SharedString::from(format!("ncd-model-{}", idx)))
-                    .px_3()
-                    .py_2()
-                    .mx_1()
-                    .rounded_md()
+                    .px(S3)
+                    .py(S2)
+                    .mx(S1)
+                    .rounded(R_MD)
                     .flex()
                     .items_center()
                     .justify_between()
@@ -314,8 +314,8 @@ impl AiApp {
             .flex()
             .items_start()
             .justify_end() // Align to right (near the + button)
-            .pt(px(40.)) // Below the titlebar
-            .pr_3() // Right padding
+            .pt(S8) // Below the titlebar
+            .pr(S3) // Right padding
             .on_click(cx.listener(|this, _, _, cx| {
                 this.hide_new_chat_dropdown(cx);
             }))
@@ -327,7 +327,7 @@ impl AiApp {
                     .bg(bg_color)
                     .border_1()
                     .border_color(border_color)
-                    .rounded_lg()
+                    .rounded(R_LG)
                     // Shadow disabled for vibrancy - shadows on transparent elements cause gray fill
                     .overflow_hidden()
                     .flex()
@@ -336,8 +336,8 @@ impl AiApp {
                     // Search input header
                     .child(
                         div()
-                            .px_3()
-                            .py_2()
+                            .px(S3)
+                            .py(S2)
                             .border_b_1()
                             .border_color(border_color)
                             .child(
@@ -353,7 +353,7 @@ impl AiApp {
                             .id("new-chat-dropdown-sections")
                             .flex_1()
                             .overflow_y_scroll()
-                            .p_1()
+                            .p(S1)
                             // Last Used Settings section (if not empty)
                             .when(!last_used_items.is_empty(), |d| {
                                 d.child(
@@ -361,14 +361,14 @@ impl AiApp {
                                         .flex()
                                         .flex_col()
                                         .w_full()
-                                        .mb_2()
+                                        .mb(S2)
                                         .child(
                                             div()
                                                 .text_xs()
                                                 .font_weight(gpui::FontWeight::MEDIUM)
                                                 .text_color(muted_fg)
-                                                .px_3()
-                                                .py_1()
+                                                .px(S3)
+                                                .py(S1)
                                                 .child("Last Used Settings"),
                                         )
                                         .children(last_used_items),
@@ -381,14 +381,14 @@ impl AiApp {
                                         .flex()
                                         .flex_col()
                                         .w_full()
-                                        .mb_2()
+                                        .mb(S2)
                                         .child(
                                             div()
                                                 .text_xs()
                                                 .font_weight(gpui::FontWeight::MEDIUM)
                                                 .text_color(muted_fg)
-                                                .px_3()
-                                                .py_1()
+                                                .px(S3)
+                                                .py(S1)
                                                 .child("Presets"),
                                         )
                                         .children(preset_items),
@@ -406,8 +406,8 @@ impl AiApp {
                                                 .text_xs()
                                                 .font_weight(gpui::FontWeight::MEDIUM)
                                                 .text_color(muted_fg)
-                                                .px_3()
-                                                .py_1()
+                                                .px(S3)
+                                                .py(S1)
                                                 .child("Models"),
                                         )
                                         .children(model_items),
@@ -417,8 +417,8 @@ impl AiApp {
                     // Footer with keyboard hint
                     .child(
                         div()
-                            .px_3()
-                            .py_2()
+                            .px(S3)
+                            .py(S2)
                             .border_t_1()
                             .border_color(border_color)
                             .flex()

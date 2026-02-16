@@ -116,8 +116,8 @@ impl AiApp {
         })
         .with_sizing_behavior(ListSizingBehavior::Infer)
         .size_full()
-        .px(SP_9)
-        .py(SP_8);
+        .px(PANEL_INSET_X)
+        .py(S4);
 
         // Track user scroll: show pill when user scrolls up (during streaming or with many messages)
         let show_scroll_pill =
@@ -161,7 +161,7 @@ impl AiApp {
                     div()
                         .id("scroll-to-bottom-pill")
                         .absolute()
-                        .bottom(SP_6)
+                        .bottom(S3)
                         .left_0()
                         .right_0()
                         .flex()
@@ -171,9 +171,9 @@ impl AiApp {
                                 .id("scroll-pill-btn")
                                 .flex()
                                 .items_center()
-                                .gap(SP_2)
-                                .px(SP_6)
-                                .py(SP_2)
+                                .gap(S1)
+                                .px(S3)
+                                .py(S1)
                                 .rounded_full()
                                 .bg(cx.theme().accent.opacity(0.85))
                                 .text_color(cx.theme().accent_foreground)

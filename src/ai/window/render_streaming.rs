@@ -30,8 +30,8 @@ impl AiApp {
             div()
                 .flex()
                 .items_center()
-                .gap(SP_3)
-                .py_2()
+                .gap(S2)
+                .py(S2)
                 .child(
                     div()
                         .text_sm()
@@ -42,22 +42,22 @@ impl AiApp {
                     div()
                         .flex()
                         .items_center()
-                        .gap(SP_1)
+                        .gap(S1)
                         .child(
                             div()
-                                .size(SP_2)
+                                .size(S1)
                                 .rounded_full()
                                 .bg(cx.theme().accent.opacity(OP_NEAR_FULL)),
                         )
                         .child(
                             div()
-                                .size(SP_2)
+                                .size(S1)
                                 .rounded_full()
                                 .bg(cx.theme().accent.opacity(OP_MEDIUM)),
                         )
                         .child(
                             div()
-                                .size(SP_2)
+                                .size(S1)
                                 .rounded_full()
                                 .bg(cx.theme().accent.opacity(OP_MUTED)),
                         ),
@@ -87,7 +87,7 @@ impl AiApp {
             .flex()
             .flex_col()
             .w_full()
-            .mb_3()
+            .mb(S3)
             .child({
                 // Model name for display in streaming header
                 let model_label: Option<SharedString> = self
@@ -100,12 +100,12 @@ impl AiApp {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .mb(SP_3)
+                    .mb(S2)
                     .child(
                         div()
                             .flex()
                             .items_center()
-                            .gap(SP_3)
+                            .gap(S2)
                             .child(
                                 svg()
                                     .external_path(LocalIconName::MessageCircle.external_path())
@@ -174,12 +174,12 @@ impl AiApp {
                         div()
                             .flex()
                             .items_center()
-                            .gap(SP_2)
+                            .gap(S1)
                             .child(
                                 div()
-                                    .px(SP_2)
-                                    .py(SP_1)
-                                    .rounded(RADIUS_XS)
+                                    .px(S1)
+                                    .py(S1)
+                                    .rounded(S1)
                                     .bg(cx.theme().muted.opacity(OP_MUTED))
                                     .text_xs()
                                     .text_color(cx.theme().muted_foreground.opacity(OP_MEDIUM))
@@ -197,7 +197,7 @@ impl AiApp {
                 div()
                     .w_full()
                     .px(MSG_PX)
-                    .py(MSG_PY)
+                    .py(S3)
                     .rounded(MSG_RADIUS)
                     .bg(streaming_bg)
                     .child(content_element),
@@ -251,20 +251,20 @@ impl AiApp {
         div()
             .flex()
             .flex_col()
-            .gap_1()
-            .px_4()
-            .py_2()
-            .rounded_md()
+            .gap(S1)
+            .px(S4)
+            .py(S2)
+            .rounded(R_MD)
             .bg(danger.opacity(0.1))
             .child(
                 div()
                     .flex()
                     .items_center()
-                    .gap_2()
+                    .gap(S2)
                     .child(
                         svg()
                             .external_path(LocalIconName::Warning.external_path())
-                            .size_4()
+                            .size(ICON_MD)
                             .text_color(danger),
                     )
                     .child(div().flex_1().text_sm().text_color(danger).child(err_msg))
@@ -273,10 +273,10 @@ impl AiApp {
                             .id("retry-btn")
                             .flex()
                             .items_center()
-                            .gap(px(4.))
-                            .px_3()
-                            .py_1()
-                            .rounded_md()
+                            .gap(S1)
+                            .px(S3)
+                            .py(S1)
+                            .rounded(R_MD)
                             .bg(danger.opacity(0.2))
                             .text_sm()
                             .text_color(danger)
@@ -288,7 +288,7 @@ impl AiApp {
                             .child(
                                 svg()
                                     .external_path(LocalIconName::Refresh.external_path())
-                                    .size(px(12.))
+                                    .size(ICON_XS)
                                     .text_color(danger),
                             )
                             .child("Retry"),
@@ -299,7 +299,7 @@ impl AiApp {
                     div()
                         .text_xs()
                         .text_color(cx.theme().muted_foreground.opacity(0.7))
-                        .pl(px(24.))
+                        .pl(S6)
                         .child(hint),
                 )
             })
@@ -312,15 +312,15 @@ impl AiApp {
         div()
             .flex()
             .items_center()
-            .gap_2()
-            .px_4()
-            .py_1()
+            .gap(S2)
+            .px(S4)
+            .py(S1)
             .bg(accent.opacity(0.1))
             .rounded_t_md()
             .child(
                 svg()
                     .external_path(LocalIconName::Pencil.external_path())
-                    .size_3()
+                    .size(ICON_XS)
                     .text_color(accent),
             )
             .child(div().text_xs().text_color(accent).child("Editing message"))

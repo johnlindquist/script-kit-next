@@ -39,14 +39,14 @@ impl AiApp {
             .items_center()
             .justify_center()
             .flex_1()
-            .gap(px(20.))
-            .px_4()
+            .gap(S6)
+            .px(S4)
             .child(
                 div()
                     .flex()
                     .flex_col()
                     .items_center()
-                    .gap(px(6.))
+                    .gap(S3)
                     .child(
                         div()
                             .text_xl()
@@ -79,7 +79,7 @@ impl AiApp {
                 div()
                     .flex()
                     .flex_col()
-                    .gap(px(6.))
+                    .gap(S2)
                     .w_full()
                     .max_w(px(400.))
                     .children(suggestions.into_iter().enumerate().map(
@@ -91,10 +91,10 @@ impl AiApp {
                                 .id(SharedString::from(format!("suggestion-{}", i)))
                                 .flex()
                                 .items_center()
-                                .gap_3()
-                                .px(px(14.))
-                                .py(px(10.))
-                                .rounded(px(8.))
+                                .gap(S3)
+                                .px(S4)
+                                .py(S3)
+                                .rounded(R_SM)
                                 .bg(suggestion_bg)
                                 .cursor_pointer()
                                 .hover(move |s| s.bg(suggestion_hover_bg))
@@ -107,7 +107,7 @@ impl AiApp {
                                 .child(
                                     svg()
                                         .external_path(icon.external_path())
-                                        .size(px(16.))
+                                        .size(ICON_MD)
                                         .text_color(cx.theme().accent.opacity(0.6))
                                         .flex_shrink_0(),
                                 )
@@ -115,7 +115,7 @@ impl AiApp {
                                     div()
                                         .flex()
                                         .flex_col()
-                                        .gap(px(1.))
+                                        .gap(S1)
                                         .child(
                                             div()
                                                 .text_sm()
@@ -141,8 +141,8 @@ impl AiApp {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .gap(px(12.))
-                    .mt(px(4.))
+                    .gap(S3)
+                    .mt(S1)
                     .children(
                         [
                             ("\u{2318} Enter", "Send"),
@@ -157,12 +157,12 @@ impl AiApp {
                             div()
                                 .flex()
                                 .items_center()
-                                .gap(px(4.))
+                                .gap(S1)
                                 .child(
                                     div()
-                                        .px(px(5.))
-                                        .py(px(2.))
-                                        .rounded(px(4.))
+                                        .px(S2)
+                                        .py(S1)
+                                        .rounded(R_SM)
                                         .bg(cx.theme().muted.opacity(0.3))
                                         .text_xs()
                                         .text_color(cx.theme().muted_foreground.opacity(0.55))

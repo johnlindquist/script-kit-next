@@ -119,9 +119,7 @@ impl AiApp {
             .flex()
             .flex_col()
             .w_full()
-            .when(uses_continuation_spacing_after, |d| {
-                d.mb(MSG_GAP_CONTINUATION)
-            })
+            .when(uses_continuation_spacing_after, |d| d.mb(S2))
             .when(!uses_continuation_spacing_after, |d| d.mb(MSG_GAP))
             // Role label row - hidden for continuation messages from same sender
             .when(!is_continuation, |el| {
@@ -130,12 +128,12 @@ impl AiApp {
                         .flex()
                         .items_center()
                         .justify_between()
-                        .mb(SP_3)
+                        .mb(S2)
                         .child(
                             div()
                                 .flex()
                                 .items_center()
-                                .gap(SP_3)
+                                .gap(S2)
                                 .child(
                                     svg()
                                         .external_path(role_icon.external_path())
@@ -182,9 +180,9 @@ impl AiApp {
                                     .id(SharedString::from(format!("edit-{}", msg_id_for_edit)))
                                     .flex()
                                     .items_center()
-                                    .px(SP_3)
-                                    .py(SP_1)
-                                    .rounded(RADIUS_SM)
+                                    .px(S2)
+                                    .py(S1)
+                                    .rounded(R_SM)
                                     .cursor_pointer()
                                     .opacity(0.0)
                                     .group_hover("message", |s| s.opacity(0.6))
@@ -213,10 +211,10 @@ impl AiApp {
                                 .id(SharedString::from(format!("copy-{}", msg_id)))
                                 .flex()
                                 .items_center()
-                                .gap(SP_2)
-                                .px(SP_3)
-                                .py(SP_1)
-                                .rounded(RADIUS_SM)
+                                .gap(S1)
+                                .px(S2)
+                                .py(S1)
+                                .rounded(R_SM)
                                 .cursor_pointer()
                                 .when(!is_copied, |d| {
                                     d.opacity(0.0).group_hover("message", |s| s.opacity(0.6))
@@ -234,7 +232,7 @@ impl AiApp {
                                         div()
                                             .flex()
                                             .items_center()
-                                            .gap(SP_1)
+                                            .gap(S1)
                                             .child(
                                                 svg()
                                                     .external_path(
@@ -269,7 +267,7 @@ impl AiApp {
                 div()
                     .w_full()
                     .px(MSG_PX)
-                    .py(MSG_PY)
+                    .py(S3)
                     .rounded(MSG_RADIUS)
                     .bg(bubble_bg)
                     .border_l_2()
@@ -277,14 +275,14 @@ impl AiApp {
                     .when(cue.italic, |d| d.italic())
                     .when(has_images, |el| {
                         el.child(
-                            div().flex().flex_wrap().gap_2().mb_2().children(
+                            div().flex().flex_wrap().gap(S2).mb(S2).children(
                                 image_thumbnails
                                     .into_iter()
                                     .enumerate()
                                     .map(|(i, render_img)| {
                                         div()
                                             .id(SharedString::from(format!("msg-img-{}", i)))
-                                            .rounded(RADIUS_MD)
+                                            .rounded(R_MD)
                                             .overflow_hidden()
                                             .border_1()
                                             .border_color(cx.theme().border.opacity(OP_MEDIUM))
@@ -352,11 +350,11 @@ impl AiApp {
                                         )))
                                         .flex()
                                         .items_center()
-                                        .gap(SP_2)
-                                        .mt(SP_3)
-                                        .px(SP_3)
-                                        .py(SP_2)
-                                        .rounded(RADIUS_MD)
+                                        .gap(S1)
+                                        .mt(S2)
+                                        .px(S2)
+                                        .py(S1)
+                                        .rounded(R_MD)
                                         .cursor_pointer()
                                         .text_xs()
                                         .text_color(cx.theme().accent.opacity(OP_STRONG))
