@@ -67,7 +67,7 @@ impl Default for ThemeCache {
     }
 }
 
-use super::hex_color::{hex_color_serde, HexColor};
+use super::hex_color::{hex_color_option_serde, hex_color_serde, HexColor};
 
 /// Theme appearance mode for determining light/dark rendering
 ///
@@ -418,6 +418,24 @@ pub struct UIColors {
 /// Colors 0-7 are the normal palette, colors 8-15 are the bright variants.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TerminalColors {
+    /// Optional default terminal foreground color.
+    ///
+    /// When unset, terminal rendering falls back to the theme text foreground.
+    #[serde(
+        default,
+        with = "hex_color_option_serde",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub foreground: Option<HexColor>,
+    /// Optional default terminal background color.
+    ///
+    /// When unset, terminal rendering falls back to the theme main background.
+    #[serde(
+        default,
+        with = "hex_color_option_serde",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub background: Option<HexColor>,
     /// ANSI 0: Black
     #[serde(default = "default_terminal_black", with = "hex_color_serde")]
     pub black: HexColor,
@@ -478,6 +496,8 @@ impl TerminalColors {
     /// Dark mode terminal colors (Dracula/One Dark inspired for better visibility)
     pub fn dark_default() -> Self {
         TerminalColors {
+            foreground: None,
+            background: None,
             black: 0x000000,
             red: 0xcd3131,
             green: 0x50fa7b, // Dracula green - vibrant for executables
@@ -500,6 +520,8 @@ impl TerminalColors {
     /// Light mode terminal colors
     pub fn light_default() -> Self {
         TerminalColors {
+            foreground: None,
+            background: None,
             black: 0x000000,
             red: 0xcd3131,
             green: 0x00bc00,
@@ -836,6 +858,14 @@ impl ColorScheme {
                 info: blend_toward(self.ui.info, blend_target, blend_pct),
             },
             terminal: TerminalColors {
+                foreground: self
+                    .terminal
+                    .foreground
+                    .map(|color| blend_toward(color, blend_target, blend_pct)),
+                background: self
+                    .terminal
+                    .background
+                    .map(|color| blend_toward(color, blend_target, blend_pct)),
                 black: blend_toward(self.terminal.black, blend_target, blend_pct),
                 red: blend_toward(self.terminal.red, blend_target, blend_pct),
                 green: blend_toward(self.terminal.green, blend_target, blend_pct),
