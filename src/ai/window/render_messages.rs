@@ -23,11 +23,20 @@ impl AiApp {
         let old_count = self.messages_list_state.item_count();
         if old_count != item_count {
             self.messages_list_state.splice(0..old_count, item_count);
+        } else if self.is_streaming && item_count > 0 {
+            // Content within the streaming item changed — invalidate its cached
+            // height so the list re-measures it on the next layout pass.
+            let last = item_count - 1;
+            self.messages_list_state.splice(last..item_count, 1);
         }
-        // Only auto-scroll if user hasn't scrolled up
+        // Only auto-scroll if user hasn't scrolled up.
+        // Use scroll_to with a large offset_in_item to reach the actual bottom
+        // of the last (growing) item, not just "reveal" it.
         if item_count > 0 && !self.user_has_scrolled_up {
-            self.messages_list_state
-                .scroll_to_reveal_item(item_count - 1);
+            self.messages_list_state.scroll_to(ListOffset {
+                item_ix: item_count - 1,
+                offset_in_item: px(1_000_000.),
+            });
         }
     }
 
@@ -40,10 +49,16 @@ impl AiApp {
         let old_count = self.messages_list_state.item_count();
         if old_count != item_count {
             self.messages_list_state.splice(0..old_count, item_count);
+        } else if item_count > 0 {
+            // Invalidate last item height so re-measure picks up new content.
+            let last = item_count - 1;
+            self.messages_list_state.splice(last..item_count, 1);
         }
         if item_count > 0 {
-            self.messages_list_state
-                .scroll_to_reveal_item(item_count - 1);
+            self.messages_list_state.scroll_to(ListOffset {
+                item_ix: item_count - 1,
+                offset_in_item: px(1_000_000.),
+            });
         }
     }
 
@@ -126,14 +141,12 @@ impl AiApp {
                             cx.notify();
                         }
                     } else if delta_y < px(0.) {
-                        // Scrolling down - check if near bottom to reset flag
-                        // Use logical_scroll_top to determine position
-                        let scroll_top = this.messages_list_state.logical_scroll_top().item_ix;
-                        // If we're within 2 items of the bottom, consider it "at bottom"
-                        if total_items > 0
-                            && scroll_top + 3 >= total_items
-                            && this.user_has_scrolled_up
-                        {
+                        // Scrolling down - check if at true bottom to resume auto-scroll.
+                        // For a bottom-aligned list, GPUI reports item_ix >= item_count
+                        // when the viewport has reached the absolute bottom.
+                        let scroll_top = this.messages_list_state.logical_scroll_top();
+                        let at_bottom = total_items == 0 || scroll_top.item_ix >= total_items;
+                        if at_bottom && this.user_has_scrolled_up {
                             this.user_has_scrolled_up = false;
                             cx.notify();
                         }
