@@ -61,6 +61,17 @@ fn ai_window_drain_streaming_deltas(
     Ok(Some(drained_delta))
 }
 
+fn ai_window_submit_message_create_chat_error_message() -> String {
+    "Failed to create a new chat. Check storage/database configuration and retry.".to_string()
+}
+
+fn ai_window_submit_message_save_error_message(
+    chat_id: ChatId,
+    error: &impl std::fmt::Display,
+) -> String {
+    format!("Failed to save your message for chat '{chat_id}': {error}")
+}
+
 impl AiApp {
     pub(super) fn submit_message(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let content = self.input_state.read(cx).value().to_string();
@@ -89,7 +100,10 @@ impl AiApp {
             match self.create_chat(window, cx) {
                 Some(id) => id,
                 None => {
-                    tracing::error!("Failed to create chat for message submission");
+                    let message = ai_window_submit_message_create_chat_error_message();
+                    tracing::error!(error = %message, "Failed to create chat for message submission");
+                    self.streaming_error = Some(message);
+                    cx.notify();
                     return;
                 }
             }
@@ -135,6 +149,8 @@ impl AiApp {
 
         if let Err(e) = storage::save_message(&user_message) {
             tracing::error!(error = %e, "Failed to save user message");
+            self.streaming_error = Some(ai_window_submit_message_save_error_message(chat_id, &e));
+            cx.notify();
             return;
         }
 
@@ -229,11 +245,14 @@ impl AiApp {
         let provider = match self.provider_registry.get_provider(&model.provider) {
             Some(p) => p.clone(),
             None => {
+                let message = Self::provider_unavailable_error_message(&model.id, &model.provider);
                 tracing::error!(
                     model_id = %model.id,
                     provider = %model.provider,
+                    error = %message,
                     "No provider found for selected model provider"
                 );
+                self.clear_streaming_state_with_error(message, cx);
                 return;
             }
         };
@@ -630,6 +649,30 @@ mod tests {
             streaming_provider_panic_payload_to_message(&borrowed_message),
             borrowed_message,
             "&str panic payloads should preserve their message"
+        );
+    }
+
+    #[test]
+    fn test_submit_message_create_chat_error_message_is_actionable() {
+        let message = ai_window_submit_message_create_chat_error_message();
+        assert!(
+            message.contains("storage/database"),
+            "Create-chat submission error should direct users to storage configuration"
+        );
+    }
+
+    #[test]
+    fn test_submit_message_save_error_message_includes_chat_and_error() {
+        let chat_id = ChatId::new();
+        let message = ai_window_submit_message_save_error_message(chat_id, &"disk full");
+
+        assert!(
+            message.contains(&chat_id.to_string()),
+            "Save-message submission error should include chat ID"
+        );
+        assert!(
+            message.contains("disk full"),
+            "Save-message submission error should include underlying storage error"
         );
     }
 

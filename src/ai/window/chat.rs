@@ -6,6 +6,32 @@ impl AiApp {
         model.id == chat.model_id && model.provider == chat.provider
     }
 
+    pub(super) fn provider_unavailable_error_message(model_id: &str, provider: &str) -> String {
+        format!(
+            "Model '{model_id}' uses provider '{provider}', but that provider is unavailable. Configure the '{provider}' API key or pick a different model."
+        )
+    }
+
+    pub(super) fn clear_streaming_state_with_error(
+        &mut self,
+        message: impl Into<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let message = message.into();
+
+        if let Some(cancelled) = self.streaming_cancel.take() {
+            cancelled.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+
+        self.is_streaming = false;
+        self.streaming_content.clear();
+        self.streaming_generation = self.streaming_generation.wrapping_add(1);
+        self.streaming_chat_id = None;
+        self.streaming_started_at = None;
+        self.streaming_error = Some(message);
+        cx.notify();
+    }
+
     pub(super) fn initialize_with_pending_chat(
         &mut self,
         _window: &mut Window,
@@ -147,7 +173,23 @@ impl AiApp {
         self.selected_chat_id = Some(id);
 
         // Load messages for this chat
-        self.current_messages = storage::get_chat_messages(&id).unwrap_or_default();
+        let mut provider_error_message: Option<String> = None;
+        let mut storage_error_message: Option<String> = None;
+        match storage::get_chat_messages(&id) {
+            Ok(messages) => {
+                self.current_messages = messages;
+            }
+            Err(error) => {
+                let message = format!("Failed to load chat messages for chat '{id}': {error}");
+                tracing::error!(
+                    chat_id = %id,
+                    error = %error,
+                    "Failed to load chat messages during chat switch"
+                );
+                self.current_messages = Vec::new();
+                storage_error_message = Some(message);
+            }
+        }
         self.cache_message_images(&self.current_messages.clone());
 
         // Sync selected_model with the chat's stored model (BYOK per chat)
@@ -168,6 +210,23 @@ impl AiApp {
                     provider = %chat.provider,
                     "Chat's model not found in available models (provider may not be configured)"
                 );
+
+                if self
+                    .provider_registry
+                    .get_provider(&chat.provider)
+                    .is_none()
+                {
+                    let message =
+                        Self::provider_unavailable_error_message(&chat.model_id, &chat.provider);
+                    tracing::error!(
+                        chat_id = %id,
+                        model_id = %chat.model_id,
+                        provider = %chat.provider,
+                        error = %message,
+                        "Provider missing for selected chat model"
+                    );
+                    provider_error_message = Some(message);
+                }
             }
         }
 
@@ -186,7 +245,13 @@ impl AiApp {
 
         // Reset UX state for new chat
         self.editing_message_id = None;
-        self.streaming_error = None;
+        if let Some(message) = provider_error_message {
+            self.clear_streaming_state_with_error(message, cx);
+        } else if let Some(message) = storage_error_message {
+            self.streaming_error = Some(message);
+        } else {
+            self.streaming_error = None;
+        }
 
         // Restore draft for incoming chat
         self.restore_draft(window, cx);
@@ -242,6 +307,21 @@ mod tests {
         assert!(
             !AiApp::model_matches_chat_identity(&wrong_provider_model, &chat),
             "Model should not match when provider differs even if model_id is identical"
+        );
+    }
+
+    #[test]
+    fn test_provider_unavailable_error_message_includes_model_id_and_provider_name() {
+        let message =
+            AiApp::provider_unavailable_error_message("claude-3-5-sonnet-20241022", "anthropic");
+
+        assert!(
+            message.contains("claude-3-5-sonnet-20241022"),
+            "Provider unavailability message should include model ID"
+        );
+        assert!(
+            message.contains("anthropic"),
+            "Provider unavailability message should include provider name"
         );
     }
 }
