@@ -55,4 +55,7 @@ pub use window::{
 pub mod prelude;
 
 #[cfg(test)]
+// Unit-test module wiring lives in src/actions/tests.rs and includes
+// the canonical builtin dialog validation suite from
+// src/actions/tests/dialog_builtin_validation/mod.rs.
 include!("tests.rs");
