@@ -22,6 +22,45 @@ fn resolve_streaming_start_mode(
     }
 }
 
+fn streaming_provider_panic_payload_to_message(
+    panic_payload: &(dyn std::any::Any + Send),
+) -> String {
+    if let Some(message) = panic_payload.downcast_ref::<String>() {
+        return message.clone();
+    }
+
+    if let Some(message) = panic_payload.downcast_ref::<&str>() {
+        return (*message).to_string();
+    }
+
+    "unknown panic payload".to_string()
+}
+
+fn ai_window_drain_streaming_deltas(
+    shared_deltas: &std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+    accumulated_content: &mut String,
+) -> Result<Option<String>, String> {
+    let mut pending_deltas = shared_deltas
+        .lock()
+        .map_err(|err| format!("failed to lock streaming delta queue: {err}"))?;
+
+    if pending_deltas.is_empty() {
+        return Ok(None);
+    }
+
+    let mut drained_delta = String::new();
+    for chunk in pending_deltas.drain(..) {
+        drained_delta.push_str(&chunk);
+    }
+
+    if drained_delta.is_empty() {
+        return Ok(None);
+    }
+
+    accumulated_content.push_str(&drained_delta);
+    Ok(Some(drained_delta))
+}
+
 impl AiApp {
     pub(super) fn submit_message(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let content = self.input_state.read(cx).value().to_string();
@@ -235,45 +274,86 @@ impl AiApp {
             "Starting AI streaming response"
         );
 
-        // Use a shared buffer for streaming content
-        let shared_content = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+        // Shared delta queue: provider pushes chunks, UI drains and appends incrementally.
+        let shared_deltas = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
         let shared_done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let shared_error = std::sync::Arc::new(std::sync::Mutex::new(None::<String>));
         let cancelled = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         self.streaming_cancel = Some(cancelled.clone());
 
         let model_id = model.id.clone();
-        let content_clone = shared_content.clone();
+        let deltas_for_thread = shared_deltas.clone();
         let done_clone = shared_done.clone();
         let error_clone = shared_error.clone();
         let cancelled_clone = cancelled.clone();
+        let thread_chat_id = chat_id;
+        let thread_generation = generation;
         // Use chat_id as session_id for Claude Code CLI conversation continuity
         let session_id = chat_id.to_string();
 
         // Spawn background thread for streaming
         std::thread::spawn(move || {
-            let result = provider.stream_message(
-                &api_messages,
-                &model_id,
-                Box::new(move |chunk| {
-                    if cancelled_clone.load(std::sync::atomic::Ordering::SeqCst) {
-                        return false;
-                    }
-                    if let Ok(mut content) = content_clone.lock() {
-                        content.push_str(&chunk);
-                    }
-                    true
-                }),
-                Some(&session_id),
-            );
+            let callback_deltas = deltas_for_thread.clone();
+            let callback_error = error_clone.clone();
+            let callback_model_id = model_id.clone();
+            let stream_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                provider.stream_message(
+                    &api_messages,
+                    &model_id,
+                    Box::new(move |chunk| {
+                        if cancelled_clone.load(std::sync::atomic::Ordering::SeqCst) {
+                            return false;
+                        }
 
-            match result {
-                Ok(()) => {
+                        match callback_deltas.lock() {
+                            Ok(mut pending_deltas) => {
+                                pending_deltas.push(chunk);
+                                true
+                            }
+                            Err(err) => {
+                                let error_message =
+                                    format!("Failed to queue streaming delta: {err}");
+                                tracing::error!(
+                                    chat_id = %thread_chat_id,
+                                    generation = thread_generation,
+                                    model_id = %callback_model_id,
+                                    error = %error_message,
+                                    "Streaming delta queue lock poisoned"
+                                );
+                                if let Ok(mut error_state) = callback_error.lock() {
+                                    *error_state = Some(error_message);
+                                }
+                                false
+                            }
+                        }
+                    }),
+                    Some(&session_id),
+                )
+            }));
+
+            match stream_result {
+                Ok(Ok(())) => {
                     done_clone.store(true, std::sync::atomic::Ordering::SeqCst);
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     if let Ok(mut err) = error_clone.lock() {
                         *err = Some(e.to_string());
+                    }
+                    done_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+                }
+                Err(panic_payload) => {
+                    let panic_message =
+                        streaming_provider_panic_payload_to_message(panic_payload.as_ref());
+                    let error_message = format!("Streaming provider panicked: {panic_message}");
+                    tracing::error!(
+                        chat_id = %thread_chat_id,
+                        generation = thread_generation,
+                        model_id = %model_id,
+                        panic = %panic_message,
+                        "Streaming provider thread panicked"
+                    );
+                    if let Ok(mut err) = error_clone.lock() {
+                        *err = Some(error_message);
                     }
                     done_clone.store(true, std::sync::atomic::Ordering::SeqCst);
                 }
@@ -281,19 +361,77 @@ impl AiApp {
         });
 
         // Poll for streaming updates using background executor
-        let content_for_poll = shared_content.clone();
+        let deltas_for_poll = shared_deltas.clone();
         let done_for_poll = shared_done.clone();
         let error_for_poll = shared_error.clone();
 
         cx.spawn(async move |this, cx| {
             use gpui::Timer;
+            let mut accumulated_content = String::new();
             loop {
                 Timer::after(std::time::Duration::from_millis(50)).await;
 
+                let drained_delta = match ai_window_drain_streaming_deltas(
+                    &deltas_for_poll,
+                    &mut accumulated_content,
+                ) {
+                    Ok(delta) => delta,
+                    Err(lock_error) => {
+                        tracing::error!(
+                            chat_id = %chat_id,
+                            generation = generation,
+                            error = %lock_error,
+                            "Failed to drain streaming deltas"
+                        );
+                        let lock_error_for_ui = lock_error.clone();
+                        let _ = cx.update(|cx| {
+                            this.update(cx, move |app, cx| {
+                                if app.streaming_generation != generation
+                                    || app.streaming_chat_id != Some(chat_id)
+                                {
+                                    return;
+                                }
+                                app.streaming_error = Some(lock_error_for_ui);
+                                app.streaming_started_at = None;
+                                app.is_streaming = false;
+                                app.streaming_content.clear();
+                                app.streaming_chat_id = None;
+                                app.streaming_cancel = None;
+                                cx.notify();
+                            })
+                        });
+                        break;
+                    }
+                };
+
+                if let Some(delta) = drained_delta {
+                    let _ = cx.update(|cx| {
+                        this.update(cx, move |app, cx| {
+                            // Guard: only update UI if this is the current streaming session
+                            if app.streaming_generation != generation
+                                || app.streaming_chat_id != Some(chat_id)
+                            {
+                                return; // Stale update, ignore
+                            }
+                            if app.selected_chat_id != Some(chat_id) {
+                                return; // Belt-and-suspenders: don't render into a different active chat
+                            }
+                            app.streaming_content.push_str(&delta);
+                            // Auto-scroll to bottom as new content arrives
+                            app.sync_messages_list_and_scroll_to_bottom();
+                            cx.notify();
+                        })
+                    });
+                }
+
                 // Check if done or errored
                 if done_for_poll.load(std::sync::atomic::Ordering::SeqCst) {
-                    // Get final content
-                    let final_content = content_for_poll.lock().ok().map(|c| c.clone());
+                    // Final content has already been assembled incrementally from drained deltas.
+                    let final_content = if accumulated_content.is_empty() {
+                        None
+                    } else {
+                        Some(accumulated_content.clone())
+                    };
                     let error = error_for_poll.lock().ok().and_then(|e| e.clone());
 
                     let _ = cx.update(|cx| {
@@ -377,30 +515,6 @@ impl AiApp {
                     });
                     break;
                 }
-
-                // Update with current content (only if generation matches)
-                if let Ok(content) = content_for_poll.lock() {
-                    if !content.is_empty() {
-                        let current = content.clone();
-                        let _ = cx.update(|cx| {
-                            this.update(cx, |app, cx| {
-                                // Guard: only update UI if this is the current streaming session
-                                if app.streaming_generation != generation
-                                    || app.streaming_chat_id != Some(chat_id)
-                                {
-                                    return; // Stale update, ignore
-                                }
-                                if app.selected_chat_id != Some(chat_id) {
-                                    return; // Belt-and-suspenders: don't render into a different active chat
-                                }
-                                app.streaming_content = current;
-                                // Auto-scroll to bottom as new content arrives
-                                app.sync_messages_list_and_scroll_to_bottom();
-                                cx.notify();
-                            })
-                        });
-                    }
-                }
             }
         })
         .detach();
@@ -449,6 +563,73 @@ mod tests {
             mode,
             StreamingStartMode::RealProviderStream,
             "Real provider streaming should continue when both selected model and available models exist"
+        );
+    }
+
+    #[test]
+    fn test_ai_window_drain_streaming_deltas_drains_queue_and_appends_accumulator_when_chunks_exist(
+    ) {
+        let shared_deltas = std::sync::Arc::new(std::sync::Mutex::new(vec![
+            "hello".to_string(),
+            " world".to_string(),
+        ]));
+        let mut accumulated_content = String::new();
+
+        let drained_delta =
+            ai_window_drain_streaming_deltas(&shared_deltas, &mut accumulated_content)
+                .expect("draining streaming deltas should succeed");
+
+        assert_eq!(
+            drained_delta.as_deref(),
+            Some("hello world"),
+            "Draining should concatenate all pending chunks in order"
+        );
+        assert_eq!(
+            accumulated_content, "hello world",
+            "Accumulated content should include drained deltas"
+        );
+        assert!(
+            shared_deltas
+                .lock()
+                .expect("delta queue should still be lockable")
+                .is_empty(),
+            "Drain should remove all queued deltas"
+        );
+    }
+
+    #[test]
+    fn test_ai_window_drain_streaming_deltas_returns_none_when_queue_has_no_chunks() {
+        let shared_deltas = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+        let mut accumulated_content = "existing".to_string();
+
+        let drained_delta =
+            ai_window_drain_streaming_deltas(&shared_deltas, &mut accumulated_content)
+                .expect("draining empty queue should still succeed");
+
+        assert_eq!(
+            drained_delta, None,
+            "No UI delta should be emitted when queue is empty"
+        );
+        assert_eq!(
+            accumulated_content, "existing",
+            "Accumulator should not change when no deltas are pending"
+        );
+    }
+
+    #[test]
+    fn test_streaming_provider_panic_payload_to_message_extracts_string_and_str_payloads() {
+        let owned_message = "owned panic payload".to_string();
+        let borrowed_message = "borrowed panic payload";
+
+        assert_eq!(
+            streaming_provider_panic_payload_to_message(&owned_message),
+            owned_message,
+            "Owned String panic payloads should preserve their message"
+        );
+        assert_eq!(
+            streaming_provider_panic_payload_to_message(&borrowed_message),
+            borrowed_message,
+            "&str panic payloads should preserve their message"
         );
     }
 
