@@ -485,6 +485,13 @@ mod tests {
         include_str!("prompt_input.rs")
     }
 
+    fn prompt_input_production_source() -> &'static str {
+        prompt_input_source()
+            .split("\n#[cfg(test)]")
+            .next()
+            .expect("prompt_input source should include production code")
+    }
+
     #[test]
     fn test_prompt_input_colors_default_uses_cached_theme_tokens() {
         let resolved = PromptInputColors::default();
@@ -500,7 +507,7 @@ mod tests {
 
     #[test]
     fn test_prompt_input_render_uses_theme_text_tokens_for_input_states() {
-        let source = prompt_input_source();
+        let source = prompt_input_production_source();
 
         assert!(
             source.contains("colors.text_muted.to_rgb()"),
@@ -514,7 +521,7 @@ mod tests {
 
     #[test]
     fn test_prompt_input_render_does_not_hardcode_input_text_colors() {
-        let source = prompt_input_source();
+        let source = prompt_input_production_source();
 
         assert!(
             !source.contains("text_color(rgb(0x"),

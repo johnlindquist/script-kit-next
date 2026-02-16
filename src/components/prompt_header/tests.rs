@@ -19,7 +19,12 @@ fn render_input_area_section() -> String {
     let start = content
         .find("fn render_input_area")
         .expect("render_input_area not found in prompt_header/component.rs");
-    content[start..content.len().min(start + 2600)].to_string()
+    let end = content[start..]
+        .find("\n    fn render_buttons_area")
+        .map(|offset| start + offset)
+        .unwrap_or(content.len());
+
+    content[start..end].to_string()
 }
 
 #[test]
