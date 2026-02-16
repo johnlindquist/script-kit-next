@@ -1,4 +1,4 @@
-use crate::theme::gpui_integration::best_contrast_of_two;
+use crate::theme::gpui_integration::{best_contrast_of_two, sync_gpui_component_theme_for_theme};
 
 const ALPHA_BADGE_BORDER: u32 = 0x40;
 const ALPHA_FOOTER_BORDER: u32 = 0x30;
@@ -285,7 +285,7 @@ impl ScriptListApp {
                         // No filter to clear — restore original theme and go back
                         if let Some(original) = this.theme_before_chooser.take() {
                             this.theme = original;
-                            theme::sync_gpui_component_theme(cx);
+                            sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
                         }
                         this.go_back_or_close(window, cx);
                     }
@@ -295,7 +295,7 @@ impl ScriptListApp {
                 if has_cmd && key_str == "w" {
                     if let Some(original) = this.theme_before_chooser.take() {
                         this.theme = original;
-                        theme::sync_gpui_component_theme(cx);
+                        sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
                     }
                     this.close_and_reset_window(cx);
                     return;
@@ -312,13 +312,10 @@ impl ScriptListApp {
                     let (new_accent, _) = Self::ACCENT_PALETTE[new_idx];
                     let mut modified = (*this.theme).clone();
                     modified.colors.accent.selected = new_accent;
-                    modified.colors.text.on_accent = best_contrast_of_two(
-                        new_accent,
-                        0xFFFFFF,
-                        modified.colors.background.main,
-                    );
+                    modified.colors.text.on_accent =
+                        best_contrast_of_two(new_accent, 0xFFFFFF, modified.colors.background.main);
                     this.theme = std::sync::Arc::new(modified);
-                    theme::sync_gpui_component_theme(cx);
+                    sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
                     cx.notify();
                     return;
                 }
@@ -329,13 +326,10 @@ impl ScriptListApp {
                     let (new_accent, _) = Self::ACCENT_PALETTE[new_idx];
                     let mut modified = (*this.theme).clone();
                     modified.colors.accent.selected = new_accent;
-                    modified.colors.text.on_accent = best_contrast_of_two(
-                        new_accent,
-                        0xFFFFFF,
-                        modified.colors.background.main,
-                    );
+                    modified.colors.text.on_accent =
+                        best_contrast_of_two(new_accent, 0xFFFFFF, modified.colors.background.main);
                     this.theme = std::sync::Arc::new(modified);
-                    theme::sync_gpui_component_theme(cx);
+                    sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
                     cx.notify();
                     return;
                 }
@@ -351,7 +345,7 @@ impl ScriptListApp {
                             op.title_bar = target;
                         }
                         this.theme = std::sync::Arc::new(modified);
-                        theme::sync_gpui_component_theme(cx);
+                        sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
                         cx.notify();
                     }
                     return;
@@ -367,7 +361,7 @@ impl ScriptListApp {
                             op.title_bar = target;
                         }
                         this.theme = std::sync::Arc::new(modified);
-                        theme::sync_gpui_component_theme(cx);
+                        sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
                         cx.notify();
                     }
                     return;
@@ -379,7 +373,7 @@ impl ScriptListApp {
                         vibrancy.enabled = !vibrancy.enabled;
                     }
                     this.theme = std::sync::Arc::new(modified);
-                    theme::sync_gpui_component_theme(cx);
+                    sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
                     cx.notify();
                     return;
                 }
@@ -399,7 +393,7 @@ impl ScriptListApp {
                         vibrancy.material = new_material;
                     }
                     this.theme = std::sync::Arc::new(modified);
-                    theme::sync_gpui_component_theme(cx);
+                    sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
                     cx.notify();
                     return;
                 }
@@ -420,7 +414,7 @@ impl ScriptListApp {
                         if let Some(&pidx) = filtered.get(*selected_index) {
                             if pidx < presets.len() {
                                 this.theme = std::sync::Arc::new(presets[pidx].create_theme());
-                                theme::sync_gpui_component_theme(cx);
+                                sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
                                 cx.notify();
                             }
                         }
@@ -433,7 +427,7 @@ impl ScriptListApp {
                     if let Err(e) = theme::presets::write_theme_to_disk(&this.theme) {
                         logging::log("ERROR", &format!("Failed to save theme: {}", e));
                     }
-                    theme::sync_gpui_component_theme(cx);
+                    sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
                     this.go_back_or_close(window, cx);
                     return;
                 }
@@ -489,7 +483,7 @@ impl ScriptListApp {
                     this.theme = new_theme;
                     this.theme_chooser_scroll_handle
                         .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
-                    theme::sync_gpui_component_theme(cx);
+                    sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
                     cx.notify();
                 }
             },
@@ -635,7 +629,10 @@ impl ScriptListApp {
                                                 this.theme = std::sync::Arc::new(
                                                     presets[pidx].create_theme(),
                                                 );
-                                                theme::sync_gpui_component_theme(cx);
+                                                sync_gpui_component_theme_for_theme(
+                                                    cx,
+                                                    this.theme.as_ref(),
+                                                );
                                                 cx.notify();
                                             }
                                         }
@@ -838,7 +835,7 @@ impl ScriptListApp {
                                     modified.colors.text.on_accent =
                                         best_contrast_of_two(color, 0xFFFFFF, swatch_bg_main);
                                     this.theme = std::sync::Arc::new(modified);
-                                    theme::sync_gpui_component_theme(cx);
+                                    sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
                                     cx.notify();
                                 });
                             }
@@ -885,7 +882,7 @@ impl ScriptListApp {
                                         op.title_bar = value;
                                     }
                                     this.theme = std::sync::Arc::new(modified);
-                                    theme::sync_gpui_component_theme(cx);
+                                    sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
                                     cx.notify();
                                 });
                             }
@@ -918,7 +915,7 @@ impl ScriptListApp {
                                 vibrancy.enabled = !vibrancy.enabled;
                             }
                             this.theme = std::sync::Arc::new(modified);
-                            theme::sync_gpui_component_theme(cx);
+                            sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
                             cx.notify();
                         });
                     }
@@ -995,7 +992,7 @@ impl ScriptListApp {
                                         vibrancy.material = material;
                                     }
                                     this.theme = std::sync::Arc::new(modified);
-                                    theme::sync_gpui_component_theme(cx);
+                                    sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
                                     cx.notify();
                                 });
                             }
@@ -1048,7 +1045,7 @@ impl ScriptListApp {
                                         });
                                     }
                                     this.theme = std::sync::Arc::new(modified);
-                                    theme::sync_gpui_component_theme(cx);
+                                    sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
                                     cx.notify();
                                 });
                             }
@@ -1094,7 +1091,10 @@ impl ScriptListApp {
                                     if pidx < presets.len() {
                                         this.theme =
                                             std::sync::Arc::new(presets[pidx].create_theme());
-                                        theme::sync_gpui_component_theme(cx);
+                                        sync_gpui_component_theme_for_theme(
+                                            cx,
+                                            this.theme.as_ref(),
+                                        );
                                         cx.notify();
                                     }
                                 }
@@ -1623,7 +1623,10 @@ mod theme_chooser_filter_tests {
         assert_eq!(layout.content_gap, THEME_ITEM_CONTENT_GAP_MAX);
         assert_eq!(layout.text_gap, THEME_ITEM_TEXT_GAP_MAX);
         assert_eq!(layout.swatch_gap, THEME_ITEM_SWATCH_GAP_MAX);
-        assert_eq!(layout.list_vertical_padding, THEME_LIST_VERTICAL_PADDING_MAX);
+        assert_eq!(
+            layout.list_vertical_padding,
+            THEME_LIST_VERTICAL_PADDING_MAX
+        );
         assert_eq!(
             layout.badge_horizontal_padding,
             THEME_ITEM_BADGE_HORIZONTAL_PADDING_MAX

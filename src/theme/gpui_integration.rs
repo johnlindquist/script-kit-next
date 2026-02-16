@@ -316,6 +316,18 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
     theme_color
 }
 
+#[inline]
+fn resolve_mode_and_colors(sk_theme: &Theme) -> (ThemeMode, ThemeColor) {
+    let is_dark = sk_theme.is_dark_mode();
+    let mode = if is_dark {
+        ThemeMode::Dark
+    } else {
+        ThemeMode::Light
+    };
+    let colors = map_scriptkit_to_gpui_theme(sk_theme, is_dark);
+    (mode, colors)
+}
+
 /// Sync Script Kit theme with gpui-component's global Theme
 ///
 /// This function loads the Script Kit theme and applies it to gpui-component's
@@ -329,12 +341,22 @@ pub fn sync_gpui_component_theme(cx: &mut App) {
     // Load Script Kit's theme
     let sk_theme = get_cached_theme();
 
-    // Determine if we're in dark mode based on SYSTEM appearance (not theme colors)
-    // This ensures correct rendering when user switches between light/dark mode in macOS
-    let is_dark = sk_theme.is_dark_mode();
+    sync_gpui_component_theme_for_theme(cx, &sk_theme);
+}
 
-    // Map Script Kit colors to gpui-component ThemeColor with appearance awareness
-    let custom_colors = map_scriptkit_to_gpui_theme(&sk_theme, is_dark);
+/// Sync gpui-component theme from a specific Script Kit theme instance.
+///
+/// Use this when the active in-memory theme differs from the cached on-disk
+/// theme (for example, while previewing presets in the theme chooser).
+pub(crate) fn sync_gpui_component_theme_for_theme(cx: &mut App, sk_theme: &Theme) {
+    let (mode, custom_colors) = resolve_mode_and_colors(sk_theme);
+    let is_dark = matches!(mode, ThemeMode::Dark);
+
+    debug!(
+        appearance = ?sk_theme.appearance,
+        has_dark_colors = sk_theme.has_dark_colors(),
+        "sync_gpui_component_theme_for_theme start"
+    );
 
     // Get font configuration
     let fonts = sk_theme.get_fonts();
@@ -342,13 +364,8 @@ pub fn sync_gpui_component_theme(cx: &mut App) {
     // Apply the custom colors and fonts to the global theme
     let theme = GpuiTheme::global_mut(cx);
     theme.colors = custom_colors;
-    // Set ThemeMode based on system appearance
-    theme.mode = if is_dark {
-        ThemeMode::Dark
-    } else {
-        ThemeMode::Light
-    };
-    theme.highlight_theme = Arc::new(build_markdown_highlight_theme(&sk_theme, is_dark));
+    theme.mode = mode;
+    theme.highlight_theme = Arc::new(build_markdown_highlight_theme(sk_theme, is_dark));
 
     // Debug: Log the background color to verify vibrancy is applied
     debug!(
@@ -534,6 +551,26 @@ mod tests {
         assert_hsla_close(
             light_mapped.primary_active,
             primary_interaction_color(light_theme.colors.accent.selected, false, 0.12),
+        );
+    }
+
+    #[test]
+    fn test_resolve_mode_and_colors_uses_passed_theme_appearance() {
+        let dark_theme = Theme::dark_default();
+        let light_theme = Theme::light_default();
+
+        let (dark_mode, dark_colors) = resolve_mode_and_colors(&dark_theme);
+        let (light_mode, light_colors) = resolve_mode_and_colors(&light_theme);
+
+        assert_eq!(dark_mode, ThemeMode::Dark);
+        assert_eq!(light_mode, ThemeMode::Light);
+        assert_hsla_close(
+            dark_colors.background,
+            map_scriptkit_to_gpui_theme(&dark_theme, true).background,
+        );
+        assert_hsla_close(
+            light_colors.background,
+            map_scriptkit_to_gpui_theme(&light_theme, false).background,
         );
     }
 
