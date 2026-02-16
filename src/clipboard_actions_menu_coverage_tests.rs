@@ -62,26 +62,82 @@ mod tests {
     }
 
     #[test]
-    fn file_attach_to_ai_hides_main_before_opening_ai_window() {
+    fn file_attach_to_ai_uses_deferred_helper_after_hiding_main_window() {
         let handler = app_action_handler_region();
         let branch_start = handler
             .find("\"attach_to_ai\" => {")
             .expect("Expected attach_to_ai handler branch");
         let branch = &handler[branch_start..];
 
-        let hide_index = branch
+        let helper_call_index = branch
+            .find("self.open_ai_window_after_main_hide(")
+            .expect("Expected attach_to_ai to delegate deferred AI open to helper");
+
+        assert!(
+            helper_call_index > 0,
+            "attach_to_ai should route through open_ai_window_after_main_hide"
+        );
+
+        let helper_start = handler
+            .find("fn open_ai_window_after_main_hide(")
+            .expect("Expected deferred AI helper implementation");
+        let helper = &handler[helper_start..];
+
+        let hide_index = helper
             .find("self.hide_main_and_reset(cx);")
-            .expect("Expected attach_to_ai to hide main window first");
-        let spawn_index = branch
+            .expect("Expected helper to hide main window first");
+        let spawn_index = helper
             .find("cx.spawn(async move |this, cx| {")
-            .expect("Expected attach_to_ai to defer AI open via spawn");
-        let open_index = branch
+            .expect("Expected helper to defer AI open via spawn");
+        let open_index = helper
             .find("ai::open_ai_window(cx)")
-            .expect("Expected attach_to_ai to open AI window");
+            .expect("Expected helper to open AI window");
 
         assert!(
             hide_index < spawn_index && spawn_index < open_index,
-            "attach_to_ai should hide main, then defer open_ai_window via cx.spawn"
+            "helper should hide main, then defer open_ai_window via cx.spawn"
+        );
+    }
+
+    #[test]
+    fn clipboard_attach_to_ai_delegates_window_open_to_deferred_helper() {
+        let handler = app_action_handler_region();
+        let branch_start = handler
+            .find("\"clipboard_attach_to_ai\" => {")
+            .expect("Expected clipboard_attach_to_ai handler branch");
+        let branch = &handler[branch_start..];
+
+        let helper_call_index = branch
+            .find("self.open_ai_window_after_main_hide(")
+            .expect("Expected clipboard_attach_to_ai to use deferred AI helper");
+        let before_helper = &branch[..helper_call_index];
+
+        assert!(
+            !before_helper.contains("ai::open_ai_window(cx)"),
+            "clipboard_attach_to_ai should not open AI window synchronously before helper"
+        );
+    }
+
+    #[test]
+    fn clipboard_file_attach_to_ai_queues_attachment_instead_of_input_text() {
+        let handler = app_action_handler_region();
+        let branch_start = handler
+            .find("\"clipboard_attach_to_ai\" => {")
+            .expect("Expected clipboard_attach_to_ai handler branch");
+        let branch = &handler[branch_start..];
+
+        let file_case_start = branch
+            .find("clipboard_history::ContentType::File => {")
+            .expect("Expected clipboard file content branch");
+        let image_case_start = branch[file_case_start..]
+            .find("clipboard_history::ContentType::Image => {")
+            .map(|idx| file_case_start + idx)
+            .expect("Expected clipboard image content branch");
+        let file_case = &branch[file_case_start..image_case_start];
+
+        assert!(
+            file_case.contains("DeferredAiWindowAction::AddAttachment"),
+            "clipboard file content should queue an attachment for AI chat"
         );
     }
 }

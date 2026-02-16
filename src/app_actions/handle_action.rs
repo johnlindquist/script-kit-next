@@ -1,3 +1,29 @@
+enum DeferredAiWindowAction {
+    SetInput { text: String },
+    SetInputWithImage { text: String, image_base64: String },
+    AddAttachment { path: String },
+}
+
+impl DeferredAiWindowAction {
+    fn name(&self) -> &'static str {
+        match self {
+            Self::SetInput { .. } => "set_input",
+            Self::SetInputWithImage { .. } => "set_input_with_image",
+            Self::AddAttachment { .. } => "add_attachment",
+        }
+    }
+
+    fn apply(self, cx: &mut App) {
+        match self {
+            Self::SetInput { text } => ai::set_ai_input(cx, &text, false),
+            Self::SetInputWithImage { text, image_base64 } => {
+                ai::set_ai_input_with_image(cx, &text, &image_base64, false);
+            }
+            Self::AddAttachment { path } => ai::add_ai_attachment(cx, &path),
+        }
+    }
+}
+
 impl ScriptListApp {
     pub(crate) fn hide_main_and_reset(&self, _cx: &mut Context<Self>) {
         if let Some((x, y, w, h)) = platform::get_main_window_bounds() {
@@ -11,6 +37,80 @@ impl ScriptListApp {
         // Use platform-specific hide that only hides the main window,
         // not the entire app (cx.hide() would hide HUD too)
         platform::hide_main_window();
+    }
+
+    fn open_ai_window_after_main_hide(
+        &mut self,
+        deferred_action: DeferredAiWindowAction,
+        success_message: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        let deferred_action_name = deferred_action.name();
+        tracing::info!(
+            category = "AI",
+            event = "action_attach_to_ai_defer_open_start",
+            deferred_action = deferred_action_name,
+            "Hiding main window before opening AI window"
+        );
+
+        self.hide_main_and_reset(cx);
+
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(1))
+                .await;
+
+            let open_result = cx.update(|cx| {
+                ai::open_ai_window(cx).map_err(|error| error.to_string())?;
+                deferred_action.apply(cx);
+                Ok::<(), String>(())
+            });
+
+            match open_result {
+                Ok(Ok(())) => {
+                    if let Err(error) = this.update(cx, |this, cx| {
+                        this.show_hud(success_message.to_string(), Some(HUD_SHORT_MS), cx);
+                        cx.notify();
+                    }) {
+                        tracing::warn!(
+                            category = "AI",
+                            event = "action_attach_to_ai_hud_update_cancelled",
+                            deferred_action = deferred_action_name,
+                            error = %error,
+                            "Deferred Add-to-AI completed after app action context was gone"
+                        );
+                    }
+                }
+                Ok(Err(error)) => {
+                    let _ = this.update(cx, |this, cx| {
+                        tracing::error!(
+                            category = "AI",
+                            event = "action_attach_to_ai_defer_open_failed",
+                            attempted = "open_ai_window_after_main_hide",
+                            deferred_action = deferred_action_name,
+                            error = %error,
+                            "Failed to open AI window after hiding main window"
+                        );
+                        this.show_hud(
+                            "Failed to open AI window".to_string(),
+                            Some(HUD_MEDIUM_MS),
+                            cx,
+                        );
+                        cx.notify();
+                    });
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        category = "AI",
+                        event = "action_attach_to_ai_defer_open_cancelled",
+                        deferred_action = deferred_action_name,
+                        error = %error,
+                        "Deferred Add-to-AI task cancelled before completion"
+                    );
+                }
+            }
+        })
+        .detach();
     }
 
     /// Helper to reveal a path in Finder (macOS)
@@ -439,17 +539,26 @@ impl ScriptListApp {
                     "Attaching clipboard entry to AI chat"
                 );
 
-                match entry.content_type {
+                let deferred_action = match entry.content_type {
                     clipboard_history::ContentType::Text
                     | clipboard_history::ContentType::Link
-                    | clipboard_history::ContentType::File
                     | clipboard_history::ContentType::Color => {
-                        if let Err(e) = ai::open_ai_window(cx) {
-                            tracing::error!(message = ? &format!("Failed to open AI window: {}", e));
-                            self.show_hud("Failed to open AI window".to_string(), Some(HUD_MEDIUM_MS), cx);
+                        DeferredAiWindowAction::SetInput { text: content }
+                    }
+                    clipboard_history::ContentType::File => {
+                        let attachment_path = shellexpand::tilde(content.trim()).into_owned();
+                        if attachment_path.is_empty() {
+                            self.show_hud(
+                                "Clipboard file path is empty".to_string(),
+                                Some(HUD_MEDIUM_MS),
+                                cx,
+                            );
                             return;
                         }
-                        ai::set_ai_input(cx, &content, false);
+
+                        DeferredAiWindowAction::AddAttachment {
+                            path: attachment_path,
+                        }
                     }
                     clipboard_history::ContentType::Image => {
                         let Some(png_bytes) = clipboard_history::content_to_png_bytes(&content)
@@ -465,19 +574,14 @@ impl ScriptListApp {
                         use base64::Engine;
                         let base64_data =
                             base64::engine::general_purpose::STANDARD.encode(&png_bytes);
-
-                        if let Err(e) = ai::open_ai_window(cx) {
-                            tracing::error!(message = ? &format!("Failed to open AI window: {}", e));
-                            self.show_hud("Failed to open AI window".to_string(), Some(HUD_MEDIUM_MS), cx);
-                            return;
+                        DeferredAiWindowAction::SetInputWithImage {
+                            text: String::new(),
+                            image_base64: base64_data,
                         }
-                        ai::set_ai_input_with_image(cx, "", &base64_data, false);
                     }
-                }
+                };
 
-                self.show_hud("Attached to AI".to_string(), Some(HUD_SHORT_MS), cx);
-                self.hide_main_and_reset(cx);
-                cx.notify();
+                self.open_ai_window_after_main_hide(deferred_action, "Attached to AI", cx);
                 return;
             }
             // Copy to clipboard without pasting (Cmd+Enter)
@@ -1267,32 +1371,11 @@ impl ScriptListApp {
                         "open_with" => crate::file_search::open_with(&path),
                         "show_info" => crate::file_search::show_info(&path),
                         "attach_to_ai" => {
-                            let deferred_path = path.clone();
-                            self.hide_main_and_reset(cx);
-
-                            cx.spawn(async move |this, cx| {
-                                Timer::after(std::time::Duration::from_millis(1)).await;
-                                this.update(cx, |this, cx| {
-                                    if let Err(error) = ai::open_ai_window(cx) {
-                                        tracing::error!(
-                                            message = ? &format!("Failed to open AI window: {}", error)
-                                        );
-                                        this.show_hud(
-                                            "Failed to open AI window".to_string(),
-                                            Some(HUD_MEDIUM_MS),
-                                            cx,
-                                        );
-                                        cx.notify();
-                                        return;
-                                    }
-
-                                    ai::add_ai_attachment(cx, &deferred_path);
-                                    this.show_hud("Attached to AI".to_string(), Some(HUD_SHORT_MS), cx);
-                                    cx.notify();
-                                })
-                                .ok();
-                            })
-                            .detach();
+                            self.open_ai_window_after_main_hide(
+                                DeferredAiWindowAction::AddAttachment { path: path.clone() },
+                                "Attached to AI",
+                                cx,
+                            );
 
                             Ok(())
                         }
