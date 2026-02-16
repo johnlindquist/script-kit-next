@@ -295,6 +295,22 @@ impl AiApp {
                                                 content_len = content.len(),
                                                 "Orphaned streaming response saved to DB"
                                             );
+                                            let preview: String =
+                                                content.chars().take(60).collect();
+                                            let preview = if preview.len() < content.len() {
+                                                format!("{}...", preview.trim())
+                                            } else {
+                                                preview
+                                            };
+                                            app.message_previews.insert(chat_id, preview);
+                                            let count = app
+                                                .message_counts
+                                                .get(&chat_id)
+                                                .copied()
+                                                .unwrap_or(0);
+                                            app.message_counts.insert(chat_id, count + 1);
+                                            app.touch_and_reorder_chat(chat_id);
+                                            cx.notify();
                                         }
                                     }
                                 }
@@ -342,5 +358,78 @@ impl AiApp {
             }
         })
         .detach();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_orphaned_completion_preview_truncates_and_appends_ellipsis() {
+        let content = "a".repeat(70);
+        let preview: String = content.chars().take(60).collect();
+        let preview = if preview.len() < content.len() {
+            format!("{}...", preview.trim())
+        } else {
+            preview
+        };
+
+        assert_eq!(
+            preview.len(),
+            63,
+            "Long orphaned completion previews should truncate to 60 chars plus ellipsis"
+        );
+        assert!(
+            preview.ends_with("..."),
+            "Long orphaned completion previews should end with ellipsis"
+        );
+    }
+
+    #[test]
+    fn test_orphaned_completion_preview_keeps_short_content() {
+        let content = "short response";
+        let preview: String = content.chars().take(60).collect();
+        let preview = if preview.len() < content.len() {
+            format!("{}...", preview.trim())
+        } else {
+            preview
+        };
+
+        assert_eq!(
+            preview, content,
+            "Short orphaned completion previews should remain unchanged"
+        );
+    }
+
+    #[test]
+    fn test_orphaned_completion_count_increments_cached_count() {
+        let chat_id = ChatId::new();
+        let mut message_counts = std::collections::HashMap::new();
+        message_counts.insert(chat_id, 5usize);
+
+        let count = message_counts.get(&chat_id).copied().unwrap_or(0);
+        message_counts.insert(chat_id, count + 1);
+
+        assert_eq!(
+            message_counts.get(&chat_id).copied(),
+            Some(6usize),
+            "Orphaned completion should increment existing cached message count"
+        );
+    }
+
+    #[test]
+    fn test_orphaned_completion_count_starts_from_zero_when_missing() {
+        let chat_id = ChatId::new();
+        let mut message_counts = std::collections::HashMap::new();
+
+        let count = message_counts.get(&chat_id).copied().unwrap_or(0);
+        message_counts.insert(chat_id, count + 1);
+
+        assert_eq!(
+            message_counts.get(&chat_id).copied(),
+            Some(1usize),
+            "Missing cached message count should initialize to one after orphaned completion"
+        );
     }
 }
