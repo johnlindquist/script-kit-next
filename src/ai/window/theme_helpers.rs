@@ -1,6 +1,18 @@
 use super::*;
 
 impl AiApp {
+    fn model_display_name_for_provider(
+        available_models: &[ModelInfo],
+        model_id: &str,
+        provider: &str,
+    ) -> String {
+        available_models
+            .iter()
+            .find(|m| m.id == model_id && m.provider == provider)
+            .map(|m| m.display_name.clone())
+            .unwrap_or_else(|| model_id.to_string())
+    }
+
     pub(super) fn create_box_shadows(&self) -> Vec<BoxShadow> {
         self.cached_box_shadows.clone()
     }
@@ -76,11 +88,11 @@ impl AiApp {
             seen.insert(key);
 
             // Look up display names from available models
-            let display_name = available_models
-                .iter()
-                .find(|m| m.id == chat.model_id)
-                .map(|m| m.display_name.clone())
-                .unwrap_or_else(|| chat.model_id.clone());
+            let display_name = Self::model_display_name_for_provider(
+                available_models,
+                &chat.model_id,
+                &chat.provider,
+            );
 
             let provider_display_name = match chat.provider.as_str() {
                 "anthropic" => "Anthropic".to_string(),
@@ -111,12 +123,8 @@ impl AiApp {
     /// Update the last used settings when a new chat is created
     pub(super) fn update_last_used_settings(&mut self, model_id: &str, provider: &str) {
         // Find display names
-        let display_name = self
-            .available_models
-            .iter()
-            .find(|m| m.id == model_id)
-            .map(|m| m.display_name.clone())
-            .unwrap_or_else(|| model_id.to_string());
+        let display_name =
+            Self::model_display_name_for_provider(&self.available_models, model_id, provider);
 
         let provider_display_name = match provider {
             "anthropic" => "Anthropic".to_string(),
@@ -173,5 +181,55 @@ impl AiApp {
     pub(super) fn get_modal_overlay_background() -> gpui::Rgba {
         let sk_theme = crate::theme::get_cached_theme();
         crate::theme::modal_overlay_bg(&sk_theme, 0x80)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_model_display_name_for_provider_uses_provider_when_model_ids_overlap() {
+        let available_models = vec![
+            ModelInfo::new("shared-model", "OpenAI Shared", "openai", true, 128_000),
+            ModelInfo::new(
+                "shared-model",
+                "Anthropic Shared",
+                "anthropic",
+                true,
+                200_000,
+            ),
+        ];
+
+        let display_name =
+            AiApp::model_display_name_for_provider(&available_models, "shared-model", "anthropic");
+
+        assert_eq!(
+            display_name, "Anthropic Shared",
+            "Display name lookup must match on provider+model_id, not model_id alone"
+        );
+    }
+
+    #[test]
+    fn test_compute_last_used_settings_uses_provider_scoped_model_display_names() {
+        let chats = vec![Chat::new("shared-model", "anthropic")];
+        let available_models = vec![
+            ModelInfo::new("shared-model", "OpenAI Shared", "openai", true, 128_000),
+            ModelInfo::new(
+                "shared-model",
+                "Anthropic Shared",
+                "anthropic",
+                true,
+                200_000,
+            ),
+        ];
+
+        let settings = AiApp::compute_last_used_settings(&chats, &available_models);
+
+        assert_eq!(settings.len(), 1);
+        assert_eq!(
+            settings[0].display_name, "Anthropic Shared",
+            "Last-used settings should resolve model names using provider+model_id identity"
+        );
     }
 }

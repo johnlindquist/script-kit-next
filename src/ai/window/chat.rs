@@ -2,6 +2,10 @@ use super::window_api::get_pending_chat;
 use super::*;
 
 impl AiApp {
+    fn model_matches_chat_identity(model: &ModelInfo, chat: &Chat) -> bool {
+        model.id == chat.model_id && model.provider == chat.provider
+    }
+
     pub(super) fn initialize_with_pending_chat(
         &mut self,
         _window: &mut Window,
@@ -148,11 +152,11 @@ impl AiApp {
 
         // Sync selected_model with the chat's stored model (BYOK per chat)
         if let Some(chat) = self.chats.iter().find(|c| c.id == id) {
-            // Find the model in available_models that matches the chat's model_id
+            // Find the model in available_models that matches the chat's provider+model_id
             self.selected_model = self
                 .available_models
                 .iter()
-                .find(|m| m.id == chat.model_id)
+                .find(|m| Self::model_matches_chat_identity(m, chat))
                 .cloned();
 
             if self.selected_model.is_none() && !chat.model_id.is_empty() {
@@ -217,5 +221,27 @@ impl AiApp {
         if let Some(id) = self.selected_chat_id {
             self.delete_chat_by_id(id, cx);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_model_matches_chat_identity_requires_provider_match() {
+        let matching_model = ModelInfo::new("shared-model", "Shared", "openai", true, 128_000);
+        let wrong_provider_model =
+            ModelInfo::new("shared-model", "Shared", "anthropic", true, 128_000);
+        let chat = Chat::new("shared-model", "openai");
+
+        assert!(
+            AiApp::model_matches_chat_identity(&matching_model, &chat),
+            "Model should match when both model_id and provider match the chat"
+        );
+        assert!(
+            !AiApp::model_matches_chat_identity(&wrong_provider_model, &chat),
+            "Model should not match when provider differs even if model_id is identical"
+        );
     }
 }
