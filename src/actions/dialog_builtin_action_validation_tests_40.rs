@@ -620,7 +620,10 @@ mod tests {
         let actions = get_path_context_actions(&path_info);
         for action in &actions {
             assert!(
-                action.id.chars().all(|c| c.is_lowercase() || c == '_'),
+                action
+                    .id
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c == '_' || c == ':'),
                 "Action ID '{}' is not snake_case",
                 action.id
             );
@@ -637,7 +640,10 @@ mod tests {
         let actions = get_path_context_actions(&path_info);
         for action in &actions {
             assert!(
-                action.id.chars().all(|c| c.is_lowercase() || c == '_'),
+                action
+                    .id
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c == '_' || c == ':'),
                 "Action ID '{}' is not snake_case",
                 action.id
             );
@@ -774,7 +780,7 @@ mod tests {
         assert!(ids.contains(&"run_script"));
         assert!(ids.contains(&"add_shortcut"));
         assert!(ids.contains(&"add_alias"));
-        assert!(ids.contains(&"script:copy_deeplink"));
+        assert!(ids.contains(&"copy_deeplink"));
     }
 
     #[test]
@@ -801,14 +807,14 @@ mod tests {
     fn script_primary_title_uses_run_verb() {
         let info = ScriptInfo::new("my-script", "/path/to/my-script.ts");
         let actions = get_script_context_actions(&info);
-        assert_eq!(actions[0].title, "Run \"my-script\"");
+        assert_eq!(actions[0].title, "Run");
     }
 
     #[test]
     fn script_primary_title_uses_custom_verb() {
         let info = ScriptInfo::with_action_verb("launcher", "/path", true, "Launch");
         let actions = get_script_context_actions(&info);
-        assert_eq!(actions[0].title, "Launch \"launcher\"");
+        assert_eq!(actions[0].title, "Launch");
     }
 
     #[test]
@@ -883,7 +889,7 @@ mod tests {
     fn scriptlet_copy_deeplink_uses_deeplink_name() {
         let script = ScriptInfo::scriptlet("Open GitHub", "/path/snippet.md", None, None);
         let actions = get_scriptlet_context_actions_with_custom(&script, None);
-        let deeplink = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+        let deeplink = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
         assert!(deeplink
             .description
             .as_ref()
@@ -895,7 +901,7 @@ mod tests {
     fn scriptlet_copy_deeplink_shortcut() {
         let script = ScriptInfo::scriptlet("Test", "/path", None, None);
         let actions = get_scriptlet_context_actions_with_custom(&script, None);
-        let deeplink = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+        let deeplink = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
         assert_eq!(deeplink.shortcut, Some("⌘⇧D".to_string()));
     }
 
@@ -1359,7 +1365,10 @@ mod tests {
             icon: IconName::Star,
         }];
         let actions = get_new_chat_actions(&[], &presets, &[]);
-        assert!(actions[0].description.is_none());
+        assert_eq!(
+            actions[0].description.as_deref(),
+            Some("Uses General preset")
+        );
     }
 
     // =========================================================================

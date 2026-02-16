@@ -534,8 +534,8 @@ fn batch21_notes_copy_deeplink_shortcut() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    let a = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
-    assert_eq!(a.shortcut.as_deref(), Some("⇧⌘D"));
+    let a = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
+    assert_eq!(a.shortcut.as_deref(), Some("⇧⌘Y"));
 }
 
 #[test]
@@ -546,7 +546,7 @@ fn batch21_notes_copy_deeplink_section_copy() {
         auto_sizing_enabled: false,
     };
     let actions = get_notes_command_bar_actions(&info);
-    let a = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+    let a = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
     assert_eq!(a.section.as_deref(), Some("Copy"));
 }
 
@@ -742,7 +742,7 @@ fn batch21_new_chat_last_used_id_format() {
         provider_display_name: "OpenAI".into(),
     }];
     let actions = get_new_chat_actions(&last_used, &[], &[]);
-    assert_eq!(actions[0].id, "last_used_0");
+    assert_eq!(actions[0].id, "last_used_openai::gpt-4");
 }
 
 #[test]
@@ -765,7 +765,7 @@ fn batch21_new_chat_model_id_format() {
         provider_display_name: "Anthropic".into(),
     }];
     let actions = get_new_chat_actions(&[], &[], &models);
-    assert_eq!(actions[0].id, "model_0");
+    assert_eq!(actions[0].id, "model_anthropic::claude-3");
 }
 
 #[test]
@@ -785,8 +785,8 @@ fn batch21_new_chat_multiple_last_used_sequential_ids() {
         },
     ];
     let actions = get_new_chat_actions(&last_used, &[], &[]);
-    assert_eq!(actions[0].id, "last_used_0");
-    assert_eq!(actions[1].id, "last_used_1");
+    assert_eq!(actions[0].id, "last_used_p::a");
+    assert_eq!(actions[1].id, "last_used_p::b");
 }
 
 #[test]
@@ -1518,7 +1518,7 @@ fn batch21_nonempty_id_title_file() {
 fn batch21_deeplink_url_format_script() {
     let s = ScriptInfo::new("My Script", "/p");
     let actions = get_script_context_actions(&s);
-    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
     let desc = dl.description.as_deref().unwrap();
     assert!(desc.contains("scriptkit://run/my-script"));
 }
@@ -1527,7 +1527,7 @@ fn batch21_deeplink_url_format_script() {
 fn batch21_deeplink_url_format_builtin() {
     let s = ScriptInfo::builtin("Clipboard History");
     let actions = get_script_context_actions(&s);
-    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
     let desc = dl.description.as_deref().unwrap();
     assert!(desc.contains("scriptkit://run/clipboard-history"));
 }
@@ -1536,7 +1536,7 @@ fn batch21_deeplink_url_format_builtin() {
 fn batch21_deeplink_url_format_scriptlet() {
     let s = ScriptInfo::scriptlet("Open GitHub", "/p", None, None);
     let actions = get_script_context_actions(&s);
-    let dl = actions.iter().find(|a| a.id == "script:copy_deeplink").unwrap();
+    let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
     let desc = dl.description.as_deref().unwrap();
     assert!(desc.contains("scriptkit://run/open-github"));
 }

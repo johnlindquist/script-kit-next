@@ -153,8 +153,8 @@ fn agent_has_reveal_copy_path_copy_content() {
     agent.is_agent = true;
     let actions = get_script_context_actions(&agent);
     let ids = action_ids(&actions);
-    assert!(ids.contains(&"file:reveal_in_finder"));
-    assert!(ids.contains(&"file:copy_path"));
+    assert!(ids.contains(&"reveal_in_finder"));
+    assert!(ids.contains(&"copy_path"));
     assert!(ids.contains(&"copy_content"));
 }
 
@@ -176,7 +176,7 @@ fn agent_lacks_view_logs() {
 fn action_verb_run_in_primary_title() {
     let script = ScriptInfo::new("Test Script", "/path/test.ts");
     let actions = get_script_context_actions(&script);
-    assert_eq!(actions[0].title, "Run \"Test Script\"");
+    assert_eq!(actions[0].title, "Run");
 }
 
 #[test]
@@ -184,28 +184,28 @@ fn action_verb_launch_in_primary_title() {
     let script =
         ScriptInfo::with_action_verb("Safari", "/Applications/Safari.app", false, "Launch");
     let actions = get_script_context_actions(&script);
-    assert_eq!(actions[0].title, "Launch \"Safari\"");
+    assert_eq!(actions[0].title, "Launch");
 }
 
 #[test]
 fn action_verb_switch_to_in_primary_title() {
     let script = ScriptInfo::with_action_verb("My Window", "window:123", false, "Switch to");
     let actions = get_script_context_actions(&script);
-    assert_eq!(actions[0].title, "Switch to \"My Window\"");
+    assert_eq!(actions[0].title, "Switch To");
 }
 
 #[test]
 fn action_verb_open_in_primary_title() {
     let script = ScriptInfo::with_action_verb("Clipboard History", "builtin:ch", false, "Open");
     let actions = get_script_context_actions(&script);
-    assert_eq!(actions[0].title, "Open \"Clipboard History\"");
+    assert_eq!(actions[0].title, "Open");
 }
 
 #[test]
 fn action_verb_execute_in_primary_title() {
     let script = ScriptInfo::with_all("My Task", "/path/task.ts", true, "Execute", None, None);
     let actions = get_script_context_actions(&script);
-    assert_eq!(actions[0].title, "Execute \"My Task\"");
+    assert_eq!(actions[0].title, "Execute");
 }
 
 // =========================================================================
@@ -671,7 +671,7 @@ fn score_action_empty_query_returns_zero() {
 
 #[test]
 fn score_action_exact_title_match_gets_prefix_score() {
-    let action = Action::new("script:edit", "Edit Script", None, ActionCategory::ScriptContext);
+    let action = Action::new("edit", "Edit Script", None, ActionCategory::ScriptContext);
     let score = ActionsDialog::score_action(&action, "edit script");
     assert!(
         score >= 100,
@@ -719,13 +719,13 @@ fn score_action_shortcut_only_match_returns_ten() {
 #[test]
 fn score_action_title_plus_description_stacks() {
     let action = Action::new(
-        "script:edit",
+        "edit",
         "Edit Script",
         Some("Edit the script file".to_string()),
         ActionCategory::ScriptContext,
     );
-    let score = ActionsDialog::score_action(&action, "script:edit");
-    // title prefix (100) + description contains "script:edit" (15) = 115
+    let score = ActionsDialog::score_action(&action, "edit");
+    // title prefix (100) + description contains "edit" (15) = 115
     assert!(
         score >= 115,
         "Stacked score should be >= 115, got {}",
@@ -735,7 +735,7 @@ fn score_action_title_plus_description_stacks() {
 
 #[test]
 fn score_action_single_char_query() {
-    let action = Action::new("script:edit", "Edit Script", None, ActionCategory::ScriptContext);
+    let action = Action::new("edit", "Edit Script", None, ActionCategory::ScriptContext);
     let score = ActionsDialog::score_action(&action, "e");
     assert!(
         score >= 100,
@@ -975,12 +975,12 @@ fn deeplink_name_leading_trailing_stripped() {
 
 #[test]
 fn deeplink_name_empty_string() {
-    assert_eq!(to_deeplink_name(""), "");
+    assert_eq!(to_deeplink_name(""), "_unnamed");
 }
 
 #[test]
 fn deeplink_name_only_special_chars() {
-    assert_eq!(to_deeplink_name("!@#$%"), "");
+    assert_eq!(to_deeplink_name("!@#$%"), "_unnamed");
 }
 
 #[test]
@@ -995,8 +995,7 @@ fn deeplink_name_mixed_case_lowered() {
 
 #[test]
 fn deeplink_name_accented_chars() {
-    // Accented characters are alphanumeric and should be preserved
-    assert_eq!(to_deeplink_name("café résumé"), "café-résumé");
+    assert_eq!(to_deeplink_name("café résumé"), "caf%C3%A9-r%C3%A9sum%C3%A9");
 }
 
 #[test]
@@ -1773,8 +1772,8 @@ fn path_trash_description_differs_by_is_dir() {
     let file_actions = get_path_context_actions(&file_path);
     let dir_trash = find_action(&dir_actions, "file:move_to_trash").unwrap();
     let file_trash = find_action(&file_actions, "file:move_to_trash").unwrap();
-    assert_eq!(dir_trash.description.as_deref(), Some("Delete folder"));
-    assert_eq!(file_trash.description.as_deref(), Some("Delete file"));
+    assert_eq!(dir_trash.description.as_deref(), Some("Moves this folder to the Trash"));
+    assert_eq!(file_trash.description.as_deref(), Some("Moves this file to the Trash"));
 }
 
 // =========================================================================
@@ -1823,7 +1822,7 @@ fn file_dir_primary_title_includes_dirname() {
 fn deeplink_description_contains_url_with_formatted_name() {
     let script = ScriptInfo::new("My Cool Script", "/path/to/script.ts");
     let actions = get_script_context_actions(&script);
-    let dl = find_action(&actions, "script:copy_deeplink").unwrap();
+    let dl = find_action(&actions, "copy_deeplink").unwrap();
     assert!(
         dl.description
             .as_ref()
@@ -1838,7 +1837,7 @@ fn deeplink_description_contains_url_with_formatted_name() {
 fn deeplink_description_for_builtin() {
     let builtin = ScriptInfo::builtin("Clipboard History");
     let actions = get_script_context_actions(&builtin);
-    let dl = find_action(&actions, "script:copy_deeplink").unwrap();
+    let dl = find_action(&actions, "copy_deeplink").unwrap();
     assert!(dl
         .description
         .as_ref()
@@ -2303,7 +2302,7 @@ fn new_chat_last_used_has_provider_display_name_description() {
         provider_display_name: "Anthropic".to_string(),
     }];
     let actions = get_new_chat_actions(&last_used, &[], &[]);
-    assert_eq!(actions[0].description.as_deref(), Some("Anthropic"));
+    assert_eq!(actions[0].description.as_deref(), Some("Uses Anthropic"));
 }
 
 #[test]
@@ -2314,7 +2313,7 @@ fn new_chat_preset_has_no_description() {
         icon: IconName::Star,
     }];
     let actions = get_new_chat_actions(&[], &presets, &[]);
-    assert_eq!(actions[0].description, None);
+    assert_eq!(actions[0].description.as_deref(), Some("Uses General preset"));
 }
 
 #[test]
@@ -2326,7 +2325,7 @@ fn new_chat_model_has_provider_display_name_description() {
         provider_display_name: "OpenAI".to_string(),
     }];
     let actions = get_new_chat_actions(&[], &[], &models);
-    assert_eq!(actions[0].description.as_deref(), Some("OpenAI"));
+    assert_eq!(actions[0].description.as_deref(), Some("Uses OpenAI"));
 }
 
 // =========================================================================
@@ -2350,8 +2349,8 @@ fn new_chat_last_used_id_format() {
         },
     ];
     let actions = get_new_chat_actions(&last_used, &[], &[]);
-    assert_eq!(actions[0].id, "last_used_0");
-    assert_eq!(actions[1].id, "last_used_1");
+    assert_eq!(actions[0].id, "last_used_p::a");
+    assert_eq!(actions[1].id, "last_used_p::b");
 }
 
 #[test]
@@ -2382,6 +2381,6 @@ fn new_chat_model_id_format() {
         },
     ];
     let actions = get_new_chat_actions(&[], &[], &models);
-    assert_eq!(actions[0].id, "model_0");
-    assert_eq!(actions[1].id, "model_1");
+    assert_eq!(actions[0].id, "model_anthropic::claude");
+    assert_eq!(actions[1].id, "model_openai::gpt4");
 }

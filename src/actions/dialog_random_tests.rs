@@ -107,8 +107,8 @@ fn window_count_section_headers_some_then_none_then_some() {
         make_action("b", "B", None),
         make_action("c", "C", Some("S1")),
     ];
-    // S1(count) -> None(skip) -> S1(prev was None, which is != Some("S1"), count)
-    assert_eq!(count_section_headers(&actions, &[0, 1, 2]), 2);
+    // S1(count) -> None(skip) -> S1(same section as last sectioned row, no new header)
+    assert_eq!(count_section_headers(&actions, &[0, 1, 2]), 1);
 }
 
 #[test]
@@ -513,16 +513,14 @@ fn build_grouped_items_no_sections_with_headers_style() {
 
 #[test]
 fn to_deeplink_name_unicode_accents() {
-    // Accented chars should lowercase and remain (they're alphanumeric)
     let result = to_deeplink_name("Café Résumé");
-    assert_eq!(result, "café-résumé");
+    assert_eq!(result, "caf%C3%A9-r%C3%A9sum%C3%A9");
 }
 
 #[test]
 fn to_deeplink_name_all_special_chars() {
     let result = to_deeplink_name("!@#$%^&*()");
-    // All non-alphanumeric → hyphens, then filtered as empty segments
-    assert_eq!(result, "");
+    assert_eq!(result, "_unnamed");
 }
 
 #[test]
@@ -594,8 +592,8 @@ fn agent_has_reveal_copy_content() {
     script.is_script = false;
     let actions = get_script_context_actions(&script);
     let ids = action_ids(&actions);
-    assert!(ids.contains(&"file:reveal_in_finder"));
-    assert!(ids.contains(&"file:copy_path"));
+    assert!(ids.contains(&"reveal_in_finder"));
+    assert!(ids.contains(&"copy_path"));
     assert!(ids.contains(&"copy_content"));
 }
 
@@ -834,7 +832,7 @@ fn chat_model_description_has_provider() {
     };
     let actions = get_chat_context_actions(&info);
     let model_action = find_action(&actions, "chat:select_model_claude-3").unwrap();
-    assert_eq!(model_action.description, Some("via Anthropic".to_string()));
+    assert_eq!(model_action.description, Some("Uses Anthropic".to_string()));
 }
 
 // =========================================================================
@@ -860,7 +858,7 @@ fn notes_new_note_always_present() {
             for &auto in &[false, true] {
                 let ids = notes_action_ids(sel, trash, auto);
                 assert!(
-                    ids.contains(&"notes:new_note".to_string()),
+                    ids.contains(&"new_note".to_string()),
                     "new_note missing for sel={}, trash={}, auto={}",
                     sel,
                     trash,
@@ -1785,7 +1783,7 @@ fn clipboard_action_ids_are_snake_case() {
 fn script_deeplink_description_contains_formatted_name() {
     let script = ScriptInfo::new("My Cool Script", "/path/test.ts");
     let actions = get_script_context_actions(&script);
-    let deeplink = find_action(&actions, "script:copy_deeplink").unwrap();
+    let deeplink = find_action(&actions, "copy_deeplink").unwrap();
     assert!(
         deeplink
             .description
@@ -1801,7 +1799,7 @@ fn builtin_also_has_deeplink() {
     let builtin = ScriptInfo::builtin("Clipboard History");
     let actions = get_script_context_actions(&builtin);
     let ids = action_ids(&actions);
-    assert!(ids.contains(&"script:copy_deeplink"));
+    assert!(ids.contains(&"copy_deeplink"));
 }
 
 // =========================================================================

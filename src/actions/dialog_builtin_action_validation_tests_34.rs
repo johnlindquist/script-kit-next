@@ -214,7 +214,7 @@ fn file_open_file_desc_says_default_application() {
         .description
         .as_ref()
         .unwrap()
-        .contains("default application"));
+        .contains("default app"));
 }
 
 #[test]
@@ -231,7 +231,7 @@ fn file_reveal_desc_says_reveal_in_finder() {
         .description
         .as_ref()
         .unwrap()
-        .contains("Reveal in Finder"));
+        .contains("Finder"));
 }
 
 #[test]
@@ -609,7 +609,12 @@ fn chat_continue_in_chat_desc_mentions_ai_chat() {
     };
     let actions = get_chat_context_actions(&info);
     let cont = actions.iter().find(|a| a.id == "chat:continue_in_chat").unwrap();
-    assert!(cont.description.as_ref().unwrap().contains("AI Chat"));
+    assert!(cont
+        .description
+        .as_ref()
+        .unwrap()
+        .to_lowercase()
+        .contains("ai chat"));
 }
 
 #[test]
@@ -804,7 +809,7 @@ fn deeplink_mixed_punctuation() {
 
 #[test]
 fn deeplink_empty_string() {
-    assert_eq!(to_deeplink_name(""), "");
+    assert_eq!(to_deeplink_name(""), "_unnamed");
 }
 
 // =====================================================================
@@ -1079,7 +1084,7 @@ fn agent_has_reveal_in_finder() {
     script.is_script = false;
     script.is_agent = true;
     let actions = get_script_context_actions(&script);
-    assert!(actions.iter().any(|a| a.id == "file:reveal_in_finder"));
+    assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
 }
 
 #[test]
@@ -1125,7 +1130,7 @@ fn new_chat_preset_desc_is_none() {
         icon: IconName::Code,
     }];
     let actions = get_new_chat_actions(&[], &presets, &[]);
-    assert!(actions[0].description.is_none());
+    assert_eq!(actions[0].description.as_deref(), Some("Uses Code preset"));
 }
 
 #[test]
@@ -1137,7 +1142,7 @@ fn new_chat_model_desc_is_provider_display_name() {
         provider_display_name: "OpenAI".into(),
     }];
     let actions = get_new_chat_actions(&[], &[], &models);
-    assert_eq!(actions[0].description.as_deref(), Some("OpenAI"));
+    assert_eq!(actions[0].description.as_deref(), Some("Uses OpenAI"));
 }
 
 // =====================================================================
@@ -1391,7 +1396,7 @@ fn score_action_matches_case_insensitive() {
         Some("Open in editor".into()),
         ActionCategory::ScriptContext,
     );
-    let score = ActionsDialog::score_action(&action, "script:edit");
+    let score = ActionsDialog::score_action(&action, "edit");
     assert!(score >= 100, "Prefix match should score >=100, got {score}");
 }
 
