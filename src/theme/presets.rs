@@ -268,6 +268,7 @@ pub fn all_preset_preview_colors() -> Vec<PresetPreviewColors> {
 fn build_dark_theme(colors: ColorScheme) -> Theme {
     Theme {
         colors,
+        focus_aware: None,
         opacity: Some(BackgroundOpacity::dark_default()),
         drop_shadow: Some(DropShadow::default()),
         vibrancy: Some(VibrancySettings::default()),
@@ -279,6 +280,7 @@ fn build_dark_theme(colors: ColorScheme) -> Theme {
 fn build_light_theme(colors: ColorScheme) -> Theme {
     Theme {
         colors,
+        focus_aware: None,
         opacity: Some(BackgroundOpacity::light_default()),
         drop_shadow: Some(DropShadow {
             opacity: 0.12,
