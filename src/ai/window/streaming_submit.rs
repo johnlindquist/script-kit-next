@@ -196,11 +196,14 @@ impl AiApp {
         let shared_content = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
         let shared_done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let shared_error = std::sync::Arc::new(std::sync::Mutex::new(None::<String>));
+        let cancelled = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        self.streaming_cancel = Some(cancelled.clone());
 
         let model_id = model.id.clone();
         let content_clone = shared_content.clone();
         let done_clone = shared_done.clone();
         let error_clone = shared_error.clone();
+        let cancelled_clone = cancelled.clone();
         // Use chat_id as session_id for Claude Code CLI conversation continuity
         let session_id = chat_id.to_string();
 
@@ -210,9 +213,13 @@ impl AiApp {
                 &api_messages,
                 &model_id,
                 Box::new(move |chunk| {
+                    if cancelled_clone.load(std::sync::atomic::Ordering::SeqCst) {
+                        return false;
+                    }
                     if let Ok(mut content) = content_clone.lock() {
                         content.push_str(&chunk);
                     }
+                    true
                 }),
                 Some(&session_id),
             );
@@ -301,6 +308,7 @@ impl AiApp {
                                 app.is_streaming = false;
                                 app.streaming_content.clear();
                                 app.streaming_chat_id = None;
+                                app.streaming_cancel = None;
                             } else if let Some(content) = final_content {
                                 app.streaming_content = content;
                                 app.finish_streaming(chat_id, generation, cx);
