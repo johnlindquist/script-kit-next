@@ -286,6 +286,8 @@ impl ScriptListApp {
         let handle_close = cx.entity().downgrade();
         let handle_actions = cx.entity().downgrade();
         let actions_mode_for_footer = actions_mode;
+        let show_inline_actions_backdrop =
+            self.show_actions_popup && matches!(actions_mode, TermPromptActionsMode::SdkActions);
 
         // Container with explicit height. We wrap the entity in a sized div because
         // GPUI entities don't automatically inherit parent flex sizing.
@@ -328,7 +330,7 @@ impl ScriptListApp {
             // Actions dialog overlay
             .when_some(
                 render_actions_backdrop(
-                    self.show_actions_popup,
+                    show_inline_actions_backdrop,
                     self.actions_dialog.clone(),
                     actions_dialog_top,
                     actions_dialog_right,
@@ -385,6 +387,14 @@ mod term_prompt_render_tests {
         assert!(
             TERM_RENDER_SOURCE.contains("show_pointer_cursor: false"),
             "term render should keep backdrop cursor pointer disabled"
+        );
+        assert!(
+            TERM_RENDER_SOURCE.contains("let show_inline_actions_backdrop ="),
+            "term render should derive a dedicated inline-backdrop visibility flag"
+        );
+        assert!(
+            TERM_RENDER_SOURCE.contains("matches!(actions_mode, TermPromptActionsMode::SdkActions)"),
+            "term render should only show inline backdrop for SDK actions mode"
         );
     }
 
