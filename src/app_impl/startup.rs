@@ -762,7 +762,14 @@ impl ScriptListApp {
         let app_entity_for_arrows = cx.entity().downgrade();
         let arrow_interceptor = cx.intercept_keystrokes({
             let app_entity = app_entity_for_arrows;
-            move |event, _window, cx| {
+            move |event, window, cx| {
+                // intercept_keystrokes is GLOBAL and fires for ALL windows in the app.
+                // Keep main list arrow routing scoped to the main window so notes/AI
+                // windows receive their own navigation key events.
+                if crate::notes::is_notes_window(window) || crate::ai::is_ai_window(window) {
+                    return;
+                }
+
                 let key = event.keystroke.key.as_str();
                 let is_up = crate::ui_foundation::is_key_up(key);
                 let is_down = crate::ui_foundation::is_key_down(key);
@@ -1059,11 +1066,11 @@ impl ScriptListApp {
                                                     |state, input_cx| {
                                                         state.set_value(
                                                             text.clone(),
-                                                            _window,
+                                                            window,
                                                             input_cx,
                                                         );
                                                         state.set_selection(
-                                                            text_len, text_len, _window, input_cx,
+                                                            text_len, text_len, window, input_cx,
                                                         );
                                                     },
                                                 );
@@ -1089,11 +1096,11 @@ impl ScriptListApp {
                                                     |state, input_cx| {
                                                         state.set_value(
                                                             text.clone(),
-                                                            _window,
+                                                            window,
                                                             input_cx,
                                                         );
                                                         state.set_selection(
-                                                            text_len, text_len, _window, input_cx,
+                                                            text_len, text_len, window, input_cx,
                                                         );
                                                     },
                                                 );
@@ -1107,11 +1114,11 @@ impl ScriptListApp {
                                                     |state, input_cx| {
                                                         state.set_value(
                                                             String::new(),
-                                                            _window,
+                                                            window,
                                                             input_cx,
                                                         );
                                                         state
-                                                            .set_selection(0, 0, _window, input_cx);
+                                                            .set_selection(0, 0, window, input_cx);
                                                     },
                                                 );
                                                 this.queue_filter_compute(String::new(), cx);

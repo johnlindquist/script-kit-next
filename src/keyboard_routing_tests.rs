@@ -118,6 +118,29 @@ mod tests {
         );
     }
 
+    /// Verify global arrow interception skips secondary windows.
+    ///
+    /// intercept_keystrokes hooks are app-wide, so this guard prevents the
+    /// main list from consuming notes/AI window arrow navigation.
+    #[test]
+    fn test_arrow_interceptor_skips_notes_and_ai_windows() {
+        let content = read_app_impl_sources();
+        let arrow_section = get_arrow_interceptor_section(&content);
+
+        let guard = "if crate::notes::is_notes_window(window) || crate::ai::is_ai_window(window)";
+        let guard_pos = arrow_section
+            .find(guard)
+            .expect("arrow interceptor must skip notes/AI windows");
+        let key_parse_pos = arrow_section
+            .find("let key = event.keystroke.key.as_str()")
+            .expect("arrow interceptor key parsing not found");
+
+        assert!(
+            guard_pos < key_parse_pos,
+            "Notes/AI window guard should run before key routing in arrow interceptor"
+        );
+    }
+
     /// Verify that render_script_list.rs handles keyboard events for actions popup.
     ///
     /// The render handler should route Enter, Escape, Backspace, and character
