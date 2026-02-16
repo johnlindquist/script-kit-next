@@ -212,8 +212,6 @@ pub mod env_vars {
     pub const GOOGLE_API_KEY: &str = "SCRIPT_KIT_GOOGLE_API_KEY";
     /// Groq API key environment variable
     pub const GROQ_API_KEY: &str = "SCRIPT_KIT_GROQ_API_KEY";
-    /// OpenRouter API key environment variable
-    pub const OPENROUTER_API_KEY: &str = "SCRIPT_KIT_OPENROUTER_API_KEY";
     /// Vercel API key environment variable
     pub const VERCEL_API_KEY: &str = "SCRIPT_KIT_VERCEL_API_KEY";
 
@@ -272,7 +270,6 @@ pub struct DetectedKeys {
     pub(crate) anthropic: Option<SecretString>,
     pub(crate) google: Option<SecretString>,
     pub(crate) groq: Option<SecretString>,
-    pub(crate) openrouter: Option<SecretString>,
     pub(crate) vercel: Option<SecretString>,
 }
 
@@ -283,7 +280,6 @@ impl std::fmt::Debug for DetectedKeys {
             .field("anthropic", &self.anthropic.is_some())
             .field("google", &self.google.is_some())
             .field("groq", &self.groq.is_some())
-            .field("openrouter", &self.openrouter.is_some())
             .field("vercel", &self.vercel.is_some())
             .finish()
     }
@@ -304,8 +300,6 @@ impl DetectedKeys {
             anthropic: read_key_env_or_keyring(env_vars::ANTHROPIC_API_KEY).map(SecretString::from),
             google: read_key_env_or_keyring(env_vars::GOOGLE_API_KEY).map(SecretString::from),
             groq: read_key_env_or_keyring(env_vars::GROQ_API_KEY).map(SecretString::from),
-            openrouter: read_key_env_or_keyring(env_vars::OPENROUTER_API_KEY)
-                .map(SecretString::from),
             vercel: read_key_env_or_keyring(env_vars::VERCEL_API_KEY).map(SecretString::from),
         }
     }
@@ -316,7 +310,6 @@ impl DetectedKeys {
             || self.anthropic.is_some()
             || self.google.is_some()
             || self.groq.is_some()
-            || self.openrouter.is_some()
             || self.vercel.is_some()
     }
 
@@ -337,9 +330,6 @@ impl DetectedKeys {
         }
         if self.groq.is_some() {
             providers.push("Groq");
-        }
-        if self.openrouter.is_some() {
-            providers.push("OpenRouter");
         }
         if self.vercel.is_some() {
             providers.push("Vercel");
@@ -370,13 +360,6 @@ pub mod default_models {
             ModelInfo::new(
                 "claude-haiku-4-5-20250514",
                 "Claude Haiku 4.5",
-                "anthropic",
-                true,
-                200_000,
-            ),
-            ModelInfo::new(
-                "claude-3-5-sonnet-20241022",
-                "Claude 3.5 Sonnet",
                 "anthropic",
                 true,
                 200_000,
@@ -561,7 +544,6 @@ mod tests {
             anthropic: None,
             google: None,
             groq: None,
-            openrouter: None,
             vercel: None,
         };
         assert!(keys.has_any());
@@ -577,6 +559,20 @@ mod tests {
         let anthropic_models = default_models::anthropic();
         assert!(!anthropic_models.is_empty());
         assert!(anthropic_models.iter().any(|m| m.id.contains("claude")));
+    }
+
+    #[test]
+    fn test_anthropic_default_models_have_unique_model_ids() {
+        let models = default_models::anthropic();
+        let mut unique_ids = std::collections::HashSet::new();
+
+        for model in &models {
+            assert!(
+                unique_ids.insert(model.id.clone()),
+                "Duplicate Anthropic model ID found: {}",
+                model.id
+            );
+        }
     }
 
     #[test]
@@ -600,7 +596,6 @@ mod tests {
             anthropic: Some("sk-ant-secret-key".into()),
             google: None,
             groq: None,
-            openrouter: None,
             vercel: Some("vk-vercel-key".into()),
         };
         let debug_output = format!("{:?}", keys);
@@ -650,7 +645,6 @@ mod tests {
             anthropic: None,
             google: None,
             groq: None,
-            openrouter: None,
             vercel: Some("vk-test".into()),
         };
         assert!(keys.has_any());
