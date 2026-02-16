@@ -4,16 +4,16 @@ use crate::ai::providers::{ProviderImage, ProviderMessage};
 
 impl AiApp {
     pub(super) fn submit_message(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // If we are in editing mode, delegate to the edit-submit flow
-        if self.editing_message_id.is_some() {
-            self.submit_edited_message(window, cx);
-            return;
-        }
-
         let content = self.input_state.read(cx).value().to_string();
         let has_pending_image = self.pending_image.is_some();
 
         if !ai_window_can_submit_message(&content, has_pending_image) {
+            return;
+        }
+
+        // If we are in editing mode, delegate to the edit-submit flow
+        if self.editing_message_id.is_some() {
+            self.submit_edited_message(window, cx);
             return;
         }
 
@@ -486,6 +486,25 @@ mod tests {
         assert!(
             should_ignore_update,
             "Bumping generation on chat switch must invalidate prior streaming poll-loop updates"
+        );
+    }
+
+    #[test]
+    fn test_edit_submit_path_is_not_entered_when_submission_input_is_invalid() {
+        let editing_message_id = Some("editing-id");
+        let content = "   ";
+        let has_pending_image = false;
+
+        let should_delegate_to_edit_submit =
+            if !ai_window_can_submit_message(content, has_pending_image) {
+                false
+            } else {
+                editing_message_id.is_some()
+            };
+
+        assert!(
+            !should_delegate_to_edit_submit,
+            "Empty edits must be treated as no-op and should not enter edit-submit truncation flow"
         );
     }
 }
