@@ -31,13 +31,13 @@ impl AiApp {
 
                 div()
                     .id(SharedString::from(format!("attach-{}", id_str)))
-                    .px_3()
-                    .py_2()
-                    .mx_1()
-                    .rounded_md()
+                    .px(S3)
+                    .py(S2)
+                    .mx(S1)
+                    .rounded(R_MD)
                     .flex()
                     .items_center()
-                    .gap_3()
+                    .gap(S3)
                     .cursor_pointer()
                     .hover(|el| el.bg(accent.opacity(0.5)))
                     .on_click(cx.listener(move |this, _, _, cx| {
@@ -59,7 +59,7 @@ impl AiApp {
                     .child(
                         svg()
                             .external_path(icon_name.external_path())
-                            .size(px(16.))
+                            .size(ICON_MD)
                             .text_color(muted_fg),
                     )
                     // Name
@@ -82,19 +82,19 @@ impl AiApp {
 
                 div()
                     .id(SharedString::from(format!("pending-{}", idx)))
-                    .px_3()
-                    .py_1()
-                    .mx_1()
-                    .rounded_md()
+                    .px(S3)
+                    .py(S1)
+                    .mx(S1)
+                    .rounded(R_MD)
                     .flex()
                     .items_center()
-                    .gap_2()
+                    .gap(S2)
                     .bg(accent.opacity(0.2))
                     // File icon
                     .child(
                         svg()
                             .external_path(LocalIconName::File.external_path())
-                            .size(px(14.))
+                            .size(ICON_SM)
                             .text_color(accent),
                     )
                     // Filename
@@ -119,7 +119,7 @@ impl AiApp {
                             .child(
                                 svg()
                                     .external_path(LocalIconName::Close.external_path())
-                                    .size(px(12.))
+                                    .size(ICON_XS)
                                     .text_color(muted_fg),
                             ),
                     )
@@ -137,8 +137,8 @@ impl AiApp {
             .flex()
             .items_end()
             .justify_start()
-            .pb_20()
-            .pl_4()
+            .pb(px(80.))
+            .pl(S4)
             .on_click(cx.listener(|this, _, _, cx| {
                 this.hide_attachments_picker(cx);
             }))
@@ -149,7 +149,7 @@ impl AiApp {
                     .bg(bg_color)
                     .border_1()
                     .border_color(border_color)
-                    .rounded_lg()
+                    .rounded(R_LG)
                     // Shadow disabled for vibrancy - shadows on transparent elements cause gray fill
                     .overflow_hidden()
                     .flex()
@@ -158,8 +158,8 @@ impl AiApp {
                     // Header
                     .child(
                         div()
-                            .px_3()
-                            .py_2()
+                            .px(S3)
+                            .py(S2)
                             .border_b_1()
                             .border_color(border_color)
                             .text_sm()
@@ -171,18 +171,18 @@ impl AiApp {
                     .when(!self.pending_attachments.is_empty(), |el| {
                         el.child(
                             div()
-                                .px_2()
-                                .py_1()
+                                .px(S2)
+                                .py(S1)
                                 .border_b_1()
                                 .border_color(border_color)
                                 .flex()
                                 .flex_col()
-                                .gap_1()
+                                .gap(S1)
                                 .children(pending_items),
                         )
                     })
                     // Options
-                    .child(div().p_1().children(option_items)),
+                    .child(div().p(S1).children(option_items)),
             )
     }
 }
