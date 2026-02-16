@@ -123,10 +123,10 @@ impl PromptColors {
 // Theme-aware overlay utilities
 // =============================================================================
 
-/// Get a modal overlay background color that works in both light and dark modes
+/// Get a modal overlay color derived from theme colors.
 ///
-/// For dark mode: black overlay (darkens content behind)
-/// For light mode: white overlay (keeps content readable on light backgrounds)
+/// Uses whichever of the theme's background/text colors is darker so modal dimming
+/// remains consistent for both light and dark themes.
 ///
 /// # Arguments
 /// * `theme` - The theme to use for dark/light detection
@@ -135,37 +135,65 @@ impl PromptColors {
 /// # Returns
 /// A Rgba color suitable for use with `.bg()`
 pub fn modal_overlay_bg(theme: &Theme, opacity: u8) -> Rgba {
-    let base_color = if theme.has_dark_colors() {
-        0x000000u32 // black for dark mode
-    } else {
-        0xffffffu32 // white for light mode
-    };
+    let background_color = theme.colors.background.main;
+    let foreground_color = theme.colors.text.primary;
+    let base_color =
+        if relative_luminance_srgb(background_color) <= relative_luminance_srgb(foreground_color) {
+            background_color
+        } else {
+            foreground_color
+        };
     rgba((base_color << 8) | (opacity as u32))
 }
 
-/// Get a hover overlay color that works in both light and dark modes
+/// Get a hover overlay color derived from theme text color.
 ///
-/// For dark mode: white overlay (brightens/lifts the element)
-/// For light mode: black overlay (darkens/highlights the element)
+/// Hover overlays track `text.primary` so hover affordances stay theme-consistent.
 ///
 /// # Arguments
-/// * `theme` - The theme to use for dark/light detection
+/// * `theme` - The theme supplying the base hover color
 /// * `opacity` - Alpha value (0-255), e.g., 0x26 for ~15%
 ///
 /// # Returns
 /// A Rgba color suitable for use with `.bg()` on hover
 pub fn hover_overlay_bg(theme: &Theme, opacity: u8) -> Rgba {
-    let base_color = if theme.has_dark_colors() {
-        0xffffffu32 // white for dark mode (brightens)
-    } else {
-        0x000000u32 // black for light mode (darkens)
-    };
+    let base_color = theme.colors.text.primary;
     rgba((base_color << 8) | (opacity as u32))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{accent_color_name, ColorScheme, PromptColors, ACCENT_PALETTE};
+    use super::{
+        accent_color_name, hover_overlay_bg, modal_overlay_bg, ColorScheme, PromptColors, Theme,
+        ACCENT_PALETTE,
+    };
+    use gpui::rgba;
+
+    #[test]
+    fn test_modal_overlay_bg_uses_darker_theme_color_when_background_is_darker() {
+        let mut theme = Theme::dark_default();
+        theme.colors.background.main = 0x101820;
+        theme.colors.text.primary = 0xf0f4f8;
+
+        assert_eq!(modal_overlay_bg(&theme, 0x80), rgba(0x10182080));
+    }
+
+    #[test]
+    fn test_modal_overlay_bg_uses_darker_theme_color_when_text_is_darker() {
+        let mut theme = Theme::light_default();
+        theme.colors.background.main = 0xf8fafc;
+        theme.colors.text.primary = 0x1f2937;
+
+        assert_eq!(modal_overlay_bg(&theme, 0x66), rgba(0x1f293766));
+    }
+
+    #[test]
+    fn test_hover_overlay_bg_uses_theme_primary_text_as_base_color() {
+        let mut theme = Theme::dark_default();
+        theme.colors.text.primary = 0x335577;
+
+        assert_eq!(hover_overlay_bg(&theme, 0x24), rgba(0x33557724));
+    }
 
     #[test]
     fn test_list_item_colors_text_on_accent_uses_text_on_accent_from_scheme() {
