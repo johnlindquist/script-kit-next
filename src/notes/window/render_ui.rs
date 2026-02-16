@@ -178,8 +178,8 @@ impl NotesApp {
                     .ghost()
                     .xsmall()
                     .label("TXT")
-                    .on_click(cx.listener(|this, _, _, _cx| {
-                        this.export_note(ExportFormat::PlainText);
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.export_note(ExportFormat::PlainText, cx);
                     })),
             )
             .child(
@@ -187,8 +187,8 @@ impl NotesApp {
                     .ghost()
                     .xsmall()
                     .label("MD")
-                    .on_click(cx.listener(|this, _, _, _cx| {
-                        this.export_note(ExportFormat::Markdown);
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.export_note(ExportFormat::Markdown, cx);
                     })),
             )
             .child(
@@ -196,8 +196,8 @@ impl NotesApp {
                     .ghost()
                     .xsmall()
                     .label("HTML")
-                    .on_click(cx.listener(|this, _, _, _cx| {
-                        this.export_note(ExportFormat::Html);
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.export_note(ExportFormat::Html, cx);
                     })),
             )
     }

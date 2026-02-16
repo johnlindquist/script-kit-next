@@ -21,10 +21,11 @@ impl NotesApp {
     }
 
     /// Copy note content as markdown to clipboard (Cmd+Shift+C)
-    pub(super) fn copy_as_markdown(&mut self, cx: &Context<Self>) {
+    pub(super) fn copy_as_markdown(&mut self, cx: &mut Context<Self>) {
         let content = self.editor_state.read(cx).value().to_string();
         self.copy_text_to_clipboard(&content);
         self.show_action_feedback("Copied", false);
+        cx.notify();
         info!("Copied note as markdown to clipboard");
     }
 }
