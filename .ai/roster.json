@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-02-16T01:52:18.564Z",
+  "updatedAt": "2026-02-16T01:58:43.877Z",
   "agents": {
     "codex-actions-consistency": {
       "id": "codex-actions-consistency",
@@ -7431,6 +7431,38 @@
       "lastSeenAt": "2026-02-16T01:52:18.564Z",
       "host": "johns.macbook.pro.lan",
       "startSha": "1fea2a1bac50c2033a745ef0405687eab8623200",
+      "notes": "[policy] missing agent_report json"
+    },
+    "codex-fix-beachball": {
+      "id": "codex-fix-beachball",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "gpt-5.3-codex",
+      "task": "Fix the 'Add to AI Chat' beachball/hang bug in Script Kit GPUI. Recent commits (268dc399, b77b448c, 1fea2a1b) show prior attempts to fix this by deferring window open. The flow should be: user triggers 'Add to AI' action → main window hides/closes → AI chat window opens with a file/image/text reference (likely prefixed with @). Look at src/app_actions.rs or similar for the attach_to_ai / add_to_ai action handler. The beachball is likely caused by: (1) blocking the main thread during window transition, (2) a deadlock between hiding main window and opening AI chat window, or (3) synchronous operations that should be async/deferred. Fix by ensuring the main window hide completes before the AI chat window opens, using cx.spawn or cx.defer or similar async patterns. The AI chat window should receive the file reference to display. Run 'cargo check && cargo clippy --all-targets -- -D warnings && cargo test' to verify. Commit the fix.",
+      "scope": "src/app_actions.rs,src/app_actions/*.rs,src/app_impl.rs,src/ai_chat*.rs,src/ai/*.rs,src/render_prompts/*.rs,src/windows/*.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-02-16T01:53:27.054Z",
+      "lastSeenAt": "2026-02-16T01:58:43.877Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "11c3f6a36e1bfc516b45021a80e4d2cbbac12a52",
+      "notes": "[policy] missing agent_report json"
+    },
+    "codex-test-flow": {
+      "id": "codex-test-flow",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "gpt-5.3-codex",
+      "task": "Add or update tests for the 'Add to AI Chat' flow in Script Kit GPUI. The flow is: user triggers add-to-ai action → main window closes → AI chat window opens with a file reference (@file). Look in tests/ for existing AI chat tests or app action tests. Add a test that verifies: (1) the action handler does not block/deadlock, (2) the main window is hidden after the action, (3) the AI chat window receives the file reference. Use existing test patterns from the codebase. Run 'cargo check && cargo clippy --all-targets -- -D warnings && cargo test' to verify. Commit the test.",
+      "scope": "tests/*.rs,tests/**/*.rs,src/app_actions/tests.rs,src/ai/tests.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-02-16T01:55:27.273Z",
+      "lastSeenAt": "2026-02-16T01:58:42.069Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "11c3f6a36e1bfc516b45021a80e4d2cbbac12a52",
       "notes": "[policy] missing agent_report json"
     }
   }
