@@ -170,12 +170,13 @@ impl AiApp {
         // Force scroll to bottom when switching chats (always scroll)
         self.force_scroll_to_bottom();
 
-        // Clear streaming state for display purposes, but don't clear streaming_chat_id/generation
+        // Clear streaming state for display purposes, but don't clear streaming_chat_id
         // The streaming task may still be running for the previous chat - it will be
         // ignored via the generation guard when it tries to update
         self.is_streaming = false;
         self.streaming_content.clear();
-        // Note: streaming_chat_id and streaming_generation are NOT cleared here
+        self.streaming_generation = self.streaming_generation.wrapping_add(1);
+        // Note: streaming_chat_id is intentionally NOT cleared here
         // This allows the background streaming to complete and save to DB correctly
         // while UI shows the newly selected chat's messages
 

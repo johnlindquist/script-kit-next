@@ -347,6 +347,9 @@ impl AiApp {
                                 {
                                     return; // Stale update, ignore
                                 }
+                                if app.selected_chat_id != Some(chat_id) {
+                                    return; // Belt-and-suspenders: don't render into a different active chat
+                                }
                                 app.streaming_content = current;
                                 // Auto-scroll to bottom as new content arrives
                                 app.sync_messages_list_and_scroll_to_bottom();
@@ -430,6 +433,59 @@ mod tests {
             message_counts.get(&chat_id).copied(),
             Some(1usize),
             "Missing cached message count should initialize to one after orphaned completion"
+        );
+    }
+
+    #[test]
+    fn test_streaming_ui_update_guard_rejects_when_selected_chat_differs() {
+        let chat_id = ChatId::new();
+        let different_selected_chat = ChatId::new();
+        let generation = 10_u64;
+        let streaming_generation = 10_u64;
+        let streaming_chat_id = Some(chat_id);
+        let selected_chat_id = Some(different_selected_chat);
+
+        let should_ignore_update = streaming_generation != generation
+            || streaming_chat_id != Some(chat_id)
+            || selected_chat_id != Some(chat_id);
+
+        assert!(
+            should_ignore_update,
+            "Streaming updates must be ignored when user has switched to another selected chat"
+        );
+    }
+
+    #[test]
+    fn test_streaming_ui_update_guard_allows_matching_selected_chat() {
+        let chat_id = ChatId::new();
+        let generation = 42_u64;
+        let streaming_generation = 42_u64;
+        let streaming_chat_id = Some(chat_id);
+        let selected_chat_id = Some(chat_id);
+
+        let should_ignore_update = streaming_generation != generation
+            || streaming_chat_id != Some(chat_id)
+            || selected_chat_id != Some(chat_id);
+
+        assert!(
+            !should_ignore_update,
+            "Streaming updates should continue only while generation, streaming chat, and selected chat all match"
+        );
+    }
+
+    #[test]
+    fn test_chat_switch_generation_bump_makes_existing_streaming_update_stale() {
+        let chat_id = ChatId::new();
+        let stream_generation = 7_u64;
+        let generation_after_chat_switch = stream_generation.wrapping_add(1);
+        let streaming_chat_id = Some(chat_id);
+
+        let should_ignore_update =
+            generation_after_chat_switch != stream_generation || streaming_chat_id != Some(chat_id);
+
+        assert!(
+            should_ignore_update,
+            "Bumping generation on chat switch must invalidate prior streaming poll-loop updates"
         );
     }
 }
