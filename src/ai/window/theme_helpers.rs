@@ -13,10 +13,6 @@ impl AiApp {
             .unwrap_or_else(|| model_id.to_string())
     }
 
-    pub(super) fn create_box_shadows(&self) -> Vec<BoxShadow> {
-        self.cached_box_shadows.clone()
-    }
-
     /// Compute box shadows from theme configuration (called once at construction)
     pub(super) fn compute_box_shadows() -> Vec<BoxShadow> {
         let theme = crate::theme::get_cached_theme();
@@ -26,46 +22,17 @@ impl AiApp {
             return vec![];
         }
 
-        // Convert hex color to HSLA
-        let r = ((shadow_config.color >> 16) & 0xFF) as f32 / 255.0;
-        let g = ((shadow_config.color >> 8) & 0xFF) as f32 / 255.0;
-        let b = (shadow_config.color & 0xFF) as f32 / 255.0;
-
-        // Simple RGB to HSL conversion
-        let max = r.max(g).max(b);
-        let min = r.min(g).min(b);
-        let l = (max + min) / 2.0;
-
-        let (h, s) = if max == min {
-            (0.0, 0.0)
-        } else {
-            let d = max - min;
-            let s = if l > 0.5 {
-                d / (2.0 - max - min)
-            } else {
-                d / (max + min)
-            };
-            let h = if max == r {
-                (g - b) / d + if g < b { 6.0 } else { 0.0 }
-            } else if max == g {
-                (b - r) / d + 2.0
-            } else {
-                (r - g) / d + 4.0
-            };
-            (h / 6.0, s)
-        };
+        let color = crate::ui_foundation::hex_to_hsla_with_alpha(
+            shadow_config.color,
+            shadow_config.opacity,
+        );
 
         vec![BoxShadow {
-            color: hsla(h, s, l, shadow_config.opacity),
+            color,
             offset: point(px(shadow_config.offset_x), px(shadow_config.offset_y)),
             blur_radius: px(shadow_config.blur_radius),
             spread_radius: px(shadow_config.spread_radius),
         }]
-    }
-
-    /// Update cached box shadows when theme changes
-    pub fn update_theme(&mut self, _cx: &mut Context<Self>) {
-        self.cached_box_shadows = Self::compute_box_shadows();
     }
 
     /// Compute the list of last used model+provider settings from recent chats
