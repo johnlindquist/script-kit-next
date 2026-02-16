@@ -22,6 +22,7 @@ mod tests {
     fn read_app_impl_sources() -> String {
         let files = [
             "src/app_impl/startup_new_prelude.rs",
+            "src/app_impl/startup_new_tab.rs",
             "src/app_impl/startup_new_arrow.rs",
             "src/app_impl/startup_new_actions.rs",
             "src/app_impl/actions_dialog.rs",
@@ -51,6 +52,21 @@ mod tests {
             .unwrap_or(after_start.len().min(5000));
 
         &content[start..start + end]
+    }
+
+    fn assert_main_window_visibility_guard_precedes_key_parse(section: &str, section_name: &str) {
+        let guard = "if !script_kit_gpui::is_main_window_visible()";
+        let guard_pos = section.find(guard).unwrap_or_else(|| {
+            panic!("{section_name} must skip handling when main window is hidden")
+        });
+        let key_parse_pos = section
+            .find("let key = event.keystroke.key.as_str()")
+            .unwrap_or_else(|| panic!("{section_name} key parsing not found"));
+
+        assert!(
+            guard_pos < key_parse_pos,
+            "{section_name} visibility guard must run before key parsing"
+        );
     }
 
     /// Verify that ScriptList arrow key handling checks for actions popup.
@@ -141,14 +157,71 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_arrow_interceptor_skips_when_main_window_hidden() {
+        let content =
+            fs::read_to_string("src/app_impl/startup_new_arrow.rs").expect("Failed to read");
+        let section = get_arrow_interceptor_section(&content);
+        assert_main_window_visibility_guard_precedes_key_parse(section, "arrow interceptor");
+    }
+
+    #[test]
+    fn test_home_end_interceptor_skips_when_main_window_hidden() {
+        let content =
+            fs::read_to_string("src/app_impl/startup_new_arrow.rs").expect("Failed to read");
+        let start = content
+            .find("let home_end_interceptor = cx.intercept_keystrokes")
+            .expect("home_end interceptor not found");
+        let after_start = &content[start..];
+        let end = after_start
+            .find("app.gpui_input_subscriptions.push(home_end_interceptor);")
+            .expect("home_end interceptor end not found");
+        let section = &content[start..start + end];
+
+        assert_main_window_visibility_guard_precedes_key_parse(section, "home_end interceptor");
+    }
+
+    #[test]
+    fn test_actions_interceptor_skips_when_main_window_hidden() {
+        let content =
+            fs::read_to_string("src/app_impl/startup_new_actions.rs").expect("Failed to read");
+        let start = content
+            .find("let actions_interceptor = cx.intercept_keystrokes")
+            .expect("actions interceptor not found");
+        let after_start = &content[start..];
+        let end = after_start
+            .find("app.gpui_input_subscriptions.push(actions_interceptor);")
+            .expect("actions interceptor end not found");
+        let section = &content[start..start + end];
+
+        assert_main_window_visibility_guard_precedes_key_parse(section, "actions interceptor");
+    }
+
+    #[test]
+    fn test_tab_interceptor_skips_when_main_window_hidden() {
+        let content =
+            fs::read_to_string("src/app_impl/startup_new_tab.rs").expect("Failed to read");
+        let start = content
+            .find("let tab_interceptor = cx.intercept_keystrokes")
+            .expect("tab interceptor not found");
+        let after_start = &content[start..];
+        let end = after_start
+            .find("app.gpui_input_subscriptions.push(tab_interceptor);")
+            .expect("tab interceptor end not found");
+        let section = &content[start..start + end];
+
+        assert_main_window_visibility_guard_precedes_key_parse(section, "tab interceptor");
+    }
+
     /// Verify that render_script_list.rs handles keyboard events for actions popup.
     ///
     /// The render handler should route Enter, Escape, Backspace, and character
     /// input to the actions dialog when the popup is open.
     #[test]
     fn test_render_script_list_handles_actions_keyboard() {
-        let content = fs::read_to_string("src/render_script_list.rs")
-            .expect("Failed to read render_script_list.rs");
+        let content = fs::read_to_string("src/render_script_list/mod.rs")
+            .or_else(|_| fs::read_to_string("src/render_script_list.rs"))
+            .expect("Failed to read render_script_list source");
 
         // Verify actions popup keyboard handling exists
         assert!(
@@ -164,7 +237,9 @@ mod tests {
 
         // Verify Escape closes actions popup
         assert!(
-            content.contains("escape") && content.contains("close_actions_window"),
+            content.contains("escape")
+                && (content.contains("close_actions_popup")
+                    || content.contains("close_actions_window")),
             "Escape should close the actions popup"
         );
     }

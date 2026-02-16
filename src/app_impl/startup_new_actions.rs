@@ -4,6 +4,12 @@
         let actions_interceptor = cx.intercept_keystrokes({
             let app_entity = app_entity_for_actions;
             move |event, window, cx| {
+                // When the main window is hidden (e.g. Notes/AI open), main-menu
+                // key interceptors must not consume keystrokes from secondary windows.
+                if !script_kit_gpui::is_main_window_visible() {
+                    return;
+                }
+
                 // CRITICAL: Skip processing if this keystroke is from Notes or AI window
                 // intercept_keystrokes is GLOBAL and fires for ALL windows in the app
                 // We only want to handle keystrokes for the main window
