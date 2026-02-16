@@ -274,11 +274,13 @@ impl ScriptListApp {
             let selected = selected_index;
             let hovered = self.hovered_index;
             let current_input_mode = self.input_mode;
-            let hover_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x30);
+            let cell_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x18);
+            let hover_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x2c);
             let selected_border = self.theme.colors.accent.selected;
+            let cell_border = rgba((ui_border << 8) | 0x3c);
             // Keep selection visible but subtle in dense emoji rows (~50% outline, ~14% fill).
             let selected_outline = rgba((selected_border << 8) | 0x80);
-            let selected_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x24);
+            let selected_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x34);
             let click_entity_handle = cx.entity().downgrade();
             let hover_entity_handle = cx.entity().downgrade();
             let grid_cols = cols;
@@ -311,16 +313,17 @@ impl ScriptListApp {
                                     .w_full()
                                     .flex()
                                     .px(px(design_spacing.padding_lg))
-                                    .gap(px(1.0))
+                                    .py(px(design_spacing.padding_xs / 2.0))
+                                    .gap(px(design_spacing.gap_sm))
                                     .children((0..grid_cols).map(move |col| -> AnyElement {
                                         if col >= row_count {
                                             // Invisible spacer to maintain consistent cell width
-                                            return div().flex_1().h(px(40.0)).into_any_element();
+                                            return div().flex_1().h(px(48.0)).into_any_element();
                                         }
                                         let flat_emoji_index = row_start_index + col;
                                         let emoji = match emojis_for_row.get(flat_emoji_index) {
                                             Some(e) => e,
-                                            None => return div().flex_1().h(px(40.0)).into_any_element(),
+                                            None => return div().flex_1().h(px(48.0)).into_any_element(),
                                         };
                                         let is_selected = flat_emoji_index == selected;
                                         let is_hovered = hovered == Some(flat_emoji_index)
@@ -333,7 +336,7 @@ impl ScriptListApp {
                                         div()
                                             .id(flat_emoji_index)
                                             .flex_1()
-                                            .h(px(40.0))
+                                            .h(px(48.0))
                                             .flex()
                                             .items_center()
                                             .justify_center()
@@ -387,20 +390,24 @@ impl ScriptListApp {
                                             )
                                             .child(
                                                 div()
-                                                    .size(px(34.0))
+                                                    .w_full()
+                                                    .h_full()
+                                                    .px(px(design_spacing.padding_xs))
+                                                    .py(px(design_spacing.padding_xs))
                                                     .flex()
                                                     .items_center()
                                                     .justify_center()
-                                                    .rounded(px(6.0))
+                                                    .rounded(px(design_visual.radius_md))
                                                     .text_size(px(26.0))
                                                     .border_1()
                                                     .border_color(if is_selected {
                                                         selected_outline
                                                     } else {
-                                                        gpui::transparent_black().into()
+                                                        cell_border
                                                     })
-                                                    .when(is_selected, |d| d.bg(selected_bg))
+                                                    .bg(cell_bg)
                                                     .when(is_hovered && !is_selected, |d| d.bg(hover_bg))
+                                                    .when(is_selected, |d| d.bg(selected_bg))
                                                     .child(emoji_display),
                                             )
                                             .into_any_element()
@@ -606,28 +613,46 @@ mod emoji_picker_tests {
     }
 
     #[test]
-    fn test_render_emoji_picker_uses_subtle_outline_when_cell_is_selected() {
+    fn test_render_emoji_picker_applies_airy_cell_layout_when_rendering_grid_rows() {
         let source = read_emoji_picker_source();
 
+        assert!(
+            source.contains(".gap(px(design_spacing.gap_sm))"),
+            "emoji grid rows should add spacing between cells for an airier layout"
+        );
+        assert!(
+            source.contains(".h(px(48.0))"),
+            "emoji grid cells should be taller to reduce packed density"
+        );
+        assert!(
+            source.contains(".px(px(design_spacing.padding_xs))")
+                && source.contains(".py(px(design_spacing.padding_xs))"),
+            "emoji cells should add internal padding so glyphs are not touching edges"
+        );
+        assert!(
+            source.contains("let cell_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x18);"),
+            "emoji cells should use theme-based subtle surface backgrounds"
+        );
+        assert!(
+            source.contains("let hover_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x2c);")
+                && source.contains(".when(is_hovered && !is_selected, |d| d.bg(hover_bg))"),
+            "emoji cells should use a stronger theme-based hover background"
+        );
+        assert!(
+            source.contains("let cell_border = rgba((ui_border << 8) | 0x3c);"),
+            "emoji cells should keep a theme-based border in non-selected states"
+        );
+        assert!(
+            source.contains(".bg(cell_bg)"),
+            "emoji cells should always render a subtle rounded background container"
+        );
         assert!(
             source.contains("let selected_outline = rgba((selected_border << 8) | 0x80);"),
             "selected emoji cell should use a subtle alpha-blended outline color"
         );
         assert!(
-            source.contains(".border_1()"),
-            "emoji cells should keep a 1px border for consistent layout"
-        );
-        assert!(
-            source.contains("gpui::transparent_black().into()"),
-            "unselected emoji cells should keep transparent borders to avoid layout shift"
-        );
-        assert!(
-            source.contains(".when(is_selected, |d| d.bg(selected_bg))"),
-            "selected emoji cell should apply subtle rounded background highlight"
-        );
-        assert!(
-            source.contains(".size(px(34.0))") && source.contains(".h(px(40.0))"),
-            "selected emoji indicator should use a tighter rounded square around the emoji"
+            source.contains(".rounded(px(design_visual.radius_md))"),
+            "emoji cells should use theme radius for rounded container styling"
         );
     }
 }
