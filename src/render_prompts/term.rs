@@ -286,8 +286,7 @@ impl ScriptListApp {
         let handle_close = cx.entity().downgrade();
         let handle_actions = cx.entity().downgrade();
         let actions_mode_for_footer = actions_mode;
-        let show_inline_actions_backdrop =
-            self.show_actions_popup && matches!(actions_mode, TermPromptActionsMode::SdkActions);
+        let show_inline_actions_backdrop = self.show_actions_popup;
 
         // Container with explicit height. We wrap the entity in a sized div because
         // GPUI entities don't automatically inherit parent flex sizing.
@@ -393,8 +392,8 @@ mod term_prompt_render_tests {
             "term render should derive a dedicated inline-backdrop visibility flag"
         );
         assert!(
-            TERM_RENDER_SOURCE.contains("matches!(actions_mode, TermPromptActionsMode::SdkActions)"),
-            "term render should only show inline backdrop for SDK actions mode"
+            TERM_RENDER_SOURCE.contains("let show_inline_actions_backdrop = self.show_actions_popup;"),
+            "term render should keep terminal actions dialogs anchored inline whenever popup state is active"
         );
     }
 
