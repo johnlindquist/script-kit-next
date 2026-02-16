@@ -17,9 +17,7 @@ static AI_DB: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
 
 /// Get the path to the AI chats database (~/.scriptkit/db/ai-chats.sqlite)
 fn get_ai_db_path() -> PathBuf {
-    let kit_dir = dirs::home_dir()
-        .map(|h| h.join(".scriptkit"))
-        .unwrap_or_else(|| PathBuf::from(".scriptkit"));
+    let kit_dir = crate::setup::get_kit_path();
 
     kit_dir.join("db").join("ai-chats.sqlite")
 }
@@ -1281,8 +1279,11 @@ mod tests {
     #[test]
     fn test_db_path() {
         let path = get_ai_db_path();
-        assert!(path.to_string_lossy().contains("ai-chats.sqlite"));
-        assert!(path.to_string_lossy().contains(".scriptkit/db"));
+        let expected = crate::setup::get_kit_path()
+            .join("db")
+            .join("ai-chats.sqlite");
+
+        assert_eq!(path, expected);
     }
 
     #[test]
