@@ -2,6 +2,26 @@ use super::*;
 use crate::ai::model::ImageAttachment;
 use crate::ai::providers::{ProviderImage, ProviderMessage};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StreamingStartMode {
+    MockMode,
+    MissingSelectedModel,
+    RealProviderStream,
+}
+
+fn resolve_streaming_start_mode(
+    selected_model: Option<&ModelInfo>,
+    available_models: &[ModelInfo],
+) -> StreamingStartMode {
+    if available_models.is_empty() {
+        StreamingStartMode::MockMode
+    } else if selected_model.is_none() {
+        StreamingStartMode::MissingSelectedModel
+    } else {
+        StreamingStartMode::RealProviderStream
+    }
+}
+
 impl AiApp {
     pub(super) fn submit_message(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let content = self.input_state.read(cx).value().to_string();
@@ -129,29 +149,52 @@ impl AiApp {
 
     /// Start streaming an AI response (or mock response if no providers configured)
     pub(super) fn start_streaming_response(&mut self, chat_id: ChatId, cx: &mut Context<Self>) {
-        // Check if we have a model selected - if not, use mock mode
-        let use_mock_mode = self.selected_model.is_none() || self.available_models.is_empty();
-
-        if use_mock_mode {
-            info!(chat_id = %chat_id, "No AI providers configured - using mock mode");
-            self.start_mock_streaming_response(chat_id, cx);
-            return;
+        match resolve_streaming_start_mode(self.selected_model.as_ref(), &self.available_models) {
+            StreamingStartMode::MockMode => {
+                info!(chat_id = %chat_id, "No AI providers configured - using mock mode");
+                self.start_mock_streaming_response(chat_id, cx);
+                return;
+            }
+            StreamingStartMode::MissingSelectedModel => {
+                let message = "Selected model not found".to_string();
+                self.streaming_error = Some(message.clone());
+                tracing::error!(
+                    chat_id = %chat_id,
+                    available_models = self.available_models.len(),
+                    error = %message,
+                    "Cannot start streaming response"
+                );
+                cx.notify();
+                return;
+            }
+            StreamingStartMode::RealProviderStream => {}
         }
 
         // Get the selected model
         let model = match &self.selected_model {
             Some(m) => m.clone(),
             None => {
-                tracing::error!("No model selected for streaming");
+                let message = "Selected model not found".to_string();
+                self.streaming_error = Some(message.clone());
+                tracing::error!(
+                    chat_id = %chat_id,
+                    error = %message,
+                    "Selected model unexpectedly missing after streaming mode resolution"
+                );
+                cx.notify();
                 return;
             }
         };
 
         // Find the provider for this model
-        let provider = match self.provider_registry.find_provider_for_model(&model.id) {
+        let provider = match self.provider_registry.get_provider(&model.provider) {
             Some(p) => p.clone(),
             None => {
-                tracing::error!(model_id = model.id, "No provider found for model");
+                tracing::error!(
+                    model_id = %model.id,
+                    provider = %model.provider,
+                    "No provider found for selected model provider"
+                );
                 return;
             }
         };
@@ -367,6 +410,47 @@ impl AiApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_resolve_streaming_start_mode_uses_mock_only_when_no_models_available() {
+        let mode = resolve_streaming_start_mode(None, &[]);
+        assert_eq!(
+            mode,
+            StreamingStartMode::MockMode,
+            "Mock mode should only be used when there are no configured models"
+        );
+    }
+
+    #[test]
+    fn test_resolve_streaming_start_mode_reports_missing_selected_model_when_models_exist() {
+        let available_models = vec![ModelInfo::new(
+            "shared-model",
+            "Shared",
+            "openai",
+            true,
+            128_000,
+        )];
+
+        let mode = resolve_streaming_start_mode(None, &available_models);
+        assert_eq!(
+            mode,
+            StreamingStartMode::MissingSelectedModel,
+            "When models exist but selected_model is None, streaming should fail with a model-not-found path"
+        );
+    }
+
+    #[test]
+    fn test_resolve_streaming_start_mode_uses_real_stream_when_model_is_selected() {
+        let selected = ModelInfo::new("shared-model", "Shared", "openai", true, 128_000);
+        let available_models = vec![selected.clone()];
+
+        let mode = resolve_streaming_start_mode(Some(&selected), &available_models);
+        assert_eq!(
+            mode,
+            StreamingStartMode::RealProviderStream,
+            "Real provider streaming should continue when both selected model and available models exist"
+        );
+    }
 
     #[test]
     fn test_orphaned_completion_preview_truncates_and_appends_ellipsis() {
