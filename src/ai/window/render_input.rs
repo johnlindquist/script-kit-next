@@ -3,24 +3,14 @@ use super::*;
 impl AiApp {
     pub(super) fn render_input_with_cursor(
         &self,
-        border_color: gpui::Hsla,
-        cx: &mut Context<Self>,
+        _cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let input_bg = cx.theme().muted.opacity(0.4);
-
-        // Make border semi-transparent for vibrancy (50% opacity for better contrast)
-        let transparent_border = border_color.opacity(0.5);
-
-        // Wrap input in a styled container for vibrancy support
-        // No px padding - let Input component handle text positioning
+        // Keep this focused on text alignment; the outer composer surface owns border/radius.
         div()
             .flex_1()
-            .h(px(36.))
-            .pl_2() // Small left padding for visual alignment with border
-            .rounded(px(10.))
-            .border_1()
-            .border_color(transparent_border) // Semi-transparent accent border
-            .bg(input_bg) // Vibrancy-compatible semi-transparent background
+            .h(COMPOSER_H)
+            .pl(S3)
+            .rounded(R_MD)
             .flex()
             .items_center()
             .child(
@@ -43,10 +33,10 @@ impl AiApp {
                 .id("setup-hint")
                 .flex()
                 .items_center()
-                .gap_2()
-                .px_2()
-                .py(px(2.))
-                .rounded_md()
+                .gap(S2)
+                .px(S2)
+                .py(S1)
+                .rounded(R_SM)
                 .cursor_pointer()
                 .hover(|s| s.bg(cx.theme().muted.opacity(0.3)))
                 .on_click(cx.listener(|this, _, window, cx| {
@@ -55,12 +45,12 @@ impl AiApp {
                 }))
                 .child(if show_copied {
                     Icon::new(IconName::Check)
-                        .size(px(12.))
+                        .size(ICON_XS)
                         .text_color(cx.theme().success)
                         .into_any_element()
                 } else {
                     Icon::new(IconName::TriangleAlert)
-                        .size(px(12.))
+                        .size(ICON_XS)
                         .text_color(cx.theme().warning)
                         .into_any_element()
                 })
@@ -81,9 +71,9 @@ impl AiApp {
                 .when(!show_copied, |d| {
                     d.child(
                         div()
-                            .px(px(4.))
-                            .py(px(1.))
-                            .rounded(px(3.))
+                            .px(S1)
+                            .py(S0)
+                            .rounded(RADIUS_SM)
                             .bg(cx.theme().muted)
                             .text_xs()
                             .text_color(cx.theme().muted_foreground)
@@ -106,10 +96,10 @@ impl AiApp {
             .id("model-display")
             .flex()
             .items_center()
-            .gap_1()
-            .px_2()
-            .py(px(2.))
-            .rounded_md()
+            .gap(S1)
+            .px(S2)
+            .py(S1)
+            .rounded(R_SM)
             .text_xs()
             .text_color(cx.theme().muted_foreground)
             .child(model_label)
