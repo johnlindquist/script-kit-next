@@ -184,7 +184,7 @@ fn path_context_directory_has_open_directory_as_primary() {
     let path = PathInfo::new("Projects", "/Users/test/Projects", true);
     let actions = get_path_context_actions(&path);
 
-    assert_eq!(actions[0].id, "open_directory");
+    assert_eq!(actions[0].id, "file:open_directory");
     assert!(actions[0].title.contains("Projects"));
     assert_eq!(actions[0].shortcut.as_deref(), Some("↵"));
 }
@@ -194,7 +194,7 @@ fn path_context_file_has_select_file_as_primary() {
     let path = PathInfo::new("config.toml", "/Users/test/config.toml", false);
     let actions = get_path_context_actions(&path);
 
-    assert_eq!(actions[0].id, "select_file");
+    assert_eq!(actions[0].id, "file:select_file");
     assert!(actions[0].title.contains("config.toml"));
     assert_eq!(actions[0].shortcut.as_deref(), Some("↵"));
 }
@@ -206,12 +206,12 @@ fn path_context_all_common_actions_present() {
     let ids = action_ids(&actions);
 
     let expected = [
-        "copy_path",
-        "open_in_finder",
-        "open_in_editor",
-        "open_in_terminal",
-        "copy_filename",
-        "move_to_trash",
+        "file:copy_path",
+        "file:open_in_finder",
+        "file:open_in_editor",
+        "file:open_in_terminal",
+        "file:copy_filename",
+        "file:move_to_trash",
     ];
     for &expected_id in &expected {
         assert!(
@@ -226,7 +226,7 @@ fn path_context_all_common_actions_present() {
 fn path_context_finder_label_uses_reveal() {
     let path = PathInfo::new("file.txt", "/tmp/file.txt", false);
     let actions = get_path_context_actions(&path);
-    let reveal = find_action(&actions, "open_in_finder").expect("missing open_in_finder");
+    let reveal = find_action(&actions, "file:open_in_finder").expect("missing open_in_finder");
     assert_eq!(reveal.title, "Reveal in Finder");
 }
 
@@ -238,8 +238,8 @@ fn path_context_move_to_trash_description_matches_type() {
     let dir_actions = get_path_context_actions(&dir_path);
     let file_actions = get_path_context_actions(&file_path);
 
-    let dir_trash = find_action(&dir_actions, "move_to_trash").unwrap();
-    let file_trash = find_action(&file_actions, "move_to_trash").unwrap();
+    let dir_trash = find_action(&dir_actions, "file:move_to_trash").unwrap();
+    let file_trash = find_action(&file_actions, "file:move_to_trash").unwrap();
 
     assert!(
         dir_trash.description.as_ref().unwrap().contains("folder"),
@@ -284,16 +284,16 @@ fn clipboard_text_entry_has_core_actions() {
     let ids = action_ids(&actions);
 
     let expected = [
-        "clipboard_paste",
-        "clipboard_copy",
-        "clipboard_paste_keep_open",
-        "clipboard_share",
-        "clipboard_attach_to_ai",
-        "clipboard_save_snippet",
-        "clipboard_save_file",
-        "clipboard_delete",
-        "clipboard_delete_multiple",
-        "clipboard_delete_all",
+        "clip:clipboard_paste",
+        "clip:clipboard_copy",
+        "clip:clipboard_paste_keep_open",
+        "clip:clipboard_share",
+        "clip:clipboard_attach_to_ai",
+        "clip:clipboard_save_snippet",
+        "clip:clipboard_save_file",
+        "clip:clipboard_delete",
+        "clip:clipboard_delete_multiple",
+        "clip:clipboard_delete_all",
     ];
     for &expected_id in &expected {
         assert!(
@@ -308,7 +308,7 @@ fn clipboard_text_entry_has_core_actions() {
 fn clipboard_paste_title_includes_app_name() {
     let entry = make_text_entry(false);
     let actions = get_clipboard_history_context_actions(&entry);
-    let paste = find_action(&actions, "clipboard_paste").unwrap();
+    let paste = find_action(&actions, "clip:clipboard_paste").unwrap();
 
     assert_eq!(paste.title, "Paste to VS Code");
 }
@@ -317,7 +317,7 @@ fn clipboard_paste_title_includes_app_name() {
 fn clipboard_paste_title_fallback_when_no_app() {
     let entry = make_image_entry(false);
     let actions = get_clipboard_history_context_actions(&entry);
-    let paste = find_action(&actions, "clipboard_paste").unwrap();
+    let paste = find_action(&actions, "clip:clipboard_paste").unwrap();
 
     assert_eq!(paste.title, "Paste to Active App");
 }
@@ -329,7 +329,7 @@ fn clipboard_image_entry_has_ocr_action() {
     let ids = action_ids(&actions);
 
     assert!(
-        ids.contains(&"clipboard_ocr"),
+        ids.contains(&"clip:clipboard_ocr"),
         "Image entries should have OCR action"
     );
 
@@ -337,15 +337,15 @@ fn clipboard_image_entry_has_ocr_action() {
     #[cfg(target_os = "macos")]
     {
         assert!(
-            ids.contains(&"clipboard_open_with"),
+            ids.contains(&"clip:clipboard_open_with"),
             "macOS image should have Open With"
         );
         assert!(
-            ids.contains(&"clipboard_annotate_cleanshot"),
+            ids.contains(&"clip:clipboard_annotate_cleanshot"),
             "macOS image should have CleanShot annotate"
         );
         assert!(
-            ids.contains(&"clipboard_upload_cleanshot"),
+            ids.contains(&"clip:clipboard_upload_cleanshot"),
             "macOS image should have CleanShot upload"
         );
     }
@@ -358,15 +358,15 @@ fn clipboard_text_entry_lacks_image_specific_actions() {
     let ids = action_ids(&actions);
 
     assert!(
-        !ids.contains(&"clipboard_ocr"),
+        !ids.contains(&"clip:clipboard_ocr"),
         "Text entries should NOT have OCR"
     );
     assert!(
-        !ids.contains(&"clipboard_open_with"),
+        !ids.contains(&"clip:clipboard_open_with"),
         "Text entries should NOT have Open With"
     );
     assert!(
-        !ids.contains(&"clipboard_annotate_cleanshot"),
+        !ids.contains(&"clip:clipboard_annotate_cleanshot"),
         "Text entries should NOT have CleanShot annotate"
     );
 }
@@ -378,11 +378,11 @@ fn clipboard_pinned_entry_shows_unpin() {
     let ids = action_ids(&actions);
 
     assert!(
-        ids.contains(&"clipboard_unpin"),
+        ids.contains(&"clip:clipboard_unpin"),
         "Pinned entry should show Unpin"
     );
     assert!(
-        !ids.contains(&"clipboard_pin"),
+        !ids.contains(&"clip:clipboard_pin"),
         "Pinned entry should NOT show Pin"
     );
 }
@@ -394,11 +394,11 @@ fn clipboard_unpinned_entry_shows_pin() {
     let ids = action_ids(&actions);
 
     assert!(
-        ids.contains(&"clipboard_pin"),
+        ids.contains(&"clip:clipboard_pin"),
         "Unpinned entry should show Pin"
     );
     assert!(
-        !ids.contains(&"clipboard_unpin"),
+        !ids.contains(&"clip:clipboard_unpin"),
         "Unpinned entry should NOT show Unpin"
     );
 }
@@ -430,13 +430,13 @@ fn chat_context_model_selection_marks_current() {
     };
     let actions = get_chat_context_actions(&info);
 
-    let sonnet = find_action(&actions, "select_model_claude-sonnet").unwrap();
+    let sonnet = find_action(&actions, "chat:select_model_claude-sonnet").unwrap();
     assert!(
         sonnet.title.contains("✓"),
         "Current model should have checkmark"
     );
 
-    let gpt4 = find_action(&actions, "select_model_gpt-4").unwrap();
+    let gpt4 = find_action(&actions, "chat:select_model_gpt-4").unwrap();
     assert!(
         !gpt4.title.contains("✓"),
         "Non-current model should not have checkmark"
@@ -454,7 +454,7 @@ fn chat_context_copy_response_only_when_has_response() {
     let actions = get_chat_context_actions(&with_response);
     let ids = action_ids(&actions);
     assert!(
-        ids.contains(&"copy_response"),
+        ids.contains(&"chat:copy_response"),
         "Should have copy_response when has_response=true"
     );
 
@@ -467,7 +467,7 @@ fn chat_context_copy_response_only_when_has_response() {
     let actions = get_chat_context_actions(&without_response);
     let ids = action_ids(&actions);
     assert!(
-        !ids.contains(&"copy_response"),
+        !ids.contains(&"chat:copy_response"),
         "Should NOT have copy_response when has_response=false"
     );
 }
@@ -483,7 +483,7 @@ fn chat_context_clear_only_when_has_messages() {
     let actions = get_chat_context_actions(&with_msgs);
     let ids = action_ids(&actions);
     assert!(
-        ids.contains(&"clear_conversation"),
+        ids.contains(&"chat:clear_conversation"),
         "Should have clear_conversation when has_messages=true"
     );
 
@@ -496,7 +496,7 @@ fn chat_context_clear_only_when_has_messages() {
     let actions = get_chat_context_actions(&empty);
     let ids = action_ids(&actions);
     assert!(
-        !ids.contains(&"clear_conversation"),
+        !ids.contains(&"chat:clear_conversation"),
         "Should NOT have clear_conversation when has_messages=false"
     );
 }
@@ -512,7 +512,7 @@ fn chat_context_continue_in_chat_always_present() {
     let actions = get_chat_context_actions(&info);
     let ids = action_ids(&actions);
     assert!(
-        ids.contains(&"continue_in_chat"),
+        ids.contains(&"chat:continue_in_chat"),
         "continue_in_chat should always be present"
     );
 }
@@ -621,15 +621,15 @@ fn ai_command_bar_has_all_expected_actions() {
     let ids = action_ids(&actions);
 
     let expected = [
-        "copy_response",
-        "copy_chat",
-        "copy_last_code",
-        "submit",
-        "new_chat",
-        "delete_chat",
-        "add_attachment",
-        "paste_image",
-        "change_model",
+        "chat:copy_response",
+        "chat:copy_chat",
+        "chat:copy_last_code",
+        "chat:submit",
+        "chat:new_chat",
+        "chat:delete_chat",
+        "chat:add_attachment",
+        "chat:paste_image",
+        "chat:change_model",
     ];
     for &expected_id in &expected {
         assert!(
@@ -653,7 +653,7 @@ fn ai_command_bar_actions_have_sections() {
     }
 
     // Verify correct section assignments
-    let response_ids = ["copy_response", "copy_chat", "copy_last_code"];
+    let response_ids = ["chat:copy_response", "chat:copy_chat", "chat:copy_last_code"];
     for id in &response_ids {
         let a = find_action(&actions, id).unwrap();
         assert_eq!(
@@ -664,7 +664,7 @@ fn ai_command_bar_actions_have_sections() {
         );
     }
 
-    let action_ids_list = ["submit", "new_chat", "delete_chat"];
+    let action_ids_list = ["chat:submit", "chat:new_chat", "chat:delete_chat"];
     for id in &action_ids_list {
         let a = find_action(&actions, id).unwrap();
         assert_eq!(
@@ -1116,14 +1116,14 @@ fn new_chat_actions_last_used_section() {
     let actions = get_new_chat_actions(&last_used, &[], &[]);
     assert_eq!(actions.len(), 2);
 
-    assert_eq!(actions[0].id, "last_used_0");
+    assert_eq!(actions[0].id, "last_used_anthropic::claude-sonnet");
     assert_eq!(actions[0].title, "Claude Sonnet");
-    assert_eq!(actions[0].description.as_deref(), Some("Anthropic"));
+    assert_eq!(actions[0].description.as_deref(), Some("Uses Anthropic"));
     assert_eq!(actions[0].section.as_deref(), Some("Last Used Settings"));
 
-    assert_eq!(actions[1].id, "last_used_1");
+    assert_eq!(actions[1].id, "last_used_openai::gpt-4");
     assert_eq!(actions[1].title, "GPT-4");
-    assert_eq!(actions[1].description.as_deref(), Some("OpenAI"));
+    assert_eq!(actions[1].description.as_deref(), Some("Uses OpenAI"));
 }
 
 #[test]
@@ -1146,9 +1146,9 @@ fn new_chat_actions_presets_section() {
     assert_eq!(actions[0].id, "preset_general");
     assert_eq!(actions[0].title, "General");
     assert_eq!(actions[0].section.as_deref(), Some("Presets"));
-    assert!(
-        actions[0].description.is_none(),
-        "Presets have no description"
+    assert_eq!(
+        actions[0].description.as_deref(),
+        Some("Uses General preset")
     );
 
     assert_eq!(actions[1].id, "preset_code");
@@ -1166,9 +1166,9 @@ fn new_chat_actions_models_section() {
     let actions = get_new_chat_actions(&[], &[], &models);
     assert_eq!(actions.len(), 1);
 
-    assert_eq!(actions[0].id, "model_0");
+    assert_eq!(actions[0].id, "model_anthropic::opus");
     assert_eq!(actions[0].title, "Claude Opus");
-    assert_eq!(actions[0].description.as_deref(), Some("Anthropic"));
+    assert_eq!(actions[0].description.as_deref(), Some("Uses Anthropic"));
     assert_eq!(actions[0].section.as_deref(), Some("Models"));
 }
 
