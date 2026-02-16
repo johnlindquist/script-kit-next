@@ -1571,9 +1571,6 @@ pub fn load_theme() -> Theme {
                         );
 
                         if should_use_light {
-                            // System is in light mode (or explicitly set to light)
-                            theme.appearance = AppearanceMode::Light; // Mark as light for consistency
-
                             // Use light opacity defaults
                             if theme.opacity.is_none() {
                                 theme.opacity = Some(BackgroundOpacity::light_default());
