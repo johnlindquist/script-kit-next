@@ -203,13 +203,14 @@ impl ScriptListApp {
         // Footer colors and handlers for PromptFooter (same shared prompt footer pattern)
         let footer_colors = prompt_footer_colors_for_prompt(&design_colors, !theme.is_dark_mode());
 
-        // Footer config: Capture Photo as primary action, always show Actions button
+        // Footer config: keep webcam footer focused on essential controls only.
         let footer_config = prompt_footer_config_with_status(
             "Capture Photo",
             true,
-            Some(running_status_text("camera ready, press Enter to capture")),
-            Some("Webcam".to_string()),
+            None,
+            None,
         )
+        .show_logo(false)
         // Keep explicit label for source-based regression tests.
         .primary_label("Capture Photo");
 
