@@ -145,6 +145,30 @@ mod tests {
     }
 
     #[test]
+    fn render_webcam_footer_removes_extra_metadata_but_keeps_actions() {
+        let content =
+            fs::read_to_string("src/render_prompts/other.rs").expect("Failed to read render file");
+
+        let start = content
+            .find("render_webcam_prompt(")
+            .expect("render_webcam_prompt not found");
+        let section = &content[start..];
+
+        assert!(
+            section.contains(".show_logo(false)"),
+            "Webcam footer should hide nonessential logo chrome for a cleaner capture surface."
+        );
+        assert!(
+            !section.contains("camera ready, press Enter to capture"),
+            "Webcam footer should not include extra status helper text."
+        );
+        assert!(
+            !section.contains("Some(\"Webcam\".to_string())"),
+            "Webcam footer should not include redundant info labels."
+        );
+    }
+
+    #[test]
     fn webcam_start_errors_are_surfaceable_in_open_flow() {
         let content = fs::read_to_string("src/app_execute/utility_views.rs")
             .expect("Failed to read src/app_execute/utility_views.rs");
