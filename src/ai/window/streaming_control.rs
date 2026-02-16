@@ -279,6 +279,8 @@ impl AiApp {
                 tracing::error!(error = %e, "Failed to delete assistant message for regeneration");
             }
 
+            self.sync_chat_derived_state_from_current_messages(chat_id);
+            cx.notify();
             self.force_scroll_to_bottom();
             info!(chat_id = %chat_id, "Regenerating response");
             self.start_streaming_response(chat_id, cx);
@@ -353,6 +355,42 @@ mod tests {
             message_counts.get(&chat_id).copied(),
             Some(1usize),
             "Missing cache entry should initialize to one message for background completion"
+        );
+    }
+
+    #[test]
+    fn test_regenerate_removal_recomputes_preview_and_count_from_remaining_messages() {
+        let chat_id = ChatId::new();
+        let mut current_messages = vec![
+            Message::user(chat_id, "question"),
+            Message::assistant(chat_id, "answer"),
+        ];
+        let mut message_counts = std::collections::HashMap::new();
+        let mut message_previews = std::collections::HashMap::new();
+
+        let assistant_idx = current_messages
+            .iter()
+            .rposition(|message| message.role == MessageRole::Assistant);
+        if let Some(index) = assistant_idx {
+            current_messages.remove(index);
+        }
+
+        super::super::interactions::ai_window_recompute_chat_derived_state_from_messages(
+            chat_id,
+            &current_messages,
+            &mut message_counts,
+            &mut message_previews,
+        );
+
+        assert_eq!(
+            message_counts.get(&chat_id).copied(),
+            Some(1usize),
+            "After regeneration removal, count should match the in-memory remaining messages"
+        );
+        assert_eq!(
+            message_previews.get(&chat_id).map(String::as_str),
+            Some("question"),
+            "After regeneration removal, preview should point to the latest remaining message"
         );
     }
 }

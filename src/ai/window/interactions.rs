@@ -324,19 +324,37 @@ impl AiApp {
 
     /// Submit the edited message: truncate history from the edit point and re-send.
     pub(super) fn submit_edited_message(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(edit_id) = self.editing_message_id.take() {
-            if let Some(idx) = self.current_messages.iter().position(|m| m.id == edit_id) {
-                let to_delete: Vec<String> = self.current_messages[idx..]
-                    .iter()
-                    .map(|m| m.id.clone())
-                    .collect();
-                for mid in &to_delete {
-                    let _ = storage::delete_message(mid);
+        let Some(edit_id) = self.editing_message_id.clone() else {
+            return;
+        };
+
+        if let Some(idx) = self.current_messages.iter().position(|m| m.id == edit_id) {
+            let to_delete: Vec<String> = self.current_messages[idx..]
+                .iter()
+                .map(|m| m.id.clone())
+                .collect();
+
+            for mid in &to_delete {
+                if let Err(error) = storage::delete_message(mid) {
+                    tracing::error!(
+                        error = %error,
+                        message_id = %mid,
+                        edit_message_id = %edit_id,
+                        "Failed to delete message while submitting edit; aborting resubmit"
+                    );
+                    return;
                 }
-                self.current_messages.truncate(idx);
             }
-            self.submit_message(window, cx);
+
+            self.current_messages.truncate(idx);
+            if let Some(chat_id) = self.selected_chat_id {
+                self.sync_chat_derived_state_from_current_messages(chat_id);
+            }
+            cx.notify();
         }
+
+        self.editing_message_id = None;
+        self.submit_message(window, cx);
     }
 
     /// Edit the last user message (triggered by Up arrow in empty input).
@@ -449,5 +467,133 @@ impl AiApp {
         self.last_persisted_bounds = Some(wb);
         self.last_bounds_save = std::time::Instant::now();
         crate::window_state::save_window_from_gpui(crate::window_state::WindowRole::Ai, wb);
+    }
+
+    pub(super) fn sync_chat_derived_state_from_current_messages(&mut self, chat_id: ChatId) {
+        ai_window_recompute_chat_derived_state_from_messages(
+            chat_id,
+            &self.current_messages,
+            &mut self.message_counts,
+            &mut self.message_previews,
+        );
+    }
+}
+
+pub(super) fn ai_window_recompute_chat_derived_state_from_messages(
+    chat_id: ChatId,
+    current_messages: &[Message],
+    message_counts: &mut std::collections::HashMap<ChatId, usize>,
+    message_previews: &mut std::collections::HashMap<ChatId, String>,
+) {
+    message_counts.insert(chat_id, current_messages.len());
+
+    if let Some(last_message) = current_messages.last() {
+        message_previews.insert(
+            chat_id,
+            ai_window_sidebar_preview_from_message(last_message),
+        );
+    } else {
+        message_previews.remove(&chat_id);
+    }
+}
+
+fn ai_window_sidebar_preview_from_message(message: &Message) -> String {
+    let preview_source = if message.content.trim().is_empty() && !message.images.is_empty() {
+        "Image attachment"
+    } else {
+        message.content.as_str()
+    };
+
+    let preview: String = preview_source.chars().take(60).collect();
+    if preview.len() < preview_source.len() {
+        format!("{}...", preview.trim())
+    } else {
+        preview
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ai::model::ImageAttachment;
+
+    #[test]
+    fn test_ai_window_recompute_chat_derived_state_sets_count_and_preview_from_last_message() {
+        let chat_id = ChatId::new();
+        let current_messages = vec![
+            Message::user(chat_id, "first"),
+            Message::assistant(chat_id, "latest"),
+        ];
+        let mut message_counts = std::collections::HashMap::new();
+        let mut message_previews = std::collections::HashMap::new();
+
+        ai_window_recompute_chat_derived_state_from_messages(
+            chat_id,
+            &current_messages,
+            &mut message_counts,
+            &mut message_previews,
+        );
+
+        assert_eq!(
+            message_counts.get(&chat_id).copied(),
+            Some(2usize),
+            "Derived message count should always match current in-memory messages"
+        );
+        assert_eq!(
+            message_previews.get(&chat_id).map(String::as_str),
+            Some("latest"),
+            "Derived preview should reflect the latest in-memory message"
+        );
+    }
+
+    #[test]
+    fn test_ai_window_recompute_chat_derived_state_removes_preview_for_empty_chat() {
+        let chat_id = ChatId::new();
+        let mut message_counts = std::collections::HashMap::new();
+        let mut message_previews = std::collections::HashMap::new();
+        message_counts.insert(chat_id, 5usize);
+        message_previews.insert(chat_id, "stale preview".to_string());
+
+        ai_window_recompute_chat_derived_state_from_messages(
+            chat_id,
+            &[],
+            &mut message_counts,
+            &mut message_previews,
+        );
+
+        assert_eq!(
+            message_counts.get(&chat_id).copied(),
+            Some(0usize),
+            "Derived count should reset to zero when no messages remain"
+        );
+        assert!(
+            !message_previews.contains_key(&chat_id),
+            "Derived preview should be removed when no messages remain"
+        );
+    }
+
+    #[test]
+    fn test_ai_window_recompute_chat_derived_state_uses_image_attachment_preview_for_empty_content()
+    {
+        let chat_id = ChatId::new();
+        let mut image_only_message = Message::user(chat_id, " ");
+        image_only_message
+            .images
+            .push(ImageAttachment::png("base64-data".to_string()));
+        let mut message_counts = std::collections::HashMap::new();
+        let mut message_previews = std::collections::HashMap::new();
+
+        ai_window_recompute_chat_derived_state_from_messages(
+            chat_id,
+            &[image_only_message],
+            &mut message_counts,
+            &mut message_previews,
+        );
+
+        assert_eq!(
+            message_previews.get(&chat_id).map(String::as_str),
+            Some("Image attachment"),
+            "Image-only messages should keep the same sidebar preview label after recomputation"
+        );
     }
 }
