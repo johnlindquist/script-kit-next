@@ -27,7 +27,7 @@
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use gpui::{App, Timer};
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::watcher::ThemeWatcher;
 use crate::windows;
@@ -73,6 +73,85 @@ fn bump_theme_revision() {
         new_revision = old + 1,
         "Theme revision bumped"
     );
+}
+
+fn log_theme_validation_diagnostics(theme_json: &serde_json::Value) -> (usize, usize) {
+    let mut diagnostics = super::validation::ThemeDiagnostics::new();
+    diagnostics.merge(super::validation::validate_theme_json(theme_json));
+    diagnostics.info("/theme", "Theme validation completed");
+
+    let warning_count = diagnostics.warning_count();
+    let error_count = diagnostics.error_count();
+
+    if diagnostics.has_warnings() || diagnostics.has_errors() {
+        debug!(
+            warning_count,
+            error_count,
+            summary = %diagnostics.format_for_log(),
+            "Theme validation reported diagnostics"
+        );
+    } else if diagnostics.is_ok() {
+        debug!(summary = %diagnostics.format_for_log(), "Theme validation passed");
+    }
+
+    for diag in diagnostics.diagnostics {
+        match diag.severity {
+            super::validation::DiagnosticSeverity::Warning => {
+                warn!(
+                    path = %diag.path,
+                    message = %diag.message,
+                    "theme validation warning"
+                );
+            }
+            super::validation::DiagnosticSeverity::Error => {
+                error!(
+                    path = %diag.path,
+                    message = %diag.message,
+                    "theme validation error"
+                );
+            }
+            super::validation::DiagnosticSeverity::Info => {}
+        }
+    }
+
+    (warning_count, error_count)
+}
+
+fn validate_theme_json_before_reload() {
+    let theme_path = crate::setup::get_kit_path().join("kit").join("theme.json");
+    let contents = match std::fs::read_to_string(&theme_path) {
+        Ok(contents) => contents,
+        Err(error) => {
+            debug!(
+                path = %theme_path.display(),
+                error = ?error,
+                "Skipping theme validation: failed to read theme file"
+            );
+            return;
+        }
+    };
+
+    let json_value = match serde_json::from_str::<serde_json::Value>(&contents) {
+        Ok(json_value) => json_value,
+        Err(error) => {
+            debug!(
+                path = %theme_path.display(),
+                error = ?error,
+                "Skipping theme validation: failed to parse theme JSON"
+            );
+            return;
+        }
+    };
+
+    let (warning_count, error_count) = log_theme_validation_diagnostics(&json_value);
+    if warning_count > 0 || error_count > 0 {
+        debug!(
+            path = %theme_path.display(),
+            warning_count,
+            error_count,
+            "Theme validation diagnostics emitted before reload"
+        );
+    }
 }
 
 /// Ensure the global theme service is running.
@@ -121,6 +200,7 @@ pub fn ensure_theme_service(cx: &mut App) {
 
                 // Reload the theme cache FIRST (before syncing)
                 // This ensures get_cached_theme() returns fresh data
+                validate_theme_json_before_reload();
                 crate::theme::reload_theme_cache();
 
                 let update_result = cx.update(|cx| {
@@ -190,5 +270,42 @@ mod tests {
         bump_theme_revision();
         let after = theme_revision();
         assert!(after > before);
+    }
+
+    #[test]
+    fn test_log_theme_validation_diagnostics_counts_errors_and_warnings_for_invalid_theme_json() {
+        let invalid_theme_json = serde_json::json!({
+            "colors": {
+                "background": {
+                    "main": -1
+                }
+            },
+            "unexpected_key": true
+        });
+
+        let (warning_count, error_count) = log_theme_validation_diagnostics(&invalid_theme_json);
+
+        assert!(warning_count > 0);
+        assert!(error_count > 0);
+    }
+
+    #[test]
+    fn test_log_theme_validation_diagnostics_returns_zero_for_valid_theme_json() {
+        let valid_theme_json = serde_json::json!({
+            "colors": {
+                "background": {
+                    "main": "#111111"
+                }
+            },
+            "vibrancy": {
+                "enabled": true,
+                "material": "hud"
+            }
+        });
+
+        let (warning_count, error_count) = log_theme_validation_diagnostics(&valid_theme_json);
+
+        assert_eq!(warning_count, 0);
+        assert_eq!(error_count, 0);
     }
 }

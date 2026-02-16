@@ -23,9 +23,7 @@ pub mod prelude;
 pub mod presets;
 pub mod service;
 mod types;
-#[cfg(test)]
-#[allow(dead_code)]
-pub mod validation;
+pub(crate) mod validation;
 
 // Re-export types used externally
 pub(crate) use types::relative_luminance_srgb;

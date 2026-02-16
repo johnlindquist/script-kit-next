@@ -272,7 +272,10 @@ fn check_unknown_keys<'a>(
             } else {
                 format!("{}/{}", parent_path, key)
             };
-            diags.warning(&path, format!("Unknown key '{}' will be ignored", key));
+            diags.add(
+                Diagnostic::warning(&path, format!("Unknown key '{}' will be ignored", key))
+                    .with_suggestion("Remove this key or rename it to a supported theme field"),
+            );
         }
     }
 }
