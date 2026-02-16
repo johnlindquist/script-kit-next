@@ -301,10 +301,11 @@ impl ScriptListApp {
             // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
             .w_full()
             .h(content_height)
-            .overflow_hidden()
             .key_context(TERM_PROMPT_KEY_CONTEXT)
             .capture_key_down(handle_key)
             // Terminal content takes remaining space
+            // Keep overflow clipping scoped to terminal output so the actions popup can
+            // preserve vibrancy/translucency compositing when rendered as an overlay.
             .child(div().flex_1().min_h(px(0.)).overflow_hidden().child(entity))
             // Footer at the bottom
             .child(
@@ -404,6 +405,24 @@ mod term_prompt_render_tests {
         assert!(
             TERM_RENDER_SOURCE.contains("let show_inline_actions_backdrop = self.show_actions_popup;"),
             "term render should keep terminal actions dialogs anchored inline whenever popup state is active"
+        );
+    }
+
+    #[test]
+    fn test_term_actions_overlay_keeps_root_unclipped_for_vibrancy_compositing() {
+        const TERM_RENDER_SOURCE: &str = include_str!("term.rs");
+
+        assert!(
+            !TERM_RENDER_SOURCE.contains(
+                ".h(content_height)\n            .overflow_hidden()\n            .key_context(TERM_PROMPT_KEY_CONTEXT)"
+            ),
+            "term root container should not clip overflow before key handling, so overlay vibrancy can composite correctly"
+        );
+        assert!(
+            TERM_RENDER_SOURCE.contains(
+                ".child(div().flex_1().min_h(px(0.)).overflow_hidden().child(entity))"
+            ),
+            "term render should keep overflow clipping scoped to the terminal content child"
         );
     }
 
