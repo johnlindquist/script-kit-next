@@ -317,6 +317,37 @@ fn test_validate_unknown_color_key() {
 }
 
 #[test]
+fn test_validate_valid_terminal_colors() {
+    let json = json!({
+        "colors": {
+            "terminal": {
+                "black": "#000000",
+                "red": "#FF0000"
+            }
+        }
+    });
+    let diags = validate_theme_json(&json);
+    assert!(diags.is_ok());
+}
+
+#[test]
+fn test_validate_unknown_terminal_key() {
+    let json = json!({
+        "colors": {
+            "terminal": {
+                "not_a_color": "#000000"
+            }
+        }
+    });
+    let diags = validate_theme_json(&json);
+    assert!(diags.has_warnings());
+    assert!(diags
+        .diagnostics
+        .iter()
+        .any(|d| d.message.contains("not_a_color")));
+}
+
+#[test]
 fn test_severity_ordering() {
     // With derive(Ord), ordering is by variant declaration order
     // Error is declared first, so it has the lowest value
