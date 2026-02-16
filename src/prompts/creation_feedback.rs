@@ -87,7 +87,9 @@ impl RenderOnce for CreationFeedbackPanel {
         // Translucent to preserve vibrancy from outer shell.
         let path_surface = rgba((theme.colors.accent.selected_subtle << 8) | 0x30);
         let button_colors = ButtonColors::from_theme(&theme);
-        let mono_font = TypographyResolver::new(&theme, DesignVariant::Default).mono_font();
+        let mono_font = TypographyResolver::new(&theme, DesignVariant::Default)
+            .mono_font()
+            .to_string();
 
         let reveal_button = match on_reveal_in_finder {
             Some(callback) => {
