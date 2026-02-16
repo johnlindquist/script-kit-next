@@ -28,10 +28,10 @@ const BASE_FONT_SIZE: f32 = 14.0;
 /// and ascenders while keeping text readable
 const LINE_HEIGHT_MULTIPLIER: f32 = 1.3;
 /// Terminal cell dimensions at base font size
-/// Cell width for Menlo 14pt is 8.4287px (measured). We use a slightly larger value
+/// Cell width for FONT_MONO at 14pt is 8.4287px (measured). We use a slightly larger value
 /// to be conservative and prevent the last character from wrapping to the next line.
 /// Using 8.5px ensures we never tell the PTY we have more columns than can render.
-const BASE_CELL_WIDTH: f32 = 8.5; // Conservative value for Menlo 14pt (actual: 8.4287px)
+const BASE_CELL_WIDTH: f32 = 8.5; // Conservative value for FONT_MONO at 14pt (actual: 8.4287px)
 /// Default cell height at base font size (used for tests and static calculations)
 #[cfg(test)]
 const BASE_CELL_HEIGHT: f32 = BASE_FONT_SIZE * LINE_HEIGHT_MULTIPLIER; // 18.2px for 14pt
@@ -1345,7 +1345,7 @@ mod tests {
 
     #[test]
     fn test_cell_dimensions_are_reasonable() {
-        // Menlo 14pt should have reasonable cell dimensions
+        // FONT_MONO at 14pt should have reasonable cell dimensions
         const _: () = assert!(CELL_WIDTH > 5.0 && CELL_WIDTH < 15.0);
         const _: () = assert!(CELL_HEIGHT > 10.0 && CELL_HEIGHT < 25.0);
     }
@@ -1418,7 +1418,7 @@ mod tests {
         use gpui::px;
 
         // Test that we use conservative column calculation to prevent wrapping.
-        // CELL_WIDTH is 8.5px (slightly larger than actual 8.4287px Menlo width)
+        // CELL_WIDTH is 8.5px (slightly larger than actual 8.4287px FONT_MONO width)
         // to ensure we never tell PTY we have more columns than can render.
 
         // With no padding: 680px / 8.5 = 80.0 -> exactly 80 cols
