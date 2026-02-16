@@ -153,8 +153,13 @@ impl AiApp {
                 preview
             };
             self.message_previews.insert(chat_id, preview);
-            self.message_counts
-                .insert(chat_id, self.current_messages.len());
+            if self.selected_chat_id == Some(chat_id) {
+                self.message_counts
+                    .insert(chat_id, self.current_messages.len());
+            } else {
+                let current = self.message_counts.get(&chat_id).copied().unwrap_or(0);
+                self.message_counts.insert(chat_id, current + 1);
+            }
 
             // Update chat timestamp and move to top of list
             self.touch_and_reorder_chat(chat_id);
@@ -218,8 +223,13 @@ impl AiApp {
                 preview
             };
             self.message_previews.insert(chat_id, preview);
-            self.message_counts
-                .insert(chat_id, self.current_messages.len());
+            if self.selected_chat_id == Some(chat_id) {
+                self.message_counts
+                    .insert(chat_id, self.current_messages.len());
+            } else {
+                let current = self.message_counts.get(&chat_id).copied().unwrap_or(0);
+                self.message_counts.insert(chat_id, current + 1);
+            }
             self.touch_and_reorder_chat(chat_id);
 
             info!(
@@ -274,5 +284,75 @@ impl AiApp {
             self.start_streaming_response(chat_id, cx);
             cx.notify();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_streaming_message_count_uses_current_messages_len_for_selected_chat() {
+        let chat_id = ChatId::new();
+        let selected_chat_id = Some(chat_id);
+        let current_messages_len = 4usize;
+        let mut message_counts = std::collections::HashMap::new();
+        message_counts.insert(chat_id, 10usize);
+
+        if selected_chat_id == Some(chat_id) {
+            message_counts.insert(chat_id, current_messages_len);
+        } else {
+            let current = message_counts.get(&chat_id).copied().unwrap_or(0);
+            message_counts.insert(chat_id, current + 1);
+        }
+
+        assert_eq!(
+            message_counts.get(&chat_id).copied(),
+            Some(current_messages_len),
+            "Selected chat should use in-memory current_messages length"
+        );
+    }
+
+    #[test]
+    fn test_streaming_message_count_increments_cached_count_for_non_selected_chat() {
+        let chat_id = ChatId::new();
+        let selected_chat_id = Some(ChatId::new());
+        let current_messages_len = 99usize;
+        let mut message_counts = std::collections::HashMap::new();
+        message_counts.insert(chat_id, 3usize);
+
+        if selected_chat_id == Some(chat_id) {
+            message_counts.insert(chat_id, current_messages_len);
+        } else {
+            let current = message_counts.get(&chat_id).copied().unwrap_or(0);
+            message_counts.insert(chat_id, current + 1);
+        }
+
+        assert_eq!(
+            message_counts.get(&chat_id).copied(),
+            Some(4usize),
+            "Background chat should increment cached count instead of using selected chat length"
+        );
+    }
+
+    #[test]
+    fn test_streaming_message_count_starts_at_one_for_non_selected_chat_without_cache() {
+        let chat_id = ChatId::new();
+        let selected_chat_id = Some(ChatId::new());
+        let current_messages_len = 0usize;
+        let mut message_counts = std::collections::HashMap::new();
+
+        if selected_chat_id == Some(chat_id) {
+            message_counts.insert(chat_id, current_messages_len);
+        } else {
+            let current = message_counts.get(&chat_id).copied().unwrap_or(0);
+            message_counts.insert(chat_id, current + 1);
+        }
+
+        assert_eq!(
+            message_counts.get(&chat_id).copied(),
+            Some(1usize),
+            "Missing cache entry should initialize to one message for background completion"
+        );
     }
 }
