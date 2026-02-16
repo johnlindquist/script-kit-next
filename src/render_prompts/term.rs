@@ -119,8 +119,10 @@ impl ScriptListApp {
     ) -> AnyElement {
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = render_context.theme;
-        let actions_dialog_top = render_context.actions_dialog_top;
         let actions_dialog_right = render_context.actions_dialog_right;
+        let actions_dialog_bottom = window_resize::layout::FOOTER_HEIGHT
+            + render_context.design_spacing.padding_sm
+            - render_context.design_visual.border_thin;
         let has_actions = self.has_nonempty_sdk_actions();
         let actions_mode = term_prompt_actions_mode(has_actions);
 
@@ -328,10 +330,10 @@ impl ScriptListApp {
             )
             // Actions dialog overlay
             .when_some(
-                render_actions_backdrop(
+                render_actions_backdrop_bottom_anchored(
                     show_inline_actions_backdrop,
                     self.actions_dialog.clone(),
-                    actions_dialog_top,
+                    actions_dialog_bottom,
                     actions_dialog_right,
                     ActionsBackdropConfig {
                         backdrop_id: "term-actions-backdrop",
@@ -372,7 +374,7 @@ mod term_prompt_render_tests {
         const TERM_RENDER_SOURCE: &str = include_str!("term.rs");
 
         assert!(
-            TERM_RENDER_SOURCE.contains("render_actions_backdrop("),
+            TERM_RENDER_SOURCE.contains("render_actions_backdrop_bottom_anchored("),
             "term render should delegate backdrop overlay creation to shared helper"
         );
         assert!(
@@ -386,6 +388,14 @@ mod term_prompt_render_tests {
         assert!(
             TERM_RENDER_SOURCE.contains("show_pointer_cursor: false"),
             "term render should keep backdrop cursor pointer disabled"
+        );
+        assert!(
+            TERM_RENDER_SOURCE.contains("let actions_dialog_bottom ="),
+            "term render should derive a footer-relative actions popup offset"
+        );
+        assert!(
+            TERM_RENDER_SOURCE.contains("window_resize::layout::FOOTER_HEIGHT"),
+            "term actions popup should stay anchored from the shared footer height constant"
         );
         assert!(
             TERM_RENDER_SOURCE.contains("let show_inline_actions_backdrop ="),
