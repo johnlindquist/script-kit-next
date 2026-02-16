@@ -184,6 +184,24 @@ const KNOWN_TEXT_KEYS: &[&str] = &[
 ];
 const KNOWN_ACCENT_KEYS: &[&str] = &["selected", "selected_subtle"];
 const KNOWN_UI_KEYS: &[&str] = &["border", "success", "error", "warning", "info"];
+const KNOWN_TERMINAL_KEYS: &[&str] = &[
+    "black",
+    "red",
+    "green",
+    "yellow",
+    "blue",
+    "magenta",
+    "cyan",
+    "white",
+    "bright_black",
+    "bright_red",
+    "bright_green",
+    "bright_yellow",
+    "bright_blue",
+    "bright_magenta",
+    "bright_cyan",
+    "bright_white",
+];
 const KNOWN_OPACITY_KEYS: &[&str] = &[
     "main",
     "title_bar",
@@ -283,6 +301,14 @@ fn validate_colors(diags: &mut ThemeDiagnostics, path: &str, colors: &Value) {
         }
         if let Some(ui) = map.get("ui") {
             validate_color_object(diags, &format!("{}/ui", path), ui, KNOWN_UI_KEYS);
+        }
+        if let Some(terminal) = map.get("terminal") {
+            validate_color_object(
+                diags,
+                &format!("{}/terminal", path),
+                terminal,
+                KNOWN_TERMINAL_KEYS,
+            );
         }
     } else {
         diags.error(path, "colors must be an object");
