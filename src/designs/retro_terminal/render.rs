@@ -2,7 +2,7 @@ use gpui::*;
 
 use crate::scripts::SearchResult;
 
-use super::colors::TerminalColors;
+use super::colors::{color_hsla, color_rgba, TerminalColors};
 use super::constants::{
     ASCII_EMPTY_BORDER_BOTTOM, ASCII_EMPTY_BORDER_TOP, ASCII_LOG_HEADER, ASCII_PREVIEW_FOOTER,
     ASCII_PREVIEW_HEADER, TERMINAL_CURSOR_HIDDEN, TERMINAL_CURSOR_VISIBLE, TERMINAL_FONT_FAMILY,
@@ -43,7 +43,7 @@ pub fn render_terminal_header(
 
     // Create green glow shadow for the header
     let glow_shadows = vec![BoxShadow {
-        color: hsla(120.0 / 360.0, 1.0, 0.5, 0.3), // Subtle green glow
+        color: color_hsla(colors.glow, 0.30),
         offset: point(px(0.), px(0.)),
         blur_radius: px(4.),
         spread_radius: px(0.),
@@ -85,7 +85,7 @@ pub fn render_terminal_preview_panel(content: &str, colors: TerminalColors) -> i
 
     // Create glow effect for the panel
     let panel_glow = vec![BoxShadow {
-        color: hsla(120.0 / 360.0, 1.0, 0.5, 0.1), // Very subtle green glow
+        color: color_hsla(colors.glow, 0.10),
         offset: point(px(0.), px(0.)),
         blur_radius: px(12.),
         spread_radius: px(0.),
@@ -172,7 +172,7 @@ pub fn render_terminal_preview_panel(content: &str, colors: TerminalColors) -> i
 pub fn render_terminal_log_panel(logs: &[String], colors: TerminalColors) -> impl IntoElement {
     // Create glow effect for the panel
     let panel_glow = vec![BoxShadow {
-        color: hsla(120.0 / 360.0, 1.0, 0.5, 0.08), // Very subtle green glow
+        color: color_hsla(colors.glow, 0.08),
         offset: point(px(0.), px(0.)),
         blur_radius: px(8.),
         spread_radius: px(0.),
@@ -223,7 +223,7 @@ pub fn render_terminal_log_panel(logs: &[String], colors: TerminalColors) -> imp
 
                     // Scanline effect: slightly darker on odd rows
                     let row_bg = if index % 2 == 1 {
-                        rgba((colors.scanline << 8) | 0x20)
+                        color_rgba(colors.scanline, 0.125)
                     } else {
                         rgb(colors.background)
                     };

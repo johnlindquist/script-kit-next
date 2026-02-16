@@ -50,8 +50,10 @@ pub mod hex_color_serde {
             where
                 E: de::Error,
             {
-                if value > u64::from(u32::MAX) {
-                    return Err(de::Error::custom("color value exceeds u32::MAX"));
+                if value > 0xFFFFFF {
+                    return Err(de::Error::custom(
+                        "color value exceeds 0xFFFFFF; use hex string for RRGGBBAA",
+                    ));
                 }
                 Ok(value as HexColor)
             }
@@ -142,14 +144,6 @@ pub mod hex_color_serde {
                 }
                 expanded
             }
-            4 => {
-                let mut expanded = String::with_capacity(6);
-                for ch in hex.chars().take(3) {
-                    expanded.push(ch);
-                    expanded.push(ch);
-                }
-                expanded
-            }
             6 => hex.to_string(),
             8 => hex
                 .get(..6)
@@ -157,7 +151,7 @@ pub mod hex_color_serde {
                 .to_string(),
             _ => {
                 return Err(format!(
-                    "hex color must be 3, 4, 6, or 8 characters, got {}",
+                    "hex color must be 3, 6, or 8 characters, got {}",
                     hex.len()
                 ));
             }
@@ -197,14 +191,9 @@ pub mod hex_color_serde {
         }
 
         #[test]
-        fn test_deserialize_rejects_u64_value_when_above_u32_max() {
-            let error = serde_json::from_str::<HexColorWrapper>(r#"{"color":4294967296}"#)
-                .expect_err("value above u32::MAX should fail");
-
-            assert!(
-                error.to_string().contains("color value exceeds u32::MAX"),
-                "unexpected error: {error}"
-            );
+        fn test_deserialize_rejects_u64_above_0xffffff() {
+            let parsed = serde_json::from_str::<HexColorWrapper>(r#"{"color":16777216}"#);
+            assert!(parsed.is_err(), "value above 0xFFFFFF should fail");
         }
 
         #[test]
@@ -217,10 +206,7 @@ pub mod hex_color_serde {
 
         #[test]
         fn test_parse_color_string_ignores_alpha_when_hex_len_is_4() {
-            assert_eq!(
-                parse_color_string("FFFA").expect("4-digit hex should parse as RGB"),
-                0xFFFFFF
-            );
+            assert!(parse_color_string("FFFA").is_err());
         }
 
         #[test]
@@ -293,8 +279,10 @@ pub mod hex_color_option_serde {
         match value {
             None => Ok(None),
             Some(ColorInput::Unsigned(v)) => {
-                if v > u64::from(u32::MAX) {
-                    return Err(de::Error::custom("color value exceeds u32::MAX"));
+                if v > 0xFFFFFF {
+                    return Err(de::Error::custom(
+                        "color value exceeds 0xFFFFFF; use hex string for RRGGBBAA",
+                    ));
                 }
                 Ok(Some(v as HexColor))
             }
@@ -302,8 +290,10 @@ pub mod hex_color_option_serde {
                 if v < 0 {
                     return Err(de::Error::custom("color value cannot be negative"));
                 }
-                if v as u64 > u64::from(u32::MAX) {
-                    return Err(de::Error::custom("color value exceeds u32::MAX"));
+                if v as u64 > 0xFFFFFF {
+                    return Err(de::Error::custom(
+                        "color value exceeds 0xFFFFFF; use hex string for RRGGBBAA",
+                    ));
                 }
                 Ok(Some(v as HexColor))
             }

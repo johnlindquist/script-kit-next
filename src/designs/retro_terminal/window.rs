@@ -1,6 +1,6 @@
-use gpui::{hsla, Hsla};
+use gpui::Hsla;
 
-use super::colors::DIM_GREEN;
+use super::colors::{color_hsla, TerminalColors};
 use super::constants::TERMINAL_FONT_FAMILY;
 
 /// Terminal window container configuration
@@ -27,13 +27,15 @@ pub struct TerminalWindowConfig {
 
 impl Default for TerminalWindowConfig {
     fn default() -> Self {
+        let colors = TerminalColors::default();
+
         Self {
-            background: 0x0a0a0a, // Slightly off-black for CRT feel
-            border: DIM_GREEN,
+            background: colors.background,
+            border: colors.dim,
             border_width: 1.0,
             font_family: TERMINAL_FONT_FAMILY,
             glow_enabled: true,
-            glow_color: hsla(120.0 / 360.0, 1.0, 0.5, 0.15), // Subtle green glow
+            glow_color: color_hsla(colors.glow, 0.15),
             glow_blur: 20.0,
         }
     }
@@ -42,8 +44,8 @@ impl Default for TerminalWindowConfig {
 /// Returns terminal window container configuration with CRT styling
 ///
 /// Use this to wrap your main terminal UI with consistent styling:
-/// - Black background (0x0a0a0a)
-/// - Dim green border
+/// - Theme terminal background
+/// - Theme-derived dim border
 /// - Monospace font (Menlo/SF Mono)
 /// - Optional CRT glow effect
 pub fn render_terminal_window_container() -> TerminalWindowConfig {

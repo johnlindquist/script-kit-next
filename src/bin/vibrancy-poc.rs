@@ -12,9 +12,16 @@ use gpui::{
     div, point, prelude::*, px, rgba, size, App, Application, Context, FocusHandle, Focusable,
     Render, Window, WindowBackgroundAppearance, WindowBounds, WindowOptions,
 };
+use script_kit_gpui::theme::{
+    get_cached_theme,
+    service::{ensure_theme_service, theme_revision},
+};
+use script_kit_gpui::ui_foundation::hex_to_rgba_with_opacity;
 
 fn main() {
     Application::new().run(|cx: &mut App| {
+        ensure_theme_service(cx);
+
         // Window size similar to Raycast
         let window_size = size(px(750.), px(500.));
 
@@ -36,15 +43,19 @@ fn main() {
             ..Default::default()
         };
 
-        cx.open_window(window_options, |window, cx| {
+        let open_result = cx.open_window(window_options, |window, cx| {
             cx.new(|cx| RaycastPOC::new(window, cx))
-        })
-        .unwrap();
+        });
+
+        if let Err(error) = open_result {
+            eprintln!("failed to open vibrancy POC window: {error:?}");
+        }
     });
 }
 
 struct RaycastPOC {
     focus_handle: FocusHandle,
+    theme_revision_seen: u64,
 }
 
 impl RaycastPOC {
@@ -52,7 +63,38 @@ impl RaycastPOC {
         let focus_handle = cx.focus_handle();
         focus_handle.focus(window, cx);
 
-        Self { focus_handle }
+        let mut view = Self {
+            focus_handle,
+            theme_revision_seen: theme_revision(),
+        };
+        view.start_theme_refresh(cx);
+        view
+    }
+
+    fn start_theme_refresh(&mut self, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
+            loop {
+                gpui::Timer::after(std::time::Duration::from_millis(250)).await;
+
+                let should_stop = cx
+                    .update(|cx| {
+                        this.update(cx, |view, cx| {
+                            let revision = theme_revision();
+                            if view.theme_revision_seen != revision {
+                                view.theme_revision_seen = revision;
+                                cx.notify();
+                            }
+                        })
+                        .is_err()
+                    })
+                    .unwrap_or(true);
+
+                if should_stop {
+                    break;
+                }
+            }
+        })
+        .detach();
     }
 }
 
@@ -63,27 +105,29 @@ impl Focusable for RaycastPOC {
 }
 
 impl Render for RaycastPOC {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        // Raycast light theme colors (with transparency for vibrancy)
-        // The key insight: use semi-transparent backgrounds to let the blur show through
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let current_theme_revision = theme_revision();
+        if self.theme_revision_seen != current_theme_revision {
+            self.theme_revision_seen = current_theme_revision;
+            cx.notify();
+        }
 
-        // Main container background - very light with slight transparency
-        // rgba(250, 250, 250, 0.85) - light gray, 85% opacity lets blur through
-        let container_bg = rgba(0xFAFAFAD9);
+        let theme = get_cached_theme();
+        let opacity = theme.get_opacity();
+        let colors = &theme.colors;
 
-        // Input area background - slightly lighter/more transparent
-        let input_area_bg = rgba(0xFFFFFFE6); // white at 90% opacity
+        let container_bg = theme_rgba(colors.background.main, opacity.main);
+        let input_area_bg = theme_rgba(colors.background.search_box, opacity.search_box);
+        let selected_bg = theme_rgba(colors.accent.selected_subtle, opacity.selected);
+        let separator_color = theme_rgba(colors.ui.border, opacity.border_active);
+        let subtle_border_color = theme_rgba(colors.ui.border, opacity.border_inactive);
 
-        // List item hover/selected background
-        let selected_bg = rgba(0xE8E8E8CC); // light gray at 80% opacity
+        let primary_text = theme_rgba(colors.text.primary, 1.0);
+        let secondary_text = theme_rgba(colors.text.tertiary, 1.0);
+        let hint_text = theme_rgba(colors.text.dimmed, 1.0);
 
-        // Separator color
-        let separator_color = rgba(0xE0E0E0FF);
-
-        // Text colors
-        let primary_text = rgba(0x1A1A1AFF); // near black
-        let secondary_text = rgba(0x6B6B6BFF); // medium gray
-        let hint_text = rgba(0x9B9B9BFF); // light gray
+        let keycap_bg = theme_rgba(colors.background.log_panel, opacity.input_inactive);
+        let icon_bg = theme_rgba(colors.ui.border, opacity.border_active);
 
         div()
             .id("raycast-container")
@@ -95,7 +139,7 @@ impl Render for RaycastPOC {
             .bg(container_bg)
             .rounded(px(12.))
             .border_1()
-            .border_color(rgba(0xD0D0D040)) // subtle border
+            .border_color(subtle_border_color)
             .overflow_hidden()
             .child(
                 // Search input area
@@ -135,7 +179,7 @@ impl Render for RaycastPOC {
                                     .px(px(6.))
                                     .py(px(2.))
                                     .rounded(px(4.))
-                                    .bg(rgba(0xE8E8E8FF))
+                                    .bg(keycap_bg)
                                     .text_size(px(11.))
                                     .text_color(secondary_text)
                                     .child("Tab"),
@@ -169,6 +213,7 @@ impl Render for RaycastPOC {
                         primary_text,
                         secondary_text,
                         selected_bg,
+                        icon_bg,
                     ))
                     .child(render_list_item(
                         "Rewrite Selected Text",
@@ -177,6 +222,7 @@ impl Render for RaycastPOC {
                         primary_text,
                         secondary_text,
                         selected_bg,
+                        icon_bg,
                     ))
                     .child(render_list_item(
                         "Export Settings & Data",
@@ -185,6 +231,7 @@ impl Render for RaycastPOC {
                         primary_text,
                         secondary_text,
                         selected_bg,
+                        icon_bg,
                     ))
                     .child(render_list_item(
                         "Top Center Sixth",
@@ -193,6 +240,7 @@ impl Render for RaycastPOC {
                         primary_text,
                         secondary_text,
                         selected_bg,
+                        icon_bg,
                     ))
                     .child(render_list_item(
                         "General",
@@ -201,6 +249,7 @@ impl Render for RaycastPOC {
                         primary_text,
                         secondary_text,
                         selected_bg,
+                        icon_bg,
                     )),
             )
             .child(
@@ -216,7 +265,7 @@ impl Render for RaycastPOC {
                     .items_center()
                     .child(
                         // Left side - app icon placeholder
-                        div().size(px(20.)).rounded(px(4.)).bg(rgba(0xD0D0D0FF)),
+                        div().size(px(20.)).rounded(px(4.)).bg(icon_bg),
                     )
                     .child(
                         // Right side - actions
@@ -240,7 +289,7 @@ impl Render for RaycastPOC {
                                             .px(px(6.))
                                             .py(px(2.))
                                             .rounded(px(4.))
-                                            .bg(rgba(0xE8E8E8FF))
+                                            .bg(keycap_bg)
                                             .text_size(px(11.))
                                             .text_color(secondary_text)
                                             .child("\u{21B5}"), // return symbol
@@ -267,7 +316,7 @@ impl Render for RaycastPOC {
                                                     .px(px(6.))
                                                     .py(px(2.))
                                                     .rounded(px(4.))
-                                                    .bg(rgba(0xE8E8E8FF))
+                                                    .bg(keycap_bg)
                                                     .text_size(px(11.))
                                                     .text_color(secondary_text)
                                                     .child("\u{2318}"), // cmd symbol
@@ -277,7 +326,7 @@ impl Render for RaycastPOC {
                                                     .px(px(6.))
                                                     .py(px(2.))
                                                     .rounded(px(4.))
-                                                    .bg(rgba(0xE8E8E8FF))
+                                                    .bg(keycap_bg)
                                                     .text_size(px(11.))
                                                     .text_color(secondary_text)
                                                     .child("K"),
@@ -296,6 +345,7 @@ fn render_list_item(
     primary_text: gpui::Rgba,
     secondary_text: gpui::Rgba,
     selected_bg: gpui::Rgba,
+    icon_bg: gpui::Rgba,
 ) -> impl IntoElement {
     div()
         .w_full()
@@ -317,7 +367,7 @@ fn render_list_item(
                     div()
                         .size(px(28.))
                         .rounded(px(6.))
-                        .bg(rgba(0xD0D0D0FF))
+                        .bg(icon_bg)
                         .flex()
                         .items_center()
                         .justify_center(),
@@ -348,4 +398,8 @@ fn render_list_item(
                 .text_color(secondary_text)
                 .child(if selected { "Application" } else { "Command" }),
         )
+}
+
+fn theme_rgba(hex: u32, opacity: f32) -> gpui::Rgba {
+    rgba(hex_to_rgba_with_opacity(hex, opacity))
 }
