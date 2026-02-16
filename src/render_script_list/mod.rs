@@ -191,7 +191,7 @@ impl ScriptListApp {
         // Build script list using uniform_list for proper virtualized scrolling
         // Use unified color resolver for consistent empty state styling
         let empty_text_color = color_resolver.empty_text_color();
-        let empty_font_family = typography_resolver.primary_font();
+        let empty_font_family = typography_resolver.primary_font().to_string();
 
         let list_element: AnyElement = if item_count == 0 {
             // Empty state rendering with icon and helpful messaging
@@ -211,7 +211,7 @@ impl ScriptListApp {
                     .items_center()
                     .justify_center()
                     .gap(px(EMPTY_STATE_GAP))
-                    .font_family(empty_font_family)
+                    .font_family(empty_font_family.clone())
                     // Large muted icon
                     .child(
                         svg()
@@ -956,7 +956,7 @@ impl ScriptListApp {
 
         // Use unified color resolver for text and fonts
         let text_primary = color_resolver.primary_text_color();
-        let font_family = typography_resolver.primary_font();
+        let font_family = typography_resolver.primary_font().to_string();
 
         // Extract footer colors BEFORE render_preview_panel (borrow checker).
         // Footer uses theme tokens directly so app-shell chrome stays consistent

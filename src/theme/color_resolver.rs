@@ -164,33 +164,32 @@ impl ColorResolver {
 }
 
 /// Unified typography resolution that works with both theme and design tokens
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct TypographyResolver {
-    font_family: &'static str,
-    font_family_mono: &'static str,
+    font_family: String,
+    font_family_mono: String,
     font_size_xl: f32,
 }
 
 impl TypographyResolver {
     /// Create a new typography resolver for the given theme and design variant
-    pub fn new(_theme: &Theme, variant: DesignVariant) -> Self {
-        let tokens = get_tokens(variant);
-        let typography = tokens.typography();
+    pub fn new(theme: &Theme, _variant: DesignVariant) -> Self {
+        let fonts = theme.get_fonts();
         Self {
-            font_family: typography.font_family,
-            font_family_mono: typography.font_family_mono,
-            font_size_xl: typography.font_size_xl,
+            font_family: fonts.ui_family,
+            font_family_mono: fonts.mono_family,
+            font_size_xl: (fonts.ui_size * 1.25).clamp(1.0, 200.0),
         }
     }
 
     /// Get the primary font family
-    pub fn primary_font(&self) -> &'static str {
-        self.font_family
+    pub fn primary_font(&self) -> &str {
+        &self.font_family
     }
 
     /// Get the monospace font family
-    pub fn mono_font(&self) -> &'static str {
-        self.font_family_mono
+    pub fn mono_font(&self) -> &str {
+        &self.font_family_mono
     }
 
     /// Get extra-large font size token
@@ -264,20 +263,24 @@ mod tests {
     #[test]
     fn test_typography_resolver_default() {
         let theme = Theme::default();
+        let fonts = theme.get_fonts();
         let resolver = TypographyResolver::new(&theme, DesignVariant::Default);
 
-        assert_eq!(resolver.primary_font(), ".AppleSystemUIFont");
-        assert_eq!(resolver.mono_font(), "Menlo");
+        assert_eq!(resolver.primary_font(), fonts.ui_family.as_str());
+        assert_eq!(resolver.mono_font(), fonts.mono_family.as_str());
     }
 
     #[test]
     fn test_typography_resolver_retro_terminal() {
         let theme = Theme::default();
-        let resolver = TypographyResolver::new(&theme, DesignVariant::RetroTerminal);
+        let fonts = theme.get_fonts();
+        let default_resolver = TypographyResolver::new(&theme, DesignVariant::Default);
+        let retro_resolver = TypographyResolver::new(&theme, DesignVariant::RetroTerminal);
 
-        // RetroTerminal uses Menlo for everything
-        assert_eq!(resolver.primary_font(), "Menlo");
-        assert_eq!(resolver.mono_font(), "Menlo");
+        assert_eq!(default_resolver.primary_font(), fonts.ui_family.as_str());
+        assert_eq!(default_resolver.mono_font(), fonts.mono_family.as_str());
+        assert_eq!(retro_resolver.primary_font(), fonts.ui_family.as_str());
+        assert_eq!(retro_resolver.mono_font(), fonts.mono_family.as_str());
     }
 
     #[test]
