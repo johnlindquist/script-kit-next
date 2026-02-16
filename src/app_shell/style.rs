@@ -109,10 +109,8 @@ pub struct HeaderColors {
 impl HeaderColors {
     pub fn from_theme(theme: &Theme) -> Self {
         let colors = &theme.colors;
-        // Logo icon color: For Script Kit, we use black (0x000000) on gold/yellow
-        // accent background for brand consistency and maximum contrast.
-        // This could be made configurable via theme in the future.
-        let logo_icon_hex = 0x000000u32; // Black for contrast on yellow/gold
+        // Use the theme token intended for text/icons on accent backgrounds.
+        let logo_icon_hex = colors.text.on_accent;
         Self {
             text_primary: colors.text.primary.to_rgb(),
             text_muted: colors.text.muted.to_rgb(),
@@ -140,25 +138,16 @@ pub struct FooterColors {
     /// Color for icons/text displayed on accent background (logo icon)
     pub logo_icon: Hsla,
     pub logo_icon_hex: u32,
-    /// Semi-transparent overlay background (theme-aware: black for dark, white for light)
-    /// Used for footer background with vibrancy
+    /// Semi-transparent overlay background derived from theme background.
+    /// Used for footer background with vibrancy.
     pub overlay_bg: Hsla,
 }
 
 impl FooterColors {
     pub fn from_theme(theme: &Theme) -> Self {
         let colors = &theme.colors;
-        // Logo icon color: For Script Kit, we use black (0x000000) on gold/yellow
-        // accent background for brand consistency and maximum contrast.
-        let logo_icon_hex = 0x000000u32; // Black for contrast on yellow/gold
-
-        // Theme-aware overlay: black for dark mode (darkens), white for light mode (lightens)
-        // 50% opacity (0x80) for vibrancy balance
-        let overlay_bg = if theme.has_dark_colors() {
-            0x000000u32.rgba8(0x80) // black at 50% for dark mode
-        } else {
-            0xffffffu32.rgba8(0x80) // white at 50% for light mode
-        };
+        let logo_icon_hex = colors.text.on_accent;
+        let overlay_bg = colors.background.main.with_opacity(0.5);
 
         Self {
             accent: colors.accent.selected.to_rgb(),
@@ -192,3 +181,38 @@ impl DividerColors {
 
 // Note: hex_to_hsla_with_alpha removed - now using direct RGBA via hex_to_rgba_with_opacity
 // This matches the POC approach and avoids potential HSLA conversion issues
+
+#[cfg(test)]
+mod tests {
+    use super::{FooterColors, HeaderColors};
+    use crate::theme::Theme;
+    use crate::ui_foundation::HexColorExt;
+
+    #[test]
+    fn test_header_colors_logo_icon_uses_text_on_accent_theme_token() {
+        let theme = Theme::default();
+        let header = HeaderColors::from_theme(&theme);
+
+        assert_eq!(header.logo_icon_hex, theme.colors.text.on_accent);
+    }
+
+    #[test]
+    fn test_footer_colors_logo_icon_uses_text_on_accent_theme_token() {
+        let theme = Theme::default();
+        let footer = FooterColors::from_theme(&theme);
+
+        assert_eq!(footer.logo_icon_hex, theme.colors.text.on_accent);
+    }
+
+    #[test]
+    fn test_footer_colors_overlay_background_uses_theme_background_opacity() {
+        let theme = Theme::default();
+        let footer = FooterColors::from_theme(&theme);
+        let expected = theme.colors.background.main.with_opacity(0.5);
+
+        assert_eq!(footer.overlay_bg.h, expected.h);
+        assert_eq!(footer.overlay_bg.s, expected.s);
+        assert_eq!(footer.overlay_bg.l, expected.l);
+        assert_eq!(footer.overlay_bg.a, expected.a);
+    }
+}

@@ -89,7 +89,7 @@ pub fn hex_to_hsla_with_alpha(hex: u32, alpha: f32) -> Hsla {
 /// 75% opacity balances vibrancy blur visibility with readability.
 pub const VIBRANCY_DARK_OPACITY: f32 = 0.75;
 /// Opacity for vibrancy window backgrounds in light mode.
-/// Higher value (85%) needed for visibility - matches POC's rgba(0xFAFAFAD9).
+/// Higher value (85%) needed for visibility - matches POC's FAFAFA tint at D9 alpha.
 pub const VIBRANCY_LIGHT_OPACITY: f32 = 0.85;
 /// Get the vibrancy background for window root containers.
 ///

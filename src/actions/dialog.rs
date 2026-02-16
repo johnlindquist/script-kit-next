@@ -1195,7 +1195,6 @@ impl ActionsDialog {
 const ACTIONS_DIALOG_COLOR_ALPHA_MAX: f32 = 255.0;
 const ACTIONS_DIALOG_SEARCH_BORDER_ALPHA_SCALE: f32 = 2.0;
 const ACTIONS_DIALOG_CONTAINER_BORDER_MIN_ALPHA: u8 = 0x80;
-const ACTIONS_DIALOG_VIBRANT_DIALOG_MIN_OPACITY: f32 = 0.50;
 const ACTIONS_DIALOG_OPAQUE_DIALOG_MIN_OPACITY: f32 = 0.95;
 
 fn actions_dialog_alpha_u8(opacity: f32) -> u8 {
@@ -1214,12 +1213,14 @@ fn actions_dialog_container_border_alpha(border_inactive_opacity: f32) -> u8 {
 }
 
 fn actions_dialog_container_background_alpha(dialog_opacity: f32, use_vibrancy: bool) -> u8 {
-    let minimum_dialog_opacity = if use_vibrancy {
-        ACTIONS_DIALOG_VIBRANT_DIALOG_MIN_OPACITY
+    // In vibrancy mode, keep the dialog at the configured opacity so blur can
+    // composite through. Opaque mode still enforces a readability floor.
+    let resolved_opacity = if use_vibrancy {
+        dialog_opacity
     } else {
-        ACTIONS_DIALOG_OPAQUE_DIALOG_MIN_OPACITY
+        dialog_opacity.max(ACTIONS_DIALOG_OPAQUE_DIALOG_MIN_OPACITY)
     };
-    actions_dialog_alpha_u8(dialog_opacity.max(minimum_dialog_opacity))
+    actions_dialog_alpha_u8(resolved_opacity)
 }
 
 fn actions_dialog_rgba_with_alpha(hex: u32, alpha: u8) -> gpui::Rgba {
@@ -1372,8 +1373,8 @@ impl ActionsDialog {
     ) -> (gpui::Rgba, gpui::Rgba, gpui::Rgba) {
         let opacity = self.theme.get_opacity();
         let use_vibrancy = self.theme.is_vibrancy_enabled();
-        // Keep the current readability floors while allowing stronger user-configured dialog
-        // opacity values to take effect.
+        // In vibrancy mode this uses theme dialog opacity directly so blur can show through.
+        // In opaque mode it keeps a high readability floor.
         let dialog_alpha = actions_dialog_container_background_alpha(opacity.dialog, use_vibrancy);
         let border_alpha = actions_dialog_container_border_alpha(opacity.border_inactive);
         let (main_background, container_border, container_text) =
@@ -1402,6 +1403,7 @@ mod actions_dialog_opacity_consistency_tests {
         actions_dialog_rgba_with_alpha, actions_dialog_search_border_alpha,
         ACTIONS_DIALOG_CONTAINER_BORDER_MIN_ALPHA,
     };
+    use crate::theme::Theme;
     use gpui::rgba;
 
     #[test]
@@ -1418,8 +1420,8 @@ mod actions_dialog_opacity_consistency_tests {
     }
 
     #[test]
-    fn test_actions_dialog_container_background_alpha_keeps_vibrancy_floor() {
-        assert_eq!(actions_dialog_container_background_alpha(0.15, true), 127);
+    fn test_actions_dialog_container_background_alpha_respects_vibrancy_opacity_setting() {
+        assert_eq!(actions_dialog_container_background_alpha(0.15, true), 38);
     }
 
     #[test]
@@ -1434,9 +1436,12 @@ mod actions_dialog_opacity_consistency_tests {
 
     #[test]
     fn test_actions_dialog_rgba_with_alpha_combines_hex_and_alpha_channels() {
+        let theme = Theme::default();
+        let background = theme.colors.background.main;
+
         assert_eq!(
-            actions_dialog_rgba_with_alpha(0x112233, 0x44),
-            rgba(0x11223344)
+            actions_dialog_rgba_with_alpha(background, 0x44),
+            rgba((background << 8) | 0x44)
         );
     }
 }
@@ -2141,8 +2146,8 @@ impl Render for ActionsDialog {
         // Fixed width, dynamic height based on content, rounded corners, shadow
         // NOTE: Using visual.radius_lg from design tokens for consistency with child item rounding
         //
-        // VIBRANCY: Background is handled in get_container_colors() with vibrancy-aware opacity
-        // (~50% when vibrancy enabled, ~95% when disabled)
+        // VIBRANCY: Background is handled in get_container_colors():
+        // theme dialog opacity in vibrancy mode, high readability floor when opaque.
 
         // Build footer with keyboard hints (if enabled)
         let footer_container = if self.config.show_footer {
