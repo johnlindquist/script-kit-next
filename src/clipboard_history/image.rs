@@ -692,6 +692,37 @@ mod tests {
         assert!(get_png_dimensions_fast(&bad_png).is_none());
     }
 
+    fn patch_png_ihdr_dimensions(png_bytes: &mut [u8], width: u32, height: u32) {
+        assert!(
+            png_bytes.len() >= 33,
+            "PNG bytes should include IHDR and CRC"
+        );
+
+        png_bytes[16..20].copy_from_slice(&width.to_be_bytes());
+        png_bytes[20..24].copy_from_slice(&height.to_be_bytes());
+
+        let ihdr_chunk_type_and_data = &png_bytes[12..29];
+        let crc = crc32(ihdr_chunk_type_and_data);
+        png_bytes[29..33].copy_from_slice(&crc.to_be_bytes());
+    }
+
+    fn crc32(data: &[u8]) -> u32 {
+        let mut crc = 0xFFFF_FFFFu32;
+
+        for &byte in data {
+            crc ^= u32::from(byte);
+            for _ in 0..8 {
+                if (crc & 1) == 1 {
+                    crc = (crc >> 1) ^ 0xEDB8_8320;
+                } else {
+                    crc >>= 1;
+                }
+            }
+        }
+
+        !crc
+    }
+
     #[test]
     fn test_decode_to_render_image_rejects_png_above_pixel_limit() {
         let original = arboard::ImageData {
@@ -708,9 +739,8 @@ mod tests {
             )
             .expect("Should decode PNG base64");
 
-        // Overwrite IHDR dimensions to exceed MAX_RENDER_IMAGE_PIXELS.
-        png_bytes[16..20].copy_from_slice(&5000u32.to_be_bytes());
-        png_bytes[20..24].copy_from_slice(&5000u32.to_be_bytes());
+        // Overwrite IHDR dimensions and CRC to exceed MAX_RENDER_IMAGE_PIXELS.
+        patch_png_ihdr_dimensions(&mut png_bytes, 5000, 5000);
 
         let oversized_png = format!("png:{}", BASE64.encode(&png_bytes));
         assert_eq!(get_image_dimensions(&oversized_png), Some((5000, 5000)));
@@ -729,9 +759,8 @@ mod tests {
         };
         let mut png_bytes = encode_image_to_png_bytes(&original).expect("Should encode PNG bytes");
 
-        // Overwrite IHDR dimensions to exceed MAX_RENDER_IMAGE_PIXELS.
-        png_bytes[16..20].copy_from_slice(&5000u32.to_be_bytes());
-        png_bytes[20..24].copy_from_slice(&5000u32.to_be_bytes());
+        // Overwrite IHDR dimensions and CRC to exceed MAX_RENDER_IMAGE_PIXELS.
+        patch_png_ihdr_dimensions(&mut png_bytes, 5000, 5000);
 
         let oversized_blob = store_blob(&png_bytes).expect("Should store oversized blob");
         assert_eq!(get_image_dimensions(&oversized_blob), Some((5000, 5000)));
