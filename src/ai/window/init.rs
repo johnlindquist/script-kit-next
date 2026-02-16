@@ -219,13 +219,13 @@ impl AiApp {
             command_bar: CommandBar::new(
                 get_ai_command_bar_actions(),
                 CommandBarConfig::ai_style(),
-                std::sync::Arc::new(theme::load_theme()),
+                std::sync::Arc::new(theme::get_cached_theme()),
             ),
             // New chat dropdown (Raycast-style, positioned at top-right)
             new_chat_command_bar: CommandBar::new(
                 Vec::new(),                   // Actions will be set dynamically when opened
                 CommandBarConfig::ai_style(), // Same style as Cmd+K (search at top, headers)
-                std::sync::Arc::new(theme::load_theme()),
+                std::sync::Arc::new(theme::get_cached_theme()),
             ),
             // Presets state
             showing_presets_dropdown: false,
