@@ -23,8 +23,71 @@
 //! rather than accidentally exposing keys from other applications.
 
 use std::env;
+use std::fmt;
 
 use crate::secrets::get_secret;
+
+/// Wrapper type for secret values that always redacts in logs.
+#[derive(Clone, PartialEq, Eq)]
+pub(crate) struct SecretString(String);
+
+impl SecretString {
+    /// Create a new secret string.
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    /// Expose the underlying secret value for API usage only.
+    pub fn expose(&self) -> &str {
+        &self.0
+    }
+
+    /// Return true when the underlying secret is empty.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Consume and return the underlying string.
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl fmt::Debug for SecretString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("***")
+    }
+}
+
+impl fmt::Display for SecretString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("***")
+    }
+}
+
+impl From<String> for SecretString {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl From<&str> for SecretString {
+    fn from(value: &str) -> Self {
+        Self(value.to_string())
+    }
+}
+
+impl From<SecretString> for String {
+    fn from(value: SecretString) -> Self {
+        value.0
+    }
+}
+
+impl AsRef<str> for SecretString {
+    fn as_ref(&self) -> &str {
+        self.expose()
+    }
+}
 
 /// Represents a detected AI provider configuration.
 #[derive(Clone)]
@@ -34,7 +97,7 @@ pub struct ProviderConfig {
     /// Human-readable name (e.g., "OpenAI", "Anthropic")
     pub display_name: String,
     /// The API key (should never be logged or displayed)
-    api_key: String,
+    api_key: SecretString,
     /// Base URL for the API (for custom endpoints)
     pub base_url: Option<String>,
 }
@@ -49,7 +112,7 @@ impl ProviderConfig {
         Self {
             provider_id: provider_id.into(),
             display_name: display_name.into(),
-            api_key: api_key.into(),
+            api_key: SecretString::new(api_key),
             base_url: None,
         }
     }
@@ -66,7 +129,7 @@ impl ProviderConfig {
     /// This method intentionally returns a reference to prevent accidental
     /// copies of the API key. Never log or display the returned value.
     pub fn api_key(&self) -> &str {
-        &self.api_key
+        self.api_key.expose()
     }
 
     /// Check if this provider has a valid (non-empty) API key.
@@ -205,12 +268,12 @@ fn read_key_env_or_keyring(name: &str) -> Option<String> {
 /// Detected API keys from environment.
 #[derive(Default)]
 pub struct DetectedKeys {
-    pub openai: Option<String>,
-    pub anthropic: Option<String>,
-    pub google: Option<String>,
-    pub groq: Option<String>,
-    pub openrouter: Option<String>,
-    pub vercel: Option<String>,
+    pub(crate) openai: Option<SecretString>,
+    pub(crate) anthropic: Option<SecretString>,
+    pub(crate) google: Option<SecretString>,
+    pub(crate) groq: Option<SecretString>,
+    pub(crate) openrouter: Option<SecretString>,
+    pub(crate) vercel: Option<SecretString>,
 }
 
 impl std::fmt::Debug for DetectedKeys {
@@ -237,12 +300,13 @@ impl DetectedKeys {
     /// in the keyring, and have the AI Chat window automatically pick them up.
     pub fn from_environment() -> Self {
         Self {
-            openai: read_key_env_or_keyring(env_vars::OPENAI_API_KEY),
-            anthropic: read_key_env_or_keyring(env_vars::ANTHROPIC_API_KEY),
-            google: read_key_env_or_keyring(env_vars::GOOGLE_API_KEY),
-            groq: read_key_env_or_keyring(env_vars::GROQ_API_KEY),
-            openrouter: read_key_env_or_keyring(env_vars::OPENROUTER_API_KEY),
-            vercel: read_key_env_or_keyring(env_vars::VERCEL_API_KEY),
+            openai: read_key_env_or_keyring(env_vars::OPENAI_API_KEY).map(SecretString::from),
+            anthropic: read_key_env_or_keyring(env_vars::ANTHROPIC_API_KEY).map(SecretString::from),
+            google: read_key_env_or_keyring(env_vars::GOOGLE_API_KEY).map(SecretString::from),
+            groq: read_key_env_or_keyring(env_vars::GROQ_API_KEY).map(SecretString::from),
+            openrouter: read_key_env_or_keyring(env_vars::OPENROUTER_API_KEY)
+                .map(SecretString::from),
+            vercel: read_key_env_or_keyring(env_vars::VERCEL_API_KEY).map(SecretString::from),
         }
     }
 
@@ -493,7 +557,7 @@ mod tests {
     fn test_detected_keys_with_provider() {
         // Manually construct to avoid env dependency in test
         let keys = DetectedKeys {
-            openai: Some("sk-test".to_string()),
+            openai: Some("sk-test".into()),
             anthropic: None,
             google: None,
             groq: None,
@@ -532,12 +596,12 @@ mod tests {
     #[test]
     fn test_detected_keys_debug_shows_only_presence() {
         let keys = DetectedKeys {
-            openai: Some("sk-secret-openai-key".to_string()),
-            anthropic: Some("sk-ant-secret-key".to_string()),
+            openai: Some("sk-secret-openai-key".into()),
+            anthropic: Some("sk-ant-secret-key".into()),
             google: None,
             groq: None,
             openrouter: None,
-            vercel: Some("vk-vercel-key".to_string()),
+            vercel: Some("vk-vercel-key".into()),
         };
         let debug_output = format!("{:?}", keys);
 
@@ -587,10 +651,28 @@ mod tests {
             google: None,
             groq: None,
             openrouter: None,
-            vercel: Some("vk-test".to_string()),
+            vercel: Some("vk-test".into()),
         };
         assert!(keys.has_any());
         assert_eq!(keys.available_providers(), vec!["Vercel"]);
+    }
+
+    #[test]
+    fn test_secret_string_debug_masks_value() {
+        let secret = SecretString::new("sk-test-super-secret");
+        assert_eq!(format!("{:?}", secret), "***");
+    }
+
+    #[test]
+    fn test_secret_string_display_masks_value() {
+        let secret = SecretString::new("sk-test-super-secret");
+        assert_eq!(format!("{}", secret), "***");
+    }
+
+    #[test]
+    fn test_secret_string_expose_returns_inner_value() {
+        let secret = SecretString::new("sk-test-super-secret");
+        assert_eq!(secret.expose(), "sk-test-super-secret");
     }
 
     #[test]
