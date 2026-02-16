@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-02-16T01:58:43.877Z",
+  "updatedAt": "2026-02-16T02:08:19.524Z",
   "agents": {
     "codex-actions-consistency": {
       "id": "codex-actions-consistency",
@@ -7463,6 +7463,22 @@
       "lastSeenAt": "2026-02-16T01:58:42.069Z",
       "host": "johns.macbook.pro.lan",
       "startSha": "11c3f6a36e1bfc516b45021a80e4d2cbbac12a52",
+      "notes": "[policy] missing agent_report json"
+    },
+    "codex-actions-popup-alignment": {
+      "id": "codex-actions-popup-alignment",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "gpt-5.3-codex",
+      "task": "Fix actions popup positioning when terminal is open. Currently the actions popup (triggered by Cmd+Shift+K or the 'Actions' button in the footer) floats in the middle of the window when the terminal prompt is active, instead of being anchored/pinned to the footer bar at the bottom. In every other prompt type, the actions popup is properly aligned to the footer. Investigate how the actions popup is positioned in render_prompts/ and prompts/ directories, and how the terminal prompt layout differs from other prompts. The issue is likely that the terminal prompt renders the actions popup differently or doesn't properly anchor it to the footer. Look at how other prompt types (e.g. arg prompt, editor prompt) position the actions popup relative to the footer, and make the terminal prompt match that pattern. After fixing, run: cargo check && cargo clippy --all-targets -- -D warnings && cargo test. Then commit with a descriptive message and push.",
+      "scope": "src/render_prompts/**,src/prompts/**,src/app_impl.rs,src/actions/**,src/footer/**",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-02-16T02:00:51.889Z",
+      "lastSeenAt": "2026-02-16T02:08:19.524Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "3c913ed4d67d9bd22be399ae609d84072ae54ed7",
       "notes": "[policy] missing agent_report json"
     }
   }
