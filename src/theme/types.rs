@@ -687,7 +687,7 @@ impl ColorScheme {
                 tertiary: 0x999999,
                 muted: 0x808080,
                 dimmed: 0x666666,
-                on_accent: 0x1e1e1e, // Dark text on yellow accent backgrounds for contrast
+                on_accent: 0xffffff, // Light text for focused items on accent backgrounds
             },
             accent: AccentColors {
                 selected: 0xfbbf24,        // Script Kit primary: #fbbf24 (yellow/gold)
@@ -1895,6 +1895,12 @@ mod tests {
             focused_terminal.green,
             TerminalColors::light_default().green
         );
+    }
+
+    #[test]
+    fn test_dark_default_uses_light_on_accent_text() {
+        let dark_theme = Theme::dark_default();
+        assert_eq!(dark_theme.colors.text.on_accent, 0xffffff);
     }
 
     #[test]
