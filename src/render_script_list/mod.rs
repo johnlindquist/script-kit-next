@@ -35,22 +35,50 @@ fn inline_calc_list_copy_hint() -> &'static str {
     "↵ Copy"
 }
 
+fn inline_calc_list_item_result_text_color(
+    is_selected: bool,
+    design_variant: DesignVariant,
+    theme: &crate::theme::Theme,
+    color_resolver: crate::theme::ColorResolver,
+) -> u32 {
+    if is_selected && design_variant != DesignVariant::Default {
+        color_resolver.primary_accent()
+    } else if is_selected {
+        theme.colors.accent.selected
+    } else {
+        color_resolver.primary_text_color()
+    }
+}
+
+fn inline_calc_list_item_hint_text_color(color_resolver: crate::theme::ColorResolver) -> u32 {
+    color_resolver.empty_text_color()
+}
+
+fn inline_calc_list_item_selected_overlay_rgba(
+    theme: &crate::theme::Theme,
+    color_resolver: crate::theme::ColorResolver,
+) -> u32 {
+    let selected_overlay_alpha = ((theme.get_opacity().selected.clamp(0.0, 1.0) * 255.0).round()
+        as u32)
+        .max(0x2E);
+    (color_resolver.primary_accent() << 8) | selected_overlay_alpha
+}
+
 fn render_inline_calc_list_item(
     calculator: &crate::calculator::CalculatorInlineResult,
     is_selected: bool,
     theme: &crate::theme::Theme,
     design_variant: DesignVariant,
+    color_resolver: crate::theme::ColorResolver,
 ) -> AnyElement {
     let tokens = get_tokens(design_variant);
     let spacing = tokens.spacing();
     let typography = tokens.typography();
 
     let result_title = inline_calc_list_item_title(&calculator.formatted);
-    let result_text_color = if is_selected {
-        theme.colors.accent.selected
-    } else {
-        theme.colors.text.primary
-    };
+    let result_text_color =
+        inline_calc_list_item_result_text_color(is_selected, design_variant, theme, color_resolver);
+    let hint_text_color = inline_calc_list_item_hint_text_color(color_resolver);
     let hint_alpha = if is_selected { 0xD9 } else { 0x8C };
 
     div()
@@ -59,12 +87,10 @@ fn render_inline_calc_list_item(
         .px(px(spacing.item_padding_x))
         .py(px(spacing.padding_xs))
         .when(is_selected, |div| {
-            let selected_overlay_alpha = ((theme.get_opacity().selected.clamp(0.0, 1.0) * 255.0)
-                .round() as u32)
-                .max(0x2E);
-            div.bg(rgba(
-                (theme.colors.accent.selected_subtle << 8) | selected_overlay_alpha,
-            ))
+            div.bg(rgba(inline_calc_list_item_selected_overlay_rgba(
+                theme,
+                color_resolver,
+            )))
         })
         .flex()
         .flex_row()
@@ -83,7 +109,7 @@ fn render_inline_calc_list_item(
         .child(
             div()
                 .text_size(px(typography.font_size_xs))
-                .text_color(rgba((theme.colors.text.muted << 8) | hint_alpha))
+                .text_color(rgba((hint_text_color << 8) | hint_alpha))
                 .child(inline_calc_list_copy_hint()),
         )
         .into_any_element()
@@ -446,6 +472,7 @@ impl ScriptListApp {
                                             is_selected,
                                             &this.theme,
                                             this.current_design,
+                                            color_resolver,
                                         )
                                     } else if let Some(result) = flat_results_clone.get(*result_idx)
                                     {
@@ -1212,9 +1239,12 @@ impl ScriptListApp {
 #[cfg(test)]
 mod render_script_list_footer_tests {
     use super::{
-        app_shell_footer_colors, inline_calc_list_item_title, script_list_footer_info_label,
-        script_list_footer_primary_label,
+        app_shell_footer_colors, inline_calc_list_item_hint_text_color,
+        inline_calc_list_item_result_text_color, inline_calc_list_item_selected_overlay_rgba,
+        inline_calc_list_item_title, script_list_footer_info_label, script_list_footer_primary_label,
     };
+    use crate::designs::DesignVariant;
+    use crate::theme::ColorResolver;
 
     #[test]
     fn test_app_shell_footer_colors_use_theme_accent_tokens() {
@@ -1268,5 +1298,50 @@ mod render_script_list_footer_tests {
     #[test]
     fn test_inline_calc_list_item_title_prefixes_equals_sign() {
         assert_eq!(inline_calc_list_item_title("1500"), "= 1500");
+    }
+
+    #[test]
+    fn test_inline_calc_result_text_color_does_use_resolver_accent_when_selected_non_default() {
+        let mut theme = crate::theme::Theme::default();
+        theme.colors.accent.selected = 0x112233;
+        let color_resolver = ColorResolver::new(&theme, DesignVariant::NeonCyberpunk);
+
+        let color = inline_calc_list_item_result_text_color(
+            true,
+            DesignVariant::NeonCyberpunk,
+            &theme,
+            color_resolver,
+        );
+
+        assert_eq!(color, color_resolver.primary_accent());
+        assert_ne!(color, theme.colors.accent.selected);
+    }
+
+    #[test]
+    fn test_inline_calc_hint_text_color_does_use_color_resolver_muted_token() {
+        let theme = crate::theme::Theme::default();
+        let color_resolver = ColorResolver::new(&theme, DesignVariant::NeonCyberpunk);
+
+        assert_eq!(
+            inline_calc_list_item_hint_text_color(color_resolver),
+            color_resolver.empty_text_color()
+        );
+    }
+
+    #[test]
+    fn test_inline_calc_selected_overlay_does_use_resolver_accent_with_theme_alpha() {
+        let mut theme = crate::theme::Theme::default();
+        theme.colors.accent.selected_subtle = 0x010203;
+        let color_resolver = ColorResolver::new(&theme, DesignVariant::NeonCyberpunk);
+
+        let expected_alpha = ((theme.get_opacity().selected.clamp(0.0, 1.0) * 255.0).round()
+            as u32)
+            .max(0x2E);
+        let expected = (color_resolver.primary_accent() << 8) | expected_alpha;
+
+        assert_eq!(
+            inline_calc_list_item_selected_overlay_rgba(&theme, color_resolver),
+            expected
+        );
     }
 }
