@@ -1,4 +1,5 @@
 use super::*;
+use crate::theme::get_cached_theme;
 
 #[cfg(target_os = "macos")]
 const NS_FLOATING_WINDOW_LEVEL: i64 = 3;
@@ -143,7 +144,7 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
     );
 
     // Load theme to determine window background appearance (vibrancy)
-    let theme = crate::theme::load_theme();
+    let theme = get_cached_theme();
     let window_background = if theme.is_vibrancy_enabled() {
         gpui::WindowBackgroundAppearance::Blurred
     } else {
@@ -436,7 +437,7 @@ fn configure_notes_as_floating_panel() {
                         // ═══════════════════════════════════════════════════════════════════════════
                         // VIBRANCY CONFIGURATION - Match main window for consistent blur
                         // ═══════════════════════════════════════════════════════════════════════════
-                        let theme = crate::theme::load_theme();
+                        let theme = get_cached_theme();
                         let is_dark = theme.should_use_dark_vibrancy();
                         crate::platform::configure_secondary_window_vibrancy(
                             window, "Notes", is_dark,

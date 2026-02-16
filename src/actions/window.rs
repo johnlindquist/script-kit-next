@@ -9,7 +9,7 @@
 // - Shares the ActionsDialog entity with the main app for keyboard routing
 
 use crate::platform;
-use crate::theme;
+use crate::theme::get_cached_theme;
 use crate::ui_foundation::{is_key_backspace, is_key_down, is_key_enter, is_key_escape, is_key_up};
 use crate::window_resize::layout::FOOTER_HEIGHT;
 use gpui::{
@@ -719,7 +719,8 @@ pub fn open_actions_window(
     close_actions_window(cx);
 
     // Load theme for vibrancy settings
-    let theme = theme::load_theme();
+    let theme = get_cached_theme();
+    let is_dark_vibrancy = theme.should_use_dark_vibrancy();
     let window_background = if theme.is_vibrancy_enabled() {
         gpui::WindowBackgroundAppearance::Blurred
     } else {
@@ -824,8 +825,8 @@ pub fn open_actions_window(
     // internal state borrowed immediately after open_window returns.
     #[cfg(target_os = "macos")]
     {
-        let configure_result = handle.update(cx, |_root, window, cx| {
-            window.defer(cx, |_window, _cx| {
+        let configure_result = handle.update(cx, move |_root, window, cx| {
+            window.defer(cx, move |_window, _cx| {
                 use cocoa::appkit::NSApp;
                 use cocoa::base::nil;
                 use objc::{msg_send, sel, sel_impl};
@@ -840,9 +841,7 @@ pub fn open_actions_window(
                         // Get the last window (most recently created)
                         let ns_window: cocoa::base::id = msg_send![windows, lastObject];
                         if ns_window != nil {
-                            let theme = crate::theme::load_theme();
-                            let is_dark = theme.should_use_dark_vibrancy();
-                            platform::configure_actions_popup_window(ns_window, is_dark);
+                            platform::configure_actions_popup_window(ns_window, is_dark_vibrancy);
                         }
                     }
                 }

@@ -11,7 +11,7 @@
 // --- merged from part_000.rs ---
 use crate::components::button::{Button, ButtonColors, ButtonVariant};
 use crate::logging;
-use crate::theme;
+use crate::theme::get_cached_theme;
 use gpui::{
     div, point, prelude::*, px, rgb, size, App, Context, ElementId, Pixels, Render, SharedString,
     Timer, Window, WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowOptions,
@@ -46,7 +46,7 @@ struct HudColors {
 impl HudColors {
     /// Load HUD colors from the current theme
     fn from_theme() -> Self {
-        let theme = theme::load_theme();
+        let theme = get_cached_theme();
         let colors = &theme.colors;
 
         // Calculate hover/active variants from accent

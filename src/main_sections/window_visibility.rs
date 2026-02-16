@@ -94,7 +94,7 @@ fn show_main_window_helper(
         platform::swizzle_gpui_blurred_view();
         // Configure vibrancy material based on theme's actual colors
         // Uses VibrantDark for dark-colored themes, VibrantLight for light-colored themes
-        let theme = theme::load_theme();
+        let theme = theme::get_cached_theme();
         let is_dark = theme.should_use_dark_vibrancy();
         platform::configure_window_vibrancy_material_for_appearance(is_dark);
         PANEL_CONFIGURED.store(true, Ordering::SeqCst);
