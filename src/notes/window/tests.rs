@@ -120,3 +120,40 @@ fn test_platform_arrow_shortcuts_only_run_note_navigation_when_editor_not_focuse
         "Platform arrow shortcuts must skip note navigation when editor is focused"
     );
 }
+
+#[test]
+fn test_show_selected_note_missing_feedback_notifies_after_feedback_state_update() {
+    const NOTES_ACTIONS_SOURCE: &str = include_str!("notes_actions.rs");
+    assert!(
+        NOTES_ACTIONS_SOURCE.contains(
+            "self.show_action_feedback(Self::SELECTED_NOTE_NOT_FOUND_FEEDBACK, true);\n        cx.notify();"
+        ),
+        "Missing-note feedback should notify after updating action feedback state"
+    );
+}
+
+#[test]
+fn test_duplicate_selected_note_sets_feedback_before_select_note() {
+    const NOTES_ACTIONS_SOURCE: &str = include_str!("notes_actions.rs");
+    let feedback_idx = NOTES_ACTIONS_SOURCE
+        .find("self.show_action_feedback(\"Duplicated\", false);")
+        .expect("Expected duplicate feedback call in notes_actions.rs");
+    let select_idx = NOTES_ACTIONS_SOURCE
+        .find("self.select_note(duplicate.id, window, cx);")
+        .expect("Expected duplicate select_note call in notes_actions.rs");
+
+    assert!(
+        feedback_idx < select_idx,
+        "Duplicate feedback should be set before select_note triggers notify"
+    );
+}
+
+#[test]
+fn test_copy_as_markdown_notifies_after_feedback_state_update() {
+    const CLIPBOARD_OPS_SOURCE: &str = include_str!("clipboard_ops.rs");
+    assert!(
+        CLIPBOARD_OPS_SOURCE
+            .contains("self.show_action_feedback(\"Copied\", false);\n        cx.notify();"),
+        "Copy-as-markdown should notify after updating action feedback state"
+    );
+}

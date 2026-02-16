@@ -232,23 +232,25 @@ impl NotesApp {
     }
 
     /// Export the current note
-    pub(super) fn export_note(&mut self, format: ExportFormat) {
-        let Some((_id, note)) = self.selected_note_for_action("export_note") else {
+    pub(super) fn export_note(&mut self, format: ExportFormat, cx: &mut Context<Self>) {
+        let Some((_id, note)) = self.selected_note_for_action("export_note", cx) else {
             return;
         };
+        let title = note.title.clone();
+        let note_content = note.content.clone();
 
         let content = match format {
-            ExportFormat::PlainText => note.content.clone(),
+            ExportFormat::PlainText => note_content.clone(),
             // For Markdown, just export the content as-is.
             // The title is derived from the first line of content,
             // so prepending it would cause duplication.
-            ExportFormat::Markdown => note.content.clone(),
+            ExportFormat::Markdown => note_content.clone(),
             ExportFormat::Html => {
                 // For HTML, we include proper structure with the title
                 // and render the content as preformatted text
                 format!(
                     "<!DOCTYPE html>\n<html>\n<head><title>{}</title></head>\n<body>\n<h1>{}</h1>\n<pre>{}</pre>\n</body>\n</html>",
-                    note.title, note.title, note.content
+                    title, title, note_content
                 )
             }
         };

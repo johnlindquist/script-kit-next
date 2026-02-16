@@ -206,10 +206,10 @@ impl NotesApp {
                 window.dispatch_action(Box::new(Search), cx);
                 return; // Early return - already handled focus
             }
-            NotesAction::CopyNoteAs => self.copy_note_as_markdown(),
-            NotesAction::CopyDeeplink => self.copy_note_deeplink(),
-            NotesAction::CreateQuicklink => self.create_note_quicklink(),
-            NotesAction::Export => self.export_note(ExportFormat::Html),
+            NotesAction::CopyNoteAs => self.copy_note_as_markdown(cx),
+            NotesAction::CopyDeeplink => self.copy_note_deeplink(cx),
+            NotesAction::CreateQuicklink => self.create_note_quicklink(cx),
+            NotesAction::Export => self.export_note(ExportFormat::Html, cx),
             NotesAction::MoveListItemUp | NotesAction::MoveListItemDown => {}
             NotesAction::Format => {
                 self.show_format_toolbar = !self.show_format_toolbar;
@@ -289,7 +289,7 @@ impl NotesApp {
                 notes_len = self.notes.len(),
                 "notes_note_switcher_selected_note_not_found",
             );
-            self.show_selected_note_missing_feedback("execute_note_switcher_action");
+            self.show_selected_note_missing_feedback("execute_note_switcher_action", cx);
             self.close_browse_panel(window, cx);
             return;
         }
