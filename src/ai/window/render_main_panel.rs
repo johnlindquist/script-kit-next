@@ -2,20 +2,9 @@ use super::*;
 
 impl AiApp {
     pub(super) fn render_main_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        // Build titlebar - just a spacer with border (title is now globally centered at window level)
-        let titlebar = div()
-            .id("ai-titlebar")
-            .h(TITLEBAR_H)
-            // NO .bg() - let vibrancy show through from root
-            .border_b_1()
-            .border_color(cx.theme().border);
-
-        // Build input area at bottom - Raycast-style layout:
-        // Row 1: [+ icon] [input field with magenta border]
-        // Row 2: [Model picker with spinner] ... [Submit ↵] | [Actions ⌘K]
-
-        // Use theme accent color for input border (follows theme)
-        let input_border_color = cx.theme().accent;
+        // Build input area at bottom:
+        // Row 1: single composer surface containing [+] and input text field
+        // Row 2: model picker + word count on left, submit/actions on right
 
         // Check if we have a pending image to show
         let has_pending_image = self.pending_image.is_some();
@@ -24,6 +13,13 @@ impl AiApp {
         let input_char_count = self.input_state.read(cx).value().len();
         let input_is_long = input_char_count > 2000;
         let input_is_very_long = input_char_count > 4000;
+        let composer_border_color = if input_is_very_long {
+            cx.theme().danger.opacity(0.6)
+        } else if input_is_long {
+            cx.theme().warning.opacity(0.5)
+        } else {
+            cx.theme().accent
+        };
 
         let input_area = div()
             .id("ai-input-area")
@@ -33,10 +29,9 @@ impl AiApp {
             // NO .bg() - let vibrancy show through from root
             .border_t_1()
             .border_color(cx.theme().border.opacity(0.4))
-            .px(SP_7)
-            .pt(SP_5)
-            .pb(SP_5)
-            .gap(SP_4)
+            .px(PANEL_INSET_X)
+            .py(S3)
+            .gap(S2)
             // Handle image file drops
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _window, cx| {
                 this.handle_file_drop(paths, cx);
@@ -47,13 +42,20 @@ impl AiApp {
             .when(has_pending_image, |d| {
                 d.child(self.render_pending_image_preview(cx))
             })
-            // Input row with + icon and accent border
+            // Composer row: one surface for attachments + text input
             .child(
                 div()
+                    .id("ai-composer")
                     .flex()
                     .items_center()
-                    .gap_1()
                     .w_full()
+                    .h(COMPOSER_H)
+                    .px(S3)
+                    .gap(S2)
+                    .rounded(R_LG)
+                    .border_1()
+                    .border_color(composer_border_color.opacity(0.5))
+                    .bg(cx.theme().muted.opacity(0.4))
                     // Plus button on the left - opens attachments picker
                     .child(
                         div()
@@ -62,8 +64,8 @@ impl AiApp {
                             .flex()
                             .items_center()
                             .justify_center()
-                            .size(px(28.))
-                            .rounded_full()
+                            .size(S6)
+                            .rounded(R_MD)
                             .border_1()
                             .border_color(if has_pending_image {
                                 cx.theme().accent.opacity(0.6)
@@ -95,27 +97,17 @@ impl AiApp {
                                 d.child(
                                     div()
                                         .absolute()
-                                        .top(px(-1.))
-                                        .right(px(-1.))
-                                        .size(px(7.))
+                                        .top(S0)
+                                        .right(S0)
+                                        .size(S2)
                                         .rounded_full()
                                         .bg(cx.theme().accent),
                                 )
                             }),
                     )
-                    // Input field with subtle accent border
-                    .child(self.render_input_with_cursor(
-                        if input_is_very_long {
-                            cx.theme().danger.opacity(0.6)
-                        } else if input_is_long {
-                            cx.theme().warning.opacity(0.5)
-                        } else {
-                            input_border_color
-                        },
-                        cx,
-                    )),
+                    .child(self.render_input_with_cursor(cx)),
             )
-            // Bottom row: Model picker left, actions right (reduced padding)
+            // Bottom row: Model picker left, actions right
             .child(
                 div()
                     .flex()
@@ -128,7 +120,7 @@ impl AiApp {
                         div()
                             .flex()
                             .items_center()
-                            .gap_2()
+                            .gap(S2)
                             .overflow_hidden()
                             .child(self.render_model_picker(cx))
                             // Word count (only shown when input has content)
@@ -140,13 +132,13 @@ impl AiApp {
                                     div()
                                         .flex()
                                         .items_center()
-                                        .gap(px(4.))
+                                        .gap(S1)
                                         .text_xs()
                                         .text_color(cx.theme().success.opacity(0.8))
                                         .child(
                                             svg()
                                                 .external_path(LocalIconName::Check.external_path())
-                                                .size(px(11.))
+                                                .size(ICON_XS)
                                                 .text_color(cx.theme().success.opacity(0.6)),
                                         )
                                         .child("Exported!")
@@ -179,7 +171,7 @@ impl AiApp {
                         div()
                             .flex()
                             .items_center()
-                            .gap_1()
+                            .gap(S1)
                             .flex_shrink_0()
                             // Submit or Stop button
                             .child(if self.is_streaming {
@@ -187,10 +179,10 @@ impl AiApp {
                                     .id("stop-btn")
                                     .flex()
                                     .items_center()
-                                    .gap(px(5.))
-                                    .px(px(10.))
-                                    .py(px(4.))
-                                    .rounded(px(6.))
+                                    .gap(S1)
+                                    .px(S2)
+                                    .py(S1)
+                                    .rounded(R_SM)
                                     .cursor_pointer()
                                     .hover(|s| s.bg(cx.theme().danger.opacity(0.15)))
                                     .text_sm()
@@ -201,13 +193,13 @@ impl AiApp {
                                             this.stop_streaming(cx);
                                         }),
                                     )
-                                    .child(div().size(px(8.)).rounded(px(1.)).bg(cx.theme().danger))
+                                    .child(div().size(S2).bg(cx.theme().danger))
                                     .child("Stop")
                                     .child(
                                         div()
-                                            .px(px(4.))
-                                            .py(px(1.))
-                                            .rounded(px(3.))
+                                            .px(S1)
+                                            .py(S0)
+                                            .rounded(RADIUS_SM)
                                             .bg(cx.theme().danger.opacity(0.15))
                                             .text_xs()
                                             .text_color(cx.theme().danger.opacity(0.7))
@@ -219,9 +211,9 @@ impl AiApp {
                                     .id("submit-btn")
                                     .flex()
                                     .items_center()
-                                    .px(px(10.))
-                                    .py(px(4.))
-                                    .rounded(px(6.))
+                                    .px(S2)
+                                    .py(S1)
+                                    .rounded(R_SM)
                                     .when(!input_is_empty, |d| {
                                         d.cursor_pointer()
                                             .hover(|s| s.bg(cx.theme().accent.opacity(0.15)))
@@ -245,18 +237,18 @@ impl AiApp {
                             // Divider
                             .child(
                                 div()
-                                    .w(px(1.))
-                                    .h(px(18.))
-                                    .bg(cx.theme().border.opacity(0.6)),
+                                    .h(S4)
+                                    .border_l_1()
+                                    .border_color(cx.theme().border.opacity(0.6)),
                             )
                             // Actions ⌘K - opens command bar with AI-specific actions
                             .child(
                                 div()
                                     .flex()
                                     .items_center()
-                                    .px(px(10.))
-                                    .py(px(4.))
-                                    .rounded(px(6.))
+                                    .px(S2)
+                                    .py(S1)
+                                    .rounded(R_SM)
                                     .cursor_pointer()
                                     .hover(|s| s.bg(cx.theme().accent.opacity(0.15)))
                                     .text_sm()
@@ -277,7 +269,7 @@ impl AiApp {
         let has_messages = !self.current_messages.is_empty() || self.is_streaming;
 
         // Build main layout
-        // Structure: titlebar (fixed) -> content area (flex_1, scrollable) -> input area (fixed)
+        // Structure: content area (flex_1, scrollable) -> input area (fixed)
         div()
             .id("ai-main-panel")
             .flex_1()
@@ -289,8 +281,6 @@ impl AiApp {
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _window, cx| {
                 this.handle_file_drop(paths, cx);
             }))
-            // Titlebar (fixed height)
-            .child(titlebar)
             // Content area - this wrapper gets flex_1 to fill remaining space
             // The scrollable content goes inside this bounded container
             .child(
