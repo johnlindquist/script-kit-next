@@ -408,103 +408,53 @@ pub struct UIColors {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TerminalColors {
     /// ANSI 0: Black
-    #[serde(default = "default_terminal_black", with = "hex_color_serde")]
+    #[serde(with = "hex_color_serde")]
     pub black: HexColor,
     /// ANSI 1: Red
-    #[serde(default = "default_terminal_red", with = "hex_color_serde")]
+    #[serde(with = "hex_color_serde")]
     pub red: HexColor,
     /// ANSI 2: Green
-    #[serde(default = "default_terminal_green", with = "hex_color_serde")]
+    #[serde(with = "hex_color_serde")]
     pub green: HexColor,
     /// ANSI 3: Yellow
-    #[serde(default = "default_terminal_yellow", with = "hex_color_serde")]
+    #[serde(with = "hex_color_serde")]
     pub yellow: HexColor,
     /// ANSI 4: Blue
-    #[serde(default = "default_terminal_blue", with = "hex_color_serde")]
+    #[serde(with = "hex_color_serde")]
     pub blue: HexColor,
     /// ANSI 5: Magenta
-    #[serde(default = "default_terminal_magenta", with = "hex_color_serde")]
+    #[serde(with = "hex_color_serde")]
     pub magenta: HexColor,
     /// ANSI 6: Cyan
-    #[serde(default = "default_terminal_cyan", with = "hex_color_serde")]
+    #[serde(with = "hex_color_serde")]
     pub cyan: HexColor,
     /// ANSI 7: White
-    #[serde(default = "default_terminal_white", with = "hex_color_serde")]
+    #[serde(with = "hex_color_serde")]
     pub white: HexColor,
     /// ANSI 8: Bright Black (Gray)
-    #[serde(default = "default_terminal_bright_black", with = "hex_color_serde")]
+    #[serde(with = "hex_color_serde")]
     pub bright_black: HexColor,
     /// ANSI 9: Bright Red
-    #[serde(default = "default_terminal_bright_red", with = "hex_color_serde")]
+    #[serde(with = "hex_color_serde")]
     pub bright_red: HexColor,
     /// ANSI 10: Bright Green
-    #[serde(default = "default_terminal_bright_green", with = "hex_color_serde")]
+    #[serde(with = "hex_color_serde")]
     pub bright_green: HexColor,
     /// ANSI 11: Bright Yellow
-    #[serde(default = "default_terminal_bright_yellow", with = "hex_color_serde")]
+    #[serde(with = "hex_color_serde")]
     pub bright_yellow: HexColor,
     /// ANSI 12: Bright Blue
-    #[serde(default = "default_terminal_bright_blue", with = "hex_color_serde")]
+    #[serde(with = "hex_color_serde")]
     pub bright_blue: HexColor,
     /// ANSI 13: Bright Magenta
-    #[serde(default = "default_terminal_bright_magenta", with = "hex_color_serde")]
+    #[serde(with = "hex_color_serde")]
     pub bright_magenta: HexColor,
     /// ANSI 14: Bright Cyan
-    #[serde(default = "default_terminal_bright_cyan", with = "hex_color_serde")]
+    #[serde(with = "hex_color_serde")]
     pub bright_cyan: HexColor,
     /// ANSI 15: Bright White
-    #[serde(default = "default_terminal_bright_white", with = "hex_color_serde")]
+    #[serde(with = "hex_color_serde")]
     pub bright_white: HexColor,
-}
-
-// Terminal color defaults (VS Code dark theme inspired)
-fn default_terminal_black() -> HexColor {
-    0x000000
-}
-fn default_terminal_red() -> HexColor {
-    0xcd3131
-}
-fn default_terminal_green() -> HexColor {
-    0x50fa7b // Dracula green - vibrant for executables
-}
-fn default_terminal_yellow() -> HexColor {
-    0xe5e510
-}
-fn default_terminal_blue() -> HexColor {
-    0x5c9ceb // Brighter blue for directories
-}
-fn default_terminal_magenta() -> HexColor {
-    0xbc3fbc
-}
-fn default_terminal_cyan() -> HexColor {
-    0x56d4e2 // Brighter cyan for symlinks
-}
-fn default_terminal_white() -> HexColor {
-    0xe5e5e5
-}
-fn default_terminal_bright_black() -> HexColor {
-    0x666666
-}
-fn default_terminal_bright_red() -> HexColor {
-    0xf14c4c
-}
-fn default_terminal_bright_green() -> HexColor {
-    0x69ff94 // Very bright green
-}
-fn default_terminal_bright_yellow() -> HexColor {
-    0xf5f543
-}
-fn default_terminal_bright_blue() -> HexColor {
-    0x6eb4ff // Vibrant blue for directories
-}
-fn default_terminal_bright_magenta() -> HexColor {
-    0xd670d6
-}
-fn default_terminal_bright_cyan() -> HexColor {
-    0x8be9fd // Dracula cyan - very visible
-}
-fn default_terminal_bright_white() -> HexColor {
-    0xffffff
 }
 
 impl Default for TerminalColors {
@@ -737,7 +687,7 @@ impl ColorScheme {
                 tertiary: 0x999999,
                 muted: 0x808080,
                 dimmed: 0x666666,
-                on_accent: 0xffffff, // White text on accent backgrounds
+                on_accent: 0x1e1e1e, // Dark text on yellow accent backgrounds for contrast
             },
             accent: AccentColors {
                 selected: 0xfbbf24,        // Script Kit primary: #fbbf24 (yellow/gold)
@@ -797,64 +747,100 @@ impl ColorScheme {
 
     /// Create an unfocused (dimmed) version of this color scheme
     pub fn to_unfocused(&self) -> Self {
-        fn darken_hex(color: HexColor) -> HexColor {
-            // Reduce brightness by blending towards mid-gray
-            let r = (color >> 16) & 0xFF;
-            let g = (color >> 8) & 0xFF;
-            let b = color & 0xFF;
+        fn blend_toward(color: HexColor, target: HexColor, pct: f32) -> HexColor {
+            let mix_channel = |source: u32, destination: u32| -> u32 {
+                ((source as f32 * (1.0 - pct)) + (destination as f32 * pct)).round() as u32
+            };
 
-            // Reduce saturation and brightness: blend 30% toward gray
-            let gray = 0x80u32;
-            let new_r = ((r * 70 + gray * 30) / 100) as u8;
-            let new_g = ((g * 70 + gray * 30) / 100) as u8;
-            let new_b = ((b * 70 + gray * 30) / 100) as u8;
+            let color_r = (color >> 16) & 0xFF;
+            let color_g = (color >> 8) & 0xFF;
+            let color_b = color & 0xFF;
+            let target_r = (target >> 16) & 0xFF;
+            let target_g = (target >> 8) & 0xFF;
+            let target_b = target & 0xFF;
 
-            ((new_r as u32) << 16) | ((new_g as u32) << 8) | (new_b as u32)
+            let new_r = mix_channel(color_r, target_r);
+            let new_g = mix_channel(color_g, target_g);
+            let new_b = mix_channel(color_b, target_b);
+
+            (new_r << 16) | (new_g << 8) | new_b
         }
+
+        let is_dark = relative_luminance_srgb(self.background.main) < 0.5;
+        let background_candidates = [
+            self.background.main,
+            self.background.title_bar,
+            self.background.search_box,
+            self.background.log_panel,
+        ];
+
+        let mut darkest_background = background_candidates[0];
+        let mut lightest_background = background_candidates[0];
+        let mut darkest_luminance = relative_luminance_srgb(darkest_background);
+        let mut lightest_luminance = darkest_luminance;
+
+        for candidate in &background_candidates[1..] {
+            let candidate_luminance = relative_luminance_srgb(*candidate);
+            if candidate_luminance < darkest_luminance {
+                darkest_luminance = candidate_luminance;
+                darkest_background = *candidate;
+            }
+            if candidate_luminance > lightest_luminance {
+                lightest_luminance = candidate_luminance;
+                lightest_background = *candidate;
+            }
+        }
+
+        let blend_target = if is_dark {
+            darkest_background
+        } else {
+            lightest_background
+        };
+        let blend_pct = 0.18;
 
         ColorScheme {
             background: BackgroundColors {
-                main: darken_hex(self.background.main),
-                title_bar: darken_hex(self.background.title_bar),
-                search_box: darken_hex(self.background.search_box),
-                log_panel: darken_hex(self.background.log_panel),
+                main: blend_toward(self.background.main, blend_target, blend_pct),
+                title_bar: blend_toward(self.background.title_bar, blend_target, blend_pct),
+                search_box: blend_toward(self.background.search_box, blend_target, blend_pct),
+                log_panel: blend_toward(self.background.log_panel, blend_target, blend_pct),
             },
             text: TextColors {
-                primary: darken_hex(self.text.primary),
-                secondary: darken_hex(self.text.secondary),
-                tertiary: darken_hex(self.text.tertiary),
-                muted: darken_hex(self.text.muted),
-                dimmed: darken_hex(self.text.dimmed),
-                on_accent: darken_hex(self.text.on_accent),
+                primary: blend_toward(self.text.primary, blend_target, blend_pct),
+                secondary: blend_toward(self.text.secondary, blend_target, blend_pct),
+                tertiary: blend_toward(self.text.tertiary, blend_target, blend_pct),
+                muted: blend_toward(self.text.muted, blend_target, blend_pct),
+                dimmed: blend_toward(self.text.dimmed, blend_target, blend_pct),
+                on_accent: blend_toward(self.text.on_accent, blend_target, blend_pct),
             },
             accent: AccentColors {
-                selected: darken_hex(self.accent.selected),
-                selected_subtle: darken_hex(self.accent.selected_subtle),
+                selected: blend_toward(self.accent.selected, blend_target, blend_pct),
+                selected_subtle: blend_toward(self.accent.selected_subtle, blend_target, blend_pct),
             },
             ui: UIColors {
-                border: darken_hex(self.ui.border),
-                success: darken_hex(self.ui.success),
-                error: darken_hex(self.ui.error),
-                warning: darken_hex(self.ui.warning),
-                info: darken_hex(self.ui.info),
+                border: blend_toward(self.ui.border, blend_target, blend_pct),
+                success: blend_toward(self.ui.success, blend_target, blend_pct),
+                error: blend_toward(self.ui.error, blend_target, blend_pct),
+                warning: blend_toward(self.ui.warning, blend_target, blend_pct),
+                info: blend_toward(self.ui.info, blend_target, blend_pct),
             },
             terminal: TerminalColors {
-                black: darken_hex(self.terminal.black),
-                red: darken_hex(self.terminal.red),
-                green: darken_hex(self.terminal.green),
-                yellow: darken_hex(self.terminal.yellow),
-                blue: darken_hex(self.terminal.blue),
-                magenta: darken_hex(self.terminal.magenta),
-                cyan: darken_hex(self.terminal.cyan),
-                white: darken_hex(self.terminal.white),
-                bright_black: darken_hex(self.terminal.bright_black),
-                bright_red: darken_hex(self.terminal.bright_red),
-                bright_green: darken_hex(self.terminal.bright_green),
-                bright_yellow: darken_hex(self.terminal.bright_yellow),
-                bright_blue: darken_hex(self.terminal.bright_blue),
-                bright_magenta: darken_hex(self.terminal.bright_magenta),
-                bright_cyan: darken_hex(self.terminal.bright_cyan),
-                bright_white: darken_hex(self.terminal.bright_white),
+                black: blend_toward(self.terminal.black, blend_target, blend_pct),
+                red: blend_toward(self.terminal.red, blend_target, blend_pct),
+                green: blend_toward(self.terminal.green, blend_target, blend_pct),
+                yellow: blend_toward(self.terminal.yellow, blend_target, blend_pct),
+                blue: blend_toward(self.terminal.blue, blend_target, blend_pct),
+                magenta: blend_toward(self.terminal.magenta, blend_target, blend_pct),
+                cyan: blend_toward(self.terminal.cyan, blend_target, blend_pct),
+                white: blend_toward(self.terminal.white, blend_target, blend_pct),
+                bright_black: blend_toward(self.terminal.bright_black, blend_target, blend_pct),
+                bright_red: blend_toward(self.terminal.bright_red, blend_target, blend_pct),
+                bright_green: blend_toward(self.terminal.bright_green, blend_target, blend_pct),
+                bright_yellow: blend_toward(self.terminal.bright_yellow, blend_target, blend_pct),
+                bright_blue: blend_toward(self.terminal.bright_blue, blend_target, blend_pct),
+                bright_magenta: blend_toward(self.terminal.bright_magenta, blend_target, blend_pct),
+                bright_cyan: blend_toward(self.terminal.bright_cyan, blend_target, blend_pct),
+                bright_white: blend_toward(self.terminal.bright_white, blend_target, blend_pct),
             },
         }
     }
@@ -1201,6 +1187,101 @@ fn merge_json(base: &mut serde_json::Value, overlay: serde_json::Value) {
     }
 }
 
+fn should_use_light_palette(appearance: AppearanceMode, is_system_dark: bool) -> bool {
+    match appearance {
+        AppearanceMode::Light => true,
+        AppearanceMode::Dark => false,
+        AppearanceMode::Auto => !is_system_dark,
+    }
+}
+
+fn terminal_defaults_for_appearance(
+    appearance: AppearanceMode,
+    is_system_dark: bool,
+) -> TerminalColors {
+    if should_use_light_palette(appearance, is_system_dark) {
+        TerminalColors::light_default()
+    } else {
+        TerminalColors::dark_default()
+    }
+}
+
+fn hydrate_terminal_colors_for_color_scheme_json(
+    color_scheme_json: &mut serde_json::Value,
+    terminal_defaults_json: &serde_json::Value,
+) {
+    let Some(color_scheme_map) = color_scheme_json.as_object_mut() else {
+        return;
+    };
+
+    let existing_terminal_json = color_scheme_map.remove("terminal");
+    let mut hydrated_terminal_json = terminal_defaults_json.clone();
+
+    if let Some(existing_terminal_json) = existing_terminal_json {
+        if existing_terminal_json.is_object() {
+            merge_json(&mut hydrated_terminal_json, existing_terminal_json);
+        } else {
+            warn!(
+                terminal_json = ?existing_terminal_json,
+                "Theme terminal colors must be an object; using appearance-aware defaults"
+            );
+        }
+    }
+
+    color_scheme_map.insert("terminal".to_string(), hydrated_terminal_json);
+}
+
+fn hydrate_terminal_colors_for_deserialize(
+    merged_theme_json: &mut serde_json::Value,
+    is_system_dark: bool,
+) {
+    let Some(theme_map) = merged_theme_json.as_object_mut() else {
+        warn!("Theme JSON root is not an object; skipping terminal color hydration");
+        return;
+    };
+
+    let appearance = theme_map
+        .get("appearance")
+        .cloned()
+        .and_then(|value| serde_json::from_value::<AppearanceMode>(value).ok())
+        .unwrap_or_default();
+
+    let terminal_defaults_json =
+        match serde_json::to_value(terminal_defaults_for_appearance(appearance, is_system_dark)) {
+            Ok(value) => value,
+            Err(e) => {
+                error!(
+                    error = ?e,
+                    appearance = ?appearance,
+                    "Failed to serialize terminal defaults for hydration"
+                );
+                return;
+            }
+        };
+
+    if let Some(colors_json) = theme_map.get_mut("colors") {
+        hydrate_terminal_colors_for_color_scheme_json(colors_json, &terminal_defaults_json);
+    }
+
+    if let Some(focus_aware_json) = theme_map.get_mut("focus_aware") {
+        if let Some(focus_aware_map) = focus_aware_json.as_object_mut() {
+            if let Some(focused_json) = focus_aware_map.get_mut("focused") {
+                hydrate_terminal_colors_for_color_scheme_json(
+                    focused_json,
+                    &terminal_defaults_json,
+                );
+            }
+
+            if let Some(unfocused_json) = focus_aware_map.get_mut("unfocused") {
+                hydrate_terminal_colors_for_color_scheme_json(
+                    unfocused_json,
+                    &terminal_defaults_json,
+                );
+            }
+        }
+    }
+}
+
 fn theme_from_user_preferences(
     preferences: &crate::config::ScriptKitUserPreferences,
     correlation_id: &str,
@@ -1344,11 +1425,8 @@ pub fn load_theme() -> Theme {
                         serde_json::from_value::<AppearanceMode>(appearance).ok()
                     })
                     .unwrap_or_default();
-                let should_use_light = match requested_appearance {
-                    AppearanceMode::Light => true,
-                    AppearanceMode::Dark => false,
-                    AppearanceMode::Auto => !is_system_dark, // Follow system
-                };
+                let should_use_light =
+                    should_use_light_palette(requested_appearance, is_system_dark);
 
                 let mut merged_theme_json = match serde_json::to_value(if should_use_light {
                     Theme::light_default()
@@ -1374,6 +1452,7 @@ pub fn load_theme() -> Theme {
                 };
 
                 merge_json(&mut merged_theme_json, user_theme_json);
+                hydrate_terminal_colors_for_deserialize(&mut merged_theme_json, is_system_dark);
 
                 match serde_json::from_value::<Theme>(merged_theme_json) {
                     Ok(mut theme) => {
@@ -1666,6 +1745,183 @@ mod tests {
         assert_eq!(
             dark_theme.get_opacity().main,
             BackgroundOpacity::dark_default().main
+        );
+    }
+
+    #[test]
+    fn test_hydrate_terminal_colors_for_deserialize_sets_light_palette_for_focus_aware_when_light_mode(
+    ) {
+        let mut merged_theme_json =
+            serde_json::to_value(Theme::light_default()).expect("serialize light default theme");
+
+        let mut focused_json =
+            serde_json::to_value(ColorScheme::light_default()).expect("serialize color scheme");
+        focused_json
+            .as_object_mut()
+            .expect("color scheme must be object")
+            .remove("terminal");
+
+        merge_json(
+            &mut merged_theme_json,
+            serde_json::json!({
+                "appearance": "light",
+                "focus_aware": {
+                    "focused": focused_json
+                }
+            }),
+        );
+
+        hydrate_terminal_colors_for_deserialize(&mut merged_theme_json, true);
+
+        let merged_theme: Theme =
+            serde_json::from_value(merged_theme_json).expect("deserialize hydrated theme");
+        let focused_terminal = merged_theme
+            .focus_aware
+            .expect("focus aware colors expected")
+            .focused
+            .expect("focused colors expected")
+            .terminal;
+        let light_defaults = TerminalColors::light_default();
+
+        assert_eq!(focused_terminal.blue, light_defaults.blue);
+        assert_eq!(focused_terminal.bright_white, light_defaults.bright_white);
+    }
+
+    #[test]
+    fn test_hydrate_terminal_colors_for_deserialize_preserves_override_when_auto_mode_is_dark() {
+        let mut merged_theme_json = serde_json::json!({
+            "appearance": "auto",
+            "colors": {
+                "terminal": {
+                    "red": 1122867
+                }
+            }
+        });
+
+        hydrate_terminal_colors_for_deserialize(&mut merged_theme_json, true);
+
+        let hydrated_terminal: TerminalColors =
+            serde_json::from_value(merged_theme_json["colors"]["terminal"].clone())
+                .expect("deserialize hydrated terminal");
+        let dark_defaults = TerminalColors::dark_default();
+
+        assert_eq!(hydrated_terminal.red, 1_122_867);
+        assert_eq!(hydrated_terminal.blue, dark_defaults.blue);
+        assert_eq!(hydrated_terminal.bright_white, dark_defaults.bright_white);
+    }
+
+    #[test]
+    fn test_hydrate_terminal_colors_for_deserialize_uses_light_palette_for_focus_aware_partial_terminal(
+    ) {
+        let overridden_red = 0x11_22_33;
+        let mut merged_theme_json =
+            serde_json::to_value(Theme::light_default()).expect("serialize light default theme");
+
+        let mut focused_json =
+            serde_json::to_value(ColorScheme::light_default()).expect("serialize color scheme");
+        focused_json
+            .as_object_mut()
+            .expect("color scheme must be object")
+            .insert(
+                "terminal".to_string(),
+                serde_json::json!({ "red": overridden_red }),
+            );
+
+        merge_json(
+            &mut merged_theme_json,
+            serde_json::json!({
+                "appearance": "light",
+                "focus_aware": {
+                    "focused": focused_json
+                }
+            }),
+        );
+        hydrate_terminal_colors_for_deserialize(&mut merged_theme_json, true);
+
+        let merged_theme: Theme =
+            serde_json::from_value(merged_theme_json).expect("deserialize hydrated theme");
+        let focused_terminal = merged_theme
+            .focus_aware
+            .expect("focus aware colors expected")
+            .focused
+            .expect("focused colors expected")
+            .terminal;
+
+        assert_eq!(focused_terminal.red, overridden_red);
+        assert_eq!(focused_terminal.green, 0x00bc00);
+        assert_ne!(focused_terminal.green, TerminalColors::dark_default().green);
+    }
+
+    #[test]
+    fn test_hydrate_terminal_colors_for_deserialize_uses_dark_palette_for_focus_aware_partial_terminal(
+    ) {
+        let overridden_red = 0x33_22_11;
+        let mut merged_theme_json =
+            serde_json::to_value(Theme::dark_default()).expect("serialize dark default theme");
+
+        let mut focused_json =
+            serde_json::to_value(ColorScheme::dark_default()).expect("serialize color scheme");
+        focused_json
+            .as_object_mut()
+            .expect("color scheme must be object")
+            .insert(
+                "terminal".to_string(),
+                serde_json::json!({ "red": overridden_red }),
+            );
+
+        merge_json(
+            &mut merged_theme_json,
+            serde_json::json!({
+                "appearance": "dark",
+                "focus_aware": {
+                    "focused": focused_json
+                }
+            }),
+        );
+        hydrate_terminal_colors_for_deserialize(&mut merged_theme_json, false);
+
+        let merged_theme: Theme =
+            serde_json::from_value(merged_theme_json).expect("deserialize hydrated theme");
+        let focused_terminal = merged_theme
+            .focus_aware
+            .expect("focus aware colors expected")
+            .focused
+            .expect("focused colors expected")
+            .terminal;
+
+        assert_eq!(focused_terminal.red, overridden_red);
+        assert_eq!(focused_terminal.green, 0x50fa7b);
+        assert_ne!(
+            focused_terminal.green,
+            TerminalColors::light_default().green
+        );
+    }
+
+    #[test]
+    fn test_to_unfocused_does_not_brighten_dark_backgrounds() {
+        let dark_scheme = ColorScheme::dark_default();
+        let unfocused = dark_scheme.to_unfocused();
+
+        let original_luminance = relative_luminance_srgb(dark_scheme.background.main);
+        let unfocused_luminance = relative_luminance_srgb(unfocused.background.main);
+
+        assert!(
+            unfocused_luminance <= original_luminance,
+            "expected unfocused dark background luminance ({unfocused_luminance}) to be <= original ({original_luminance})",
+        );
+    }
+
+    #[test]
+    fn test_to_unfocused_light_theme_lightens_primary_text() {
+        let light_scheme = ColorScheme::light_default();
+        let unfocused = light_scheme.to_unfocused();
+
+        let original_luminance = relative_luminance_srgb(light_scheme.text.primary);
+        let unfocused_luminance = relative_luminance_srgb(unfocused.text.primary);
+
+        assert!(
+            unfocused_luminance >= original_luminance,
+            "expected unfocused light theme text luminance ({unfocused_luminance}) to be >= original ({original_luminance})",
         );
     }
 }
