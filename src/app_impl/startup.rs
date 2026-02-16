@@ -563,6 +563,12 @@ impl ScriptListApp {
         let tab_interceptor = cx.intercept_keystrokes({
             let app_entity = app_entity_for_tab;
             move |event, window, cx| {
+                // When the main window is hidden (e.g. Notes/AI open), main-menu
+                // key interceptors must not consume keystrokes from secondary windows.
+                if !script_kit_gpui::is_main_window_visible() {
+                    return;
+                }
+
                 let key = event.keystroke.key.as_str();
                 let is_tab_key = key.eq_ignore_ascii_case("tab");
                 let has_shift = event.keystroke.modifiers.shift;
@@ -763,6 +769,12 @@ impl ScriptListApp {
         let arrow_interceptor = cx.intercept_keystrokes({
             let app_entity = app_entity_for_arrows;
             move |event, window, cx| {
+                // When the main window is hidden (e.g. Notes/AI open), main-menu
+                // key interceptors must not consume keystrokes from secondary windows.
+                if !script_kit_gpui::is_main_window_visible() {
+                    return;
+                }
+
                 // intercept_keystrokes is GLOBAL and fires for ALL windows in the app.
                 // Keep main list arrow routing scoped to the main window so notes/AI
                 // windows receive their own navigation key events.
@@ -1148,6 +1160,12 @@ impl ScriptListApp {
         let home_end_interceptor = cx.intercept_keystrokes({
             let app_entity = app_entity_for_home_end;
             move |event, window, cx| {
+                // When the main window is hidden (e.g. Notes/AI open), main-menu
+                // key interceptors must not consume keystrokes from secondary windows.
+                if !script_kit_gpui::is_main_window_visible() {
+                    return;
+                }
+
                 // Skip processing if this keystroke is from Notes or AI window
                 if crate::notes::is_notes_window(window) || crate::ai::is_ai_window(window) {
                     return;
@@ -1205,6 +1223,12 @@ impl ScriptListApp {
         let actions_interceptor = cx.intercept_keystrokes({
             let app_entity = app_entity_for_actions;
             move |event, window, cx| {
+                // When the main window is hidden (e.g. Notes/AI open), main-menu
+                // key interceptors must not consume keystrokes from secondary windows.
+                if !script_kit_gpui::is_main_window_visible() {
+                    return;
+                }
+
                 // CRITICAL: Skip processing if this keystroke is from Notes or AI window
                 // intercept_keystrokes is GLOBAL and fires for ALL windows in the app
                 // We only want to handle keystrokes for the main window

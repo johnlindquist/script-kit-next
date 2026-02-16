@@ -5,6 +5,12 @@
         let tab_interceptor = cx.intercept_keystrokes({
             let app_entity = app_entity_for_tab;
             move |event, window, cx| {
+                // When the main window is hidden (e.g. Notes/AI open), main-menu
+                // key interceptors must not consume keystrokes from secondary windows.
+                if !script_kit_gpui::is_main_window_visible() {
+                    return;
+                }
+
                 let key = event.keystroke.key.as_str();
                 let is_tab_key = key.eq_ignore_ascii_case("tab");
                 let has_shift = event.keystroke.modifiers.shift;
