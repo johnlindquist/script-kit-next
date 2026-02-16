@@ -347,6 +347,11 @@ impl TermPrompt {
 
 // --- merged from part_001_impl/methods_001.rs ---
 impl TermPrompt {
+    /// Font family for terminal content.
+    fn terminal_output_font_family() -> &'static str {
+        FONT_MONO
+    }
+
     /// Get the configured font size
     ///
     /// KEEP as px() because:
@@ -662,7 +667,7 @@ impl TermPrompt {
             .min_h(px(0.)) // Critical for flex children sizing
             .overflow_hidden()
             // No background - let vibrancy show through from parent
-            .font_family(FONT_MONO)
+            .font_family(Self::terminal_output_font_family())
             .text_size(px(font_size))
             .line_height(px(cell_height)); // Use calculated line height for proper descender room
 
@@ -772,6 +777,7 @@ impl TermPrompt {
                     .w(px(batch_width))
                     .h(px(cell_height))
                     .flex_shrink_0()
+                    .font_family(Self::terminal_output_font_family())
                     .when_some(bg_color, |d, bg| d.bg(bg)) // Only apply bg when needed
                     .text_color(fg_color)
                     .child(SharedString::from(batch_text));
@@ -1844,6 +1850,10 @@ mod tests {
             BELL_FLASH_DURATION_MS, 150,
             "BELL_FLASH_DURATION_MS changed!"
         );
+    }
+    #[test]
+    fn test_terminal_output_font_family_uses_font_mono() {
+        assert_eq!(TermPrompt::terminal_output_font_family(), FONT_MONO);
     }
     #[test]
     fn test_perf_timer_loop_iteration_count() {
