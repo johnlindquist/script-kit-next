@@ -20,7 +20,7 @@
                                     platform::configure_as_floating_panel();
                                     platform::swizzle_gpui_blurred_view();
                                     // Configure vibrancy based on actual theme colors
-                                    let theme = theme::load_theme();
+                                    let theme = theme::get_cached_theme();
                                     let is_dark = theme.should_use_dark_vibrancy();
                                     platform::configure_window_vibrancy_material_for_appearance(is_dark);
                                     PANEL_CONFIGURED.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -94,7 +94,7 @@
                                     platform::configure_as_floating_panel();
                                     platform::swizzle_gpui_blurred_view();
                                     // Configure vibrancy based on actual theme colors
-                                    let theme = theme::load_theme();
+                                    let theme = theme::get_cached_theme();
                                     let is_dark = theme.should_use_dark_vibrancy();
                                     platform::configure_window_vibrancy_material_for_appearance(is_dark);
                                     PANEL_CONFIGURED.store(true, std::sync::atomic::Ordering::SeqCst);

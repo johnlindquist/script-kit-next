@@ -24,7 +24,7 @@ pub(super) fn configure_ai_window_vibrancy() {
                         // Disable dragging by window background to prevent titlebar interference
                         // with mouse clicks on content (e.g., setup card buttons)
                         let _: () = msg_send![window, setMovableByWindowBackground: false];
-                        let theme = crate::theme::load_theme();
+                        let theme = crate::theme::get_cached_theme();
                         let is_dark = theme.should_use_dark_vibrancy();
                         crate::platform::configure_secondary_window_vibrancy(window, "AI", is_dark);
 
@@ -120,7 +120,7 @@ fn configure_ai_as_floating_panel() {
                         // ═══════════════════════════════════════════════════════════════════════════
                         // VIBRANCY CONFIGURATION - Match main window for consistent blur
                         // ═══════════════════════════════════════════════════════════════════════════
-                        let theme = crate::theme::load_theme();
+                        let theme = crate::theme::get_cached_theme();
                         let is_dark = theme.should_use_dark_vibrancy();
                         crate::platform::configure_secondary_window_vibrancy(window, "AI", is_dark);
 
