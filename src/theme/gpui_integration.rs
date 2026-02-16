@@ -73,7 +73,7 @@ fn best_contrast_of_two(background: u32, option_a: u32, option_b: u32) -> u32 {
 /// not for making UI elements semi-transparent. UI elements should remain solid
 /// so that text and icons are readable regardless of the vibrancy setting.
 pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColor {
-    let colors = &sk_theme.colors;
+    let colors = sk_theme.get_colors(true);
     let opacity = sk_theme.get_opacity();
     let vibrancy_enabled = sk_theme.is_vibrancy_enabled();
 
@@ -248,8 +248,22 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
     theme_color.scrollbar_thumb = hex_to_hsla(colors.text.dimmed);
     theme_color.scrollbar_thumb_hover = hex_to_hsla(colors.text.muted);
 
-    // Caret (cursor) - match main input text color
-    theme_color.caret = hex_to_hsla(colors.text.primary);
+    // Caret (cursor) - prefer explicit focused cursor override when configured
+    let has_focused_cursor_override = sk_theme
+        .focus_aware
+        .as_ref()
+        .and_then(|focus_aware| focus_aware.focused.as_ref())
+        .and_then(|focused| focused.cursor.as_ref())
+        .is_some();
+    let caret_color = if has_focused_cursor_override {
+        sk_theme
+            .get_cursor_style(true)
+            .map(|cursor| cursor.color)
+            .unwrap_or(colors.text.primary)
+    } else {
+        colors.text.primary
+    };
+    theme_color.caret = hex_to_hsla(caret_color);
 
     // Selection - match main input selection alpha (0x60)
     let mut selection = hex_to_hsla(colors.accent.selected);
@@ -450,6 +464,7 @@ pub(crate) fn build_markdown_highlight_theme(sk_theme: &Theme, is_dark: bool) ->
 
 #[cfg(test)]
 mod tests {
+    use super::super::types::{CursorStyle, FocusAwareColorScheme, FocusColorScheme};
     use super::*;
 
     fn assert_hsla_close(actual: Hsla, expected: Hsla) {
@@ -457,6 +472,20 @@ mod tests {
         assert!((actual.s - expected.s).abs() < 1e-6);
         assert!((actual.l - expected.l).abs() < 1e-6);
         assert!((actual.a - expected.a).abs() < 1e-6);
+    }
+
+    fn focus_color_scheme_from(
+        colors: &crate::theme::ColorScheme,
+        cursor: Option<CursorStyle>,
+    ) -> FocusColorScheme {
+        FocusColorScheme {
+            background: colors.background.clone(),
+            text: colors.text.clone(),
+            accent: colors.accent.clone(),
+            ui: colors.ui.clone(),
+            cursor,
+            terminal: colors.terminal.clone(),
+        }
     }
 
     #[test]
@@ -561,5 +590,46 @@ mod tests {
         assert!(light_mapped.secondary_hover.a > light_mapped.secondary.a);
         assert!(light_mapped.secondary_active.a > light_mapped.secondary_hover.a);
         assert!(light_mapped.muted.a > 0.0);
+    }
+
+    #[test]
+    fn test_map_scriptkit_to_gpui_theme_prefers_focus_aware_focused_colors() {
+        let mut theme = Theme::dark_default();
+        theme.colors.text.primary = 0x111111;
+        theme.colors.accent.selected = 0x222222;
+
+        let mut focused_colors = theme.colors.clone();
+        focused_colors.text.primary = 0xaabbcc;
+        focused_colors.accent.selected = 0x123456;
+        theme.focus_aware = Some(FocusAwareColorScheme {
+            focused: Some(focus_color_scheme_from(&focused_colors, None)),
+            unfocused: None,
+        });
+
+        let mapped = map_scriptkit_to_gpui_theme(&theme, true);
+        assert_hsla_close(mapped.foreground, hex_to_hsla(focused_colors.text.primary));
+        assert_hsla_close(mapped.accent, hex_to_hsla(focused_colors.accent.selected));
+    }
+
+    #[test]
+    fn test_map_scriptkit_to_gpui_theme_uses_focus_aware_cursor_override_for_caret() {
+        let mut theme = Theme::dark_default();
+        theme.colors.text.primary = 0x111111;
+
+        let focused_colors = theme.colors.clone();
+        let cursor_override = CursorStyle {
+            color: 0x34c9ff,
+            blink_interval_ms: 700,
+        };
+        theme.focus_aware = Some(FocusAwareColorScheme {
+            focused: Some(focus_color_scheme_from(
+                &focused_colors,
+                Some(cursor_override.clone()),
+            )),
+            unfocused: None,
+        });
+
+        let mapped = map_scriptkit_to_gpui_theme(&theme, true);
+        assert_hsla_close(mapped.caret, hex_to_hsla(cursor_override.color));
     }
 }
