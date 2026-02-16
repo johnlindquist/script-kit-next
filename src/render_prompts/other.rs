@@ -8,6 +8,9 @@ mod __render_prompts_other_docs {
 // Contains: select, env, drop, template prompts
 // This file is included via include!() macro in main.rs
 
+const WEBCAM_FOOTER_READY_STATUS_CONTEXT: &str = "camera ready, press Enter to capture";
+const WEBCAM_FOOTER_HIDE_PRIMARY_LABEL: &str = "Run Command";
+
 impl ScriptListApp {
     #[inline]
     fn other_prompt_shell_radius_lg(&self) -> f32 {
@@ -207,12 +210,14 @@ impl ScriptListApp {
         let footer_config = prompt_footer_config_with_status(
             "Capture Photo",
             true,
-            None,
+            Some(running_status_text(WEBCAM_FOOTER_READY_STATUS_CONTEXT)),
             None,
         )
         .show_logo(false)
-        // Keep explicit label for source-based regression tests.
-        .primary_label("Capture Photo");
+        // Keep explicit label for source-based regression tests, then hide
+        // the primary button so webcam footer only shows status + Actions.
+        .primary_label("Capture Photo")
+        .primary_label(WEBCAM_FOOTER_HIDE_PRIMARY_LABEL);
 
         // Create click handlers for footer
         let handle_submit = cx.entity().downgrade();
@@ -363,5 +368,26 @@ mod other_prompt_render_wrapper_tests {
                 "{fn_name} should not allocate unused box shadows in the shell wrapper"
             );
         }
+    }
+
+    #[test]
+    fn webcam_footer_shows_status_and_actions_without_primary_capture_button() {
+        let body = fn_source("render_webcam_prompt");
+        assert!(
+            body.contains("running_status_text(WEBCAM_FOOTER_READY_STATUS_CONTEXT)"),
+            "render_webcam_prompt should keep camera-ready status helper text in footer"
+        );
+        assert!(
+            body.contains(".primary_label(WEBCAM_FOOTER_HIDE_PRIMARY_LABEL)"),
+            "render_webcam_prompt should hide the primary capture button in the footer"
+        );
+        assert!(
+            body.contains("toggle_webcam_actions"),
+            "render_webcam_prompt should keep the footer Actions trigger wired"
+        );
+        assert!(
+            !body.contains("Some(\"Webcam\".to_string())"),
+            "render_webcam_prompt should not include the redundant Webcam info label"
+        );
     }
 }
