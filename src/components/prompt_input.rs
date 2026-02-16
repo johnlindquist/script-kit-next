@@ -285,19 +285,6 @@ impl PromptInputColors {
             border: theme.colors.ui.border,
         }
     }
-
-    /// Create PromptInputColors from theme with focus awareness
-    pub fn from_theme_focused(theme: &Theme, is_focused: bool) -> Self {
-        let colors = theme.get_colors(is_focused);
-        Self {
-            text_primary: colors.text.primary,
-            text_muted: colors.text.muted,
-            text_dimmed: colors.text.dimmed,
-            accent: colors.accent.selected,
-            background: colors.background.main,
-            border: colors.ui.border,
-        }
-    }
 }
 
 impl Default for PromptInputColors {

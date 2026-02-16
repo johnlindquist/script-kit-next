@@ -3,7 +3,6 @@
 //! This module provides functionality for:
 //! - Loading theme from ~/.scriptkit/kit/theme.json
 //! - Color scheme definitions (dark/light mode)
-//! - Focus-aware color variations
 //! - Terminal ANSI color palette
 //! - gpui-component theme integration
 //! - Global theme service for multi-window theme sync

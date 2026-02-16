@@ -166,7 +166,6 @@ impl ThemeDiagnostics {
 const KNOWN_TOP_LEVEL_KEYS: &[&str] = &[
     "appearance",
     "colors",
-    "focus_aware",
     "opacity",
     "drop_shadow",
     "vibrancy",

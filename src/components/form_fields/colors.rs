@@ -34,10 +34,7 @@ impl FormFieldColors {
     /// Create FormFieldColors from a Theme
     pub fn from_theme(theme: &crate::theme::Theme) -> Self {
         let ui_font_size = theme.get_fonts().ui_size;
-        let cursor_color = theme
-            .get_cursor_style(true)
-            .map(|cursor| cursor.color)
-            .unwrap_or(theme.colors.accent.selected);
+        let cursor_color = theme.colors.accent.selected;
         Self {
             background: theme.colors.background.search_box,
             background_focused: theme.colors.background.main,
