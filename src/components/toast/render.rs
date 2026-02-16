@@ -2,6 +2,7 @@ use gpui::*;
 
 use crate::components::button::{Button, ButtonColors, ButtonVariant};
 use crate::list_item::FONT_MONO;
+use crate::theme::get_cached_theme;
 
 use super::types::{
     TOAST_ACTIONS_GAP_PX, TOAST_ACTIONS_MARGIN_TOP_PX, TOAST_BORDER_WIDTH_PX, TOAST_CONTENT_GAP_PX,
@@ -17,7 +18,8 @@ impl RenderOnce for Toast {
         let on_dismiss_callback = self.on_dismiss;
 
         // Check vibrancy to conditionally apply shadow
-        let vibrancy_enabled = crate::theme::load_theme().is_vibrancy_enabled();
+        let theme = get_cached_theme();
+        let vibrancy_enabled = theme.is_vibrancy_enabled();
 
         // Main toast container
         // Apply shadow conditionally BEFORE .id() to avoid Stateful<Div> type issues

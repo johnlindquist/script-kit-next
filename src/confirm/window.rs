@@ -11,7 +11,7 @@
 //! - No actions/key bindings needed
 
 use crate::platform;
-use crate::theme;
+use crate::theme::get_cached_theme;
 use anyhow::Context as _;
 use gpui::{
     div, prelude::*, px, App, Bounds, Context, DisplayId, Entity, FocusHandle, Focusable, Pixels,
@@ -196,7 +196,8 @@ pub fn open_confirm_window(
     close_confirm_window(cx);
 
     // Load theme for vibrancy settings
-    let theme = theme::load_theme();
+    let theme = get_cached_theme();
+    let is_dark_vibrancy = theme.should_use_dark_vibrancy();
     let window_background = if theme.is_vibrancy_enabled() {
         gpui::WindowBackgroundAppearance::Blurred
     } else {
@@ -278,8 +279,8 @@ pub fn open_confirm_window(
     // internal state borrowed immediately after open_window returns.
     #[cfg(target_os = "macos")]
     {
-        let _ = handle.update(cx, |_root, window, cx| {
-            window.defer(cx, |_window, _cx| {
+        let _ = handle.update(cx, move |_root, window, cx| {
+            window.defer(cx, move |_window, _cx| {
                 use cocoa::appkit::NSApp;
                 use cocoa::base::nil;
                 use objc::{msg_send, sel, sel_impl};
@@ -294,9 +295,7 @@ pub fn open_confirm_window(
                         // Get the last window (most recently created)
                         let ns_window: cocoa::base::id = msg_send![windows, lastObject];
                         if ns_window != nil {
-                            let theme = crate::theme::load_theme();
-                            let is_dark = theme.should_use_dark_vibrancy();
-                            platform::configure_actions_popup_window(ns_window, is_dark);
+                            platform::configure_actions_popup_window(ns_window, is_dark_vibrancy);
                         }
                     }
                 }

@@ -41,7 +41,7 @@ impl ScriptListApp {
     }
 
     pub(crate) fn update_theme(&mut self, cx: &mut Context<Self>) {
-        let base_theme = theme::load_theme();
+        let base_theme = theme::get_cached_theme();
 
         // Preserve opacity offset in light mode, reset in dark mode
         if base_theme.is_dark_mode() {
@@ -90,7 +90,7 @@ impl ScriptListApp {
     /// The offset is clamped to the range -0.5 to +0.5.
     pub(crate) fn adjust_light_opacity(&mut self, delta: f32, cx: &mut Context<Self>) {
         // Only adjust if we're in light mode
-        let base_theme = theme::load_theme();
+        let base_theme = theme::get_cached_theme();
         if base_theme.is_dark_mode() {
             debug!(target: "APP", "Opacity adjustment only works in light mode");
             return;
