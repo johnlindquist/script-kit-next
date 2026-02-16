@@ -39,6 +39,12 @@ fn primary_interaction_color(hex: u32, is_dark: bool, amount: f32) -> Hsla {
 }
 
 #[inline]
+fn subtle_overlay(hex: u32, alpha: f32) -> Hsla {
+    let base = hex_to_hsla(hex);
+    hsla(base.h, base.s, base.l, alpha.clamp(0.0, 1.0))
+}
+
+#[inline]
 fn contrast_ratio(a: u32, b: u32) -> f32 {
     let luminance_a = relative_luminance_srgb(a);
     let luminance_b = relative_luminance_srgb(b);
@@ -100,10 +106,6 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
             hex_to_hsla(hex)
         }
     };
-    let subtle_overlay = |alpha: f32| -> Hsla {
-        let base = hex_to_hsla(colors.accent.selected_subtle);
-        hsla(base.h, base.s, base.l, alpha.clamp(0.0, 1.0))
-    };
 
     // ╔════════════════════════════════════════════════════════════════════════════╗
     // ║ VIBRANCY BACKGROUND - CONSISTENT FOR ALL CONTENT IN WINDOW                 ║
@@ -162,18 +164,23 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
     theme_color.foreground = hex_to_hsla(colors.text.primary);
 
     // Accent colors (Script Kit yellow/gold) - keep opaque for visibility
+    let accent_foreground_hex = best_contrast_of_two(
+        colors.accent.selected,
+        colors.text.on_accent,
+        colors.background.main,
+    );
     theme_color.accent = hex_to_hsla(colors.accent.selected);
-    theme_color.accent_foreground = hex_to_hsla(colors.text.on_accent);
+    theme_color.accent_foreground = hex_to_hsla(accent_foreground_hex);
 
     // Border - keep opaque
     theme_color.border = hex_to_hsla(colors.ui.border);
-    theme_color.input = with_vibrancy(colors.ui.border, opacity.search_box);
+    theme_color.input = with_vibrancy(colors.background.search_box, opacity.search_box);
 
     // List/sidebar colors - TRANSPARENT when vibrancy enabled to prevent stacking
     theme_color.list = main_bg; // transparent when vibrancy enabled
-    theme_color.list_active = hex_to_hsla(colors.accent.selected_subtle); // Keep selection visible
+    theme_color.list_active = subtle_overlay(colors.accent.selected_subtle, opacity.selected);
     theme_color.list_active_border = hex_to_hsla(colors.accent.selected);
-    theme_color.list_hover = hex_to_hsla(colors.accent.selected_subtle); // Keep hover visible
+    theme_color.list_hover = subtle_overlay(colors.accent.selected_subtle, opacity.hover);
     theme_color.list_even = main_bg; // transparent when vibrancy enabled
     theme_color.list_head = main_bg; // transparent when vibrancy enabled
 
@@ -181,38 +188,44 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
     theme_color.sidebar = main_bg;
     theme_color.sidebar_foreground = hex_to_hsla(colors.text.primary);
     theme_color.sidebar_border = hex_to_hsla(colors.ui.border);
-    theme_color.sidebar_accent = hex_to_hsla(colors.accent.selected_subtle);
+    theme_color.sidebar_accent = subtle_overlay(colors.accent.selected_subtle, opacity.selected);
     theme_color.sidebar_accent_foreground = hex_to_hsla(colors.text.primary);
     theme_color.sidebar_primary = hex_to_hsla(colors.accent.selected);
-    theme_color.sidebar_primary_foreground = hex_to_hsla(colors.text.primary);
+    theme_color.sidebar_primary_foreground = hex_to_hsla(accent_foreground_hex);
 
     // Primary (accent-colored buttons) - keep opaque for visibility
     theme_color.primary = hex_to_hsla(colors.accent.selected);
-    theme_color.primary_foreground = hex_to_hsla(colors.background.main);
+    theme_color.primary_foreground = hex_to_hsla(accent_foreground_hex);
     theme_color.primary_hover = primary_interaction_color(colors.accent.selected, is_dark, 0.06);
     theme_color.primary_active = primary_interaction_color(colors.accent.selected, is_dark, 0.12);
 
     // Secondary (muted buttons) - TRANSPARENT when vibrancy enabled
     theme_color.secondary = if vibrancy_enabled {
-        subtle_overlay(SECONDARY_VIBRANCY_ALPHA)
+        subtle_overlay(colors.accent.selected_subtle, SECONDARY_VIBRANCY_ALPHA)
     } else {
         with_vibrancy(colors.background.search_box, 0.15)
     };
     theme_color.secondary_foreground = hex_to_hsla(colors.text.primary);
     theme_color.secondary_hover = if vibrancy_enabled {
-        subtle_overlay(SECONDARY_VIBRANCY_HOVER_ALPHA)
+        subtle_overlay(
+            colors.accent.selected_subtle,
+            SECONDARY_VIBRANCY_HOVER_ALPHA,
+        )
     } else {
         with_vibrancy(colors.background.title_bar, 0.2)
     };
     theme_color.secondary_active = if vibrancy_enabled {
-        subtle_overlay(SECONDARY_VIBRANCY_ACTIVE_ALPHA)
+        subtle_overlay(
+            colors.accent.selected_subtle,
+            SECONDARY_VIBRANCY_ACTIVE_ALPHA,
+        )
     } else {
         with_vibrancy(colors.background.title_bar, 0.25)
     };
 
     // Muted (disabled states, subtle elements) - transparent when vibrancy
     theme_color.muted = if vibrancy_enabled {
-        subtle_overlay(MUTED_VIBRANCY_ALPHA)
+        subtle_overlay(colors.accent.selected_subtle, MUTED_VIBRANCY_ALPHA)
     } else {
         with_vibrancy(colors.background.search_box, 0.1)
     };
@@ -464,7 +477,9 @@ pub(crate) fn build_markdown_highlight_theme(sk_theme: &Theme, is_dark: bool) ->
 
 #[cfg(test)]
 mod tests {
-    use super::super::types::{CursorStyle, FocusAwareColorScheme, FocusColorScheme};
+    use super::super::types::{
+        BackgroundOpacity, CursorStyle, FocusAwareColorScheme, FocusColorScheme,
+    };
     use super::*;
 
     fn assert_hsla_close(actual: Hsla, expected: Hsla) {
@@ -523,17 +538,66 @@ mod tests {
     }
 
     #[test]
-    fn test_map_scriptkit_to_gpui_theme_uses_text_on_accent_for_accent_foreground() {
+    fn test_map_scriptkit_to_gpui_theme_uses_best_contrast_for_accent_derived_foregrounds() {
         let mut theme = Theme::dark_default();
-        theme.colors.text.primary = 0x010203;
-        theme.colors.text.on_accent = 0xfefefe;
+        theme.colors.accent.selected = 0xf5d86a;
+        theme.colors.text.on_accent = 0xffffff;
+        theme.colors.background.main = 0x111217;
 
         let mapped = map_scriptkit_to_gpui_theme(&theme, true);
-        assert_hsla_close(
-            mapped.accent_foreground,
-            hex_to_hsla(theme.colors.text.on_accent),
+        let expected = best_contrast_of_two(
+            theme.colors.accent.selected,
+            theme.colors.text.on_accent,
+            theme.colors.background.main,
         );
-        assert_hsla_close(mapped.foreground, hex_to_hsla(theme.colors.text.primary));
+        assert_hsla_close(mapped.accent_foreground, hex_to_hsla(expected));
+        assert_hsla_close(mapped.primary_foreground, hex_to_hsla(expected));
+        assert_hsla_close(mapped.sidebar_primary_foreground, hex_to_hsla(expected));
+    }
+
+    #[test]
+    fn test_map_scriptkit_to_gpui_theme_uses_search_box_color_for_input_background() {
+        let mut theme = Theme::dark_default();
+        theme.colors.background.search_box = 0x1a2b3c;
+        theme.colors.ui.border = 0xddeeff;
+        theme.opacity = Some(BackgroundOpacity {
+            search_box: 0.42,
+            ..theme.get_opacity()
+        });
+
+        let mapped = map_scriptkit_to_gpui_theme(&theme, true);
+        let search_box = hex_to_hsla(theme.colors.background.search_box);
+        let expected = hsla(
+            search_box.h,
+            search_box.s,
+            search_box.l,
+            theme.get_opacity().search_box,
+        );
+        assert_hsla_close(mapped.input, expected);
+    }
+
+    #[test]
+    fn test_map_scriptkit_to_gpui_theme_applies_selected_and_hover_overlay_opacity() {
+        let mut theme = Theme::dark_default();
+        theme.colors.accent.selected_subtle = 0x335577;
+        theme.opacity = Some(BackgroundOpacity {
+            selected: 0.38,
+            hover: 0.24,
+            ..theme.get_opacity()
+        });
+
+        let mapped = map_scriptkit_to_gpui_theme(&theme, true);
+        let expected_selected = subtle_overlay(
+            theme.colors.accent.selected_subtle,
+            theme.get_opacity().selected,
+        );
+        let expected_hover = subtle_overlay(
+            theme.colors.accent.selected_subtle,
+            theme.get_opacity().hover,
+        );
+        assert_hsla_close(mapped.list_active, expected_selected);
+        assert_hsla_close(mapped.sidebar_accent, expected_selected);
+        assert_hsla_close(mapped.list_hover, expected_hover);
     }
 
     #[test]
