@@ -4,8 +4,8 @@ impl ThemeAdapter {
     /// Creates a theme adapter from a Script Kit theme.
     ///
     /// Maps theme colors to terminal colors:
-    /// - `theme.colors.text.primary` → foreground
-    /// - `theme.colors.background.main` → background
+    /// - `theme.colors.terminal.foreground` (or `theme.colors.text.primary`) → foreground
+    /// - `theme.colors.terminal.background` (or `theme.colors.background.main`) → background
     /// - `theme.colors.accent.selected` → cursor
     /// - `theme.colors.accent.selected_subtle` → selection background
     /// - `theme.colors.text.secondary` → selection foreground
@@ -14,14 +14,14 @@ impl ThemeAdapter {
     /// All 16 ANSI colors are now fully themeable via `theme.colors.terminal`.
     pub fn from_theme(theme: &Theme) -> Self {
         let colors = &theme.colors;
+        let terminal = &colors.terminal;
 
-        let foreground = hex_to_rgb(colors.text.primary);
-        let background = hex_to_rgb(colors.background.main);
+        let foreground = hex_to_rgb(terminal.foreground.unwrap_or(colors.text.primary));
+        let background = hex_to_rgb(terminal.background.unwrap_or(colors.background.main));
         let cursor = hex_to_rgb(colors.accent.selected);
         let selection_background = hex_to_rgb(colors.accent.selected_subtle);
         let selection_foreground = hex_to_rgb(colors.text.secondary);
 
-        let terminal = &colors.terminal;
         let ansi = AnsiColors {
             black: hex_to_rgb(terminal.black),
             red: hex_to_rgb(terminal.red),

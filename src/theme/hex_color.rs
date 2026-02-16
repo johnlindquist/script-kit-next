@@ -3,7 +3,7 @@
 //! Provides custom serialization/deserialization for HexColor values,
 //! supporting multiple input formats: hex strings, RGB/RGBA strings, and numbers.
 
-use serde::{Deserializer, Serializer};
+use serde::{Deserialize, Deserializer, Serializer};
 
 /// Transparent color constant (fully transparent black)
 #[cfg(test)]
@@ -255,6 +255,62 @@ pub mod hex_color_serde {
                 parse_hex(" 1E1E1E ").expect("hex parser should trim leading/trailing whitespace"),
                 0x1E1E1E
             );
+        }
+    }
+}
+
+/// Custom serialization/deserialization for optional HexColor values.
+///
+/// This preserves the same input format flexibility as `hex_color_serde` while
+/// allowing omitted/null values for optional theme fields.
+pub mod hex_color_option_serde {
+    use super::{hex_color_serde, *};
+    use serde::de;
+
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum ColorInput {
+        Unsigned(u64),
+        Signed(i64),
+        Text(String),
+    }
+
+    pub fn serialize<S>(color: &Option<HexColor>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match color {
+            Some(value) => serializer.serialize_some(&format!("#{:06X}", value)),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<HexColor>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = Option::<ColorInput>::deserialize(deserializer)?;
+        match value {
+            None => Ok(None),
+            Some(ColorInput::Unsigned(v)) => {
+                if v > u64::from(u32::MAX) {
+                    return Err(de::Error::custom("color value exceeds u32::MAX"));
+                }
+                Ok(Some(v as HexColor))
+            }
+            Some(ColorInput::Signed(v)) => {
+                if v < 0 {
+                    return Err(de::Error::custom("color value cannot be negative"));
+                }
+                if v as u64 > u64::from(u32::MAX) {
+                    return Err(de::Error::custom("color value exceeds u32::MAX"));
+                }
+                Ok(Some(v as HexColor))
+            }
+            Some(ColorInput::Text(s)) => {
+                let parsed = hex_color_serde::parse_color_string(&s).map_err(de::Error::custom)?;
+                Ok(Some(parsed))
+            }
         }
     }
 }

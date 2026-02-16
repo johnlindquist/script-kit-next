@@ -360,6 +360,8 @@ fn theme_dracula() -> Theme {
             info: 0x8be9fd,
         },
         terminal: TerminalColors {
+            foreground: None,
+            background: None,
             black: 0x21222c,
             red: 0xff5555,
             green: 0x50fa7b,
@@ -408,6 +410,8 @@ fn theme_nord() -> Theme {
             info: 0x81a1c1,
         },
         terminal: TerminalColors {
+            foreground: None,
+            background: None,
             black: 0x3b4252,
             red: 0xbf616a,
             green: 0xa3be8c,
@@ -456,6 +460,8 @@ fn theme_catppuccin_mocha() -> Theme {
             info: 0x89b4fa,
         },
         terminal: TerminalColors {
+            foreground: None,
+            background: None,
             black: 0x45475a,
             red: 0xf38ba8,
             green: 0xa6e3a1,
@@ -504,6 +510,8 @@ fn theme_catppuccin_latte() -> Theme {
             info: 0x1e66f5,
         },
         terminal: TerminalColors {
+            foreground: None,
+            background: None,
             black: 0x5c5f77,
             red: 0xd20f39,
             green: 0x40a02b,
@@ -552,6 +560,8 @@ fn theme_one_dark() -> Theme {
             info: 0x61afef,
         },
         terminal: TerminalColors {
+            foreground: None,
+            background: None,
             black: 0x3f4451,
             red: 0xe06c75,
             green: 0x98c379,
@@ -600,6 +610,8 @@ fn theme_tokyo_night() -> Theme {
             info: 0x7dcfff,
         },
         terminal: TerminalColors {
+            foreground: None,
+            background: None,
             black: 0x414868,
             red: 0xf7768e,
             green: 0x9ece6a,
@@ -648,6 +660,8 @@ fn theme_gruvbox_dark() -> Theme {
             info: 0x83a598,
         },
         terminal: TerminalColors {
+            foreground: None,
+            background: None,
             black: 0x282828,
             red: 0xcc241d,
             green: 0x98971a,
@@ -696,6 +710,8 @@ fn theme_rose_pine() -> Theme {
             info: 0x9ccfd8,
         },
         terminal: TerminalColors {
+            foreground: None,
+            background: None,
             black: 0x26233a,
             red: 0xeb6f92,
             green: 0x31748f,
@@ -745,6 +761,8 @@ fn theme_solarized_dark() -> Theme {
             info: 0x268bd2,
         },
         terminal: TerminalColors {
+            foreground: None,
+            background: None,
             black: 0x073642,
             red: 0xdc322f,
             green: 0x859900,
@@ -793,6 +811,8 @@ fn theme_solarized_light() -> Theme {
             info: 0x268bd2,
         },
         terminal: TerminalColors {
+            foreground: None,
+            background: None,
             black: 0x073642,
             red: 0xdc322f,
             green: 0x859900,
@@ -841,6 +861,8 @@ fn theme_github_dark() -> Theme {
             info: 0x58a6ff,
         },
         terminal: TerminalColors {
+            foreground: None,
+            background: None,
             black: 0x484f58,
             red: 0xff7b72,
             green: 0x3fb950,
@@ -889,6 +911,8 @@ fn theme_github_light() -> Theme {
             info: 0x0969da,
         },
         terminal: TerminalColors {
+            foreground: None,
+            background: None,
             black: 0x24292f,
             red: 0xcf222e,
             green: 0x116329,
@@ -937,6 +961,8 @@ fn theme_monokai_pro() -> Theme {
             info: 0x78dce8,
         },
         terminal: TerminalColors {
+            foreground: None,
+            background: None,
             black: 0x403e41,
             red: 0xff6188,
             green: 0xa9dc76,
@@ -985,6 +1011,8 @@ fn theme_everforest_dark() -> Theme {
             info: 0x7fbbb3,
         },
         terminal: TerminalColors {
+            foreground: None,
+            background: None,
             black: 0x343f44,
             red: 0xe67e80,
             green: 0xa7c080,
@@ -1033,6 +1061,8 @@ fn theme_kanagawa() -> Theme {
             info: 0x7fb4ca,
         },
         terminal: TerminalColors {
+            foreground: None,
+            background: None,
             black: 0x2a2a37,
             red: 0xc34043,
             green: 0x76946a,
@@ -1081,6 +1111,8 @@ fn theme_ayu_dark() -> Theme {
             info: 0x59c2ff,
         },
         terminal: TerminalColors {
+            foreground: None,
+            background: None,
             black: 0x1d2631,
             red: 0xff3333,
             green: 0xc2d94c,
@@ -1129,6 +1161,8 @@ fn theme_material_ocean() -> Theme {
             info: 0x82aaff,
         },
         terminal: TerminalColors {
+            foreground: None,
+            background: None,
             black: 0x1f2233,
             red: 0xff5370,
             green: 0xc3e88d,

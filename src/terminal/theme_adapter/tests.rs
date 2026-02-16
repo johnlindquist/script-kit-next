@@ -1,5 +1,6 @@
 use super::*;
 use crate::theme::{ColorScheme, Theme};
+use serde_json::json;
 
 #[test]
 fn test_hex_to_rgb_white() {
@@ -151,6 +152,22 @@ fn test_from_theme_uses_terminal_colors_for_ansi() {
         adapter.ansi_color(4),
         hex_to_rgb(theme.colors.terminal.blue)
     );
+}
+
+#[test]
+fn test_from_theme_uses_terminal_defaults_when_theme_json_sets_foreground_and_background() {
+    let mut theme_json = serde_json::to_value(Theme::dark_default()).expect("serialize theme");
+    theme_json["colors"]["terminal"]["foreground"] = json!("#123456");
+    theme_json["colors"]["terminal"]["background"] = json!("#654321");
+
+    let theme: Theme = serde_json::from_value(theme_json).expect("deserialize theme");
+    let adapter = ThemeAdapter::from_theme(&theme);
+
+    assert_eq!(theme.colors.terminal.foreground, Some(0x123456));
+    assert_eq!(theme.colors.terminal.background, Some(0x654321));
+    assert_eq!(adapter.foreground(), hex_to_rgb(0x123456));
+    assert_eq!(adapter.background(), hex_to_rgb(0x654321));
+    assert_eq!(adapter.ansi_color(1), hex_to_rgb(theme.colors.terminal.red));
 }
 
 #[test]
