@@ -1150,8 +1150,7 @@ fn theme_material_ocean() -> Theme {
 // --- merged from part_04.rs ---
 /// Write a theme to the user's theme.json file
 pub fn write_theme_to_disk(theme: &Theme) -> Result<(), std::io::Error> {
-    let theme_path =
-        std::path::PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/theme.json").as_ref());
+    let theme_path = crate::setup::get_kit_path().join("kit").join("theme.json");
 
     // Ensure parent directory exists
     if let Some(parent) = theme_path.parent() {
