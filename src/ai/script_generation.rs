@@ -12,6 +12,15 @@ const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
 const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
 const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
 const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
+const AI_SCRIPT_USER_REQUEST_START_DELIMITER: &str = "---USER_REQUEST---";
+const AI_SCRIPT_USER_REQUEST_END_DELIMITER: &str = "---END_REQUEST---";
+const AI_SCRIPT_SHELL_EXECUTION_PATTERNS: [(&str, &str); 5] = [
+    ("child_process", "child_process"),
+    ("exec", "exec"),
+    ("execSync", "execsync"),
+    ("spawn", "spawn"),
+    ("spawnSync", "spawnsync"),
+];
 
 pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit TypeScript scripts.
 
@@ -229,6 +238,7 @@ pub struct GeneratedScriptOutput {
     pub slug: String,
     pub model_id: String,
     pub provider_id: String,
+    pub shell_execution_warning: bool,
 }
 
 pub fn generate_script_from_prompt(
@@ -258,13 +268,7 @@ pub fn generate_script_from_prompt(
         ),
     );
 
-    let messages = vec![
-        ProviderMessage::system(AI_SCRIPT_GENERATION_SYSTEM_PROMPT),
-        ProviderMessage::user(format!(
-            "Generate a Script Kit script for this user request:\n\n{}",
-            normalized_prompt
-        )),
-    ];
+    let messages = build_script_generation_messages(normalized_prompt);
 
     let raw_response = provider
         .send_message(&messages, &selected_model.id)
@@ -276,6 +280,20 @@ pub fn generate_script_from_prompt(
         })?;
 
     let (slug, finalized) = prepare_script_from_ai_response(normalized_prompt, &raw_response)?;
+    let suspicious_shell_patterns =
+        detect_unexpected_shell_execution_patterns(normalized_prompt, &finalized);
+    let shell_execution_warning = !suspicious_shell_patterns.is_empty();
+    if shell_execution_warning {
+        tracing::warn!(
+            correlation_id = "ai-script-generation",
+            state = "suspicious_shell_pattern_detected",
+            patterns = ?suspicious_shell_patterns,
+            model_id = %selected_model.id,
+            provider_id = %selected_model.provider,
+            "AI-generated script includes shell execution patterns without explicit shell intent"
+        );
+    }
+
     let path = write_generated_script(&slug, &finalized).with_context(|| {
         format!(
             "Failed writing AI-generated script (state=write_failed, slug={})",
@@ -297,6 +315,7 @@ pub fn generate_script_from_prompt(
         slug,
         model_id: selected_model.id,
         provider_id: selected_model.provider,
+        shell_execution_warning,
     })
 }
 
@@ -367,6 +386,61 @@ fn select_generation_model(
 
 fn generated_scripts_dir() -> PathBuf {
     PathBuf::from(shellexpand::tilde(AI_SCRIPT_OUTPUT_DIR).as_ref())
+}
+
+fn build_script_generation_messages(normalized_prompt: &str) -> Vec<ProviderMessage> {
+    vec![
+        ProviderMessage::system(AI_SCRIPT_GENERATION_SYSTEM_PROMPT),
+        ProviderMessage::user(format!(
+            "Generate a Script Kit script for this user request:\n\n{}\n{}\n{}",
+            AI_SCRIPT_USER_REQUEST_START_DELIMITER,
+            normalized_prompt,
+            AI_SCRIPT_USER_REQUEST_END_DELIMITER
+        )),
+    ]
+}
+
+fn prompt_allows_shell_execution(prompt: &str) -> bool {
+    prompt
+        .split(|character: char| !character.is_ascii_alphanumeric() && character != '_')
+        .filter(|token| !token.is_empty())
+        .any(|token| {
+            let normalized_token = token.to_ascii_lowercase();
+            normalized_token.starts_with("shell")
+                || normalized_token.starts_with("exec")
+                || normalized_token.starts_with("command")
+                || normalized_token.starts_with("terminal")
+                || normalized_token.starts_with("process")
+        })
+}
+
+fn detect_shell_execution_patterns(script_source: &str) -> Vec<&'static str> {
+    let normalized_tokens = script_source
+        .split(|character: char| !character.is_ascii_alphanumeric() && character != '_')
+        .filter(|token| !token.is_empty())
+        .map(|token| token.to_ascii_lowercase())
+        .collect::<Vec<_>>();
+
+    AI_SCRIPT_SHELL_EXECUTION_PATTERNS
+        .iter()
+        .filter_map(|(pattern_name, normalized_pattern)| {
+            normalized_tokens
+                .iter()
+                .any(|token| token == normalized_pattern)
+                .then_some(*pattern_name)
+        })
+        .collect()
+}
+
+fn detect_unexpected_shell_execution_patterns(
+    prompt: &str,
+    script_source: &str,
+) -> Vec<&'static str> {
+    if prompt_allows_shell_execution(prompt) {
+        return Vec::new();
+    }
+
+    detect_shell_execution_patterns(script_source)
 }
 
 fn split_fence_header_and_body(fence: &str) -> (&str, &str) {
@@ -580,6 +654,47 @@ mod tests {
             "build-api-client"
         );
         assert_eq!(slugify_script_name("  ___  "), "ai-script");
+    }
+
+    #[test]
+    fn test_build_script_generation_messages_wraps_prompt_with_request_delimiters() {
+        let messages = build_script_generation_messages("show today's weather");
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[1].role, "user");
+        assert!(messages[1]
+            .content
+            .contains(AI_SCRIPT_USER_REQUEST_START_DELIMITER));
+        assert!(messages[1]
+            .content
+            .contains(AI_SCRIPT_USER_REQUEST_END_DELIMITER));
+        assert!(messages[1]
+            .content
+            .contains("---USER_REQUEST---\nshow today's weather\n---END_REQUEST---"));
+    }
+
+    #[test]
+    fn test_detect_unexpected_shell_execution_patterns_returns_patterns_when_prompt_disallows_shell(
+    ) {
+        let prompt = "Show CPU usage in a rich UI";
+        let script_source = r#"
+import { execSync } from "child_process";
+await div(execSync("top -l 1").toString());
+"#;
+
+        let patterns = detect_unexpected_shell_execution_patterns(prompt, script_source);
+        assert_eq!(patterns, vec!["child_process", "execSync"]);
+    }
+
+    #[test]
+    fn test_detect_unexpected_shell_execution_patterns_returns_empty_when_prompt_allows_shell() {
+        let prompt = "Run a shell command in the terminal and show output";
+        let script_source = r#"
+import { execSync } from "child_process";
+await div(execSync("pwd").toString());
+"#;
+
+        let patterns = detect_unexpected_shell_execution_patterns(prompt, script_source);
+        assert!(patterns.is_empty());
     }
 
     #[test]
