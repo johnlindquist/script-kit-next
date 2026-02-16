@@ -10,6 +10,11 @@ impl ChatPrompt {
         let old_count = self.turns_list_state.item_count();
         if old_count != item_count {
             self.turns_list_state.splice(0..old_count, item_count);
+        } else if self.streaming_message_id.is_some() && item_count > 0 {
+            // Content within the streaming turn changed — invalidate its cached
+            // height so the list re-measures it on the next layout pass.
+            let last = item_count - 1;
+            self.turns_list_state.splice(last..item_count, 1);
         }
     }
 
@@ -54,8 +59,15 @@ impl ChatPrompt {
             self.user_has_scrolled_up = false;
         }
 
+        // Use scroll_to with a large offset_in_item to reach the actual bottom
+        // of the last (growing) turn, not just "reveal" it. This ensures the
+        // viewport follows content as a streaming item grows taller than the
+        // viewport (e.g., long markdown tables).
         if !self.user_has_scrolled_up {
-            self.turns_list_state.scroll_to_reveal_item(item_count - 1);
+            self.turns_list_state.scroll_to(ListOffset {
+                item_ix: item_count - 1,
+                offset_in_item: px(1_000_000.),
+            });
         }
     }
 
@@ -64,7 +76,10 @@ impl ChatPrompt {
         self.ensure_conversation_turns_cache();
         let item_count = self.conversation_turns_cache.len();
         if item_count > 0 {
-            self.turns_list_state.scroll_to_reveal_item(item_count - 1);
+            self.turns_list_state.scroll_to(ListOffset {
+                item_ix: item_count - 1,
+                offset_in_item: px(1_000_000.),
+            });
         }
     }
 

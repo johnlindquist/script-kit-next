@@ -8,9 +8,9 @@ use chrono::{Datelike, NaiveDate, Utc};
 use gpui::{
     div, hsla, img, list, point, prelude::*, px, rgba, size, svg, App, BoxShadow, Context,
     CursorStyle, Entity, ExternalPaths, FocusHandle, Focusable, IntoElement, KeyDownEvent,
-    ListAlignment, ListSizingBehavior, ListState, MouseMoveEvent, ParentElement, Render,
-    RenderImage, ScrollWheelEvent, SharedString, Styled, Subscription, Window, WindowBounds,
-    WindowOptions,
+    ListAlignment, ListOffset, ListSizingBehavior, ListState, MouseMoveEvent, ParentElement,
+    Render, RenderImage, ScrollWheelEvent, SharedString, Styled, Subscription, Window,
+    WindowBounds, WindowOptions,
 };
 
 use crate::designs::icon_variations::IconName as LocalIconName;
