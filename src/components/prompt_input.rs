@@ -374,7 +374,7 @@ impl PromptInput {
         let cursor_bg = if visible {
             self.colors.text_primary.to_rgb()
         } else {
-            0x000000u32.with_opacity(0.0)
+            self.colors.background.with_opacity(0.0)
         };
 
         div()
@@ -522,14 +522,30 @@ mod tests {
     #[test]
     fn test_prompt_input_render_does_not_hardcode_input_text_colors() {
         let source = prompt_input_production_source();
+        let hardcoded_rgb_pattern = "text_color(rgb(".to_owned() + "0x";
+        let hardcoded_rgba_pattern = "text_color(rgba(".to_owned() + "0x";
 
         assert!(
-            !source.contains("text_color(rgb(0x"),
+            !source.contains(&hardcoded_rgb_pattern),
             "PromptInput should not hardcode hex rgb text colors"
         );
         assert!(
-            !source.contains("text_color(rgba(0x"),
+            !source.contains(&hardcoded_rgba_pattern),
             "PromptInput should not hardcode hex rgba text colors"
+        );
+    }
+
+    #[test]
+    fn test_prompt_input_hidden_cursor_uses_theme_background_transparency() {
+        let source = prompt_input_production_source();
+
+        assert!(
+            source.contains("self.colors.background.with_opacity(0.0)"),
+            "PromptInput hidden cursor should derive transparent color from theme background token"
+        );
+        assert!(
+            !source.contains("0x000000u32.with_opacity(0.0)"),
+            "PromptInput hidden cursor should not hardcode black when transparent"
         );
     }
 }
