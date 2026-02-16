@@ -12,7 +12,7 @@
       "tertiary": "#999999",
       "muted": "#808080",
       "dimmed": "#666666",
-      "on_accent": "#1E1E1E"
+      "on_accent": "#FFFFFF"
     },
     "accent": {
       "selected": "#FBBF24",
