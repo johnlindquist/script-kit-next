@@ -9,6 +9,7 @@
 
 // --- merged from part_01.rs ---
 use serde::{Deserialize, Serialize};
+use std::cell::Cell;
 use std::fmt;
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
@@ -23,6 +24,16 @@ static THEME_CACHE: OnceLock<Mutex<ThemeCache>> = OnceLock::new();
 
 /// How long to cache the system appearance before re-detecting
 const APPEARANCE_CACHE_TTL: Duration = Duration::from_secs(5);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TerminalDefaultPalette {
+    Light,
+    Dark,
+}
+
+thread_local! {
+    static TERMINAL_DEFAULT_PALETTE_HINT: Cell<Option<TerminalDefaultPalette>> = const { Cell::new(None) };
+}
 
 #[derive(Debug)]
 struct AppearanceCache {
@@ -408,52 +419,52 @@ pub struct UIColors {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TerminalColors {
     /// ANSI 0: Black
-    #[serde(with = "hex_color_serde")]
+    #[serde(default = "default_terminal_black", with = "hex_color_serde")]
     pub black: HexColor,
     /// ANSI 1: Red
-    #[serde(with = "hex_color_serde")]
+    #[serde(default = "default_terminal_red", with = "hex_color_serde")]
     pub red: HexColor,
     /// ANSI 2: Green
-    #[serde(with = "hex_color_serde")]
+    #[serde(default = "default_terminal_green", with = "hex_color_serde")]
     pub green: HexColor,
     /// ANSI 3: Yellow
-    #[serde(with = "hex_color_serde")]
+    #[serde(default = "default_terminal_yellow", with = "hex_color_serde")]
     pub yellow: HexColor,
     /// ANSI 4: Blue
-    #[serde(with = "hex_color_serde")]
+    #[serde(default = "default_terminal_blue", with = "hex_color_serde")]
     pub blue: HexColor,
     /// ANSI 5: Magenta
-    #[serde(with = "hex_color_serde")]
+    #[serde(default = "default_terminal_magenta", with = "hex_color_serde")]
     pub magenta: HexColor,
     /// ANSI 6: Cyan
-    #[serde(with = "hex_color_serde")]
+    #[serde(default = "default_terminal_cyan", with = "hex_color_serde")]
     pub cyan: HexColor,
     /// ANSI 7: White
-    #[serde(with = "hex_color_serde")]
+    #[serde(default = "default_terminal_white", with = "hex_color_serde")]
     pub white: HexColor,
     /// ANSI 8: Bright Black (Gray)
-    #[serde(with = "hex_color_serde")]
+    #[serde(default = "default_terminal_bright_black", with = "hex_color_serde")]
     pub bright_black: HexColor,
     /// ANSI 9: Bright Red
-    #[serde(with = "hex_color_serde")]
+    #[serde(default = "default_terminal_bright_red", with = "hex_color_serde")]
     pub bright_red: HexColor,
     /// ANSI 10: Bright Green
-    #[serde(with = "hex_color_serde")]
+    #[serde(default = "default_terminal_bright_green", with = "hex_color_serde")]
     pub bright_green: HexColor,
     /// ANSI 11: Bright Yellow
-    #[serde(with = "hex_color_serde")]
+    #[serde(default = "default_terminal_bright_yellow", with = "hex_color_serde")]
     pub bright_yellow: HexColor,
     /// ANSI 12: Bright Blue
-    #[serde(with = "hex_color_serde")]
+    #[serde(default = "default_terminal_bright_blue", with = "hex_color_serde")]
     pub bright_blue: HexColor,
     /// ANSI 13: Bright Magenta
-    #[serde(with = "hex_color_serde")]
+    #[serde(default = "default_terminal_bright_magenta", with = "hex_color_serde")]
     pub bright_magenta: HexColor,
     /// ANSI 14: Bright Cyan
-    #[serde(with = "hex_color_serde")]
+    #[serde(default = "default_terminal_bright_cyan", with = "hex_color_serde")]
     pub bright_cyan: HexColor,
     /// ANSI 15: Bright White
-    #[serde(with = "hex_color_serde")]
+    #[serde(default = "default_terminal_bright_white", with = "hex_color_serde")]
     pub bright_white: HexColor,
 }
 
@@ -1195,15 +1206,78 @@ fn should_use_light_palette(appearance: AppearanceMode, is_system_dark: bool) ->
     }
 }
 
+fn terminal_palette_for_appearance(
+    appearance: AppearanceMode,
+    is_system_dark: bool,
+) -> TerminalDefaultPalette {
+    if should_use_light_palette(appearance, is_system_dark) {
+        TerminalDefaultPalette::Light
+    } else {
+        TerminalDefaultPalette::Dark
+    }
+}
+
+fn terminal_defaults_for_palette(palette: TerminalDefaultPalette) -> TerminalColors {
+    match palette {
+        TerminalDefaultPalette::Light => TerminalColors::light_default(),
+        TerminalDefaultPalette::Dark => TerminalColors::dark_default(),
+    }
+}
+
+fn with_terminal_default_palette_hint<T>(
+    palette: TerminalDefaultPalette,
+    f: impl FnOnce() -> T,
+) -> T {
+    TERMINAL_DEFAULT_PALETTE_HINT.with(|hint| {
+        let previous = hint.replace(Some(palette));
+        let result = f();
+        hint.set(previous);
+        result
+    })
+}
+
+fn terminal_default_palette_for_serde() -> TerminalDefaultPalette {
+    TERMINAL_DEFAULT_PALETTE_HINT
+        .with(Cell::get)
+        .unwrap_or_else(|| {
+            terminal_palette_for_appearance(AppearanceMode::Auto, detect_system_appearance())
+        })
+}
+
+fn terminal_defaults_for_serde_fallback() -> TerminalColors {
+    terminal_defaults_for_palette(terminal_default_palette_for_serde())
+}
+
+macro_rules! define_terminal_component_default {
+    ($fn_name:ident, $field:ident) => {
+        fn $fn_name() -> HexColor {
+            terminal_defaults_for_serde_fallback().$field
+        }
+    };
+}
+
+define_terminal_component_default!(default_terminal_black, black);
+define_terminal_component_default!(default_terminal_red, red);
+define_terminal_component_default!(default_terminal_green, green);
+define_terminal_component_default!(default_terminal_yellow, yellow);
+define_terminal_component_default!(default_terminal_blue, blue);
+define_terminal_component_default!(default_terminal_magenta, magenta);
+define_terminal_component_default!(default_terminal_cyan, cyan);
+define_terminal_component_default!(default_terminal_white, white);
+define_terminal_component_default!(default_terminal_bright_black, bright_black);
+define_terminal_component_default!(default_terminal_bright_red, bright_red);
+define_terminal_component_default!(default_terminal_bright_green, bright_green);
+define_terminal_component_default!(default_terminal_bright_yellow, bright_yellow);
+define_terminal_component_default!(default_terminal_bright_blue, bright_blue);
+define_terminal_component_default!(default_terminal_bright_magenta, bright_magenta);
+define_terminal_component_default!(default_terminal_bright_cyan, bright_cyan);
+define_terminal_component_default!(default_terminal_bright_white, bright_white);
+
 fn terminal_defaults_for_appearance(
     appearance: AppearanceMode,
     is_system_dark: bool,
 ) -> TerminalColors {
-    if should_use_light_palette(appearance, is_system_dark) {
-        TerminalColors::light_default()
-    } else {
-        TerminalColors::dark_default()
-    }
+    terminal_defaults_for_palette(terminal_palette_for_appearance(appearance, is_system_dark))
 }
 
 fn hydrate_terminal_colors_for_color_scheme_json(
@@ -1453,8 +1527,12 @@ pub fn load_theme() -> Theme {
 
                 merge_json(&mut merged_theme_json, user_theme_json);
                 hydrate_terminal_colors_for_deserialize(&mut merged_theme_json, is_system_dark);
+                let terminal_palette =
+                    terminal_palette_for_appearance(requested_appearance, is_system_dark);
 
-                match serde_json::from_value::<Theme>(merged_theme_json) {
+                match with_terminal_default_palette_hint(terminal_palette, || {
+                    serde_json::from_value::<Theme>(merged_theme_json)
+                }) {
                     Ok(mut theme) => {
                         debug!(
                             correlation_id = %correlation_id,
@@ -1808,6 +1886,32 @@ mod tests {
         assert_eq!(hydrated_terminal.red, 1_122_867);
         assert_eq!(hydrated_terminal.blue, dark_defaults.blue);
         assert_eq!(hydrated_terminal.bright_white, dark_defaults.bright_white);
+    }
+
+    #[test]
+    fn test_terminal_colors_serde_defaults_use_light_palette_when_light_hint_is_set() {
+        let terminal = with_terminal_default_palette_hint(TerminalDefaultPalette::Light, || {
+            serde_json::from_value::<TerminalColors>(serde_json::json!({ "red": 0x11_22_33 }))
+                .expect("deserialize terminal with light defaults")
+        });
+        let light_defaults = TerminalColors::light_default();
+
+        assert_eq!(terminal.red, 0x11_22_33);
+        assert_eq!(terminal.green, light_defaults.green);
+        assert_eq!(terminal.bright_white, light_defaults.bright_white);
+    }
+
+    #[test]
+    fn test_terminal_colors_serde_defaults_use_dark_palette_when_dark_hint_is_set() {
+        let terminal = with_terminal_default_palette_hint(TerminalDefaultPalette::Dark, || {
+            serde_json::from_value::<TerminalColors>(serde_json::json!({ "red": 0x22_33_44 }))
+                .expect("deserialize terminal with dark defaults")
+        });
+        let dark_defaults = TerminalColors::dark_default();
+
+        assert_eq!(terminal.red, 0x22_33_44);
+        assert_eq!(terminal.green, dark_defaults.green);
+        assert_eq!(terminal.bright_white, dark_defaults.bright_white);
     }
 
     #[test]
