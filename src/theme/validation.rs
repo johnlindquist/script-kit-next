@@ -173,6 +173,10 @@ const KNOWN_TOP_LEVEL_KEYS: &[&str] = &[
     "fonts",
 ];
 const KNOWN_COLOR_KEYS: &[&str] = &["background", "text", "accent", "ui", "terminal"];
+const KNOWN_FOCUS_AWARE_KEYS: &[&str] = &["focused", "unfocused"];
+const KNOWN_FOCUS_COLOR_SCHEME_KEYS: &[&str] =
+    &["background", "text", "accent", "ui", "cursor", "terminal"];
+const KNOWN_CURSOR_KEYS: &[&str] = &["color", "blink_interval_ms"];
 const KNOWN_BACKGROUND_KEYS: &[&str] = &["main", "title_bar", "search_box", "log_panel"];
 const KNOWN_TEXT_KEYS: &[&str] = &[
     "primary",
@@ -185,6 +189,8 @@ const KNOWN_TEXT_KEYS: &[&str] = &[
 const KNOWN_ACCENT_KEYS: &[&str] = &["selected", "selected_subtle"];
 const KNOWN_UI_KEYS: &[&str] = &["border", "success", "error", "warning", "info"];
 const KNOWN_TERMINAL_KEYS: &[&str] = &[
+    "foreground",
+    "background",
     "black",
     "red",
     "green",
@@ -239,6 +245,9 @@ pub fn validate_theme_json(json: &Value) -> ThemeDiagnostics {
         check_unknown_keys(&mut diags, "", map.keys(), KNOWN_TOP_LEVEL_KEYS);
         if let Some(colors) = map.get("colors") {
             validate_colors(&mut diags, "/colors", colors);
+        }
+        if let Some(focus_aware) = map.get("focus_aware") {
+            validate_focus_aware(&mut diags, "/focus_aware", focus_aware);
         }
         if let Some(opacity) = map.get("opacity") {
             validate_opacity(&mut diags, "/opacity", opacity);
@@ -315,6 +324,90 @@ fn validate_colors(diags: &mut ThemeDiagnostics, path: &str, colors: &Value) {
         }
     } else {
         diags.error(path, "colors must be an object");
+    }
+}
+
+fn validate_focus_aware(diags: &mut ThemeDiagnostics, path: &str, focus_aware: &Value) {
+    if let Value::Object(map) = focus_aware {
+        check_unknown_keys(diags, path, map.keys(), KNOWN_FOCUS_AWARE_KEYS);
+
+        if let Some(focused) = map.get("focused") {
+            validate_focus_color_scheme(diags, &format!("{}/focused", path), focused);
+        }
+
+        if let Some(unfocused) = map.get("unfocused") {
+            validate_focus_color_scheme(diags, &format!("{}/unfocused", path), unfocused);
+        }
+    } else {
+        diags.error(path, "focus_aware must be an object");
+    }
+}
+
+fn validate_focus_color_scheme(diags: &mut ThemeDiagnostics, path: &str, scheme: &Value) {
+    if let Value::Object(map) = scheme {
+        check_unknown_keys(diags, path, map.keys(), KNOWN_FOCUS_COLOR_SCHEME_KEYS);
+
+        if let Some(bg) = map.get("background") {
+            validate_color_object(
+                diags,
+                &format!("{}/background", path),
+                bg,
+                KNOWN_BACKGROUND_KEYS,
+            );
+        }
+
+        if let Some(text) = map.get("text") {
+            validate_color_object(diags, &format!("{}/text", path), text, KNOWN_TEXT_KEYS);
+        }
+
+        if let Some(accent) = map.get("accent") {
+            validate_color_object(
+                diags,
+                &format!("{}/accent", path),
+                accent,
+                KNOWN_ACCENT_KEYS,
+            );
+        }
+
+        if let Some(ui) = map.get("ui") {
+            validate_color_object(diags, &format!("{}/ui", path), ui, KNOWN_UI_KEYS);
+        }
+
+        if let Some(cursor) = map.get("cursor") {
+            validate_cursor(diags, &format!("{}/cursor", path), cursor);
+        }
+
+        if let Some(terminal) = map.get("terminal") {
+            validate_color_object(
+                diags,
+                &format!("{}/terminal", path),
+                terminal,
+                KNOWN_TERMINAL_KEYS,
+            );
+        }
+    } else {
+        diags.error(path, "Expected an object");
+    }
+}
+
+fn validate_cursor(diags: &mut ThemeDiagnostics, path: &str, cursor: &Value) {
+    if let Value::Object(map) = cursor {
+        check_unknown_keys(diags, path, map.keys(), KNOWN_CURSOR_KEYS);
+
+        if let Some(color) = map.get("color") {
+            validate_color_value(diags, &format!("{}/color", path), color);
+        }
+
+        if let Some(blink_interval_ms) = map.get("blink_interval_ms") {
+            if !blink_interval_ms.is_u64() {
+                diags.error(
+                    format!("{}/blink_interval_ms", path),
+                    "blink_interval_ms must be a non-negative integer",
+                );
+            }
+        }
+    } else {
+        diags.error(path, "cursor must be an object");
     }
 }
 

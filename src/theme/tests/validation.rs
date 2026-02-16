@@ -115,6 +115,24 @@ fn test_validate_allows_focus_aware_key_without_unknown_warning() {
 }
 
 #[test]
+fn test_validate_warns_on_unknown_focus_aware_sub_object_key() {
+    let json = json!({
+        "focus_aware": {
+            "focused": {},
+            "unfocused": {},
+            "other_state": {}
+        }
+    });
+    let diags = validate_theme_json(&json);
+
+    assert!(diags.has_warnings());
+    assert!(diags
+        .diagnostics
+        .iter()
+        .any(|d| d.path == "/focus_aware/other_state" && d.message.contains("Unknown key 'other_state'")));
+}
+
+#[test]
 fn test_validate_valid_color_number() {
     let json = json!({
         "colors": {
@@ -331,6 +349,21 @@ fn test_validate_valid_terminal_colors() {
 }
 
 #[test]
+fn test_validate_terminal_allows_foreground_and_background_keys() {
+    let json = json!({
+        "colors": {
+            "terminal": {
+                "foreground": "#d4d4d4",
+                "background": "#1e1e1e",
+                "bright_white": "#ffffff"
+            }
+        }
+    });
+    let diags = validate_theme_json(&json);
+    assert!(diags.is_ok());
+}
+
+#[test]
 fn test_validate_unknown_terminal_key() {
     let json = json!({
         "colors": {
@@ -345,6 +378,25 @@ fn test_validate_unknown_terminal_key() {
         .diagnostics
         .iter()
         .any(|d| d.message.contains("not_a_color")));
+}
+
+#[test]
+fn test_validate_focus_aware_terminal_unknown_key() {
+    let json = json!({
+        "focus_aware": {
+            "focused": {
+                "terminal": {
+                    "not_a_color": "#000000"
+                }
+            }
+        }
+    });
+    let diags = validate_theme_json(&json);
+    assert!(diags.has_warnings());
+    assert!(diags.diagnostics.iter().any(|d| {
+        d.path == "/focus_aware/focused/terminal/not_a_color"
+            && d.message.contains("Unknown key 'not_a_color'")
+    }));
 }
 
 #[test]

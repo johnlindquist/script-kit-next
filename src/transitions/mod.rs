@@ -207,6 +207,22 @@ mod tests {
         assert!((ease_in_out_quad(0.5) - 0.5).abs() < f32::EPSILON);
     }
 
+    #[test]
+    fn test_ease_out_cubic_returns_endpoints_and_fast_start() {
+        assert!((ease_out_cubic(0.0) - 0.0).abs() < f32::EPSILON);
+        assert!((ease_out_cubic(1.0) - 1.0).abs() < f32::EPSILON);
+        // t=0.5 should be > 0.5 for ease-out behavior
+        assert!(ease_out_cubic(0.5) > 0.5);
+    }
+
+    #[test]
+    fn test_ease_in_cubic_returns_endpoints_and_slow_start() {
+        assert!((ease_in_cubic(0.0) - 0.0).abs() < f32::EPSILON);
+        assert!((ease_in_cubic(1.0) - 1.0).abs() < f32::EPSILON);
+        // t=0.5 should be < 0.5 for ease-in behavior
+        assert!(ease_in_cubic(0.5) < 0.5);
+    }
+
     // -------------------------------------------------------------------------
     // Opacity Lerp Tests
     // -------------------------------------------------------------------------
@@ -242,6 +258,13 @@ mod tests {
 
         let clamped = Opacity::new(-0.5);
         assert!((clamped.0 - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_opacity_default_and_value_accessor() {
+        let default_opacity = Opacity::default();
+        assert!((default_opacity.value() - 1.0).abs() < f32::EPSILON);
+        assert!((Opacity::HALF.value() - 0.5).abs() < f32::EPSILON);
     }
 
     // -------------------------------------------------------------------------
