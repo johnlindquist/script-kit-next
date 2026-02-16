@@ -316,6 +316,7 @@ impl ChatPrompt {
                     if let Ok(mut content) = content_clone.lock() {
                         content.push_str(&chunk);
                     }
+                    true
                 }),
                 Some(&session_id),
             );

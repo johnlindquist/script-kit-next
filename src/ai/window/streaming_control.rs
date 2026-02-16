@@ -11,6 +11,7 @@ impl AiApp {
         self.streaming_content.clear();
         self.streaming_chat_id = Some(chat_id);
         self.streaming_generation = self.streaming_generation.wrapping_add(1);
+        self.streaming_cancel = None;
         self.streaming_started_at = Some(std::time::Instant::now());
         let generation = self.streaming_generation;
 
@@ -174,6 +175,7 @@ impl AiApp {
         self.is_streaming = false;
         self.streaming_content.clear();
         self.streaming_chat_id = None;
+        self.streaming_cancel = None;
         self.streaming_started_at = None;
         cx.notify();
     }
@@ -182,6 +184,10 @@ impl AiApp {
     pub(super) fn stop_streaming(&mut self, cx: &mut Context<Self>) {
         if !self.is_streaming {
             return;
+        }
+
+        if let Some(cancelled) = self.streaming_cancel.take() {
+            cancelled.store(true, std::sync::atomic::Ordering::SeqCst);
         }
 
         let chat_id = match self.streaming_chat_id {

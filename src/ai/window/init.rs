@@ -190,6 +190,7 @@ impl AiApp {
             streaming_content: String::new(),
             streaming_chat_id: None,
             streaming_generation: 0,
+            streaming_cancel: None,
             suppressed_orphan_sessions: std::collections::HashSet::new(),
             current_messages,
             messages_list_state: ListState::new(

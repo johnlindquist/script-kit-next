@@ -57,6 +57,10 @@ pub struct AiApp {
     /// Incremented each time streaming starts. Old streaming updates become no-ops.
     pub(super) streaming_generation: u64,
 
+    /// Cancellation flag for the currently active provider stream.
+    /// Set by stop_streaming and checked by chunk callbacks.
+    pub(crate) streaming_cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+
     /// Streaming sessions where stale completion persistence should be skipped.
     /// Used when a stream is explicitly stopped or the source chat is deleted.
     pub(super) suppressed_orphan_sessions: std::collections::HashSet<StreamingSessionKey>,

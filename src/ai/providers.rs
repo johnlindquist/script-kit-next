@@ -366,7 +366,7 @@ impl ProviderMessage {
 }
 
 /// Callback type for streaming responses.
-pub type StreamCallback = Box<dyn Fn(String) + Send + Sync>;
+pub type StreamCallback = Box<dyn Fn(String) -> bool + Send + Sync>;
 
 /// Trait defining the interface for AI providers.
 ///
@@ -653,7 +653,9 @@ impl AiProvider for OpenAiProvider {
                     .and_then(|delta| delta.get("content"))
                     .and_then(|c| c.as_str())
                 {
-                    on_chunk(content.to_string());
+                    if !on_chunk(content.to_string()) {
+                        return Ok(false);
+                    }
                 }
             }
             Ok(true) // continue processing
@@ -913,7 +915,9 @@ impl AiProvider for AnthropicProvider {
                     if let Some(delta) = parsed.get("delta") {
                         if delta.get("type").and_then(|t| t.as_str()) == Some("text_delta") {
                             if let Some(text) = delta.get("text").and_then(|t| t.as_str()) {
-                                on_chunk(text.to_string());
+                                if !on_chunk(text.to_string()) {
+                                    return Ok(false);
+                                }
                             }
                         }
                     }
@@ -981,7 +985,9 @@ impl AiProvider for GoogleProvider {
         let response = self.send_message(messages, model_id)?;
 
         for word in response.split_whitespace() {
-            on_chunk(format!("{} ", word));
+            if !on_chunk(format!("{} ", word)) {
+                break;
+            }
         }
 
         Ok(())
@@ -1041,7 +1047,9 @@ impl AiProvider for GroqProvider {
         let response = self.send_message(messages, model_id)?;
 
         for word in response.split_whitespace() {
-            on_chunk(format!("{} ", word));
+            if !on_chunk(format!("{} ", word)) {
+                break;
+            }
         }
 
         Ok(())
@@ -1359,7 +1367,9 @@ impl AiProvider for VercelGatewayProvider {
                     .and_then(|delta| delta.get("content"))
                     .and_then(|c| c.as_str())
                 {
-                    on_chunk(content.to_string());
+                    if !on_chunk(content.to_string()) {
+                        return Ok(false);
+                    }
                 }
             }
             Ok(true) // continue processing
@@ -1752,7 +1762,11 @@ impl ClaudeCodeProvider {
                             if let Some(text) = event["delta"].get("text").and_then(|x| x.as_str())
                             {
                                 saw_text_delta = true;
-                                on_chunk(text.to_string());
+                                if !on_chunk(text.to_string()) {
+                                    let _ = child.kill();
+                                    let _ = child.wait();
+                                    return Ok(final_result.unwrap_or_default());
+                                }
                             }
                         }
                     }
@@ -1771,8 +1785,10 @@ impl ClaudeCodeProvider {
                                     }
                                 }
                             }
-                            if !text.is_empty() {
-                                on_chunk(text.clone());
+                            if !text.is_empty() && !on_chunk(text.clone()) {
+                                let _ = child.kill();
+                                let _ = child.wait();
+                                return Ok(final_result.unwrap_or_default());
                             }
                         }
                     }
@@ -1868,7 +1884,7 @@ impl AiProvider for ClaudeCodeProvider {
 
         // Use a no-op callback since we don't need streaming for send_message
         // send_message is always a new session (no persistence)
-        let noop: StreamCallback = Box::new(|_| {});
+        let noop: StreamCallback = Box::new(|_| true);
         self.stream_claude_once(
             &session_id,
             model_id,
@@ -1926,7 +1942,7 @@ impl AiProvider for ClaudeCodeProvider {
                         chunk_len = chunk.len(),
                         "Persistent session chunk received"
                     );
-                    on_chunk(chunk.to_string());
+                    let _ = on_chunk(chunk.to_string());
                 },
             ) {
                 Ok(result) => {
@@ -2198,6 +2214,7 @@ mod tests {
                         .lock()
                         .unwrap_or_else(|e| e.into_inner())
                         .push(chunk);
+                    true
                 }),
                 None,
             )
@@ -2899,6 +2916,7 @@ mod tests {
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .push(chunk);
+                true
             }),
             Some("test-session"),
         );
