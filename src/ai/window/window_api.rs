@@ -114,7 +114,7 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
     info!("Opening new AI window");
 
     // Load theme to determine window background appearance (vibrancy)
-    let theme = crate::theme::load_theme();
+    let theme = crate::theme::get_cached_theme();
     let window_background = if theme.is_vibrancy_enabled() {
         gpui::WindowBackgroundAppearance::Blurred
     } else {
