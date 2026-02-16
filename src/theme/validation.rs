@@ -432,7 +432,7 @@ fn validate_color_value(diags: &mut ThemeDiagnostics, path: &str, value: &Value)
         Value::Number(n) => {
             if let Some(v) = n.as_u64() {
                 if v > 0xFFFFFF {
-                    diags.warning(path, "Color value exceeds 0xFFFFFF (16777215)");
+                    diags.error(path, "Color value exceeds 0xFFFFFF (16777215)");
                 }
             } else if let Some(v) = n.as_i64() {
                 if v < 0 {

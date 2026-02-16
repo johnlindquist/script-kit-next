@@ -2,7 +2,7 @@ use gpui::*;
 
 use crate::scripts::SearchResult;
 
-use super::colors::TerminalColors;
+use super::colors::{color_hsla, color_rgba, TerminalColors};
 use super::constants::{
     ASCII_FOOTER_BORDER_BOTTOM, ASCII_HEADER_BORDER_TOP, ASCII_HEADER_TITLE_LINE,
     ASCII_SECTION_SEPARATOR, EMPTY_FILTER_MESSAGE, TERMINAL_CURSOR_HIDDEN, TERMINAL_CURSOR_VISIBLE,
@@ -13,16 +13,12 @@ use super::constants::{
 ///
 /// Implements a classic CRT terminal aesthetic with green phosphor text,
 /// scanline effects, and ASCII box drawing characters.
-pub struct RetroTerminalRenderer {
-    colors: TerminalColors,
-}
+pub struct RetroTerminalRenderer;
 
 impl RetroTerminalRenderer {
     /// Create a new retro terminal renderer with default colors
     pub fn new() -> Self {
-        Self {
-            colors: TerminalColors::default(),
-        }
+        Self
     }
 
     /// Render a single terminal list item
@@ -32,7 +28,7 @@ impl RetroTerminalRenderer {
         index: usize,
         is_selected: bool,
     ) -> impl IntoElement {
-        let colors = self.colors;
+        let colors = TerminalColors::default();
 
         // Get name and convert to UPPERCASE for terminal aesthetic
         let name = result.name().to_uppercase();
@@ -52,7 +48,7 @@ impl RetroTerminalRenderer {
 
         // Scanline effect: slightly darker background on odd rows
         let row_bg = if !is_selected && index % 2 == 1 {
-            rgba((colors.scanline << 8) | 0x40) // Very subtle darker stripe
+            color_rgba(colors.scanline, 0.25)
         } else {
             bg_color
         };
@@ -60,7 +56,7 @@ impl RetroTerminalRenderer {
         // Create glow shadow for selected items
         let shadows = if is_selected {
             vec![BoxShadow {
-                color: hsla(120.0 / 360.0, 1.0, 0.5, 0.6), // Green glow
+                color: color_hsla(colors.glow, 0.60),
                 offset: point(px(0.), px(0.)),
                 blur_radius: px(8.),
                 spread_radius: px(0.),
@@ -89,7 +85,7 @@ impl RetroTerminalRenderer {
 
     /// Render the search input with terminal prompt style
     pub fn render_search_input(&self, filter_text: &str, cursor_visible: bool) -> impl IntoElement {
-        let colors = self.colors;
+        let colors = TerminalColors::default();
 
         let cursor = if cursor_visible {
             TERMINAL_CURSOR_VISIBLE
@@ -114,7 +110,7 @@ impl RetroTerminalRenderer {
             .text_sm()
             .text_color(rgb(colors.phosphor))
             .shadow(vec![BoxShadow {
-                color: hsla(120.0 / 360.0, 1.0, 0.5, 0.3), // Subtle green glow
+                color: color_hsla(colors.glow, 0.30),
                 offset: point(px(0.), px(0.)),
                 blur_radius: px(4.),
                 spread_radius: px(0.),
@@ -124,7 +120,7 @@ impl RetroTerminalRenderer {
 
     /// Render the terminal header with ASCII box characters
     pub fn render_header(&self) -> impl IntoElement {
-        let colors = self.colors;
+        let colors = TerminalColors::default();
 
         div()
             .w_full()
@@ -146,7 +142,7 @@ impl RetroTerminalRenderer {
 
     /// Render the terminal footer with ASCII box characters
     pub fn render_footer(&self, item_count: usize) -> impl IntoElement {
-        let colors = self.colors;
+        let colors = TerminalColors::default();
 
         let status = format!("│ {} ITEMS LOADED                         │", item_count);
 
@@ -165,7 +161,7 @@ impl RetroTerminalRenderer {
 
     /// Render empty state message
     pub fn render_empty_state(&self, filter_text: &str) -> impl IntoElement {
-        let colors = self.colors;
+        let colors = TerminalColors::default();
 
         let message = if filter_text.is_empty() {
             EMPTY_FILTER_MESSAGE.to_string()
