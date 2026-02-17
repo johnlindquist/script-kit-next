@@ -431,8 +431,16 @@ fn validate_color_value(diags: &mut ThemeDiagnostics, path: &str, value: &Value)
     match value {
         Value::Number(n) => {
             if let Some(v) = n.as_u64() {
-                if v > 0xFFFFFF {
-                    diags.error(path, "Color value exceeds 0xFFFFFF (16777215)");
+                if v > 0xFFFF_FFFF {
+                    diags.error(
+                        path,
+                        "Color value exceeds 0xFFFFFFFF — expected RGB (0xRRGGBB) or RGBA (0xRRGGBBAA)",
+                    );
+                } else if v > 0x00FF_FFFF {
+                    diags.warning(
+                        path,
+                        "Numeric color includes alpha channel (0xRRGGBBAA) — alpha will be stripped",
+                    );
                 }
             } else if let Some(v) = n.as_i64() {
                 if v < 0 {
