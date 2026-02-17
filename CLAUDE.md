@@ -26,8 +26,10 @@ After the gate passes, verify the change actually works:
 | Action | Command |
 |--------|---------|
 | Check | `cargo check` |
+| Format check | `cargo fmt --check` |
 | Lint | `cargo clippy --all-targets -- -D warnings` |
 | Test | `cargo test` |
+| Test (CI) | `cargo nextest run` |
 | Test (system) | `cargo test --features system-tests` |
 | Test (slow) | `cargo test --features slow-tests` |
 | Run | `echo '{"type":"show"}' \| SCRIPT_KIT_AI_LOG=1 ./target/debug/script-kit-gpui 2>&1` |
