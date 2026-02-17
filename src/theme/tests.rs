@@ -1,5 +1,6 @@
-use super::{hex_color::hex_color_serde, presets, Theme};
+use super::{hex_color::hex_color_serde, presets, validation, Theme};
 use serde::Serialize;
+use serde_json::json;
 
 const THEME_DARK_DEFAULT_GOLDEN: &str =
     include_str!("../../tests/theme/snapshots/theme_dark_default.json");
@@ -114,6 +115,98 @@ fn snapshot_color_string_parse_matrix() {
         "color_string_parse_matrix",
         &actual,
         COLOR_STRING_PARSE_MATRIX_GOLDEN,
+    );
+}
+
+#[test]
+fn test_validate_theme_json_accepts_numeric_rgb_color_value() {
+    let theme_json = json!({
+        "colors": {
+            "background": {
+                "main": 0x001E_1E1E
+            }
+        }
+    });
+
+    let diagnostics = validation::validate_theme_json(&theme_json);
+
+    assert_eq!(
+        diagnostics.error_count(),
+        0,
+        "RGB numeric values should remain valid"
+    );
+    assert_eq!(
+        diagnostics.warning_count(),
+        0,
+        "RGB numeric values should not emit warnings"
+    );
+}
+
+#[test]
+fn test_validate_theme_json_warns_when_numeric_color_includes_alpha_channel() {
+    let theme_json = json!({
+        "colors": {
+            "background": {
+                "main": 0x1E1E_1E80
+            }
+        }
+    });
+
+    let diagnostics = validation::validate_theme_json(&theme_json);
+
+    assert_eq!(
+        diagnostics.error_count(),
+        0,
+        "RGBA numeric values within u32 range should not be hard errors"
+    );
+    assert_eq!(
+        diagnostics.warning_count(),
+        1,
+        "RGBA numeric values should emit an alpha-stripping warning"
+    );
+
+    let warning = diagnostics
+        .diagnostics
+        .first()
+        .expect("expected warning diagnostic");
+    assert_eq!(warning.path, "/colors/background/main");
+    assert_eq!(
+        warning.message,
+        "Numeric color includes alpha channel (0xRRGGBBAA) — alpha will be stripped"
+    );
+}
+
+#[test]
+fn test_validate_theme_json_errors_when_numeric_color_exceeds_u32_range() {
+    let theme_json = json!({
+        "colors": {
+            "background": {
+                "main": 0x0001_0000_0000u64
+            }
+        }
+    });
+
+    let diagnostics = validation::validate_theme_json(&theme_json);
+
+    assert_eq!(
+        diagnostics.error_count(),
+        1,
+        "values above 0xFFFFFFFF should produce an error"
+    );
+    assert_eq!(
+        diagnostics.warning_count(),
+        0,
+        "out-of-range values should fail validation instead of warning"
+    );
+
+    let error = diagnostics
+        .diagnostics
+        .first()
+        .expect("expected error diagnostic");
+    assert_eq!(error.path, "/colors/background/main");
+    assert_eq!(
+        error.message,
+        "Color value exceeds 0xFFFFFFFF — expected RGB (0xRRGGBB) or RGBA (0xRRGGBBAA)"
     );
 }
 
