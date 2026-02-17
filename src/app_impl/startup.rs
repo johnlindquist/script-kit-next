@@ -269,6 +269,16 @@ impl ScriptListApp {
                     this.handle_filter_input_change(window, cx);
                 }
                 InputEvent::PressEnter { .. } => {
+                    if !script_kit_gpui::is_main_window_visible() {
+                        logging::log("KEY", "Ignoring PressEnter: main window not visible");
+                        return;
+                    }
+
+                    if script_kit_gpui::is_within_focus_grace_period() {
+                        logging::log("KEY", "Ignoring PressEnter: within focus grace period");
+                        return;
+                    }
+
                     if matches!(this.current_view, AppView::ScriptList) && !this.show_actions_popup
                     {
                         // Check if we're in fallback mode first
