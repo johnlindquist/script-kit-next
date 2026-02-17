@@ -234,14 +234,31 @@ impl ScriptListApp {
         self.sync_filter_input_if_needed(window, cx);
     }
 
+    fn request_focus_restore_for_actions_host(&mut self, host: ActionsDialogHost) {
+        use crate::focus_coordinator::FocusRequest;
+
+        let request = match host {
+            ActionsDialogHost::ArgPrompt => FocusRequest::arg_prompt(),
+            ActionsDialogHost::ChatPrompt => FocusRequest::chat_prompt(),
+            ActionsDialogHost::EditorPrompt => FocusRequest::editor_prompt(),
+            ActionsDialogHost::FormPrompt => FocusRequest::form_prompt(),
+            ActionsDialogHost::DivPrompt => FocusRequest::div_prompt(),
+            ActionsDialogHost::TermPrompt => FocusRequest::term_prompt(),
+            ActionsDialogHost::WebcamPrompt => FocusRequest::div_prompt(),
+            ActionsDialogHost::MainList
+            | ActionsDialogHost::FileSearch
+            | ActionsDialogHost::ClipboardHistory
+            | ActionsDialogHost::EmojiPicker => FocusRequest::main_filter(),
+        };
+
+        self.focus_coordinator.request(request);
+        self.sync_coordinator_to_legacy();
+    }
+
     /// Close the actions popup and restore focus based on host type.
     ///
     /// This centralizes close behavior, ensuring cx.notify() is always called
     /// and focus is correctly restored based on which prompt hosted the dialog.
-    ///
-    /// NOTE: The `host` parameter is now deprecated. Focus restoration is handled
-    /// automatically by the FocusCoordinator's overlay stack. The host is kept
-    /// for logging purposes only.
     pub(crate) fn close_actions_popup(
         &mut self,
         host: ActionsDialogHost,
@@ -290,6 +307,8 @@ impl ScriptListApp {
         if !callback_restored_focus {
             self.pop_focus_overlay(cx);
         }
+
+        self.request_focus_restore_for_actions_host(host);
 
         // Apply restored focus immediately rather than deferring to next render.
         // pop_focus_overlay sets pending_focus to the saved target (e.g. ChatPrompt).
@@ -377,5 +396,58 @@ mod close_actions_popup_regression_tests {
             fallback_focus_pos < notify_pos,
             "close_actions_popup must notify after focus restore paths complete"
         );
+    }
+
+    #[test]
+    fn test_close_actions_popup_restores_host_focus_before_apply_pending_focus() {
+        let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
+            .expect("Failed to read src/app_impl/actions_dialog.rs");
+        let close_fn_start = source
+            .find("pub(crate) fn close_actions_popup")
+            .expect("close_actions_popup function not found");
+        let close_fn = &source[close_fn_start..];
+
+        let host_restore_pos = close_fn
+            .find("self.request_focus_restore_for_actions_host(host);")
+            .expect("close_actions_popup must request host-specific focus restore");
+        let apply_pending_pos = close_fn
+            .find("if !self.apply_pending_focus(window, cx) {")
+            .expect("close_actions_popup must apply pending focus after host restore");
+
+        assert!(
+            host_restore_pos < apply_pending_pos,
+            "close_actions_popup should request host-specific focus before applying pending focus"
+        );
+    }
+
+    #[test]
+    fn test_actions_host_focus_restore_maps_prompt_hosts() {
+        let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
+            .expect("Failed to read src/app_impl/actions_dialog.rs");
+        let helper_start = source
+            .find("fn request_focus_restore_for_actions_host")
+            .expect("request_focus_restore_for_actions_host function not found");
+        let helper_fn = &source[helper_start..];
+
+        for expected in [
+            "ActionsDialogHost::ArgPrompt => FocusRequest::arg_prompt()",
+            "ActionsDialogHost::ChatPrompt => FocusRequest::chat_prompt()",
+            "ActionsDialogHost::EditorPrompt => FocusRequest::editor_prompt()",
+            "ActionsDialogHost::FormPrompt => FocusRequest::form_prompt()",
+            "ActionsDialogHost::DivPrompt => FocusRequest::div_prompt()",
+            "ActionsDialogHost::TermPrompt => FocusRequest::term_prompt()",
+            "ActionsDialogHost::WebcamPrompt => FocusRequest::div_prompt()",
+            "ActionsDialogHost::MainList",
+            "ActionsDialogHost::FileSearch",
+            "ActionsDialogHost::ClipboardHistory",
+            "ActionsDialogHost::EmojiPicker",
+            "FocusRequest::main_filter()",
+        ] {
+            assert!(
+                helper_fn.contains(expected),
+                "request_focus_restore_for_actions_host should include mapping fragment: {}",
+                expected
+            );
+        }
     }
 }
