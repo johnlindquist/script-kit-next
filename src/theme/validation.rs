@@ -446,6 +446,11 @@ fn validate_color_value(diags: &mut ThemeDiagnostics, path: &str, value: &Value)
                 if v < 0 {
                     diags.error(path, "Color value cannot be negative");
                 }
+            } else {
+                diags.error(
+                    path,
+                    "Color value must be an integer — channel values must be 0-255",
+                );
             }
         }
         Value::String(s) => {
