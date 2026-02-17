@@ -1,6 +1,14 @@
+use super::types::*;
 use super::*;
 
 impl AiApp {
+    pub(super) fn setup_export_command() -> String {
+        format!(
+            "export {}=\"your-key-here\"",
+            crate::ai::config::env_vars::VERCEL_API_KEY
+        )
+    }
+
     pub(super) fn get_selected_chat(&self) -> Option<&Chat> {
         self.selected_chat_id
             .and_then(|id| self.chats.iter().find(|c| c.id == id))
@@ -12,16 +20,16 @@ impl AiApp {
         // Style the container and use appearance(false) on Input to remove its default white background
         // Use vibrancy-compatible background: white with low alpha (similar to selected items)
         let search_bg = cx.theme().muted.opacity(0.4);
-        let border_color = cx.theme().border.opacity(0.3);
+        let border_color = cx.theme().border.opacity(0.35);
 
         div()
             .id("search-container")
             .w_full()
-            .h(TITLEBAR_H) // Fixed height to prevent layout shift
+            .h(SEARCH_H) // Fixed height to prevent layout shift
             .flex()
             .items_center()
-            .px_2()
-            .rounded_md()
+            .px(SIDEBAR_INSET_X)
+            .rounded(R_MD)
             .border_1()
             .border_color(border_color)
             .bg(search_bg) // Vibrancy-compatible semi-transparent background
@@ -47,10 +55,11 @@ impl AiApp {
 
     /// Copy the setup command to clipboard and show feedback
     pub(super) fn copy_setup_command(&mut self, cx: &mut Context<Self>) {
-        let setup_command = "export SCRIPT_KIT_ANTHROPIC_API_KEY=\"your-key-here\"";
-        let item = gpui::ClipboardItem::new_string(setup_command.to_string());
+        let setup_command = Self::setup_export_command();
+        let item = gpui::ClipboardItem::new_string(setup_command);
         cx.write_to_clipboard(item);
-        self.setup_copied_at = Some(std::time::Instant::now());
+        let copied_at = std::time::Instant::now();
+        self.setup_copied_at = Some(copied_at);
         info!("Setup command copied to clipboard");
         cx.notify();
 
@@ -59,8 +68,10 @@ impl AiApp {
             gpui::Timer::after(std::time::Duration::from_millis(2000)).await;
             let _ = cx.update(|cx| {
                 this.update(cx, |this, cx| {
-                    this.setup_copied_at = None;
-                    cx.notify();
+                    if this.setup_copied_at == Some(copied_at) {
+                        this.setup_copied_at = None;
+                        cx.notify();
+                    }
                 })
             });
         })
@@ -313,5 +324,19 @@ impl AiApp {
         self.focus_input(window, cx);
 
         cx.notify();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AiApp;
+
+    #[test]
+    fn test_setup_export_command_uses_vercel_api_key_env_var() {
+        let expected = format!(
+            "export {}=\"your-key-here\"",
+            crate::ai::config::env_vars::VERCEL_API_KEY
+        );
+        assert_eq!(AiApp::setup_export_command(), expected);
     }
 }
