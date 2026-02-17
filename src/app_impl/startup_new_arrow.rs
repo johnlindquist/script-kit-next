@@ -11,9 +11,12 @@
                 }
 
                 // intercept_keystrokes is GLOBAL and fires for ALL windows in the app.
-                // Keep main list arrow routing scoped to the main window so notes/AI
+                // Keep main list arrow routing scoped to the main window so notes/AI/actions
                 // windows receive their own navigation key events.
-                if crate::notes::is_notes_window(window) || crate::ai::is_ai_window(window) {
+                if crate::notes::is_notes_window(window)
+                    || crate::ai::is_ai_window(window)
+                    || crate::actions::is_actions_window(window)
+                {
                     return;
                 }
 
@@ -379,8 +382,11 @@
                     return;
                 }
 
-                // Skip processing if this keystroke is from Notes or AI window
-                if crate::notes::is_notes_window(window) || crate::ai::is_ai_window(window) {
+                // Skip processing if this keystroke is from a secondary window
+                if crate::notes::is_notes_window(window)
+                    || crate::ai::is_ai_window(window)
+                    || crate::actions::is_actions_window(window)
+                {
                     return;
                 }
 

@@ -10,10 +10,14 @@
                     return;
                 }
 
-                // CRITICAL: Skip processing if this keystroke is from Notes or AI window
-                // intercept_keystrokes is GLOBAL and fires for ALL windows in the app
-                // We only want to handle keystrokes for the main window
-                if crate::notes::is_notes_window(window) || crate::ai::is_ai_window(window) {
+                // CRITICAL: Skip processing if this keystroke is from a secondary window.
+                // intercept_keystrokes is GLOBAL and fires for ALL windows in the app.
+                // We only want to handle keystrokes for the main window.
+                // The actions popup manages its own Escape/Enter/arrows in ActionsWindow::render().
+                if crate::notes::is_notes_window(window)
+                    || crate::ai::is_ai_window(window)
+                    || crate::actions::is_actions_window(window)
+                {
                     return; // Let the secondary window handle its own keystrokes
                 }
 
