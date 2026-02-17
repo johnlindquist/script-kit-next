@@ -143,6 +143,40 @@ fn test_validate_theme_json_accepts_numeric_rgb_color_value() {
 }
 
 #[test]
+fn test_validate_theme_json_errors_when_numeric_color_is_float() {
+    let theme_json = json!({
+        "colors": {
+            "background": {
+                "main": 1.5
+            }
+        }
+    });
+
+    let diagnostics = validation::validate_theme_json(&theme_json);
+
+    assert_eq!(
+        diagnostics.error_count(),
+        1,
+        "floating-point numeric color values should fail validation"
+    );
+    assert_eq!(
+        diagnostics.warning_count(),
+        0,
+        "floating-point numeric color values should be hard errors"
+    );
+
+    let error = diagnostics
+        .diagnostics
+        .first()
+        .expect("expected error diagnostic");
+    assert_eq!(error.path, "/colors/background/main");
+    assert_eq!(
+        error.message,
+        "Color value must be an integer — channel values must be 0-255"
+    );
+}
+
+#[test]
 fn test_validate_theme_json_warns_when_numeric_color_includes_alpha_channel() {
     let theme_json = json!({
         "colors": {
