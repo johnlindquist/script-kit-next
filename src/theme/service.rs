@@ -29,6 +29,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use gpui::{App, Timer};
 use tracing::{debug, error, info, warn};
 
+use super::types::AppearanceMode;
 use crate::watcher::ThemeWatcher;
 use crate::windows;
 
@@ -154,6 +155,14 @@ fn validate_theme_json_before_reload() {
     }
 }
 
+fn should_reload_theme(
+    file_changed: bool,
+    appearance_changed: bool,
+    auto_appearance: bool,
+) -> bool {
+    file_changed || (appearance_changed && auto_appearance)
+}
+
 /// Ensure the global theme service is running.
 ///
 /// This is idempotent - calling it multiple times is safe and will only
@@ -183,6 +192,7 @@ pub fn ensure_theme_service(cx: &mut App) {
 
         // Adaptive polling: starts at 200ms, increases to 2s when idle
         let mut idle_count = 0u32;
+        let mut last_system_dark = super::types::detect_system_appearance();
         loop {
             // Adaptive polling: 200ms when active, up to 2000ms when idle
             let poll_interval = if u64::from(idle_count) < FAST_POLL_IDLE_CUTOFF {
@@ -194,13 +204,24 @@ pub fn ensure_theme_service(cx: &mut App) {
             };
             Timer::after(std::time::Duration::from_millis(poll_interval)).await;
 
-            if rx.try_recv().is_ok() {
+            let file_changed = rx.try_recv().is_ok();
+            let current_system_dark = super::types::detect_system_appearance();
+            let appearance_changed = current_system_dark != last_system_dark;
+            last_system_dark = current_system_dark;
+            let auto_appearance = matches!(
+                super::types::get_cached_theme().appearance,
+                AppearanceMode::Auto
+            );
+
+            if should_reload_theme(file_changed, appearance_changed, auto_appearance) {
                 idle_count = 0; // Reset on activity
-                info!("Theme changed, syncing to all windows");
 
                 // Reload the theme cache FIRST (before syncing)
                 // This ensures get_cached_theme() returns fresh data
-                validate_theme_json_before_reload();
+                if file_changed {
+                    info!("Theme changed, syncing to all windows");
+                    validate_theme_json_before_reload();
+                }
                 crate::theme::reload_theme_cache();
 
                 let update_result = cx.update(|cx| {
@@ -307,5 +328,20 @@ mod tests {
 
         assert_eq!(warning_count, 0);
         assert_eq!(error_count, 0);
+    }
+
+    #[test]
+    fn test_should_reload_theme_when_file_changes() {
+        assert!(should_reload_theme(true, false, false));
+    }
+
+    #[test]
+    fn test_should_reload_theme_when_appearance_changes_in_auto_mode() {
+        assert!(should_reload_theme(false, true, true));
+    }
+
+    #[test]
+    fn test_should_not_reload_theme_when_appearance_changes_outside_auto_mode() {
+        assert!(!should_reload_theme(false, true, false));
     }
 }
