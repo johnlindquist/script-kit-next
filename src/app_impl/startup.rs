@@ -269,6 +269,20 @@ impl ScriptListApp {
                     this.handle_filter_input_change(window, cx);
                 }
                 InputEvent::PressEnter { .. } => {
+                    logging::log(
+                        "KEY",
+                        &format!(
+                            "PressEnter event: visible={}, grace={}, view={:?}, actions_popup={}, fallback_mode={}, selected_index={}, filter_len={}",
+                            script_kit_gpui::is_main_window_visible(),
+                            script_kit_gpui::is_within_focus_grace_period(),
+                            std::mem::discriminant(&this.current_view),
+                            this.show_actions_popup,
+                            this.fallback_mode,
+                            this.selected_index,
+                            this.filter_text.len()
+                        ),
+                    );
+
                     if !script_kit_gpui::is_main_window_visible() {
                         logging::log("KEY", "Ignoring PressEnter: main window not visible");
                         return;
