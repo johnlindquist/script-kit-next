@@ -12,6 +12,7 @@ use syntect::easy::HighlightLines;
 use syntect::highlighting::{Style, Theme, ThemeSet};
 use syntect::parsing::SyntaxSet;
 use syntect::util::LinesWithEndings;
+use tracing::warn;
 
 // =============================================================================
 // Fallback text colors — used when syntect returns no style for a token.
@@ -79,12 +80,13 @@ fn dark_theme() -> &'static Theme {
             .get("base16-ocean.dark")
             .cloned()
             .unwrap_or_else(|| {
-                themes
-                    .themes
-                    .values()
-                    .next()
-                    .cloned()
-                    .expect("syntect ThemeSet should contain at least one theme")
+                match themes.themes.values().next().cloned() {
+                    Some(theme) => theme,
+                    None => {
+                        warn!("Failed to find dark theme in defaults, using fallback");
+                        Theme::default()
+                    }
+                }
             })
     })
 }
@@ -97,12 +99,13 @@ fn light_theme() -> &'static Theme {
             .get("base16-ocean.light")
             .cloned()
             .unwrap_or_else(|| {
-                themes
-                    .themes
-                    .values()
-                    .next()
-                    .cloned()
-                    .expect("syntect ThemeSet should contain at least one theme")
+                match themes.themes.values().next().cloned() {
+                    Some(theme) => theme,
+                    None => {
+                        warn!("Failed to find light theme in defaults, using fallback");
+                        Theme::default()
+                    }
+                }
             })
     })
 }

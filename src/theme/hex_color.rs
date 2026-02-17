@@ -24,6 +24,7 @@ pub mod hex_color_serde {
     use super::*;
     use serde::de::{self, Visitor};
     use std::fmt;
+    use tracing::warn;
 
     pub fn serialize<S>(color: &HexColor, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -50,12 +51,7 @@ pub mod hex_color_serde {
             where
                 E: de::Error,
             {
-                if value > 0xFFFFFF {
-                    return Err(de::Error::custom(
-                        "color value exceeds 0xFFFFFF; use hex string for RRGGBBAA",
-                    ));
-                }
-                Ok(value as HexColor)
+                parse_numeric_color(value).map_err(de::Error::custom)
             }
 
             fn visit_i64<E>(self, value: i64) -> Result<HexColor, E>
@@ -65,7 +61,7 @@ pub mod hex_color_serde {
                 if value < 0 {
                     return Err(de::Error::custom("color value cannot be negative"));
                 }
-                self.visit_u64(value as u64)
+                parse_numeric_color(value as u64).map_err(de::Error::custom)
             }
 
             fn visit_str<E>(self, value: &str) -> Result<HexColor, E>
@@ -77,6 +73,28 @@ pub mod hex_color_serde {
         }
 
         deserializer.deserialize_any(HexColorVisitor)
+    }
+
+    pub(crate) fn parse_numeric_color(value: u64) -> Result<HexColor, String> {
+        if value <= 0xFFFFFF {
+            return Ok(value as HexColor);
+        }
+
+        if value <= 0xFFFFFFFF {
+            let rgb = value >> 8;
+            warn!(
+                value,
+                alpha = value & 0xFF,
+                rgb,
+                "numeric color includes alpha channel; stripping alpha component"
+            );
+            return Ok(rgb as HexColor);
+        }
+
+        Err(format!(
+            "color value exceeds 0xFFFFFFFF: {}. Expected RGB (0xRRGGBB) or RGBA (0xRRGGBBAA)",
+            value
+        ))
     }
 
     /// Parse a color string into a HexColor
@@ -99,6 +117,11 @@ pub mod hex_color_serde {
                 let r: u8 = parts[0].parse().map_err(|_| "invalid red value")?;
                 let g: u8 = parts[1].parse().map_err(|_| "invalid green value")?;
                 let b: u8 = parts[2].parse().map_err(|_| "invalid blue value")?;
+                warn!(
+                    input = s,
+                    alpha = parts[3],
+                    "rgba() alpha channel is not supported for HexColor; stripping alpha component"
+                );
                 // Alpha is ignored for HexColor (RGB only)
                 return Ok(((r as u32) << 16) | ((g as u32) << 8) | (b as u32));
             }
@@ -145,10 +168,19 @@ pub mod hex_color_serde {
                 expanded
             }
             6 => hex.to_string(),
-            8 => hex
-                .get(..6)
-                .ok_or_else(|| format!("invalid hex color: {}", hex))?
-                .to_string(),
+            8 => {
+                let rgb = hex
+                    .get(..6)
+                    .ok_or_else(|| format!("invalid hex color: {}", hex))?;
+                let alpha = hex
+                    .get(6..8)
+                    .ok_or_else(|| format!("invalid hex color: {}", hex))?;
+                warn!(
+                    input = hex,
+                    alpha, "hex color includes alpha channel; stripping alpha component"
+                );
+                rgb.to_string()
+            }
             _ => {
                 return Err(format!(
                     "hex color must be 3, 6, or 8 characters, got {}",
@@ -191,9 +223,17 @@ pub mod hex_color_serde {
         }
 
         #[test]
-        fn test_deserialize_rejects_u64_above_0xffffff() {
-            let parsed = serde_json::from_str::<HexColorWrapper>(r#"{"color":16777216}"#);
-            assert!(parsed.is_err(), "value above 0xFFFFFF should fail");
+        fn test_deserialize_accepts_u64_rgba_by_stripping_alpha() {
+            let parsed = serde_json::from_str::<HexColorWrapper>(r#"{"color":505290495}"#)
+                .expect("rgba numeric value should parse by stripping alpha");
+
+            assert_eq!(parsed.color, 0x1E1E1E);
+        }
+
+        #[test]
+        fn test_deserialize_rejects_u64_above_0xffffffff() {
+            let parsed = serde_json::from_str::<HexColorWrapper>(r#"{"color":4294967296}"#);
+            assert!(parsed.is_err(), "value above 0xFFFFFFFF should fail");
         }
 
         #[test]
@@ -221,6 +261,15 @@ pub mod hex_color_serde {
         fn test_parse_color_string_ignores_alpha_when_hex_len_is_8() {
             assert_eq!(
                 parse_color_string("1E1E1EFF").expect("8-digit hex should parse as RGB"),
+                0x1E1E1E
+            );
+        }
+
+        #[test]
+        fn test_parse_color_string_ignores_alpha_when_rgba_function_is_used() {
+            assert_eq!(
+                parse_color_string("rgba(30, 30, 30, 0.5)")
+                    .expect("rgba() string should parse as RGB"),
                 0x1E1E1E
             );
         }
@@ -278,29 +327,46 @@ pub mod hex_color_option_serde {
         let value = Option::<ColorInput>::deserialize(deserializer)?;
         match value {
             None => Ok(None),
-            Some(ColorInput::Unsigned(v)) => {
-                if v > 0xFFFFFF {
-                    return Err(de::Error::custom(
-                        "color value exceeds 0xFFFFFF; use hex string for RRGGBBAA",
-                    ));
-                }
-                Ok(Some(v as HexColor))
-            }
+            Some(ColorInput::Unsigned(v)) => hex_color_serde::parse_numeric_color(v)
+                .map(Some)
+                .map_err(de::Error::custom),
             Some(ColorInput::Signed(v)) => {
                 if v < 0 {
                     return Err(de::Error::custom("color value cannot be negative"));
                 }
-                if v as u64 > 0xFFFFFF {
-                    return Err(de::Error::custom(
-                        "color value exceeds 0xFFFFFF; use hex string for RRGGBBAA",
-                    ));
-                }
-                Ok(Some(v as HexColor))
+                hex_color_serde::parse_numeric_color(v as u64)
+                    .map(Some)
+                    .map_err(de::Error::custom)
             }
             Some(ColorInput::Text(s)) => {
                 let parsed = hex_color_serde::parse_color_string(&s).map_err(de::Error::custom)?;
                 Ok(Some(parsed))
             }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::HexColor;
+        use serde::Deserialize;
+
+        #[derive(Debug, Deserialize)]
+        struct OptionalHexColorWrapper {
+            #[serde(deserialize_with = "super::deserialize")]
+            color: Option<HexColor>,
+        }
+
+        #[test]
+        fn test_deserialize_option_accepts_u64_rgba_by_stripping_alpha() {
+            let parsed = serde_json::from_str::<OptionalHexColorWrapper>(r#"{"color":505290495}"#)
+                .expect("rgba numeric value should parse by stripping alpha");
+            assert_eq!(parsed.color, Some(0x1E1E1E));
+        }
+
+        #[test]
+        fn test_deserialize_option_rejects_u64_above_0xffffffff() {
+            let parsed = serde_json::from_str::<OptionalHexColorWrapper>(r#"{"color":4294967296}"#);
+            assert!(parsed.is_err(), "value above 0xFFFFFFFF should fail");
         }
     }
 }
