@@ -79,13 +79,11 @@ fn dark_theme() -> &'static Theme {
             .themes
             .get("base16-ocean.dark")
             .cloned()
-            .unwrap_or_else(|| {
-                match themes.themes.values().next().cloned() {
-                    Some(theme) => theme,
-                    None => {
-                        warn!("Failed to find dark theme in defaults, using fallback");
-                        Theme::default()
-                    }
+            .unwrap_or_else(|| match themes.themes.values().next().cloned() {
+                Some(theme) => theme,
+                None => {
+                    warn!("Failed to find dark theme in defaults, using fallback");
+                    Theme::default()
                 }
             })
     })
@@ -98,13 +96,11 @@ fn light_theme() -> &'static Theme {
             .themes
             .get("base16-ocean.light")
             .cloned()
-            .unwrap_or_else(|| {
-                match themes.themes.values().next().cloned() {
-                    Some(theme) => theme,
-                    None => {
-                        warn!("Failed to find light theme in defaults, using fallback");
-                        Theme::default()
-                    }
+            .unwrap_or_else(|| match themes.themes.values().next().cloned() {
+                Some(theme) => theme,
+                None => {
+                    warn!("Failed to find light theme in defaults, using fallback");
+                    Theme::default()
                 }
             })
     })
