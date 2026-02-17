@@ -324,7 +324,7 @@ pub fn request_show_main_window() {
 static WINDOW_SHOWN_AT: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
 
 /// Grace period in milliseconds after showing window during which focus loss is ignored
-const FOCUS_LOSS_GRACE_PERIOD_MS: u64 = 200;
+const FOCUS_LOSS_GRACE_PERIOD_MS: u64 = 400;
 
 /// Mark the window as just shown (call from show_main_window_helper)
 pub fn mark_window_shown() {
@@ -348,6 +348,35 @@ pub fn is_within_focus_grace_period() -> bool {
 #[cfg(test)]
 mod main_menu_input_guard_tests {
     use std::fs;
+
+    #[test]
+    fn test_focus_grace_period_window_is_400ms() {
+        let lib_source = fs::read_to_string("src/lib.rs").expect("Failed to read src/lib.rs");
+        assert!(
+            lib_source.contains("const FOCUS_LOSS_GRACE_PERIOD_MS: u64 = 400;"),
+            "Focus loss grace period should be 400ms"
+        );
+    }
+
+    #[test]
+    fn test_main_render_resets_grace_timer_when_focus_is_regained() {
+        let render_impl = fs::read_to_string("src/main_sections/render_impl.rs")
+            .expect("Failed to read src/main_sections/render_impl.rs");
+        assert!(
+            render_impl.contains("if !self.was_window_focused && is_window_focused {"),
+            "Main render should detect focus gained transition"
+        );
+        assert!(
+            render_impl.contains("script_kit_gpui::mark_window_shown();"),
+            "Focus gained transition should reset window shown timestamp"
+        );
+        assert!(
+            render_impl.contains(
+                "logging::log(\"FOCUS\", \"Main window gained focus - resetting grace timer\");"
+            ),
+            "Focus gained transition should emit grace timer reset log"
+        );
+    }
 
     #[test]
     fn test_execute_selected_ignores_stale_input_when_window_just_opened() {
