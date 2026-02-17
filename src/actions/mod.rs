@@ -47,8 +47,8 @@ pub use types::{
 
 // Window functions for separate vibrancy window
 pub use window::{
-    close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
-    resize_actions_window, WindowPosition,
+    close_actions_window, is_actions_window, is_actions_window_open, notify_actions_window,
+    open_actions_window, resize_actions_window, WindowPosition,
 };
 // get_actions_window_handle available but not re-exported (use window:: directly if needed)
 

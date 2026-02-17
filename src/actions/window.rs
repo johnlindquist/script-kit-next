@@ -265,12 +265,16 @@ impl ActionsWindow {
             ),
         );
 
-        if let Some(on_close) = self.dialog.read(cx).on_close.clone() {
-            on_close(cx);
-        }
-
+        // Activate the main window BEFORE scheduling focus restoration.
+        // macOS window activation is async; starting it early gives the OS
+        // more time to make the main window key before the deferred
+        // on_close callback runs and sets pending focus.
         if activate_main_window {
             platform::activate_main_window();
+        }
+
+        if let Some(on_close) = self.dialog.read(cx).on_close.clone() {
+            on_close(cx);
         }
 
         Self::defer_close(window, cx, reason);
@@ -902,6 +906,22 @@ pub fn close_actions_window(cx: &mut App) {
     }
 }
 
+/// Check if the given window handle matches the actions window.
+///
+/// Used by keystroke interceptors to avoid handling keys meant for the
+/// actions popup (which manages its own Escape / Enter / arrows).
+pub fn is_actions_window(window: &gpui::Window) -> bool {
+    if let Some(window_storage) = ACTIONS_WINDOW.get() {
+        if let Ok(guard) = window_storage.lock() {
+            if let Some(actions_handle) = guard.as_ref() {
+                let actions_any: gpui::AnyWindowHandle = (*actions_handle).into();
+                return window.window_handle() == actions_any;
+            }
+        }
+    }
+    false
+}
+
 /// Check if the actions window is currently open
 pub fn is_actions_window_open() -> bool {
     if let Some(window_storage) = ACTIONS_WINDOW.get() {
@@ -1246,6 +1266,51 @@ mod resize_instant_tests {
         assert!(
             !flag,
             "Actions window resize must stay instant with animation disabled"
+        );
+    }
+}
+
+#[cfg(test)]
+mod request_close_ordering_tests {
+    use std::fs;
+
+    #[test]
+    fn test_request_close_activates_main_window_before_on_close_callback() {
+        let source = fs::read_to_string("src/actions/window.rs")
+            .expect("Failed to read src/actions/window.rs");
+
+        let start = source
+            .find("fn request_close")
+            .expect("Expected request_close function in src/actions/window.rs");
+        let end = source[start..]
+            .find("Self::defer_close")
+            .map(|idx| start + idx)
+            .expect("Expected defer_close call in request_close");
+        let body = &source[start..end];
+
+        let activate_idx = body
+            .find("platform::activate_main_window")
+            .expect("Expected activate_main_window call in request_close");
+        let on_close_idx = body
+            .find("on_close(cx)")
+            .expect("Expected on_close(cx) invocation in request_close");
+
+        assert!(
+            activate_idx < on_close_idx,
+            "request_close must activate the main window BEFORE scheduling focus restoration \
+             via on_close callback. macOS window activation is async — starting it earlier \
+             gives the OS time to make the main window key before the deferred callback runs."
+        );
+    }
+
+    #[test]
+    fn test_is_actions_window_function_exists() {
+        let source = fs::read_to_string("src/actions/window.rs")
+            .expect("Failed to read src/actions/window.rs");
+
+        assert!(
+            source.contains("pub fn is_actions_window(window: &gpui::Window) -> bool"),
+            "window.rs must export is_actions_window(window) for keystroke interceptor guards"
         );
     }
 }

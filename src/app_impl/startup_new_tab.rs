@@ -11,6 +11,11 @@
                     return;
                 }
 
+                // Skip keystrokes from secondary windows
+                if crate::actions::is_actions_window(window) {
+                    return;
+                }
+
                 let key = event.keystroke.key.as_str();
                 let is_tab_key = key.eq_ignore_ascii_case("tab");
                 let has_shift = event.keystroke.modifiers.shift;

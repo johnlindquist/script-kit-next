@@ -400,4 +400,44 @@ mod tests {
             "Arrow key handlers must call stop_propagation after routing to actions dialog"
         );
     }
+
+    /// All global keystroke interceptors must guard against the actions popup window.
+    ///
+    /// The actions window (ActionsWindow) handles its own Escape, Enter, arrows, etc.
+    /// If the main window's interceptors also process those keystrokes, they pass the
+    /// WRONG window reference to focus restoration code, breaking Escape-to-close.
+    ///
+    /// This test ensures every interceptor file that checks for Notes/AI windows
+    /// also checks for the actions window, preventing the class of bugs where
+    /// interceptors steal keystrokes from the actions popup.
+    #[test]
+    fn test_all_interceptors_guard_against_actions_window_keystrokes() {
+        let interceptor_files = [
+            "src/app_impl/startup.rs",
+            "src/app_impl/startup_new_actions.rs",
+            "src/app_impl/startup_new_arrow.rs",
+            "src/app_impl/startup_new_tab.rs",
+        ];
+
+        for file_path in &interceptor_files {
+            let source = fs::read_to_string(file_path)
+                .unwrap_or_else(|_| panic!("Failed to read {}", file_path));
+
+            // Count how many interceptor guards check for notes/ai windows
+            let notes_guard_count = source.matches("is_notes_window(window)").count();
+            let actions_guard_count = source.matches("is_actions_window(window)").count();
+
+            // Every interceptor that guards against notes windows must also guard
+            // against the actions window. The actions window manages its own keys.
+            assert!(
+                actions_guard_count >= notes_guard_count,
+                "{}: has {} notes window guard(s) but only {} actions window guard(s). \
+                 Every intercept_keystrokes guard that checks is_notes_window must also \
+                 check is_actions_window to prevent stealing keystrokes from the actions popup.",
+                file_path,
+                notes_guard_count,
+                actions_guard_count
+            );
+        }
+    }
 }
