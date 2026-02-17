@@ -57,11 +57,13 @@ After the gate passes, verify the change actually works:
 
 ## Architecture Quick Ref
 
-- Built-in commands: `BuiltInFeature` enum → `get_builtin_entries()` → `execute_builtin()` → `AppView` variant → render
-- Non-dismissable views: add to `is_dismissable_view()` in `app_impl.rs`
+- Built-in commands: `BuiltInFeature` (`src/builtins/mod.rs`) → `get_builtin_entries()` (startup/search) → `execute_builtin()` (`src/app_execute/builtin_execution.rs`) → `AppView` (`src/main_sections/app_view_state.rs`) → render dispatch (`src/main_sections/render_impl.rs`)
+- Built-in caveat: some built-ins open external windows or perform side effects without setting `AppView` (AI/Notes/system/menu/quicklinks paths in `src/app_execute/builtin_execution.rs`)
+- Non-dismissable views: add to `is_dismissable_view()` in `src/app_impl/shortcuts_hud_grid.rs`
 - Vibrancy: prompts should NOT set opaque bg — let vibrancy show through from Root
-- Render wrappers: `render_prompts/other.rs` wraps prompt entities, `prompts/*.rs` are inner components
-- Protocol: bidirectional JSONL over stdin/stdout between bun scripts and Rust app — see `docs/PROTOCOL.md`
+- Prompt rendering split: `src/render_prompts/*.rs` are outer wrappers; `src/prompts/**` are inner prompt entities (Arg prompt remains inline in `src/render_prompts/arg.rs`)
+- Protocol: bidirectional JSONL over stdin/stdout between bun scripts and Rust app — see `docs/PROTOCOL.md`, runtime code in `src/protocol/**` and `src/stdin_commands/mod.rs`
+- Organization: there is no monolithic `app_impl.rs`; app logic is split across `src/main_sections/`, `src/app_impl/`, `src/app_execute/`, and `src/render_*` modules
 
 ## Consistency Rules (Non-Negotiable)
 
