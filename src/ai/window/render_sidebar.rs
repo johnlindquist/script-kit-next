@@ -1,6 +1,20 @@
+use super::types::*;
 use super::*;
 
 impl AiApp {
+    pub(super) fn sidebar_list_splice_plan(
+        old_count: usize,
+        item_count: usize,
+    ) -> Option<(std::ops::Range<usize>, usize)> {
+        if item_count > old_count {
+            Some((old_count..old_count, item_count - old_count))
+        } else if item_count < old_count {
+            Some((item_count..old_count, 0))
+        } else {
+            None
+        }
+    }
+
     pub(super) fn render_sidebar_toggle(&self, cx: &mut Context<Self>) -> impl IntoElement {
         // Use opacity to indicate state - dimmed when collapsed
         let icon_color = if self.sidebar_collapsed {
@@ -39,8 +53,8 @@ impl AiApp {
 
     pub(super) fn sync_sidebar_list_item_count(&mut self, item_count: usize) {
         let old_count = self.sidebar_list_state.item_count();
-        if old_count != item_count {
-            self.sidebar_list_state.splice(0..old_count, item_count);
+        if let Some((range, insert_count)) = Self::sidebar_list_splice_plan(old_count, item_count) {
+            self.sidebar_list_state.splice(range, insert_count);
         }
     }
 
@@ -76,8 +90,8 @@ impl AiApp {
         })
         .with_sizing_behavior(ListSizingBehavior::Infer)
         .size_full()
-        .px_2()
-        .pb_2();
+        .px(SIDEBAR_INSET_X)
+        .pb(S2);
 
         // Build a custom sidebar with date groupings using divs
         // This gives us more control over the layout than SidebarGroup
@@ -89,17 +103,15 @@ impl AiApp {
             // NO .bg() - let vibrancy show through from root
             .border_r_1()
             .border_color(cx.theme().sidebar_border)
-            // Spacer for titlebar height (toggle button is now absolutely positioned in main container)
-            .child(div().h(TITLEBAR_H))
             // Header with new chat button and search
             .child(
                 div()
                     .flex()
                     .flex_col()
                     .w_full()
-                    .px_2()
-                    .pb_2()
-                    .gap_2()
+                    .px(SIDEBAR_INSET_X)
+                    .pb(S2)
+                    .gap(S2)
                     // New chat button row with preset dropdown option
                     .child(
                         div()
@@ -194,7 +206,7 @@ impl AiApp {
                             .justify_center()
                             .flex_1()
                             .py_8()
-                            .gap_2()
+                            .gap(S2)
                             .child(
                                 svg()
                                     .external_path(LocalIconName::MagnifyingGlass.external_path())
@@ -269,5 +281,28 @@ impl AiApp {
                     }),
             )
             .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AiApp;
+
+    #[test]
+    fn test_sidebar_list_splice_plan_appends_when_item_count_grows() {
+        let plan = AiApp::sidebar_list_splice_plan(3, 6);
+        assert_eq!(plan, Some((3..3, 3)));
+    }
+
+    #[test]
+    fn test_sidebar_list_splice_plan_truncates_when_item_count_shrinks() {
+        let plan = AiApp::sidebar_list_splice_plan(6, 3);
+        assert_eq!(plan, Some((3..6, 0)));
+    }
+
+    #[test]
+    fn test_sidebar_list_splice_plan_returns_none_when_count_unchanged() {
+        let plan = AiApp::sidebar_list_splice_plan(4, 4);
+        assert_eq!(plan, None);
     }
 }
