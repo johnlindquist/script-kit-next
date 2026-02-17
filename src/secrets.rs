@@ -73,22 +73,27 @@ fn secrets_cache() -> &'static Mutex<Option<HashMap<String, SecretEntry>>> {
 }
 
 /// Get cached secrets, loading from disk if not yet cached.
-fn get_cached_secrets() -> HashMap<String, SecretEntry> {
-    let mut guard = secrets_cache().lock().expect("Secrets cache lock poisoned");
+fn get_cached_secrets() -> anyhow::Result<HashMap<String, SecretEntry>> {
+    let mut guard = secrets_cache()
+        .lock()
+        .map_err(|e| anyhow::anyhow!("Secrets cache lock poisoned: {e}"))?;
     if let Some(ref secrets) = *guard {
-        return secrets.clone();
+        return Ok(secrets.clone());
     }
 
     // First access - load from disk and cache
     let secrets = load_secrets_from_disk();
     *guard = Some(secrets.clone());
-    secrets
+    Ok(secrets)
 }
 
 /// Update the cache after a write operation.
-fn update_cache(secrets: HashMap<String, SecretEntry>) {
-    let mut guard = secrets_cache().lock().expect("Secrets cache lock poisoned");
+fn update_cache(secrets: HashMap<String, SecretEntry>) -> anyhow::Result<()> {
+    let mut guard = secrets_cache()
+        .lock()
+        .map_err(|e| anyhow::anyhow!("Secrets cache lock poisoned: {e}"))?;
     *guard = Some(secrets);
+    Ok(())
 }
 
 /// Warm up the secrets cache (call at app startup).
@@ -96,7 +101,10 @@ fn update_cache(secrets: HashMap<String, SecretEntry>) {
 pub fn warmup_cache() {
     std::thread::spawn(|| {
         let start = std::time::Instant::now();
-        let secrets = get_cached_secrets();
+        let secrets = get_cached_secrets().unwrap_or_else(|e| {
+            tracing::error!("Failed to warm secrets cache: {e}");
+            HashMap::new()
+        });
         let elapsed = start.elapsed();
         logging::log(
             "SECRETS",
@@ -113,9 +121,10 @@ pub fn warmup_cache() {
 const APP_IDENTIFIER: &str = "com.scriptkit.secrets";
 
 /// Get the path to the secrets file
-fn secrets_path() -> PathBuf {
-    let home = dirs::home_dir().expect("Could not determine home directory");
-    home.join(".scriptkit").join("secrets.age")
+fn secrets_path() -> anyhow::Result<PathBuf> {
+    let home =
+        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
+    Ok(home.join(".scriptkit").join("secrets.age"))
 }
 
 /// Derive a machine-specific passphrase
@@ -137,7 +146,13 @@ fn derive_passphrase() -> SecretString {
 /// Handles migration from old format (HashMap<String, String>) to new format
 /// (HashMap<String, SecretEntry>) automatically.
 fn load_secrets_from_disk() -> HashMap<String, SecretEntry> {
-    let path = secrets_path();
+    let path = match secrets_path() {
+        Ok(path) => path,
+        Err(e) => {
+            tracing::error!("Failed to resolve secrets path when loading from disk: {e}");
+            return HashMap::new();
+        }
+    };
 
     if !path.exists() {
         return HashMap::new();
@@ -223,7 +238,7 @@ fn load_secrets_from_disk() -> HashMap<String, SecretEntry> {
 
 /// Encrypt and save the secrets store
 fn save_secrets(secrets: &HashMap<String, SecretEntry>) -> Result<(), String> {
-    let path = secrets_path();
+    let path = secrets_path().map_err(|e| format!("Failed to resolve secrets path: {e}"))?;
 
     // Ensure parent directory exists
     if let Some(parent) = path.parent() {
@@ -292,7 +307,10 @@ fn save_secrets(secrets: &HashMap<String, SecretEntry>) -> Result<(), String> {
 /// }
 /// ```
 pub fn get_secret(key: &str) -> Option<String> {
-    let secrets = get_cached_secrets();
+    let secrets = get_cached_secrets().unwrap_or_else(|e| {
+        tracing::error!("Failed to get cached secrets for get_secret: {e}");
+        HashMap::new()
+    });
     let result = secrets.get(key).map(|entry| entry.value.clone());
 
     if result.is_some() {
@@ -317,7 +335,10 @@ pub fn get_secret(key: &str) -> Option<String> {
 /// }
 /// ```
 pub fn get_secret_info(key: &str) -> Option<SecretInfo> {
-    let secrets = get_cached_secrets();
+    let secrets = get_cached_secrets().unwrap_or_else(|e| {
+        tracing::error!("Failed to get cached secrets for get_secret_info: {e}");
+        HashMap::new()
+    });
     let result = secrets
         .get(key)
         .map(|entry| SecretInfo::from(entry.clone()));
@@ -344,7 +365,8 @@ pub fn get_secret_info(key: &str) -> Option<SecretInfo> {
 /// set_secret("OPENAI_API_KEY", "sk-...")?;
 /// ```
 pub fn set_secret(key: &str, value: &str) -> Result<(), String> {
-    let mut secrets = get_cached_secrets();
+    let mut secrets = get_cached_secrets()
+        .map_err(|e| format!("Failed to get cached secrets for set_secret: {e}"))?;
     secrets.insert(
         key.to_string(),
         SecretEntry {
@@ -355,7 +377,7 @@ pub fn set_secret(key: &str, value: &str) -> Result<(), String> {
     save_secrets(&secrets)?;
 
     // Update the in-memory cache
-    update_cache(secrets);
+    update_cache(secrets).map_err(|e| format!("Failed to update secrets cache: {e}"))?;
 
     logging::log("SECRETS", &format!("Stored secret for key: {}", key));
     Ok(())
@@ -370,12 +392,13 @@ pub fn set_secret(key: &str, value: &str) -> Result<(), String> {
 /// delete_secret("OPENAI_API_KEY")?;
 /// ```
 pub fn delete_secret(key: &str) -> Result<(), String> {
-    let mut secrets = get_cached_secrets();
+    let mut secrets = get_cached_secrets()
+        .map_err(|e| format!("Failed to get cached secrets for delete_secret: {e}"))?;
 
     if secrets.remove(key).is_some() {
         save_secrets(&secrets)?;
         // Update the in-memory cache
-        update_cache(secrets);
+        update_cache(secrets).map_err(|e| format!("Failed to update secrets cache: {e}"))?;
         logging::log("SECRETS", &format!("Deleted secret for key: {}", key));
     } else {
         logging::log("SECRETS", &format!("No secret to delete for key: {}", key));
@@ -398,7 +421,7 @@ mod tests {
 
     #[test]
     fn test_secrets_path() {
-        let path = secrets_path();
+        let path = secrets_path().expect("secrets path should resolve in tests");
         assert!(path.ends_with("secrets.age"));
         assert!(path.to_string_lossy().contains(".scriptkit"));
     }
