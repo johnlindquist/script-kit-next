@@ -54,7 +54,6 @@ impl Default for AppearanceCache {
 #[derive(Debug, Clone)]
 struct ThemeCache {
     theme: Theme,
-    loaded_at: Instant,
 }
 
 impl Default for ThemeCache {
@@ -62,7 +61,6 @@ impl Default for ThemeCache {
         // Create with a dark default theme - will be replaced on first load
         Self {
             theme: Theme::dark_default(),
-            loaded_at: Instant::now() - Duration::from_secs(3600), // Force reload
         }
     }
 }
@@ -1236,6 +1234,23 @@ fn should_use_light_palette(appearance: AppearanceMode, is_system_dark: bool) ->
     }
 }
 
+fn set_requested_appearance_on_theme_json(
+    merged_theme_json: &mut serde_json::Value,
+    requested_appearance: AppearanceMode,
+) {
+    if let Some(map) = merged_theme_json.as_object_mut() {
+        let appearance_str = match requested_appearance {
+            AppearanceMode::Auto => "auto",
+            AppearanceMode::Light => "light",
+            AppearanceMode::Dark => "dark",
+        };
+        map.insert(
+            "appearance".to_string(),
+            serde_json::Value::String(appearance_str.to_string()),
+        );
+    }
+}
+
 fn terminal_palette_for_appearance(
     appearance: AppearanceMode,
     is_system_dark: bool,
@@ -1556,6 +1571,10 @@ pub fn load_theme() -> Theme {
                 };
 
                 merge_json(&mut merged_theme_json, user_theme_json);
+                set_requested_appearance_on_theme_json(
+                    &mut merged_theme_json,
+                    requested_appearance,
+                );
                 hydrate_terminal_colors_for_deserialize(&mut merged_theme_json, is_system_dark);
                 let terminal_palette =
                     terminal_palette_for_appearance(requested_appearance, is_system_dark);
@@ -1656,14 +1675,14 @@ pub fn load_theme() -> Theme {
 /// - After explicitly invalidating the cache
 pub fn get_cached_theme() -> Theme {
     let cache = THEME_CACHE.get_or_init(|| Mutex::new(ThemeCache::default()));
-
-    let cache_guard = match cache.lock() {
-        Ok(guard) => guard,
-        Err(_) => {
-            // Mutex poisoned, return default
-            return Theme::dark_default();
-        }
-    };
+    let cache_guard = cache.lock().unwrap_or_else(|error| {
+        warn!(
+            operation = "get_cached_theme_lock",
+            error = ?error,
+            "Theme cache mutex poisoned; recovering cached theme state"
+        );
+        error.into_inner()
+    });
 
     cache_guard.theme.clone()
 }
@@ -1676,11 +1695,16 @@ pub fn reload_theme_cache() -> Theme {
     let theme = load_theme();
 
     let cache = THEME_CACHE.get_or_init(|| Mutex::new(ThemeCache::default()));
-    if let Ok(mut guard) = cache.lock() {
-        guard.theme = theme.clone();
-        guard.loaded_at = Instant::now();
-        debug!("Theme cache reloaded");
-    }
+    let mut guard = cache.lock().unwrap_or_else(|error| {
+        warn!(
+            operation = "reload_theme_cache_lock",
+            error = ?error,
+            "Theme cache mutex poisoned; recovering cache for theme reload"
+        );
+        error.into_inner()
+    });
+    guard.theme = theme.clone();
+    debug!("Theme cache reloaded");
 
     theme
 }
@@ -1756,6 +1780,36 @@ fn log_theme_config(theme: &Theme) {
 mod tests {
     use super::*;
     use crate::config::{LayoutConfig, ScriptKitUserPreferences, ThemeSelectionPreferences};
+    use std::sync::{Mutex, OnceLock};
+
+    static THEME_CACHE_TEST_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+    fn poison_theme_cache_with(theme: Theme) {
+        let cache = THEME_CACHE.get_or_init(|| Mutex::new(ThemeCache::default()));
+        let _ = std::thread::spawn(move || {
+            let mut guard = cache.lock().expect("theme cache lock should succeed");
+            guard.theme = theme;
+            panic!("intentional poison for theme cache recovery test");
+        })
+        .join();
+        assert!(cache.is_poisoned(), "theme cache lock should be poisoned");
+    }
+
+    fn clear_theme_cache_poison_and_restore() {
+        let cache = THEME_CACHE.get_or_init(|| Mutex::new(ThemeCache::default()));
+        cache.clear_poison();
+        let mut guard = cache
+            .lock()
+            .expect("theme cache lock should be healthy after clear_poison");
+        guard.theme = Theme::dark_default();
+    }
+
+    fn lock_theme_cache_test() -> std::sync::MutexGuard<'static, ()> {
+        THEME_CACHE_TEST_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("theme cache test lock should succeed")
+    }
 
     fn preferences_with_preset(preset_id: Option<&str>) -> ScriptKitUserPreferences {
         ScriptKitUserPreferences {
@@ -1801,6 +1855,55 @@ mod tests {
     }
 
     #[test]
+    fn test_get_cached_theme_recovers_from_poisoned_mutex_without_defaulting() {
+        let _guard = lock_theme_cache_test();
+        let mut custom_theme = Theme::light_default();
+        custom_theme.colors.background.main = 0x12_34_56;
+
+        poison_theme_cache_with(custom_theme.clone());
+        let cached_theme = get_cached_theme();
+
+        assert_eq!(
+            cached_theme.colors.background.main,
+            custom_theme.colors.background.main
+        );
+        assert_ne!(
+            cached_theme.colors.background.main,
+            Theme::dark_default().colors.background.main
+        );
+
+        clear_theme_cache_poison_and_restore();
+    }
+
+    #[test]
+    fn test_reload_theme_cache_recovers_from_poisoned_mutex_and_updates_cached_theme() {
+        let _guard = lock_theme_cache_test();
+        let loaded_theme = load_theme();
+        let mut stale_theme = loaded_theme.clone();
+        stale_theme.colors.background.main ^= 0x00_01_01;
+        stale_theme.colors.accent.selected ^= 0x00_02_02;
+
+        poison_theme_cache_with(stale_theme.clone());
+        let reloaded_theme = reload_theme_cache();
+        let cached_theme = get_cached_theme();
+
+        assert_eq!(
+            cached_theme.colors.background.main,
+            reloaded_theme.colors.background.main
+        );
+        assert_eq!(
+            cached_theme.colors.accent.selected,
+            reloaded_theme.colors.accent.selected
+        );
+        assert_ne!(
+            cached_theme.colors.background.main,
+            stale_theme.colors.background.main
+        );
+
+        clear_theme_cache_poison_and_restore();
+    }
+
+    #[test]
     fn test_merge_json_preserves_user_light_colors_when_overlaying_defaults() {
         let mut base = serde_json::to_value(Theme::light_default()).expect("serialize theme");
         let overlay = serde_json::json!({
@@ -1834,6 +1937,31 @@ mod tests {
         merge_json(&mut base, serde_json::json!({ "opacity": null }));
 
         assert_eq!(base["opacity"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn test_set_requested_appearance_on_theme_json_overrides_default_after_merge_when_user_omits_appearance(
+    ) {
+        let mut merged_theme_json =
+            serde_json::to_value(Theme::light_default()).expect("serialize light default theme");
+
+        merge_json(
+            &mut merged_theme_json,
+            serde_json::json!({
+                "colors": {
+                    "background": {
+                        "main": 0x12_34_56
+                    }
+                }
+            }),
+        );
+
+        set_requested_appearance_on_theme_json(&mut merged_theme_json, AppearanceMode::Auto);
+
+        let merged_theme: Theme =
+            serde_json::from_value(merged_theme_json).expect("deserialize merged theme");
+        assert_eq!(merged_theme.appearance, AppearanceMode::Auto);
+        assert_eq!(merged_theme.colors.background.main, 0x12_34_56);
     }
 
     #[test]
