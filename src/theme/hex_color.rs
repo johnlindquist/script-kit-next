@@ -31,7 +31,8 @@ pub mod hex_color_serde {
         S: Serializer,
     {
         // Serialize as "#RRGGBB" hex string for readability
-        serializer.serialize_str(&format!("#{:06X}", color))
+        let rgb = *color & 0x00FF_FFFF;
+        serializer.serialize_str(&format!("#{:06X}", rgb))
     }
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<HexColor, D::Error>
@@ -195,12 +196,27 @@ pub mod hex_color_serde {
     #[cfg(test)]
     mod tests {
         use super::{parse_color_string, parse_hex, HexColor};
-        use serde::Deserialize;
+        use serde::{Deserialize, Serialize};
 
-        #[derive(Debug, Deserialize)]
+        #[derive(Debug, Serialize, Deserialize)]
         struct HexColorWrapper {
-            #[serde(deserialize_with = "super::deserialize")]
+            #[serde(
+                serialize_with = "super::serialize",
+                deserialize_with = "super::deserialize"
+            )]
             color: HexColor,
+        }
+
+        #[test]
+        fn test_serialize_masks_alpha_and_roundtrips_to_rgb() {
+            let wrapper = HexColorWrapper { color: 0x0D1E1E1E };
+            let serialized =
+                serde_json::to_string(&wrapper).expect("HexColor should serialize with RGB mask");
+            assert_eq!(serialized, "{\"color\":\"#1E1E1E\"}");
+
+            let deserialized: HexColorWrapper =
+                serde_json::from_str(&serialized).expect("serialized HexColor should deserialize");
+            assert_eq!(deserialized.color, 0x1E1E1E);
         }
 
         #[test]
@@ -315,7 +331,7 @@ pub mod hex_color_option_serde {
         S: Serializer,
     {
         match color {
-            Some(value) => serializer.serialize_some(&format!("#{:06X}", value)),
+            Some(value) => serializer.serialize_some(&format!("#{:06X}", *value & 0x00FF_FFFF)),
             None => serializer.serialize_none(),
         }
     }
@@ -348,12 +364,29 @@ pub mod hex_color_option_serde {
     #[cfg(test)]
     mod tests {
         use super::HexColor;
-        use serde::Deserialize;
+        use serde::{Deserialize, Serialize};
 
-        #[derive(Debug, Deserialize)]
+        #[derive(Debug, Serialize, Deserialize)]
         struct OptionalHexColorWrapper {
-            #[serde(deserialize_with = "super::deserialize")]
+            #[serde(
+                serialize_with = "super::serialize",
+                deserialize_with = "super::deserialize"
+            )]
             color: Option<HexColor>,
+        }
+
+        #[test]
+        fn test_serialize_option_masks_alpha_and_roundtrips_to_rgb() {
+            let wrapper = OptionalHexColorWrapper {
+                color: Some(0x0D1E1E1E),
+            };
+            let serialized = serde_json::to_string(&wrapper)
+                .expect("Optional HexColor should serialize with RGB mask");
+            assert_eq!(serialized, "{\"color\":\"#1E1E1E\"}");
+
+            let deserialized: OptionalHexColorWrapper = serde_json::from_str(&serialized)
+                .expect("serialized Optional HexColor should deserialize");
+            assert_eq!(deserialized.color, Some(0x1E1E1E));
         }
 
         #[test]
