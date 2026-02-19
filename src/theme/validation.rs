@@ -247,19 +247,29 @@ pub fn validate_theme_json(json: &Value) -> ThemeDiagnostics {
             validate_colors(&mut diags, "/colors", colors);
         }
         if let Some(focus_aware) = map.get("focus_aware") {
-            validate_focus_aware(&mut diags, "/focus_aware", focus_aware);
+            if !focus_aware.is_null() {
+                validate_focus_aware(&mut diags, "/focus_aware", focus_aware);
+            }
         }
         if let Some(opacity) = map.get("opacity") {
-            validate_opacity(&mut diags, "/opacity", opacity);
+            if !opacity.is_null() {
+                validate_opacity(&mut diags, "/opacity", opacity);
+            }
         }
         if let Some(vibrancy) = map.get("vibrancy") {
-            validate_vibrancy(&mut diags, "/vibrancy", vibrancy);
+            if !vibrancy.is_null() {
+                validate_vibrancy(&mut diags, "/vibrancy", vibrancy);
+            }
         }
         if let Some(shadow) = map.get("drop_shadow") {
-            validate_drop_shadow(&mut diags, "/drop_shadow", shadow);
+            if !shadow.is_null() {
+                validate_drop_shadow(&mut diags, "/drop_shadow", shadow);
+            }
         }
         if let Some(fonts) = map.get("fonts") {
-            validate_fonts(&mut diags, "/fonts", fonts);
+            if !fonts.is_null() {
+                validate_fonts(&mut diags, "/fonts", fonts);
+            }
         }
     } else {
         diags.error("", "Theme must be a JSON object");
@@ -298,10 +308,11 @@ fn validate_colors(diags: &mut ThemeDiagnostics, path: &str, colors: &Value) {
                 &format!("{}/background", path),
                 bg,
                 KNOWN_BACKGROUND_KEYS,
+                &[],
             );
         }
         if let Some(text) = map.get("text") {
-            validate_color_object(diags, &format!("{}/text", path), text, KNOWN_TEXT_KEYS);
+            validate_color_object(diags, &format!("{}/text", path), text, KNOWN_TEXT_KEYS, &[]);
         }
         if let Some(accent) = map.get("accent") {
             validate_color_object(
@@ -309,10 +320,11 @@ fn validate_colors(diags: &mut ThemeDiagnostics, path: &str, colors: &Value) {
                 &format!("{}/accent", path),
                 accent,
                 KNOWN_ACCENT_KEYS,
+                &[],
             );
         }
         if let Some(ui) = map.get("ui") {
-            validate_color_object(diags, &format!("{}/ui", path), ui, KNOWN_UI_KEYS);
+            validate_color_object(diags, &format!("{}/ui", path), ui, KNOWN_UI_KEYS, &[]);
         }
         if let Some(terminal) = map.get("terminal") {
             validate_color_object(
@@ -320,6 +332,7 @@ fn validate_colors(diags: &mut ThemeDiagnostics, path: &str, colors: &Value) {
                 &format!("{}/terminal", path),
                 terminal,
                 KNOWN_TERMINAL_KEYS,
+                &["foreground", "background"],
             );
         }
     } else {
@@ -353,11 +366,12 @@ fn validate_focus_color_scheme(diags: &mut ThemeDiagnostics, path: &str, scheme:
                 &format!("{}/background", path),
                 bg,
                 KNOWN_BACKGROUND_KEYS,
+                &[],
             );
         }
 
         if let Some(text) = map.get("text") {
-            validate_color_object(diags, &format!("{}/text", path), text, KNOWN_TEXT_KEYS);
+            validate_color_object(diags, &format!("{}/text", path), text, KNOWN_TEXT_KEYS, &[]);
         }
 
         if let Some(accent) = map.get("accent") {
@@ -366,11 +380,12 @@ fn validate_focus_color_scheme(diags: &mut ThemeDiagnostics, path: &str, scheme:
                 &format!("{}/accent", path),
                 accent,
                 KNOWN_ACCENT_KEYS,
+                &[],
             );
         }
 
         if let Some(ui) = map.get("ui") {
-            validate_color_object(diags, &format!("{}/ui", path), ui, KNOWN_UI_KEYS);
+            validate_color_object(diags, &format!("{}/ui", path), ui, KNOWN_UI_KEYS, &[]);
         }
 
         if let Some(cursor) = map.get("cursor") {
@@ -383,6 +398,7 @@ fn validate_focus_color_scheme(diags: &mut ThemeDiagnostics, path: &str, scheme:
                 &format!("{}/terminal", path),
                 terminal,
                 KNOWN_TERMINAL_KEYS,
+                &[],
             );
         }
     } else {
@@ -416,10 +432,14 @@ fn validate_color_object(
     path: &str,
     obj: &Value,
     known_keys: &[&str],
+    nullable_keys: &[&str],
 ) {
     if let Value::Object(map) = obj {
         check_unknown_keys(diags, path, map.keys(), known_keys);
         for (key, value) in map {
+            if value.is_null() && nullable_keys.contains(&key.as_str()) {
+                continue;
+            }
             validate_color_value(diags, &format!("{}/{}", path, key), value);
         }
     } else {
@@ -574,5 +594,69 @@ fn validate_fonts(diags: &mut ThemeDiagnostics, path: &str, fonts: &Value) {
         }
     } else {
         diags.error(path, "fonts must be an object");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_theme_json;
+    use serde_json::json;
+
+    #[test]
+    fn test_validate_theme_json_skips_errors_when_terminal_nullable_keys_are_null() {
+        let theme = json!({
+            "colors": {
+                "terminal": {
+                    "foreground": null,
+                    "background": null,
+                    "red": "#ff0000"
+                }
+            }
+        });
+
+        let diagnostics = validate_theme_json(&theme);
+
+        assert_eq!(
+            diagnostics.error_count(),
+            0,
+            "nullable terminal keys should accept null values",
+        );
+    }
+
+    #[test]
+    fn test_validate_theme_json_skips_focus_aware_validation_when_section_is_null() {
+        let theme = json!({
+            "focus_aware": null
+        });
+
+        let diagnostics = validate_theme_json(&theme);
+
+        assert_eq!(
+            diagnostics.error_count(),
+            0,
+            "null optional focus_aware section should be treated as unset",
+        );
+    }
+
+    #[test]
+    fn test_validate_theme_json_reports_error_when_required_color_is_null() {
+        let theme = json!({
+            "colors": {
+                "background": {
+                    "main": null
+                }
+            }
+        });
+
+        let diagnostics = validate_theme_json(&theme);
+
+        assert!(
+            diagnostics
+                .diagnostics
+                .iter()
+                .any(|diag| diag.path == "/colors/background/main"
+                    && diag.message == "Color must be a number or string"),
+            "required color fields should still reject null values",
+        );
     }
 }
