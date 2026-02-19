@@ -196,7 +196,9 @@ impl ScriptListApp {
                     // Handle the save - need to defer to avoid borrow issues
                     let app_entity = cx.entity().downgrade();
                     cx.spawn(async move |_this, cx| {
-                        gpui::Timer::after(std::time::Duration::from_millis(1)).await;
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(1))
+                            .await;
                         let _ = cx.update(|cx| {
                             if let Some(app) = app_entity.upgrade() {
                                 app.update(cx, |this, cx| {
@@ -216,7 +218,9 @@ impl ScriptListApp {
                     // Clear means remove the alias - save with empty string
                     let app_entity = cx.entity().downgrade();
                     cx.spawn(async move |_this, cx| {
-                        gpui::Timer::after(std::time::Duration::from_millis(1)).await;
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(1))
+                            .await;
                         let _ = cx.update(|cx| {
                             if let Some(app) = app_entity.upgrade() {
                                 app.update(cx, |this, cx| {

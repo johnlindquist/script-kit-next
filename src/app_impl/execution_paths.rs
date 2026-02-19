@@ -317,8 +317,8 @@ impl ScriptListApp {
                     });
 
                     match open_result {
-                        Ok(Ok(_)) => {}
-                        Ok(Err(e)) => {
+                        Ok(_) => {}
+                        Err(e) => {
                             this.update(cx, |this, cx| {
                                 logging::log(
                                     "ERROR",
@@ -329,11 +329,9 @@ impl ScriptListApp {
                                     Some(HUD_2500_MS),
                                     cx,
                                 );
-                            })
-                            .ok();
+                            });
                             return;
                         }
-                        Err(_) => return,
                     }
 
                     let Ok(confirmed) = confirm_rx.recv().await else {
@@ -371,8 +369,7 @@ impl ScriptListApp {
                             }
                         }
                         cx.notify();
-                    })
-                    .ok();
+                    });
                 })
                 .detach();
                 return;

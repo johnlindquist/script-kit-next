@@ -174,8 +174,7 @@ impl ScriptListApp {
                 Err(e) => {
                     logging::log("ACTIONS", &format!("{}: {}", failed_prefix, e));
                 }
-            })
-            .ok();
+            });
         })
         .detach();
     }

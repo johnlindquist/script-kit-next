@@ -19,8 +19,7 @@ impl ScriptListApp {
             cx.spawn(async move |_this, cx| {
                 cx.update(|cx| {
                     close_actions_window(cx);
-                })
-                .ok();
+                });
             })
             .detach();
 
@@ -124,8 +123,7 @@ impl ScriptListApp {
                             logging::log("ERROR", &format!("Failed to open actions window: {}", e));
                         }
                     }
-                })
-                .ok();
+                });
             })
             .detach();
         }
@@ -150,8 +148,7 @@ impl ScriptListApp {
             cx.spawn(async move |_this, cx| {
                 cx.update(|cx| {
                     close_actions_window(cx);
-                })
-                .ok();
+                });
             })
             .detach();
 
@@ -255,8 +252,7 @@ impl ScriptListApp {
                             logging::log("ERROR", &format!("Failed to open actions window: {}", e));
                         }
                     }
-                })
-                .ok();
+                });
             })
             .detach();
         }
