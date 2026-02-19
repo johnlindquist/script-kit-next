@@ -99,7 +99,7 @@ impl ScriptListApp {
                     match open_result {
                         Ok(_) => {}
                         Err(e) => {
-                            this.update(cx, |this, cx| {
+                            let _ = this.update(cx, |this, cx| {
                                 logging::log(
                                     "ERROR",
                                     &format!("Failed to open confirmation modal: {}", e),
@@ -121,7 +121,7 @@ impl ScriptListApp {
                         return;
                     }
 
-                    this.update(cx, |_, cx| {
+                    let _ = this.update(cx, |_, cx| {
                         chat_entity.update(cx, |chat, cx| {
                             chat.clear_messages(cx);
                         });

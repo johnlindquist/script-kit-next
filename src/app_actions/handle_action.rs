@@ -68,13 +68,13 @@ impl ScriptListApp {
 
             match open_result {
                 Ok(()) => {
-                    this.update(cx, |this, cx| {
+                    let _ = this.update(cx, |this, cx| {
                         this.show_hud(success_message.to_string(), Some(HUD_SHORT_MS), cx);
                         cx.notify();
                     });
                 }
                 Err(error) => {
-                    this.update(cx, |this, cx| {
+                    let _ = this.update(cx, |this, cx| {
                         tracing::error!(
                             category = "AI",
                             event = "action_attach_to_ai_defer_open_failed",
@@ -700,7 +700,7 @@ impl ScriptListApp {
                             return;
                         };
 
-                        this.update(cx, |this, cx| match reveal_result {
+                        let _ = this.update(cx, |this, cx| match reveal_result {
                             Ok(()) => {
                                 this.show_hud("Opened in Finder".to_string(), Some(HUD_SHORT_MS), cx);
                                 this.hide_main_and_reset(cx);
@@ -1124,7 +1124,7 @@ impl ScriptListApp {
                                 return;
                             };
 
-                            this.update(cx, |this, cx| match launch_result {
+                            let _ = this.update(cx, |this, cx| match launch_result {
                                 Ok(()) => {
                                     this.hide_main_and_reset(cx);
                                 }
@@ -1213,7 +1213,7 @@ impl ScriptListApp {
                     match open_result {
                         Ok(_) => {}
                         Err(e) => {
-                            this.update(cx, |this, cx| {
+                            let _ = this.update(cx, |this, cx| {
                                 tracing::error!(message = ?
                                     &format!("Failed to open confirmation modal: {}", e),
                                 );
@@ -1234,7 +1234,7 @@ impl ScriptListApp {
                         return;
                     }
 
-                    this.update(cx, move |this, cx| match move_path_to_trash(&target.path) {
+                    let _ = this.update(cx, move |this, cx| match move_path_to_trash(&target.path) {
                         Ok(()) => {
                             tracing::info!(category = "UI", message = ?
                                 &format!(
@@ -1766,7 +1766,7 @@ impl ScriptListApp {
                     match open_result {
                         Ok(_) => {}
                         Err(e) => {
-                            this.update(cx, |this, cx| {
+                            let _ = this.update(cx, |this, cx| {
                                 tracing::error!(message = ?
                                     &format!("Failed to open confirmation modal: {}", e),
                                 );
@@ -1787,7 +1787,7 @@ impl ScriptListApp {
                         return;
                     }
 
-                    this.update(cx, move |this, cx| {
+                    let _ = this.update(cx, move |this, cx| {
                         let mut deleted = 0usize;
                         let mut failed = 0usize;
                         for id in ids_to_delete {
@@ -1952,7 +1952,7 @@ impl ScriptListApp {
                     match open_result {
                         Ok(_) => {}
                         Err(e) => {
-                            this.update(cx, |this, cx| {
+                            let _ = this.update(cx, |this, cx| {
                                 tracing::error!(message = ?
                                     &format!("Failed to open confirmation modal: {}", e),
                                 );
@@ -1973,7 +1973,7 @@ impl ScriptListApp {
                         return;
                     }
 
-                    this.update(cx, move |this, cx| {
+                    let _ = this.update(cx, move |this, cx| {
                         match clipboard_history::clear_unpinned_history() {
                             Ok(()) => {
                                 tracing::info!(category = "UI", message = ?
@@ -2190,7 +2190,7 @@ impl ScriptListApp {
                                     return;
                                 };
 
-                                this.update(cx, |this, cx| match launch_result {
+                                let _ = this.update(cx, |this, cx| match launch_result {
                                     Ok(()) => {
                                         this.hide_main_and_reset(cx);
                                     }
@@ -2236,7 +2236,7 @@ impl ScriptListApp {
                                     return;
                                 };
 
-                                this.update(cx, |this, cx| match reveal_result {
+                                let _ = this.update(cx, |this, cx| match reveal_result {
                                     Ok(()) => {
                                         this.show_hud(
                                             "Opened in Finder".to_string(),

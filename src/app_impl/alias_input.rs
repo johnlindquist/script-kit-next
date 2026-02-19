@@ -199,7 +199,7 @@ impl ScriptListApp {
                         cx.background_executor()
                             .timer(std::time::Duration::from_millis(1))
                             .await;
-                        let _ = cx.update(|cx| {
+                        cx.update(|cx| {
                             if let Some(app) = app_entity.upgrade() {
                                 app.update(cx, |this, cx| {
                                     this.save_alias_with_text(Some(alias), cx);
@@ -221,7 +221,7 @@ impl ScriptListApp {
                         cx.background_executor()
                             .timer(std::time::Duration::from_millis(1))
                             .await;
-                        let _ = cx.update(|cx| {
+                        cx.update(|cx| {
                             if let Some(app) = app_entity.upgrade() {
                                 app.update(cx, |this, cx| {
                                     this.save_alias_with_text(Some(String::new()), cx);
