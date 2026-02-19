@@ -163,6 +163,14 @@ fn should_reload_theme(
     file_changed || (appearance_changed && auto_appearance)
 }
 
+fn drain_pending_events<T>(rx: &std::sync::mpsc::Receiver<T>) -> bool {
+    let mut has_events = false;
+    while let Ok(_evt) = rx.try_recv() {
+        has_events = true;
+    }
+    has_events
+}
+
 /// Ensure the global theme service is running.
 ///
 /// This is idempotent - calling it multiple times is safe and will only
@@ -204,7 +212,7 @@ pub fn ensure_theme_service(cx: &mut App) {
             };
             Timer::after(std::time::Duration::from_millis(poll_interval)).await;
 
-            let file_changed = rx.try_recv().is_ok();
+            let file_changed = drain_pending_events(&rx);
             let current_system_dark = super::types::detect_system_appearance();
             let appearance_changed = current_system_dark != last_system_dark;
             last_system_dark = current_system_dark;
@@ -343,5 +351,28 @@ mod tests {
     #[test]
     fn test_should_not_reload_theme_when_appearance_changes_outside_auto_mode() {
         assert!(!should_reload_theme(false, true, false));
+    }
+
+    #[test]
+    fn test_drain_pending_events_returns_false_when_queue_is_empty() {
+        let (_tx, rx) = std::sync::mpsc::channel::<u8>();
+        assert!(!drain_pending_events(&rx));
+    }
+
+    #[test]
+    fn test_drain_pending_events_drains_all_queued_events() {
+        let (tx, rx) = std::sync::mpsc::channel::<u8>();
+        tx.send(1)
+            .expect("sending first queued event for drain test should succeed");
+        tx.send(2)
+            .expect("sending second queued event for drain test should succeed");
+        tx.send(3)
+            .expect("sending third queued event for drain test should succeed");
+
+        assert!(drain_pending_events(&rx));
+        assert!(matches!(
+            rx.try_recv(),
+            Err(std::sync::mpsc::TryRecvError::Empty)
+        ));
     }
 }
