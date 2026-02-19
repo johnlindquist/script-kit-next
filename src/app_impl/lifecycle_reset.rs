@@ -127,8 +127,7 @@ impl ScriptListApp {
             cx.spawn(async move |_this, cx| {
                 cx.update(|cx| {
                     close_actions_window(cx);
-                })
-                .ok();
+                });
             })
             .detach();
             logging::log("VISIBILITY", "Closed actions window before hiding main");

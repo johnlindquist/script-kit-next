@@ -67,22 +67,14 @@ impl ScriptListApp {
             });
 
             match open_result {
-                Ok(Ok(())) => {
-                    if let Err(error) = this.update(cx, |this, cx| {
+                Ok(()) => {
+                    this.update(cx, |this, cx| {
                         this.show_hud(success_message.to_string(), Some(HUD_SHORT_MS), cx);
                         cx.notify();
-                    }) {
-                        tracing::warn!(
-                            category = "AI",
-                            event = "action_attach_to_ai_hud_update_cancelled",
-                            deferred_action = deferred_action_name,
-                            error = %error,
-                            "Deferred Add-to-AI completed after app action context was gone"
-                        );
-                    }
+                    });
                 }
-                Ok(Err(error)) => {
-                    let _ = this.update(cx, |this, cx| {
+                Err(error) => {
+                    this.update(cx, |this, cx| {
                         tracing::error!(
                             category = "AI",
                             event = "action_attach_to_ai_defer_open_failed",
@@ -98,15 +90,6 @@ impl ScriptListApp {
                         );
                         cx.notify();
                     });
-                }
-                Err(error) => {
-                    tracing::warn!(
-                        category = "AI",
-                        event = "action_attach_to_ai_defer_open_cancelled",
-                        deferred_action = deferred_action_name,
-                        error = %error,
-                        "Deferred Add-to-AI task cancelled before completion"
-                    );
                 }
             }
         })
@@ -497,8 +480,10 @@ impl ScriptListApp {
                 match clipboard_history::copy_entry_to_clipboard(&entry.id) {
                     Ok(()) => {
                         tracing::info!(category = "CLIPBOARD", message = ? "Entry copied, simulating paste");
-                        cx.spawn(async move |_this, _cx| {
-                            Timer::after(std::time::Duration::from_millis(50)).await;
+                        cx.spawn(async move |_this, cx| {
+                            cx.background_executor()
+                                .timer(std::time::Duration::from_millis(50))
+                                .await;
                             if let Err(e) = selected_text::simulate_paste_with_cg() {
                                 tracing::error!(message = ? &format!("Failed to simulate paste: {}", e));
                             } else {
@@ -619,8 +604,10 @@ impl ScriptListApp {
                     Ok(()) => {
                         tracing::info!(category = "CLIPBOARD", message = ? "Entry copied, simulating paste");
                         // Simulate Cmd+V paste after a brief delay
-                        cx.spawn(async move |_this, _cx| {
-                            Timer::after(std::time::Duration::from_millis(50)).await;
+                        cx.spawn(async move |_this, cx| {
+                            cx.background_executor()
+                                .timer(std::time::Duration::from_millis(50))
+                                .await;
                             if let Err(e) = selected_text::simulate_paste_with_cg() {
                                 tracing::error!(message = ? &format!("Failed to simulate paste: {}", e));
                             } else {
@@ -721,8 +708,7 @@ impl ScriptListApp {
                             Err(message) => {
                                 this.show_hud(message, Some(HUD_2500_MS), cx);
                             }
-                        })
-                        .ok();
+                        });
                     })
                     .detach();
                 } else {
@@ -1145,8 +1131,7 @@ impl ScriptListApp {
                                 Err(message) => {
                                     this.show_hud(message, Some(HUD_LONG_MS), cx);
                                 }
-                            })
-                            .ok();
+                            });
                         })
                         .detach();
                     } else {
@@ -1226,8 +1211,8 @@ impl ScriptListApp {
                     });
 
                     match open_result {
-                        Ok(Ok(_)) => {}
-                        Ok(Err(e)) => {
+                        Ok(_) => {}
+                        Err(e) => {
                             this.update(cx, |this, cx| {
                                 tracing::error!(message = ?
                                     &format!("Failed to open confirmation modal: {}", e),
@@ -1237,11 +1222,9 @@ impl ScriptListApp {
                                     Some(HUD_2500_MS),
                                     cx,
                                 );
-                            })
-                            .ok();
+                            });
                             return;
                         }
-                        Err(_) => return,
                     }
 
                     let Ok(confirmed) = confirm_rx.recv().await else {
@@ -1282,8 +1265,7 @@ impl ScriptListApp {
                             );
                             this.show_hud(format!("Failed to remove: {}", e), Some(HUD_3200_MS), cx);
                         }
-                    })
-                    .ok();
+                    });
                 })
                 .detach();
                 return;
@@ -1782,8 +1764,8 @@ impl ScriptListApp {
                     });
 
                     match open_result {
-                        Ok(Ok(_)) => {}
-                        Ok(Err(e)) => {
+                        Ok(_) => {}
+                        Err(e) => {
                             this.update(cx, |this, cx| {
                                 tracing::error!(message = ?
                                     &format!("Failed to open confirmation modal: {}", e),
@@ -1793,11 +1775,9 @@ impl ScriptListApp {
                                     Some(HUD_2500_MS),
                                     cx,
                                 );
-                            })
-                            .ok();
+                            });
                             return;
                         }
-                        Err(_) => return,
                     }
 
                     let Ok(confirmed) = confirm_rx.recv().await else {
@@ -1846,8 +1826,7 @@ impl ScriptListApp {
                                 cx,
                             );
                         }
-                    })
-                    .ok();
+                    });
                 })
                 .detach();
                 return;
@@ -1971,8 +1950,8 @@ impl ScriptListApp {
                     });
 
                     match open_result {
-                        Ok(Ok(_)) => {}
-                        Ok(Err(e)) => {
+                        Ok(_) => {}
+                        Err(e) => {
                             this.update(cx, |this, cx| {
                                 tracing::error!(message = ?
                                     &format!("Failed to open confirmation modal: {}", e),
@@ -1982,11 +1961,9 @@ impl ScriptListApp {
                                     Some(HUD_2500_MS),
                                     cx,
                                 );
-                            })
-                            .ok();
+                            });
                             return;
                         }
-                        Err(_) => return,
                     }
 
                     let Ok(confirmed) = confirm_rx.recv().await else {
@@ -2037,8 +2014,7 @@ impl ScriptListApp {
                                 this.show_hud(format!("Delete failed: {}", e), Some(HUD_LONG_MS), cx);
                             }
                         }
-                    })
-                    .ok();
+                    });
                 })
                 .detach();
                 return;
@@ -2221,8 +2197,7 @@ impl ScriptListApp {
                                     Err(message) => {
                                         this.show_hud(message, Some(HUD_LONG_MS), cx);
                                     }
-                                })
-                                .ok();
+                                });
                             })
                             .detach();
                         } else {
@@ -2273,8 +2248,7 @@ impl ScriptListApp {
                                     Err(message) => {
                                         this.show_hud(message, Some(HUD_2500_MS), cx);
                                     }
-                                })
-                                .ok();
+                                });
                             })
                             .detach();
                         } else {
