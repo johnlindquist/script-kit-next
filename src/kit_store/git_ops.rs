@@ -95,6 +95,13 @@ fn extract_repo_name(repo_url: &str) -> Result<String, String> {
         .strip_suffix(".git")
         .unwrap_or(without_trailing_slash);
 
+    if has_path_traversal_segment(without_git_suffix) {
+        return Err(format!(
+            "Invalid repository URL '{}': path traversal is not allowed",
+            repo_url
+        ));
+    }
+
     let candidate = without_git_suffix
         .rsplit(['/', ':'])
         .next()
@@ -130,6 +137,10 @@ fn extract_repo_name(repo_url: &str) -> Result<String, String> {
     }
 
     Ok(candidate.to_string())
+}
+
+fn has_path_traversal_segment(input: &str) -> bool {
+    input.split(['/', '\\', ':']).any(|segment| segment == "..")
 }
 
 fn is_windows_reserved_device_name(name: &str) -> bool {
