@@ -54,3 +54,59 @@ hello world
     assert_eq!(tool, "paste");
     assert_eq!(code, "hello world");
 }
+
+#[test]
+fn test_read_scriptlets_keeps_first_scriptlet_when_file_starts_with_heading() {
+    use crate::setup::SK_PATH_ENV;
+    use std::fs;
+    use tempfile::TempDir;
+
+    struct EnvVarGuard {
+        key: &'static str,
+        previous: Option<String>,
+    }
+
+    impl EnvVarGuard {
+        fn set(key: &'static str, value: &str) -> Self {
+            let previous = std::env::var(key).ok();
+            std::env::set_var(key, value);
+            Self { key, previous }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            if let Some(value) = &self.previous {
+                std::env::set_var(self.key, value);
+            } else {
+                std::env::remove_var(self.key);
+            }
+        }
+    }
+
+    let temp_dir = TempDir::new().expect("create temp dir");
+    let extensions_dir = temp_dir.path().join("kit").join("main").join("extensions");
+    fs::create_dir_all(&extensions_dir).expect("create extensions dir");
+
+    let scriptlet_file = extensions_dir.join("scriptlets.md");
+    fs::write(
+        &scriptlet_file,
+        r#"## First Scriptlet
+```paste
+one
+```
+
+## Second Scriptlet
+```paste
+two
+```
+"#,
+    )
+    .expect("write scriptlet file");
+
+    let _guard = EnvVarGuard::set(SK_PATH_ENV, &temp_dir.path().to_string_lossy());
+    let scriptlets = super::loading::read_scriptlets();
+
+    let names: Vec<String> = scriptlets.iter().map(|s| s.name.clone()).collect();
+    assert_eq!(names, vec!["First Scriptlet", "Second Scriptlet"]);
+}

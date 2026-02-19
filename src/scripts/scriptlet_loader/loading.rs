@@ -58,7 +58,9 @@ pub fn read_scriptlets() -> Vec<Arc<Scriptlet>> {
                                 }
                                 current_section = line.to_string();
                             } else {
-                                current_section.push('\n');
+                                if !current_section.is_empty() {
+                                    current_section.push('\n');
+                                }
                                 current_section.push_str(line);
                             }
                         }
