@@ -45,6 +45,30 @@ fn subtle_overlay(hex: u32, alpha: f32) -> Hsla {
 }
 
 #[inline]
+fn blend_hex_over_background(foreground: u32, background: u32, alpha: f32) -> u32 {
+    let alpha = alpha.clamp(0.0, 1.0);
+
+    let blend_channel = |fg: u8, bg: u8| -> u8 {
+        let fg = f32::from(fg);
+        let bg = f32::from(bg);
+        (bg * (1.0 - alpha) + fg * alpha).round() as u8
+    };
+
+    let fg_r = ((foreground >> 16) & 0xff) as u8;
+    let fg_g = ((foreground >> 8) & 0xff) as u8;
+    let fg_b = (foreground & 0xff) as u8;
+    let bg_r = ((background >> 16) & 0xff) as u8;
+    let bg_g = ((background >> 8) & 0xff) as u8;
+    let bg_b = (background & 0xff) as u8;
+
+    let out_r = blend_channel(fg_r, bg_r);
+    let out_g = blend_channel(fg_g, bg_g);
+    let out_b = blend_channel(fg_b, bg_b);
+
+    (u32::from(out_r) << 16) | (u32::from(out_g) << 8) | u32::from(out_b)
+}
+
+#[inline]
 fn contrast_ratio(a: u32, b: u32) -> f32 {
     let luminance_a = relative_luminance_srgb(a);
     let luminance_b = relative_luminance_srgb(b);
@@ -97,13 +121,18 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
         *ThemeColor::light()
     };
 
-    // Helper to apply opacity to a color when vibrancy is enabled
+    // Helper to apply opacity: true alpha when vibrancy is enabled,
+    // or precomposed opaque color against background when disabled.
     let with_vibrancy = |hex: u32, alpha: f32| -> Hsla {
         if vibrancy_enabled {
             let base = hex_to_hsla(hex);
             hsla(base.h, base.s, base.l, alpha)
         } else {
-            hex_to_hsla(hex)
+            hex_to_hsla(blend_hex_over_background(
+                hex,
+                colors.background.main,
+                alpha,
+            ))
         }
     };
 
@@ -691,6 +720,22 @@ mod tests {
         assert!(light_mapped.secondary_hover.a > light_mapped.secondary.a);
         assert!(light_mapped.secondary_active.a > light_mapped.secondary_hover.a);
         assert!(light_mapped.muted.a > 0.0);
+    }
+
+    #[test]
+    fn test_map_scriptkit_to_gpui_theme_non_vibrancy_secondary_states_are_distinct() {
+        let mut theme = Theme::dark_default();
+        theme.colors.background.main = 0x000000;
+        theme.colors.background.title_bar = 0xffffff;
+        let mut vibrancy = theme.get_vibrancy();
+        vibrancy.enabled = false;
+        theme.vibrancy = Some(vibrancy);
+
+        let mapped = map_scriptkit_to_gpui_theme(&theme, true);
+
+        assert!((mapped.secondary_hover.a - 1.0).abs() < 1e-6);
+        assert!((mapped.secondary_active.a - 1.0).abs() < 1e-6);
+        assert!((mapped.secondary_hover.l - mapped.secondary_active.l).abs() > 1e-6);
     }
 
     #[test]
