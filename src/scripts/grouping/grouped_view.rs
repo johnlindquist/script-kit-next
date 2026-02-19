@@ -154,12 +154,7 @@ pub(super) fn build_grouped_view_results(
 
     // Sort each section alphabetically by name (case-insensitive)
     let sort_alphabetically = |indices: &mut Vec<usize>| {
-        indices.sort_by(|&a, &b| {
-            results[a]
-                .name()
-                .to_lowercase()
-                .cmp(&results[b].name().to_lowercase())
-        });
+        indices.sort_by_cached_key(|&idx| results[idx].name().to_lowercase());
     };
 
     // Sort items within each kit section

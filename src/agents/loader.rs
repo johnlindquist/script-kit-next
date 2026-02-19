@@ -90,7 +90,7 @@ pub fn load_agents_from_path(kit_path: &Path) -> Vec<Arc<Agent>> {
     }
 
     // Sort by name
-    agents.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    agents.sort_by_cached_key(|agent| agent.name.to_lowercase());
 
     debug!(count = agents.len(), "Loaded agents");
     agents
