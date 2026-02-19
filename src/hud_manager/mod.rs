@@ -14,7 +14,7 @@ use crate::logging;
 use crate::theme::get_cached_theme;
 use gpui::{
     div, point, prelude::*, px, rgb, size, App, Context, ElementId, Pixels, Render, SharedString,
-    Timer, Window, WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowOptions,
+    Window, WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowOptions,
 };
 use gpui_component::tooltip::Tooltip;
 use parking_lot::Mutex;
@@ -527,7 +527,7 @@ pub fn show_hud(text: String, duration_ms: Option<u64>, cx: &mut App) {
             // Schedule cleanup after duration - use ID for dismissal
             let duration_duration = Duration::from_millis(duration);
             cx.spawn(async move |cx: &mut gpui::AsyncApp| {
-                Timer::after(duration_duration).await;
+                cx.background_executor().timer(duration_duration).await;
 
                 // IMPORTANT: All AppKit calls must happen on the main thread.
                 // cx.update() ensures we're on the main thread.
@@ -664,7 +664,7 @@ pub fn show_hud_with_action(
             // Schedule cleanup after duration - use ID for dismissal
             let duration_duration = Duration::from_millis(duration);
             cx.spawn(async move |cx: &mut gpui::AsyncApp| {
-                Timer::after(duration_duration).await;
+                cx.background_executor().timer(duration_duration).await;
 
                 // IMPORTANT: All AppKit calls must happen on the main thread.
                 // cx.update() ensures we're on the main thread.
@@ -850,22 +850,11 @@ fn dismiss_hud_by_id(hud_id: u64, cx: &mut App) {
     // Close the window using GPUI's proper API
     if let Some(window_handle) = window_to_close {
         // Use WindowHandle.update() to access window.remove_window()
-        let result = window_handle.update(cx, |_view, window, _cx| {
+        window_handle.update(cx, |_view, window, _cx| {
             window.remove_window();
         });
 
-        match result {
-            Ok(()) => {
-                logging::log("HUD", &format!("Dismissed HUD id={}", hud_id));
-            }
-            Err(e) => {
-                // Window may have already been closed (e.g., by user)
-                logging::log(
-                    "HUD",
-                    &format!("HUD id={} window already closed: {}", hud_id, e),
-                );
-            }
-        }
+        logging::log("HUD", &format!("Dismissed HUD id={}", hud_id));
 
         // Show any pending HUDs
         cleanup_expired_huds(cx);

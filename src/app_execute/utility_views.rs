@@ -412,7 +412,9 @@ impl ScriptListApp {
         // Exits when the channel disconnects (CaptureHandle dropped) or the entity is gone.
         cx.spawn(async move |_this, cx| {
             loop {
-                gpui::Timer::after(std::time::Duration::from_millis(16)).await;
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(16))
+                    .await;
 
                 // Drain to latest frame, detect channel disconnect
                 let mut latest = None;
@@ -439,10 +441,10 @@ impl ScriptListApp {
                     }
                 });
 
-                match result {
-                    Ok(true) => continue,
-                    Ok(false) | Err(_) => break,
+                if result {
+                    continue;
                 }
+                break;
             }
         })
         .detach();
