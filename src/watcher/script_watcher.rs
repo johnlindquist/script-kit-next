@@ -76,7 +76,7 @@ impl ScriptWatcherSpec {
             storm_threshold: settings.storm_threshold,
             pending: HashMap::new(),
             full_reload_at: None,
-            kit_path: PathBuf::from(shellexpand::tilde("~/.scriptkit/kit").as_ref()),
+            kit_path: crate::setup::get_kit_path().join("kit"),
             tracked_scripts_paths: HashSet::new(),
             tracked_extensions_paths: HashSet::new(),
             tracked_agents_paths: HashSet::new(),
