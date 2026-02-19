@@ -190,7 +190,7 @@ impl ConfigWatcher {
             .take()
             .ok_or_else(|| std::io::Error::other("watcher already started"))?;
         let settings = load_watcher_settings();
-        let target_path = PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/config.ts").as_ref());
+        let target_path = crate::setup::get_kit_path().join("kit").join("config.ts");
 
         let mut watcher = build_single_file_reload_watcher(
             tx,
@@ -234,7 +234,7 @@ impl ThemeWatcher {
             .take()
             .ok_or_else(|| std::io::Error::other("watcher already started"))?;
         let settings = load_watcher_settings();
-        let target_path = PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/theme.json").as_ref());
+        let target_path = crate::setup::get_kit_path().join("kit").join("theme.json");
 
         let mut watcher = build_single_file_reload_watcher(
             tx,
@@ -332,7 +332,7 @@ struct KitWatchPaths {
 /// Discovers all kit subdirectories under ~/.scriptkit/kit/
 /// Returns paths to all scripts/, extensions/, and agents/ directories that should be watched
 fn discover_kit_watch_paths() -> KitWatchPaths {
-    let kit_path = PathBuf::from(shellexpand::tilde("~/.scriptkit/kit").as_ref());
+    let kit_path = crate::setup::get_kit_path().join("kit");
     let mut scripts_paths = Vec::new();
     let mut extensions_paths = Vec::new();
     let mut agents_paths = Vec::new();
