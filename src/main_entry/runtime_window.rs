@@ -1,5 +1,5 @@
         // Root is required for gpui_component's InputState focus tracking
-        let window: WindowHandle<Root> = cx.open_window(
+        let window: WindowHandle<Root> = match cx.open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
                 titlebar: None,
@@ -20,16 +20,31 @@
                 *app_entity_for_closure.lock().unwrap_or_else(|e| e.into_inner()) = Some(view.clone());
                 cx.new(|cx| Root::new(view, window, cx))
             },
-        )
-        .unwrap();
+        ) {
+            Ok(window) => window,
+            Err(error) => {
+                tracing::error!(error = ?error, "Failed to open main runtime window");
+                return;
+            }
+        };
 
         // Extract the app entity for use in callbacks
-        let app_entity = app_entity_holder.lock().unwrap_or_else(|e| e.into_inner()).clone().expect("App entity should be set");
+        let app_entity = match app_entity_holder
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+        {
+            Some(app_entity) => app_entity,
+            None => {
+                tracing::error!("Main runtime app entity missing after window creation");
+                return;
+            }
+        };
 
         // Set initial focus via the Root window
         // We access the app entity within the window context to properly focus it
         let app_entity_for_focus = app_entity.clone();
-        window
+        let update_result = window
             .update(cx, |_root, win, root_cx| {
                 app_entity_for_focus.update(root_cx, |view, ctx| {
                     let focus_handle = view.focus_handle(ctx);
@@ -71,9 +86,8 @@
                         // detect_system_appearance() gets the fresh value
                         theme::invalidate_appearance_cache();
 
-                        // Reload the theme cache so get_cached_theme() returns
-                        // fresh colors (used by vibrancy backgrounds, etc.)
-                        let theme = theme::reload_theme_cache();
+                        // Reload cache + sync gpui theme + bump revision in one update.
+                        let theme = theme::service::reload_theme_cache_sync_and_bump_revision(ctx);
                         let is_dark = theme.should_use_dark_vibrancy();
 
                         // Reconfigure vibrancy materials on NSVisualEffectViews
@@ -82,9 +96,6 @@
                         // Update all secondary windows (Notes, AI, Actions)
                         platform::update_all_secondary_windows_appearance(is_dark);
 
-                        // Sync gpui-component theme with new system appearance
-                        theme::sync_gpui_component_theme(ctx);
-
                         // Update the app entity theme
                         view.update_theme(ctx);
 
@@ -92,8 +103,14 @@
                         windows::notify_all_windows(ctx);
                     }));
                 });
-            })
-            .unwrap();
+            });
+        if let Err(error) = update_result {
+            tracing::error!(
+                error = ?error,
+                "Failed to initialize main runtime window focus and subscriptions"
+            );
+            return;
+        }
 
         // Register the main window with WindowManager before tray init
         // This must happen after GPUI creates the window but before tray creates its windows

@@ -17,21 +17,20 @@ pub enum InputType {
 }
 
 // Compile regex patterns once using LazyLock
-static URL_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^(https?://|file://)[^\s]+$").expect("Invalid URL regex"));
+static URL_REGEX: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r"^(https?://|file://)[^\s]+$").ok());
 
-static MATH_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+static MATH_REGEX: LazyLock<Option<Regex>> = LazyLock::new(|| {
     // Matches strings containing only digits, operators, parens, spaces, and decimal points
     // Must contain at least one digit and one operator to be considered math
-    Regex::new(r"^[\d\s\+\-\*/%\^\(\)\.]+$").expect("Invalid math regex")
+    Regex::new(r"^[\d\s\+\-\*/%\^\(\)\.]+$").ok()
 });
 
-static CODE_FUNC_CALL_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\w+\s*\([^)]*\)").expect("Invalid code function call regex"));
+static CODE_FUNC_CALL_REGEX: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r"\w+\s*\([^)]*\)").ok());
 
-static CODE_IDENT_CALL_PREFIX_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"[a-zA-Z_]\w*\s*\(").expect("Invalid code identifier call prefix regex")
-});
+static CODE_IDENT_CALL_PREFIX_REGEX: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r"[a-zA-Z_]\w*\s*\(").ok());
 
 // Code keywords to detect
 const CODE_KEYWORDS: &[&str] = &[
@@ -87,7 +86,11 @@ pub fn is_url(input: &str) -> bool {
         return false;
     }
 
-    URL_REGEX.is_match(trimmed)
+    if let Some(ref re) = *URL_REGEX {
+        return re.is_match(trimmed);
+    }
+
+    false
 }
 
 /// Check if the input looks like a directory path
@@ -195,7 +198,11 @@ pub fn is_math_expression(input: &str) -> bool {
     }
 
     // Must match the math pattern (only valid characters)
-    if !MATH_REGEX.is_match(trimmed) {
+    if let Some(ref re) = *MATH_REGEX {
+        if !re.is_match(trimmed) {
+            return false;
+        }
+    } else {
         return false;
     }
 
@@ -249,11 +256,17 @@ pub fn is_code_snippet(input: &str) -> bool {
 
     // Function call pattern: word followed by parentheses
     // e.g., foo(), bar(1, 2)
-    if CODE_FUNC_CALL_REGEX.is_match(trimmed) {
+    if let Some(ref func_call_re) = *CODE_FUNC_CALL_REGEX {
+        if !func_call_re.is_match(trimmed) {
+            return false;
+        }
+
         // But exclude math expressions like (1+2)
         // Only match if there's a word before the paren
-        if CODE_IDENT_CALL_PREFIX_REGEX.is_match(trimmed) {
-            return true;
+        if let Some(ref ident_prefix_re) = *CODE_IDENT_CALL_PREFIX_REGEX {
+            if ident_prefix_re.is_match(trimmed) {
+                return true;
+            }
         }
     }
 

@@ -520,7 +520,13 @@ pub fn format_parse_error_message(errors: &[ScriptletValidationError]) -> String
 
     if file_count == 1 {
         // Single file - show more detail
-        let (path, file_errors) = by_file.iter().next().unwrap();
+        let Some((path, file_errors)) = by_file.iter().next() else {
+            tracing::warn!(
+                category = "SCRIPTLET_PARSE",
+                "format_parse_error_message expected one file but found none"
+            );
+            return "Parse errors detected. Check logs.".to_string();
+        };
         let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
 
         if file_errors.len() == 1 {

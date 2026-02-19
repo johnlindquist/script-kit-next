@@ -52,18 +52,17 @@ impl ShellStyleCache {
         let shadows = if theme.is_vibrancy_enabled() {
             vec![] // No shadows for vibrancy - matches POC behavior
         } else {
-            // Standard drop shadow for non-vibrancy mode
-            vec![gpui::BoxShadow {
-                color: Hsla {
-                    h: 0.0,
-                    s: 0.0,
-                    l: 0.0,
-                    a: 0.4,
-                },
-                offset: gpui::point(px(0.0), px(4.0)),
-                blur_radius: px(20.0),
-                spread_radius: px(0.0),
-            }]
+            let drop_shadow = theme.get_drop_shadow();
+            if drop_shadow.enabled {
+                vec![gpui::BoxShadow {
+                    color: drop_shadow.color.with_opacity(drop_shadow.opacity),
+                    offset: gpui::point(px(drop_shadow.offset_x), px(drop_shadow.offset_y)),
+                    blur_radius: px(drop_shadow.blur_radius),
+                    spread_radius: px(drop_shadow.spread_radius),
+                }]
+            } else {
+                vec![]
+            }
         };
 
         Self {
@@ -184,9 +183,10 @@ impl DividerColors {
 
 #[cfg(test)]
 mod tests {
-    use super::{FooterColors, HeaderColors};
+    use super::{FooterColors, HeaderColors, ShellStyleCache};
     use crate::theme::Theme;
     use crate::ui_foundation::HexColorExt;
+    use gpui::{point, px};
 
     #[test]
     fn test_header_colors_logo_icon_uses_text_on_accent_theme_token() {
@@ -214,5 +214,61 @@ mod tests {
         assert_eq!(footer.overlay_bg.s, expected.s);
         assert_eq!(footer.overlay_bg.l, expected.l);
         assert_eq!(footer.overlay_bg.a, expected.a);
+    }
+
+    #[test]
+    fn test_shell_style_cache_uses_theme_drop_shadow_when_vibrancy_is_disabled() {
+        let mut theme = Theme::default();
+        let mut vibrancy = theme.get_vibrancy();
+        vibrancy.enabled = false;
+        theme.vibrancy = Some(vibrancy);
+
+        let mut shadow = theme.get_drop_shadow();
+        shadow.enabled = true;
+        shadow.color = theme.colors.accent.selected;
+        shadow.opacity = 0.62;
+        shadow.blur_radius = 11.0;
+        shadow.spread_radius = 2.0;
+        shadow.offset_x = -3.0;
+        shadow.offset_y = 5.0;
+        theme.drop_shadow = Some(shadow.clone());
+
+        let styles = ShellStyleCache::from_theme(&theme, 7);
+
+        assert_eq!(styles.shadows.len(), 1);
+        let computed = styles
+            .shadows
+            .first()
+            .expect("shell style cache should include one shadow");
+        let expected_color = shadow.color.with_opacity(shadow.opacity);
+
+        assert_eq!(computed.color.h, expected_color.h);
+        assert_eq!(computed.color.s, expected_color.s);
+        assert_eq!(computed.color.l, expected_color.l);
+        assert_eq!(computed.color.a, expected_color.a);
+        assert_eq!(
+            computed.offset,
+            point(px(shadow.offset_x), px(shadow.offset_y))
+        );
+        assert_eq!(computed.blur_radius, px(shadow.blur_radius));
+        assert_eq!(computed.spread_radius, px(shadow.spread_radius));
+    }
+
+    #[test]
+    fn test_shell_style_cache_has_no_shadows_when_drop_shadow_is_disabled() {
+        let mut theme = Theme::default();
+        let mut vibrancy = theme.get_vibrancy();
+        vibrancy.enabled = false;
+        theme.vibrancy = Some(vibrancy);
+
+        let mut shadow = theme.get_drop_shadow();
+        shadow.enabled = false;
+        theme.drop_shadow = Some(shadow);
+
+        let styles = ShellStyleCache::from_theme(&theme, 8);
+        assert!(
+            styles.shadows.is_empty(),
+            "drop shadow should not be rendered when disabled in theme"
+        );
     }
 }

@@ -6,6 +6,23 @@
 use crate::protocol::Field;
 use regex::Regex;
 use std::collections::HashMap;
+use tracing::warn;
+
+fn compile_regex(pattern: &str, context: &str) -> Option<Regex> {
+    match Regex::new(pattern) {
+        Ok(regex) => Some(regex),
+        Err(error) => {
+            warn!(
+                category = "FORM_PARSER",
+                context,
+                pattern,
+                ?error,
+                "Failed to compile HTML form parser regex"
+            );
+            None
+        }
+    }
+}
 
 /// Parse an HTML string and extract form fields.
 ///
@@ -27,38 +44,43 @@ pub fn parse_form_html(html: &str) -> Vec<Field> {
     let mut elements: Vec<(usize, Field)> = Vec::new();
 
     // Parse input elements
-    let input_regex = Regex::new(r#"<input\s+([^>]*)/?>"#).unwrap();
-    for cap in input_regex.captures_iter(html) {
-        if let Some(attrs_str) = cap.get(1) {
-            let attrs = parse_attributes(attrs_str.as_str());
-            if let Some(field) = input_to_field(&attrs, &labels) {
-                let pos = cap.get(0).map(|m| m.start()).unwrap_or(0);
-                elements.push((pos, field));
+    if let Some(input_regex) = compile_regex(r#"<input\s+([^>]*)/?>"#, "input") {
+        for cap in input_regex.captures_iter(html) {
+            if let Some(attrs_str) = cap.get(1) {
+                let attrs = parse_attributes(attrs_str.as_str());
+                if let Some(field) = input_to_field(&attrs, &labels) {
+                    let pos = cap.get(0).map(|m| m.start()).unwrap_or(0);
+                    elements.push((pos, field));
+                }
             }
         }
     }
 
     // Parse textarea elements (handles both empty and with content)
-    let textarea_regex = Regex::new(r#"<textarea\s+([^>]*)>([\s\S]*?)</textarea>"#).unwrap();
-    for cap in textarea_regex.captures_iter(html) {
-        if let Some(attrs_str) = cap.get(1) {
-            let attrs = parse_attributes(attrs_str.as_str());
-            let content = cap.get(2).map(|m| m.as_str()).unwrap_or("");
-            if let Some(field) = textarea_to_field(&attrs, content, &labels) {
-                let pos = cap.get(0).map(|m| m.start()).unwrap_or(0);
-                elements.push((pos, field));
+    if let Some(textarea_regex) =
+        compile_regex(r#"<textarea\s+([^>]*)>([\s\S]*?)</textarea>"#, "textarea")
+    {
+        for cap in textarea_regex.captures_iter(html) {
+            if let Some(attrs_str) = cap.get(1) {
+                let attrs = parse_attributes(attrs_str.as_str());
+                let content = cap.get(2).map(|m| m.as_str()).unwrap_or("");
+                if let Some(field) = textarea_to_field(&attrs, content, &labels) {
+                    let pos = cap.get(0).map(|m| m.start()).unwrap_or(0);
+                    elements.push((pos, field));
+                }
             }
         }
     }
 
     // Parse select elements
-    let select_regex = Regex::new(r#"<select\s+([^>]*)>[\s\S]*?</select>"#).unwrap();
-    for cap in select_regex.captures_iter(html) {
-        if let Some(attrs_str) = cap.get(1) {
-            let attrs = parse_attributes(attrs_str.as_str());
-            if let Some(field) = select_to_field(&attrs, &labels) {
-                let pos = cap.get(0).map(|m| m.start()).unwrap_or(0);
-                elements.push((pos, field));
+    if let Some(select_regex) = compile_regex(r#"<select\s+([^>]*)>[\s\S]*?</select>"#, "select") {
+        for cap in select_regex.captures_iter(html) {
+            if let Some(attrs_str) = cap.get(1) {
+                let attrs = parse_attributes(attrs_str.as_str());
+                if let Some(field) = select_to_field(&attrs, &labels) {
+                    let pos = cap.get(0).map(|m| m.start()).unwrap_or(0);
+                    elements.push((pos, field));
+                }
             }
         }
     }
@@ -73,26 +95,32 @@ fn extract_labels(html: &str) -> HashMap<String, String> {
     let mut labels = HashMap::new();
 
     // Labels with `for` attribute
-    let label_regex =
-        Regex::new(r#"<label\s+[^>]*for\s*=\s*["']([^"']+)["'][^>]*>([^<]*)</label>"#).unwrap();
-    for cap in label_regex.captures_iter(html) {
-        if let (Some(for_attr), Some(text)) = (cap.get(1), cap.get(2)) {
-            labels.insert(
-                for_attr.as_str().to_string(),
-                text.as_str().trim().to_string(),
-            );
+    if let Some(label_regex) = compile_regex(
+        r#"<label\s+[^>]*for\s*=\s*["']([^"']+)["'][^>]*>([^<]*)</label>"#,
+        "label_with_attrs",
+    ) {
+        for cap in label_regex.captures_iter(html) {
+            if let (Some(for_attr), Some(text)) = (cap.get(1), cap.get(2)) {
+                labels.insert(
+                    for_attr.as_str().to_string(),
+                    text.as_str().trim().to_string(),
+                );
+            }
         }
     }
 
     // Also check for simpler labels without other attributes
-    let simple_label_regex =
-        Regex::new(r#"<label\s+for\s*=\s*["']([^"']+)["']\s*>([^<]*)</label>"#).unwrap();
-    for cap in simple_label_regex.captures_iter(html) {
-        if let (Some(for_attr), Some(text)) = (cap.get(1), cap.get(2)) {
-            let key = for_attr.as_str().to_string();
-            labels
-                .entry(key)
-                .or_insert_with(|| text.as_str().trim().to_string());
+    if let Some(simple_label_regex) = compile_regex(
+        r#"<label\s+for\s*=\s*["']([^"']+)["']\s*>([^<]*)</label>"#,
+        "simple_label",
+    ) {
+        for cap in simple_label_regex.captures_iter(html) {
+            if let (Some(for_attr), Some(text)) = (cap.get(1), cap.get(2)) {
+                let key = for_attr.as_str().to_string();
+                labels
+                    .entry(key)
+                    .or_insert_with(|| text.as_str().trim().to_string());
+            }
         }
     }
 
@@ -104,10 +132,11 @@ fn parse_attributes(attrs_str: &str) -> HashMap<String, String> {
     let mut attrs = HashMap::new();
 
     // Match attribute="value" or attribute='value'
-    let attr_regex = Regex::new(r#"(\w+)\s*=\s*["']([^"']*)["']"#).unwrap();
-    for cap in attr_regex.captures_iter(attrs_str) {
-        if let (Some(name), Some(value)) = (cap.get(1), cap.get(2)) {
-            attrs.insert(name.as_str().to_lowercase(), value.as_str().to_string());
+    if let Some(attr_regex) = compile_regex(r#"(\w+)\s*=\s*["']([^"']*)["']"#, "attributes") {
+        for cap in attr_regex.captures_iter(attrs_str) {
+            if let (Some(name), Some(value)) = (cap.get(1), cap.get(2)) {
+                attrs.insert(name.as_str().to_lowercase(), value.as_str().to_string());
+            }
         }
     }
 

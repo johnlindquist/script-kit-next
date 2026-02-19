@@ -163,6 +163,12 @@ pub fn swizzle_gpui_blurred_view() {
         return;
     }
 
+    let Ok(class_name) = std::ffi::CString::new("BlurredView") else {
+        tracing::error!("CString creation failed");
+        SWIZZLE_DONE.store(false, Ordering::SeqCst);
+        return;
+    };
+
     // SAFETY: Uses Objective-C runtime to look up a class by name and replace
     // a method implementation. Both the class pointer and method pointer are
     // checked for null before use. The swizzle is guarded by SWIZZLE_DONE
@@ -170,7 +176,6 @@ pub fn swizzle_gpui_blurred_view() {
     // an Objective-C IMP, which is ABI-compatible for extern "C" functions.
     unsafe {
         // Get GPUI's BlurredView class
-        let class_name = std::ffi::CString::new("BlurredView").unwrap();
         let blurred_class = objc::runtime::objc_getClass(class_name.as_ptr());
 
         logging::log(

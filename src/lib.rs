@@ -1,4 +1,5 @@
 #![allow(unexpected_cfgs)]
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
 #![recursion_limit = "2048"]
 
 //! Script Kit GPUI - A GPUI-based launcher for Script Kit

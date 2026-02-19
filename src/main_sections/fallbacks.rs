@@ -46,7 +46,7 @@ fn execute_fallback_action(
                                 activate
                                 do script "{}"
                             end tell"#,
-                            command.replace("\"", "\\\"").replace("\\", "\\\\")
+                            crate::utils::escape_applescript_string(&command)
                         );
                         match std::process::Command::new("osascript")
                             .arg("-e")

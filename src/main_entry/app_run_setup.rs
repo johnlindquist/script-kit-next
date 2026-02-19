@@ -334,7 +334,7 @@ app.run(move |cx: &mut App| {
         let config_for_tray_actions = config_for_app.clone();
 
         // Root is required for gpui_component's InputState focus tracking
-        let window: WindowHandle<Root> = cx.open_window(
+        let window: WindowHandle<Root> = match cx.open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
                 titlebar: None,
@@ -355,16 +355,37 @@ app.run(move |cx: &mut App| {
                 *app_entity_for_closure.lock().unwrap_or_else(|e| e.into_inner()) = Some(view.clone());
                 cx.new(|cx| Root::new(view, window, cx))
             },
-        )
-        .unwrap();
+        ) {
+            Ok(window) => window,
+            Err(error) => {
+                logging::log(
+                    "APP",
+                    &format!("Failed to open main window during startup: {}", error),
+                );
+                return;
+            }
+        };
 
         // Extract the app entity for use in callbacks
-        let app_entity = app_entity_holder.lock().unwrap_or_else(|e| e.into_inner()).clone().expect("App entity should be set");
+        let app_entity = match app_entity_holder
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+        {
+            Some(app_entity) => app_entity,
+            None => {
+                logging::log(
+                    "APP",
+                    "Main app entity missing after window creation; aborting startup initialization",
+                );
+                return;
+            }
+        };
 
         // Set initial focus via the Root window
         // We access the app entity within the window context to properly focus it
         let app_entity_for_focus = app_entity.clone();
-        window
+        let update_result = window
             .update(cx, |_root, win, root_cx| {
                 app_entity_for_focus.update(root_cx, |view, ctx| {
                     let focus_handle = view.focus_handle(ctx);
@@ -427,8 +448,17 @@ app.run(move |cx: &mut App| {
                         windows::notify_all_windows(ctx);
                     }));
                 });
-            })
-            .unwrap();
+            });
+        if let Err(error) = update_result {
+            logging::log(
+                "APP",
+                &format!(
+                    "Failed to initialize main window focus/subscriptions during startup: {}",
+                    error
+                ),
+            );
+            return;
+        }
 
         // Register the main window with WindowManager before tray init
         // This must happen after GPUI creates the window but before tray creates its windows
