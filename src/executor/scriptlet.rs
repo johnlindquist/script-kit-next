@@ -742,6 +742,46 @@ pub fn execute_transform(
     Err("Transform scriptlets are only supported on macOS".to_string())
 }
 
+#[cfg(any(test, target_os = "windows"))]
+fn escape_windows_cmd_launch_argument(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '^' | '&' | '|' | '<' | '>' | '(' | ')' | '%' | '!' | '"' => {
+                escaped.push('^');
+                escaped.push(ch);
+            }
+            _ => escaped.push(ch),
+        }
+    }
+    escaped
+}
+
+fn build_open_command(target: &str) -> Command {
+    #[cfg(target_os = "macos")]
+    {
+        let mut command = Command::new("open");
+        command.arg(target);
+        command
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let mut command = Command::new("xdg-open");
+        command.arg(target);
+        command
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let mut command = Command::new("cmd");
+        command
+            .args(["/C", "start", ""])
+            .arg(escape_windows_cmd_launch_argument(target));
+        command
+    }
+}
+
 /// Execute open command (open URL or file)
 pub fn execute_open(
     content: &str,
@@ -754,16 +794,7 @@ pub fn execute_open(
     );
 
     let target = content.trim();
-
-    #[cfg(target_os = "macos")]
-    let cmd_name = "open";
-    #[cfg(target_os = "linux")]
-    let cmd_name = "xdg-open";
-    #[cfg(target_os = "windows")]
-    let cmd_name = "start";
-
-    let mut cmd = Command::new(cmd_name);
-    cmd.arg(target);
+    let mut cmd = build_open_command(target);
     apply_scriptlet_environment_allowlist(&mut cmd);
 
     let output = cmd
@@ -776,6 +807,36 @@ pub fn execute_open(
         stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
         success: output.status.success(),
     })
+}
+
+#[cfg(test)]
+#[allow(clippy::items_after_test_module)]
+mod open_command_tests {
+    #[cfg(target_os = "windows")]
+    use super::build_open_command;
+    use super::escape_windows_cmd_launch_argument;
+
+    #[test]
+    fn test_escape_windows_cmd_launch_argument_escapes_shell_metacharacters() {
+        let escaped = escape_windows_cmd_launch_argument(r#"a&b|c<d>e(f)g^h%i!j"k"#);
+        assert_eq!(escaped, r#"a^&b^|c^<d^>e^(f^)g^^h^%i^!j^"k"#);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn test_build_open_command_uses_cmd_start_with_empty_title_on_windows() {
+        let command = build_open_command("https://example.com/?x=1&y=2");
+        let args: Vec<String> = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect();
+
+        assert_eq!(command.get_program().to_string_lossy(), "cmd");
+        assert_eq!(
+            args,
+            vec!["/C", "start", "", "https://example.com/?x=1^&y=2"]
+        );
+    }
 }
 
 /// Execute edit command (open file in editor)

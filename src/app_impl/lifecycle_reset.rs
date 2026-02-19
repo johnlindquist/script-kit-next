@@ -1,5 +1,28 @@
 use super::*;
 
+#[cfg(unix)]
+fn process_group_id_from_pid(pid: u32) -> Result<i32, String> {
+    i32::try_from(pid).map_err(|_| format!("PID {} is out of range for killpg", pid))
+}
+
+#[cfg(unix)]
+fn force_kill_script_process_group(pid: u32) -> Result<(), String> {
+    let process_group_id = process_group_id_from_pid(pid)?;
+
+    // SAFETY: killpg is a syscall wrapper. We pass a validated process group id
+    // captured at spawn time and a constant signal value.
+    let kill_result = unsafe { libc::killpg(process_group_id, libc::SIGKILL) };
+    if kill_result == 0 {
+        return Ok(());
+    }
+
+    Err(format!(
+        "killpg failed for process group {}: {}",
+        pid,
+        std::io::Error::last_os_error()
+    ))
+}
+
 impl ScriptListApp {
     pub(crate) fn cancel_script_execution(&mut self, cx: &mut Context<Self>) {
         logging::log("EXEC", "=== Canceling script execution ===");
@@ -35,9 +58,15 @@ impl ScriptListApp {
             );
             #[cfg(unix)]
             {
-                let _ = std::process::Command::new("kill")
-                    .args(["-9", &format!("-{}", pid)])
-                    .output();
+                if let Err(error) = force_kill_script_process_group(pid) {
+                    logging::log(
+                        "CLEANUP",
+                        &format!(
+                            "Failed to force-kill script process group {}: {}",
+                            pid, error
+                        ),
+                    );
+                }
             }
         }
 
@@ -348,5 +377,16 @@ impl ScriptListApp {
             );
             self.close_and_reset_window(cx);
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod lifecycle_reset_unix_tests {
+    use super::process_group_id_from_pid;
+
+    #[test]
+    fn test_process_group_id_from_pid_rejects_out_of_range_u32() {
+        let err = process_group_id_from_pid(u32::MAX).expect_err("u32::MAX should be rejected");
+        assert!(err.contains("out of range"));
     }
 }
