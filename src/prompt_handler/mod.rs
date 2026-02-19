@@ -9,6 +9,21 @@ fn unhandled_message_warning(message_type: &str) -> String {
     )
 }
 
+#[cfg(any(test, target_os = "windows"))]
+fn escape_windows_cmd_open_target(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '^' | '&' | '|' | '<' | '>' | '(' | ')' | '%' | '!' | '"' => {
+                escaped.push('^');
+                escaped.push(ch);
+            }
+            _ => escaped.push(ch),
+        }
+    }
+    escaped
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PromptMessageRoute {
     ConfirmWindow,
@@ -519,8 +534,10 @@ impl ScriptListApp {
                 }
                 #[cfg(target_os = "windows")]
                 {
+                    let escaped_url = escape_windows_cmd_open_target(&url);
                     match std::process::Command::new("cmd")
-                        .args(["/C", "start", &url])
+                        .args(["/C", "start", ""])
+                        .arg(&escaped_url)
                         .spawn()
                     {
                         Ok(_) => tracing::info!(
@@ -2090,7 +2107,10 @@ impl ScriptListApp {
 // --- merged from part_002.rs ---
 #[cfg(test)]
 mod prompt_handler_message_tests {
-    use super::{classify_prompt_message_route, unhandled_message_warning, PromptMessageRoute};
+    use super::{
+        classify_prompt_message_route, escape_windows_cmd_open_target, unhandled_message_warning,
+        PromptMessageRoute,
+    };
     use crate::PromptMessage;
 
     #[test]
@@ -2137,5 +2157,11 @@ mod prompt_handler_message_tests {
 
         assert_eq!(truncated.chars().count(), 30);
         assert!(std::str::from_utf8(truncated.as_bytes()).is_ok());
+    }
+
+    #[test]
+    fn test_escape_windows_cmd_open_target_escapes_shell_metacharacters() {
+        let escaped = escape_windows_cmd_open_target(r#"https://example.com/?x=1&y=2|3"#);
+        assert_eq!(escaped, r#"https://example.com/?x=1^&y=2^|3"#);
     }
 }

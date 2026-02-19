@@ -1,5 +1,20 @@
 use std::path::Path;
 
+#[cfg(any(test, target_os = "windows"))]
+fn escape_windows_cmd_open_target(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '^' | '&' | '|' | '<' | '>' | '(' | ')' | '%' | '!' | '"' => {
+                escaped.push('^');
+                escaped.push(ch);
+            }
+            _ => escaped.push(ch),
+        }
+    }
+    escaped
+}
+
 /// Open a file with the system default application
 #[allow(dead_code)]
 pub fn open_file(path: &str) -> Result<(), String> {
@@ -25,8 +40,10 @@ pub fn open_file(path: &str) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
+        let escaped_path = escape_windows_cmd_open_target(path);
         Command::new("cmd")
-            .args(["/C", "start", "", path])
+            .args(["/C", "start", ""])
+            .arg(&escaped_path)
             .spawn()
             .map_err(|e| format!("Failed to open file: {}", e))?;
         Ok(())
@@ -237,5 +254,22 @@ pub fn show_info(path: &str) -> Result<(), String> {
     {
         let _ = path;
         Err("Show Info is only supported on macOS".to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{escape_windows_cmd_open_target, terminal_working_directory};
+
+    #[test]
+    fn test_terminal_working_directory_returns_parent_for_file_paths() {
+        let resolved = terminal_working_directory("/tmp/a/b/file.txt", false);
+        assert_eq!(resolved, "/tmp/a/b");
+    }
+
+    #[test]
+    fn test_escape_windows_cmd_open_target_escapes_shell_metacharacters() {
+        let escaped = escape_windows_cmd_open_target(r#"C:\tmp\a&b|c<d>e(f)g^h%i!j"k.txt"#);
+        assert_eq!(escaped, r#"C:\tmp\a^&b^|c^<d^>e^(f^)g^^h^%i^!j^"k.txt"#);
     }
 }

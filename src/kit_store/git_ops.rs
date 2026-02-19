@@ -2,7 +2,7 @@
 
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Clone a kit repository into `~/.scriptkit/kits/<kit-name>`.
@@ -19,10 +19,7 @@ pub fn install_kit(repo_url: &str) -> Result<String, String> {
         )
     })?;
 
-    let output = Command::new("git")
-        .arg("clone")
-        .arg(repo_url)
-        .arg(&target_path)
+    let output = build_git_clone_command(repo_url, &target_path)
         .output()
         .map_err(|err| format!("Failed to run 'git clone': {}", err))?;
 
@@ -74,6 +71,17 @@ fn kits_root_path() -> PathBuf {
     PathBuf::from(home).join(".scriptkit").join("kits")
 }
 
+fn build_git_clone_command(repo_url: &str, target_path: &Path) -> Command {
+    let mut command = Command::new("git");
+    command
+        .arg("clone")
+        // Guard against option injection when repo URL starts with '-'.
+        .arg("--")
+        .arg(repo_url)
+        .arg(target_path);
+    command
+}
+
 fn extract_repo_name(repo_url: &str) -> Result<String, String> {
     let trimmed = repo_url.trim();
     if trimmed.is_empty() {
@@ -100,12 +108,68 @@ fn extract_repo_name(repo_url: &str) -> Result<String, String> {
         ));
     }
 
+    if candidate.contains("..") {
+        return Err(format!(
+            "Invalid repository name '{}' extracted from '{}': path traversal is not allowed",
+            candidate, repo_url
+        ));
+    }
+
+    if candidate.contains('/') || candidate.contains('\\') {
+        return Err(format!(
+            "Invalid repository name '{}' extracted from '{}': path separators are not allowed",
+            candidate, repo_url
+        ));
+    }
+
+    if is_windows_reserved_device_name(candidate) {
+        return Err(format!(
+            "Invalid repository name '{}' extracted from '{}': reserved device names are not allowed",
+            candidate, repo_url
+        ));
+    }
+
     Ok(candidate.to_string())
+}
+
+fn is_windows_reserved_device_name(name: &str) -> bool {
+    let trimmed = name.trim_end_matches([' ', '.']);
+    if trimmed.is_empty() {
+        return false;
+    }
+
+    let base = trimmed.split('.').next().unwrap_or_default();
+    matches!(
+        base.to_ascii_uppercase().as_str(),
+        "CON"
+            | "PRN"
+            | "AUX"
+            | "NUL"
+            | "COM1"
+            | "COM2"
+            | "COM3"
+            | "COM4"
+            | "COM5"
+            | "COM6"
+            | "COM7"
+            | "COM8"
+            | "COM9"
+            | "LPT1"
+            | "LPT2"
+            | "LPT3"
+            | "LPT4"
+            | "LPT5"
+            | "LPT6"
+            | "LPT7"
+            | "LPT8"
+            | "LPT9"
+    )
 }
 
 #[cfg(test)]
 mod tests {
-    use super::extract_repo_name;
+    use super::{build_git_clone_command, extract_repo_name};
+    use std::path::Path;
 
     #[test]
     fn test_extract_repo_name_from_https_url() {
@@ -131,5 +195,39 @@ mod tests {
     fn test_extract_repo_name_rejects_empty_url() {
         let err = extract_repo_name("   ").expect_err("empty url should fail");
         assert!(err.contains("cannot be empty"));
+    }
+
+    #[test]
+    fn test_extract_repo_name_rejects_path_traversal_sequences() {
+        let err =
+            extract_repo_name("https://github.com/user/../evil-kit").expect_err("should reject");
+        assert!(err.contains("path traversal"));
+    }
+
+    #[test]
+    fn test_extract_repo_name_rejects_path_separators() {
+        let err =
+            extract_repo_name("https://github.com/user/kit\\evil").expect_err("should reject");
+        assert!(err.contains("path separators"));
+    }
+
+    #[test]
+    fn test_extract_repo_name_rejects_windows_reserved_device_names() {
+        let err = extract_repo_name("https://github.com/user/CON.git").expect_err("should reject");
+        assert!(err.contains("reserved device names"));
+    }
+
+    #[test]
+    fn test_build_git_clone_command_inserts_double_dash_before_repo_url() {
+        let command = build_git_clone_command("-unsafe-url", Path::new("/tmp/kit"));
+        let args: Vec<String> = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect();
+
+        assert_eq!(args[0], "clone");
+        assert_eq!(args[1], "--");
+        assert_eq!(args[2], "-unsafe-url");
+        assert_eq!(args[3], "/tmp/kit");
     }
 }
