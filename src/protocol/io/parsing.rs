@@ -86,6 +86,17 @@ fn is_unknown_message_type_error(error: &str, message_type: &str) -> bool {
         || error.contains(&format!("unknown variant {message_type}"))
 }
 
+fn json_value_kind(value: &serde_json::Value) -> &'static str {
+    match value {
+        serde_json::Value::Null => "null",
+        serde_json::Value::Bool(_) => "boolean",
+        serde_json::Value::Number(_) => "number",
+        serde_json::Value::String(_) => "string",
+        serde_json::Value::Array(_) => "array",
+        serde_json::Value::Object(_) => "object",
+    }
+}
+
 /// Result type for graceful message parsing
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
@@ -94,6 +105,13 @@ enum ParseResult {
     Ok(Message),
     /// Message has no "type" field
     MissingType {
+        /// Truncated raw JSON for debugging
+        raw: String,
+    },
+    /// Message has an invalid "type" field shape/value (or non-object root)
+    InvalidTypeField {
+        /// Error describing why the type field is invalid
+        error: String,
         /// Truncated raw JSON for debugging
         raw: String,
     },
@@ -121,6 +139,7 @@ enum ParseResult {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParseIssueKind {
     MissingType,
+    InvalidTypeField,
     UnknownType,
     InvalidPayload,
     ParseError,
@@ -162,7 +181,9 @@ impl ParseIssue {
 /// gracefully by returning `ParseResult::UnknownType` instead of failing.
 ///
 /// # Classification Logic
+/// - Non-object JSON root → `InvalidTypeField`
 /// - Missing "type" field → `MissingType`
+/// - Non-string "type" field → `InvalidTypeField`
 /// - Unknown type value → `UnknownType`
 /// - Known type with invalid payload → `InvalidPayload`
 /// - Invalid JSON syntax → `ParseError`
@@ -199,10 +220,36 @@ fn parse_message_graceful(line: &str) -> ParseResult {
                 }
             };
 
-            let msg_type: String = match value.get("type").and_then(|t| t.as_str()) {
-                Some(t) => t.to_string(),
+            let object = match value.as_object() {
+                Some(obj) => obj,
+                None => {
+                    return ParseResult::InvalidTypeField {
+                        error: format!(
+                            "Message root must be a JSON object, found {}",
+                            json_value_kind(&value)
+                        ),
+                        raw: preview.to_string(),
+                    };
+                }
+            };
+
+            let type_value = match object.get("type") {
+                Some(value) => value,
                 None => {
                     return ParseResult::MissingType {
+                        raw: preview.to_string(),
+                    };
+                }
+            };
+
+            let msg_type: String = match type_value.as_str() {
+                Some(t) => t.to_string(),
+                None => {
+                    return ParseResult::InvalidTypeField {
+                        error: format!(
+                            "Message 'type' field must be a string, found {}",
+                            json_value_kind(type_value)
+                        ),
                         raw: preview.to_string(),
                     };
                 }

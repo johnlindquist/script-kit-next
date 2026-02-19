@@ -73,6 +73,38 @@ fn test_jsonl_reader_reports_invalid_payload() {
 }
 
 #[test]
+fn test_jsonl_reader_reports_invalid_type_field() {
+    use std::io::Cursor;
+
+    let jsonl = r#"[1,2,3]
+{"type":123}
+{"type":"beep"}
+"#;
+    let cursor = Cursor::new(jsonl);
+    let mut reader = JsonlReader::new(cursor);
+    let mut issues: Vec<ParseIssue> = Vec::new();
+
+    let msg = reader
+        .next_message_graceful_with_handler(|issue| issues.push(issue))
+        .unwrap();
+
+    assert!(matches!(msg, Some(Message::Beep {})));
+    assert_eq!(issues.len(), 2);
+    assert_eq!(issues[0].kind, ParseIssueKind::InvalidTypeField);
+    assert!(issues[0]
+        .error
+        .as_deref()
+        .unwrap_or("")
+        .contains("root must be a JSON object"));
+    assert_eq!(issues[1].kind, ParseIssueKind::InvalidTypeField);
+    assert!(issues[1]
+        .error
+        .as_deref()
+        .unwrap_or("")
+        .contains("field must be a string"));
+}
+
+#[test]
 fn test_next_message_returns_error_when_line_exceeds_limit() {
     use std::io::Cursor;
 
