@@ -232,6 +232,26 @@ impl BackgroundOpacity {
             vibrancy_background: Some(0.85), // Match POC: 85% opacity (0xD9/255)
         }
     }
+
+    /// Clamp all opacity values to the valid 0.0..=1.0 range.
+    pub fn clamped(mut self) -> Self {
+        self.main = self.main.clamp(0.0, 1.0);
+        self.title_bar = self.title_bar.clamp(0.0, 1.0);
+        self.search_box = self.search_box.clamp(0.0, 1.0);
+        self.log_panel = self.log_panel.clamp(0.0, 1.0);
+        self.selected = self.selected.clamp(0.0, 1.0);
+        self.hover = self.hover.clamp(0.0, 1.0);
+        self.preview = self.preview.clamp(0.0, 1.0);
+        self.dialog = self.dialog.clamp(0.0, 1.0);
+        self.input = self.input.clamp(0.0, 1.0);
+        self.panel = self.panel.clamp(0.0, 1.0);
+        self.input_inactive = self.input_inactive.clamp(0.0, 1.0);
+        self.input_active = self.input_active.clamp(0.0, 1.0);
+        self.border_inactive = self.border_inactive.clamp(0.0, 1.0);
+        self.border_active = self.border_active.clamp(0.0, 1.0);
+        self.vibrancy_background = self.vibrancy_background.map(|value| value.clamp(0.0, 1.0));
+        self
+    }
 }
 
 /// Vibrancy material type for macOS window backgrounds
@@ -1043,13 +1063,16 @@ impl Theme {
     /// Get background opacity settings
     /// Returns the configured opacity or sensible defaults
     pub fn get_opacity(&self) -> BackgroundOpacity {
-        self.opacity.clone().unwrap_or_else(|| {
-            if self.is_dark_mode() {
-                BackgroundOpacity::dark_default()
-            } else {
-                BackgroundOpacity::light_default()
-            }
-        })
+        self.opacity
+            .clone()
+            .unwrap_or_else(|| {
+                if self.is_dark_mode() {
+                    BackgroundOpacity::dark_default()
+                } else {
+                    BackgroundOpacity::light_default()
+                }
+            })
+            .clamped()
     }
 
     /// Create a new theme with opacity adjusted by an offset
@@ -1979,6 +2002,75 @@ mod tests {
             dark_theme.get_opacity().main,
             BackgroundOpacity::dark_default().main
         );
+    }
+
+    #[test]
+    fn test_background_opacity_clamped_clamps_all_fields_when_values_out_of_range() {
+        let clamped = BackgroundOpacity {
+            main: -0.1,
+            title_bar: 1.1,
+            search_box: 0.5,
+            log_panel: -3.0,
+            selected: 4.0,
+            hover: -0.2,
+            preview: 0.2,
+            dialog: 2.0,
+            input: -1.0,
+            panel: 0.7,
+            input_inactive: 1.2,
+            input_active: -0.4,
+            border_inactive: 0.3,
+            border_active: 1.9,
+            vibrancy_background: Some(-0.3),
+        }
+        .clamped();
+
+        assert_eq!(clamped.main, 0.0);
+        assert_eq!(clamped.title_bar, 1.0);
+        assert_eq!(clamped.search_box, 0.5);
+        assert_eq!(clamped.log_panel, 0.0);
+        assert_eq!(clamped.selected, 1.0);
+        assert_eq!(clamped.hover, 0.0);
+        assert_eq!(clamped.preview, 0.2);
+        assert_eq!(clamped.dialog, 1.0);
+        assert_eq!(clamped.input, 0.0);
+        assert_eq!(clamped.panel, 0.7);
+        assert_eq!(clamped.input_inactive, 1.0);
+        assert_eq!(clamped.input_active, 0.0);
+        assert_eq!(clamped.border_inactive, 0.3);
+        assert_eq!(clamped.border_active, 1.0);
+        assert_eq!(clamped.vibrancy_background, Some(0.0));
+    }
+
+    #[test]
+    fn test_get_opacity_clamps_configured_values_before_returning() {
+        let mut theme = Theme::dark_default();
+        theme.opacity = Some(BackgroundOpacity {
+            main: 2.0,
+            title_bar: -0.5,
+            search_box: 0.4,
+            log_panel: 0.3,
+            selected: 0.2,
+            hover: 0.1,
+            preview: 0.0,
+            dialog: 0.9,
+            input: 0.8,
+            panel: 0.7,
+            input_inactive: 0.6,
+            input_active: 0.5,
+            border_inactive: -0.1,
+            border_active: 3.0,
+            vibrancy_background: Some(1.4),
+        });
+
+        let opacity = theme.get_opacity();
+
+        assert_eq!(opacity.main, 1.0);
+        assert_eq!(opacity.title_bar, 0.0);
+        assert_eq!(opacity.search_box, 0.4);
+        assert_eq!(opacity.border_inactive, 0.0);
+        assert_eq!(opacity.border_active, 1.0);
+        assert_eq!(opacity.vibrancy_background, Some(1.0));
     }
 
     #[test]
