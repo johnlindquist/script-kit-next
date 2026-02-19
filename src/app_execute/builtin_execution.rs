@@ -222,7 +222,7 @@ impl ScriptListApp {
                 });
 
                 // Notify main window to re-render (in case UI state changed)
-                this.update(cx, |_this, cx| {
+                let _ = this.update(cx, |_this, cx| {
                     cx.notify();
                 });
             })

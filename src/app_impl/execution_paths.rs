@@ -319,7 +319,7 @@ impl ScriptListApp {
                     match open_result {
                         Ok(_) => {}
                         Err(e) => {
-                            this.update(cx, |this, cx| {
+                            let _ = this.update(cx, |this, cx| {
                                 logging::log(
                                     "ERROR",
                                     &format!("Failed to open confirmation modal: {}", e),
@@ -341,7 +341,7 @@ impl ScriptListApp {
                         return;
                     }
 
-                    this.update(cx, move |this, cx| {
+                    let _ = this.update(cx, move |this, cx| {
                         let path_str = path_info.path.clone();
                         let name = path_info.name.clone();
 

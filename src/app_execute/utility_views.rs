@@ -383,7 +383,7 @@ impl ScriptListApp {
                 let entity_weak2 = entity.downgrade();
                 let err_msg = err.to_string();
                 cx.spawn(async move |_this, cx| {
-                    let _ = cx.update(|cx| {
+                    cx.update(|cx| {
                         if let Some(entity) = entity_weak2.upgrade() {
                             entity.update(cx, |prompt, cx| {
                                 prompt.set_error(err_msg, cx);
