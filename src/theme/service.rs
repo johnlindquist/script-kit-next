@@ -26,6 +26,7 @@
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
+use anyhow::Context;
 use gpui::{App, Timer};
 use tracing::{debug, error, info, warn};
 
@@ -182,6 +183,32 @@ fn should_reload_theme(
     file_changed || (appearance_changed && auto_appearance)
 }
 
+fn theme_poll_detect_appearance_change_if_auto(
+    auto_appearance: bool,
+    last_system_dark: &mut bool,
+    detect_system_appearance: impl FnOnce() -> bool,
+) -> bool {
+    if !auto_appearance {
+        return false;
+    }
+
+    let current_system_dark = detect_system_appearance();
+    let appearance_changed = current_system_dark != *last_system_dark;
+    *last_system_dark = current_system_dark;
+    appearance_changed
+}
+
+fn theme_poll_refresh_baseline_on_auto_enable(
+    previous_auto_appearance: bool,
+    auto_appearance: bool,
+    last_system_dark: &mut bool,
+    detect_system_appearance: impl FnOnce() -> bool,
+) {
+    if !previous_auto_appearance && auto_appearance {
+        *last_system_dark = detect_system_appearance();
+    }
+}
+
 fn drain_pending_events<T>(rx: &std::sync::mpsc::Receiver<T>) -> bool {
     let mut has_events = false;
     while let Ok(_evt) = rx.try_recv() {
@@ -219,7 +246,14 @@ pub fn ensure_theme_service(cx: &mut App) {
 
         // Adaptive polling: starts at 200ms, increases to 2s when idle
         let mut idle_count = 0u32;
-        let mut last_system_dark = super::types::detect_system_appearance();
+        let mut auto_appearance = matches!(
+            super::types::get_cached_theme().appearance,
+            AppearanceMode::Auto
+        );
+        let mut last_system_dark = false;
+        if auto_appearance {
+            last_system_dark = super::types::detect_system_appearance();
+        }
         loop {
             // Adaptive polling: 200ms when active, up to 2000ms when idle
             let poll_interval = if u64::from(idle_count) < FAST_POLL_IDLE_CUTOFF {
@@ -232,12 +266,10 @@ pub fn ensure_theme_service(cx: &mut App) {
             Timer::after(std::time::Duration::from_millis(poll_interval)).await;
 
             let file_changed = drain_pending_events(&rx);
-            let current_system_dark = super::types::detect_system_appearance();
-            let appearance_changed = current_system_dark != last_system_dark;
-            last_system_dark = current_system_dark;
-            let auto_appearance = matches!(
-                super::types::get_cached_theme().appearance,
-                AppearanceMode::Auto
+            let appearance_changed = theme_poll_detect_appearance_change_if_auto(
+                auto_appearance,
+                &mut last_system_dark,
+                super::types::detect_system_appearance,
             );
 
             if should_reload_theme(file_changed, appearance_changed, auto_appearance) {
@@ -248,19 +280,42 @@ pub fn ensure_theme_service(cx: &mut App) {
                     validate_theme_json_before_reload();
                 }
 
-                let update_result = cx.update(|cx| {
-                    // Keep cache update + gpui sync + revision bump in one app update.
-                    reload_theme_cache_sync_and_bump_revision(cx);
+                let update_result = cx
+                    .update(|cx| {
+                        // Keep cache update + gpui sync + revision bump in one app update.
+                        let theme = reload_theme_cache_sync_and_bump_revision(cx);
+                        let updated_auto_appearance =
+                            matches!(theme.appearance, AppearanceMode::Auto);
 
-                    // Notify all registered windows to re-render
-                    windows::notify_all_windows(cx);
-                });
+                        // Notify all registered windows to re-render
+                        windows::notify_all_windows(cx);
+                        updated_auto_appearance
+                    })
+                    .context("theme service failed to update app context");
 
-                // If the update failed, the app may be shutting down
-                if let Err(error) = update_result {
-                    warn!(error = ?error, "App context gone, stopping theme service");
-                    break;
+                let updated_auto_appearance = match update_result {
+                    Ok(updated_auto_appearance) => updated_auto_appearance,
+                    Err(error) => {
+                        warn!(error = ?error, "App context gone, stopping theme service");
+                        break;
+                    }
+                };
+
+                if auto_appearance != updated_auto_appearance {
+                    debug!(
+                        previous_auto_appearance = auto_appearance,
+                        auto_appearance = updated_auto_appearance,
+                        "Theme appearance mode updated"
+                    );
                 }
+
+                theme_poll_refresh_baseline_on_auto_enable(
+                    auto_appearance,
+                    updated_auto_appearance,
+                    &mut last_system_dark,
+                    super::types::detect_system_appearance,
+                );
+                auto_appearance = updated_auto_appearance;
             } else {
                 idle_count = idle_count.saturating_add(1);
             }
@@ -372,6 +427,61 @@ mod tests {
     #[test]
     fn test_should_not_reload_theme_when_appearance_changes_outside_auto_mode() {
         assert!(!should_reload_theme(false, true, false));
+    }
+
+    #[test]
+    fn test_theme_poll_detect_appearance_change_if_auto_skips_detection_when_not_auto() {
+        let mut last_system_dark = true;
+        let mut called = false;
+
+        let appearance_changed =
+            theme_poll_detect_appearance_change_if_auto(false, &mut last_system_dark, || {
+                called = true;
+                false
+            });
+
+        assert!(!appearance_changed);
+        assert!(!called);
+        assert!(last_system_dark);
+    }
+
+    #[test]
+    fn test_theme_poll_detect_appearance_change_if_auto_updates_last_system_state() {
+        let mut last_system_dark = true;
+
+        let appearance_changed =
+            theme_poll_detect_appearance_change_if_auto(true, &mut last_system_dark, || false);
+
+        assert!(appearance_changed);
+        assert!(!last_system_dark);
+    }
+
+    #[test]
+    fn test_theme_poll_refresh_baseline_on_auto_enable_detects_baseline_once() {
+        let mut last_system_dark = false;
+        let mut call_count = 0usize;
+
+        theme_poll_refresh_baseline_on_auto_enable(false, true, &mut last_system_dark, || {
+            call_count += 1;
+            true
+        });
+
+        assert_eq!(call_count, 1);
+        assert!(last_system_dark);
+    }
+
+    #[test]
+    fn test_theme_poll_refresh_baseline_on_auto_enable_skips_when_auto_not_newly_enabled() {
+        let mut last_system_dark = false;
+        let mut call_count = 0usize;
+
+        theme_poll_refresh_baseline_on_auto_enable(true, true, &mut last_system_dark, || {
+            call_count += 1;
+            true
+        });
+
+        assert_eq!(call_count, 0);
+        assert!(!last_system_dark);
     }
 
     #[test]
