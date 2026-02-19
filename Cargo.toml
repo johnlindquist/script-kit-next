@@ -24,17 +24,13 @@ path = "src/bin/storybook.rs"
 test = false
 
 [dependencies]
-gpui = { git = "https://github.com/zed-industries/zed" }
+gpui = { git = "https://www.github.com/zed-industries/zed", rev = "94faaebfec5e46afa6d3aee5372cbbdb33b97c33" }
 global-hotkey = "0.7"
 notify = "8.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"        # YAML frontmatter parsing for scriptlet bundles
 shellexpand = "2.1"
-core-graphics = "0.24"
-cocoa = "0.26"
-core-video = { version = "0.4.3", features = ["metal"] }
-objc = "0.2"
 dirs = "5.0"
 smallvec = "1.15"
 syntect = { version = "5.2", default-features = false, features = ["default-syntaxes", "default-themes", "default-fancy"] }
@@ -59,13 +55,11 @@ async-channel = "2.3"          # Async channel for stdin command listener
 # Selected text functionality (getSelectedText/setSelectedText)
 get-selected-text = "0.1"      # Hybrid AX + clipboard fallback for reading selected text
 arboard = "3.6"                # Clipboard access for setSelectedText fallback
-# Note: We use core-graphics directly for Cmd+V simulation (more reliable than enigo on macOS)
-macos-accessibility-client = "0.0.1"  # Permission checking for accessibility APIs
 
 # System tray / menu bar integration
 tray-icon = "0.21"                    # Cross-platform tray icon (includes muda for menus)
-resvg = "0.46"                        # SVG to PNG conversion for tray icon
-usvg = "0.46"                         # SVG parsing (used by resvg)
+resvg = "0.45"                        # SVG to PNG conversion for tray icon
+usvg = "0.45"                         # SVG parsing (used by resvg)
 tiny-skia = "0.11"                    # 2D graphics library for SVG rendering
 
 # Clipboard history storage
@@ -110,14 +104,11 @@ meval = "0.2"
 # Fork adds set_selection() method for programmatic text selection (snippet/template support)
 # Original: https://github.com/longbridge/gpui-component
 # Fork: https://github.com/johnlindquist/gpui-component
-gpui-component = { git = "https://github.com/johnlindquist/gpui-component", package = "gpui-component" }
+gpui-component = { git = "https://github.com/johnlindquist/gpui-component", rev = "b9996cafc2eab35740d4b8dc2fe3268ecd76414e", package = "gpui-component" }
 
 # Tree-sitter markdown grammar for Notes editor highlighting
 tree-sitter-md = "0.5.2"
 
-# Core Foundation for CFRunLoop (keyboard monitoring)
-core-foundation = "0.10"
-foreign-types = "0.5"
 
 # Cron scheduling support
 croner = "3.0"                 # Parse and validate cron expressions
@@ -126,8 +117,6 @@ english-to-cron = "0.1"        # Convert natural language schedules to cron
 # HTTP client for AI provider API calls
 ureq = { version = "3", default-features = false, features = ["json", "rustls"] }
 
-# macOS launch-at-login via SMAppService
-smappservice-rs = "0.1"
 which = "8.0.0"
 hex = "0.4.3"
 
@@ -135,6 +124,22 @@ hex = "0.4.3"
 tempfile = "3"
 tree-sitter = "0.25"
 tree-sitter-typescript = "0.23.2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# Note: We use core-graphics directly for Cmd+V simulation (more reliable than enigo on macOS)
+core-graphics = "0.24"
+cocoa = "0.26"
+core-video = { version = "0.4.3", features = ["metal"] }
+objc = "0.2"
+macos-accessibility-client = "0.0.1"  # Permission checking for accessibility APIs
+# Core Foundation for CFRunLoop (keyboard monitoring)
+core-foundation = "0.10"
+foreign-types = "0.5"
+# macOS launch-at-login via SMAppService
+smappservice-rs = "0.1"
+
+[patch."https://github.com/zed-industries/zed"]
+gpui = { git = "https://www.github.com/zed-industries/zed", rev = "94faaebfec5e46afa6d3aee5372cbbdb33b97c33" }
 
 [features]
 default = ["ocr"]
