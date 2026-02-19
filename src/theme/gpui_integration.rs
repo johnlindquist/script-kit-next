@@ -124,6 +124,7 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
     // Helper to apply opacity: true alpha when vibrancy is enabled,
     // or precomposed opaque color against background when disabled.
     let with_vibrancy = |hex: u32, alpha: f32| -> Hsla {
+        let alpha = alpha.clamp(0.0, 1.0);
         if vibrancy_enabled {
             let base = hex_to_hsla(hex);
             hsla(base.h, base.s, base.l, alpha)
@@ -167,7 +168,8 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
                 .vibrancy_background
                 .map(|v| v.max(0.85))
                 .unwrap_or(0.85)
-        };
+        }
+        .clamp(0.0, 1.0);
 
         debug!(
             is_dark,
@@ -309,7 +311,7 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
 
     // Selection - match main input selection alpha (0x60)
     let mut selection = hex_to_hsla(colors.accent.selected);
-    selection.a = 96.0 / 255.0;
+    selection.a = (96.0_f32 / 255.0_f32).clamp(0.0, 1.0);
     theme_color.selection = selection;
 
     // Ring (focus ring)
@@ -640,6 +642,24 @@ mod tests {
             theme.get_opacity().search_box,
         );
         assert_hsla_close(mapped.input, expected);
+    }
+
+    #[test]
+    fn test_map_scriptkit_to_gpui_theme_clamps_out_of_range_vibrancy_alphas() {
+        let mut theme = Theme::dark_default();
+        let mut vibrancy = theme.get_vibrancy();
+        vibrancy.enabled = true;
+        theme.vibrancy = Some(vibrancy);
+        theme.opacity = Some(BackgroundOpacity {
+            search_box: 1.7,
+            vibrancy_background: Some(-0.4),
+            ..theme.get_opacity()
+        });
+
+        let mapped = map_scriptkit_to_gpui_theme(&theme, true);
+
+        assert!((mapped.input.a - 1.0).abs() < 1e-6);
+        assert!((mapped.background.a - 0.0).abs() < 1e-6);
     }
 
     #[test]
