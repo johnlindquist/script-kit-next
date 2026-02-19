@@ -63,6 +63,18 @@ impl StderrBuffer {
 
     /// Add a line to the buffer, evicting old lines if necessary
     pub fn push_line(&self, line: String) {
+        let mut line = line;
+        if line.len() > self.max_bytes {
+            let original_bytes = line.len();
+            truncate_line_to_max_bytes(&mut line, self.max_bytes);
+            debug!(
+                target: "SCRIPT",
+                original_bytes,
+                truncated_bytes = line.len(),
+                max_bytes = self.max_bytes,
+                "Truncated oversized stderr line"
+            );
+        }
         let line_bytes = line.len();
 
         let mut lines = self.lines.lock().unwrap_or_else(|e| e.into_inner());
@@ -127,6 +139,18 @@ impl StderrBuffer {
     }
 }
 
+fn truncate_line_to_max_bytes(line: &mut String, max_bytes: usize) {
+    if line.len() <= max_bytes {
+        return;
+    }
+
+    let mut truncate_at = max_bytes.min(line.len());
+    while truncate_at > 0 && !line.is_char_boundary(truncate_at) {
+        truncate_at -= 1;
+    }
+    line.truncate(truncate_at);
+}
+
 /// Stderr capture handle containing both buffer and thread handle
 ///
 /// This struct bundles the stderr buffer with the thread's JoinHandle,
@@ -179,13 +203,42 @@ impl StderrCapture {
 /// The JoinHandle allows callers to wait for the reader to complete before
 /// snapshotting the buffer, preventing partial error captures.
 ///
+/// Passing an existing StderrCapture returns it unchanged. This keeps call sites
+/// compatible when stderr is already being drained upstream.
+///
 /// # Example
 /// ```ignore
 /// let capture = spawn_stderr_reader(stderr, script_path);
 /// // ... wait for process to exit ...
 /// let stderr_text = capture.get_contents_with_timeout(Duration::from_millis(100));
 /// ```
-pub fn spawn_stderr_reader<R: Read + Send + 'static>(
+pub fn spawn_stderr_reader<R: IntoStderrCapture>(stderr: R, script_path: String) -> StderrCapture {
+    stderr.into_stderr_capture(script_path)
+}
+
+/// Source that can be converted into an active stderr capture.
+pub trait IntoStderrCapture {
+    fn into_stderr_capture(self, script_path: String) -> StderrCapture;
+}
+
+impl<R: Read + Send + 'static> IntoStderrCapture for R {
+    fn into_stderr_capture(self, script_path: String) -> StderrCapture {
+        spawn_stderr_reader_thread(self, script_path)
+    }
+}
+
+impl IntoStderrCapture for StderrCapture {
+    fn into_stderr_capture(self, script_path: String) -> StderrCapture {
+        debug!(
+            target: "SCRIPT",
+            script_path = %script_path,
+            "Stderr capture already active; reusing existing capture"
+        );
+        self
+    }
+}
+
+fn spawn_stderr_reader_thread<R: Read + Send + 'static>(
     stderr: R,
     script_path: String,
 ) -> StderrCapture {
@@ -368,6 +421,17 @@ mod tests {
     }
 
     #[test]
+    fn test_push_line_truncates_single_oversized_line_to_max_bytes() {
+        let buffer = StderrBuffer::new(10, 16);
+
+        buffer.push_line("1234567890abcdefghijklmnopqrstuvwxyz".to_string());
+
+        assert_eq!(buffer.len(), 1);
+        assert_eq!(buffer.byte_count(), 16);
+        assert_eq!(buffer.get_contents(), "1234567890abcdef");
+    }
+
+    #[test]
     fn test_unicode_handling() {
         let buffer = StderrBuffer::new(10, 1024);
 
@@ -495,5 +559,21 @@ mod tests {
             completed2,
             "Should return true immediately if already finished"
         );
+    }
+
+    #[test]
+    fn test_spawn_stderr_reader_returns_existing_capture_when_already_active() {
+        use std::io::Cursor;
+
+        let initial = spawn_stderr_reader(
+            Cursor::new(b"line-one\nline-two\n".to_vec()),
+            "/test/script.ts".to_string(),
+        );
+
+        let reused = spawn_stderr_reader(initial, "/test/script.ts".to_string());
+        let contents = reused.get_contents_with_timeout(Duration::from_millis(500));
+
+        assert!(contents.contains("line-one"));
+        assert!(contents.contains("line-two"));
     }
 }
