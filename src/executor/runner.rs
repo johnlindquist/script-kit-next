@@ -6,12 +6,13 @@
 //! - SDK path management
 //! - File type detection
 
+use super::stderr_buffer::{spawn_stderr_reader, StderrCapture};
 use crate::logging;
 use crate::process_manager::PROCESS_MANAGER;
 use crate::protocol::JsonlReader;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::time::Instant;
 use tracing::{debug, error, info, instrument};
 
@@ -455,7 +456,7 @@ pub struct ScriptSession {
     pub stdin: ChildStdin,
     pub(crate) stdout_reader: JsonlReader<BufReader<ChildStdout>>,
     /// Captured stderr for error reporting
-    pub stderr: Option<ChildStderr>,
+    pub stderr: Option<StderrCapture>,
     pub(crate) child: Child,
     /// Process handle for cleanup - kills process group on drop
     pub(crate) process_handle: ProcessHandle,
@@ -466,7 +467,7 @@ pub struct SplitSession {
     pub stdin: ChildStdin,
     pub stdout_reader: JsonlReader<BufReader<ChildStdout>>,
     /// Captured stderr for error reporting
-    pub stderr: Option<ChildStderr>,
+    pub stderr: Option<StderrCapture>,
     pub child: Child,
     /// Process handle for cleanup - kills process group on drop
     /// IMPORTANT: This MUST be kept alive until the script completes!
@@ -736,12 +737,15 @@ pub fn spawn_script(cmd: &str, args: &[&str], script_path: &str) -> Result<Scrip
         .take()
         .ok_or_else(|| "Failed to open script stdout".to_string())?;
 
-    // Capture stderr for error reporting
-    let stderr = child.stderr.take();
+    // Start a background stderr drain so child writes cannot block on a full pipe.
+    let stderr = child
+        .stderr
+        .take()
+        .map(|stderr| spawn_stderr_reader(stderr, script_path.to_string()));
     info!(
         category = "EXEC",
-        stderr_captured = stderr.is_some(),
-        "Captured stderr handle"
+        stderr_capture_started = stderr.is_some(),
+        "Started stderr capture"
     );
 
     let process_handle = ProcessHandle::new(pid, script_path.to_string());
@@ -901,8 +905,8 @@ mod env_scrub_tests {
     use super::spawn_script;
     use std::env;
     use std::ffi::OsString;
-    use std::io::Read;
     use std::sync::{Mutex, OnceLock};
+    use std::time::{Duration, Instant};
 
     fn env_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -953,12 +957,50 @@ mod env_scrub_tests {
         let exit_code = split.wait().expect("wait should succeed");
         assert_eq!(exit_code, 0);
 
-        let mut stderr = String::new();
-        let mut stderr_reader = split.stderr.take().expect("stderr should be captured");
-        stderr_reader
-            .read_to_string(&mut stderr)
-            .expect("stderr should be readable");
+        let stderr_capture = split.stderr.take().expect("stderr should be captured");
+        let stderr = stderr_capture.get_contents_with_timeout(Duration::from_millis(500));
 
         assert_eq!(stderr, "forwarded|missing");
+    }
+
+    #[test]
+    fn test_spawn_script_drains_stderr_when_output_exceeds_pipe_capacity() {
+        let session = spawn_script(
+            "sh",
+            &["-c", "yes stderr_line | head -n 25000 >&2"],
+            "[test:runner_stderr_drain]",
+        )
+        .expect("spawn_script should succeed");
+
+        let mut split = session.split();
+        let deadline = Instant::now() + Duration::from_secs(5);
+
+        let status = loop {
+            match split.child.try_wait() {
+                Ok(Some(status)) => break status,
+                Ok(None) => {
+                    if Instant::now() >= deadline {
+                        let _ = split.kill();
+                        panic!("child did not exit after writing large stderr output");
+                    }
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                Err(error) => {
+                    let _ = split.kill();
+                    panic!("failed to poll child status: {}", error);
+                }
+            }
+        };
+        assert!(
+            status.success(),
+            "stderr stress script should exit successfully"
+        );
+
+        let capture = split.stderr.take().expect("stderr should be captured");
+        let stderr = capture.get_contents_with_timeout(Duration::from_millis(500));
+        assert!(
+            !stderr.is_empty(),
+            "stderr capture should include drained output"
+        );
     }
 }
