@@ -204,6 +204,28 @@ impl<R: Read> JsonlReader<R> {
                             on_issue(issue);
                             continue;
                         }
+                        ParseResult::InvalidTypeField { error, .. } => {
+                            let issue = ParseIssue::new(
+                                ParseIssueKind::InvalidTypeField,
+                                None,
+                                Some(error.clone()),
+                                preview.to_string(),
+                                raw_len,
+                            );
+                            // Set correlation ID for this parse error
+                            let _guard =
+                                crate::logging::set_correlation_id(issue.correlation_id.clone());
+
+                            warn!(
+                                correlation_id = %issue.correlation_id,
+                                error = %error,
+                                raw_preview = %issue.raw_preview,
+                                raw_len = issue.raw_len,
+                                "Skipping message with invalid 'type' field"
+                            );
+                            on_issue(issue);
+                            continue;
+                        }
                         ParseResult::UnknownType { message_type, .. } => {
                             let issue = ParseIssue::new(
                                 ParseIssueKind::UnknownType,

@@ -96,6 +96,38 @@ fn test_parse_message_graceful_missing_type_field() {
 }
 
 #[test]
+fn test_parse_message_graceful_invalid_type_field_when_root_is_not_object() {
+    let json = r#"[1,2,3]"#;
+    match parse_message_graceful(json) {
+        ParseResult::InvalidTypeField { error, raw } => {
+            assert!(
+                error.contains("root must be a JSON object"),
+                "unexpected error: {error}"
+            );
+            assert!(error.contains("array"), "unexpected error: {error}");
+            assert_eq!(raw, json);
+        }
+        other => panic!("Expected ParseResult::InvalidTypeField, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_parse_message_graceful_invalid_type_field_when_type_is_not_string() {
+    let json = r#"{"type":123,"id":"1"}"#;
+    match parse_message_graceful(json) {
+        ParseResult::InvalidTypeField { error, raw } => {
+            assert!(
+                error.contains("field must be a string"),
+                "unexpected error: {error}"
+            );
+            assert!(error.contains("number"), "unexpected error: {error}");
+            assert_eq!(raw, json);
+        }
+        other => panic!("Expected ParseResult::InvalidTypeField, got {:?}", other),
+    }
+}
+
+#[test]
 fn test_parse_message_graceful_invalid_payload() {
     // Known type "arg" but missing required "placeholder" field
     let json = r#"{"type":"arg","id":"1"}"#;
