@@ -219,7 +219,7 @@ impl ChatPromptMessage {
         if let Some(ref mut content) = self.content {
             content.push_str(chunk);
         } else {
-            self.content = Some(chunk.to_string());
+            self.content = Some(self.text.clone());
         }
     }
 
@@ -364,5 +364,32 @@ impl ChatPromptConfig {
     pub fn with_save_history(mut self, save: bool) -> Self {
         self.save_history = save;
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ChatMessagePosition, ChatMessageRole, ChatPromptMessage};
+
+    #[test]
+    fn test_append_content_preserves_existing_text_when_content_is_none() {
+        let mut message = ChatPromptMessage {
+            id: None,
+            role: Some(ChatMessageRole::Assistant),
+            content: None,
+            text: "existing".to_string(),
+            position: ChatMessagePosition::Left,
+            name: None,
+            model: None,
+            streaming: true,
+            error: None,
+            created_at: None,
+            image: None,
+        };
+
+        message.append_content(" chunk");
+
+        assert_eq!(message.text, "existing chunk");
+        assert_eq!(message.content.as_deref(), Some("existing chunk"));
     }
 }
