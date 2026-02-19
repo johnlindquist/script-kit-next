@@ -76,6 +76,25 @@ fn bump_theme_revision() {
     );
 }
 
+fn reload_theme_cache_and_bump_revision() -> super::types::Theme {
+    let theme = crate::theme::reload_theme_cache();
+    bump_theme_revision();
+    theme
+}
+
+/// Reload the Script Kit theme cache, re-sync gpui-component theme state, and bump revision.
+///
+/// Call this while already inside an app/window update so cache + revision visibility stays atomic.
+pub(crate) fn reload_theme_cache_sync_and_bump_revision(cx: &mut App) -> super::types::Theme {
+    let theme = reload_theme_cache_and_bump_revision();
+    super::gpui_integration::sync_gpui_component_theme_for_theme(cx, &theme);
+    debug!(
+        theme_revision = theme_revision(),
+        "Applied atomic theme cache + gpui sync + revision update"
+    );
+    theme
+}
+
 fn log_theme_validation_diagnostics(theme_json: &serde_json::Value) -> (usize, usize) {
     let mut diagnostics = super::validation::ThemeDiagnostics::new();
     diagnostics.merge(super::validation::validate_theme_json(theme_json));
@@ -224,20 +243,14 @@ pub fn ensure_theme_service(cx: &mut App) {
             if should_reload_theme(file_changed, appearance_changed, auto_appearance) {
                 idle_count = 0; // Reset on activity
 
-                // Reload the theme cache FIRST (before syncing)
-                // This ensures get_cached_theme() returns fresh data
                 if file_changed {
                     info!("Theme changed, syncing to all windows");
                     validate_theme_json_before_reload();
                 }
-                crate::theme::reload_theme_cache();
 
                 let update_result = cx.update(|cx| {
-                    // Re-sync gpui-component theme with updated Script Kit theme
-                    crate::theme::sync_gpui_component_theme(cx);
-
-                    // Bump revision so views know to update cached values
-                    bump_theme_revision();
+                    // Keep cache update + gpui sync + revision bump in one app update.
+                    reload_theme_cache_sync_and_bump_revision(cx);
 
                     // Notify all registered windows to re-render
                     windows::notify_all_windows(cx);
@@ -297,6 +310,14 @@ mod tests {
     fn test_bump_increments_revision() {
         let before = theme_revision();
         bump_theme_revision();
+        let after = theme_revision();
+        assert!(after > before);
+    }
+
+    #[test]
+    fn test_reload_theme_cache_and_bump_revision_increments_revision() {
+        let before = theme_revision();
+        let _ = reload_theme_cache_and_bump_revision();
         let after = theme_revision();
         assert!(after > before);
     }
