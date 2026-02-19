@@ -288,7 +288,9 @@ impl ScriptListApp {
         let handle_close = cx.entity().downgrade();
         let handle_actions = cx.entity().downgrade();
         let actions_mode_for_footer = actions_mode;
-        let show_inline_actions_backdrop = self.show_actions_popup;
+        // Terminal actions open as a separate vibrancy popup window, so the
+        // inline backdrop is not needed (the dialog renders in its own window).
+        let show_inline_actions_backdrop = false;
 
         // Container with explicit height. We wrap the entity in a sized div because
         // GPUI entities don't automatically inherit parent flex sizing.
@@ -399,12 +401,8 @@ mod term_prompt_render_tests {
             "term actions popup should stay anchored from the shared footer height constant"
         );
         assert!(
-            TERM_RENDER_SOURCE.contains("let show_inline_actions_backdrop ="),
-            "term render should derive a dedicated inline-backdrop visibility flag"
-        );
-        assert!(
-            TERM_RENDER_SOURCE.contains("let show_inline_actions_backdrop = self.show_actions_popup;"),
-            "term render should keep terminal actions dialogs anchored inline whenever popup state is active"
+            TERM_RENDER_SOURCE.contains("let show_inline_actions_backdrop = false;"),
+            "term render should disable inline backdrop since terminal uses a vibrancy popup window"
         );
     }
 

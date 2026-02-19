@@ -1,4 +1,5 @@
 #![allow(unexpected_cfgs)]
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
 
 //! Binary entrypoint and GPUI application composition for Script Kit GPUI.
 //! It defines the `ScriptListApp` runtime, wires stdin protocol handling in `main`,

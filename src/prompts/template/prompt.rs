@@ -94,8 +94,18 @@ impl TemplatePrompt {
     }
 
     pub(super) fn parse_placeholder_matches(template: &str) -> Vec<TemplatePlaceholderMatch> {
-        let placeholder_re =
-            Regex::new(r"\{\{\s*([^{}]+?)\s*\}\}|\$\{([^}]+)\}").expect("Invalid regex");
+        let placeholder_re = match Regex::new(r"\{\{\s*([^{}]+?)\s*\}\}|\$\{([^}]+)\}") {
+            Ok(regex) => regex,
+            Err(error) => {
+                logging::log(
+                    "PROMPTS",
+                    &format!(
+                        "TemplatePrompt::parse_placeholder_matches regex compile failed: {error}"
+                    ),
+                );
+                return Vec::new();
+            }
+        };
         let mut matches = Vec::new();
 
         for captures in placeholder_re.captures_iter(template) {

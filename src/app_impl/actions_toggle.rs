@@ -417,6 +417,7 @@ impl ScriptListApp {
 
     /// Toggle terminal command bar for built-in terminal
     /// Shows common terminal actions (Clear, Copy, Paste, Scroll, etc.)
+    /// Opens as a separate vibrancy window for native macOS blur effect.
     #[allow(dead_code)]
     pub fn toggle_terminal_commands(&mut self, cx: &mut Context<Self>, window: &mut Window) {
         use crate::actions::ActionsDialog;
@@ -434,9 +435,8 @@ impl ScriptListApp {
             self.close_actions_popup(ActionsDialogHost::TermPrompt, window, cx);
         } else {
             self.resync_filter_input_after_actions_if_needed(window, cx);
-            // Open inline in the prompt container so positioning matches other prompt types.
-            self.show_actions_popup = true;
-            self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
+            // Open as a separate vibrancy window for native macOS blur
+            self.begin_actions_popup_window_open(cx, window);
 
             let theme_arc = std::sync::Arc::clone(&self.theme);
             let actions = terminal_actions_for_dialog();
@@ -456,17 +456,30 @@ impl ScriptListApp {
                 d.set_context_title(Some("Terminal".to_string()));
             });
 
+            let app_entity = cx.entity().clone();
+            dialog.update(cx, |d, _cx| {
+                d.set_on_close(Self::make_actions_window_on_close_callback(
+                    app_entity,
+                    "Terminal actions closed, focus restored via coordinator",
+                ));
+            });
+
             self.actions_dialog = Some(dialog.clone());
-            let dialog_focus_handle = dialog.read(cx).focus_handle.clone();
-            window.focus(&dialog_focus_handle, cx);
-            logging::log(
-                "FOCUS",
-                &format!(
-                    "Terminal actions OPENED inline: show_actions_popup={}, actions_dialog.is_some={}",
-                    self.show_actions_popup,
-                    self.actions_dialog.is_some()
-                ),
+
+            let main_bounds = window.bounds();
+            let display_id = window.display(cx).map(|d| d.id());
+
+            Self::spawn_open_actions_window(
+                cx,
+                main_bounds,
+                display_id,
+                dialog,
+                crate::actions::WindowPosition::BottomRight,
+                "Terminal actions popup window opened",
+                "Failed to open terminal actions window",
             );
+
+            logging::log("FOCUS", "Terminal actions opened with vibrancy window");
         }
         cx.notify();
     }
@@ -643,8 +656,8 @@ mod on_close_reentrancy_tests {
 
         let helper_call_count = impl_source.matches("Self::spawn_open_actions_window(").count();
         assert_eq!(
-            helper_call_count, 3,
-            "toggle_actions, toggle_webcam_actions, and toggle_chat_actions should use the shared spawn helper"
+            helper_call_count, 4,
+            "toggle_actions, toggle_webcam_actions, toggle_chat_actions, and toggle_terminal_commands should use the shared spawn helper"
         );
 
         let open_call_count = impl_source.matches("match open_actions_window(").count();
@@ -674,8 +687,8 @@ mod on_close_reentrancy_tests {
             .matches("self.begin_actions_popup_window_open(cx, window);")
             .count();
         assert_eq!(
-            helper_call_count, 3,
-            "toggle_actions, toggle_webcam_actions, and toggle_chat_actions should call begin_actions_popup_window_open"
+            helper_call_count, 4,
+            "toggle_actions, toggle_webcam_actions, toggle_chat_actions, and toggle_terminal_commands should call begin_actions_popup_window_open"
         );
 
         let toggle_actions_source = impl_source
@@ -723,17 +736,8 @@ mod on_close_reentrancy_tests {
             .and_then(|section| section.split("pub fn toggle_chat_actions").next())
             .expect("toggle_terminal_commands source section should exist");
         assert!(
-            !toggle_terminal_commands_source.contains("self.begin_actions_popup_window_open(cx, window);"),
-            "toggle_terminal_commands should keep terminal actions inline rather than opening a popup window"
-        );
-        assert!(
-            toggle_terminal_commands_source.contains("self.show_actions_popup = true;"),
-            "toggle_terminal_commands should mark the inline actions popup visible"
-        );
-        assert!(
-            toggle_terminal_commands_source
-                .contains("self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);"),
-            "toggle_terminal_commands should push actions focus overlay for inline terminal popup"
+            toggle_terminal_commands_source.contains("self.begin_actions_popup_window_open(cx, window);"),
+            "toggle_terminal_commands should open a vibrancy popup window for native blur"
         );
     }
 }

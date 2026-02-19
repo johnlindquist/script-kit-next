@@ -92,8 +92,9 @@ impl KeyEventTracker {
             return 0.0;
         }
 
-        let first = self.event_times.front().unwrap();
-        let last = self.event_times.back().unwrap();
+        let (Some(first), Some(last)) = (self.event_times.front(), self.event_times.back()) else {
+            return 0.0;
+        };
         let elapsed = last.duration_since(*first);
 
         if elapsed.as_secs_f64() < 0.001 {

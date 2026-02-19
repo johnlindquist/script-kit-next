@@ -67,9 +67,8 @@ impl NavCoalescer {
                 self.pending_delta += 1;
                 NavRecord::Coalesced
             }
-            Some(_) => {
+            Some(old_dir) => {
                 // Direction changed - flush old, start new
-                let old_dir = self.pending_dir.unwrap();
                 let old_delta = self.pending_delta;
                 self.pending_dir = Some(dir);
                 self.pending_delta = 0;

@@ -283,7 +283,7 @@ pub(crate) const AVERAGE_ITEM_HEIGHT_FOR_SCROLL: f32 = 44.0;
 /// System UI font for all list item text
 pub(crate) const FONT_SYSTEM_UI: &str = ".AppleSystemUIFont";
 /// Monospace font for keyboard shortcuts and code badges
-pub(crate) const FONT_MONO: &str = "SF Mono";
+pub(crate) const FONT_MONO: &str = "JetBrains Mono";
 /// Enum for grouped list items - supports both regular items and section headers
 ///
 /// Used with GPUI's `list()` component when rendering grouped results (e.g., frecency with RECENT/MAIN sections).

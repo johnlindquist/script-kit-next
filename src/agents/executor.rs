@@ -125,6 +125,11 @@ fn validate_agent_markdown_path(path: &Path) -> Result<PathBuf> {
 }
 
 fn validate_agent_markdown_path_with_kit_root(path: &Path, kit_root: &Path) -> Result<PathBuf> {
+    if path.as_os_str().is_empty() {
+        warn!("agent_path_validation_failed: reason=empty_path");
+        anyhow::bail!("agent_path_validation_failed: reason=empty_path");
+    }
+
     if has_parent_dir_component(path) {
         warn!(
             path = %path.display(),
@@ -678,6 +683,20 @@ mod tests {
                 "error chain should include parent_dir_segment reason: {error_chain}"
             );
         });
+    }
+
+    #[test]
+    fn test_build_terminal_command_rejects_empty_path() {
+        let mut agent = create_test_agent(AgentBackend::Claude);
+        agent.path = PathBuf::new();
+
+        let error =
+            build_terminal_command(&agent).expect_err("empty path should be rejected explicitly");
+        let error_chain = format!("{error:#}");
+        assert!(
+            error_chain.contains("reason=empty_path"),
+            "error chain should include empty_path reason: {error_chain}"
+        );
     }
 
     #[test]

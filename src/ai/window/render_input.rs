@@ -1,10 +1,7 @@
 use super::*;
 
 impl AiApp {
-    pub(super) fn render_input_with_cursor(
-        &self,
-        _cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    pub(super) fn render_input_with_cursor(&self, _cx: &mut Context<Self>) -> impl IntoElement {
         // Keep this focused on text alignment; the outer composer surface owns border/radius.
         div()
             .flex_1()

@@ -251,9 +251,7 @@ impl<'a> HtmlParser<'a> {
     }
 
     fn parse_attribute_value(&mut self) -> String {
-        let quote_char = self.peek_char();
-        if quote_char == Some('"') || quote_char == Some('\'') {
-            let quote = quote_char.unwrap();
+        if let Some(quote @ ('"' | '\'')) = self.peek_char() {
             self.advance_char(); // skip opening quote
 
             let mut value = String::new();
@@ -490,7 +488,7 @@ impl<'a> HtmlParser<'a> {
                 if children.is_empty() {
                     None
                 } else if children.len() == 1 {
-                    Some(children.into_iter().next().unwrap())
+                    children.into_iter().next()
                 } else {
                     Some(HtmlElement::Div {
                         classes: None,

@@ -1196,6 +1196,11 @@ const ACTIONS_DIALOG_COLOR_ALPHA_MAX: f32 = 255.0;
 const ACTIONS_DIALOG_SEARCH_BORDER_ALPHA_SCALE: f32 = 2.0;
 const ACTIONS_DIALOG_CONTAINER_BORDER_MIN_ALPHA: u8 = 0x80;
 const ACTIONS_DIALOG_OPAQUE_DIALOG_MIN_OPACITY: f32 = 0.95;
+// Inline popups don't get a real NSVisualEffectView blur layer — they're just
+// absolutely-positioned divs on top of other content.  A high opacity floor
+// keeps the popup readable while still allowing a subtle translucency hint that
+// the window-level vibrancy is present behind it.
+const ACTIONS_DIALOG_VIBRANT_INLINE_MIN_OPACITY: f32 = 0.85;
 
 fn actions_dialog_alpha_u8(opacity: f32) -> u8 {
     (opacity.clamp(0.0, 1.0) * ACTIONS_DIALOG_COLOR_ALPHA_MAX) as u8
@@ -1213,10 +1218,13 @@ fn actions_dialog_container_border_alpha(border_inactive_opacity: f32) -> u8 {
 }
 
 fn actions_dialog_container_background_alpha(dialog_opacity: f32, use_vibrancy: bool) -> u8 {
-    // In vibrancy mode, keep the dialog at the configured opacity so blur can
-    // composite through. Opaque mode still enforces a readability floor.
+    // Inline vibrancy popups need a high-opacity background because they don't
+    // have their own NSVisualEffectView blur layer — the content behind them
+    // would show through as raw transparency rather than blurred.  85% opacity
+    // keeps the popup mostly opaque with a subtle translucency hint.
+    // Opaque (non-vibrancy) mode keeps a near-full readability floor.
     let resolved_opacity = if use_vibrancy {
-        dialog_opacity
+        dialog_opacity.max(ACTIONS_DIALOG_VIBRANT_INLINE_MIN_OPACITY)
     } else {
         dialog_opacity.max(ACTIONS_DIALOG_OPAQUE_DIALOG_MIN_OPACITY)
     };
@@ -1420,8 +1428,9 @@ mod actions_dialog_opacity_consistency_tests {
     }
 
     #[test]
-    fn test_actions_dialog_container_background_alpha_respects_vibrancy_opacity_setting() {
-        assert_eq!(actions_dialog_container_background_alpha(0.15, true), 38);
+    fn test_actions_dialog_container_background_alpha_uses_vibrant_inline_floor() {
+        // 0.15 dialog opacity is clamped up to 0.85 vibrant inline floor → 216
+        assert_eq!(actions_dialog_container_background_alpha(0.15, true), 216);
     }
 
     #[test]
@@ -1430,8 +1439,15 @@ mod actions_dialog_opacity_consistency_tests {
     }
 
     #[test]
-    fn test_actions_dialog_container_background_alpha_uses_higher_theme_value() {
-        assert_eq!(actions_dialog_container_background_alpha(0.80, true), 204);
+    fn test_actions_dialog_container_background_alpha_clamps_to_vibrant_floor() {
+        // 0.80 is below the 0.85 vibrant inline floor → clamped to 0.85 → 216
+        assert_eq!(actions_dialog_container_background_alpha(0.80, true), 216);
+    }
+
+    #[test]
+    fn test_actions_dialog_container_background_alpha_uses_higher_theme_value_above_floor() {
+        // 0.90 is above the 0.85 floor → passes through → 229
+        assert_eq!(actions_dialog_container_background_alpha(0.90, true), 229);
     }
 
     #[test]
@@ -2147,7 +2163,7 @@ impl Render for ActionsDialog {
         // NOTE: Using visual.radius_lg from design tokens for consistency with child item rounding
         //
         // VIBRANCY: Background is handled in get_container_colors():
-        // theme dialog opacity in vibrancy mode, high readability floor when opaque.
+        // Inline popups use 85% opacity floor (no real blur layer), opaque uses 95%.
 
         // Build footer with keyboard hints (if enabled)
         let footer_container = if self.config.show_footer {

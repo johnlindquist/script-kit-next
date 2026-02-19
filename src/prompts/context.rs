@@ -103,7 +103,11 @@ pub fn parse_mentions(input: &str) -> Vec<ContextMention> {
             // Collect the mention identifier
             while let Some(&(_, next_c)) = chars.peek() {
                 if next_c.is_alphanumeric() || next_c == '_' || next_c == '-' || next_c == ':' {
-                    mention_text.push(chars.next().unwrap().1);
+                    if let Some((_, mention_char)) = chars.next() {
+                        mention_text.push(mention_char);
+                    } else {
+                        break;
+                    }
                 } else {
                     break;
                 }
@@ -113,7 +117,11 @@ pub fn parse_mentions(input: &str) -> Vec<ContextMention> {
             if mention_text.starts_with("file:") {
                 while let Some(&(_, next_c)) = chars.peek() {
                     if !next_c.is_whitespace() {
-                        mention_text.push(chars.next().unwrap().1);
+                        if let Some((_, mention_char)) = chars.next() {
+                            mention_text.push(mention_char);
+                        } else {
+                            break;
+                        }
                     } else {
                         break;
                     }
