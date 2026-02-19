@@ -345,6 +345,21 @@ impl Default for DropShadow {
     }
 }
 
+impl DropShadow {
+    /// Clamp drop shadow values to valid ranges.
+    ///
+    /// - `opacity` is clamped to 0.0..=1.0
+    /// - `blur_radius` is clamped to >= 0.0
+    /// - `spread_radius` is clamped to >= 0.0
+    /// - Offsets are left unchanged to allow directional shadows
+    pub fn clamped(mut self) -> Self {
+        self.opacity = self.opacity.clamp(0.0, 1.0);
+        self.blur_radius = self.blur_radius.max(0.0);
+        self.spread_radius = self.spread_radius.max(0.0);
+        self
+    }
+}
+
 /// Background color definitions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackgroundColors {
@@ -1052,7 +1067,10 @@ impl Theme {
 
         if let Some(ref focus_aware) = self.focus_aware {
             if let Some(ref focused) = focus_aware.focused {
-                return focused.cursor.clone();
+                return focused
+                    .cursor
+                    .clone()
+                    .or_else(|| Some(CursorStyle::default_focused()));
             }
         }
 
@@ -1111,7 +1129,7 @@ impl Theme {
     /// Get drop shadow configuration
     /// Returns the configured shadow or sensible defaults
     pub fn get_drop_shadow(&self) -> DropShadow {
-        self.drop_shadow.clone().unwrap_or_default()
+        self.drop_shadow.clone().unwrap_or_default().clamped()
     }
 
     /// Get vibrancy/blur effect settings
@@ -1843,6 +1861,17 @@ mod tests {
         }
     }
 
+    fn focus_scheme_from_theme(theme: &Theme, cursor: Option<CursorStyle>) -> FocusColorScheme {
+        FocusColorScheme {
+            background: theme.colors.background.clone(),
+            text: theme.colors.text.clone(),
+            accent: theme.colors.accent.clone(),
+            ui: theme.colors.ui.clone(),
+            cursor,
+            terminal: theme.colors.terminal.clone(),
+        }
+    }
+
     #[test]
     fn test_theme_from_user_preferences_loads_matching_preset() {
         let preferences = preferences_with_preset(Some("nord"));
@@ -2071,6 +2100,132 @@ mod tests {
         assert_eq!(opacity.border_inactive, 0.0);
         assert_eq!(opacity.border_active, 1.0);
         assert_eq!(opacity.vibrancy_background, Some(1.0));
+    }
+
+    #[test]
+    fn test_get_cursor_style_returns_default_focused_when_focus_aware_cursor_is_omitted() {
+        let mut theme = Theme::dark_default();
+        theme.focus_aware = Some(FocusAwareColorScheme {
+            focused: Some(focus_scheme_from_theme(&theme, None)),
+            unfocused: None,
+        });
+
+        let cursor = theme
+            .get_cursor_style(true)
+            .expect("focused cursor should be present");
+        let expected = CursorStyle::default_focused();
+
+        assert_eq!(cursor.color, expected.color);
+        assert_eq!(cursor.blink_interval_ms, expected.blink_interval_ms);
+    }
+
+    #[test]
+    fn test_get_cursor_style_returns_configured_cursor_when_focus_aware_cursor_is_present() {
+        let mut theme = Theme::dark_default();
+        let configured_cursor = CursorStyle {
+            color: 0x12_34_56,
+            blink_interval_ms: 321,
+        };
+        theme.focus_aware = Some(FocusAwareColorScheme {
+            focused: Some(focus_scheme_from_theme(
+                &theme,
+                Some(configured_cursor.clone()),
+            )),
+            unfocused: None,
+        });
+
+        let cursor = theme
+            .get_cursor_style(true)
+            .expect("focused cursor should be present");
+
+        assert_eq!(cursor.color, configured_cursor.color);
+        assert_eq!(
+            cursor.blink_interval_ms,
+            configured_cursor.blink_interval_ms
+        );
+    }
+
+    #[test]
+    fn test_get_cursor_style_returns_none_when_window_is_not_focused_even_with_focus_aware_cursor()
+    {
+        let mut theme = Theme::dark_default();
+        theme.focus_aware = Some(FocusAwareColorScheme {
+            focused: Some(focus_scheme_from_theme(
+                &theme,
+                Some(CursorStyle {
+                    color: 0x65_43_21,
+                    blink_interval_ms: 250,
+                }),
+            )),
+            unfocused: None,
+        });
+
+        assert!(theme.get_cursor_style(false).is_none());
+    }
+
+    #[test]
+    fn test_get_drop_shadow_clamps_opacity_when_out_of_range() {
+        let mut theme = Theme::dark_default();
+        theme.drop_shadow = Some(DropShadow {
+            opacity: 1.7,
+            ..DropShadow::default()
+        });
+
+        let shadow = theme.get_drop_shadow();
+        assert_eq!(shadow.opacity, 1.0);
+    }
+
+    #[test]
+    fn test_get_drop_shadow_clamps_negative_blur_and_spread_to_zero() {
+        let mut theme = Theme::dark_default();
+        theme.drop_shadow = Some(DropShadow {
+            blur_radius: -4.0,
+            spread_radius: -2.5,
+            ..DropShadow::default()
+        });
+
+        let shadow = theme.get_drop_shadow();
+        assert_eq!(shadow.blur_radius, 0.0);
+        assert_eq!(shadow.spread_radius, 0.0);
+    }
+
+    #[test]
+    fn test_get_drop_shadow_preserves_valid_values() {
+        let mut theme = Theme::dark_default();
+        let configured = DropShadow {
+            enabled: false,
+            blur_radius: 12.0,
+            spread_radius: 3.0,
+            offset_x: 6.0,
+            offset_y: 4.0,
+            color: 0x11_22_33,
+            opacity: 0.45,
+        };
+        theme.drop_shadow = Some(configured.clone());
+
+        let shadow = theme.get_drop_shadow();
+
+        assert_eq!(shadow.enabled, configured.enabled);
+        assert_eq!(shadow.blur_radius, configured.blur_radius);
+        assert_eq!(shadow.spread_radius, configured.spread_radius);
+        assert_eq!(shadow.offset_x, configured.offset_x);
+        assert_eq!(shadow.offset_y, configured.offset_y);
+        assert_eq!(shadow.color, configured.color);
+        assert_eq!(shadow.opacity, configured.opacity);
+    }
+
+    #[test]
+    fn test_get_drop_shadow_allows_negative_offsets() {
+        let mut theme = Theme::dark_default();
+        theme.drop_shadow = Some(DropShadow {
+            offset_x: -5.0,
+            offset_y: -8.0,
+            ..DropShadow::default()
+        });
+
+        let shadow = theme.get_drop_shadow();
+        assert_eq!(shadow.offset_x, -5.0);
+        assert_eq!(shadow.offset_y, -8.0);
     }
 
     #[test]
