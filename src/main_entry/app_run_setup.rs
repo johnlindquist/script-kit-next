@@ -484,9 +484,11 @@ app.run(move |cx: &mut App| {
         let app_entity_for_tray = app_entity.clone();
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             // Yield once so window creation and initial render can proceed first.
-            Timer::after(std::time::Duration::from_millis(1)).await;
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(1))
+                .await;
 
-            let tray_manager = match cx.update(|_cx| match TrayManager::new() {
+            let tray_manager = cx.update(|_cx| match TrayManager::new() {
                 Ok(tm) => {
                     logging::log("TRAY", "Tray icon initialized successfully (deferred)");
                     Some(tm)
@@ -498,16 +500,7 @@ app.run(move |cx: &mut App| {
                     );
                     None
                 }
-            }) {
-                Ok(manager) => manager,
-                Err(_) => {
-                    logging::log(
-                        "TRAY",
-                        "Deferred tray initialization aborted: app context update failed",
-                    );
-                    None
-                }
-            };
+            });
 
             let Some(tray_mgr) = tray_manager else {
                 return;
@@ -655,7 +648,9 @@ app.run(move |cx: &mut App| {
         let app_entity_for_fallback = app_entity.clone();
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             // Wait 500ms for hotkey registration to complete (it runs in a separate thread)
-            Timer::after(std::time::Duration::from_millis(500)).await;
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(500))
+                .await;
 
             let hotkey_ok = hotkeys::is_main_hotkey_registered();
             let tray_ok = tray_ready_for_fallback.load(Ordering::SeqCst);
@@ -910,7 +905,9 @@ app.run(move |cx: &mut App| {
                     } else {
                         2000
                     };
-                    Timer::after(std::time::Duration::from_millis(poll_interval)).await;
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_millis(poll_interval))
+                        .await;
 
                     if config_rx.try_recv().is_ok() {
                         idle_count = 0; // Reset on activity
@@ -948,7 +945,9 @@ app.run(move |cx: &mut App| {
                     } else {
                         2000
                     };
-                    Timer::after(std::time::Duration::from_millis(poll_interval)).await;
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_millis(poll_interval))
+                        .await;
 
                     // Drain all pending events
                     let mut had_events = false;
@@ -1272,7 +1271,9 @@ app.run(move |cx: &mut App| {
                 logging::log("TEST", "Debug command file watcher enabled (debug build only)");
                 let cmd_file = std::path::PathBuf::from("/tmp/script-kit-gpui-cmd.txt");
                 loop {
-                    Timer::after(std::time::Duration::from_millis(500)).await;
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_millis(500))
+                        .await;
 
                     if cmd_file.exists() {
                         if let Ok(content) = std::fs::read_to_string(&cmd_file) {
@@ -1314,8 +1315,10 @@ static STDIN_RECEIVED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
 // Spawn a timeout warning task - helps AI agents detect when they forgot to use stdin protocol
-cx.spawn(async move |_cx: &mut gpui::AsyncApp| {
-    Timer::after(std::time::Duration::from_secs(2)).await;
+cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+    cx.background_executor()
+        .timer(std::time::Duration::from_secs(2))
+        .await;
     if !STDIN_RECEIVED.load(std::sync::atomic::Ordering::SeqCst) {
         logging::log("STDIN", "");
         logging::log(
@@ -2147,7 +2150,9 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             loop {
                 // Check every 500ms for shutdown signal
                 // 500ms is acceptable latency for graceful shutdown while reducing CPU wakeups
-                Timer::after(std::time::Duration::from_millis(500)).await;
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(500))
+                    .await;
 
                 if SHUTDOWN_REQUESTED.load(Ordering::SeqCst) {
                     logging::log("SHUTDOWN", "Shutdown signal detected, performing graceful cleanup");

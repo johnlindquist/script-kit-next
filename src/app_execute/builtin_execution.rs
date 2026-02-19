@@ -219,14 +219,12 @@ impl ScriptListApp {
                             ),
                         );
                     }
-                })
-                .ok();
+                });
 
                 // Notify main window to re-render (in case UI state changed)
                 this.update(cx, |_this, cx| {
                     cx.notify();
-                })
-                .ok();
+                });
             })
             .detach();
 
@@ -461,8 +459,7 @@ impl ScriptListApp {
                                 cx.notify();
                             });
                         }
-                    })
-                    .ok();
+                    });
                 })
                 .detach();
             }

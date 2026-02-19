@@ -348,7 +348,9 @@ impl ChatPrompt {
                 // (kept above 50ms to avoid excessive markdown re-parsing)
                 delay_counter = delay_counter.wrapping_add(17);
                 let delay = 50 + (delay_counter % 30);
-                Timer::after(Duration::from_millis(delay)).await;
+                cx.background_executor()
+                    .timer(Duration::from_millis(delay))
+                    .await;
 
                 // Read is_done BEFORE accumulated content to avoid race condition:
                 // if done is true, stream_message has returned, so all chunks have
@@ -367,109 +369,115 @@ impl ChatPrompt {
                 };
 
                 let msg_id = msg_id_for_loop.clone();
-                let should_break = cx
-                    .update(|cx| {
-                        this.update(cx, |chat, cx| {
-                            if should_ignore_stream_reveal_update(
-                                chat.streaming_message_id.as_deref(),
-                                &msg_id,
-                            ) {
-                                logging::log(
-                                    "CHAT",
-                                    "Stopping stale stream reveal loop after stream handoff/stop",
-                                );
-                                return true;
-                            }
+                let should_break = match cx.update(|cx| {
+                    this.update(cx, |chat, cx| {
+                        if should_ignore_stream_reveal_update(
+                            chat.streaming_message_id.as_deref(),
+                            &msg_id,
+                        ) {
+                            logging::log(
+                                "CHAT",
+                                "Stopping stale stream reveal loop after stream handoff/stop",
+                            );
+                            return true;
+                        }
 
-                            // Error path
-                            if let Some(err) = &error {
-                                logging::log("CHAT", &format!("Built-in AI error: {}", err));
-                                chat.builtin_is_streaming = false;
-                                chat.streaming_message_id = None;
+                        // Error path
+                        if let Some(err) = &error {
+                            logging::log("CHAT", &format!("Built-in AI error: {}", err));
+                            chat.builtin_is_streaming = false;
+                            chat.streaming_message_id = None;
+                            if let Some(msg) = chat
+                                .messages
+                                .iter_mut()
+                                .find(|m| m.id.as_deref() == Some(&msg_id))
+                            {
+                                msg.error = Some(err.clone());
+                                msg.streaming = false;
+                            }
+                            chat.mark_conversation_turns_dirty();
+                            chat.ensure_conversation_turns_cache();
+                            chat.scroll_turns_to_bottom();
+                            cx.notify();
+                            return true; // break
+                        }
+
+                        let current_offset = chat.builtin_reveal_offset;
+
+                        if is_done {
+                            // Stream finished: flush everything remaining.
+                            // Always set content here — don't rely on offset comparison,
+                            // because accumulated content may have grown since the offset
+                            // was last stored (the previous tick's full_text was shorter).
+                            chat.builtin_reveal_offset = full_text.len();
+                            if let Some(msg) = chat
+                                .messages
+                                .iter_mut()
+                                .find(|m| m.id.as_deref() == Some(&msg_id))
+                            {
+                                msg.set_content(&full_text);
+                            }
+                            chat.builtin_streaming_content = full_text.clone();
+                            chat.builtin_accumulated_content = full_text.clone();
+                            chat.mark_conversation_turns_dirty();
+                            chat.scroll_turns_to_bottom();
+                            cx.notify();
+                        } else if let Some(new_offset) =
+                            next_reveal_boundary(&full_text, current_offset)
+                        {
+                            if new_offset > current_offset {
+                                chat.builtin_reveal_offset = new_offset;
+                                let revealed = &full_text[..new_offset];
+
                                 if let Some(msg) = chat
                                     .messages
                                     .iter_mut()
                                     .find(|m| m.id.as_deref() == Some(&msg_id))
                                 {
-                                    msg.error = Some(err.clone());
-                                    msg.streaming = false;
+                                    msg.set_content(revealed);
                                 }
-                                chat.mark_conversation_turns_dirty();
-                                chat.ensure_conversation_turns_cache();
-                                chat.scroll_turns_to_bottom();
-                                cx.notify();
-                                return true; // break
-                            }
-
-                            let current_offset = chat.builtin_reveal_offset;
-
-                            if is_done {
-                                // Stream finished: flush everything remaining.
-                                // Always set content here — don't rely on offset comparison,
-                                // because accumulated content may have grown since the offset
-                                // was last stored (the previous tick's full_text was shorter).
-                                chat.builtin_reveal_offset = full_text.len();
-                                if let Some(msg) = chat
-                                    .messages
-                                    .iter_mut()
-                                    .find(|m| m.id.as_deref() == Some(&msg_id))
-                                {
-                                    msg.set_content(&full_text);
-                                }
-                                chat.builtin_streaming_content = full_text.clone();
+                                chat.builtin_streaming_content = revealed.to_string();
                                 chat.builtin_accumulated_content = full_text.clone();
                                 chat.mark_conversation_turns_dirty();
                                 chat.scroll_turns_to_bottom();
                                 cx.notify();
-                            } else if let Some(new_offset) =
-                                next_reveal_boundary(&full_text, current_offset)
+                            }
+                        }
+
+                        // Check completion: done AND fully revealed
+                        if is_done {
+                            logging::log(
+                                "CHAT",
+                                &format!("Built-in AI complete: {} chars", full_text.len()),
+                            );
+                            chat.builtin_is_streaming = false;
+                            chat.streaming_message_id = None;
+                            if let Some(msg) = chat
+                                .messages
+                                .iter_mut()
+                                .find(|m| m.id.as_deref() == Some(&msg_id))
                             {
-                                if new_offset > current_offset {
-                                    chat.builtin_reveal_offset = new_offset;
-                                    let revealed = &full_text[..new_offset];
-
-                                    if let Some(msg) = chat
-                                        .messages
-                                        .iter_mut()
-                                        .find(|m| m.id.as_deref() == Some(&msg_id))
-                                    {
-                                        msg.set_content(revealed);
-                                    }
-                                    chat.builtin_streaming_content = revealed.to_string();
-                                    chat.builtin_accumulated_content = full_text.clone();
-                                    chat.mark_conversation_turns_dirty();
-                                    chat.scroll_turns_to_bottom();
-                                    cx.notify();
-                                }
+                                msg.streaming = false;
                             }
+                            chat.mark_conversation_turns_dirty();
+                            chat.ensure_conversation_turns_cache();
+                            chat.scroll_turns_to_bottom();
+                            cx.notify();
+                            return true; // break
+                        }
 
-                            // Check completion: done AND fully revealed
-                            if is_done {
-                                logging::log(
-                                    "CHAT",
-                                    &format!("Built-in AI complete: {} chars", full_text.len()),
-                                );
-                                chat.builtin_is_streaming = false;
-                                chat.streaming_message_id = None;
-                                if let Some(msg) = chat
-                                    .messages
-                                    .iter_mut()
-                                    .find(|m| m.id.as_deref() == Some(&msg_id))
-                                {
-                                    msg.streaming = false;
-                                }
-                                chat.mark_conversation_turns_dirty();
-                                chat.ensure_conversation_turns_cache();
-                                chat.scroll_turns_to_bottom();
-                                cx.notify();
-                                return true; // break
-                            }
-
-                            false // continue
-                        })
-                        .unwrap_or(true)
+                        false // continue
                     })
-                    .unwrap_or(true);
+                }) {
+                    Ok(should_break) => should_break,
+                    Err(error) => {
+                        logging::log(
+                            "CHAT",
+                            &format!("Stopping stream reveal loop due to update error: {}", error),
+                        );
+                        true
+                    }
+                };
 
                 if should_break {
                     break;

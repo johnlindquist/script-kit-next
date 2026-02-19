@@ -180,11 +180,7 @@ impl ScriptListApp {
     /// This modifies the user's config.ts to enable Claude Code provider,
     /// reloads the config, and then re-opens the inline chat with
     /// the newly available Claude Code provider.
-    pub fn enable_claude_code_in_config(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn enable_claude_code_in_config(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         use crate::config::editor::{self, ConfigWriteError, WriteOutcome};
 
         logging::log("EXEC", "Enabling Claude Code in config.ts");
@@ -204,14 +200,14 @@ impl ScriptListApp {
                 logging::log("EXEC", "Claude Code already enabled in config.ts");
             }
             Err(ConfigWriteError::ValidationFailed(reason)) => {
-                logging::log(
-                    "EXEC",
-                    &format!("Config validation failed: {}", reason),
-                );
+                logging::log("EXEC", &format!("Config validation failed: {}", reason));
                 // Attempt to recover from backup
                 match editor::recover_from_backup(&config_path, bun_path) {
                     Ok(true) => {
-                        logging::log("EXEC", "Config restored from backup after validation failure");
+                        logging::log(
+                            "EXEC",
+                            "Config restored from backup after validation failure",
+                        );
                         self.toast_manager.push(
                             components::toast::Toast::error(
                                 "Failed to enable Claude Code (invalid config). Backup restored."
@@ -419,7 +415,9 @@ impl ScriptListApp {
         cx.spawn(async move |_this, cx| {
             loop {
                 // Auto-save every 2 seconds
-                gpui::Timer::after(std::time::Duration::from_secs(2)).await;
+                cx.background_executor()
+                    .timer(std::time::Duration::from_secs(2))
+                    .await;
 
                 // Try to save the current content
                 let save_result = cx.update(|cx| {
@@ -437,10 +435,10 @@ impl ScriptListApp {
                     }
                 });
 
-                match save_result {
-                    Ok(true) => continue,
-                    Ok(false) | Err(_) => break, // Entity gone or context invalid
+                if save_result {
+                    continue;
                 }
+                break; // Entity gone, stop the task
             }
         })
         .detach();
@@ -460,5 +458,4 @@ impl ScriptListApp {
         .detach();
         cx.notify();
     }
-
 }

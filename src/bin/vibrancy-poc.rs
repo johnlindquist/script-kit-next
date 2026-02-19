@@ -73,20 +73,20 @@ impl RaycastPOC {
 
     fn start_theme_refresh(&mut self, cx: &mut Context<Self>) {
         cx.spawn(async move |this, cx| loop {
-            gpui::Timer::after(std::time::Duration::from_millis(250)).await;
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(250))
+                .await;
 
-            let should_stop = cx
-                .update(|cx| {
-                    this.update(cx, |view, cx| {
-                        let revision = theme_revision();
-                        if view.theme_revision_seen != revision {
-                            view.theme_revision_seen = revision;
-                            cx.notify();
-                        }
-                    })
-                    .is_err()
+            let should_stop = cx.update(|cx| {
+                this.update(cx, |view, cx| {
+                    let revision = theme_revision();
+                    if view.theme_revision_seen != revision {
+                        view.theme_revision_seen = revision;
+                        cx.notify();
+                    }
                 })
-                .unwrap_or(true);
+                .is_err()
+            });
 
             if should_stop {
                 break;
