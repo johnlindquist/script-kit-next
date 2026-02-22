@@ -182,7 +182,7 @@ impl ScriptListApp {
         // Start cursor blink timer - updates all inputs that track cursor visibility
         cx.spawn(async move |this, cx| {
             loop {
-                Timer::after(std::time::Duration::from_millis(530)).await;
+                cx.background_executor().timer(std::time::Duration::from_millis(530)).await;
 
                 // CRITICAL: Check window visibility BEFORE cx.update() to avoid
                 // unnecessary GPUI context access when window is hidden.
@@ -999,6 +999,11 @@ impl ScriptListApp {
                                                 e.text_preview
                                                     .to_lowercase()
                                                     .contains(&filter_lower)
+                                                    || e.ocr_text
+                                                        .as_deref()
+                                                        .unwrap_or("")
+                                                        .to_lowercase()
+                                                        .contains(&filter_lower)
                                             })
                                             .collect()
                                     };
