@@ -12,6 +12,17 @@ use crate::setup::get_kit_path;
 use super::super::types::Scriptlet;
 use super::parse_scriptlet_section;
 
+/// Check if a path is a companion `.actions.md` file.
+///
+/// These files define shared actions for a parent bundle (e.g., `main.actions.md`
+/// provides actions for `main.md`). They contain template variables like `{{content}}`
+/// that are substituted at runtime when triggered from the parent context.
+/// Loading them as standalone scriptlets would register broken commands with
+/// unsubstituted templates and leak their shortcuts as global hotkeys.
+fn is_actions_file(path: &Path) -> bool {
+    path.to_string_lossy().ends_with(".actions.md")
+}
+
 pub fn read_scriptlets() -> Vec<Arc<Scriptlet>> {
     let kit_path = get_kit_path();
 
@@ -34,6 +45,12 @@ pub fn read_scriptlets() -> Vec<Arc<Scriptlet>> {
 
                 // Only process .md files
                 if path.extension().and_then(|e| e.to_str()) != Some("md") {
+                    continue;
+                }
+
+                // Skip companion .actions.md files (they define shared actions
+                // with {{content}} templates, not standalone scriptlets)
+                if is_actions_file(&path) {
                     continue;
                 }
 
@@ -131,6 +148,13 @@ pub fn load_scriptlets() -> Vec<Arc<Scriptlet>> {
                 for entry in paths {
                     match entry {
                         Ok(path) => {
+                            // Skip companion .actions.md files (they define shared actions
+                            // with {{content}} templates, not standalone scriptlets)
+                            if is_actions_file(&path) {
+                                debug!(path = %path.display(), "Skipping .actions.md file");
+                                continue;
+                            }
+
                             debug!(path = %path.display(), "Parsing scriptlet file");
 
                             // Determine kit from path
@@ -259,6 +283,13 @@ pub fn read_scriptlets_from_file(path: &Path) -> Vec<Arc<Scriptlet>> {
     // Verify it's a markdown file
     if path.extension().and_then(|e| e.to_str()) != Some("md") {
         debug!(path = %path.display(), "Not a markdown file, skipping");
+        return vec![];
+    }
+
+    // Skip companion .actions.md files (they define shared actions
+    // with {{content}} templates, not standalone scriptlets)
+    if is_actions_file(path) {
+        debug!(path = %path.display(), "Skipping .actions.md file");
         return vec![];
     }
 
