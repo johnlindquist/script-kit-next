@@ -1,5 +1,9 @@
 use super::*;
 
+fn ai_main_panel_can_submit(input_value: &str, has_pending_image: bool) -> bool {
+    !input_value.is_empty() || has_pending_image
+}
+
 impl AiApp {
     pub(super) fn render_main_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
         // Build input area at bottom:
@@ -9,7 +13,8 @@ impl AiApp {
         // Check if we have a pending image to show
         let has_pending_image = self.pending_image.is_some();
         let is_editing = self.editing_message_id.is_some();
-        let input_is_empty = self.input_state.read(cx).value().is_empty() && !has_pending_image;
+        let input_is_empty =
+            !ai_main_panel_can_submit(&self.input_state.read(cx).value(), has_pending_image);
         let input_char_count = self.input_state.read(cx).value().len();
         let input_is_long = input_char_count > 2000;
         let input_is_very_long = input_char_count > 4000;
@@ -217,6 +222,22 @@ impl AiApp {
                                     .when(!input_is_empty, |d| {
                                         d.cursor_pointer()
                                             .hover(|s| s.bg(cx.theme().accent.opacity(0.15)))
+                                            .on_mouse_down(
+                                                gpui::MouseButton::Left,
+                                                cx.listener(|this, _, window, cx| {
+                                                    let can_submit = {
+                                                        let input_state = this.input_state.read(cx);
+                                                        ai_main_panel_can_submit(
+                                                            &input_state.value(),
+                                                            this.pending_image.is_some(),
+                                                        )
+                                                    };
+
+                                                    if can_submit {
+                                                        this.submit_message(window, cx);
+                                                    }
+                                                }),
+                                            )
                                     })
                                     .text_sm()
                                     .font_weight(gpui::FontWeight::MEDIUM)
@@ -225,12 +246,6 @@ impl AiApp {
                                     } else {
                                         cx.theme().accent
                                     })
-                                    .on_mouse_down(
-                                        gpui::MouseButton::Left,
-                                        cx.listener(|this, _, window, cx| {
-                                            this.submit_message(window, cx);
-                                        }),
-                                    )
                                     .child("Submit ↵")
                                     .into_any_element()
                             })
@@ -297,5 +312,25 @@ impl AiApp {
             )
             // Input area (fixed height, always visible at bottom)
             .child(input_area)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ai_main_panel_can_submit;
+
+    #[test]
+    fn test_ai_main_panel_can_submit_returns_true_when_text_present() {
+        assert!(ai_main_panel_can_submit("hello", false));
+    }
+
+    #[test]
+    fn test_ai_main_panel_can_submit_returns_true_when_pending_image_present_and_text_empty() {
+        assert!(ai_main_panel_can_submit("", true));
+    }
+
+    #[test]
+    fn test_ai_main_panel_can_submit_returns_false_when_text_empty_and_no_pending_image() {
+        assert!(!ai_main_panel_can_submit("", false));
     }
 }
