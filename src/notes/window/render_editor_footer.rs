@@ -38,6 +38,12 @@ impl NotesApp {
             .selected_note_id
             .and_then(|id| self.get_visible_notes().iter().find(|n| n.id == id))
             .map(|note| note.created_at.format("%b %d, %Y").to_string());
+        let navigate_back_click = cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+            this.navigate_back(window, cx);
+        });
+        let navigate_forward_click = cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+            this.navigate_forward(window, cx);
+        });
 
         div()
             .flex()
@@ -78,10 +84,8 @@ impl NotesApp {
                             .when(has_history_back, |d| {
                                 d.cursor_pointer()
                                     .hover(|s| s.text_color(cx.theme().foreground))
+                                    .on_click(navigate_back_click)
                             })
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.navigate_back(window, cx);
-                            }))
                             .child("‹"),
                     )
                     .child(
@@ -101,10 +105,8 @@ impl NotesApp {
                             .when(has_history_forward, |d| {
                                 d.cursor_pointer()
                                     .hover(|s| s.text_color(cx.theme().foreground))
+                                    .on_click(navigate_forward_click)
                             })
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.navigate_forward(window, cx);
-                            }))
                             .child("›"),
                     )
                     .when(has_unsaved, |d| {
