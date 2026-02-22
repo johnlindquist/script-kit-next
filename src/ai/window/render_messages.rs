@@ -17,6 +17,10 @@ pub(super) fn message_grouping_state(messages: &[Message], ix: usize) -> Message
     }
 }
 
+fn is_messages_list_at_bottom(total_items: usize, scroll_top_item_ix: usize) -> bool {
+    total_items == 0 || scroll_top_item_ix + 1 >= total_items
+}
+
 impl AiApp {
     pub(super) fn sync_messages_list_and_scroll_to_bottom(&mut self) {
         let item_count = self.messages_list_item_count();
@@ -142,10 +146,10 @@ impl AiApp {
                         }
                     } else if delta_y < px(0.) {
                         // Scrolling down - check if at true bottom to resume auto-scroll.
-                        // For a bottom-aligned list, GPUI reports item_ix >= item_count
-                        // when the viewport has reached the absolute bottom.
+                        // `logical_scroll_top()` reports the topmost visible item, so we're
+                        // at bottom when the last item is that topmost visible item.
                         let scroll_top = this.messages_list_state.logical_scroll_top();
-                        let at_bottom = total_items == 0 || scroll_top.item_ix >= total_items;
+                        let at_bottom = is_messages_list_at_bottom(total_items, scroll_top.item_ix);
                         if at_bottom && this.user_has_scrolled_up {
                             this.user_has_scrolled_up = false;
                             cx.notify();
@@ -216,6 +220,26 @@ impl AiApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_is_messages_list_at_bottom_returns_true_for_empty_list() {
+        assert!(is_messages_list_at_bottom(0, 0));
+    }
+
+    #[test]
+    fn test_is_messages_list_at_bottom_returns_false_when_not_on_last_item() {
+        assert!(!is_messages_list_at_bottom(5, 2));
+    }
+
+    #[test]
+    fn test_is_messages_list_at_bottom_returns_true_when_last_item_is_topmost_visible() {
+        assert!(is_messages_list_at_bottom(5, 4));
+    }
+
+    #[test]
+    fn test_is_messages_list_at_bottom_returns_true_when_scroll_top_is_past_last_item() {
+        assert!(is_messages_list_at_bottom(5, 6));
+    }
 
     #[test]
     fn test_message_grouping_state_decouples_continuation_and_spacing_after() {
