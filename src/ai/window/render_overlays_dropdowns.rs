@@ -117,7 +117,7 @@ impl AiApp {
                         div()
                             .id("preset-list")
                             .flex_1()
-                            .overflow_y_scroll()
+                            .overflow_y_scrollbar()
                             .p(S1)
                             .children(preset_items),
                     )
@@ -352,7 +352,7 @@ impl AiApp {
                         div()
                             .id("new-chat-dropdown-sections")
                             .flex_1()
-                            .overflow_y_scroll()
+                            .overflow_y_scrollbar()
                             .p(S1)
                             // Last Used Settings section (if not empty)
                             .when(!last_used_items.is_empty(), |d| {
