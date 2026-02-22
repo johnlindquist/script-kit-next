@@ -47,7 +47,14 @@ impl ScriptListApp {
                     self.cached_clipboard_entries
                         .iter()
                         .enumerate()
-                        .filter(|(_, e)| e.text_preview.to_lowercase().contains(&filter_lower))
+                        .filter(|(_, e)| {
+                            e.text_preview.to_lowercase().contains(&filter_lower)
+                                || e.ocr_text
+                                    .as_deref()
+                                    .unwrap_or("")
+                                    .to_lowercase()
+                                    .contains(&filter_lower)
+                        })
                         .collect()
                 };
                 self.focused_clipboard_entry_id = filtered_entries
@@ -187,7 +194,7 @@ impl ScriptListApp {
                             let dir_to_list = parsed.directory.clone();
                             let task = cx.spawn(async move |this, cx| {
                                 // Small debounce for directory listing (reduced from 50ms to 30ms)
-                                Timer::after(std::time::Duration::from_millis(30)).await;
+                                cx.background_executor().timer(std::time::Duration::from_millis(30)).await;
 
                                 // Use channel for streaming results
                                 let (tx, rx) = std::sync::mpsc::channel();
@@ -214,7 +221,7 @@ impl ScriptListApp {
 
                                 // Batch UI updates at ~60fps (16ms intervals)
                                 while !done {
-                                    Timer::after(std::time::Duration::from_millis(16)).await;
+                                    cx.background_executor().timer(std::time::Duration::from_millis(16)).await;
 
                                     // Drain all available results
                                     while let Ok(event) = rx.try_recv() {
@@ -312,7 +319,7 @@ impl ScriptListApp {
                     let search_query = new_text.clone();
                     let task = cx.spawn(async move |this, cx| {
                         // Wait for debounce period
-                        Timer::after(std::time::Duration::from_millis(75)).await;
+                        cx.background_executor().timer(std::time::Duration::from_millis(75)).await;
 
                         // Use channel for streaming results
                         let (tx, rx) = std::sync::mpsc::channel();
@@ -340,7 +347,7 @@ impl ScriptListApp {
 
                         // Batch UI updates at ~60fps (16ms intervals)
                         while !done {
-                            Timer::after(std::time::Duration::from_millis(16)).await;
+                            cx.background_executor().timer(std::time::Duration::from_millis(16)).await;
 
                             // Drain all available results
                             while let Ok(event) = rx.try_recv() {
