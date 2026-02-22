@@ -1,5 +1,6 @@
 use super::*;
 use crate::components::{FocusablePrompt, FocusablePromptInterceptedKey};
+use gpui_component::scroll::ScrollableElement;
 
 impl Focusable for DivPrompt {
     fn focus_handle(&self, _cx: &gpui::App) -> FocusHandle {
@@ -108,12 +109,12 @@ impl Render for DivPrompt {
             content_base
         };
 
-        // Add ID to make it Stateful, then enable vertical scrolling with tracked scroll handle
-        // overflow_y_scroll requires StatefulInteractiveElement trait (needs .id() first)
+        // Add ID to make it Stateful, then enable tracked scrolling and visible vertical scrollbar
+        // overflow_y_scrollbar requires ScrollableElement trait (needs .id() first)
         let content_container = content_styled
             .id(gpui::ElementId::Name(panel_semantic_id.into()))
-            .overflow_y_scroll()
-            .track_scroll(&self.scroll_handle);
+            .track_scroll(&self.scroll_handle)
+            .overflow_y_scrollbar();
 
         // Main container - fills entire window height with no bottom gap
         // Use relative positioning to overlay scrollbar

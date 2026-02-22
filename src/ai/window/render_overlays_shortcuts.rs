@@ -61,7 +61,7 @@ impl AiApp {
                     .flex()
                     .flex_col()
                     .gap(S3)
-                    .overflow_y_scroll()
+                    .overflow_y_scrollbar()
                     // Prevent clicks inside the panel from closing the overlay
                     .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| {
                         cx.stop_propagation();
