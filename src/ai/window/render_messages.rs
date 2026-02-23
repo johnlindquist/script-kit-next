@@ -18,7 +18,9 @@ pub(super) fn message_grouping_state(messages: &[Message], ix: usize) -> Message
 }
 
 fn is_messages_list_at_bottom(total_items: usize, scroll_top_item_ix: usize) -> bool {
-    total_items == 0 || scroll_top_item_ix + 1 >= total_items
+    // `logical_scroll_top` reports the topmost visible item's index.
+    // We're at bottom when that topmost item is the last item.
+    total_items == 0 || scroll_top_item_ix.saturating_add(1) >= total_items
 }
 
 impl AiApp {
@@ -126,7 +128,6 @@ impl AiApp {
         // Track user scroll: show pill when user scrolls up (during streaming or with many messages)
         let show_scroll_pill =
             self.user_has_scrolled_up && (self.is_streaming || self.current_messages.len() > 3);
-        let total_items = self.messages_list_item_count();
 
         // Wrap in a relative container with a native-style scrollbar overlay.
         // The scrollbar uses ListState's ScrollbarHandle impl for position tracking.
@@ -146,10 +147,11 @@ impl AiApp {
                         }
                     } else if delta_y < px(0.) {
                         // Scrolling down - check if at true bottom to resume auto-scroll.
-                        // `logical_scroll_top()` reports the topmost visible item, so we're
-                        // at bottom when the last item is that topmost visible item.
+                        // `logical_scroll_top` gives the topmost visible item index, so
+                        // reaching the last item means we're at bottom.
                         let scroll_top = this.messages_list_state.logical_scroll_top();
-                        let at_bottom = is_messages_list_at_bottom(total_items, scroll_top.item_ix);
+                        let item_count = this.messages_list_item_count();
+                        let at_bottom = is_messages_list_at_bottom(item_count, scroll_top.item_ix);
                         if at_bottom && this.user_has_scrolled_up {
                             this.user_has_scrolled_up = false;
                             cx.notify();
@@ -232,13 +234,17 @@ mod tests {
     }
 
     #[test]
-    fn test_is_messages_list_at_bottom_returns_true_when_last_item_is_topmost_visible() {
-        assert!(is_messages_list_at_bottom(5, 4));
+    fn test_is_messages_list_at_bottom_returns_true_when_scroll_top_is_past_last_item() {
+        assert!(is_messages_list_at_bottom(5, 5));
+        assert!(is_messages_list_at_bottom(5, 6));
     }
 
     #[test]
-    fn test_is_messages_list_at_bottom_returns_true_when_scroll_top_is_past_last_item() {
-        assert!(is_messages_list_at_bottom(5, 6));
+    fn test_is_messages_list_at_bottom_returns_true_when_top_item_is_last_item() {
+        assert!(
+            is_messages_list_at_bottom(5, 4),
+            "topmost visible last item should be treated as at bottom"
+        );
     }
 
     #[test]
