@@ -12,9 +12,9 @@
 //! - Filter notes as user types in search
 
 use gpui::{
-    div, prelude::*, px, rgba, App, Context, ElementId, Entity, FocusHandle, Focusable,
-    IntoElement, KeyDownEvent, MouseButton, ParentElement, Render, SharedString, Styled,
-    Subscription, Window,
+    div, prelude::*, px, rgba, uniform_list, AnyElement, App, Context, ElementId, Entity,
+    FocusHandle, Focusable, IntoElement, KeyDownEvent, MouseButton, ParentElement, Render,
+    ScrollStrategy, SharedString, Styled, Subscription, UniformListScrollHandle, Window,
 };
 use gpui_component::{
     button::{Button, ButtonVariants},
@@ -95,6 +95,8 @@ pub struct BrowsePanel {
     search_state: Entity<InputState>,
     /// Focus handle for keyboard events
     focus_handle: FocusHandle,
+    /// Scroll handle for virtualized list scrolling
+    scroll_handle: UniformListScrollHandle,
     /// Index of note row being hovered (for showing action icons)
     hovered_index: Option<usize>,
     /// Callback when a note is selected
@@ -135,6 +137,7 @@ impl BrowsePanel {
             selected_index: 0,
             search_state,
             focus_handle,
+            scroll_handle: UniformListScrollHandle::new(),
             hovered_index: None,
             on_select: None,
             on_close: None,
@@ -173,6 +176,9 @@ impl BrowsePanel {
         self.all_notes = notes.clone();
         self.notes = notes;
         self.selected_index = 0;
+        if !self.notes.is_empty() {
+            self.scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
+        }
         cx.notify();
     }
 
@@ -198,6 +204,9 @@ impl BrowsePanel {
 
         // Reset selection to first item
         self.selected_index = 0;
+        if !self.notes.is_empty() {
+            self.scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
+        }
         cx.notify();
     }
 
@@ -205,6 +214,8 @@ impl BrowsePanel {
     pub fn move_up(&mut self, cx: &mut Context<Self>) {
         if !self.notes.is_empty() {
             self.selected_index = self.selected_index.saturating_sub(1);
+            self.scroll_handle
+                .scroll_to_item(self.selected_index, ScrollStrategy::Nearest);
             cx.notify();
         }
     }
@@ -213,6 +224,8 @@ impl BrowsePanel {
     pub fn move_down(&mut self, cx: &mut Context<Self>) {
         if !self.notes.is_empty() {
             self.selected_index = (self.selected_index + 1).min(self.notes.len() - 1);
+            self.scroll_handle
+                .scroll_to_item(self.selected_index, ScrollStrategy::Nearest);
             cx.notify();
         }
     }
@@ -301,6 +314,12 @@ impl BrowsePanel {
             .on_mouse_move(cx.listener(move |this, _, _, cx| {
                 if this.hovered_index != Some(index) {
                     this.hovered_index = Some(index);
+                    cx.notify();
+                }
+            }))
+            .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+                if !*hovered && this.hovered_index == Some(index) {
+                    this.hovered_index = None;
                     cx.notify();
                 }
             }))
@@ -410,13 +429,28 @@ impl BrowsePanel {
                 .into_any_element();
         }
 
-        let mut list = div().w_full().flex().flex_col().gap_px();
+        let note_count = self.notes.len();
+        uniform_list(
+            "notes-browse-panel-list",
+            note_count,
+            cx.processor(
+                move |this: &mut BrowsePanel, visible_range: std::ops::Range<usize>, _window, cx| {
+                    let mut rows: Vec<AnyElement> = Vec::with_capacity(visible_range.len());
 
-        for (index, note) in self.notes.iter().enumerate() {
-            list = list.child(self.render_note_row(index, note, cx));
-        }
+                    for index in visible_range {
+                        if let Some(note) = this.notes.get(index) {
+                            rows.push(this.render_note_row(index, note, cx).into_any_element());
+                        }
+                    }
 
-        list.into_any_element()
+                    rows
+                },
+            ),
+        )
+        .h_full()
+        .w_full()
+        .track_scroll(&self.scroll_handle)
+        .into_any_element()
     }
 }
 
@@ -493,11 +527,10 @@ impl Render for BrowsePanel {
                             .px_1()
                             .py_1()
                             .on_mouse_move(cx.listener(|this, _, _, cx| {
-                                // Clear hover when mouse leaves list area without entering a row
                                 if this.hovered_index.is_some() {
-                                    // This will be overridden by row hover handlers
+                                    this.hovered_index = None;
+                                    cx.notify();
                                 }
-                                let _ = cx;
                             }))
                             .child(self.render_list(cx)),
                     )
@@ -508,6 +541,7 @@ impl Render for BrowsePanel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    const BROWSE_PANEL_SOURCE: &str = include_str!("browse_panel.rs");
 
     #[test]
     fn test_note_list_item_from_note() {
@@ -550,5 +584,41 @@ mod tests {
         assert_eq!(item.title, "Untitled Note");
         assert!(!item.is_current);
         assert!(item.is_pinned);
+    }
+
+    #[test]
+    fn test_render_list_uses_uniform_list_virtualization() {
+        assert!(
+            BROWSE_PANEL_SOURCE.contains("uniform_list("),
+            "BrowsePanel should use uniform_list for virtualized note rows"
+        );
+        assert!(
+            BROWSE_PANEL_SOURCE.contains(".track_scroll(&self.scroll_handle)"),
+            "BrowsePanel list should track the dedicated scroll handle"
+        );
+    }
+
+    #[test]
+    fn test_hover_handlers_clear_stale_row_hover_state() {
+        assert!(
+            BROWSE_PANEL_SOURCE.contains("this.hovered_index == Some(index)"),
+            "Row hover handler should clear hovered row when pointer leaves the row"
+        );
+    }
+
+    #[test]
+    fn test_list_hover_leave_clears_hovered_index() {
+        assert!(
+            BROWSE_PANEL_SOURCE.contains(".on_mouse_move(cx.listener(|this, _, _, cx| {"),
+            "List container should register a mouse move handler"
+        );
+        assert!(
+            BROWSE_PANEL_SOURCE.contains("if this.hovered_index.is_some() {"),
+            "List container mouse move handler should detect stale hovered row state"
+        );
+        assert!(
+            BROWSE_PANEL_SOURCE.contains("this.hovered_index = None;"),
+            "List container mouse move handler should clear hovered_index when pointer leaves list area"
+        );
     }
 }
