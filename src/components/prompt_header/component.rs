@@ -382,7 +382,7 @@ impl PromptHeader {
             .rounded(px(4.))
             .child(
                 svg()
-                    .external_path(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/logo.svg"))
+                    .external_path(crate::utils::get_logo_path())
                     .size(px(13.))
                     // Use logo_icon color from theme/design for contrast on accent background
                     .text_color(rgb(self.colors.logo_icon)),
