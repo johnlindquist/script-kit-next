@@ -6,6 +6,8 @@
 //! gpui-component notifications.
 
 use crate::components::{Toast, ToastVariant};
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 /// A wrapper around Toast with a generated identifier.
@@ -14,6 +16,8 @@ pub struct ToastNotification {
     pub id: String,
     /// The underlying toast component.
     pub toast: Toast,
+    /// Number of coalesced occurrences represented by this toast.
+    pub repeats: u32,
 }
 
 impl std::fmt::Debug for ToastNotification {
@@ -30,19 +34,31 @@ impl ToastNotification {
         Self {
             id: Uuid::new_v4().to_string(),
             toast,
+            repeats: 1,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+struct RecentToast {
+    id: String,
+    count: u32,
+    first_seen: Instant,
 }
 
 /// Manager for handling the toast queue.
 pub struct ToastManager {
     notifications: Vec<ToastNotification>,
+    recent: HashMap<String, RecentToast>,
+    coalesce_window: Duration,
 }
 
 impl std::fmt::Debug for ToastManager {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ToastManager")
             .field("notification_count", &self.notifications.len())
+            .field("recent_count", &self.recent.len())
+            .field("coalesce_window_ms", &self.coalesce_window.as_millis())
             .finish()
     }
 }
@@ -58,23 +74,87 @@ impl ToastManager {
     pub fn new() -> Self {
         Self {
             notifications: Vec::new(),
+            recent: HashMap::new(),
+            coalesce_window: Duration::from_millis(250),
         }
+    }
+
+    fn toast_key(toast: &Toast) -> String {
+        format!("{:?}|{}", toast.get_variant(), toast.get_message())
     }
 
     /// Push a new toast onto the queue.
     ///
     /// Returns the unique ID assigned to this toast.
     pub fn push(&mut self, toast: Toast) -> String {
+        let now = Instant::now();
+        let key = Self::toast_key(&toast);
+        let queue_len_before = self.notifications.len();
+
+        if let Some((existing_id, existing_count, first_seen)) = self
+            .recent
+            .get(&key)
+            .map(|recent| (recent.id.clone(), recent.count, recent.first_seen))
+        {
+            let elapsed = now.saturating_duration_since(first_seen);
+            if elapsed <= self.coalesce_window {
+                let updated_count = existing_count.saturating_add(1).min(999);
+
+                if let Some(notification) = self
+                    .notifications
+                    .iter_mut()
+                    .find(|notification| notification.id == existing_id)
+                {
+                    notification.repeats = updated_count;
+
+                    if let Some(recent) = self.recent.get_mut(&key) {
+                        recent.count = updated_count;
+                    }
+
+                    tracing::debug!(
+                        event = "toast_manager_push_coalesced",
+                        toast_id = %existing_id,
+                        toast_key = %key,
+                        repeats = updated_count,
+                        queue_len = queue_len_before,
+                        "Coalesced duplicate toast within window"
+                    );
+
+                    return existing_id;
+                }
+
+                tracing::warn!(
+                    event = "toast_manager_recent_missing_notification",
+                    toast_id = %existing_id,
+                    toast_key = %key,
+                    elapsed_ms = elapsed.as_millis(),
+                    "Recent toast entry referenced missing notification; removing stale entry"
+                );
+                self.recent.remove(&key);
+            }
+        }
+
         let notification = ToastNotification::new(toast);
         let id = notification.id.clone();
 
         tracing::debug!(
+            event = "toast_manager_push_enqueued",
             toast_id = %id,
-            queue_len_before = self.notifications.len(),
-            "Toast pushed to queue"
+            toast_key = %key,
+            queue_len_before = queue_len_before,
+            "Toast enqueued"
         );
 
         self.notifications.push(notification);
+        self.recent.insert(
+            key,
+            RecentToast {
+                id: id.clone(),
+                count: 1,
+                first_seen: now,
+            },
+        );
+
         id
     }
 
@@ -86,15 +166,27 @@ impl ToastManager {
         let pending: Vec<PendingToast> = self
             .notifications
             .drain(..)
-            .map(|n| PendingToast {
-                message: n.toast.get_message().to_string(),
-                variant: n.toast.get_variant(),
-                duration_ms: n.toast.get_duration_ms(),
+            .map(|notification| {
+                let mut message = notification.toast.get_message().to_string();
+                if notification.repeats > 1 {
+                    message.push_str(&format!(" (x{})", notification.repeats));
+                }
+
+                PendingToast {
+                    message,
+                    variant: notification.toast.get_variant(),
+                    duration_ms: notification.toast.get_duration_ms(),
+                }
             })
             .collect();
 
         if !pending.is_empty() {
-            tracing::debug!(count = pending.len(), "Drained pending toasts");
+            self.recent.clear();
+            tracing::debug!(
+                event = "toast_manager_drain_pending",
+                count = pending.len(),
+                "Drained pending toasts"
+            );
         }
 
         pending
@@ -113,10 +205,21 @@ pub struct PendingToast {
 mod tests {
     use super::*;
     use crate::components::ToastColors;
+    use std::thread;
 
     fn make_test_toast(message: &'static str, duration_ms: Option<u64>) -> Toast {
+        make_test_toast_with_variant(message, duration_ms, ToastVariant::Info)
+    }
+
+    fn make_test_toast_with_variant(
+        message: &'static str,
+        duration_ms: Option<u64>,
+        variant: ToastVariant,
+    ) -> Toast {
         let colors = ToastColors::default();
-        Toast::new(message, colors).duration_ms(duration_ms)
+        Toast::new(message, colors)
+            .duration_ms(duration_ms)
+            .variant(variant)
     }
 
     #[test]
@@ -157,5 +260,76 @@ mod tests {
 
         assert_eq!(first_drain.len(), 1);
         assert!(second_drain.is_empty());
+    }
+
+    #[test]
+    fn test_push_coalesces_duplicate_toasts_within_window() {
+        let mut manager = ToastManager::new();
+
+        let first_id = manager.push(make_test_toast("Duplicate", Some(3000)));
+        let second_id = manager.push(make_test_toast("Duplicate", Some(3000)));
+
+        assert_eq!(first_id, second_id);
+
+        let pending = manager.drain_pending();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].message, "Duplicate (x2)");
+    }
+
+    #[test]
+    fn test_push_uses_variant_and_message_for_coalesce_key() {
+        let mut manager = ToastManager::new();
+
+        let info_id = manager.push(make_test_toast_with_variant(
+            "Same message",
+            Some(3000),
+            ToastVariant::Info,
+        ));
+        let error_id = manager.push(make_test_toast_with_variant(
+            "Same message",
+            Some(3000),
+            ToastVariant::Error,
+        ));
+
+        assert_ne!(info_id, error_id);
+
+        let pending = manager.drain_pending();
+        assert_eq!(pending.len(), 2);
+        assert_eq!(pending[0].message, "Same message");
+        assert_eq!(pending[0].variant, ToastVariant::Info);
+        assert_eq!(pending[1].message, "Same message");
+        assert_eq!(pending[1].variant, ToastVariant::Error);
+    }
+
+    #[test]
+    fn test_push_caps_repeat_count_at_999() {
+        let mut manager = ToastManager::new();
+        let first_id = manager.push(make_test_toast("Burst", Some(3000)));
+
+        for _ in 0..1500 {
+            let id = manager.push(make_test_toast("Burst", Some(3000)));
+            assert_eq!(id, first_id);
+        }
+
+        let pending = manager.drain_pending();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].message, "Burst (x999)");
+    }
+
+    #[test]
+    fn test_push_enqueues_new_toast_when_coalesce_window_expires() {
+        let mut manager = ToastManager::new();
+        manager.coalesce_window = Duration::from_millis(1);
+
+        let first_id = manager.push(make_test_toast("Windowed", Some(3000)));
+        thread::sleep(Duration::from_millis(10));
+        let second_id = manager.push(make_test_toast("Windowed", Some(3000)));
+
+        assert_ne!(first_id, second_id);
+
+        let pending = manager.drain_pending();
+        assert_eq!(pending.len(), 2);
+        assert_eq!(pending[0].message, "Windowed");
+        assert_eq!(pending[1].message, "Windowed");
     }
 }
