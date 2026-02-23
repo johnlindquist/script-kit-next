@@ -18,6 +18,8 @@
 //!
 //! ## Keyboard Navigation
 //! - Arrow Up/Down: Navigate actions
+//! - Home/End: Jump to first/last selectable action
+//! - Page Up/Page Down: Jump by 8 actions
 //! - Enter: Execute selected action
 //! - Escape: Close panel
 //! - Type to search/filter actions
@@ -26,8 +28,8 @@ use crate::designs::icon_variations::IconName;
 use crate::protocol::ProtocolAction;
 use gpui::{
     div, point, prelude::*, px, rgba, svg, uniform_list, App, BoxShadow, Context, FocusHandle,
-    Focusable, Hsla, MouseButton, Render, ScrollStrategy, SharedString, UniformListScrollHandle,
-    Window,
+    Focusable, Hsla, KeyDownEvent, MouseButton, Render, ScrollStrategy, SharedString,
+    UniformListScrollHandle, Window,
 };
 use gpui_component::theme::{ActiveTheme, Theme};
 use std::sync::Arc;
@@ -258,6 +260,8 @@ pub const PANEL_BORDER_HEIGHT: f32 = 2.0;
 pub const ACTION_ROW_INSET: f32 = 6.0;
 /// Corner radius for selected row background
 pub const SELECTION_RADIUS: f32 = 8.0;
+/// Number of rows to jump for PageUp/PageDown navigation.
+const NOTES_PANEL_PAGE_JUMP: usize = 8;
 
 // =============================================================================
 // Shadow tokens — drop shadow for floating panel when vibrancy is off
@@ -317,6 +321,53 @@ pub fn panel_height_for_rows(row_count: usize) -> f32 {
     let items_height = (row_count as f32 * ACTION_ITEM_HEIGHT)
         .min(PANEL_MAX_HEIGHT - (PANEL_SEARCH_HEIGHT + 16.0));
     items_height + PANEL_SEARCH_HEIGHT + PANEL_BORDER_HEIGHT
+}
+
+fn find_selectable_forward(selectable: &[bool], start: usize) -> Option<usize> {
+    if start >= selectable.len() {
+        return None;
+    }
+
+    (start..selectable.len()).find(|&idx| selectable[idx])
+}
+
+fn find_selectable_backward(selectable: &[bool], start: usize) -> Option<usize> {
+    if selectable.is_empty() {
+        return None;
+    }
+
+    let clamped_start = start.min(selectable.len() - 1);
+    (0..=clamped_start).rev().find(|&idx| selectable[idx])
+}
+
+fn find_page_up_selectable(selectable: &[bool], selected_index: usize) -> Option<usize> {
+    if selectable.is_empty() {
+        return None;
+    }
+
+    let clamped_selected = selected_index.min(selectable.len() - 1);
+    let jump_target = clamped_selected.saturating_sub(NOTES_PANEL_PAGE_JUMP);
+    find_selectable_backward(selectable, jump_target).or_else(|| {
+        jump_target
+            .checked_add(1)
+            .and_then(|next_start| find_selectable_forward(selectable, next_start))
+    })
+}
+
+fn find_page_down_selectable(selectable: &[bool], selected_index: usize) -> Option<usize> {
+    if selectable.is_empty() {
+        return None;
+    }
+
+    let clamped_selected = selected_index.min(selectable.len() - 1);
+    let jump_target = clamped_selected
+        .saturating_add(NOTES_PANEL_PAGE_JUMP)
+        .min(selectable.len() - 1);
+    find_selectable_forward(selectable, jump_target).or_else(|| {
+        jump_target
+            .checked_sub(1)
+            .and_then(|prev_start| find_selectable_backward(selectable, prev_start))
+    })
 }
 
 /// Notes Actions Panel - Modal overlay for note operations
@@ -418,6 +469,65 @@ impl NotesActionsPanel {
         self.move_selection(1, cx);
     }
 
+    /// Select the first enabled action in the filtered list.
+    pub fn select_first(&mut self, cx: &mut Context<Self>) {
+        let selectable = self.selectable_flags();
+        if let Some(index) = find_selectable_forward(&selectable, 0) {
+            self.apply_selection(index, cx);
+        }
+    }
+
+    /// Select the last enabled action in the filtered list.
+    pub fn select_last(&mut self, cx: &mut Context<Self>) {
+        let selectable = self.selectable_flags();
+        if let Some(index) = selectable
+            .len()
+            .checked_sub(1)
+            .and_then(|last| find_selectable_backward(&selectable, last))
+        {
+            self.apply_selection(index, cx);
+        }
+    }
+
+    /// Jump selection up by one page while keeping selection on an enabled action.
+    pub fn select_page_up(&mut self, cx: &mut Context<Self>) {
+        let selectable = self.selectable_flags();
+        if let Some(index) = find_page_up_selectable(&selectable, self.selected_index) {
+            self.apply_selection(index, cx);
+        }
+    }
+
+    /// Jump selection down by one page while keeping selection on an enabled action.
+    pub fn select_page_down(&mut self, cx: &mut Context<Self>) {
+        let selectable = self.selectable_flags();
+        if let Some(index) = find_page_down_selectable(&selectable, self.selected_index) {
+            self.apply_selection(index, cx);
+        }
+    }
+
+    /// Handle panel-specific navigation keys not handled elsewhere.
+    pub fn handle_navigation_key(&mut self, key: &str, cx: &mut Context<Self>) -> bool {
+        match key {
+            "home" | "Home" => {
+                self.select_first(cx);
+                true
+            }
+            "end" | "End" => {
+                self.select_last(cx);
+                true
+            }
+            "pageup" | "PageUp" => {
+                self.select_page_up(cx);
+                true
+            }
+            "pagedown" | "PageDown" => {
+                self.select_page_down(cx);
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Submit the selected action
     pub fn submit_selected(&mut self) {
         if let Some(&action_idx) = self.filtered_indices.get(self.selected_index) {
@@ -499,6 +609,19 @@ impl NotesActionsPanel {
             .and_then(|&idx| self.actions.get(idx))
             .map(|item| item.enabled)
             .unwrap_or(false)
+    }
+
+    fn selectable_flags(&self) -> Vec<bool> {
+        (0..self.filtered_indices.len())
+            .map(|idx| self.is_selectable(idx))
+            .collect()
+    }
+
+    fn apply_selection(&mut self, selected_index: usize, cx: &mut Context<Self>) {
+        self.selected_index = selected_index;
+        self.scroll_handle
+            .scroll_to_item(self.selected_index, ScrollStrategy::Nearest);
+        cx.notify();
     }
 
     fn move_selection(&mut self, delta: i32, cx: &mut Context<Self>) {
@@ -850,6 +973,11 @@ impl Render for NotesActionsPanel {
             .border_color(border_color)
             .overflow_hidden()
             .track_focus(&self.focus_handle)
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                if this.handle_navigation_key(event.keystroke.key.as_str(), cx) {
+                    cx.stop_propagation();
+                }
+            }))
             .child(search_input)
             .child(actions_list)
     }
@@ -956,5 +1084,44 @@ mod tests {
         assert_eq!(ACTION_ITEM_HEIGHT, 36.0); // Unified with main dialog ACTION_ITEM_HEIGHT
         assert_eq!(ACTION_ROW_INSET, 6.0);
         assert_eq!(SELECTION_RADIUS, 8.0);
+        assert_eq!(NOTES_PANEL_PAGE_JUMP, 8);
+    }
+
+    #[test]
+    fn test_find_selectable_forward_returns_first_enabled_from_start() {
+        let selectable = [false, false, true, false, true];
+        assert_eq!(find_selectable_forward(&selectable, 0), Some(2));
+        assert_eq!(find_selectable_forward(&selectable, 3), Some(4));
+        assert_eq!(find_selectable_forward(&selectable, 5), None);
+    }
+
+    #[test]
+    fn test_find_selectable_backward_returns_last_enabled_before_start() {
+        let selectable = [false, true, false, true, false];
+        assert_eq!(find_selectable_backward(&selectable, 4), Some(3));
+        assert_eq!(find_selectable_backward(&selectable, 2), Some(1));
+        assert_eq!(find_selectable_backward(&[false, false], 1), None);
+    }
+
+    #[test]
+    fn test_find_page_up_selects_nearest_enabled_when_target_disabled() {
+        let selectable = [
+            true, false, true, false, false, true, true, false, true, false,
+        ];
+        // selected = 9, target = 1, nearest selectable at-or-before target is 0
+        assert_eq!(find_page_up_selectable(&selectable, 9), Some(0));
+        // selected = 5, target = 0
+        assert_eq!(find_page_up_selectable(&selectable, 5), Some(0));
+    }
+
+    #[test]
+    fn test_find_page_down_selects_nearest_enabled_when_target_disabled() {
+        let selectable = [
+            true, false, true, false, true, false, true, false, false, true, false,
+        ];
+        // selected = 0, target = 8, nearest selectable at-or-after target is 9
+        assert_eq!(find_page_down_selectable(&selectable, 0), Some(9));
+        // selected = 9, target clamps to last index and falls back backward to 9
+        assert_eq!(find_page_down_selectable(&selectable, 9), Some(9));
     }
 }
