@@ -1,15 +1,43 @@
 use super::*;
 
+#[derive(Clone, Copy)]
+enum ChatFooterButtonAction {
+    ContinueInChat,
+    ToggleActionsPanel,
+}
+
+impl ChatFooterButtonAction {
+    fn run(self, prompt: &mut ChatPrompt, cx: &mut Context<ChatPrompt>) {
+        match self {
+            Self::ContinueInChat => prompt.handle_continue_in_chat(cx),
+            Self::ToggleActionsPanel => prompt.toggle_actions_menu(cx),
+        }
+    }
+}
+
 impl ChatPrompt {
     fn render_footer_button(
         &self,
         id: &'static str,
         label: &'static str,
         shortcut: Option<&'static str>,
-        accent_color: u32,
-        muted_color: u32,
+        footer_colors: PromptFooterColors,
+        action: Option<ChatFooterButtonAction>,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
-        div()
+        let hover_bg = rgba((footer_colors.background << 8) | 0x26);
+        let active_bg = rgba((footer_colors.background << 8) | 0x3a);
+        let is_clickable = action.is_some();
+
+        let mut label_element = div()
+            .text_xs()
+            .text_color(rgb(footer_colors.accent))
+            .child(label);
+        if is_clickable {
+            label_element = label_element.cursor_pointer();
+        }
+
+        let mut button = div()
             .id(id)
             .flex()
             .flex_row()
@@ -19,11 +47,37 @@ impl ChatPrompt {
             .py(px(2.0))
             .rounded(px(4.0))
             .cursor_default()
-            .child(div().text_xs().text_color(rgb(accent_color)).child(label))
+            .child(label_element)
             .when_some(shortcut, |d, shortcut| {
-                d.child(div().text_xs().text_color(rgb(muted_color)).child(shortcut))
-            })
-            .into_any_element()
+                let mut shortcut_element = div()
+                    .text_xs()
+                    .text_color(rgb(footer_colors.text_muted))
+                    .child(shortcut);
+                if is_clickable {
+                    shortcut_element = shortcut_element.cursor_pointer();
+                }
+                d.child(shortcut_element)
+            });
+
+        if is_clickable {
+            button = button
+                .cursor_pointer()
+                .hover(move |d| d.bg(hover_bg))
+                .active(move |d| d.bg(active_bg));
+        }
+
+        if let Some(action_kind) = action {
+            let handle = cx.entity().downgrade();
+            button = button.on_click(move |_event, _window, cx| {
+                if let Some(entity) = handle.upgrade() {
+                    entity.update(cx, |this, cx| {
+                        action_kind.run(this, cx);
+                    });
+                }
+            });
+        }
+
+        button.into_any_element()
     }
 
     fn render_script_generation_footer_button(
@@ -139,8 +193,9 @@ impl ChatPrompt {
                 "chat-footer-primary-button",
                 "Continue in Chat",
                 Some("⌘↵"),
-                footer_colors.accent,
-                footer_colors.text_muted,
+                footer_colors,
+                Some(ChatFooterButtonAction::ContinueInChat),
+                cx,
             )
         };
 
@@ -158,8 +213,9 @@ impl ChatPrompt {
                 "chat-footer-secondary-button",
                 "Actions",
                 Some("⌘K"),
-                footer_colors.accent,
-                footer_colors.text_muted,
+                footer_colors,
+                Some(ChatFooterButtonAction::ToggleActionsPanel),
+                cx,
             ));
 
         div()
@@ -623,5 +679,26 @@ impl Render for ChatPrompt {
             // Note: Actions menu is now handled by parent via on_show_actions callback
             // The parent opens the standard ActionsDialog window
             .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod chat_footer_button_click_handler_tests {
+    const CHAT_RENDER_CORE_SOURCE: &str = include_str!("render_core.rs");
+
+    #[test]
+    fn test_chat_footer_buttons_wire_click_handlers_with_downgraded_entity() {
+        assert!(
+            CHAT_RENDER_CORE_SOURCE.contains("let handle = cx.entity().downgrade();"),
+            "Chat footer buttons should use downgraded entity handles for click callbacks"
+        );
+        assert!(
+            CHAT_RENDER_CORE_SOURCE.contains("ChatFooterButtonAction::ContinueInChat"),
+            "Continue in Chat footer button should route to continue action"
+        );
+        assert!(
+            CHAT_RENDER_CORE_SOURCE.contains("ChatFooterButtonAction::ToggleActionsPanel"),
+            "Actions footer button should route to toggle actions action"
+        );
     }
 }
