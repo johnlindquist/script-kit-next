@@ -1,5 +1,19 @@
 use super::*;
 
+const MAX_DROPPED_IMAGE_BYTES: usize = 10 * 1024 * 1024;
+
+fn normalize_to_png_bytes(raw_bytes: &[u8]) -> anyhow::Result<Vec<u8>> {
+    use anyhow::Context as _;
+
+    let decoded =
+        image::load_from_memory(raw_bytes).context("Failed to decode dropped image bytes")?;
+    let mut png_cursor = std::io::Cursor::new(Vec::new());
+    decoded
+        .write_to(&mut png_cursor, image::ImageFormat::Png)
+        .context("Failed to encode dropped image bytes as PNG")?;
+    Ok(png_cursor.into_inner())
+}
+
 impl ChatPrompt {
     pub(super) fn mark_conversation_turns_dirty(&mut self) {
         self.conversation_turns_dirty = true;
@@ -379,6 +393,8 @@ impl ChatPrompt {
 
     /// Handle file drop - if it's an image, set it as pending image
     pub(super) fn handle_file_drop(&mut self, paths: &ExternalPaths, cx: &mut Context<Self>) {
+        use anyhow::Context as _;
+
         let paths = paths.paths();
         if paths.is_empty() {
             return;
@@ -400,24 +416,53 @@ impl ChatPrompt {
             return;
         }
 
-        match std::fs::read(path) {
-            Ok(data) => {
-                use base64::Engine;
-                let base64_data = base64::engine::general_purpose::STANDARD.encode(&data);
+        let process_result = (|| -> anyhow::Result<()> {
+            let data = std::fs::read(path)
+                .with_context(|| format!("Failed to read dropped image: {}", path.display()))?;
 
-                // Decode raw bytes to RenderImage for preview
-                if let Ok(render_img) =
-                    crate::list_item::decode_png_to_render_image_with_bgra_conversion(&data)
-                {
-                    self.pending_image_render = Some(render_img);
-                }
+            if data.len() > MAX_DROPPED_IMAGE_BYTES {
+                tracing::warn!(
+                    path = %path.display(),
+                    size_bytes = data.len(),
+                    max_bytes = MAX_DROPPED_IMAGE_BYTES,
+                    "Skipping dropped image larger than 10MB"
+                );
+                return Ok(());
+            }
 
-                self.pending_image = Some(base64_data);
-                cx.notify();
+            let png_bytes = if extension == "png" {
+                data
+            } else {
+                normalize_to_png_bytes(&data).with_context(|| {
+                    format!(
+                        "Failed to normalize dropped {} image to PNG: {}",
+                        extension,
+                        path.display()
+                    )
+                })?
+            };
+
+            use base64::Engine;
+            let base64_data = base64::engine::general_purpose::STANDARD.encode(&png_bytes);
+
+            if let Ok(render_img) =
+                crate::list_item::decode_png_to_render_image_with_bgra_conversion(&png_bytes)
+            {
+                self.pending_image_render = Some(render_img);
             }
-            Err(e) => {
-                logging::log("CHAT", &format!("Failed to read dropped image: {}", e));
-            }
+
+            self.pending_image = Some(base64_data);
+            cx.notify();
+            Ok(())
+        })();
+
+        if let Err(error) = process_result {
+            tracing::warn!(
+                path = %path.display(),
+                extension = %extension,
+                error = %error,
+                "Failed to process dropped image file"
+            );
         }
     }
 
@@ -491,5 +536,36 @@ impl ChatPrompt {
                             .text_color(rgb(colors.text.muted)),
                     ),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_to_png_bytes;
+    use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
+
+    const PNG_SIGNATURE: [u8; 8] = [137, 80, 78, 71, 13, 10, 26, 10];
+
+    #[test]
+    fn test_normalize_to_png_bytes_converts_jpeg_to_png_when_input_is_jpeg() {
+        let source = DynamicImage::ImageRgba8(RgbaImage::from_pixel(2, 2, Rgba([10, 20, 30, 255])));
+        let mut jpeg_cursor = std::io::Cursor::new(Vec::new());
+        source
+            .write_to(&mut jpeg_cursor, ImageFormat::Jpeg)
+            .expect("jpeg encode should succeed");
+        let jpeg_bytes = jpeg_cursor.into_inner();
+
+        let png_bytes =
+            normalize_to_png_bytes(&jpeg_bytes).expect("jpeg bytes should normalize to png bytes");
+        assert!(png_bytes.starts_with(&PNG_SIGNATURE));
+        let decoded = image::load_from_memory(&png_bytes).expect("normalized bytes should decode");
+        assert_eq!(decoded.width(), 2);
+        assert_eq!(decoded.height(), 2);
+    }
+
+    #[test]
+    fn test_normalize_to_png_bytes_returns_error_when_input_is_invalid() {
+        let result = normalize_to_png_bytes(b"not-an-image");
+        assert!(result.is_err());
     }
 }
