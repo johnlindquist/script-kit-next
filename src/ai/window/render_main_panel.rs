@@ -1,7 +1,7 @@
 use super::*;
 
 fn ai_main_panel_can_submit(input_value: &str, has_pending_image: bool) -> bool {
-    !input_value.is_empty() || has_pending_image
+    ai_window_can_submit_message(input_value, has_pending_image)
 }
 
 impl AiApp {
@@ -15,6 +15,9 @@ impl AiApp {
         let is_editing = self.editing_message_id.is_some();
         let input_is_empty =
             !ai_main_panel_can_submit(&self.input_state.read(cx).value(), has_pending_image);
+        let action_button_colors =
+            crate::components::ButtonColors::from_theme(&crate::theme::get_cached_theme());
+        let entity = cx.entity();
         let input_char_count = self.input_state.read(cx).value().len();
         let input_is_long = input_char_count > 2000;
         let input_is_very_long = input_char_count > 4000;
@@ -180,74 +183,36 @@ impl AiApp {
                             .flex_shrink_0()
                             // Submit or Stop button
                             .child(if self.is_streaming {
-                                div()
+                                let stop_entity = entity.clone();
+                                crate::components::Button::new("Stop", action_button_colors)
                                     .id("stop-btn")
-                                    .flex()
-                                    .items_center()
-                                    .gap(S1)
-                                    .px(S2)
-                                    .py(S1)
-                                    .rounded(R_SM)
-                                    .cursor_pointer()
-                                    .hover(|s| s.bg(cx.theme().danger.opacity(0.15)))
-                                    .text_sm()
-                                    .text_color(cx.theme().danger)
-                                    .on_mouse_down(
-                                        gpui::MouseButton::Left,
-                                        cx.listener(|this, _, _window, cx| {
+                                    .variant(crate::components::ButtonVariant::Ghost)
+                                    .shortcut("Esc")
+                                    .on_click(Box::new(move |_, _window, cx| {
+                                        stop_entity.update(cx, |this, cx| {
                                             this.stop_streaming(cx);
-                                        }),
-                                    )
-                                    .child(div().size(S2).bg(cx.theme().danger))
-                                    .child("Stop")
-                                    .child(
-                                        div()
-                                            .px(S1)
-                                            .py(S0)
-                                            .rounded(RADIUS_SM)
-                                            .bg(cx.theme().danger.opacity(0.15))
-                                            .text_xs()
-                                            .text_color(cx.theme().danger.opacity(0.7))
-                                            .child("Esc"),
-                                    )
+                                        });
+                                    }))
                                     .into_any_element()
                             } else {
-                                div()
+                                let submit_button =
+                                    crate::components::Button::new("Submit", action_button_colors)
                                     .id("submit-btn")
-                                    .flex()
-                                    .items_center()
-                                    .px(S2)
-                                    .py(S1)
-                                    .rounded(R_SM)
-                                    .when(!input_is_empty, |d| {
-                                        d.cursor_pointer()
-                                            .hover(|s| s.bg(cx.theme().accent.opacity(0.15)))
-                                            .on_mouse_down(
-                                                gpui::MouseButton::Left,
-                                                cx.listener(|this, _, window, cx| {
-                                                    let can_submit = {
-                                                        let input_state = this.input_state.read(cx);
-                                                        ai_main_panel_can_submit(
-                                                            &input_state.value(),
-                                                            this.pending_image.is_some(),
-                                                        )
-                                                    };
-
-                                                    if can_submit {
-                                                        this.submit_message(window, cx);
-                                                    }
-                                                }),
-                                            )
-                                    })
-                                    .text_sm()
-                                    .font_weight(gpui::FontWeight::MEDIUM)
-                                    .text_color(if input_is_empty {
-                                        cx.theme().muted_foreground.opacity(0.35)
-                                    } else {
-                                        cx.theme().accent
-                                    })
-                                    .child("Submit ↵")
-                                    .into_any_element()
+                                    .variant(crate::components::ButtonVariant::Ghost)
+                                    .shortcut("↵")
+                                    .disabled(input_is_empty);
+                                if input_is_empty {
+                                    submit_button.into_any_element()
+                                } else {
+                                    let submit_entity = entity.clone();
+                                    submit_button
+                                        .on_click(Box::new(move |_, window, cx| {
+                                            submit_entity.update(cx, |this, cx| {
+                                                this.submit_message(window, cx);
+                                            });
+                                        }))
+                                        .into_any_element()
+                                }
                             })
                             // Divider
                             .child(
@@ -257,26 +222,18 @@ impl AiApp {
                                     .border_color(cx.theme().border.opacity(0.6)),
                             )
                             // Actions ⌘K - opens command bar with AI-specific actions
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .px(S2)
-                                    .py(S1)
-                                    .rounded(R_SM)
-                                    .cursor_pointer()
-                                    .hover(|s| s.bg(cx.theme().accent.opacity(0.15)))
-                                    .text_sm()
-                                    .font_weight(gpui::FontWeight::MEDIUM)
-                                    .text_color(cx.theme().accent) // Yellow accent like main menu
-                                    .on_mouse_down(
-                                        gpui::MouseButton::Left,
-                                        cx.listener(|this, _, window, cx| {
+                            .child({
+                                let actions_entity = entity.clone();
+                                crate::components::Button::new("Actions", action_button_colors)
+                                    .id("ai-actions-btn")
+                                    .variant(crate::components::ButtonVariant::Ghost)
+                                    .shortcut("⌘K")
+                                    .on_click(Box::new(move |_, window, cx| {
+                                        actions_entity.update(cx, |this, cx| {
                                             this.show_command_bar(window, cx);
-                                        }),
-                                    )
-                                    .child("Actions ⌘K"),
-                            ),
+                                        });
+                                    }))
+                            }),
                     ),
             );
 
@@ -332,5 +289,10 @@ mod tests {
     #[test]
     fn test_ai_main_panel_can_submit_returns_false_when_text_empty_and_no_pending_image() {
         assert!(!ai_main_panel_can_submit("", false));
+    }
+
+    #[test]
+    fn test_ai_main_panel_can_submit_returns_false_for_whitespace_without_image() {
+        assert!(!ai_main_panel_can_submit("   ", false));
     }
 }
