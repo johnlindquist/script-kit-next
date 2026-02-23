@@ -1,4 +1,5 @@
 use gpui::{ClipboardItem, Context, Render};
+use std::collections::VecDeque;
 
 /// Selection in a single-line text input
 /// anchor = where selection started, cursor = current position
@@ -8,6 +9,23 @@ pub struct TextSelection {
     pub anchor: usize,
     /// Current cursor position (moves with arrows)
     pub cursor: usize,
+}
+
+const TEXT_INPUT_UNDO_STACK_LIMIT: usize = 100;
+
+#[derive(Debug, Clone)]
+struct TextSnapshot {
+    text: String,
+    selection: TextSelection,
+}
+
+impl TextSnapshot {
+    fn capture(state: &TextInputState) -> Self {
+        Self {
+            text: state.text.clone(),
+            selection: state.selection,
+        }
+    }
 }
 
 impl TextSelection {
@@ -46,6 +64,10 @@ pub struct TextInputState {
     text: String,
     /// Selection state (anchor and cursor positions)
     selection: TextSelection,
+    /// Previous edit snapshots (bounded; oldest entries are dropped first)
+    undo_stack: VecDeque<TextSnapshot>,
+    /// Snapshots that can be restored after an undo
+    redo_stack: VecDeque<TextSnapshot>,
 }
 
 impl Default for TextInputState {
@@ -59,6 +81,8 @@ impl TextInputState {
         Self {
             text: String::new(),
             selection: TextSelection::caret(0),
+            undo_stack: VecDeque::new(),
+            redo_stack: VecDeque::new(),
         }
     }
 
@@ -69,6 +93,8 @@ impl TextInputState {
         Self {
             text,
             selection: TextSelection::caret(len), // Cursor at end
+            undo_stack: VecDeque::new(),
+            redo_stack: VecDeque::new(),
         }
     }
 
@@ -86,10 +112,6 @@ impl TextInputState {
         self.selection
     }
 
-    pub fn has_selection(&self) -> bool {
-        !self.selection.is_empty()
-    }
-
     pub fn is_empty(&self) -> bool {
         self.text.is_empty()
     }
@@ -105,32 +127,85 @@ impl TextInputState {
         &self.text[start_byte..end_byte]
     }
 
-    /// Get display text (masked if secret)
-    pub fn display_text(&self, is_secret: bool) -> String {
-        if is_secret && !self.text.is_empty() {
-            "•".repeat(self.text.chars().count())
-        } else {
-            self.text.clone()
+    /// Compute a visible text window `[start, end)` where the cursor remains visible.
+    pub fn visible_window_range(&self, max_visible_chars: usize) -> (usize, usize) {
+        let text_len = self.text.chars().count();
+        if max_visible_chars == 0 || text_len <= max_visible_chars {
+            return (0, text_len);
         }
+
+        let window_width = max_visible_chars.max(1);
+        let cursor = self.selection.cursor.min(text_len);
+
+        // Prefer to keep some context on both sides, then clamp to valid bounds.
+        let mut start = cursor.saturating_sub(window_width / 2);
+        let mut end = (start + window_width).min(text_len);
+        if end == text_len {
+            start = end.saturating_sub(window_width);
+        }
+
+        // Enforce cursor visibility after clamping.
+        if cursor < start {
+            start = cursor;
+            end = (start + window_width).min(text_len);
+        } else if cursor >= end {
+            end = (cursor + 1).min(text_len);
+            start = end.saturating_sub(window_width);
+        }
+
+        (start, end)
     }
 
     // === Setters ===
 
     pub fn set_text(&mut self, text: impl Into<String>) {
-        self.text = text.into();
-        let len = self.text.chars().count();
-        self.selection = TextSelection::caret(len.min(self.selection.cursor));
+        let new_text = text.into();
+        let len = new_text.chars().count();
+        let new_selection = TextSelection::caret(len.min(self.selection.cursor));
+        if self.text == new_text && self.selection == new_selection {
+            return;
+        }
+        self.record_edit_snapshot();
+        self.text = new_text;
+        self.selection = new_selection;
     }
 
     pub fn clear(&mut self) {
+        if self.text.is_empty() && self.selection == TextSelection::caret(0) {
+            return;
+        }
+        self.record_edit_snapshot();
         self.text.clear();
         self.selection = TextSelection::caret(0);
+    }
+
+    pub fn undo(&mut self) -> bool {
+        let Some(snapshot) = self.undo_stack.pop_back() else {
+            return false;
+        };
+
+        let current_snapshot = TextSnapshot::capture(self);
+        Self::push_snapshot(&mut self.redo_stack, current_snapshot);
+        self.restore_snapshot(snapshot);
+        true
+    }
+
+    pub fn redo(&mut self) -> bool {
+        let Some(snapshot) = self.redo_stack.pop_back() else {
+            return false;
+        };
+
+        let current_snapshot = TextSnapshot::capture(self);
+        Self::push_snapshot(&mut self.undo_stack, current_snapshot);
+        self.restore_snapshot(snapshot);
+        true
     }
 
     // === Text Manipulation ===
 
     /// Insert a character at cursor, replacing selection if any
     pub fn insert_char(&mut self, ch: char) {
+        self.record_edit_snapshot();
         self.delete_selection();
         let byte_pos = self.char_to_byte(self.selection.cursor);
         self.text.insert(byte_pos, ch);
@@ -139,6 +214,10 @@ impl TextInputState {
 
     /// Insert a string at cursor, replacing selection if any
     pub fn insert_str(&mut self, s: &str) {
+        if s.is_empty() && self.selection.is_empty() {
+            return;
+        }
+        self.record_edit_snapshot();
         self.delete_selection();
         let byte_pos = self.char_to_byte(self.selection.cursor);
         self.text.insert_str(byte_pos, s);
@@ -149,8 +228,10 @@ impl TextInputState {
     /// Delete selection, or character before cursor if no selection
     pub fn backspace(&mut self) {
         if !self.selection.is_empty() {
+            self.record_edit_snapshot();
             self.delete_selection();
         } else if self.selection.cursor > 0 {
+            self.record_edit_snapshot();
             let new_pos = self.selection.cursor - 1;
             let byte_start = self.char_to_byte(new_pos);
             let byte_end = self.char_to_byte(self.selection.cursor);
@@ -162,15 +243,79 @@ impl TextInputState {
     /// Delete selection, or character after cursor if no selection
     pub fn delete(&mut self) {
         if !self.selection.is_empty() {
+            self.record_edit_snapshot();
             self.delete_selection();
         } else {
             let len = self.text.chars().count();
             if self.selection.cursor < len {
+                self.record_edit_snapshot();
                 let byte_start = self.char_to_byte(self.selection.cursor);
                 let byte_end = self.char_to_byte(self.selection.cursor + 1);
                 self.text.replace_range(byte_start..byte_end, "");
             }
         }
+    }
+
+    pub(crate) fn handle_backspace_shortcut(&mut self, cmd: bool, alt: bool) {
+        if !self.selection.is_empty() {
+            self.backspace();
+            return;
+        }
+
+        if cmd {
+            // Cmd+Backspace: delete to start of line
+            let end = self.selection.cursor;
+            if end > 0 {
+                self.record_edit_snapshot();
+                self.selection = TextSelection {
+                    anchor: 0,
+                    cursor: end,
+                };
+                self.delete_selection();
+            }
+            return;
+        }
+
+        if alt {
+            // Alt+Backspace: delete word left
+            let start = self.find_word_boundary_left();
+            let end = self.selection.cursor;
+            if start < end {
+                self.record_edit_snapshot();
+                self.selection = TextSelection {
+                    anchor: start,
+                    cursor: end,
+                };
+                self.delete_selection();
+            }
+            return;
+        }
+
+        self.backspace();
+    }
+
+    pub(crate) fn handle_delete_shortcut(&mut self, alt: bool) {
+        if !self.selection.is_empty() {
+            self.delete();
+            return;
+        }
+
+        if alt {
+            // Alt+Delete: delete word right
+            let start = self.selection.cursor;
+            let end = self.find_word_boundary_right();
+            if start < end {
+                self.record_edit_snapshot();
+                self.selection = TextSelection {
+                    anchor: start,
+                    cursor: end,
+                };
+                self.delete_selection();
+            }
+            return;
+        }
+
+        self.delete();
     }
 
     /// Delete the selected text (internal)
@@ -283,6 +428,7 @@ impl TextInputState {
         if !self.selection.is_empty() {
             let text = self.selected_text().to_string();
             cx.write_to_clipboard(ClipboardItem::new_string(text));
+            self.record_edit_snapshot();
             self.delete_selection();
         }
     }
@@ -312,6 +458,18 @@ impl TextInputState {
         cx: &mut Context<T>,
     ) -> bool {
         // Clipboard
+        if cmd && !alt && key.eq_ignore_ascii_case("z") {
+            if shift {
+                self.redo();
+            } else {
+                self.undo();
+            }
+            return true;
+        }
+        if cmd && !alt && !shift && key.eq_ignore_ascii_case("y") {
+            self.redo();
+            return true;
+        }
         if cmd && !alt && key.eq_ignore_ascii_case("c") {
             self.copy(cx);
             return true;
@@ -361,45 +519,21 @@ impl TextInputState {
 
         // Deletion
         if key.eq_ignore_ascii_case("backspace") {
-            if cmd {
-                // Cmd+Backspace: delete to start of line
-                let (_, end) = self.selection.range();
-                self.selection = TextSelection {
-                    anchor: 0,
-                    cursor: end,
-                };
+            if !self.selection.is_empty() {
+                self.record_edit_snapshot();
                 self.delete_selection();
-            } else if alt {
-                // Alt+Backspace: delete word left
-                let start = self.find_word_boundary_left();
-                let end = self.selection.cursor;
-                if start < end {
-                    self.selection = TextSelection {
-                        anchor: start,
-                        cursor: end,
-                    };
-                    self.delete_selection();
-                }
-            } else {
-                self.backspace();
+                return true;
             }
+            self.handle_backspace_shortcut(cmd, alt);
             return true;
         }
         if key.eq_ignore_ascii_case("delete") {
-            if alt {
-                // Alt+Delete: delete word right
-                let start = self.selection.cursor;
-                let end = self.find_word_boundary_right();
-                if start < end {
-                    self.selection = TextSelection {
-                        anchor: start,
-                        cursor: end,
-                    };
-                    self.delete_selection();
-                }
-            } else {
-                self.delete();
+            if !self.selection.is_empty() {
+                self.record_edit_snapshot();
+                self.delete_selection();
+                return true;
             }
+            self.handle_delete_shortcut(alt);
             return true;
         }
 
@@ -468,5 +602,23 @@ impl TextInputState {
         }
 
         pos
+    }
+
+    fn restore_snapshot(&mut self, snapshot: TextSnapshot) {
+        self.text = snapshot.text;
+        self.selection = snapshot.selection;
+    }
+
+    fn record_edit_snapshot(&mut self) {
+        let snapshot = TextSnapshot::capture(self);
+        Self::push_snapshot(&mut self.undo_stack, snapshot);
+        self.redo_stack.clear();
+    }
+
+    fn push_snapshot(stack: &mut VecDeque<TextSnapshot>, snapshot: TextSnapshot) {
+        if stack.len() >= TEXT_INPUT_UNDO_STACK_LIMIT {
+            stack.pop_front();
+        }
+        stack.push_back(snapshot);
     }
 }
