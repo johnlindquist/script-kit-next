@@ -103,9 +103,7 @@ pub(crate) const ALPHA_TINT_SUBTLE: u8 = 0x20;
 pub(crate) const ALPHA_HOVER_WARNING: u8 = 0xE0;
 /// Get the vibrancy background for window root containers.
 ///
-/// This is used by the main window outer div to tint the macOS blur effect with the
-/// theme's background color. Each window (main, AI, Notes) must call this to apply
-/// the semi-transparent background that filters the vibrancy blur.
+/// Canonical helper used by AI/Notes window root containers to tint macOS blur.
 ///
 /// **NOTE:** Root no longer provides this background (was removed for vibrancy support).
 /// Windows must explicitly apply this to their outermost container div.
@@ -125,13 +123,24 @@ pub(crate) const ALPHA_HOVER_WARNING: u8 = 0xE0;
 /// ```
 ///
 /// Uses cached theme to avoid file I/O on every render.
+/// If `theme.opacity.vibrancy_background` is set, that value is used.
+/// Otherwise, mode-specific defaults are used (75% dark / 85% light).
+#[inline]
+fn resolve_window_vibrancy_opacity(theme: &Theme) -> f32 {
+    let opacity = theme.get_opacity();
+    opacity
+        .vibrancy_background
+        .unwrap_or(if theme.has_dark_colors() {
+            VIBRANCY_DARK_OPACITY
+        } else {
+            VIBRANCY_LIGHT_OPACITY
+        })
+        .clamp(0.0, 1.0)
+}
+
 pub fn get_window_vibrancy_background() -> Rgba {
     let theme = crate::theme::get_cached_theme();
-    let opacity = if theme.has_dark_colors() {
-        VIBRANCY_DARK_OPACITY
-    } else {
-        VIBRANCY_LIGHT_OPACITY
-    };
+    let opacity = resolve_window_vibrancy_opacity(&theme);
     let bg_hex = theme.colors.background.main;
     gpui::rgba(hex_to_rgba_with_opacity(bg_hex, opacity))
 }
@@ -885,6 +894,43 @@ mod tests {
         // Test opacity < 0.0 gets clamped
         let result = hex_to_rgba_with_opacity(0x123456, -0.5);
         assert_eq!(result, 0x12345600);
+    }
+
+    #[test]
+    fn test_resolve_window_vibrancy_opacity_uses_mode_defaults_when_unset() {
+        let dark_theme = Theme::dark_default();
+        assert!(
+            (resolve_window_vibrancy_opacity(&dark_theme) - VIBRANCY_DARK_OPACITY).abs() < 0.0001
+        );
+
+        let light_theme = Theme::light_default();
+        assert!(
+            (resolve_window_vibrancy_opacity(&light_theme) - VIBRANCY_LIGHT_OPACITY).abs() < 0.0001
+        );
+    }
+
+    #[test]
+    fn test_resolve_window_vibrancy_opacity_prefers_theme_override_when_present() {
+        let mut theme = Theme::dark_default();
+        let mut opacity = theme.get_opacity();
+        opacity.vibrancy_background = Some(0.62);
+        theme.opacity = Some(opacity);
+
+        assert!((resolve_window_vibrancy_opacity(&theme) - 0.62).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_resolve_window_vibrancy_opacity_clamps_theme_override() {
+        let mut theme = Theme::dark_default();
+        let mut opacity = theme.get_opacity();
+        opacity.vibrancy_background = Some(1.4);
+        theme.opacity = Some(opacity);
+        assert!((resolve_window_vibrancy_opacity(&theme) - 1.0).abs() < 0.0001);
+
+        let mut opacity = theme.get_opacity();
+        opacity.vibrancy_background = Some(-0.2);
+        theme.opacity = Some(opacity);
+        assert!((resolve_window_vibrancy_opacity(&theme) - 0.0).abs() < 0.0001);
     }
 
     #[test]
