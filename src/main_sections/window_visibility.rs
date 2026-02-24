@@ -115,51 +115,57 @@ fn show_main_window_helper(
         });
     }
 
-    // 7. Show window WITHOUT activating (floating panel behavior)
-    // This allows the main menu to appear without stealing focus from other apps,
-    // enabling features like "copy selected text from previous app" to work correctly.
-    logging::bench_log("window_show_native_start");
-    platform::show_main_window_without_activation();
-    let _ = window.update(cx, |_root, win, _cx| {
-        win.activate_window();
-    });
-    logging::bench_log("window_activated");
+    // 7. Show, activate, and focus (DEFERRED via cx.spawn).
+    //
+    // macOS makeKeyWindow / makeKeyAndOrderFront: synchronously fires
+    // windowDidBecomeKey: → GPUI request_frame_callback → AsyncApp::update().
+    // If we're already inside an AsyncApp::update() (the caller's cx.update()),
+    // that second borrow_mut() on the AppCell panics with "RefCell already borrowed".
+    //
+    // Spawning defers to the next event-loop tick where no AppCell borrow is held.
+    // Platform calls that trigger delegate callbacks run OUTSIDE cx.update();
+    // GPUI-only state changes (focus, selection, resize) run INSIDE cx.update().
+    cx.spawn({
+        let app_entity = app_entity.clone();
+        async move |cx: &mut gpui::AsyncApp| {
+            logging::bench_log("window_show_native_start");
 
-    // 8. Send AI window to back (if open) so it doesn't come forward with main menu
-    // The AI window should only come forward via Cmd+Tab or explicit user action
-    platform::send_ai_window_to_back();
+            // Platform calls — trigger macOS delegate callbacks.
+            // Safe here: no AppCell borrow is active.
+            platform::show_main_window_without_activation();
+            platform::activate_main_window();
+            platform::send_ai_window_to_back();
 
-    // 9. Focus input and reset resize debounce
-    app_entity.update(cx, |view, ctx| {
-        let focus_handle = view.focus_handle(ctx);
-        let _ = window.update(ctx, |_root, win, _cx| {
-            win.focus(&focus_handle, _cx);
-        });
+            logging::bench_log("window_activated");
 
-        // Reset resize debounce to ensure proper window sizing
-        reset_resize_debounce();
+            // GPUI state changes — no macOS callbacks, safe inside borrow.
+            cx.update(move |cx: &mut gpui::App| {
+                app_entity.update(cx, |view, ctx| {
+                    let focus_handle = view.focus_handle(ctx);
+                    let _ = window.update(ctx, |_root, win, _cx| {
+                        win.focus(&focus_handle, _cx);
+                    });
 
-        if !needs_reset_before_show {
-            // FIX: Always ensure selection is at the first item when showing.
-            // This fixes the bug where the main menu sometimes opened with a
-            // random item selected (e.g., "Reset Window Positions" instead of "AI Chat").
-            view.ensure_selection_at_first_item(ctx);
+                    // Reset resize debounce to ensure proper window sizing
+                    reset_resize_debounce();
 
-            // FIX: Set pending_focus to MainFilter so the input gets focused
-            // when the window is shown. Without this, the cursor won't blink
-            // and typing won't work until the user clicks the input.
-            view.focused_input = FocusedInput::MainFilter;
-            view.pending_focus = Some(FocusTarget::MainFilter);
+                    if !needs_reset_before_show {
+                        view.ensure_selection_at_first_item(ctx);
+                        view.focused_input = FocusedInput::MainFilter;
+                        view.pending_focus = Some(FocusTarget::MainFilter);
+                    }
+
+                    // Always ensure window size matches current view using deferred resize.
+                    let _ = window.update(ctx, |_root, win, win_cx| {
+                        defer_resize_to_view(ViewType::ScriptList, 0, win, win_cx);
+                    });
+                });
+
+                logging::log("VISIBILITY", "Main window shown and focused");
+            });
         }
-
-        // Always ensure window size matches current view using deferred resize.
-        // This uses Window::defer to avoid RefCell borrow conflicts.
-        let _ = window.update(ctx, |_root, win, win_cx| {
-            defer_resize_to_view(ViewType::ScriptList, 0, win, win_cx);
-        });
-    });
-
-    logging::log("VISIBILITY", "Main window shown and focused");
+    })
+    .detach();
 }
 
 /// Hide the main window with proper state management.
@@ -232,16 +238,9 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
     if notes_open || ai_open {
         logging::log(
             "VISIBILITY",
-            "Using hide_main_window() - secondary windows are open",
+            "Using defer_hide_main_window() - secondary windows are open",
         );
-        // Defer the platform call to avoid RefCell borrow conflicts.
-        // GPUI may still have internal state borrowed; spawning defers to next event loop tick.
-        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
-            let _ = cx.update(|_cx: &mut gpui::App| {
-                platform::hide_main_window();
-            });
-        })
-        .detach();
+        platform::defer_hide_main_window(cx);
     } else {
         logging::log("VISIBILITY", "Using cx.hide() - no secondary windows");
         cx.hide();

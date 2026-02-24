@@ -9,11 +9,16 @@
 //!    - This ensures reset happens AND handles Notes/AI windows correctly
 //!
 //! 2. **When hiding the main window:**
-//!    - If Notes OR AI window is open → use `platform::hide_main_window()`
+//!    - If Notes OR AI window is open → use `platform::defer_hide_main_window(cx)`
 //!    - If NO secondary windows open → use `cx.hide()`
 //!    - `close_and_reset_window()` handles this automatically
 //!
-//! 3. **Reset must happen BEFORE or DURING hide, not after**
+//! 3. **NEVER call `platform::hide_main_window()` directly from GPUI callbacks**
+//!    - `orderOut:` on a key window triggers macOS `window_did_change_key_status`
+//!      synchronously, which re-enters GPUI's `App` RefCell → panic
+//!    - Always use `platform::defer_hide_main_window(cx)` which defers via `cx.spawn()`
+//!
+//! 4. **Reset must happen BEFORE or DURING hide, not after**
 //!    - The window should be clean when shown again
 //!    - Don't rely on NEEDS_RESET flag for normal operation
 //!
@@ -22,7 +27,7 @@
 //! These patterns indicate a bug:
 //! - `cx.hide()` without `close_and_reset_window`
 //! - `NEEDS_RESET.store(true` (should use close_and_reset_window instead)
-//! - `platform::hide_main_window()` without `reset_to_script_list` first
+//! - `platform::hide_main_window()` called directly (use `defer_hide_main_window` instead)
 //!
 //! # Code Audit Tests
 //!
@@ -121,34 +126,91 @@ mod tests {
         );
     }
 
-    /// Verify that platform::hide_main_window() is not called without reset
-    /// in app_execute.rs (except in specific patterns like Notes/AI opening)
+    /// Verify that all hide calls in app_execute use defer_hide_main_window
     #[test]
-    fn test_no_orphan_hide_main_window_in_app_execute() {
-        let content = read_source_file("app_execute.rs");
-        let matches = find_lines_with_pattern(&content, "platform::hide_main_window()");
+    fn test_app_execute_uses_deferred_hide() {
+        let content = read_rs_sources_under("src/app_execute");
+        let deferred = count_occurrences(&content, "defer_hide_main_window");
 
-        // Filter out valid uses (those with comments indicating Notes/AI context)
-        let invalid_matches: Vec<_> = matches
-            .iter()
-            .filter(|(_, line)| !line.contains("// Opening Notes/AI"))
-            .collect();
+        // All hide calls in app_execute should use the deferred version
+        assert!(
+            deferred >= 1,
+            "Expected at least 1 defer_hide_main_window call in src/app_execute/"
+        );
+    }
 
-        // If we find hide_main_window without the comment marker, just log it
-        // Valid contexts: inside close_and_reset_window call, or opening secondary windows
-        if !invalid_matches.is_empty() {
-            // Manual verification: all hide_main_window calls should be:
-            // 1. Inside close_and_reset_window (which does reset first)
-            // 2. When opening Notes/AI (which calls reset_to_script_list first)
-            // For now, we just warn - the other tests catch the main issues
-            println!(
-                "Note: Found platform::hide_main_window() calls - verify they are in valid contexts:\n{}",
-                invalid_matches.iter()
-                    .map(|(line, text)| format!("  Line {}: {}", line, text.trim()))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            );
+    /// REENTRANCY GUARD: Ensure `platform::hide_main_window()` is NEVER called
+    /// directly outside the platform module.
+    ///
+    /// `orderOut:` on a key NSWindow synchronously fires macOS's
+    /// `window_did_change_key_status`, which re-enters GPUI's `App` `RefCell`.
+    /// If any GPUI borrow is held at the time, this causes:
+    ///   `RefCell already borrowed` → panic → abort
+    ///
+    /// The sync function is module-private in `src/platform/`. All external code
+    /// must use `platform::defer_hide_main_window(cx)` which runs the ObjC call
+    /// on the next event-loop tick, after all borrows are released.
+    ///
+    /// If this test fails, you introduced a direct `platform::hide_main_window()`
+    /// call. Replace it with `platform::defer_hide_main_window(cx)`.
+    #[test]
+    fn test_no_direct_hide_main_window_outside_platform() {
+        // Scan all Rust source files under src/ (excluding the platform module)
+        let dirs_to_scan = [
+            "src/app_impl",
+            "src/app_execute",
+            "src/app_actions",
+            "src/main_entry",
+            "src/main_sections",
+            "src/render_prompts",
+            "src/render_builtins",
+            "src/render_script_list",
+            "src/notes",
+            "src/ai",
+            "src/prompts",
+            "src/components",
+        ];
+
+        let mut violations = Vec::new();
+
+        for dir in &dirs_to_scan {
+            let dir_path = Path::new(dir);
+            if !dir_path.exists() {
+                continue;
+            }
+            let content = {
+                let mut buf = String::new();
+                append_rs_sources(dir_path, &mut buf);
+                buf
+            };
+
+            // Look for direct calls: platform::hide_main_window() without "defer_"
+            for (line_num, line) in content.lines().enumerate() {
+                let trimmed = line.trim();
+                // Skip comments
+                if trimmed.starts_with("//")
+                    || trimmed.starts_with("///")
+                    || trimmed.starts_with("*")
+                {
+                    continue;
+                }
+                // Match direct sync call but not the deferred wrapper
+                if trimmed.contains("hide_main_window()")
+                    && !trimmed.contains("defer_hide_main_window")
+                    && !trimmed.contains("fn hide_main_window")
+                {
+                    violations.push(format!("  {}:{}: {}", dir, line_num + 1, trimmed));
+                }
+            }
         }
+
+        assert!(
+            violations.is_empty(),
+            "Found direct hide_main_window() calls outside platform module!\n\
+             These WILL cause `RefCell already borrowed` panics.\n\
+             Replace with `platform::defer_hide_main_window(cx)`.\n\n{}\n",
+            violations.join("\n")
+        );
     }
 
     /// Verify close_and_reset_window exists and has the right structure
@@ -266,7 +328,7 @@ mod tests {
         // ```rust
         // script_kit_gpui::set_main_window_visible(false);
         // self.reset_to_script_list(cx);
-        // platform::hide_main_window();  // Always use this when opening Notes/AI
+        // platform::defer_hide_main_window(cx);  // Deferred — safe from RefCell reentrancy
         // notes::open_notes_window(cx)?;
         // ```
 
@@ -281,10 +343,11 @@ mod tests {
         // cx.hide();
         // ```
 
-        // INVALID PATTERN 3: hide_main_window without reset
+        // INVALID PATTERN 3: Direct hide_main_window (CRASHES!)
         // ```rust
-        // platform::hide_main_window();  // BAD - window state not reset
+        // platform::hide_main_window();  // BAD - RefCell reentrancy panic
         // ```
+        // Use platform::defer_hide_main_window(cx) instead.
 
         // This test exists for documentation purposes - the patterns above
         // are enforced by the other tests in this module

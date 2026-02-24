@@ -434,7 +434,7 @@ impl ScriptListApp {
                 // Reset state and hide main window first
                 script_kit_gpui::set_main_window_visible(false);
                 self.reset_to_script_list(cx);
-                platform::hide_main_window();
+                platform::defer_hide_main_window(cx);
 
                 // Defer AI window creation to avoid RefCell borrow conflicts
                 // The reset_to_script_list calls cx.notify() which schedules a render,
@@ -468,7 +468,7 @@ impl ScriptListApp {
                 // Reset state, hide main window, and open Notes window
                 script_kit_gpui::set_main_window_visible(false);
                 self.reset_to_script_list(cx);
-                platform::hide_main_window();
+                platform::defer_hide_main_window(cx);
                 if let Err(e) = notes::open_notes_window(cx) {
                     logging::log("ERROR", &format!("Failed to open Notes window: {}", e));
                     self.toast_manager.push(
@@ -863,7 +863,7 @@ impl ScriptListApp {
                 // All notes commands: reset state, hide main window, open notes
                 script_kit_gpui::set_main_window_visible(false);
                 self.reset_to_script_list(cx);
-                platform::hide_main_window();
+                platform::defer_hide_main_window(cx);
 
                 let result = match cmd_type {
                     NotesCommandType::OpenNotes
@@ -898,7 +898,7 @@ impl ScriptListApp {
                     // Most AI commands open a separate AI window.
                     script_kit_gpui::set_main_window_visible(false);
                     self.reset_to_script_list(cx);
-                    platform::hide_main_window();
+                    platform::defer_hide_main_window(cx);
                 }
 
                 match cmd_type {

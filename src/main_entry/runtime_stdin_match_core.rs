@@ -141,8 +141,8 @@
                                 // CRITICAL: Only hide main window if Notes/AI are open
                                 // ctx.hide() hides the ENTIRE app (all windows)
                                 if notes_open || ai_open {
-                                    logging::log("STDIN", "Using hide_main_window() - secondary windows are open");
-                                    platform::hide_main_window();
+                                    logging::log("STDIN", "Using defer_hide_main_window() - secondary windows are open");
+                                    platform::defer_hide_main_window(ctx);
                                 } else {
                                     ctx.hide();
                                 }

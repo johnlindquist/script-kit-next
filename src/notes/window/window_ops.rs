@@ -115,7 +115,8 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
     }
 
     // If main window is visible, hide it (Notes takes focus)
-    // Use platform::hide_main_window() to only hide the main window, not the whole app
+    // Use defer_hide_main_window to only hide the main window, not the whole app.
+    // Must be deferred to avoid RefCell reentrancy from macOS callbacks.
     // IMPORTANT: Set visibility to false so the main hotkey knows to SHOW (not hide) next time
     if crate::is_main_window_visible() {
         logging::log(
@@ -123,7 +124,7 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
             "Main window was visible - hiding it since Notes is opening",
         );
         crate::set_main_window_visible(false);
-        crate::platform::hide_main_window();
+        crate::platform::defer_hide_main_window(cx);
     }
 
     // Create new window (toggle ON)
@@ -191,7 +192,7 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
     //
     // Instead, we just ensure the main window is hidden (in case it was visible)
     // and let the PopUp window handle focus naturally.
-    crate::platform::hide_main_window();
+    crate::platform::defer_hide_main_window(cx);
 
     // Focus the editor input in the Notes window
     // Release lock before calling update

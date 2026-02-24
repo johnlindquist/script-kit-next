@@ -128,7 +128,7 @@
                                                         script_kit_gpui::set_main_window_visible(
                                                             false,
                                                         );
-                                                        platform::hide_main_window();
+                                                        platform::defer_hide_main_window(cx);
                                                         NEEDS_RESET
                                                             .store(true, Ordering::SeqCst);
                                                         std::thread::spawn(|| {
