@@ -1,5 +1,8 @@
 use super::*;
-use crate::ui_foundation::{is_key_down, is_key_enter, is_key_escape, is_key_tab, is_key_up};
+use crate::ui_foundation::{
+    is_key_backspace, is_key_delete, is_key_down, is_key_enter, is_key_escape, is_key_tab,
+    is_key_up,
+};
 
 impl NotesApp {
     pub(super) fn handle_key_down(
@@ -37,9 +40,7 @@ impl NotesApp {
                     cx.stop_propagation();
                     return;
                 }
-                key if key.eq_ignore_ascii_case("backspace")
-                    || key.eq_ignore_ascii_case("delete") =>
-                {
+                key if is_key_backspace(key) || is_key_delete(key) => {
                     self.command_bar.handle_backspace(cx);
                     cx.stop_propagation();
                     return;
@@ -83,7 +84,7 @@ impl NotesApp {
                     key if is_key_enter(key) => {
                         panel.update(cx, |panel, _| panel.submit_selected());
                     }
-                    key if key.eq_ignore_ascii_case("backspace") => {
+                    key if is_key_backspace(key) => {
                         panel.update(cx, |panel, cx| panel.handle_backspace(cx));
                     }
                     _ => {
@@ -132,9 +133,7 @@ impl NotesApp {
                     cx.stop_propagation();
                     return;
                 }
-                key if key.eq_ignore_ascii_case("backspace")
-                    || key.eq_ignore_ascii_case("delete") =>
-                {
+                key if is_key_backspace(key) || is_key_delete(key) => {
                     self.note_switcher.handle_backspace(cx);
                     cx.stop_propagation();
                     return;
@@ -427,9 +426,7 @@ impl NotesApp {
                     self.navigate_forward(window, cx);
                     cx.stop_propagation();
                 }
-                key if key.eq_ignore_ascii_case("backspace")
-                    || key.eq_ignore_ascii_case("delete") =>
-                {
+                key if is_key_backspace(key) || is_key_delete(key) => {
                     if self.selected_note_id.is_some() {
                         self.delete_selected_note(cx);
                         if let Some(id) = self.selected_note_id {
