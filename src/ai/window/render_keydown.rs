@@ -1,4 +1,7 @@
 use super::*;
+use crate::ui_foundation::{
+    is_key_backspace, is_key_down, is_key_enter, is_key_escape, is_key_k, is_key_tab, is_key_up,
+};
 
 impl AiApp {
     pub(super) fn handle_root_key_down(
@@ -11,7 +14,7 @@ impl AiApp {
         self.hide_mouse_cursor(cx);
 
         // Handle keyboard shortcuts
-        let key = event.keystroke.key.to_lowercase();
+        let key = event.keystroke.key.as_str();
         let modifiers = &event.keystroke.modifiers;
 
         let no_system_modifiers = !modifiers.platform && !modifiers.alt && !modifiers.control;
@@ -21,8 +24,8 @@ impl AiApp {
         let in_setup_mode = self.available_models.is_empty() && !self.showing_api_key_input;
 
         if no_system_modifiers && in_setup_mode {
-            match key.as_str() {
-                "tab" => {
+            match key {
+                k if is_key_tab(k) => {
                     if modifiers.shift {
                         self.move_setup_button_focus(-1, cx);
                     } else {
@@ -32,19 +35,19 @@ impl AiApp {
                     cx.stop_propagation();
                     return;
                 }
-                "up" | "arrowup" => {
+                k if is_key_up(k) => {
                     self.move_setup_button_focus(-1, cx);
                     window.activate_window();
                     cx.stop_propagation();
                     return;
                 }
-                "down" | "arrowdown" => {
+                k if is_key_down(k) => {
                     self.move_setup_button_focus(1, cx);
                     window.activate_window();
                     cx.stop_propagation();
                     return;
                 }
-                "enter" | "return" => {
+                k if is_key_enter(k) => {
                     match self.setup_button_focus_index {
                         0 => self.show_api_key_input(window, cx),
                         1 => self.enable_claude_code(window, cx),
@@ -62,28 +65,28 @@ impl AiApp {
         // This routes all relevant keys to the CommandBar
         // CRITICAL: Must stop propagation to prevent Input from consuming the keys
         if self.command_bar.is_open() {
-            match key.as_str() {
-                "up" | "arrowup" => {
+            match key {
+                k if is_key_up(k) => {
                     self.command_bar_select_prev(cx);
                     cx.stop_propagation(); // Prevent Input from handling
                     return;
                 }
-                "down" | "arrowdown" => {
+                k if is_key_down(k) => {
                     self.command_bar_select_next(cx);
                     cx.stop_propagation(); // Prevent Input from handling
                     return;
                 }
-                "enter" | "return" => {
+                k if is_key_enter(k) => {
                     self.execute_command_bar_action(window, cx);
                     cx.stop_propagation(); // Prevent Input from handling
                     return;
                 }
-                "escape" => {
+                k if is_key_escape(k) => {
                     self.hide_command_bar(cx);
                     cx.stop_propagation(); // Prevent further handling
                     return;
                 }
-                "backspace" | "delete" => {
+                k if is_key_backspace(k) || k.eq_ignore_ascii_case("delete") => {
                     self.command_bar_handle_backspace(cx);
                     cx.stop_propagation(); // Prevent Input from handling
                     return;
@@ -109,23 +112,23 @@ impl AiApp {
 
         // Handle presets dropdown navigation
         if self.showing_presets_dropdown {
-            match key.as_str() {
-                "up" | "arrowup" => {
+            match key {
+                k if is_key_up(k) => {
                     self.presets_select_prev(cx);
                     cx.stop_propagation();
                     return;
                 }
-                "down" | "arrowdown" => {
+                k if is_key_down(k) => {
                     self.presets_select_next(cx);
                     cx.stop_propagation();
                     return;
                 }
-                "enter" | "return" => {
+                k if is_key_enter(k) => {
                     self.create_chat_with_preset(window, cx);
                     cx.stop_propagation();
                     return;
                 }
-                "escape" => {
+                k if is_key_escape(k) => {
                     self.hide_presets_dropdown(cx);
                     cx.stop_propagation();
                     return;
@@ -136,23 +139,23 @@ impl AiApp {
 
         // Handle new chat dropdown navigation (Raycast-style CommandBar)
         if self.new_chat_command_bar.is_open() {
-            match key.as_str() {
-                "up" | "arrowup" => {
+            match key {
+                k if is_key_up(k) => {
                     self.new_chat_command_bar_select_prev(cx);
                     cx.stop_propagation();
                     return;
                 }
-                "down" | "arrowdown" => {
+                k if is_key_down(k) => {
                     self.new_chat_command_bar_select_next(cx);
                     cx.stop_propagation();
                     return;
                 }
-                "enter" | "return" => {
+                k if is_key_enter(k) => {
                     self.execute_new_chat_action(window, cx);
                     cx.stop_propagation();
                     return;
                 }
-                "escape" => {
+                k if is_key_escape(k) => {
                     self.hide_new_chat_command_bar(cx);
                     cx.stop_propagation();
                     return;
@@ -164,7 +167,7 @@ impl AiApp {
         }
 
         // Handle attachments picker
-        if self.showing_attachments_picker && key == "escape" {
+        if self.showing_attachments_picker && is_key_escape(key) {
             self.hide_attachments_picker(cx);
             cx.stop_propagation();
             return;
@@ -172,9 +175,9 @@ impl AiApp {
 
         // platform modifier = Cmd on macOS, Ctrl on Windows/Linux
         if modifiers.platform {
-            match key.as_str() {
+            match key {
                 // Cmd+K to toggle command bar (like Raycast)
-                "k" => {
+                k if is_key_k(k) => {
                     if self.command_bar.is_open() {
                         self.hide_command_bar(cx);
                     } else {
@@ -204,7 +207,7 @@ impl AiApp {
                         cx.stop_propagation();
                     }
                 }
-                "enter" | "return" => self.submit_message(window, cx),
+                k if is_key_enter(k) => self.submit_message(window, cx),
                 // Cmd+\ to toggle sidebar (like Raycast)
                 "\\" | "backslash" => self.toggle_sidebar(cx),
                 // Cmd+B also toggles sidebar (common convention)
@@ -237,7 +240,7 @@ impl AiApp {
                     cx.stop_propagation();
                 }
                 // Cmd+Shift+Backspace to delete current chat
-                "backspace" | "delete" => {
+                k if is_key_backspace(k) || k.eq_ignore_ascii_case("delete") => {
                     if modifiers.shift {
                         self.delete_current_chat(cx);
                         cx.stop_propagation();
@@ -270,7 +273,7 @@ impl AiApp {
         }
 
         // Escape closes shortcuts overlay
-        if key == "escape" && self.showing_shortcuts_overlay {
+        if is_key_escape(key) && self.showing_shortcuts_overlay {
             self.showing_shortcuts_overlay = false;
             cx.notify();
             cx.stop_propagation();
@@ -278,17 +281,14 @@ impl AiApp {
         }
 
         // Up arrow in empty input: edit last user message
-        if (key == "up" || key == "arrowup")
-            && self.input_state.read(cx).value().is_empty()
-            && !self.is_streaming
-        {
+        if is_key_up(key) && self.input_state.read(cx).value().is_empty() && !self.is_streaming {
             self.edit_last_user_message(window, cx);
             cx.stop_propagation();
             return;
         }
 
         // Escape cancels editing mode
-        if key == "escape" && self.editing_message_id.is_some() {
+        if is_key_escape(key) && self.editing_message_id.is_some() {
             self.editing_message_id = None;
             self.input_state.update(cx, |state, cx| {
                 state.set_value("", window, cx);
@@ -299,28 +299,28 @@ impl AiApp {
         }
 
         // Escape cancels rename
-        if key == "escape" && self.renaming_chat_id.is_some() {
+        if is_key_escape(key) && self.renaming_chat_id.is_some() {
             self.cancel_rename(cx);
             cx.stop_propagation();
             return;
         }
 
         // Escape stops streaming if active
-        if key == "escape" && self.is_streaming {
+        if is_key_escape(key) && self.is_streaming {
             self.stop_streaming(cx);
             cx.stop_propagation();
             return;
         }
 
         // Escape closes API key input (back to setup card)
-        if key == "escape" && self.showing_api_key_input {
+        if is_key_escape(key) && self.showing_api_key_input {
             self.hide_api_key_input(window, cx);
             cx.stop_propagation();
             return;
         }
 
         // Escape closes any open dropdown
-        if key == "escape"
+        if is_key_escape(key)
             && (self.command_bar.is_open()
                 || self.showing_presets_dropdown
                 || self.showing_attachments_picker)
