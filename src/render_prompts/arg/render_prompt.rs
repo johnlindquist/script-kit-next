@@ -309,7 +309,7 @@
                     div()
                         .mx(px(design_spacing.padding_lg))
                         .h(px(design_visual.border_thin))
-                        .bg(rgba((ui_border << 8) | 0x60)),
+                        .bg(rgba((ui_border << 8) | u32::from(ui_foundation::ALPHA_DIVIDER))),
                 )
                 .child(
                     div()

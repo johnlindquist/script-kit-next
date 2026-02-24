@@ -45,7 +45,9 @@
                 })
                 .child(
                     div()
-                        .bg(rgba((accent_color << 8) | 0x60))
+                        .bg(rgba(
+                            (accent_color << 8) | u32::from(ui_foundation::ALPHA_SELECTION),
+                        ))
                         // Use primary text color for selection - already set from theme
                         .text_color(rgb(text_primary))
                         .child(selected),

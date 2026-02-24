@@ -27,7 +27,9 @@ impl ScriptListApp {
             // Semi-transparent background to let vibrancy show through
             .bg(rgba((bg_main << 8) | panel_alpha as u32))
             .border_l_1()
-            .border_color(rgba((ui_border << 8) | 0x30)) // Subtle border
+            .border_color(rgba(
+                (ui_border << 8) | u32::from(ui_foundation::ALPHA_BORDER_SUBTLE),
+            )) // Subtle border
             .p(px(spacing.padding_lg))
             .flex()
             .flex_col()
@@ -58,7 +60,9 @@ impl ScriptListApp {
                                 .px(px(spacing.padding_sm))
                                 .py(px(spacing.padding_xs / 2.0))
                                 .rounded(px(visual.radius_sm))
-                                .bg(rgba((accent << 8) | 0x30))
+                                .bg(rgba(
+                                    (accent << 8) | u32::from(ui_foundation::ALPHA_BORDER_SUBTLE),
+                                ))
                                 .text_xs()
                                 .text_color(rgb(accent))
                                 .child(content_type_label),
@@ -70,7 +74,10 @@ impl ScriptListApp {
                                     .px(px(spacing.padding_sm))
                                     .py(px(spacing.padding_xs / 2.0))
                                     .rounded(px(visual.radius_sm))
-                                    .bg(rgba((accent << 8) | 0x20))
+                                    .bg(rgba(
+                                        (accent << 8)
+                                            | u32::from(ui_foundation::ALPHA_TINT_SUBTLE),
+                                    ))
                                     .text_xs()
                                     .text_color(rgb(accent))
                                     .child("📌 Pinned"),
@@ -104,7 +111,7 @@ impl ScriptListApp {
                     div()
                         .w_full()
                         .h(px(visual.border_thin))
-                        .bg(rgba((ui_border << 8) | 0x60))
+                        .bg(rgba((ui_border << 8) | u32::from(ui_foundation::ALPHA_DIVIDER)))
                         .my(px(spacing.padding_sm)),
                 );
 

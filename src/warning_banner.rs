@@ -186,7 +186,12 @@ impl RenderOnce for WarningBanner {
         if let Some(callback) = on_click_callback {
             banner = banner
                 .cursor_pointer()
-                .hover(|s| s.bg(rgba((colors.background << 8) | 0xE0))) // Slightly darker on hover
+                .hover(|s| {
+                    s.bg(rgba(
+                        (colors.background << 8)
+                            | u32::from(crate::ui_foundation::ALPHA_HOVER_WARNING),
+                    ))
+                }) // Slightly darker on hover
                 .on_click(move |event, window, cx| {
                     tracing::debug!(message = %message_for_log, "Warning banner clicked");
                     callback(event, window, cx);

@@ -1,5 +1,9 @@
 // Script list render method - extracted from app_render.rs
 // This file is included via include!() macro in main.rs
+use crate::ui_foundation::{
+    is_key_down as sk_is_key_down, is_key_enter as sk_is_key_enter,
+    is_key_escape as sk_is_key_escape, is_key_tab as sk_is_key_tab, is_key_up as sk_is_key_up,
+};
 
 // --- merged from part_000.rs ---
 fn app_shell_footer_colors(theme: &crate::theme::Theme) -> PromptFooterColors {
@@ -641,14 +645,14 @@ impl ScriptListApp {
                     return;
                 }
 
-                let key_str = event.keystroke.key.to_lowercase();
+                let key_str = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
 
                 // Check SDK action shortcuts FIRST (before built-in shortcuts)
                 // This allows scripts to override default shortcuts via setActions()
                 if !this.action_shortcuts.is_empty() {
                     let key_combo =
-                        shortcuts::keystroke_to_shortcut(&key_str, &event.keystroke.modifiers);
+                        shortcuts::keystroke_to_shortcut(key_str, &event.keystroke.modifiers);
                     if let Some(action_name) = this.action_shortcuts.get(&key_combo).cloned() {
                         logging::log(
                             "ACTIONS",
@@ -666,7 +670,7 @@ impl ScriptListApp {
                 if has_cmd {
                     let has_shift = event.keystroke.modifiers.shift;
 
-                    match key_str.as_str() {
+                    match key_str {
                         "l" => {
                             logging::log("KEY", "Shortcut Cmd+L -> toggle_logs");
                             this.toggle_logs(cx);
@@ -764,26 +768,26 @@ impl ScriptListApp {
                 // If actions popup is open, route keyboard events to it
                 if this.show_actions_popup {
                     if let Some(ref dialog) = this.actions_dialog {
-                        match key_str.as_str() {
-                            "up" | "arrowup" => {
+                        match key_str {
+                            key if sk_is_key_up(key) => {
                                 dialog.update(cx, |d, cx| d.move_up(cx));
                                 // Notify actions window to re-render
                                 cx.spawn(async move |_this, cx| {
-                                    cx.update(notify_actions_window).ok();
+                                    cx.update(notify_actions_window);
                                 })
                                 .detach();
                                 return;
                             }
-                            "down" | "arrowdown" => {
+                            key if sk_is_key_down(key) => {
                                 dialog.update(cx, |d, cx| d.move_down(cx));
                                 // Notify actions window to re-render
                                 cx.spawn(async move |_this, cx| {
-                                    cx.update(notify_actions_window).ok();
+                                    cx.update(notify_actions_window);
                                 })
                                 .detach();
                                 return;
                             }
-                            "enter" | "return" => {
+                            key if sk_is_key_enter(key) => {
                                 // Get the selected action and execute it
                                 let action_id = dialog.read(cx).get_selected_action_id();
                                 let should_close = dialog.read(cx).selected_action_should_close();
@@ -809,7 +813,7 @@ impl ScriptListApp {
                                 cx.notify();
                                 return;
                             }
-                            "escape" | "esc" => {
+                            key if sk_is_key_escape(key) => {
                                 this.close_actions_popup(ActionsDialogHost::MainList, window, cx);
                                 cx.notify();
                                 return;
@@ -821,8 +825,7 @@ impl ScriptListApp {
                                 cx.spawn(async move |_this, cx| {
                                     cx.update(|cx| {
                                         resize_actions_window(cx, &dialog_for_resize);
-                                    })
-                                    .ok();
+                                    });
                                 })
                                 .detach();
                                 return;
@@ -845,8 +848,7 @@ impl ScriptListApp {
                                                             cx,
                                                             &dialog_for_resize,
                                                         );
-                                                    })
-                                                    .ok();
+                                                    });
                                                 })
                                                 .detach();
                                                 return;
@@ -906,14 +908,14 @@ impl ScriptListApp {
                 // branch should rarely (if ever) be triggered. The normal navigation below
                 // handles fallback items in the unified list.
                 if this.fallback_mode && !this.cached_fallbacks.is_empty() {
-                    match key_str.as_str() {
-                        "up" | "arrowup" => {
+                    match key_str {
+                        key if sk_is_key_up(key) => {
                             if this.fallback_selected_index > 0 {
                                 this.fallback_selected_index -= 1;
                                 cx.notify();
                             }
                         }
-                        "down" | "arrowdown" => {
+                        key if sk_is_key_down(key) => {
                             if this.fallback_selected_index
                                 < this.cached_fallbacks.len().saturating_sub(1)
                             {
@@ -921,12 +923,12 @@ impl ScriptListApp {
                                 cx.notify();
                             }
                         }
-                        "enter" => {
+                        key if sk_is_key_enter(key) => {
                             if !this.gpui_input_focused {
                                 this.execute_selected_fallback(cx);
                             }
                         }
-                        "escape" => {
+                        key if sk_is_key_escape(key) => {
                             // Clear filter to exit fallback mode
                             this.clear_filter(window, cx);
                         }
@@ -939,13 +941,13 @@ impl ScriptListApp {
                 // NOTE: Arrow keys are now handled by the arrow_interceptor in app_impl.rs
                 // which fires before the Input component can consume them. This allows
                 // input history navigation + list navigation to work correctly.
-                match key_str.as_str() {
-                    "enter" => {
+                match key_str {
+                    key if sk_is_key_enter(key) => {
                         if !this.gpui_input_focused {
                             this.execute_selected(cx);
                         }
                     }
-                    "escape" => {
+                    key if sk_is_key_escape(key) => {
                         // Clear filter first if there's text, otherwise close window
                         if !this.filter_text.is_empty() {
                             this.clear_filter(window, cx);
@@ -956,7 +958,7 @@ impl ScriptListApp {
                     }
                     // Tab key: Send query to AI chat if filter has text
                     // Note: This is a fallback - primary Tab handling is in app_impl.rs via intercept_keystrokes
-                    "tab" | "Tab" => {
+                    key if sk_is_key_tab(key) => {
                         if !this.filter_text.is_empty() {
                             let query = this.filter_text.clone();
 
