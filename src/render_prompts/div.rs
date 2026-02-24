@@ -110,7 +110,10 @@ impl ScriptListApp {
                         div()
                             .mx(px(design_spacing.padding_lg))
                             .h(px(design_visual.border_thin))
-                            .bg(rgba((design_colors.border << 8) | 0x60)),
+                            .bg(rgba(
+                                (design_colors.border << 8)
+                                    | u32::from(ui_foundation::ALPHA_DIVIDER),
+                            )),
                     )
                     .child(crate::components::prompt_shell_content(entity.clone())),
             )

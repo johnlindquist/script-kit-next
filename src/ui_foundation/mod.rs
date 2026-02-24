@@ -91,6 +91,16 @@ pub const VIBRANCY_DARK_OPACITY: f32 = 0.75;
 /// Opacity for vibrancy window backgrounds in light mode.
 /// Higher value (85%) needed for visibility - matches POC's FAFAFA tint at D9 alpha.
 pub const VIBRANCY_LIGHT_OPACITY: f32 = 0.85;
+/// 38% opacity - arg input selection highlight fill.
+pub(crate) const ALPHA_SELECTION: u8 = 0x60;
+/// 38% opacity - prompt dividers and subtle section borders.
+pub(crate) const ALPHA_DIVIDER: u8 = 0x60;
+/// 19% opacity - subtle borders and badge backgrounds.
+pub(crate) const ALPHA_BORDER_SUBTLE: u8 = 0x30;
+/// 12% opacity - faint tint for secondary badges.
+pub(crate) const ALPHA_TINT_SUBTLE: u8 = 0x20;
+/// 88% opacity - warning banner hover darken overlay.
+pub(crate) const ALPHA_HOVER_WARNING: u8 = 0xE0;
 /// Get the vibrancy background for window root containers.
 ///
 /// This is used by the main window outer div to tint the macOS blur effect with the
