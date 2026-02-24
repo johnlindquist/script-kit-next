@@ -581,6 +581,13 @@ pub fn is_key_escape(key: &str) -> bool {
 pub fn is_key_backspace(key: &str) -> bool {
     key.eq_ignore_ascii_case("backspace")
 }
+/// Check if key is Delete.
+///
+/// Uses allocation-free ASCII case-insensitive comparison.
+#[inline]
+pub fn is_key_delete(key: &str) -> bool {
+    key.eq_ignore_ascii_case("delete")
+}
 /// Check if key is Tab.
 ///
 /// Uses allocation-free ASCII case-insensitive comparison.
@@ -788,6 +795,15 @@ mod tests {
         assert!(is_key_backspace("BACKSPACE"));
         assert!(!is_key_backspace("delete"));
         assert!(!is_key_backspace("enter"));
+    }
+
+    #[test]
+    fn test_is_key_delete() {
+        assert!(is_key_delete("delete"));
+        assert!(is_key_delete("Delete"));
+        assert!(is_key_delete("DELETE"));
+        assert!(!is_key_delete("backspace"));
+        assert!(!is_key_delete("enter"));
     }
 
     #[test]
