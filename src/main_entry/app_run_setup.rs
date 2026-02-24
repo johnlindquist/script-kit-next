@@ -544,13 +544,13 @@ app.run(move |cx: &mut App| {
                         logging::log("TRAY", "Open Script Kit menu item clicked");
                         let window_inner = window_for_tray;
                         let app_entity_inner = app_entity_for_tray.clone();
-                        let _ = cx.update(|cx| {
+                        cx.update(|cx| {
                             show_main_window_helper(window_inner, app_entity_inner, cx);
                         });
                     }
                     Some(TrayMenuAction::OpenNotes) => {
                         logging::log("TRAY", "Notes menu item clicked");
-                        let _ = cx.update(|cx| {
+                        cx.update(|cx| {
                             if let Err(e) = notes::open_notes_window(cx) {
                                 logging::log("TRAY", &format!("Failed to open notes window: {}", e));
                             }
@@ -558,7 +558,7 @@ app.run(move |cx: &mut App| {
                     }
                     Some(TrayMenuAction::OpenAiChat) => {
                         logging::log("TRAY", "AI Chat menu item clicked");
-                        let _ = cx.update(|cx| {
+                        cx.update(|cx| {
                             if let Err(e) = ai::open_ai_window(cx) {
                                 logging::log("TRAY", &format!("Failed to open AI window: {}", e));
                             }
@@ -627,7 +627,7 @@ app.run(move |cx: &mut App| {
                         // Clean up processes and PID file before quitting
                         PROCESS_MANAGER.kill_all_processes();
                         PROCESS_MANAGER.remove_main_pid();
-                        let _ = cx.update(|cx| {
+                        cx.update(|cx| {
                             cx.quit();
                         });
                         break;
@@ -665,7 +665,7 @@ app.run(move |cx: &mut App| {
                 logging::log("APP", "");
 
                 // Show window using the centralized helper
-                let _ = cx.update(|cx| {
+                cx.update(|cx| {
                     show_main_window_helper(window_for_fallback, app_entity_for_fallback, cx);
                 });
             } else {
@@ -693,12 +693,12 @@ app.run(move |cx: &mut App| {
 
                 if is_visible {
                     logging::log("VISIBILITY", "Decision: HIDE");
-                    let _ = cx.update(move |cx: &mut gpui::App| {
+                    cx.update(move |cx: &mut gpui::App| {
                         hide_main_window_helper(app_entity_inner, cx);
                     });
                 } else {
                     logging::log("VISIBILITY", "Decision: SHOW");
-                    let _ = cx.update(move |cx: &mut gpui::App| {
+                    cx.update(move |cx: &mut gpui::App| {
                         show_main_window_helper(window_inner, app_entity_inner, cx);
                     });
                 }
@@ -716,7 +716,7 @@ app.run(move |cx: &mut App| {
             while let Ok(hotkey_event) = hotkeys::notes_hotkey_channel().1.recv().await {
                 let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
                 logging::log("HOTKEY", "Notes hotkey triggered - opening notes window");
-                let _ = cx.update(|cx: &mut gpui::App| {
+                cx.update(|cx: &mut gpui::App| {
                     if let Err(e) = notes::open_notes_window(cx) {
                         logging::log("HOTKEY", &format!("Failed to open notes window: {}", e));
                     }
@@ -733,7 +733,7 @@ app.run(move |cx: &mut App| {
             while let Ok(hotkey_event) = hotkeys::ai_hotkey_channel().1.recv().await {
                 let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
                 logging::log("HOTKEY", "AI hotkey triggered - opening AI window");
-                let _ = cx.update(|cx: &mut gpui::App| {
+                cx.update(|cx: &mut gpui::App| {
                     if let Err(e) = ai::open_ai_window(cx) {
                         logging::log("HOTKEY", &format!("Failed to open AI window: {}", e));
                     }
@@ -760,7 +760,7 @@ app.run(move |cx: &mut App| {
                 let app_entity_inner = app_entity_for_scripts.clone();
                 let window_inner = window_for_scripts;
 
-                let _ = cx.update(move |cx: &mut gpui::App| {
+                cx.update(move |cx: &mut gpui::App| {
                     logging::log(
                         "HOTKEY",
                         &format!("Executing command_id: {}", id_clone),
@@ -814,7 +814,7 @@ app.run(move |cx: &mut App| {
                     // Note: Currently opens notes window; specific note navigation can be added later
                     let note_id = command_id.strip_prefix("notes/").unwrap_or("");
                     logging::log("DEEPLINK", &format!("Opening notes (note_id: {})", note_id));
-                    let _ = cx.update(|cx| {
+                    cx.update(|cx| {
                         if let Err(e) = notes::open_notes_window(cx) {
                             logging::log("DEEPLINK", &format!("Failed to open notes: {}", e));
                         }
@@ -826,7 +826,7 @@ app.run(move |cx: &mut App| {
                 let app_entity_inner = app_entity_for_deeplinks.clone();
                 let window_inner = window_for_deeplinks;
 
-                let _ = cx.update(move |cx: &mut gpui::App| {
+                cx.update(move |cx: &mut gpui::App| {
                     logging::log(
                         "DEEPLINK",
                         &format!("Executing command_id: {}", id_clone),
@@ -877,7 +877,7 @@ app.run(move |cx: &mut App| {
                 );
                 let app_entity_inner = app_entity_for_show.clone();
                 let window_inner = window_for_show;
-                let _ = cx.update(move |cx: &mut gpui::App| {
+                cx.update(move |cx: &mut gpui::App| {
                     show_main_window_helper(window_inner, app_entity_inner, cx);
                 });
             }
@@ -912,7 +912,7 @@ app.run(move |cx: &mut App| {
                     if config_rx.try_recv().is_ok() {
                         idle_count = 0; // Reset on activity
                         logging::log("APP", "Config file changed, reloading");
-                        let _ = cx.update(|cx| {
+                        cx.update(|cx| {
                             app_entity_for_config.update(cx, |view, ctx| {
                                 view.update_config(ctx);
                             });
@@ -961,7 +961,7 @@ app.run(move |cx: &mut App| {
                                 if is_scriptlet {
                                     logging::log("APP", &format!("Scriptlet file changed: {}", path.display()));
                                     let path_clone = path.clone();
-                                    let _ = cx.update(|cx| {
+                                    cx.update(|cx| {
                                         app_entity_for_scripts.update(cx, |view, ctx| {
                                             view.handle_scriptlet_file_change(&path_clone, false, ctx);
                                         });
@@ -975,7 +975,7 @@ app.run(move |cx: &mut App| {
                                             logging::log("APP", &format!("Re-registered {} scheduled scripts after file change", new_count));
                                         }
                                     }
-                                    let _ = cx.update(|cx| {
+                                    cx.update(|cx| {
                                         app_entity_for_scripts.update(cx, |view, ctx| {
                                             view.refresh_scripts(ctx);
                                         });
@@ -988,14 +988,14 @@ app.run(move |cx: &mut App| {
                                 if is_scriptlet {
                                     logging::log("APP", &format!("Scriptlet file deleted: {}", path.display()));
                                     let path_clone = path.clone();
-                                    let _ = cx.update(|cx| {
+                                    cx.update(|cx| {
                                         app_entity_for_scripts.update(cx, |view, ctx| {
                                             view.handle_scriptlet_file_change(&path_clone, true, ctx);
                                         });
                                     });
                                 } else {
                                     logging::log("APP", &format!("Script file deleted: {}", path.display()));
-                                    let _ = cx.update(|cx| {
+                                    cx.update(|cx| {
                                         app_entity_for_scripts.update(cx, |view, ctx| {
                                             view.refresh_scripts(ctx);
                                         });
@@ -1011,7 +1011,7 @@ app.run(move |cx: &mut App| {
                                         logging::log("APP", &format!("Re-registered {} scheduled scripts after full reload", new_count));
                                     }
                                 }
-                                let _ = cx.update(|cx| {
+                                cx.update(|cx| {
                                     app_entity_for_scripts.update(cx, |view, ctx| {
                                         view.refresh_scripts(ctx);
                                     });
@@ -1064,7 +1064,7 @@ app.run(move |cx: &mut App| {
 
                     // Notify UI to re-fetch cached apps and invalidate search caches
                     // This ensures new apps appear in search results immediately
-                    let _ = cx.update(|cx| {
+                    cx.update(|cx| {
                         app_entity_for_apps.update(cx, |view, ctx| {
                             view.refresh_apps(ctx);
                         });
@@ -1286,7 +1286,7 @@ app.run(move |cx: &mut App| {
 
                                     let script_name_owned = script_name.to_string();
                                     let app_entity_inner = app_entity_for_test.clone();
-                                    let _ = cx.update(|cx| {
+                                    cx.update(|cx| {
                                         app_entity_inner.update(cx, |view, ctx| {
                                             // Find and run the script interactively
                                             if let Some(script) = view.scripts.iter().find(|s| s.name == script_name_owned || s.path.to_string_lossy().contains(&script_name_owned)).cloned() {
@@ -1380,7 +1380,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
         );
 
         let app_entity_inner = app_entity_for_stdin.clone();
-        let _ = cx.update(|cx| {
+        cx.update(|cx| {
             // Use the Root window to get Window reference, then update the app entity
             let _ = window_for_stdin.update(cx, |_root, window, root_cx| {
                 app_entity_inner.update(root_cx, |view, ctx| {
@@ -1530,8 +1530,8 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 // CRITICAL: Only hide main window if Notes/AI are open
                                 // ctx.hide() hides the ENTIRE app (all windows)
                                 if notes_open || ai_open {
-                                    logging::log("STDIN", "Using hide_main_window() - secondary windows are open");
-                                    platform::hide_main_window();
+                                    logging::log("STDIN", "Using defer_hide_main_window() - secondary windows are open");
+                                    platform::defer_hide_main_window(ctx);
                                 } else {
                                     ctx.hide();
                                 }
@@ -2167,7 +2167,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                     logging::log("SHUTDOWN", "Cleanup complete, quitting application");
 
                     // Quit the GPUI application
-                    let _ = cx.update(|cx| {
+                    cx.update(|cx| {
                         cx.quit();
                     });
 

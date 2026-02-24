@@ -5,11 +5,20 @@
 #[cfg(target_os = "macos")]
 use cocoa::foundation::NSRect;
 
-/// Hide the main window without hiding the entire app.
+/// Hide the main window without hiding the entire app (synchronous, low-level).
 ///
-/// This is used when opening secondary windows (Notes, AI) to ensure the main
-/// window stays hidden while the secondary window is shown. Unlike cx.hide(),
-/// this doesn't hide all windows - only the main window.
+/// # Reentrancy Danger — Do NOT call from GPUI callbacks
+///
+/// `orderOut:` on a key window synchronously triggers macOS's
+/// `window_did_change_key_status` callback, which re-enters GPUI's `App`
+/// `RefCell`. If the `RefCell` is already borrowed (inside any listener,
+/// update, render, or entity callback), this causes a `RefCell already
+/// borrowed` panic that aborts the process.
+///
+/// **Always use [`defer_hide_main_window`] instead** when inside any GPUI
+/// borrow context. The only valid direct callers are the deferred wrapper
+/// itself and code that is provably outside any GPUI borrow (e.g. a raw
+/// `dispatch_async` block).
 ///
 /// # macOS Behavior
 ///
@@ -20,7 +29,7 @@ use cocoa::foundation::NSRect;
 ///
 /// No-op on non-macOS platforms.
 #[cfg(target_os = "macos")]
-pub fn hide_main_window() {
+fn hide_main_window() {
     if require_main_thread("hide_main_window") {
         return;
     }
@@ -48,8 +57,23 @@ pub fn hide_main_window() {
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn hide_main_window() {
+fn hide_main_window() {
     // No-op on non-macOS platforms
+}
+
+/// Hide the main window, deferring the ObjC call to the next event-loop tick.
+///
+/// This is the **only safe way** to hide the main window from inside any GPUI
+/// callback (listener, update, render, entity method, etc.).
+///
+/// Internally, `cx.spawn()` queues the work on the foreground executor.  When
+/// the closure runs, all current `RefCell` borrows have been released, so the
+/// macOS `window_did_change_key_status` callback can safely re-enter GPUI.
+pub fn defer_hide_main_window(cx: &mut gpui::App) {
+    cx.spawn(async move |_cx: &mut gpui::AsyncApp| {
+        hide_main_window();
+    })
+    .detach();
 }
 
 /// Show the main window WITHOUT activating the application.

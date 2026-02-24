@@ -25,7 +25,7 @@ impl DeferredAiWindowAction {
 }
 
 impl ScriptListApp {
-    pub(crate) fn hide_main_and_reset(&self, _cx: &mut Context<Self>) {
+    pub(crate) fn hide_main_and_reset(&self, cx: &mut Context<Self>) {
         if let Some((x, y, w, h)) = platform::get_main_window_bounds() {
             let bounds = crate::window_state::PersistedWindowBounds::new(x, y, w, h);
             let displays = platform::get_macos_displays();
@@ -34,9 +34,10 @@ impl ScriptListApp {
         }
         set_main_window_visible(false);
         NEEDS_RESET.store(true, Ordering::SeqCst);
-        // Use platform-specific hide that only hides the main window,
-        // not the entire app (cx.hide() would hide HUD too)
-        platform::hide_main_window();
+        // Use deferred platform-specific hide that only hides the main window,
+        // not the entire app (cx.hide() would hide HUD too).
+        // Must be deferred to avoid RefCell reentrancy from macOS callbacks.
+        platform::defer_hide_main_window(cx);
     }
 
     fn open_ai_window_after_main_hide(

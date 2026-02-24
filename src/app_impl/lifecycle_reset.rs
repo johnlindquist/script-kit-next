@@ -176,13 +176,15 @@ impl ScriptListApp {
 
         // CRITICAL: Only hide main window if Notes/AI are open
         // cx.hide() hides the ENTIRE app (all windows), so we use
-        // platform::hide_main_window() to hide only the main window
+        // defer_hide_main_window() to hide only the main window.
+        // Must be deferred: orderOut: triggers window_did_change_key_status
+        // synchronously, which re-enters GPUI's App RefCell and panics.
         if notes_open || ai_open {
             logging::log(
                 "VISIBILITY",
-                "Using hide_main_window() - secondary windows are open",
+                "Using defer_hide_main_window() - secondary windows are open",
             );
-            platform::hide_main_window();
+            platform::defer_hide_main_window(cx);
         } else {
             logging::log("VISIBILITY", "Using cx.hide() - no secondary windows");
             cx.hide();
