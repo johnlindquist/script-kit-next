@@ -31,7 +31,6 @@ pub mod button;
 #[cfg(test)]
 mod error_handling_audit_tests;
 pub mod focusable_prompt_wrapper;
-pub mod footer_button;
 pub mod form_fields;
 #[cfg(test)]
 mod form_fields_tests;
@@ -58,8 +57,6 @@ pub use button::{Button, ButtonColors, ButtonVariant};
 pub use focusable_prompt_wrapper::{
     match_focusable_prompt_intercepted_key, FocusablePrompt, FocusablePromptInterceptedKey,
 };
-#[allow(unused_imports)]
-pub use footer_button::FooterButton;
 #[allow(unused_imports)]
 pub use form_fields::{FormCheckbox, FormFieldColors, FormFieldState, FormTextArea, FormTextField};
 #[allow(unused_imports)]
