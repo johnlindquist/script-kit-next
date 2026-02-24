@@ -5,6 +5,7 @@ use gpui::{
 
 use crate::components::button::{Button, ButtonColors, ButtonVariant};
 use crate::logging;
+use crate::ui_foundation::{is_key_enter, is_key_escape};
 
 use super::super::types::{
     is_clear_alias_shortcut, is_command_modifier, BUTTON_GAP, MODAL_PADDING, MODAL_WIDTH,
@@ -141,15 +142,13 @@ impl Render for AliasInput {
             );
 
             // Handle special keys first
-            if key.eq_ignore_ascii_case("escape") || key.eq_ignore_ascii_case("esc") {
+            if is_key_escape(key) {
                 this.cancel();
                 cx.notify();
                 return;
             }
 
-            if (key.eq_ignore_ascii_case("enter") || key.eq_ignore_ascii_case("return"))
-                && !this.input.text().trim().is_empty()
-            {
+            if is_key_enter(key) && !this.input.text().trim().is_empty() {
                 this.save();
                 cx.notify();
                 return;

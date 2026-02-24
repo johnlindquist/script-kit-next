@@ -5,6 +5,7 @@ use gpui::{
 
 use crate::components::button::{Button, ButtonColors, ButtonVariant};
 use crate::logging;
+use crate::ui_foundation::{is_key_enter, is_key_escape};
 
 use super::types::{
     overlay_color_with_alpha, MODAL_PADDING, MODAL_WIDTH, OVERLAY_BACKDROP_ALPHA,
@@ -144,12 +145,9 @@ impl Render for ShortcutRecorder {
             );
 
             // Handle special keys
-            if key.eq_ignore_ascii_case("escape") || key.eq_ignore_ascii_case("esc") {
+            if is_key_escape(key) {
                 this.handle_escape(cx);
-            } else if (key.eq_ignore_ascii_case("enter") || key.eq_ignore_ascii_case("return"))
-                && this.shortcut.is_complete()
-                && this.conflict.is_none()
-            {
+            } else if is_key_enter(key) && this.shortcut.is_complete() && this.conflict.is_none() {
                 this.save();
                 cx.notify();
             } else {
