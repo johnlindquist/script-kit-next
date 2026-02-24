@@ -76,6 +76,17 @@ pub enum NoteAction {
     Delete,
 }
 
+/// Tracks the user's most recent list-navigation input source.
+///
+/// Keyboard mode shows only keyboard selection highlight.
+/// Mouse mode shows only mouse hover highlight.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum InputMode {
+    #[default]
+    Mouse,
+    Keyboard,
+}
+
 /// Browse Panel - modal overlay for browsing and selecting notes
 ///
 /// This component is designed to be rendered as an overlay on top of the
@@ -99,6 +110,8 @@ pub struct BrowsePanel {
     scroll_handle: UniformListScrollHandle,
     /// Index of note row being hovered (for showing action icons)
     hovered_index: Option<usize>,
+    /// Last input source for list highlighting behavior
+    input_mode: InputMode,
     /// Callback when a note is selected
     on_select: Option<OnSelectNote>,
     /// Callback when panel should close
@@ -139,6 +152,7 @@ impl BrowsePanel {
             focus_handle,
             scroll_handle: UniformListScrollHandle::new(),
             hovered_index: None,
+            input_mode: InputMode::Mouse,
             on_select: None,
             on_close: None,
             on_action: None,
@@ -210,22 +224,46 @@ impl BrowsePanel {
         cx.notify();
     }
 
+    /// Switch to keyboard navigation mode and clear stale mouse hover state.
+    fn enter_keyboard_mode(&mut self) -> bool {
+        let mut changed = false;
+        if self.input_mode != InputMode::Keyboard {
+            self.input_mode = InputMode::Keyboard;
+            changed = true;
+        }
+
+        if self.hovered_index.is_some() {
+            self.hovered_index = None;
+            changed = true;
+        }
+
+        changed
+    }
+
     /// Move selection up
     pub fn move_up(&mut self, cx: &mut Context<Self>) {
+        let mode_changed = self.enter_keyboard_mode();
+
         if !self.notes.is_empty() {
             self.selected_index = self.selected_index.saturating_sub(1);
             self.scroll_handle
                 .scroll_to_item(self.selected_index, ScrollStrategy::Nearest);
+            cx.notify();
+        } else if mode_changed {
             cx.notify();
         }
     }
 
     /// Move selection down
     pub fn move_down(&mut self, cx: &mut Context<Self>) {
+        let mode_changed = self.enter_keyboard_mode();
+
         if !self.notes.is_empty() {
             self.selected_index = (self.selected_index + 1).min(self.notes.len() - 1);
             self.scroll_handle
                 .scroll_to_item(self.selected_index, ScrollStrategy::Nearest);
+            cx.notify();
+        } else if mode_changed {
             cx.notify();
         }
     }
@@ -286,8 +324,8 @@ impl BrowsePanel {
         note: &NoteListItem,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let is_selected = index == self.selected_index;
-        let is_hovered = self.hovered_index == Some(index);
+        let is_selected = index == self.selected_index && self.input_mode == InputMode::Keyboard;
+        let is_hovered = self.hovered_index == Some(index) && self.input_mode == InputMode::Mouse;
         let note_id = note.id;
         let note_title = note.title.clone();
 
@@ -312,7 +350,8 @@ impl BrowsePanel {
             .rounded_sm()
             .cursor_pointer()
             .on_mouse_move(cx.listener(move |this, _, _, cx| {
-                if this.hovered_index != Some(index) {
+                if this.input_mode != InputMode::Mouse || this.hovered_index != Some(index) {
+                    this.input_mode = InputMode::Mouse;
                     this.hovered_index = Some(index);
                     cx.notify();
                 }
@@ -326,6 +365,8 @@ impl BrowsePanel {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(move |this, _, _, cx| {
+                    this.input_mode = InputMode::Mouse;
+                    this.hovered_index = Some(index);
                     this.selected_index = index;
                     this.select_current(cx);
                 }),
@@ -434,7 +475,10 @@ impl BrowsePanel {
             "notes-browse-panel-list",
             note_count,
             cx.processor(
-                move |this: &mut BrowsePanel, visible_range: std::ops::Range<usize>, _window, cx| {
+                move |this: &mut BrowsePanel,
+                      visible_range: std::ops::Range<usize>,
+                      _window,
+                      cx| {
                     let mut rows: Vec<AnyElement> = Vec::with_capacity(visible_range.len());
 
                     for index in visible_range {
@@ -527,8 +571,16 @@ impl Render for BrowsePanel {
                             .px_1()
                             .py_1()
                             .on_mouse_move(cx.listener(|this, _, _, cx| {
+                                let mut changed = false;
+                                if this.input_mode != InputMode::Mouse {
+                                    this.input_mode = InputMode::Mouse;
+                                    changed = true;
+                                }
                                 if this.hovered_index.is_some() {
                                     this.hovered_index = None;
+                                    changed = true;
+                                }
+                                if changed {
                                     cx.notify();
                                 }
                             }))
@@ -619,6 +671,44 @@ mod tests {
         assert!(
             BROWSE_PANEL_SOURCE.contains("this.hovered_index = None;"),
             "List container mouse move handler should clear hovered_index when pointer leaves list area"
+        );
+    }
+
+    #[test]
+    fn test_highlight_modes_are_mutually_exclusive() {
+        assert!(
+            BROWSE_PANEL_SOURCE
+                .contains("index == self.selected_index && self.input_mode == InputMode::Keyboard"),
+            "Selected row highlight should only render in keyboard mode"
+        );
+        assert!(
+            BROWSE_PANEL_SOURCE
+                .contains("self.hovered_index == Some(index) && self.input_mode == InputMode::Mouse"),
+            "Hover highlight should only render in mouse mode"
+        );
+    }
+
+    #[test]
+    fn test_arrow_navigation_switches_to_keyboard_mode() {
+        assert!(
+            BROWSE_PANEL_SOURCE.contains("fn enter_keyboard_mode(&mut self) -> bool"),
+            "BrowsePanel should define a keyboard-mode helper"
+        );
+        assert!(
+            BROWSE_PANEL_SOURCE.contains("self.input_mode = InputMode::Keyboard;"),
+            "Keyboard navigation should switch input mode to Keyboard"
+        );
+        assert!(
+            BROWSE_PANEL_SOURCE.contains("self.hovered_index = None;"),
+            "Keyboard navigation should clear hovered row state"
+        );
+    }
+
+    #[test]
+    fn test_mouse_move_switches_to_mouse_mode() {
+        assert!(
+            BROWSE_PANEL_SOURCE.contains("this.input_mode = InputMode::Mouse;"),
+            "Mouse movement should switch input mode to Mouse"
         );
     }
 }
