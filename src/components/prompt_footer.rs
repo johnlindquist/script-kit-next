@@ -44,9 +44,9 @@ const PROMPT_FOOTER_SECTION_GAP_PX: f32 = 8.0;
 /// Shared horizontal spacing between footer buttons/divider.
 const PROMPT_FOOTER_BUTTON_GAP_PX: f32 = 4.0;
 /// Hover opacity for footer action buttons.
-const PROMPT_FOOTER_BUTTON_HOVER_OPACITY: u8 = 0x26;
+pub(crate) const PROMPT_FOOTER_BUTTON_HOVER_OPACITY: u8 = 0x26;
 /// Active/pressed opacity for footer action buttons.
-const PROMPT_FOOTER_BUTTON_ACTIVE_OPACITY: u8 = 0x3a;
+pub(crate) const PROMPT_FOOTER_BUTTON_ACTIVE_OPACITY: u8 = 0x3a;
 /// Footer button font size delta from base UI font size.
 const PROMPT_FOOTER_BUTTON_FONT_DELTA_PX: f32 = 2.0;
 /// Minimum footer button font size.
@@ -79,10 +79,6 @@ const PROMPT_FOOTER_INFO_FONT_MIN_PX: f32 = 9.0;
 const PROMPT_FOOTER_HELPER_FONT_DELTA_PX: f32 = 2.0;
 /// Minimum helper label font size.
 const PROMPT_FOOTER_HELPER_FONT_MIN_PX: f32 = 10.0;
-/// Script-list footer info label that should not be displayed in the footer.
-const PROMPT_FOOTER_HIDDEN_INFO_LABEL: &str = "Built-in";
-/// Script-list primary action label that should not be displayed in the footer.
-const PROMPT_FOOTER_HIDDEN_PRIMARY_LABEL: &str = "Run Command";
 
 /// Pre-computed colors for PromptFooter rendering
 ///
@@ -171,18 +167,6 @@ fn footer_button_active_rgba(colors: PromptFooterColors) -> u32 {
     (colors.background << 8) | (PROMPT_FOOTER_BUTTON_ACTIVE_OPACITY as u32)
 }
 
-fn should_render_footer_info_label(label: &str) -> bool {
-    !label
-        .trim()
-        .eq_ignore_ascii_case(PROMPT_FOOTER_HIDDEN_INFO_LABEL)
-}
-
-fn should_render_footer_primary_button(label: &str) -> bool {
-    !label
-        .trim()
-        .eq_ignore_ascii_case(PROMPT_FOOTER_HIDDEN_PRIMARY_LABEL)
-}
-
 /// Configuration for PromptFooter display
 #[derive(Clone, Debug)]
 pub struct PromptFooterConfig {
@@ -198,6 +182,10 @@ pub struct PromptFooterConfig {
     pub show_logo: bool,
     /// Whether to show the secondary button
     pub show_secondary: bool,
+    /// Whether to show the primary button
+    pub show_primary: bool,
+    /// Whether to show the info label
+    pub show_info_label: bool,
     /// Disable interactions on the primary button
     pub primary_disabled: bool,
     /// Disable interactions on the secondary button
@@ -217,6 +205,8 @@ impl Default for PromptFooterConfig {
             secondary_shortcut: "⌘K".to_string(),
             show_logo: true,
             show_secondary: true,
+            show_primary: true,
+            show_info_label: true,
             primary_disabled: false,
             secondary_disabled: false,
             helper_text: None,
@@ -267,6 +257,18 @@ impl PromptFooterConfig {
         self
     }
 
+    /// Set whether to show the primary button
+    pub fn show_primary(mut self, show: bool) -> Self {
+        self.show_primary = show;
+        self
+    }
+
+    /// Set whether to show the info label
+    pub fn show_info_label(mut self, show: bool) -> Self {
+        self.show_info_label = show;
+        self
+    }
+
     /// Set whether the primary button is disabled
     pub fn primary_disabled(mut self, disabled: bool) -> Self {
         self.primary_disabled = disabled;
@@ -310,6 +312,8 @@ pub struct PromptFooter {
     colors: PromptFooterColors,
     on_primary_click: Option<Rc<FooterClickCallback>>,
     on_secondary_click: Option<Rc<FooterClickCallback>>,
+    left_slot: Option<AnyElement>,
+    right_slot: Option<AnyElement>,
 }
 
 impl PromptFooter {
@@ -320,6 +324,8 @@ impl PromptFooter {
             colors,
             on_primary_click: None,
             on_secondary_click: None,
+            left_slot: None,
+            right_slot: None,
         }
     }
 
@@ -332,6 +338,30 @@ impl PromptFooter {
     /// Set the secondary button click callback
     pub fn on_secondary_click(mut self, callback: FooterClickCallback) -> Self {
         self.on_secondary_click = Some(Rc::new(callback));
+        self
+    }
+
+    /// Insert custom content on the left side after logo/helper text.
+    pub fn left_slot(mut self, slot: impl IntoElement) -> Self {
+        self.left_slot = Some(slot.into_any_element());
+        self
+    }
+
+    /// Insert optional custom content on the left side after logo/helper text.
+    pub fn left_slot_opt(mut self, slot: Option<AnyElement>) -> Self {
+        self.left_slot = slot;
+        self
+    }
+
+    /// Insert custom content on the right side between info label and buttons.
+    pub fn right_slot(mut self, slot: impl IntoElement) -> Self {
+        self.right_slot = Some(slot.into_any_element());
+        self
+    }
+
+    /// Insert optional custom content on the right side between info label and buttons.
+    pub fn right_slot_opt(mut self, slot: Option<AnyElement>) -> Self {
+        self.right_slot = slot;
         self
     }
 
@@ -432,7 +462,8 @@ impl PromptFooter {
 
 impl RenderOnce for PromptFooter {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
-        let colors = self.colors;
+        let mut this = self;
+        let colors = this.colors;
         let theme = crate::theme::get_cached_theme();
         let ui_font_size = theme.get_fonts().ui_size;
         let info_font_size =
@@ -447,8 +478,8 @@ impl RenderOnce for PromptFooter {
             .min_w(px(0.));
 
         // Info label (e.g., "typescript", "5 items") - shown before buttons
-        if let Some(ref info) = self.config.info_label {
-            if should_render_footer_info_label(info) {
+        if this.config.show_info_label {
+            if let Some(ref info) = this.config.info_label {
                 let info_text = info.clone();
                 right_side = right_side.child(
                     div()
@@ -469,32 +500,36 @@ impl RenderOnce for PromptFooter {
             }
         }
 
+        if let Some(right_slot) = this.right_slot.take() {
+            right_side = right_side.child(div().min_w(px(0.)).overflow_hidden().child(right_slot));
+        }
+
         // Build the buttons container
         let mut buttons = hstack().gap(px(PROMPT_FOOTER_BUTTON_GAP_PX)).items_center();
-        let show_primary_button = should_render_footer_primary_button(&self.config.primary_label);
+        let show_primary_button = this.config.show_primary;
 
         // Primary button
         if show_primary_button {
-            buttons = buttons.child(self.render_button(
+            buttons = buttons.child(this.render_button(
                 "footer-primary-button",
-                self.config.primary_label.clone(),
-                self.config.primary_shortcut.clone(),
-                self.config.primary_disabled,
-                self.on_primary_click.clone(),
+                this.config.primary_label.clone(),
+                this.config.primary_shortcut.clone(),
+                this.config.primary_disabled,
+                this.on_primary_click.clone(),
             ));
         }
 
         // Divider + Secondary button (if enabled)
-        if self.config.show_secondary {
+        if this.config.show_secondary {
             if show_primary_button {
-                buttons = buttons.child(self.render_divider());
+                buttons = buttons.child(this.render_divider());
             }
-            buttons = buttons.child(self.render_button(
+            buttons = buttons.child(this.render_button(
                 "footer-secondary-button",
-                self.config.secondary_label.clone(),
-                self.config.secondary_shortcut.clone(),
-                self.config.secondary_disabled,
-                self.on_secondary_click.clone(),
+                this.config.secondary_label.clone(),
+                this.config.secondary_shortcut.clone(),
+                this.config.secondary_disabled,
+                this.on_secondary_click.clone(),
             ));
         }
 
@@ -539,12 +574,12 @@ impl RenderOnce for PromptFooter {
             .items_center();
 
         // Logo (if enabled)
-        if self.config.show_logo {
-            left_side = left_side.child(self.render_logo());
+        if this.config.show_logo {
+            left_side = left_side.child(this.render_logo());
         }
 
         // Helper text (e.g., "Tab 1 of 2 · Tab to continue, Esc to exit")
-        if let Some(ref helper) = self.config.helper_text {
+        if let Some(ref helper) = this.config.helper_text {
             let helper_text = helper.clone();
             left_side = left_side.child(
                 div()
@@ -560,6 +595,10 @@ impl RenderOnce for PromptFooter {
                     .tooltip(move |window, cx| Tooltip::new(helper_text.clone()).build(window, cx))
                     .child(helper.clone()),
             );
+        }
+
+        if let Some(left_slot) = this.left_slot.take() {
+            left_side = left_side.child(div().min_w(px(0.)).overflow_hidden().child(left_slot));
         }
 
         footer = footer.child(left_side);
@@ -581,7 +620,7 @@ impl RenderOnce for PromptFooter {
 #[cfg(test)]
 mod tests {
     use super::{
-        footer_surface_rgba, PromptFooterColors, PROMPT_FOOTER_BORDER_OPACITY,
+        footer_surface_rgba, PromptFooterColors, PromptFooterConfig, PROMPT_FOOTER_BORDER_OPACITY,
         PROMPT_FOOTER_BUTTON_ACTIVE_OPACITY, PROMPT_FOOTER_BUTTON_FONT_DELTA_PX,
         PROMPT_FOOTER_BUTTON_FONT_MIN_PX, PROMPT_FOOTER_BUTTON_GAP_PX,
         PROMPT_FOOTER_BUTTON_HOVER_OPACITY, PROMPT_FOOTER_DIVIDER_HEIGHT_PX,
@@ -733,17 +772,21 @@ mod tests {
     }
 
     #[test]
-    fn test_should_render_footer_info_label_hides_built_in_label() {
-        assert!(!super::should_render_footer_info_label("Built-in"));
-        assert!(!super::should_render_footer_info_label(" built-in "));
-        assert!(super::should_render_footer_info_label("typescript"));
+    fn test_prompt_footer_config_shows_primary_and_info_by_default() {
+        let config = PromptFooterConfig::new();
+
+        assert!(config.show_primary);
+        assert!(config.show_info_label);
     }
 
     #[test]
-    fn test_should_render_footer_primary_button_hides_run_command_label() {
-        assert!(!super::should_render_footer_primary_button("Run Command"));
-        assert!(!super::should_render_footer_primary_button(" run command "));
-        assert!(super::should_render_footer_primary_button("Run Script"));
+    fn test_prompt_footer_config_can_hide_primary_and_info_labels_explicitly() {
+        let config = PromptFooterConfig::new()
+            .show_primary(false)
+            .show_info_label(false);
+
+        assert!(!config.show_primary);
+        assert!(!config.show_info_label);
     }
 
     #[test]

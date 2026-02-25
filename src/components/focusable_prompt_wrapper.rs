@@ -13,6 +13,7 @@
 //! To add a new global shortcut, add a variant to `FocusablePromptInterceptedKey` and
 //! match it in `match_focusable_prompt_intercepted_key`.
 
+use crate::ui_foundation::is_key_escape;
 use gpui::{prelude::*, Context, Div, FocusHandle, Stateful, Window};
 
 #[derive(Clone)]
@@ -32,7 +33,7 @@ pub fn match_focusable_prompt_intercepted_key(
     key: &str,
     has_platform_modifier: bool,
 ) -> Option<FocusablePromptInterceptedKey> {
-    if key.eq_ignore_ascii_case("escape") || key.eq_ignore_ascii_case("esc") {
+    if is_key_escape(key) {
         return Some(FocusablePromptInterceptedKey::Escape);
     }
 

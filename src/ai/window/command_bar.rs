@@ -1,4 +1,8 @@
 use super::*;
+use crate::ui_foundation::{
+    is_key_backspace, is_key_delete, is_key_down, is_key_enter, is_key_escape, is_key_tab,
+    is_key_up,
+};
 
 impl AiApp {
     pub(super) fn show_command_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -299,23 +303,23 @@ impl AiApp {
         // Handle command bar navigation when it's open
         if self.command_bar.is_open() {
             match key_lower.as_str() {
-                "up" | "arrowup" => {
+                k if is_key_up(k) => {
                     crate::logging::log("AI", "SimulateKey: Up in command bar");
                     self.command_bar_select_prev(cx);
                 }
-                "down" | "arrowdown" => {
+                k if is_key_down(k) => {
                     crate::logging::log("AI", "SimulateKey: Down in command bar");
                     self.command_bar_select_next(cx);
                 }
-                "enter" | "return" => {
+                k if is_key_enter(k) => {
                     crate::logging::log("AI", "SimulateKey: Enter in command bar");
                     self.execute_command_bar_action(window, cx);
                 }
-                "escape" | "esc" => {
+                k if is_key_escape(k) => {
                     crate::logging::log("AI", "SimulateKey: Escape - closing command bar");
                     self.hide_command_bar(cx);
                 }
-                "backspace" | "delete" => {
+                k if is_key_backspace(k) || is_key_delete(k) => {
                     crate::logging::log("AI", "SimulateKey: Backspace in command bar");
                     self.command_bar_handle_backspace(cx);
                 }
@@ -338,10 +342,10 @@ impl AiApp {
         // Handle presets dropdown navigation
         if self.showing_presets_dropdown {
             match key_lower.as_str() {
-                "up" | "arrowup" => self.presets_select_prev(cx),
-                "down" | "arrowdown" => self.presets_select_next(cx),
-                "enter" | "return" => self.create_chat_with_preset(window, cx),
-                "escape" | "esc" => self.hide_presets_dropdown(cx),
+                k if is_key_up(k) => self.presets_select_prev(cx),
+                k if is_key_down(k) => self.presets_select_next(cx),
+                k if is_key_enter(k) => self.create_chat_with_preset(window, cx),
+                k if is_key_escape(k) => self.hide_presets_dropdown(cx),
                 _ => {}
             }
             return;
@@ -359,7 +363,7 @@ impl AiApp {
             );
             let has_shift = modifiers.contains(&KeyModifier::Shift);
             match key_lower.as_str() {
-                "tab" => {
+                k if is_key_tab(k) => {
                     if has_shift {
                         self.move_setup_button_focus(-1, cx);
                     } else {
@@ -367,15 +371,15 @@ impl AiApp {
                     }
                     return;
                 }
-                "up" | "arrowup" => {
+                k if is_key_up(k) => {
                     self.move_setup_button_focus(-1, cx);
                     return;
                 }
-                "down" | "arrowdown" => {
+                k if is_key_down(k) => {
                     self.move_setup_button_focus(1, cx);
                     return;
                 }
-                "enter" | "return" => {
+                k if is_key_enter(k) => {
                     match self.setup_button_focus_index {
                         0 => self.show_api_key_input(window, cx),
                         1 => self.enable_claude_code(window, cx),
@@ -395,7 +399,7 @@ impl AiApp {
 
         // Default key handling (when no overlays are open)
         match key_lower.as_str() {
-            "escape" | "esc" => {
+            k if is_key_escape(k) => {
                 if self.showing_attachments_picker {
                     self.hide_attachments_picker(cx);
                 }

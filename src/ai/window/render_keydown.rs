@@ -1,6 +1,7 @@
 use super::*;
 use crate::ui_foundation::{
-    is_key_backspace, is_key_down, is_key_enter, is_key_escape, is_key_k, is_key_tab, is_key_up,
+    is_key_backspace, is_key_delete, is_key_down, is_key_enter, is_key_escape, is_key_k,
+    is_key_tab, is_key_up,
 };
 
 impl AiApp {
@@ -86,7 +87,7 @@ impl AiApp {
                     cx.stop_propagation(); // Prevent further handling
                     return;
                 }
-                k if is_key_backspace(k) || k.eq_ignore_ascii_case("delete") => {
+                k if is_key_backspace(k) || is_key_delete(k) => {
                     self.command_bar_handle_backspace(cx);
                     cx.stop_propagation(); // Prevent Input from handling
                     return;
@@ -240,7 +241,7 @@ impl AiApp {
                     cx.stop_propagation();
                 }
                 // Cmd+Shift+Backspace to delete current chat
-                k if is_key_backspace(k) || k.eq_ignore_ascii_case("delete") => {
+                k if is_key_backspace(k) || is_key_delete(k) => {
                     if modifiers.shift {
                         self.delete_current_chat(cx);
                         cx.stop_propagation();
