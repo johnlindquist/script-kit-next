@@ -49,8 +49,8 @@ impl AiApp {
             .unwrap_or_else(|| "No messages yet".to_string())
             .into();
 
-        let selected_bg = cx.theme().muted.opacity(0.35);
-        let hover_bg = cx.theme().muted.opacity(0.5);
+        let selected_bg = cx.theme().list_active;
+        let hover_bg = cx.theme().list_hover;
 
         let title_color = if is_selected {
             cx.theme().foreground
