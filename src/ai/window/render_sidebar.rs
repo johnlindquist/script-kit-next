@@ -120,16 +120,27 @@ impl AiApp {
                             .justify_end()
                             .w_full()
                             .gap_1()
-                            // New chat button - use Button's native tooltip (⌘N)
+                            // New chat button with structured tooltip and key binding
                             .child(
-                                Button::new("new-chat")
-                                    .ghost()
-                                    .xsmall()
-                                    .icon(IconName::Plus)
-                                    .tooltip("New chat (⌘N)")
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.create_chat(window, cx);
-                                    })),
+                                div()
+                                    .id("new-chat-tooltip-trigger")
+                                    .hover(|el| el)
+                                    .tooltip(|window, cx| {
+                                        Tooltip::new("New chat")
+                                            .key_binding(
+                                                gpui::Keystroke::parse("cmd-n").ok().map(Kbd::new),
+                                            )
+                                            .build(window, cx)
+                                    })
+                                    .child(
+                                        Button::new("new-chat")
+                                            .ghost()
+                                            .xsmall()
+                                            .icon(IconName::Plus)
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                this.create_chat(window, cx);
+                                            })),
+                                    ),
                             )
                             // Presets dropdown trigger - use svg directly for better tooltip control
                             .child(
