@@ -1,6 +1,10 @@
 use gpui::*;
 
 use crate::protocol::Field;
+use crate::ui_foundation::{
+    is_key_backspace, is_key_delete, is_key_down, is_key_enter, is_key_left, is_key_right,
+    is_key_up,
+};
 
 use super::helpers::{byte_idx_from_char_idx, char_len, drain_char_range, slice_by_char_range};
 use super::{FormFieldColors, FormFieldState};
@@ -376,22 +380,22 @@ impl FormTextArea {
             return;
         }
         // Navigation with optional selection
-        if !cmd && (key.eq_ignore_ascii_case("left") || key.eq_ignore_ascii_case("arrowleft")) {
+        if !cmd && is_key_left(key) {
             self.move_left(shift);
             cx.notify();
             return;
         }
-        if !cmd && (key.eq_ignore_ascii_case("right") || key.eq_ignore_ascii_case("arrowright")) {
+        if !cmd && is_key_right(key) {
             self.move_right(shift);
             cx.notify();
             return;
         }
-        if !cmd && (key.eq_ignore_ascii_case("up") || key.eq_ignore_ascii_case("arrowup")) {
+        if !cmd && is_key_up(key) {
             self.move_up(shift);
             cx.notify();
             return;
         }
-        if !cmd && (key.eq_ignore_ascii_case("down") || key.eq_ignore_ascii_case("arrowdown")) {
+        if !cmd && is_key_down(key) {
             self.move_down(shift);
             cx.notify();
             return;
@@ -407,18 +411,18 @@ impl FormTextArea {
             return;
         }
         // Editing
-        if !cmd && key.eq_ignore_ascii_case("backspace") {
+        if !cmd && is_key_backspace(key) {
             self.backspace_char();
             cx.notify();
             return;
         }
-        if !cmd && key.eq_ignore_ascii_case("delete") {
+        if !cmd && is_key_delete(key) {
             self.delete_forward_char();
             cx.notify();
             return;
         }
         // Enter inserts newline
-        if !cmd && key.eq_ignore_ascii_case("enter") {
+        if !cmd && is_key_enter(key) {
             self.insert_text_at_cursor("\n");
             cx.notify();
         }
@@ -456,22 +460,22 @@ impl FormTextArea {
             return;
         }
         // Navigation with optional selection
-        if !cmd && (key.eq_ignore_ascii_case("left") || key.eq_ignore_ascii_case("arrowleft")) {
+        if !cmd && is_key_left(key) {
             self.move_left(shift);
             cx.notify();
             return;
         }
-        if !cmd && (key.eq_ignore_ascii_case("right") || key.eq_ignore_ascii_case("arrowright")) {
+        if !cmd && is_key_right(key) {
             self.move_right(shift);
             cx.notify();
             return;
         }
-        if !cmd && (key.eq_ignore_ascii_case("up") || key.eq_ignore_ascii_case("arrowup")) {
+        if !cmd && is_key_up(key) {
             self.move_up(shift);
             cx.notify();
             return;
         }
-        if !cmd && (key.eq_ignore_ascii_case("down") || key.eq_ignore_ascii_case("arrowdown")) {
+        if !cmd && is_key_down(key) {
             self.move_down(shift);
             cx.notify();
             return;
@@ -487,18 +491,18 @@ impl FormTextArea {
             return;
         }
         // Editing
-        if !cmd && key.eq_ignore_ascii_case("backspace") {
+        if !cmd && is_key_backspace(key) {
             self.backspace_char();
             cx.notify();
             return;
         }
-        if !cmd && key.eq_ignore_ascii_case("delete") {
+        if !cmd && is_key_delete(key) {
             self.delete_forward_char();
             cx.notify();
             return;
         }
         // Enter inserts newline
-        if !cmd && key.eq_ignore_ascii_case("enter") {
+        if !cmd && is_key_enter(key) {
             self.insert_text_at_cursor("\n");
             cx.notify();
             return;
@@ -520,6 +524,8 @@ impl FormTextArea {
 #[cfg(test)]
 mod tests {
     use super::{move_cursor_vertical_preserve_column, VerticalCursorDirection};
+
+    const TEXT_AREA_SOURCE: &str = include_str!("mod.rs");
 
     #[test]
     fn test_move_cursor_vertical_preserve_column_clamps_column_when_target_line_is_shorter() {
@@ -547,5 +553,16 @@ mod tests {
         let text = "abc\ndef";
         let moved = move_cursor_vertical_preserve_column(text, 6, VerticalCursorDirection::Down);
         assert_eq!(moved, 6);
+    }
+
+    #[test]
+    fn test_key_handlers_use_enter_helper_for_return_variant() {
+        let enter_handler_snippet =
+            "if !cmd && is_key_enter(key) {\n            self.insert_text_at_cursor(\"\\n\");";
+        let enter_helper_usages = TEXT_AREA_SOURCE.matches(enter_handler_snippet).count();
+        assert_eq!(
+            enter_helper_usages, 2,
+            "both text area key handlers should use is_key_enter so Return inserts a newline"
+        );
     }
 }

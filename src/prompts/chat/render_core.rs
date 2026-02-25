@@ -1,85 +1,35 @@
 use super::*;
+use crate::components::prompt_footer::{
+    PromptFooter, PromptFooterConfig, PROMPT_FOOTER_BUTTON_ACTIVE_OPACITY,
+    PROMPT_FOOTER_BUTTON_HOVER_OPACITY,
+};
 
 #[derive(Clone, Copy)]
 enum ChatFooterButtonAction {
+    StopStreaming,
     ContinueInChat,
+    SaveAndRun,
     ToggleActionsPanel,
 }
 
 impl ChatFooterButtonAction {
     fn run(self, prompt: &mut ChatPrompt, cx: &mut Context<ChatPrompt>) {
         match self {
+            Self::StopStreaming => {
+                if prompt.is_streaming() {
+                    prompt.stop_streaming(cx);
+                }
+            }
             Self::ContinueInChat => prompt.handle_continue_in_chat(cx),
+            Self::SaveAndRun => {
+                prompt.handle_script_generation_action(ScriptGenerationAction::SaveAndRun, cx)
+            }
             Self::ToggleActionsPanel => prompt.toggle_actions_menu(cx),
         }
     }
 }
 
 impl ChatPrompt {
-    fn render_footer_button(
-        &self,
-        id: &'static str,
-        label: &'static str,
-        shortcut: Option<&'static str>,
-        footer_colors: PromptFooterColors,
-        action: Option<ChatFooterButtonAction>,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let hover_bg = rgba((footer_colors.background << 8) | 0x26);
-        let active_bg = rgba((footer_colors.background << 8) | 0x3a);
-        let is_clickable = action.is_some();
-
-        let mut label_element = div()
-            .text_xs()
-            .text_color(rgb(footer_colors.accent))
-            .child(label);
-        if is_clickable {
-            label_element = label_element.cursor_pointer();
-        }
-
-        let mut button = div()
-            .id(id)
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap(px(6.0))
-            .px(px(8.0))
-            .py(px(2.0))
-            .rounded(px(4.0))
-            .cursor_default()
-            .child(label_element)
-            .when_some(shortcut, |d, shortcut| {
-                let mut shortcut_element = div()
-                    .text_xs()
-                    .text_color(rgb(footer_colors.text_muted))
-                    .child(shortcut);
-                if is_clickable {
-                    shortcut_element = shortcut_element.cursor_pointer();
-                }
-                d.child(shortcut_element)
-            });
-
-        if is_clickable {
-            button = button
-                .cursor_pointer()
-                .hover(move |d| d.bg(hover_bg))
-                .active(move |d| d.bg(active_bg));
-        }
-
-        if let Some(action_kind) = action {
-            let handle = cx.entity().downgrade();
-            button = button.on_click(move |_event, _window, cx| {
-                if let Some(entity) = handle.upgrade() {
-                    entity.update(cx, |this, cx| {
-                        action_kind.run(this, cx);
-                    });
-                }
-            });
-        }
-
-        button.into_any_element()
-    }
-
     fn render_script_generation_footer_button(
         &self,
         id: &'static str,
@@ -90,8 +40,10 @@ impl ChatPrompt {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let button_font_size = (self.theme.get_fonts().ui_size - 2.0).max(10.0);
-        let hover_bg = rgba((footer_colors.background << 8) | 0x26);
-        let active_bg = rgba((footer_colors.background << 8) | 0x3a);
+        let hover_bg =
+            rgba((footer_colors.background << 8) | (PROMPT_FOOTER_BUTTON_HOVER_OPACITY as u32));
+        let active_bg =
+            rgba((footer_colors.background << 8) | (PROMPT_FOOTER_BUTTON_ACTIVE_OPACITY as u32));
 
         div()
             .id(id)
@@ -127,115 +79,59 @@ impl ChatPrompt {
 
     fn render_footer(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let footer_colors = PromptFooterColors::from_theme(&self.theme);
-        let footer_bg = theme::hover_overlay_bg(
-            &self.theme,
-            if self.theme.is_dark_mode() {
-                CHAT_LAYOUT_FOOTER_BG_DARK_ALPHA
-            } else {
-                CHAT_LAYOUT_FOOTER_BG_LIGHT_ALPHA
-            },
-        );
-        let model_text = self.model.clone().unwrap_or_else(|| "Select Model".into());
-        let footer_height = crate::window_resize::layout::FOOTER_HEIGHT;
-        let divider = || {
-            div()
-                .w(px(1.0))
-                .h(px(16.0))
-                .mx(px(4.0))
-                .bg(rgba((footer_colors.border << 8) | 0x40))
-                .into_any_element()
-        };
-
-        let mut left_side = div()
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap(px(8.0))
-            .flex_1()
-            .min_w(px(0.0))
-            .overflow_hidden()
-            .child(
-                svg()
-                    .external_path(crate::utils::get_logo_path())
-                    .size(px(16.0))
-                    .ml(px(2.0))
-                    .text_color(rgb(footer_colors.accent)),
-            )
-            .child(
-                div()
-                    .max_w(px(420.0))
-                    .overflow_hidden()
-                    .text_ellipsis()
-                    .whitespace_nowrap()
-                    .text_xs()
-                    .text_color(rgb(footer_colors.accent))
-                    .child(model_text),
-            );
-
-        if self.script_generation_mode {
-            if let Some(script_actions) = self.render_script_generation_footer_actions(cx) {
-                left_side = left_side.child(divider()).child(script_actions);
-            }
-        }
-
-        let mut right_side = div().flex().flex_row().items_center().min_w(px(0.));
-        let primary_button = if self.script_generation_mode {
-            self.render_script_generation_footer_button(
-                "chat-footer-primary-button",
-                "Save and Run",
-                Some("⌘↵"),
-                ScriptGenerationAction::SaveAndRun,
-                footer_colors,
-                cx,
-            )
+        let _footer_overlay_alpha = if self.theme.is_dark_mode() {
+            CHAT_LAYOUT_FOOTER_BG_DARK_ALPHA
         } else {
-            self.render_footer_button(
-                "chat-footer-primary-button",
+            CHAT_LAYOUT_FOOTER_BG_LIGHT_ALPHA
+        };
+        let model_text = self.model.clone().unwrap_or_else(|| "Select Model".into());
+        let (primary_action, primary_label, primary_shortcut) = if self.is_streaming() {
+            (ChatFooterButtonAction::StopStreaming, "Stop", "Esc")
+        } else if self.script_generation_mode {
+            (ChatFooterButtonAction::SaveAndRun, "Save and Run", "⌘↵")
+        } else {
+            (
+                ChatFooterButtonAction::ContinueInChat,
                 "Continue in Chat",
-                Some("⌘↵"),
-                footer_colors,
-                Some(ChatFooterButtonAction::ContinueInChat),
-                cx,
+                "⌘↵",
             )
         };
 
-        right_side = right_side
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(rgb(footer_colors.text_muted))
-                    .child("Shift+Enter newline"),
-            )
-            .child(divider())
-            .child(primary_button)
-            .child(divider())
-            .child(self.render_footer_button(
-                "chat-footer-secondary-button",
-                "Actions",
-                Some("⌘K"),
-                footer_colors,
-                Some(ChatFooterButtonAction::ToggleActionsPanel),
-                cx,
-            ));
+        let footer_config = PromptFooterConfig::new()
+            .primary_label(primary_label)
+            .primary_shortcut(primary_shortcut)
+            .secondary_label("Actions")
+            .secondary_shortcut("⌘K")
+            .helper_text(model_text)
+            .show_info_label(false);
 
-        div()
-            .id("chat-footer")
-            .w_full()
-            .h(px(footer_height))
-            .min_h(px(footer_height))
-            .max_h(px(footer_height))
-            .flex_shrink_0()
-            .overflow_hidden()
-            .px(px(CHAT_LAYOUT_PADDING_X))
-            .flex()
-            .flex_row()
-            .items_center()
-            .justify_between()
-            .border_t_1()
-            .border_color(rgba((footer_colors.border << 8) | 0x50))
-            .bg(footer_bg)
-            .child(left_side)
-            .child(right_side)
+        let footer_hint = div()
+            .id("chat-footer-newline-hint")
+            .text_xs()
+            .text_color(rgb(footer_colors.text_muted))
+            .child("Shift+Enter newline")
+            .into_any_element();
+
+        let primary_handle = cx.entity().downgrade();
+        let secondary_handle = cx.entity().downgrade();
+
+        PromptFooter::new(footer_config, footer_colors)
+            .left_slot_opt(self.render_script_generation_footer_actions(cx))
+            .right_slot_opt(Some(footer_hint))
+            .on_primary_click(Box::new(move |_event, _window, cx| {
+                if let Some(entity) = primary_handle.upgrade() {
+                    entity.update(cx, |this, cx| {
+                        primary_action.run(this, cx);
+                    });
+                }
+            }))
+            .on_secondary_click(Box::new(move |_event, _window, cx| {
+                if let Some(entity) = secondary_handle.upgrade() {
+                    entity.update(cx, |this, cx| {
+                        ChatFooterButtonAction::ToggleActionsPanel.run(this, cx);
+                    });
+                }
+            }))
     }
 
     fn render_script_generation_footer_actions(
@@ -301,7 +197,22 @@ impl ChatPrompt {
             );
         }
 
-        Some(action_container.into_any_element())
+        Some(
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .min_w(px(0.0))
+                .child(
+                    div()
+                        .w(px(1.0))
+                        .h(px(16.0))
+                        .mx(px(4.0))
+                        .bg(rgba((footer_colors.border << 8) | 0x40)),
+                )
+                .child(action_container)
+                .into_any_element(),
+        )
     }
 }
 
@@ -425,6 +336,11 @@ impl Render for ChatPrompt {
                     if this.is_streaming() {
                         this.stop_streaming(cx);
                     }
+                }
+                ChatInputKeyAction::JumpToLatest => {
+                    this.force_scroll_turns_to_bottom();
+                    this.user_has_scrolled_up = false;
+                    cx.notify();
                 }
                 ChatInputKeyAction::ToggleActions => this.toggle_actions_menu(cx),
                 ChatInputKeyAction::ContinueInChat => {
@@ -687,14 +603,39 @@ mod chat_footer_button_click_handler_tests {
     const CHAT_RENDER_CORE_SOURCE: &str = include_str!("render_core.rs");
 
     #[test]
-    fn test_chat_footer_buttons_wire_click_handlers_with_downgraded_entity() {
+    fn test_chat_footer_uses_prompt_footer_with_slots_and_click_handlers() {
         assert!(
-            CHAT_RENDER_CORE_SOURCE.contains("let handle = cx.entity().downgrade();"),
-            "Chat footer buttons should use downgraded entity handles for click callbacks"
+            CHAT_RENDER_CORE_SOURCE.contains("PromptFooter::new"),
+            "Chat footer should render via shared PromptFooter component"
+        );
+        assert!(
+            CHAT_RENDER_CORE_SOURCE
+                .contains(".left_slot_opt(self.render_script_generation_footer_actions(cx))"),
+            "Chat footer should inject script generation actions through left slot"
+        );
+        assert!(
+            CHAT_RENDER_CORE_SOURCE.contains(".right_slot_opt(Some(footer_hint))"),
+            "Chat footer should inject newline helper text through right slot"
+        );
+        assert!(
+            CHAT_RENDER_CORE_SOURCE.contains("let primary_handle = cx.entity().downgrade();"),
+            "Chat footer primary action should use downgraded entity handle"
+        );
+        assert!(
+            CHAT_RENDER_CORE_SOURCE.contains("let secondary_handle = cx.entity().downgrade();"),
+            "Chat footer secondary action should use downgraded entity handle"
+        );
+        assert!(
+            CHAT_RENDER_CORE_SOURCE.contains("ChatFooterButtonAction::StopStreaming"),
+            "Streaming footer primary button should route to stop streaming action"
         );
         assert!(
             CHAT_RENDER_CORE_SOURCE.contains("ChatFooterButtonAction::ContinueInChat"),
             "Continue in Chat footer button should route to continue action"
+        );
+        assert!(
+            CHAT_RENDER_CORE_SOURCE.contains("ChatFooterButtonAction::SaveAndRun"),
+            "Script generation footer primary button should route to save-and-run action"
         );
         assert!(
             CHAT_RENDER_CORE_SOURCE.contains("ChatFooterButtonAction::ToggleActionsPanel"),

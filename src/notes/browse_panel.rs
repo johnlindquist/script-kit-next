@@ -23,6 +23,7 @@ use gpui_component::{
     tooltip::Tooltip,
     IconName, Sizable,
 };
+use crate::ui_foundation::{is_key_down, is_key_enter, is_key_escape, is_key_up};
 
 use super::model::{Note, NoteId};
 
@@ -550,10 +551,10 @@ impl Render for BrowsePanel {
                     .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                         let key = event.keystroke.key.as_str();
                         match key {
-                            "up" | "arrowup" => this.move_up(cx),
-                            "down" | "arrowdown" => this.move_down(cx),
-                            "enter" | "return" => this.select_current(cx),
-                            "escape" | "esc" => this.close(),
+                            k if is_key_up(k) => this.move_up(cx),
+                            k if is_key_down(k) => this.move_down(cx),
+                            k if is_key_enter(k) => this.select_current(cx),
+                            k if is_key_escape(k) => this.close(),
                             _ => {}
                         }
                     }))
