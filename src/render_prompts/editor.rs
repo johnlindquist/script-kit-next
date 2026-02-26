@@ -11,6 +11,11 @@ const EDITOR_PROMPT_KEY_CONTEXT: &str = "editor_prompt";
 const EDITOR_PROMPT_SHORTCUT_HINT_SUFFIX: &str = "⌘↵/⌘S submit · ⌘K actions";
 
 #[inline]
+fn is_editor_escape_key_variant(key: &str) -> bool {
+    ui_foundation::is_key_escape(key)
+}
+
+#[inline]
 fn editor_footer_helper_text(snippet_helper_text: Option<&str>) -> String {
     match snippet_helper_text {
         Some(snippet_text) => format!("{snippet_text} · {EDITOR_PROMPT_SHORTCUT_HINT_SUFFIX}"),
@@ -36,15 +41,23 @@ fn editor_reserved_shortcut_reason(key: &str, modifiers: &gpui::Modifiers) -> Op
         return None;
     }
 
+    if ui_foundation::is_key_enter(key) {
+        return Some("submit");
+    }
+
+    if ui_foundation::is_key_left(key)
+        || ui_foundation::is_key_right(key)
+        || ui_foundation::is_key_up(key)
+        || ui_foundation::is_key_down(key)
+    {
+        return Some("cursor_navigation");
+    }
+
     match key {
-        "enter" | "return" => Some("submit"),
         "s" => Some("save_submit"),
         "z" | "y" => Some("undo_redo"),
         "f" | "g" => Some("find"),
         "a" | "c" | "v" | "x" => Some("clipboard_selection"),
-        "left" | "right" | "up" | "down" | "arrowleft" | "arrowright" | "arrowup" | "arrowdown" => {
-            Some("cursor_navigation")
-        }
         _ => None,
     }
 }
@@ -100,7 +113,7 @@ impl ScriptListApp {
                         // For ScratchPadView (built-in utility): ESC returns to main menu or closes window
                         // This is different from EditorPrompt (SDK prompt) which doesn't respond to ESC
                         if matches!(this.current_view, AppView::ScratchPadView { .. }) {
-                            if key_str == "escape" && !this.show_actions_popup {
+                            if is_editor_escape_key_variant(&key_str) && !this.show_actions_popup {
                                 logging::log("KEY", "ESC in ScratchPadView");
                                 this.go_back_or_close(window, cx);
                                 return true;
@@ -362,7 +375,7 @@ mod editor_prompt_tests {
     fn test_editor_action_shortcuts_do_not_override_reserved_editing_bindings() {
         let cmd = cmd_modifiers();
 
-        for key in ["f", "z", "return", "s", "arrowleft", "c"] {
+        for key in ["f", "z", "return", "s", "arrowleft", "arrowup", "down", "c"] {
             assert!(
                 editor_reserved_shortcut_reason(key, &cmd).is_some(),
                 "{key} should stay editor-owned",
@@ -431,5 +444,14 @@ mod editor_prompt_tests {
             EDITOR_RENDER_SOURCE.contains("editor_reserved_shortcut_reason(&key_lower, modifiers)"),
             "editor key handling should preserve reserved shortcut filtering before SDK shortcut matching"
         );
+    }
+
+    #[test]
+    fn test_is_editor_escape_key_variant_accepts_short_and_long_forms() {
+        assert!(is_editor_escape_key_variant("escape"));
+        assert!(is_editor_escape_key_variant("Escape"));
+        assert!(is_editor_escape_key_variant("esc"));
+        assert!(is_editor_escape_key_variant("Esc"));
+        assert!(!is_editor_escape_key_variant("enter"));
     }
 }

@@ -272,99 +272,91 @@ impl ScriptListApp {
                         return;
                     };
 
-                    match key_str.as_str() {
-                        "up" | "arrowup" => {
-                            dialog.update(cx, |d, cx| d.move_up(cx));
-                        }
-                        "down" | "arrowdown" => {
-                            dialog.update(cx, |d, cx| d.move_down(cx));
-                        }
-                        "enter" | "return" => {
-                            // Get the selected action and execute it
-                            let action_id = dialog.read(cx).get_selected_action_id();
-                            let should_close = dialog.read(cx).selected_action_should_close();
-                            if let Some(action_id) = action_id {
-                                logging::log(
-                                    "ACTIONS",
-                                    &format!(
-                                        "{PATH_PROMPT_KEY_CONTEXT}: action selected via Enter (action_id={action_id}, close={should_close}, correlation_id={correlation_id})"
-                                    ),
-                                );
+                    if crate::ui_foundation::is_key_up(key) {
+                        dialog.update(cx, |d, cx| d.move_up(cx));
+                    } else if crate::ui_foundation::is_key_down(key) {
+                        dialog.update(cx, |d, cx| d.move_down(cx));
+                    } else if crate::ui_foundation::is_key_enter(key) {
+                        // Get the selected action and execute it
+                        let action_id = dialog.read(cx).get_selected_action_id();
+                        let should_close = dialog.read(cx).selected_action_should_close();
+                        if let Some(action_id) = action_id {
+                            logging::log(
+                                "ACTIONS",
+                                &format!(
+                                    "{PATH_PROMPT_KEY_CONTEXT}: action selected via Enter (action_id={action_id}, close={should_close}, correlation_id={correlation_id})"
+                                ),
+                            );
 
-                                // Get path info from PathPrompt
-                                let path_info = path_entity.read(cx).get_selected_path_info();
+                            // Get path info from PathPrompt
+                            let path_info = path_entity.read(cx).get_selected_path_info();
 
-                                // Close dialog if action says so (built-in path actions always close)
-                                if should_close {
-                                    this.path_prompt_close_actions_popup(window, cx, "enter");
-                                }
-
-                                // Execute the action if we have path info
-                                if let Some(info) = path_info {
-                                    this.execute_path_action(&action_id, &info, &path_entity, cx);
-                                }
-                            }
-                        }
-                        "escape" | "esc" => {
-                            this.path_prompt_close_actions_popup(window, cx, "escape");
-                        }
-                        "backspace" => {
-                            dialog.update(cx, |d, cx| d.handle_backspace(cx));
-                            this.path_prompt_sync_actions_search_from_dialog(cx, "backspace");
-                        }
-                        _ => {
-                            // Check for printable character input (only when no modifiers are held)
-                            // This prevents Cmd+E from being treated as typing 'e' into the search
-                            if !modifiers.platform && !modifiers.control && !modifiers.alt {
-                                if let Some(ref key_char) = event.keystroke.key_char {
-                                    if let Some(ch) = key_char.chars().next() {
-                                        if !ch.is_control() {
-                                            dialog.update(cx, |d, cx| d.handle_char(ch, cx));
-                                            this.path_prompt_sync_actions_search_from_dialog(
-                                                cx,
-                                                "printable_char",
-                                            );
-                                        }
-                                    }
-                                }
-                                return;
+                            // Close dialog if action says so (built-in path actions always close)
+                            if should_close {
+                                this.path_prompt_close_actions_popup(window, cx, "enter");
                             }
 
-                            // Check if keystroke matches any action shortcut in the dialog
-                            let keystroke_shortcut =
-                                shortcuts::keystroke_to_shortcut(&key_str, modifiers);
-
-                            // Read dialog actions and look for matching shortcut
-                            let dialog_ref = dialog.read(cx);
-                            let mut matched_action: Option<String> = None;
-                            for action in &dialog_ref.actions {
-                                if let Some(ref display_shortcut) = action.shortcut {
-                                    let normalized =
-                                        Self::normalize_display_shortcut(display_shortcut);
-                                    if normalized == keystroke_shortcut {
-                                        matched_action = Some(action.id.clone());
-                                        break;
+                            // Execute the action if we have path info
+                            if let Some(info) = path_info {
+                                this.execute_path_action(&action_id, &info, &path_entity, cx);
+                            }
+                        }
+                    } else if crate::ui_foundation::is_key_escape(key) {
+                        this.path_prompt_close_actions_popup(window, cx, "escape");
+                    } else if key.eq_ignore_ascii_case("backspace") {
+                        dialog.update(cx, |d, cx| d.handle_backspace(cx));
+                        this.path_prompt_sync_actions_search_from_dialog(cx, "backspace");
+                    } else {
+                        // Check for printable character input (only when no modifiers are held)
+                        // This prevents Cmd+E from being treated as typing 'e' into the search
+                        if !modifiers.platform && !modifiers.control && !modifiers.alt {
+                            if let Some(ref key_char) = event.keystroke.key_char {
+                                if let Some(ch) = key_char.chars().next() {
+                                    if !ch.is_control() {
+                                        dialog.update(cx, |d, cx| d.handle_char(ch, cx));
+                                        this.path_prompt_sync_actions_search_from_dialog(
+                                            cx,
+                                            "printable_char",
+                                        );
                                     }
                                 }
                             }
-                            let _ = dialog_ref;
+                            return;
+                        }
 
-                            if let Some(action_id) = matched_action {
-                                logging::log(
-                                    "ACTIONS",
-                                    &format!(
-                                        "{PATH_PROMPT_KEY_CONTEXT}: actions shortcut matched (shortcut={keystroke_shortcut}, action_id={action_id}, correlation_id={correlation_id})"
-                                    ),
-                                );
+                        // Check if keystroke matches any action shortcut in the dialog
+                        let keystroke_shortcut =
+                            shortcuts::keystroke_to_shortcut(&key_str, modifiers);
 
-                                // Get path info before closing dialog
-                                let path_info = path_entity.read(cx).get_selected_path_info();
-                                this.path_prompt_close_actions_popup(window, cx, "shortcut");
-
-                                // Execute the action
-                                if let Some(info) = path_info {
-                                    this.execute_path_action(&action_id, &info, &path_entity, cx);
+                        // Read dialog actions and look for matching shortcut
+                        let dialog_ref = dialog.read(cx);
+                        let mut matched_action: Option<String> = None;
+                        for action in &dialog_ref.actions {
+                            if let Some(ref display_shortcut) = action.shortcut {
+                                let normalized = Self::normalize_display_shortcut(display_shortcut);
+                                if normalized == keystroke_shortcut {
+                                    matched_action = Some(action.id.clone());
+                                    break;
                                 }
+                            }
+                        }
+                        let _ = dialog_ref;
+
+                        if let Some(action_id) = matched_action {
+                            logging::log(
+                                "ACTIONS",
+                                &format!(
+                                    "{PATH_PROMPT_KEY_CONTEXT}: actions shortcut matched (shortcut={keystroke_shortcut}, action_id={action_id}, correlation_id={correlation_id})"
+                                ),
+                            );
+
+                            // Get path info before closing dialog
+                            let path_info = path_entity.read(cx).get_selected_path_info();
+                            this.path_prompt_close_actions_popup(window, cx, "shortcut");
+
+                            // Execute the action
+                            if let Some(info) = path_info {
+                                this.execute_path_action(&action_id, &info, &path_entity, cx);
                             }
                         }
                     }
@@ -440,6 +432,28 @@ mod path_prompt_shared_state_tests {
                 .expect("search text state lock should succeed")
                 .as_str(),
             ""
+        );
+    }
+
+    #[test]
+    fn test_path_prompt_actions_key_routing_uses_shared_key_helpers() {
+        const PATH_RENDER_SOURCE: &str = include_str!("path.rs");
+
+        assert!(
+            PATH_RENDER_SOURCE.contains("crate::ui_foundation::is_key_up(key)"),
+            "path prompt key routing should use shared up-key helper"
+        );
+        assert!(
+            PATH_RENDER_SOURCE.contains("crate::ui_foundation::is_key_down(key)"),
+            "path prompt key routing should use shared down-key helper"
+        );
+        assert!(
+            PATH_RENDER_SOURCE.contains("crate::ui_foundation::is_key_enter(key)"),
+            "path prompt key routing should use shared enter-key helper"
+        );
+        assert!(
+            PATH_RENDER_SOURCE.contains("crate::ui_foundation::is_key_escape(key)"),
+            "path prompt key routing should use shared escape-key helper"
         );
     }
 }
