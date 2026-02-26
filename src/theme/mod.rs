@@ -19,6 +19,7 @@ mod color_resolver;
 pub(crate) mod gpui_integration;
 mod helpers;
 pub mod hex_color;
+pub mod opacity;
 pub mod prelude;
 pub mod presets;
 pub mod service;
