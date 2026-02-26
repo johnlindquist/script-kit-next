@@ -4,6 +4,16 @@ use crate::ui_foundation::{
     is_key_up,
 };
 
+#[inline]
+fn is_key_left_bracket(key: &str) -> bool {
+    key == "[" || key.eq_ignore_ascii_case("bracketleft")
+}
+
+#[inline]
+fn is_key_right_bracket(key: &str) -> bool {
+    key == "]" || key.eq_ignore_ascii_case("bracketright")
+}
+
 impl NotesApp {
     pub(super) fn handle_key_down(
         &mut self,
@@ -70,6 +80,7 @@ impl NotesApp {
         if self.show_actions_panel && self.actions_panel.is_some() {
             if is_key_escape(key) || (modifiers.platform && key.eq_ignore_ascii_case("k")) {
                 self.close_actions_panel(window, cx);
+                cx.stop_propagation();
                 return;
             }
 
@@ -161,6 +172,7 @@ impl NotesApp {
         }
 
         if is_key_escape(key) {
+            cx.stop_propagation();
             if self.show_shortcuts_help {
                 self.show_shortcuts_help = false;
                 cx.notify();
@@ -418,11 +430,11 @@ impl NotesApp {
                         cx.stop_propagation();
                     }
                 }
-                "[" => {
+                key if is_key_left_bracket(key) => {
                     self.navigate_back(window, cx);
                     cx.stop_propagation();
                 }
-                "]" => {
+                key if is_key_right_bracket(key) => {
                     self.navigate_forward(window, cx);
                     cx.stop_propagation();
                 }

@@ -98,7 +98,7 @@ const ACTIONS_PANEL_TOP_OFFSET: f32 = 32.0;
 // =============================================================================
 
 /// Opacity for disabled / completely de-emphasized elements.
-const OPACITY_DISABLED: f32 = 0.4;
+pub(super) const OPACITY_DISABLED: f32 = 0.4;
 
 /// Opacity for rest-state chrome (unhovered footer, subtle metadata).
 const OPACITY_SUBTLE: f32 = 0.5;
