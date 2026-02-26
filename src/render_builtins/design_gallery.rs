@@ -98,11 +98,11 @@ impl ScriptListApp {
                     return;
                 }
 
-                let key_str = event.keystroke.key.to_lowercase();
+                let key = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
 
                 // ESC: Clear filter first if present, otherwise go back/close
-                if key_str == "escape" && !this.show_actions_popup {
+                if is_key_escape(key) && !this.show_actions_popup {
                     if !this.clear_builtin_view_filter(cx) {
                         this.go_back_or_close(window, cx);
                     }
@@ -110,13 +110,13 @@ impl ScriptListApp {
                 }
 
                 // Cmd+W always closes window
-                if has_cmd && key_str == "w" {
+                if has_cmd && key.eq_ignore_ascii_case("w") {
                     logging::log("KEY", "Cmd+W - closing window");
                     this.close_and_reset_window(cx);
                     return;
                 }
 
-                logging::log("KEY", &format!("DesignGallery key: '{}'", key_str));
+                logging::log("KEY", &format!("DesignGallery key: '{}'", key));
 
                 if let AppView::DesignGalleryView {
                     filter,
@@ -127,8 +127,8 @@ impl ScriptListApp {
                     // so arrow keys respect the visible items after filtering
                     let current_filtered_len = filtered_len;
 
-                    match key_str.as_str() {
-                        "up" | "arrowup" => {
+                    match key {
+                        _ if is_key_up(key) => {
                             if *selected_index > 0 {
                                 *selected_index -= 1;
                                 this.design_gallery_scroll_handle
@@ -136,7 +136,7 @@ impl ScriptListApp {
                                 cx.notify();
                             }
                         }
-                        "down" | "arrowdown" => {
+                        _ if is_key_down(key) => {
                             if *selected_index < current_filtered_len.saturating_sub(1) {
                                 *selected_index += 1;
                                 this.design_gallery_scroll_handle
@@ -474,13 +474,26 @@ impl ScriptListApp {
                     .child(list_element),
             )
             // Footer
-            .child(PromptFooter::new(
-                PromptFooterConfig::new()
-                    .primary_label("Select")
-                    .primary_shortcut("↵")
-                    .show_secondary(false),
-                PromptFooterColors::from_theme(&self.theme),
-            ))
+            .child(
+                div()
+                    .id("design-gallery-footer-tooltip")
+                    .tooltip(|window, cx| {
+                        gpui_component::tooltip::Tooltip::new("Select highlighted design")
+                            .key_binding(
+                                gpui::Keystroke::parse("enter")
+                                    .ok()
+                                    .map(gpui_component::kbd::Kbd::new),
+                            )
+                            .build(window, cx)
+                    })
+                    .child(PromptFooter::new(
+                        PromptFooterConfig::new()
+                            .primary_label("Select")
+                            .primary_shortcut("↵")
+                            .show_secondary(false),
+                        PromptFooterColors::from_theme(&self.theme),
+                    )),
+            )
             .into_any_element()
     }
 }

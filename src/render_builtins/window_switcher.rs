@@ -52,11 +52,11 @@ impl ScriptListApp {
                     return;
                 }
 
-                let key_str = event.keystroke.key.to_lowercase();
+                let key = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
 
                 // ESC: Clear filter first if present, otherwise go back/close
-                if key_str == "escape" && !this.show_actions_popup {
+                if is_key_escape(key) && !this.show_actions_popup {
                     if !this.clear_builtin_view_filter(cx) {
                         this.go_back_or_close(window, cx);
                     }
@@ -64,13 +64,13 @@ impl ScriptListApp {
                 }
 
                 // Cmd+W always closes window
-                if has_cmd && key_str == "w" {
+                if has_cmd && key.eq_ignore_ascii_case("w") {
                     logging::log("KEY", "Cmd+W - closing window");
                     this.close_and_reset_window(cx);
                     return;
                 }
 
-                logging::log("KEY", &format!("WindowSwitcher key: '{}'", key_str));
+                logging::log("KEY", &format!("WindowSwitcher key: '{}'", key));
 
                 // P0 FIX: View state only - data comes from this.cached_windows
                 if let AppView::WindowSwitcherView {
@@ -95,8 +95,8 @@ impl ScriptListApp {
                     };
                     let filtered_len = filtered_windows.len();
 
-                    match key_str.as_str() {
-                        "up" | "arrowup" => {
+                    match key {
+                        _ if is_key_up(key) => {
                             if *selected_index > 0 {
                                 *selected_index -= 1;
                                 this.window_list_scroll_handle
@@ -104,7 +104,7 @@ impl ScriptListApp {
                                 cx.notify();
                             }
                         }
-                        "down" | "arrowdown" => {
+                        _ if is_key_down(key) => {
                             if *selected_index < filtered_len.saturating_sub(1) {
                                 *selected_index += 1;
                                 this.window_list_scroll_handle
@@ -112,7 +112,7 @@ impl ScriptListApp {
                                 cx.notify();
                             }
                         }
-                        "enter" | "return" => {
+                        _ if is_key_enter(key) => {
                             // Focus selected window and hide Script Kit
                             if let Some((_, window_info)) = filtered_windows.get(*selected_index) {
                                 logging::log(
@@ -264,6 +264,17 @@ impl ScriptListApp {
                                 div()
                                     .id(ix)
                                     .cursor_pointer()
+                                    .tooltip(|window, cx| {
+                                        gpui_component::tooltip::Tooltip::new(
+                                            "Switch to selected window",
+                                        )
+                                        .key_binding(
+                                            gpui::Keystroke::parse("enter")
+                                                .ok()
+                                                .map(gpui_component::kbd::Kbd::new),
+                                        )
+                                        .build(window, cx)
+                                    })
                                     .on_click(click_handler)
                                     .on_hover(hover_handler)
                                     .child(
