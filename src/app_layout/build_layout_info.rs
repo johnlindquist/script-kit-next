@@ -1,5 +1,6 @@
 impl ScriptListApp {
     pub fn build_layout_info(&self, _cx: &mut gpui::Context<Self>) -> protocol::LayoutInfo {
+        use crate::list_item::LIST_ITEM_HEIGHT;
         use protocol::{LayoutComponentInfo, LayoutComponentType, LayoutInfo};
 
         // TODO: Get actual window size once we have access to window in this context
@@ -111,8 +112,8 @@ impl ScriptListApp {
                 .with_depth(2)
                 .with_parent("ContentArea")
                 .with_explanation(format!(
-                    "Width = 50% of window = {}px. Uses uniform_list for virtualized scrolling with 48px item height.",
-                    list_width
+                    "Width = 50% of window = {}px. Uses uniform_list for virtualized scrolling with {}px item height.",
+                    list_width, LIST_ITEM_HEIGHT
                 )),
         );
 
@@ -132,7 +133,6 @@ impl ScriptListApp {
         );
 
         // List items (sample of first few visible)
-        const LIST_ITEM_HEIGHT: f32 = 48.0;
         let visible_items = ((content_height / LIST_ITEM_HEIGHT) as usize).min(5);
         for i in 0..visible_items {
             let item_top = content_top + (i as f32 * LIST_ITEM_HEIGHT);
