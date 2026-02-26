@@ -268,8 +268,8 @@ pub(crate) const DIVIDER_MARGIN_DEFAULT: f32 = 16.0;
 pub(crate) const DIVIDER_BORDER_WIDTH_DEFAULT: f32 = 1.0;
 /// Maximum height for the log panel area
 pub(crate) const LOG_PANEL_MAX_HEIGHT: f32 = 120.0;
-/// 50% opacity — divider line between header and list (visible separation)
-pub(crate) const ALPHA_DIVIDER: u32 = 0x80;
+/// 38% opacity — divider line between header and list (shared with ui_foundation)
+pub(crate) const ALPHA_DIVIDER: u32 = crate::ui_foundation::ALPHA_DIVIDER as u32;
 /// Estimated visible list container height for scrollbar calculations
 /// Window is 500px, header is ~60px, footer is ~34px → ~406px for list area
 pub(crate) const ESTIMATED_LIST_CONTAINER_HEIGHT: f32 = 436.0;
@@ -505,7 +505,7 @@ mod icon_kind_tests {
 
 #[cfg(test)]
 mod list_item_colors_tests {
-    use super::ListItemColors;
+    use super::{ListItemColors, ALPHA_DIVIDER};
 
     #[test]
     fn test_from_theme_sets_text_on_accent_from_theme_text_on_accent() {
@@ -517,6 +517,11 @@ mod list_item_colors_tests {
 
         assert_eq!(colors.text_on_accent, theme.colors.text.on_accent);
         assert_ne!(colors.text_on_accent, theme.colors.text.primary);
+    }
+
+    #[test]
+    fn test_alpha_divider_matches_ui_foundation_constant() {
+        assert_eq!(ALPHA_DIVIDER, crate::ui_foundation::ALPHA_DIVIDER as u32);
     }
 }
 impl ListItemColors {

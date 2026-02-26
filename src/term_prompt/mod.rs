@@ -14,7 +14,7 @@ use crate::theme::Theme;
 use gpui::{
     div, prelude::*, px, rgb, rgba, Context, FocusHandle, Focusable, MouseButton, MouseDownEvent,
     MouseMoveEvent, MouseUpEvent, Pixels, Render, ScrollDelta, ScrollWheelEvent, SharedString,
-    Timer, Window,
+    Window,
 };
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -49,6 +49,12 @@ const MIN_COLS: u16 = 20;
 const MIN_ROWS: u16 = 5;
 /// Duration for bell visual flash
 const BELL_FLASH_DURATION_MS: u64 = 150;
+
+#[inline]
+fn is_term_prompt_escape_key_variant(key: &str) -> bool {
+    crate::ui_foundation::is_key_escape(key)
+}
+
 /// Truncate a string to at most `max_bytes` bytes, ensuring the result is valid UTF-8.
 /// Truncates at a character boundary, never in the middle of a multibyte character.
 fn truncate_str(s: &str, max_bytes: usize) -> &str {
@@ -509,15 +515,19 @@ impl TermPrompt {
 
         cx.spawn(async move |this, cx| {
             loop {
-                Timer::after(Duration::from_millis(REFRESH_INTERVAL_MS)).await;
+                cx.background_executor()
+                    .timer(Duration::from_millis(REFRESH_INTERVAL_MS))
+                    .await;
 
-                let should_stop = cx
-                    .update(|cx| {
-                        this.update(cx, |term_prompt, cx| {
-                            if term_prompt.exited {
-                                term_prompt.refresh_timer_active = false;
-                                return true; // Stop polling
-                            }
+                let Some(this_entity) = this.upgrade() else {
+                    break;
+                };
+                let should_stop = cx.update(|cx| {
+                    this_entity.update(cx, |term_prompt, cx| {
+                        if term_prompt.exited {
+                            term_prompt.refresh_timer_active = false;
+                            return true; // Stop polling
+                        }
 
                             // Process terminal output - 2 iterations catches bursts without excessive overhead
                             // Auto-scroll: Track if we're at the bottom before processing
@@ -589,11 +599,9 @@ impl TermPrompt {
                             if needs_render {
                                 cx.notify();
                             }
-                            false
-                        })
-                        .unwrap_or(true)
+                        false
                     })
-                    .unwrap_or(true);
+                });
 
                 if should_stop {
                     break;
@@ -854,7 +862,7 @@ impl Render for TermPrompt {
                 let has_shift = event.keystroke.modifiers.shift;
 
                 // Escape always cancels
-                if key_str == "escape" {
+                if is_term_prompt_escape_key_variant(&key_str) {
                     this.submit_cancel();
                     return;
                 }
@@ -1346,6 +1354,15 @@ mod tests {
         assert_eq!(TermPrompt::ctrl_key_to_byte(" "), None);
         assert_eq!(TermPrompt::ctrl_key_to_byte("enter"), None);
         assert_eq!(TermPrompt::ctrl_key_to_byte("escape"), None);
+    }
+
+    #[test]
+    fn test_is_term_prompt_escape_key_variant_accepts_short_and_long_forms() {
+        assert!(is_term_prompt_escape_key_variant("escape"));
+        assert!(is_term_prompt_escape_key_variant("Escape"));
+        assert!(is_term_prompt_escape_key_variant("esc"));
+        assert!(is_term_prompt_escape_key_variant("Esc"));
+        assert!(!is_term_prompt_escape_key_variant("enter"));
     }
     // ========================================================================
     // Cell Dimension Tests
