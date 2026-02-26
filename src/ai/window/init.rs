@@ -244,6 +244,7 @@ impl AiApp {
             pending_attachments: Vec::new(),
             // Mouse cursor state
             mouse_cursor_hidden: false,
+            input_mode: InputMode::Mouse,
             // Copy feedback state
             copied_message_id: None,
             copied_at: None,
@@ -265,6 +266,7 @@ impl AiApp {
             collapsed_messages: std::collections::HashSet::new(),
             expanded_messages: std::collections::HashSet::new(),
             export_copied_at: None,
+            chat_transcript_copied_at: None,
         }
     }
 

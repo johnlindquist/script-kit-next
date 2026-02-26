@@ -65,7 +65,9 @@ impl AiApp {
 
         // Reset feedback after 2 seconds
         cx.spawn(async move |this, cx| {
-            gpui::Timer::after(std::time::Duration::from_millis(2000)).await;
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(2000))
+                .await;
             let _ = cx.update(|cx| {
                 this.update(cx, |this, cx| {
                     if this.setup_copied_at == Some(copied_at) {
@@ -93,9 +95,20 @@ impl AiApp {
     }
 
     pub(super) fn move_setup_button_focus(&mut self, delta: isize, cx: &mut Context<Self>) {
+        let mut should_notify = false;
+
+        if self.input_mode != InputMode::Keyboard {
+            self.input_mode = InputMode::Keyboard;
+            should_notify = true;
+        }
+
         let next_index = Self::next_setup_button_focus_index(self.setup_button_focus_index, delta);
         if next_index != self.setup_button_focus_index {
             self.setup_button_focus_index = next_index;
+            should_notify = true;
+        }
+
+        if should_notify {
             cx.notify();
         }
     }

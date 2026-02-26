@@ -1,5 +1,14 @@
 use super::*;
 
+/// Input mode for AI window navigation.
+/// Keyboard mode suppresses hover highlights to prevent dual-highlight states.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(super) enum InputMode {
+    #[default]
+    Mouse,
+    Keyboard,
+}
+
 /// The main AI chat application view
 pub struct AiApp {
     /// All chats (cached from storage)
@@ -167,6 +176,10 @@ pub struct AiApp {
     /// Whether the mouse cursor is currently hidden (hidden on keyboard, shown on mouse move)
     pub(super) mouse_cursor_hidden: bool,
 
+    /// Tracks whether the user is navigating with keyboard or mouse.
+    /// Mouse mode enables hover highlights; keyboard mode suppresses them.
+    pub(super) input_mode: InputMode,
+
     /// ID of the message whose content was just copied (for showing checkmark feedback)
     pub(super) copied_message_id: Option<String>,
 
@@ -218,4 +231,17 @@ pub struct AiApp {
 
     /// Feedback timestamp for "Exported!" clipboard feedback
     pub(super) export_copied_at: Option<std::time::Instant>,
+
+    /// Feedback timestamp for "Copied!" transcript action state
+    pub(super) chat_transcript_copied_at: Option<std::time::Instant>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::InputMode;
+
+    #[test]
+    fn test_ai_window_input_mode_defaults_to_mouse() {
+        assert_eq!(InputMode::default(), InputMode::Mouse);
+    }
 }
