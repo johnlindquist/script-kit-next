@@ -276,11 +276,11 @@ impl ScriptListApp {
                   window: &mut Window,
                   cx: &mut Context<Self>| {
                 this.hide_mouse_cursor(cx);
-                let key_str = event.keystroke.key.to_lowercase();
+                let key = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
 
                 // Escape: clear filter first if present, otherwise restore original and close
-                if key_str == "escape" && !this.show_actions_popup {
+                if is_key_escape(key) && !this.show_actions_popup {
                     if !this.clear_builtin_view_filter(cx) {
                         // No filter to clear — restore original theme and go back
                         if let Some(original) = this.theme_before_chooser.take() {
@@ -292,7 +292,7 @@ impl ScriptListApp {
                     return;
                 }
                 // Cmd+W: restore and close window
-                if has_cmd && key_str == "w" {
+                if has_cmd && key.eq_ignore_ascii_case("w") {
                     if let Some(original) = this.theme_before_chooser.take() {
                         this.theme = original;
                         sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
@@ -301,7 +301,7 @@ impl ScriptListApp {
                     return;
                 }
                 // Cmd+[ / Cmd+]: cycle accent colors
-                if has_cmd && (key_str == "[" || key_str == "bracketleft") {
+                if has_cmd && (key == "[" || key.eq_ignore_ascii_case("bracketleft")) {
                     let current = this.theme.colors.accent.selected;
                     let idx = Self::find_accent_palette_index(current).unwrap_or(0);
                     let new_idx = if idx == 0 {
@@ -319,7 +319,7 @@ impl ScriptListApp {
                     cx.notify();
                     return;
                 }
-                if has_cmd && (key_str == "]" || key_str == "bracketright") {
+                if has_cmd && (key == "]" || key.eq_ignore_ascii_case("bracketright")) {
                     let current = this.theme.colors.accent.selected;
                     let idx = Self::find_accent_palette_index(current).unwrap_or(0);
                     let new_idx = (idx + 1) % Self::ACCENT_PALETTE.len();
@@ -334,7 +334,7 @@ impl ScriptListApp {
                     return;
                 }
                 // Cmd+- / Cmd+=: adjust opacity
-                if has_cmd && key_str == "-" {
+                if has_cmd && key == "-" {
                     let current_main = this.theme.get_opacity().main;
                     let idx = Self::find_opacity_preset_index(current_main);
                     if idx > 0 {
@@ -350,7 +350,7 @@ impl ScriptListApp {
                     }
                     return;
                 }
-                if has_cmd && (key_str == "=" || key_str == "+") {
+                if has_cmd && (key == "=" || key == "+") {
                     let current_main = this.theme.get_opacity().main;
                     let idx = Self::find_opacity_preset_index(current_main);
                     if idx < Self::OPACITY_PRESETS.len() - 1 {
@@ -367,7 +367,7 @@ impl ScriptListApp {
                     return;
                 }
                 // Cmd+B: toggle vibrancy
-                if has_cmd && key_str == "b" {
+                if has_cmd && key.eq_ignore_ascii_case("b") {
                     let mut modified = (*this.theme).clone();
                     if let Some(ref mut vibrancy) = modified.vibrancy {
                         vibrancy.enabled = !vibrancy.enabled;
@@ -378,7 +378,7 @@ impl ScriptListApp {
                     return;
                 }
                 // Cmd+M: cycle vibrancy material
-                if has_cmd && key_str == "m" {
+                if has_cmd && key.eq_ignore_ascii_case("m") {
                     let current_material = this
                         .theme
                         .vibrancy
@@ -398,7 +398,7 @@ impl ScriptListApp {
                     return;
                 }
                 // Cmd+R: reset customizations to selected preset defaults
-                if has_cmd && key_str == "r" {
+                if has_cmd && key.eq_ignore_ascii_case("r") {
                     let current_filter =
                         if let AppView::ThemeChooserView { ref filter, .. } = this.current_view {
                             filter.clone()
@@ -422,7 +422,7 @@ impl ScriptListApp {
                     return;
                 }
                 // Enter: apply and close
-                if key_str == "enter" {
+                if is_key_enter(key) {
                     this.theme_before_chooser = None;
                     if let Err(e) = theme::presets::write_theme_to_disk(&this.theme) {
                         logging::log("ERROR", &format!("Failed to save theme: {}", e));
@@ -452,27 +452,27 @@ impl ScriptListApp {
                 } = this.current_view
                 {
                     let page_size: usize = THEME_LIST_PAGE_SIZE;
-                    match key_str.as_str() {
-                        "up" | "arrowup" => {
+                    match key {
+                        _ if is_key_up(key) => {
                             if *selected_index > 0 {
                                 *selected_index -= 1;
                             }
                         }
-                        "down" | "arrowdown" => {
+                        _ if is_key_down(key) => {
                             if *selected_index < count - 1 {
                                 *selected_index += 1;
                             }
                         }
-                        "home" => {
+                        _ if key.eq_ignore_ascii_case("home") => {
                             *selected_index = 0;
                         }
-                        "end" => {
+                        _ if key.eq_ignore_ascii_case("end") => {
                             *selected_index = count - 1;
                         }
-                        "pageup" => {
+                        _ if key.eq_ignore_ascii_case("pageup") => {
                             *selected_index = selected_index.saturating_sub(page_size);
                         }
-                        "pagedown" => {
+                        _ if key.eq_ignore_ascii_case("pagedown") => {
                             *selected_index = (*selected_index + page_size).min(count - 1);
                         }
                         _ => return,
@@ -724,6 +724,11 @@ impl ScriptListApp {
         .h_full()
         .track_scroll(&self.theme_chooser_scroll_handle)
         .into_any_element();
+        let list_scrollbar = self.builtin_uniform_list_scrollbar(
+            &self.theme_chooser_scroll_handle,
+            filtered_count,
+            8,
+        );
 
         // ── Header with search input ───────────────────────────────
         let header = div()
@@ -797,10 +802,11 @@ impl ScriptListApp {
         let accent_swatches: Vec<gpui::AnyElement> = Self::ACCENT_PALETTE
             .iter()
             .enumerate()
-            .map(|(i, &(color, _name))| {
+            .map(|(i, &(color, name))| {
                 let is_current = color == accent_color;
                 let click_entity = entity_handle_for_customize.clone();
                 let swatch_bg_main = bg_main;
+                let tooltip_label = format!("Set accent color to {}", name);
                 div()
                     .id(ElementId::NamedInteger("accent-swatch".into(), i as u64))
                     .w(px(22.0))
@@ -812,6 +818,10 @@ impl ScriptListApp {
                     .cursor_pointer()
                     .when(is_current, |d| d.bg(theme_row_selected_bg))
                     .when(!is_current, |d| d.hover(move |s| s.bg(theme_row_hover_bg)))
+                    .tooltip(move |window, cx| {
+                        gpui_component::tooltip::Tooltip::new(tooltip_label.clone())
+                            .build(window, cx)
+                    })
                     .child(
                         div()
                             .w(px(18.0))
@@ -852,6 +862,7 @@ impl ScriptListApp {
             .map(|(i, &(value, label))| {
                 let is_current = (value - current_opacity_main).abs() < OPACITY_MATCH_TOLERANCE;
                 let click_entity = entity_handle_for_customize.clone();
+                let tooltip_label = format!("Set opacity to {}", label);
                 div()
                     .id(ElementId::NamedInteger("opacity-btn".into(), i as u64))
                     .px(px(8.0))
@@ -869,6 +880,10 @@ impl ScriptListApp {
                             .border_color(border_rgba)
                             .text_color(rgb(text_secondary))
                             .hover(move |s| s.bg(rgba((selection_bg << 8) | hover_alpha)))
+                    })
+                    .tooltip(move |window, cx| {
+                        gpui_component::tooltip::Tooltip::new(tooltip_label.clone())
+                            .build(window, cx)
                     })
                     .on_click(
                         move |_event: &gpui::ClickEvent,
@@ -906,6 +921,9 @@ impl ScriptListApp {
             .rounded(px(4.0))
             .px(px(4.0))
             .py(px(2.0))
+            .tooltip(|window, cx| {
+                gpui_component::tooltip::Tooltip::new("Toggle vibrancy blur").build(window, cx)
+            })
             .on_click(
                 move |_event: &gpui::ClickEvent, _window: &mut Window, cx: &mut gpui::App| {
                     if let Some(app) = vibrancy_entity.upgrade() {
@@ -963,6 +981,7 @@ impl ScriptListApp {
             .map(|(i, &(material, label))| {
                 let is_current = material == current_material;
                 let click_entity = entity_handle_for_customize.clone();
+                let tooltip_label = format!("Set vibrancy material to {}", label);
                 div()
                     .id(ElementId::NamedInteger("material-btn".into(), i as u64))
                     .px(px(6.0))
@@ -980,6 +999,10 @@ impl ScriptListApp {
                             .border_color(border_rgba)
                             .text_color(rgb(text_secondary))
                             .hover(move |s| s.bg(rgba((selection_bg << 8) | hover_alpha)))
+                    })
+                    .tooltip(move |window, cx| {
+                        gpui_component::tooltip::Tooltip::new(tooltip_label.clone())
+                            .build(window, cx)
                     })
                     .on_click(
                         move |_event: &gpui::ClickEvent,
@@ -1011,6 +1034,7 @@ impl ScriptListApp {
             .map(|(i, &(size, label))| {
                 let is_current = (size - current_ui_font_size).abs() < FONT_SIZE_MATCH_TOLERANCE;
                 let click_entity = entity_handle_for_customize.clone();
+                let tooltip_label = format!("Set UI font size to {}px", label);
                 div()
                     .id(ElementId::NamedInteger("fontsize-btn".into(), i as u64))
                     .px(px(8.0))
@@ -1028,6 +1052,10 @@ impl ScriptListApp {
                             .border_color(border_rgba)
                             .text_color(rgb(text_secondary))
                             .hover(move |s| s.bg(rgba((selection_bg << 8) | hover_alpha)))
+                    })
+                    .tooltip(move |window, cx| {
+                        gpui_component::tooltip::Tooltip::new(tooltip_label.clone())
+                            .build(window, cx)
                     })
                     .on_click(
                         move |_event: &gpui::ClickEvent,
@@ -1069,6 +1097,10 @@ impl ScriptListApp {
             .border_color(border_rgba)
             .text_color(rgb(text_secondary))
             .hover(move |s| s.bg(rgba((selection_bg << 8) | hover_alpha)))
+            .tooltip(|window, cx| {
+                gpui_component::tooltip::Tooltip::new("Reset to selected preset defaults")
+                    .build(window, cx)
+            })
             .on_click(
                 move |_event: &gpui::ClickEvent, _window: &mut Window, cx: &mut gpui::App| {
                     if let Some(app) = reset_entity.upgrade() {
@@ -1532,7 +1564,14 @@ impl ScriptListApp {
                             .w_1_2()
                             .h_full()
                             .py(px(row_layout.list_vertical_padding))
-                            .child(list),
+                            .child(
+                                div()
+                                    .relative()
+                                    .w_full()
+                                    .h_full()
+                                    .child(list)
+                                    .child(list_scrollbar),
+                            ),
                     )
                     .child(preview_panel),
             )

@@ -111,14 +111,13 @@ impl ScriptListApp {
                     return;
                 }
 
-                let key_raw = event.keystroke.key.as_str();
-                let key_str = key_raw.to_lowercase();
+                let key = event.keystroke.key.as_str();
                 let key_char = event.keystroke.key_char.as_deref();
                 let has_cmd = event.keystroke.modifiers.platform;
                 let modifiers = &event.keystroke.modifiers;
 
                 match this.route_key_to_actions_dialog(
-                    &key_str,
+                    key,
                     key_char,
                     modifiers,
                     ActionsDialogHost::EmojiPicker,
@@ -135,14 +134,14 @@ impl ScriptListApp {
                     }
                 }
 
-                if key_str == "escape" && !this.show_actions_popup {
+                if is_key_escape(key) && !this.show_actions_popup {
                     if !this.clear_builtin_view_filter(cx) {
                         this.go_back_or_close(window, cx);
                     }
                     return;
                 }
 
-                if has_cmd && key_str == "w" {
+                if has_cmd && key.eq_ignore_ascii_case("w") {
                     this.close_and_reset_window(cx);
                     return;
                 }
@@ -168,36 +167,26 @@ impl ScriptListApp {
                     }
 
                     let cols = crate::emoji::GRID_COLS;
-                    let navigated = match key_str.as_str() {
-                        "up" | "arrowup" => {
+                    let navigated = match key {
+                        _ if is_key_up(key) => {
                             *selected_index = (*selected_index).saturating_sub(cols);
                             true
                         }
-                        "down" | "arrowdown" => {
+                        _ if is_key_down(key) => {
                             *selected_index = (*selected_index + cols).min(filtered_len - 1);
                             true
                         }
-                        "left" | "arrowleft" => {
+                        _ if is_key_left(key) => {
                             this.navigate_emoji_picker_horizontal(-1, cx);
                             cx.stop_propagation();
                             return;
                         }
-                        "right" | "arrowright" => {
+                        _ if is_key_right(key) => {
                             this.navigate_emoji_picker_horizontal(1, cx);
                             cx.stop_propagation();
                             return;
                         }
-                        "enter" | "return" => {
-                            if let Some(emoji) = ordered_emojis.get(*selected_index) {
-                                cx.write_to_clipboard(gpui::ClipboardItem::new_string(
-                                    emoji.emoji.to_string(),
-                                ));
-                                this.close_and_reset_window(cx);
-                            }
-                            cx.stop_propagation();
-                            return;
-                        }
-                        _ if key_raw == "Enter" => {
+                        _ if is_key_enter(key) => {
                             if let Some(emoji) = ordered_emojis.get(*selected_index) {
                                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(
                                     emoji.emoji.to_string(),
@@ -341,6 +330,15 @@ impl ScriptListApp {
                                             .items_center()
                                             .justify_center()
                                             .cursor_pointer()
+                                            .tooltip(|window, cx| {
+                                                gpui_component::tooltip::Tooltip::new("Copy emoji")
+                                                    .key_binding(
+                                                        gpui::Keystroke::parse("enter")
+                                                            .ok()
+                                                            .map(gpui_component::kbd::Kbd::new),
+                                                    )
+                                                    .build(window, cx)
+                                            })
                                             .on_click(
                                                 move |_event: &gpui::ClickEvent,
                                                       _window: &mut Window,
@@ -424,6 +422,8 @@ impl ScriptListApp {
             .track_scroll(&self.emoji_scroll_handle)
             .into_any_element()
         };
+        let grid_scrollbar =
+            self.builtin_uniform_list_scrollbar(&self.emoji_scroll_handle, rows.len(), 8);
 
         div()
             .flex()
@@ -480,7 +480,14 @@ impl ScriptListApp {
                     .min_h(px(0.0))
                     .overflow_hidden()
                     .py(px(design_spacing.padding_xs))
-                    .child(grid_element),
+                    .child(
+                        div()
+                            .relative()
+                            .w_full()
+                            .h_full()
+                            .child(grid_element)
+                            .child(grid_scrollbar),
+                    ),
             )
             .child(PromptFooter::new(
                 PromptFooterConfig::new()
@@ -528,17 +535,17 @@ mod emoji_picker_tests {
     fn test_render_emoji_picker_handles_navigation_and_enter_copy() {
         let source = read_emoji_picker_source();
 
-        for key_arm in [
-            "\"up\" | \"arrowup\"",
-            "\"down\" | \"arrowdown\"",
-            "\"left\" | \"arrowleft\"",
-            "\"right\" | \"arrowright\"",
-            "\"enter\" | \"return\"",
+        for helper_call in [
+            "is_key_up(key)",
+            "is_key_down(key)",
+            "is_key_left(key)",
+            "is_key_right(key)",
+            "is_key_enter(key)",
         ] {
             assert!(
-                source.contains(key_arm),
-                "Expected key handler arm `{}` in render_emoji_picker",
-                key_arm
+                source.contains(helper_call),
+                "Expected key handler helper `{}` in render_emoji_picker",
+                helper_call
             );
         }
 

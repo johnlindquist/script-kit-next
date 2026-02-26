@@ -1,3 +1,7 @@
+        use crate::ui_foundation::{
+            is_key_down, is_key_enter, is_key_escape, is_key_space, is_key_up,
+        };
+
         // Use theme for all colors - consistent with main menu
         let tokens = get_tokens(self.current_design);
         let design_spacing = tokens.spacing();
@@ -67,14 +71,14 @@
                     return;
                 }
 
-                let key_str = event.keystroke.key.to_lowercase();
+                let key = event.keystroke.key.as_str();
                 let key_char = event.keystroke.key_char.as_deref();
                 let has_cmd = event.keystroke.modifiers.platform;
                 let modifiers = &event.keystroke.modifiers;
 
                 // Route keys to actions dialog first if it's open
                 match this.route_key_to_actions_dialog(
-                    &key_str,
+                    key,
                     key_char,
                     modifiers,
                     ActionsDialogHost::ClipboardHistory,
@@ -92,7 +96,7 @@
                 }
 
                 // ESC: Clear filter first if present, otherwise go back/close
-                if key_str == "escape" && !this.show_actions_popup {
+                if is_key_escape(key) && !this.show_actions_popup {
                     if !this.clear_builtin_view_filter(cx) {
                         this.go_back_or_close(window, cx);
                     }
@@ -100,13 +104,13 @@
                 }
 
                 // Cmd+W always closes window
-                if has_cmd && key_str == "w" {
+                if has_cmd && key.eq_ignore_ascii_case("w") {
                     logging::log("KEY", "Cmd+W - closing window");
                     this.close_and_reset_window(cx);
                     return;
                 }
 
-                logging::log("KEY", &format!("ClipboardHistory key: '{}'", key_str));
+                logging::log("KEY", &format!("ClipboardHistory key: '{}'", key));
 
                 // P0 FIX: View state only - data comes from this.cached_clipboard_entries
                 if let AppView::ClipboardHistoryView {
@@ -142,7 +146,7 @@
                         selected_entry.as_ref().map(|entry| entry.id.clone());
 
                     // Cmd+P toggles pin state for selected entry
-                    if has_cmd && key_str == "p" {
+                    if has_cmd && key.eq_ignore_ascii_case("p") {
                         if let Some(entry) = selected_entry {
                             drop(filtered_entries);
                             let action_id = if entry.pinned {
@@ -156,7 +160,7 @@
                     }
 
                     // Cmd+K opens clipboard actions dialog
-                    if has_cmd && key_str == "k" {
+                    if has_cmd && key.eq_ignore_ascii_case("k") {
                         if let Some(entry) = selected_entry {
                             drop(filtered_entries);
                             this.toggle_clipboard_actions(entry, window, cx);
@@ -165,7 +169,7 @@
                     }
 
                     // Ctrl+Cmd+A attaches selected entry to AI chat
-                    if modifiers.control && has_cmd && key_str == "a" {
+                    if modifiers.control && has_cmd && key.eq_ignore_ascii_case("a") {
                         if let Some(_entry) = selected_entry {
                             drop(filtered_entries);
                             this.handle_action("clipboard_attach_to_ai".to_string(), cx);
@@ -174,7 +178,7 @@
                     }
 
                     // Space opens Quick Look (macOS Finder behavior)
-                    if key_str == "space"
+                    if is_key_space(key)
                         && filter.is_empty()
                         && !modifiers.platform
                         && !modifiers.control
@@ -190,8 +194,8 @@
                         return;
                     }
 
-                    match key_str.as_str() {
-                        "up" | "arrowup" => {
+                    match key {
+                        _ if is_key_up(key) => {
                             if *selected_index > 0 {
                                 *selected_index -= 1;
                                 // Scroll to keep selection visible
@@ -203,7 +207,7 @@
                                 cx.notify();
                             }
                         }
-                        "down" | "arrowdown" => {
+                        _ if is_key_down(key) => {
                             if *selected_index < filtered_len.saturating_sub(1) {
                                 *selected_index += 1;
                                 // Scroll to keep selection visible
@@ -215,7 +219,7 @@
                                 cx.notify();
                             }
                         }
-                        "enter" | "return" => {
+                        _ if is_key_enter(key) => {
                             // Copy selected entry to clipboard, hide window, then paste
                             if let Some((_, entry)) = filtered_entries.get(*selected_index) {
                                 logging::log(

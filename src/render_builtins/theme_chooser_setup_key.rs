@@ -1,3 +1,5 @@
+        use crate::ui_foundation::{is_key_down, is_key_enter, is_key_escape, is_key_up};
+
         let tokens = get_tokens(self.current_design);
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
@@ -73,11 +75,11 @@
                   window: &mut Window,
                   cx: &mut Context<Self>| {
                 this.hide_mouse_cursor(cx);
-                let key_str = event.keystroke.key.to_lowercase();
+                let key = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
 
                 // Escape: clear filter first if present, otherwise restore original and close
-                if key_str == "escape" && !this.show_actions_popup {
+                if is_key_escape(key) && !this.show_actions_popup {
                     if !this.clear_builtin_view_filter(cx) {
                         // No filter to clear — restore original theme and go back
                         if let Some(original) = this.theme_before_chooser.take() {
@@ -89,7 +91,7 @@
                     return;
                 }
                 // Cmd+W: restore and close window
-                if has_cmd && key_str == "w" {
+                if has_cmd && key.eq_ignore_ascii_case("w") {
                     if let Some(original) = this.theme_before_chooser.take() {
                         this.theme = original;
                         theme::sync_gpui_component_theme(cx);
@@ -98,7 +100,7 @@
                     return;
                 }
                 // Cmd+[ / Cmd+]: cycle accent colors
-                if has_cmd && (key_str == "[" || key_str == "bracketleft") {
+                if has_cmd && (key == "[" || key.eq_ignore_ascii_case("bracketleft")) {
                     let current = this.theme.colors.accent.selected;
                     let idx = Self::find_accent_palette_index(current).unwrap_or(0);
                     let new_idx = if idx == 0 {
@@ -116,7 +118,7 @@
                     cx.notify();
                     return;
                 }
-                if has_cmd && (key_str == "]" || key_str == "bracketright") {
+                if has_cmd && (key == "]" || key.eq_ignore_ascii_case("bracketright")) {
                     let current = this.theme.colors.accent.selected;
                     let idx = Self::find_accent_palette_index(current).unwrap_or(0);
                     let new_idx = (idx + 1) % Self::ACCENT_PALETTE.len();
@@ -131,7 +133,7 @@
                     return;
                 }
                 // Cmd+- / Cmd+=: adjust opacity
-                if has_cmd && key_str == "-" {
+                if has_cmd && key == "-" {
                     let current_main = this.theme.get_opacity().main;
                     let idx = Self::find_opacity_preset_index(current_main);
                     if idx > 0 {
@@ -147,7 +149,7 @@
                     }
                     return;
                 }
-                if has_cmd && (key_str == "=" || key_str == "+") {
+                if has_cmd && (key == "=" || key == "+") {
                     let current_main = this.theme.get_opacity().main;
                     let idx = Self::find_opacity_preset_index(current_main);
                     if idx < Self::OPACITY_PRESETS.len() - 1 {
@@ -164,7 +166,7 @@
                     return;
                 }
                 // Cmd+B: toggle vibrancy
-                if has_cmd && key_str == "b" {
+                if has_cmd && key.eq_ignore_ascii_case("b") {
                     let mut modified = (*this.theme).clone();
                     if let Some(ref mut vibrancy) = modified.vibrancy {
                         vibrancy.enabled = !vibrancy.enabled;
@@ -175,7 +177,7 @@
                     return;
                 }
                 // Cmd+M: cycle vibrancy material
-                if has_cmd && key_str == "m" {
+                if has_cmd && key.eq_ignore_ascii_case("m") {
                     let current_material = this
                         .theme
                         .vibrancy
@@ -195,7 +197,7 @@
                     return;
                 }
                 // Cmd+R: reset customizations to selected preset defaults
-                if has_cmd && key_str == "r" {
+                if has_cmd && key.eq_ignore_ascii_case("r") {
                     let current_filter =
                         if let AppView::ThemeChooserView { ref filter, .. } = this.current_view {
                             filter.clone()
@@ -220,7 +222,7 @@
                     return;
                 }
                 // Enter: apply and close
-                if key_str == "enter" {
+                if is_key_enter(key) {
                     this.theme_before_chooser = None;
                     if let Err(e) = theme::presets::write_theme_to_disk(&this.theme) {
                         logging::log("ERROR", &format!("Failed to save theme: {}", e));
@@ -250,27 +252,27 @@
                 } = this.current_view
                 {
                     let page_size: usize = 5;
-                    match key_str.as_str() {
-                        "up" | "arrowup" => {
+                    match key {
+                        _ if is_key_up(key) => {
                             if *selected_index > 0 {
                                 *selected_index -= 1;
                             }
                         }
-                        "down" | "arrowdown" => {
+                        _ if is_key_down(key) => {
                             if *selected_index < count - 1 {
                                 *selected_index += 1;
                             }
                         }
-                        "home" => {
+                        _ if key.eq_ignore_ascii_case("home") => {
                             *selected_index = 0;
                         }
-                        "end" => {
+                        _ if key.eq_ignore_ascii_case("end") => {
                             *selected_index = count - 1;
                         }
-                        "pageup" => {
+                        _ if key.eq_ignore_ascii_case("pageup") => {
                             *selected_index = selected_index.saturating_sub(page_size);
                         }
-                        "pagedown" => {
+                        _ if key.eq_ignore_ascii_case("pagedown") => {
                             *selected_index = (*selected_index + page_size).min(count - 1);
                         }
                         _ => return,
@@ -286,4 +288,3 @@
                 }
             },
         );
-

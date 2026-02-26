@@ -204,7 +204,7 @@ impl ScriptListApp {
             });
 
             let decode_result = loop {
-                Timer::after(std::time::Duration::from_millis(16)).await;
+                cx.background_executor().timer(std::time::Duration::from_millis(16)).await;
                 match rx.try_recv() {
                     Ok(result) => break result,
                     Err(std::sync::mpsc::TryRecvError::Empty) => {}
@@ -362,7 +362,7 @@ impl ScriptListApp {
                     return;
                 }
 
-                let key_str = event.keystroke.key.to_lowercase();
+                let key = event.keystroke.key.as_str();
                 let key_char = event.keystroke.key_char.as_deref();
                 let has_cmd = event.keystroke.modifiers.platform;
 
@@ -370,7 +370,7 @@ impl ScriptListApp {
 
                 // Route keys to actions dialog first if it's open
                 match this.route_key_to_actions_dialog(
-                    &key_str,
+                    key,
                     key_char,
                     modifiers,
                     ActionsDialogHost::FileSearch,
@@ -394,7 +394,7 @@ impl ScriptListApp {
                 }
 
                 // ESC: Clear query first if present, otherwise go back/close
-                if key_str == "escape" {
+                if is_key_escape(key) {
                     if !this.clear_builtin_view_filter(cx) {
                         this.go_back_or_close(window, cx);
                     }
@@ -402,7 +402,7 @@ impl ScriptListApp {
                 }
 
                 // Cmd+W closes window
-                if has_cmd && key_str == "w" {
+                if has_cmd && key.eq_ignore_ascii_case("w") {
                     logging::log("KEY", "Cmd+W - closing window");
                     this.close_and_reset_window(cx);
                     return;
@@ -422,16 +422,16 @@ impl ScriptListApp {
                             .cloned()
                     };
 
-                    match key_str.as_str() {
+                    match key {
                         // Arrow keys are handled by arrow_interceptor in app_impl.rs
                         // which calls stop_propagation(). This is the single source of truth
                         // for arrow key handling in FileSearchView.
-                        "up" | "arrowup" | "down" | "arrowdown" => {
+                        _ if is_key_up(key) || is_key_down(key) => {
                             // Already handled by interceptor, no-op here
                         }
                         // Tab/Shift+Tab handled by intercept_keystrokes in app_impl.rs
                         // (interceptor fires BEFORE input component can capture Tab)
-                        "enter" | "return" => {
+                        _ if is_key_enter(key) => {
                             // Check for Cmd+Enter (reveal in finder) first
                             if has_cmd {
                                 if let Some(file) = get_selected_file() {
@@ -448,7 +448,7 @@ impl ScriptListApp {
                         }
                         _ => {
                             // Handle Cmd+K (toggle actions)
-                            if has_cmd && key_str == "k" {
+                            if has_cmd && key.eq_ignore_ascii_case("k") {
                                 if let Some(file) = get_selected_file() {
                                     this.toggle_file_search_actions(&file, window, cx);
                                 }
@@ -456,7 +456,7 @@ impl ScriptListApp {
                             }
                             // Handle Cmd+Y (Quick Look) - macOS only
                             #[cfg(target_os = "macos")]
-                            if has_cmd && key_str == "y" {
+                            if has_cmd && key.eq_ignore_ascii_case("y") {
                                 if let Some(file) = get_selected_file() {
                                     let _ = file_search::quick_look(&file.path);
                                 }
@@ -464,14 +464,14 @@ impl ScriptListApp {
                             }
                             // Handle Cmd+I (Show Info) - macOS only
                             #[cfg(target_os = "macos")]
-                            if has_cmd && key_str == "i" {
+                            if has_cmd && key.eq_ignore_ascii_case("i") {
                                 if let Some(file) = get_selected_file() {
                                     let _ = file_search::show_info(&file.path);
                                 }
                             }
                             // Handle Cmd+O (Open With) - macOS only
                             #[cfg(target_os = "macos")]
-                            if has_cmd && key_str == "o" {
+                            if has_cmd && key.eq_ignore_ascii_case("o") {
                                 if let Some(file) = get_selected_file() {
                                     let _ = file_search::open_with(&file.path);
                                 }
@@ -650,6 +650,17 @@ impl ScriptListApp {
                                     .bg(bg)
                                     .cursor_pointer()
                                     .when(is_mouse_mode, |d| d.hover(move |s| s.bg(hover_bg)))
+                                    .tooltip(|window, cx| {
+                                        gpui_component::tooltip::Tooltip::new(
+                                            "Open selected file",
+                                        )
+                                        .key_binding(
+                                            gpui::Keystroke::parse("enter")
+                                                .ok()
+                                                .map(gpui_component::kbd::Kbd::new),
+                                        )
+                                        .build(window, cx)
+                                    })
                                     .on_click(click_handler)
                                     .on_hover(hover_handler)
                                     .child(if show_thumbnail {
@@ -742,6 +753,11 @@ impl ScriptListApp {
             .track_scroll(&self.file_search_scroll_handle)
             .into_any_element()
         };
+        let list_scrollbar = self.builtin_uniform_list_scrollbar(
+            &self.file_search_scroll_handle,
+            filtered_len,
+            8,
+        );
 
         // Build preview panel content - matching main menu labeled section pattern
         let preview_content = if let Some(file) = &selected_file {
@@ -1092,7 +1108,14 @@ impl ScriptListApp {
                             .overflow_hidden()
                             .border_r(px(design_visual.border_thin))
                             .border_color(rgba((ui_border << 8) | 0x40))
-                            .child(list_element),
+                            .child(
+                                div()
+                                    .relative()
+                                    .w_full()
+                                    .h_full()
+                                    .child(list_element)
+                                    .child(list_scrollbar),
+                            ),
                     )
                     // Right panel: preview (50%)
                     .child(

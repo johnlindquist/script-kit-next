@@ -1,3 +1,4 @@
+        use crate::ui_foundation::{is_key_down, is_key_enter, is_key_escape, is_key_up};
         use crate::file_search::{self, FileType};
 
         // Use design tokens for spacing/visual, theme for colors
@@ -79,7 +80,7 @@
                     return;
                 }
 
-                let key_str = event.keystroke.key.to_lowercase();
+                let key = event.keystroke.key.as_str();
                 let key_char = event.keystroke.key_char.as_deref();
                 let has_cmd = event.keystroke.modifiers.platform;
 
@@ -87,7 +88,7 @@
 
                 // Route keys to actions dialog first if it's open
                 match this.route_key_to_actions_dialog(
-                    &key_str,
+                    key,
                     key_char,
                     modifiers,
                     ActionsDialogHost::FileSearch,
@@ -111,7 +112,7 @@
                 }
 
                 // ESC: Clear query first if present, otherwise go back/close
-                if key_str == "escape" {
+                if is_key_escape(key) {
                     if !this.clear_builtin_view_filter(cx) {
                         this.go_back_or_close(window, cx);
                     }
@@ -119,7 +120,7 @@
                 }
 
                 // Cmd+W closes window
-                if has_cmd && key_str == "w" {
+                if has_cmd && key.eq_ignore_ascii_case("w") {
                     logging::log("KEY", "Cmd+W - closing window");
                     this.close_and_reset_window(cx);
                     return;
@@ -139,16 +140,16 @@
                             .cloned()
                     };
 
-                    match key_str.as_str() {
+                    match key {
                         // Arrow keys are handled by arrow_interceptor in app_impl.rs
                         // which calls stop_propagation(). This is the single source of truth
                         // for arrow key handling in FileSearchView.
-                        "up" | "arrowup" | "down" | "arrowdown" => {
+                        _ if is_key_up(key) || is_key_down(key) => {
                             // Already handled by interceptor, no-op here
                         }
                         // Tab/Shift+Tab handled by intercept_keystrokes in app_impl.rs
                         // (interceptor fires BEFORE input component can capture Tab)
-                        "enter" | "return" => {
+                        _ if is_key_enter(key) => {
                             // Check for Cmd+Enter (reveal in finder) first
                             if has_cmd {
                                 if let Some(file) = get_selected_file() {
@@ -165,7 +166,7 @@
                         }
                         _ => {
                             // Handle Cmd+K (toggle actions)
-                            if has_cmd && key_str == "k" {
+                            if has_cmd && key.eq_ignore_ascii_case("k") {
                                 if let Some(file) = get_selected_file() {
                                     this.toggle_file_search_actions(&file, window, cx);
                                 }
@@ -173,7 +174,7 @@
                             }
                             // Handle Cmd+Y (Quick Look) - macOS only
                             #[cfg(target_os = "macos")]
-                            if has_cmd && key_str == "y" {
+                            if has_cmd && key.eq_ignore_ascii_case("y") {
                                 if let Some(file) = get_selected_file() {
                                     let _ = file_search::quick_look(&file.path);
                                 }
@@ -181,14 +182,14 @@
                             }
                             // Handle Cmd+I (Show Info) - macOS only
                             #[cfg(target_os = "macos")]
-                            if has_cmd && key_str == "i" {
+                            if has_cmd && key.eq_ignore_ascii_case("i") {
                                 if let Some(file) = get_selected_file() {
                                     let _ = file_search::show_info(&file.path);
                                 }
                             }
                             // Handle Cmd+O (Open With) - macOS only
                             #[cfg(target_os = "macos")]
-                            if has_cmd && key_str == "o" {
+                            if has_cmd && key.eq_ignore_ascii_case("o") {
                                 if let Some(file) = get_selected_file() {
                                     let _ = file_search::open_with(&file.path);
                                 }

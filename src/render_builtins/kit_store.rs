@@ -410,10 +410,10 @@ impl ScriptListApp {
                   cx: &mut Context<Self>| {
                 this.hide_mouse_cursor(cx);
 
-                let key = event.keystroke.key.to_lowercase();
+                let key = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
 
-                if has_cmd && key == "w" {
+                if has_cmd && key.eq_ignore_ascii_case("w") {
                     this.close_and_reset_window(cx);
                     return;
                 }
@@ -428,15 +428,15 @@ impl ScriptListApp {
                     results,
                 } = &mut this.current_view
                 {
-                    match key.as_str() {
-                        "escape" => {
+                    match key {
+                        _ if is_key_escape(key) => {
                             if query.is_empty() {
                                 this.go_back_or_close(window, cx);
                             } else {
                                 next_query = Some(String::new());
                             }
                         }
-                        "up" | "arrowup" => {
+                        _ if is_key_up(key) => {
                             if *selected_index > 0 {
                                 *selected_index -= 1;
                                 this.list_scroll_handle
@@ -444,7 +444,7 @@ impl ScriptListApp {
                                 cx.notify();
                             }
                         }
-                        "down" | "arrowdown" => {
+                        _ if is_key_down(key) => {
                             if *selected_index < results.len().saturating_sub(1) {
                                 *selected_index += 1;
                                 this.list_scroll_handle
@@ -452,7 +452,7 @@ impl ScriptListApp {
                                 cx.notify();
                             }
                         }
-                        "enter" | "return" => {
+                        _ if is_key_enter(key) => {
                             install_selected = true;
                         }
                         "backspace" => {
@@ -636,6 +636,17 @@ impl ScriptListApp {
                                             .font_weight(FontWeight::MEDIUM)
                                             .text_color(rgb(text_primary))
                                             .cursor_pointer()
+                                            .tooltip(|window, cx| {
+                                                gpui_component::tooltip::Tooltip::new(
+                                                    "Install selected kit",
+                                                )
+                                                .key_binding(
+                                                    gpui::Keystroke::parse("enter")
+                                                        .ok()
+                                                        .map(gpui_component::kbd::Kbd::new),
+                                                )
+                                                .build(window, cx)
+                                            })
                                             .on_click(move |_event, _window, cx| {
                                                 if let Some(entity) = install_btn_entity.upgrade() {
                                                     let result_for_install =
@@ -661,6 +672,8 @@ impl ScriptListApp {
             .track_scroll(&self.list_scroll_handle)
             .into_any_element()
         };
+        let list_scrollbar =
+            self.builtin_uniform_list_scrollbar(&self.list_scroll_handle, total_results, 8);
 
         div()
             .w_full()
@@ -750,7 +763,14 @@ impl ScriptListApp {
                     .min_h(px(0.0))
                     .w_full()
                     .py(px(design_spacing.padding_xs))
-                    .child(list),
+                    .child(
+                        div()
+                            .relative()
+                            .w_full()
+                            .h_full()
+                            .child(list)
+                            .child(list_scrollbar),
+                    ),
             )
             .child(PromptFooter::new(
                 PromptFooterConfig::new()
@@ -791,14 +811,14 @@ impl ScriptListApp {
                   cx: &mut Context<Self>| {
                 this.hide_mouse_cursor(cx);
 
-                let key = event.keystroke.key.to_lowercase();
+                let key = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
 
-                if key == "escape" {
+                if is_key_escape(key) {
                     this.go_back_or_close(window, cx);
                     return;
                 }
-                if has_cmd && key == "w" {
+                if has_cmd && key.eq_ignore_ascii_case("w") {
                     this.close_and_reset_window(cx);
                     return;
                 }
@@ -808,8 +828,8 @@ impl ScriptListApp {
                     kits,
                 } = &mut this.current_view
                 {
-                    match key.as_str() {
-                        "up" | "arrowup" => {
+                    match key {
+                        _ if is_key_up(key) => {
                             if *selected_index > 0 {
                                 *selected_index -= 1;
                                 this.list_scroll_handle
@@ -817,7 +837,7 @@ impl ScriptListApp {
                                 cx.notify();
                             }
                         }
-                        "down" | "arrowdown" => {
+                        _ if is_key_down(key) => {
                             if *selected_index < kits.len().saturating_sub(1) {
                                 *selected_index += 1;
                                 this.list_scroll_handle
@@ -825,7 +845,7 @@ impl ScriptListApp {
                                 cx.notify();
                             }
                         }
-                        "enter" | "return" => {
+                        _ if is_key_enter(key) => {
                             let selected = kits.get(*selected_index).cloned();
                             if let Some(selected) = selected {
                                 this.kit_store_update_selected_kit(&selected, cx);
@@ -972,6 +992,17 @@ impl ScriptListApp {
                                                     .font_weight(FontWeight::MEDIUM)
                                                     .text_color(rgb(text_primary))
                                                     .cursor_pointer()
+                                                    .tooltip(|window, cx| {
+                                                        gpui_component::tooltip::Tooltip::new(
+                                                            "Update selected kit",
+                                                        )
+                                                        .key_binding(
+                                                            gpui::Keystroke::parse("enter")
+                                                                .ok()
+                                                                .map(gpui_component::kbd::Kbd::new),
+                                                        )
+                                                        .build(window, cx)
+                                                    })
                                                     .on_click(move |_event, _window, cx| {
                                                         if let Some(entity) = update_btn_entity.upgrade() {
                                                             let kit_for_update = kit_for_update.clone();
@@ -995,6 +1026,17 @@ impl ScriptListApp {
                                                     .font_weight(FontWeight::MEDIUM)
                                                     .text_color(rgb(text_primary))
                                                     .cursor_pointer()
+                                                    .tooltip(|window, cx| {
+                                                        gpui_component::tooltip::Tooltip::new(
+                                                            "Remove selected kit",
+                                                        )
+                                                        .key_binding(
+                                                            gpui::Keystroke::parse("backspace")
+                                                                .ok()
+                                                                .map(gpui_component::kbd::Kbd::new),
+                                                        )
+                                                        .build(window, cx)
+                                                    })
                                                     .on_click(move |_event, _window, cx| {
                                                         if let Some(entity) = remove_btn_entity.upgrade() {
                                                             let kit_for_remove = kit_for_remove.clone();
@@ -1020,6 +1062,8 @@ impl ScriptListApp {
             .track_scroll(&self.list_scroll_handle)
             .into_any_element()
         };
+        let list_scrollbar =
+            self.builtin_uniform_list_scrollbar(&self.list_scroll_handle, total_kits, 8);
 
         div()
             .w_full()
@@ -1068,7 +1112,14 @@ impl ScriptListApp {
                     .min_h(px(0.0))
                     .w_full()
                     .py(px(design_spacing.padding_xs))
-                    .child(list),
+                    .child(
+                        div()
+                            .relative()
+                            .w_full()
+                            .h_full()
+                            .child(list)
+                            .child(list_scrollbar),
+                    ),
             )
             .child(PromptFooter::new(
                 PromptFooterConfig::new()
