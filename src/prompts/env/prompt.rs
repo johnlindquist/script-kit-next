@@ -33,6 +33,10 @@ pub struct EnvPrompt {
     pub modified_at: Option<DateTime<Utc>>,
     /// Inline validation/persistence error shown to the user
     pub(super) validation_error: Option<String>,
+    /// Whether secret text is currently visible
+    pub(super) reveal_secret: bool,
+    /// Monotonic counter used to cancel stale auto-hide timers
+    pub(super) reveal_generation: u64,
 }
 
 impl EnvPrompt {
@@ -72,6 +76,8 @@ impl EnvPrompt {
             exists_in_keyring,
             modified_at,
             validation_error: None,
+            reveal_secret: false,
+            reveal_generation: 0,
         }
     }
 
@@ -155,6 +161,38 @@ impl EnvPrompt {
         cx.notify();
     }
 
+    pub(super) fn toggle_secret_reveal(&mut self, cx: &mut Context<Self>) {
+        if !self.secret {
+            return;
+        }
+
+        self.reveal_secret = !self.reveal_secret;
+        self.reveal_generation = self.reveal_generation.wrapping_add(1);
+        let reveal_generation = self.reveal_generation;
+        let should_auto_hide = self.reveal_secret;
+        cx.notify();
+
+        if !should_auto_hide {
+            return;
+        }
+
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_secs(5))
+                .await;
+
+            cx.update(|cx| {
+                let _ = this.update(cx, |prompt, cx| {
+                    if prompt.reveal_secret && prompt.reveal_generation == reveal_generation {
+                        prompt.reveal_secret = false;
+                        cx.notify();
+                    }
+                });
+            });
+        })
+        .detach();
+    }
+
     /// Cancel - submit None
     pub(super) fn submit_cancel(&mut self) {
         self.validation_error = None;
@@ -194,7 +232,11 @@ impl EnvPrompt {
 
     /// Get display text (masked if secret)
     pub(super) fn display_text(&self) -> String {
-        self.input.display_text(self.secret)
+        if self.secret && !self.reveal_secret {
+            masked_secret_value_for_display(self.input.text())
+        } else {
+            self.input.text().to_string()
+        }
     }
 
     pub(super) fn render_text_with_cursor_and_selection(
@@ -203,76 +245,24 @@ impl EnvPrompt {
         text_primary: u32,
         accent_color: u32,
     ) -> Div {
-        let chars: Vec<char> = text.chars().collect();
-        let text_len = chars.len();
-        let cursor_pos = self.input.cursor().min(text_len);
-        let has_selection = self.input.has_selection();
-
-        if text.is_empty() {
-            return div().flex().flex_row().items_center().child(
-                div()
-                    .w(px(CURSOR_WIDTH))
-                    .h(px(CURSOR_HEIGHT_LG))
-                    .bg(rgb(text_primary)),
-            );
-        }
-
-        if has_selection {
-            let selection = self.input.selection();
-            let (start, end) = selection.range();
-            let start = start.min(text_len);
-            let end = end.min(text_len);
-            let (start, end) = if start <= end {
-                (start, end)
-            } else {
-                (end, start)
-            };
-
-            let before: String = chars[..start].iter().collect();
-            let selected: String = chars[start..end].iter().collect();
-            let after: String = chars[end..].iter().collect();
-
-            return div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .overflow_x_hidden()
-                .when(!before.is_empty(), |d: Div| d.child(div().child(before)))
-                .child(
-                    div()
-                        .bg(rgba((accent_color << 8) | 0x60))
-                        .text_color(rgb(text_primary))
-                        .child(selected),
-                )
-                .when(!after.is_empty(), |d: Div| d.child(div().child(after)));
-        }
-
-        let before: String = chars[..cursor_pos].iter().collect();
-        let after: String = chars[cursor_pos..].iter().collect();
-
-        div()
-            .flex()
-            .flex_row()
-            .items_center()
-            .overflow_x_hidden()
-            .when(!before.is_empty(), |d: Div| d.child(div().child(before)))
-            .child(
-                div()
-                    .w(px(CURSOR_WIDTH))
-                    .h(px(CURSOR_HEIGHT_LG))
-                    .bg(rgb(text_primary)),
-            )
-            .when(!after.is_empty(), |d: Div| d.child(div().child(after)))
+        crate::components::text_input::render_text_input_cursor_selection(
+            crate::components::text_input::TextInputRenderConfig {
+                cursor: self.input.cursor(),
+                selection: Some(self.input.selection()),
+                cursor_visible: true,
+                cursor_color: text_primary,
+                text_color: text_primary,
+                selection_color: accent_color,
+                selection_text_color: text_primary,
+                overflow_x_hidden: true,
+                ..crate::components::text_input::TextInputRenderConfig::default_for_prompt(text)
+            },
+        )
     }
 
     /// Render the text input with cursor and selection
     pub(super) fn render_input_text(&self, text_primary: u32, accent_color: u32) -> Div {
-        if self.secret {
-            let masked = masked_secret_value_for_display(self.input.text());
-            self.render_text_with_cursor_and_selection(&masked, text_primary, accent_color)
-        } else {
-            let text = self.display_text();
-            self.render_text_with_cursor_and_selection(&text, text_primary, accent_color)
-        }
+        let text = self.display_text();
+        self.render_text_with_cursor_and_selection(&text, text_primary, accent_color)
     }
 }
