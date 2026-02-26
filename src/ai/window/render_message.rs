@@ -1,4 +1,8 @@
 use super::*;
+use crate::theme::opacity::{
+    OPACITY_MESSAGE_ASSISTANT_BACKGROUND, OPACITY_MESSAGE_BORDER, OPACITY_MESSAGE_USER_BACKGROUND,
+    OPACITY_MUTED, OPACITY_NEAR_FULL, OPACITY_SELECTED, OPACITY_STRONG, OPACITY_SUBTLE,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum MessageCueTone {
@@ -19,23 +23,23 @@ pub(super) fn message_bubble_cue(role: MessageRole) -> MessageBubbleCue {
     match role {
         MessageRole::User => MessageBubbleCue {
             background_tone: MessageCueTone::Accent,
-            background_opacity: OP_USER_MSG_BG,
+            background_opacity: OPACITY_MESSAGE_USER_BACKGROUND,
             border_tone: MessageCueTone::Accent,
-            border_opacity: OP_MSG_BORDER,
+            border_opacity: OPACITY_MESSAGE_BORDER,
             italic: false,
         },
         MessageRole::Assistant => MessageBubbleCue {
             background_tone: MessageCueTone::Muted,
-            background_opacity: OP_ASSISTANT_MSG_BG,
+            background_opacity: OPACITY_MESSAGE_ASSISTANT_BACKGROUND,
             border_tone: MessageCueTone::Muted,
-            border_opacity: OP_MUTED,
+            border_opacity: OPACITY_MUTED,
             italic: false,
         },
         MessageRole::System => MessageBubbleCue {
             background_tone: MessageCueTone::Muted,
-            background_opacity: OP_ASSISTANT_MSG_BG,
+            background_opacity: OPACITY_MESSAGE_ASSISTANT_BACKGROUND,
             border_tone: MessageCueTone::Muted,
-            border_opacity: OP_MEDIUM,
+            border_opacity: OPACITY_SELECTED,
             italic: true,
         },
     }
@@ -141,7 +145,7 @@ impl AiApp {
                                         .text_color(if is_user {
                                             cx.theme().accent
                                         } else {
-                                            cx.theme().muted_foreground.opacity(OP_STRONG)
+                                            cx.theme().muted_foreground.opacity(OPACITY_STRONG)
                                         }),
                                 )
                                 .child(
@@ -151,7 +155,7 @@ impl AiApp {
                                         .text_color(if is_user {
                                             cx.theme().foreground
                                         } else {
-                                            cx.theme().muted_foreground.opacity(OP_NEAR_FULL)
+                                            cx.theme().muted_foreground.opacity(OPACITY_NEAR_FULL)
                                         })
                                         .child(role_label),
                                 )
@@ -159,14 +163,16 @@ impl AiApp {
                                     div()
                                         .size(DOT_SIZE)
                                         .rounded_full()
-                                        .bg(cx.theme().muted_foreground.opacity(OP_MUTED)),
+                                        .bg(cx.theme().muted_foreground.opacity(OPACITY_MUTED)),
                                 )
                                 .child({
                                     let tooltip_text = full_timestamp.clone();
                                     div()
                                         .id(SharedString::from(format!("ts-{}", msg_id)))
                                         .text_xs()
-                                        .text_color(cx.theme().muted_foreground.opacity(OP_MEDIUM))
+                                        .text_color(
+                                            cx.theme().muted_foreground.opacity(OPACITY_SELECTED),
+                                        )
                                         .tooltip(move |window, cx| {
                                             Tooltip::new(tooltip_text.clone()).build(window, cx)
                                         })
@@ -187,7 +193,8 @@ impl AiApp {
                                     .opacity(0.0)
                                     .group_hover("message", |s| s.opacity(0.6))
                                     .hover(|s| {
-                                        s.bg(cx.theme().muted.opacity(OP_MEDIUM)).opacity(1.0)
+                                        s.bg(cx.theme().muted.opacity(OPACITY_SELECTED))
+                                            .opacity(1.0)
                                     })
                                     .on_click(cx.listener(move |this, _, window, cx| {
                                         this.start_editing_message(
@@ -219,7 +226,10 @@ impl AiApp {
                                 .when(!is_copied, |d| {
                                     d.opacity(0.0).group_hover("message", |s| s.opacity(0.6))
                                 })
-                                .hover(|s| s.bg(cx.theme().muted.opacity(OP_MEDIUM)).opacity(1.0))
+                                .hover(|s| {
+                                    s.bg(cx.theme().muted.opacity(OPACITY_SELECTED))
+                                        .opacity(1.0)
+                                })
                                 .on_click(cx.listener(move |this, _, _window, cx| {
                                     this.copy_message(
                                         msg_id_for_click.clone(),
@@ -255,7 +265,9 @@ impl AiApp {
                                             .external_path(LocalIconName::Copy.external_path())
                                             .size(ICON_XS)
                                             .text_color(
-                                                cx.theme().muted_foreground.opacity(OP_MEDIUM),
+                                                cx.theme()
+                                                    .muted_foreground
+                                                    .opacity(OPACITY_SELECTED),
                                             ),
                                     )
                                 }),
@@ -285,7 +297,9 @@ impl AiApp {
                                             .rounded(R_MD)
                                             .overflow_hidden()
                                             .border_1()
-                                            .border_color(cx.theme().border.opacity(OP_MEDIUM))
+                                            .border_color(
+                                                cx.theme().border.opacity(OPACITY_SELECTED),
+                                            )
                                             .child(
                                                 img(move |_window: &mut Window, _cx: &mut App| {
                                                     Some(Ok(render_img.clone()))
@@ -357,10 +371,10 @@ impl AiApp {
                                         .rounded(R_MD)
                                         .cursor_pointer()
                                         .text_xs()
-                                        .text_color(cx.theme().accent.opacity(OP_STRONG))
+                                        .text_color(cx.theme().accent.opacity(OPACITY_STRONG))
                                         .hover(|s| {
                                             s.text_color(cx.theme().accent)
-                                                .bg(cx.theme().accent.opacity(OP_SUBTLE))
+                                                .bg(cx.theme().accent.opacity(OPACITY_SUBTLE))
                                         })
                                         .on_click(cx.listener(move |this, _, _, cx| {
                                             this.toggle_message_collapse(toggle_msg_id.clone(), cx);
@@ -376,7 +390,9 @@ impl AiApp {
                                                     .external_path(),
                                                 )
                                                 .size(ICON_XS)
-                                                .text_color(cx.theme().accent.opacity(OP_MEDIUM)),
+                                                .text_color(
+                                                    cx.theme().accent.opacity(OPACITY_SELECTED),
+                                                ),
                                         )
                                         .child(toggle_label),
                                 )

@@ -99,19 +99,6 @@ mod layout_token_tests {
     }
 }
 
-// -- Semantic opacity levels --
-// Use named constants so the same semantic intent always gets the same value.
-pub(super) const OP_SUBTLE: f32 = 0.15;
-pub(super) const OP_MUTED: f32 = 0.3;
-pub(super) const OP_MEDIUM: f32 = 0.5;
-pub(super) const OP_STRONG: f32 = 0.7;
-pub(super) const OP_NEAR_FULL: f32 = 0.85;
-
-// -- Message-specific opacities (contrast-tuned) --
-pub(super) const OP_USER_MSG_BG: f32 = 0.12; // user bubble tint (accent)
-pub(super) const OP_ASSISTANT_MSG_BG: f32 = 0.10; // assistant bubble tint (muted)
-pub(super) const OP_MSG_BORDER: f32 = 0.45; // left-border on user bubbles
-
 // -- Dot separator --
 pub(super) const DOT_SIZE: Pixels = px(3.);
 

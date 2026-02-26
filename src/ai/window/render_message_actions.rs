@@ -1,4 +1,12 @@
 use super::*;
+use crate::theme::opacity::{
+    OPACITY_BORDER, OPACITY_HOVER, OPACITY_ICON_MUTED, OPACITY_SELECTED, OPACITY_STRONG,
+    OPACITY_TEXT_MUTED,
+};
+
+fn ai_message_actions_can_copy_chat_transcript(message_count: usize, is_streaming: bool) -> bool {
+    message_count > 0 && !is_streaming
+}
 
 impl AiApp {
     pub(super) fn render_message_actions(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -64,8 +72,11 @@ impl AiApp {
                     .rounded(R_SM)
                     .cursor_pointer()
                     .text_xs()
-                    .text_color(muted_fg.opacity(0.65))
-                    .hover(|s| s.bg(cx.theme().muted.opacity(0.3)).text_color(muted_fg))
+                    .text_color(muted_fg.opacity(OPACITY_TEXT_MUTED))
+                    .hover(|s| {
+                        s.bg(cx.theme().muted.opacity(OPACITY_HOVER))
+                            .text_color(muted_fg)
+                    })
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.regenerate_response(window, cx);
                     }))
@@ -73,7 +84,7 @@ impl AiApp {
                         svg()
                             .external_path(LocalIconName::Refresh.external_path())
                             .size(ICON_XS)
-                            .text_color(muted_fg.opacity(0.55)),
+                            .text_color(muted_fg.opacity(OPACITY_ICON_MUTED)),
                     )
                     .child("Regenerate"),
             )
@@ -92,10 +103,14 @@ impl AiApp {
                     (
                         LocalIconName::Check,
                         "Copied!",
-                        cx.theme().success.opacity(0.7),
+                        cx.theme().success.opacity(OPACITY_STRONG),
                     )
                 } else {
-                    (LocalIconName::Copy, "Copy", muted_fg.opacity(0.5))
+                    (
+                        LocalIconName::Copy,
+                        "Copy",
+                        muted_fg.opacity(OPACITY_SELECTED),
+                    )
                 };
                 div()
                     .id("copy-response-btn")
@@ -108,14 +123,76 @@ impl AiApp {
                     .cursor_pointer()
                     .text_xs()
                     .text_color(if is_copied {
-                        cx.theme().success.opacity(0.7)
+                        cx.theme().success.opacity(OPACITY_STRONG)
                     } else {
-                        muted_fg.opacity(0.65)
+                        muted_fg.opacity(OPACITY_TEXT_MUTED)
                     })
-                    .hover(|s| s.bg(cx.theme().muted.opacity(0.3)).text_color(muted_fg))
+                    .hover(|s| {
+                        s.bg(cx.theme().muted.opacity(OPACITY_HOVER))
+                            .text_color(muted_fg)
+                    })
                     .on_click(cx.listener(|this, _, _window, cx| {
                         this.copy_last_assistant_response(cx);
                     }))
+                    .child(
+                        svg()
+                            .external_path(icon.external_path())
+                            .size(ICON_XS)
+                            .text_color(icon_color),
+                    )
+                    .child(label)
+            })
+            // Copy full chat transcript button
+            .child({
+                let can_copy_chat = ai_message_actions_can_copy_chat_transcript(
+                    self.current_messages.len(),
+                    self.is_streaming,
+                );
+                let is_copied = self.is_showing_chat_transcript_copied_feedback();
+                let (icon, label, icon_color) = if is_copied {
+                    (
+                        LocalIconName::Check,
+                        "Copied!",
+                        cx.theme().success.opacity(OPACITY_STRONG),
+                    )
+                } else {
+                    (
+                        LocalIconName::Copy,
+                        "Copy chat",
+                        if can_copy_chat {
+                            muted_fg.opacity(OPACITY_SELECTED)
+                        } else {
+                            muted_fg.opacity(OPACITY_HOVER)
+                        },
+                    )
+                };
+
+                div()
+                    .id("copy-chat-btn")
+                    .flex()
+                    .items_center()
+                    .gap(S1)
+                    .px(S2)
+                    .py(S1)
+                    .rounded(R_SM)
+                    .when(can_copy_chat, |d| {
+                        d.cursor_pointer()
+                            .hover(|s| {
+                                s.bg(cx.theme().muted.opacity(OPACITY_HOVER))
+                                    .text_color(muted_fg)
+                            })
+                            .on_click(cx.listener(|this, _, _window, cx| {
+                                this.copy_chat_transcript(cx);
+                            }))
+                    })
+                    .text_xs()
+                    .text_color(if is_copied {
+                        cx.theme().success.opacity(OPACITY_STRONG)
+                    } else if can_copy_chat {
+                        muted_fg.opacity(OPACITY_TEXT_MUTED)
+                    } else {
+                        muted_fg.opacity(OPACITY_BORDER)
+                    })
                     .child(
                         svg()
                             .external_path(icon.external_path())
@@ -132,15 +209,40 @@ impl AiApp {
                         .items_center()
                         .gap(S1)
                         .text_xs()
-                        .text_color(cx.theme().success.opacity(0.7))
+                        .text_color(cx.theme().success.opacity(OPACITY_STRONG))
                         .child(
                             svg()
                                 .external_path(LocalIconName::Check.external_path())
                                 .size(ICON_XS)
-                                .text_color(cx.theme().success.opacity(0.5)),
+                                .text_color(cx.theme().success.opacity(OPACITY_SELECTED)),
                         )
                         .child(format!("Generated in {}", label)),
                 )
             })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ai_message_actions_can_copy_chat_transcript;
+
+    #[test]
+    fn test_ai_message_actions_can_copy_chat_transcript_requires_messages() {
+        assert!(
+            !ai_message_actions_can_copy_chat_transcript(0, false),
+            "Copy chat should stay disabled when there are no messages"
+        );
+        assert!(
+            ai_message_actions_can_copy_chat_transcript(1, false),
+            "Copy chat should be enabled with at least one message and no stream"
+        );
+    }
+
+    #[test]
+    fn test_ai_message_actions_can_copy_chat_transcript_disables_during_streaming() {
+        assert!(
+            !ai_message_actions_can_copy_chat_transcript(3, true),
+            "Copy chat should stay disabled while streaming"
+        );
     }
 }
