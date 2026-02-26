@@ -2,85 +2,59 @@ impl ScriptListApp {
     /// Render the arg input text with cursor and selection highlight
     fn render_arg_input_text(&self, text_primary: u32, accent_color: u32) -> gpui::Div {
         let text = self.arg_input.text();
-        let chars: Vec<char> = text.chars().collect();
-        let cursor_pos = self.arg_input.cursor();
-        let has_selection = self.arg_input.has_selection();
+        let text_muted = self.theme.colors.text.muted;
+        let max_visible_chars = self.arg_input_max_visible_chars();
+        let (window_start, window_end) = self.arg_input.visible_window_range(max_visible_chars);
+        let is_window_truncated_left = window_start > 0;
+        let is_window_truncated_right = window_end < text.chars().count();
         // Separate focus state from blink state to avoid layout shift
         let is_focused = self.focused_input == FocusedInput::ArgPrompt;
         let is_cursor_visible = is_focused && self.cursor_visible;
 
-        if text.is_empty() {
-            // Empty - always reserve cursor space, only show bg when visible
-            // Note: height matches the fixed input_height (22px = CURSOR_HEIGHT_LG + 2*CURSOR_MARGIN_Y)
-            return div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .h(px(CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0)))
-                .child(
-                    div()
-                        .w(px(CURSOR_WIDTH))
-                        .h(px(CURSOR_HEIGHT_LG))
-                        .when(is_cursor_visible, |d: gpui::Div| d.bg(rgb(text_primary))),
-                );
-        }
+        crate::components::text_input::render_text_input_cursor_selection(
+            crate::components::text_input::TextInputRenderConfig {
+                cursor: self.arg_input.cursor(),
+                selection: Some(self.arg_input.selection()),
+                window: Some((window_start, window_end)),
+                cursor_visible: is_cursor_visible,
+                cursor_color: text_primary,
+                text_color: text_primary,
+                selection_color: accent_color,
+                selection_text_color: text_primary,
+                container_height: Some(CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0)),
+                overflow_x_hidden: true,
+                leading_indicator: is_window_truncated_left.then_some(
+                    crate::components::text_input::TextInputRenderIndicator {
+                        text: "...",
+                        color: text_muted,
+                    },
+                ),
+                trailing_indicator: is_window_truncated_right.then_some(
+                    crate::components::text_input::TextInputRenderIndicator {
+                        text: "...",
+                        color: text_muted,
+                    },
+                ),
+                ..crate::components::text_input::TextInputRenderConfig::default_for_prompt(text)
+            },
+        )
+    }
 
-        if has_selection {
-            // With selection: before | selected | after (no cursor shown during selection)
-            // Use fixed height matching the input container for consistent centering
-            let selection = self.arg_input.selection();
-            let (start, end) = selection.range();
+    fn arg_input_max_visible_chars(&self) -> usize {
+        const DEFAULT_WINDOW_WIDTH: f64 = 750.0;
+        const ARG_INPUT_WIDTH_PADDING_PX: f64 = (HEADER_PADDING_X as f64 * 2.0) + 12.0;
+        const ARG_INPUT_MIN_VISIBLE_CHARS: usize = 24;
+        const ARG_INPUT_MAX_VISIBLE_CHARS: usize = 240;
+        const ARG_INPUT_APPROX_CHAR_WIDTH_PX: f64 = 8.5;
 
-            let before: String = chars[..start].iter().collect();
-            let selected: String = chars[start..end].iter().collect();
-            let after: String = chars[end..].iter().collect();
+        let window_width = crate::platform::get_main_window_bounds()
+            .map(|(_, _, width, _)| width)
+            .filter(|width| width.is_finite() && *width > 0.0)
+            .unwrap_or(DEFAULT_WINDOW_WIDTH);
+        let usable_width = (window_width - ARG_INPUT_WIDTH_PADDING_PX).max(200.0);
+        let visible_chars = (usable_width / ARG_INPUT_APPROX_CHAR_WIDTH_PX).floor() as usize;
 
-            div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .h(px(CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0)))
-                .overflow_x_hidden()
-                .when(!before.is_empty(), |d: gpui::Div| {
-                    d.child(div().child(before))
-                })
-                .child(
-                    div()
-                        .bg(rgba((accent_color << 8) | 0x60))
-                        // Use primary text color for selection - already set from theme
-                        .text_color(rgb(text_primary))
-                        .child(selected),
-                )
-                .when(!after.is_empty(), |d: gpui::Div| {
-                    d.child(div().child(after))
-                })
-        } else {
-            // No selection: before cursor | cursor | after cursor
-            // Always reserve cursor space to prevent layout shift during blink
-            // Use fixed height matching the input container for consistent centering
-            let before: String = chars[..cursor_pos].iter().collect();
-            let after: String = chars[cursor_pos..].iter().collect();
-
-            div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .h(px(CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0)))
-                .overflow_x_hidden()
-                .when(!before.is_empty(), |d: gpui::Div| {
-                    d.child(div().child(before))
-                })
-                // Always render cursor element, only show bg when visible
-                .child(
-                    div()
-                        .w(px(CURSOR_WIDTH))
-                        .h(px(CURSOR_HEIGHT_LG))
-                        .when(is_cursor_visible, |d: gpui::Div| d.bg(rgb(text_primary))),
-                )
-                .when(!after.is_empty(), |d: gpui::Div| {
-                    d.child(div().child(after))
-                })
-        }
+        visible_chars.clamp(ARG_INPUT_MIN_VISIBLE_CHARS, ARG_INPUT_MAX_VISIBLE_CHARS)
     }
     fn render_arg_prompt(
         &mut self,
@@ -100,7 +74,9 @@ impl ScriptListApp {
         let actions_dialog_right = render_context.actions_dialog_right;
         let _filtered = self.filtered_arg_choices();
         #[allow(clippy::unnecessary_map_or)]
-        let has_actions = actions.as_ref().map_or(false, |action_list| !action_list.is_empty());
+        let has_actions = actions
+            .as_ref()
+            .map_or(false, |action_list| !action_list.is_empty());
         let has_choices = !choices.is_empty();
 
         // Key handler for arg prompt
@@ -346,7 +322,9 @@ impl ScriptListApp {
                     div()
                         .mx(px(design_spacing.padding_lg))
                         .h(px(design_visual.border_thin))
-                        .bg(rgba((ui_border << 8) | 0x60)),
+                        .bg(rgba(
+                            (ui_border << 8) | u32::from(ui_foundation::ALPHA_DIVIDER),
+                        )),
                 )
                 .child(
                     div()

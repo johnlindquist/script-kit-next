@@ -4,13 +4,9 @@ impl ChatPrompt {
     pub(super) fn render_input(&self, is_focused: bool) -> impl IntoElement {
         let theme_colors = &self.theme.colors;
         let text = self.input.text();
-        let cursor_pos = self.input.cursor();
-        let chars: Vec<char> = text.chars().collect();
         let cursor_visible = self.cursor_visible && is_focused;
         let input_text_color = rgb(theme_colors.text.primary);
         let placeholder_text_color = rgb(theme_colors.text.muted);
-        let cursor_color = rgb(theme_colors.accent.selected);
-
         let mut input_content = div()
             .flex()
             .flex_row()
@@ -18,22 +14,22 @@ impl ChatPrompt {
             .w_full()
             .text_size(px(14.0))
             .text_color(input_text_color);
+        input_content = input_content.child(
+            crate::components::text_input::render_text_input_cursor_selection(
+                crate::components::text_input::TextInputRenderConfig {
+                    cursor: self.input.cursor(),
+                    selection: Some(self.input.selection()),
+                    cursor_visible,
+                    cursor_color: theme_colors.accent.selected,
+                    text_color: theme_colors.text.primary,
+                    selection_color: theme_colors.accent.selected,
+                    selection_text_color: theme_colors.text.primary,
+                    transform: Some(Self::input_display_text),
+                    ..crate::components::text_input::TextInputRenderConfig::default_for_prompt(text)
+                },
+            ),
+        );
 
-        // Text before cursor
-        if !text.is_empty() && cursor_pos > 0 {
-            let before_raw: String = chars[..cursor_pos].iter().collect();
-            let before = Self::input_display_text(&before_raw);
-            input_content = input_content.child(before);
-        }
-
-        // Cursor (blinking)
-        let cursor = div()
-            .w(px(2.0))
-            .h(px(16.0))
-            .when(cursor_visible, |d| d.bg(cursor_color));
-        input_content = input_content.child(cursor);
-
-        // Placeholder if empty - cursor appears BEFORE placeholder text
         if text.is_empty() {
             let placeholder = self
                 .placeholder
@@ -41,11 +37,6 @@ impl ChatPrompt {
                 .unwrap_or_else(|| "Ask follow-up...".into());
             input_content =
                 input_content.child(div().text_color(placeholder_text_color).child(placeholder));
-        } else if cursor_pos < chars.len() {
-            // Text after cursor
-            let after_raw: String = chars[cursor_pos..].iter().collect();
-            let after = Self::input_display_text(&after_raw);
-            input_content = input_content.child(after);
         }
 
         let input_bg_alpha = if is_focused {
