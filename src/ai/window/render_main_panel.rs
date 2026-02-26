@@ -1,4 +1,8 @@
 use super::*;
+use crate::theme::opacity::{
+    OPACITY_ACCENT_MEDIUM, OPACITY_BORDER, OPACITY_DISABLED, OPACITY_HOVER, OPACITY_SELECTED,
+    OPACITY_STRONG, OPACITY_SUCCESS,
+};
 
 fn ai_main_panel_can_submit(input_value: &str, has_pending_image: bool) -> bool {
     ai_window_can_submit_message(input_value, has_pending_image)
@@ -22,9 +26,9 @@ impl AiApp {
         let input_is_long = input_char_count > 2000;
         let input_is_very_long = input_char_count > 4000;
         let composer_border_color = if input_is_very_long {
-            cx.theme().danger.opacity(0.6)
+            cx.theme().danger.opacity(OPACITY_ACCENT_MEDIUM)
         } else if input_is_long {
-            cx.theme().warning.opacity(0.5)
+            cx.theme().warning.opacity(OPACITY_SELECTED)
         } else {
             cx.theme().accent
         };
@@ -36,7 +40,7 @@ impl AiApp {
             .w_full()
             // NO .bg() - let vibrancy show through from root
             .border_t_1()
-            .border_color(cx.theme().border.opacity(0.4))
+            .border_color(cx.theme().border.opacity(OPACITY_DISABLED))
             .px(PANEL_INSET_X)
             .py(S3)
             .gap(S2)
@@ -62,8 +66,8 @@ impl AiApp {
                     .gap(S2)
                     .rounded(R_LG)
                     .border_1()
-                    .border_color(composer_border_color.opacity(0.5))
-                    .bg(cx.theme().muted.opacity(0.4))
+                    .border_color(composer_border_color.opacity(OPACITY_SELECTED))
+                    .bg(cx.theme().muted.opacity(OPACITY_DISABLED))
                     // Plus button on the left - opens attachments picker
                     .child(
                         div()
@@ -76,12 +80,12 @@ impl AiApp {
                             .rounded(R_MD)
                             .border_1()
                             .border_color(if has_pending_image {
-                                cx.theme().accent.opacity(0.6)
+                                cx.theme().accent.opacity(OPACITY_ACCENT_MEDIUM)
                             } else {
-                                cx.theme().muted_foreground.opacity(0.45)
+                                cx.theme().muted_foreground.opacity(OPACITY_BORDER)
                             })
                             .cursor_pointer()
-                            .hover(|s| s.bg(cx.theme().muted.opacity(0.3)))
+                            .hover(|s| s.bg(cx.theme().muted.opacity(OPACITY_HOVER)))
                             .on_click(cx.listener(|this, _, window, cx| {
                                 if this.showing_attachments_picker {
                                     this.hide_attachments_picker(cx);
@@ -142,12 +146,16 @@ impl AiApp {
                                         .items_center()
                                         .gap(S1)
                                         .text_xs()
-                                        .text_color(cx.theme().success.opacity(0.8))
+                                        .text_color(cx.theme().success.opacity(OPACITY_SUCCESS))
                                         .child(
                                             svg()
                                                 .external_path(LocalIconName::Check.external_path())
                                                 .size(ICON_XS)
-                                                .text_color(cx.theme().success.opacity(0.6)),
+                                                .text_color(
+                                                    cx.theme()
+                                                        .success
+                                                        .opacity(OPACITY_ACCENT_MEDIUM),
+                                                ),
                                         )
                                         .child("Exported!")
                                         .into_any_element()
@@ -158,11 +166,11 @@ impl AiApp {
                                         format!("{} words", word_count)
                                     };
                                     let word_color = if input_is_very_long {
-                                        cx.theme().danger.opacity(0.7)
+                                        cx.theme().danger.opacity(OPACITY_STRONG)
                                     } else if input_is_long {
-                                        cx.theme().warning.opacity(0.6)
+                                        cx.theme().warning.opacity(OPACITY_ACCENT_MEDIUM)
                                     } else {
-                                        cx.theme().muted_foreground.opacity(0.4)
+                                        cx.theme().muted_foreground.opacity(OPACITY_DISABLED)
                                     };
                                     div()
                                         .text_xs()
@@ -197,10 +205,10 @@ impl AiApp {
                             } else {
                                 let submit_button =
                                     crate::components::Button::new("Submit", action_button_colors)
-                                    .id("submit-btn")
-                                    .variant(crate::components::ButtonVariant::Ghost)
-                                    .shortcut("↵")
-                                    .disabled(input_is_empty);
+                                        .id("submit-btn")
+                                        .variant(crate::components::ButtonVariant::Ghost)
+                                        .shortcut("↵")
+                                        .disabled(input_is_empty);
                                 if input_is_empty {
                                     submit_button.into_any_element()
                                 } else {
@@ -219,7 +227,7 @@ impl AiApp {
                                 div()
                                     .h(S4)
                                     .border_l_1()
-                                    .border_color(cx.theme().border.opacity(0.6)),
+                                    .border_color(cx.theme().border.opacity(OPACITY_ACCENT_MEDIUM)),
                             )
                             // Actions ⌘K - opens command bar with AI-specific actions
                             .child({

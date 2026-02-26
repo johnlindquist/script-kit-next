@@ -1,9 +1,16 @@
 use super::*;
+use crate::theme::opacity::{
+    OPACITY_MESSAGE_ASSISTANT_BACKGROUND, OPACITY_MUTED, OPACITY_NEAR_FULL, OPACITY_SELECTED,
+    OPACITY_STRONG,
+};
 
 impl AiApp {
     pub(super) fn render_streaming_content(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = theme::PromptColors::from_theme(&crate::theme::get_cached_theme());
-        let streaming_bg = cx.theme().muted.opacity(OP_ASSISTANT_MSG_BG);
+        let streaming_bg = cx
+            .theme()
+            .muted
+            .opacity(OPACITY_MESSAGE_ASSISTANT_BACKGROUND);
 
         let elapsed_label: SharedString = self
             .streaming_started_at
@@ -47,26 +54,26 @@ impl AiApp {
                             div()
                                 .size(S1)
                                 .rounded_full()
-                                .bg(cx.theme().accent.opacity(OP_NEAR_FULL)),
+                                .bg(cx.theme().accent.opacity(OPACITY_NEAR_FULL)),
                         )
                         .child(
                             div()
                                 .size(S1)
                                 .rounded_full()
-                                .bg(cx.theme().accent.opacity(OP_MEDIUM)),
+                                .bg(cx.theme().accent.opacity(OPACITY_SELECTED)),
                         )
                         .child(
                             div()
                                 .size(S1)
                                 .rounded_full()
-                                .bg(cx.theme().accent.opacity(OP_MUTED)),
+                                .bg(cx.theme().accent.opacity(OPACITY_MUTED)),
                         ),
                 )
                 .when(show_elapsed, |d| {
                     d.child(
                         div()
                             .text_xs()
-                            .text_color(cx.theme().muted_foreground.opacity(OP_MEDIUM))
+                            .text_color(cx.theme().muted_foreground.opacity(OPACITY_SELECTED))
                             .child(elapsed_label.clone()),
                     )
                 })
@@ -110,26 +117,32 @@ impl AiApp {
                                 svg()
                                     .external_path(LocalIconName::MessageCircle.external_path())
                                     .size(ICON_SM)
-                                    .text_color(cx.theme().muted_foreground.opacity(OP_STRONG)),
+                                    .text_color(
+                                        cx.theme().muted_foreground.opacity(OPACITY_STRONG),
+                                    ),
                             )
                             .child(
                                 div()
                                     .text_sm()
                                     .font_weight(gpui::FontWeight::SEMIBOLD)
-                                    .text_color(cx.theme().muted_foreground.opacity(OP_NEAR_FULL))
+                                    .text_color(
+                                        cx.theme().muted_foreground.opacity(OPACITY_NEAR_FULL),
+                                    )
                                     .child("Assistant"),
                             )
                             .child(
                                 div()
                                     .size(DOT_SIZE)
                                     .rounded_full()
-                                    .bg(cx.theme().muted_foreground.opacity(OP_MUTED)),
+                                    .bg(cx.theme().muted_foreground.opacity(OPACITY_MUTED)),
                             )
                             .when_some(model_label, |d, label| {
                                 d.child(
                                     div()
                                         .text_xs()
-                                        .text_color(cx.theme().muted_foreground.opacity(OP_MEDIUM))
+                                        .text_color(
+                                            cx.theme().muted_foreground.opacity(OPACITY_SELECTED),
+                                        )
                                         .child(label),
                                 )
                             })
@@ -137,7 +150,9 @@ impl AiApp {
                                 d.child(
                                     div()
                                         .text_xs()
-                                        .text_color(cx.theme().muted_foreground.opacity(OP_MEDIUM))
+                                        .text_color(
+                                            cx.theme().muted_foreground.opacity(OPACITY_SELECTED),
+                                        )
                                         .child(elapsed_label),
                                 )
                             })
@@ -162,7 +177,7 @@ impl AiApp {
                                         div()
                                             .text_xs()
                                             .text_color(
-                                                cx.theme().muted_foreground.opacity(OP_MUTED),
+                                                cx.theme().muted_foreground.opacity(OPACITY_MUTED),
                                             )
                                             .child(wps),
                                     )
@@ -180,15 +195,17 @@ impl AiApp {
                                     .px(S1)
                                     .py(S1)
                                     .rounded(S1)
-                                    .bg(cx.theme().muted.opacity(OP_MUTED))
+                                    .bg(cx.theme().muted.opacity(OPACITY_MUTED))
                                     .text_xs()
-                                    .text_color(cx.theme().muted_foreground.opacity(OP_MEDIUM))
+                                    .text_color(
+                                        cx.theme().muted_foreground.opacity(OPACITY_SELECTED),
+                                    )
                                     .child("Esc"),
                             )
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(cx.theme().muted_foreground.opacity(OP_MUTED))
+                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
                                     .child("to stop"),
                             ),
                     )
