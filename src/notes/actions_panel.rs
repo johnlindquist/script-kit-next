@@ -24,20 +24,31 @@
 //! - Escape: Close panel
 //! - Type to search/filter actions
 
+use super::window::OPACITY_DISABLED;
+use crate::actions::ActionsDialog;
 use crate::designs::icon_variations::IconName;
 use crate::protocol::ProtocolAction;
 use gpui::{
-    div, point, prelude::*, px, rgba, svg, uniform_list, App, BoxShadow, Context, FocusHandle,
-    Focusable, Hsla, KeyDownEvent, MouseButton, Render, ScrollStrategy, SharedString,
+    div, point, prelude::*, px, rgba, svg, uniform_list, AnyElement, App, BoxShadow, Context,
+    FocusHandle, Focusable, Hsla, KeyDownEvent, MouseButton, Render, ScrollStrategy, SharedString,
     UniformListScrollHandle, Window,
 };
 use gpui_component::theme::{ActiveTheme, Theme};
 use std::sync::Arc;
 use tracing::debug;
 
-/// Callback type for action execution
-/// The String parameter is the action ID
-pub type NotesActionCallback = Arc<dyn Fn(NotesAction) + Send + Sync>;
+/// Action invocation emitted by `NotesActionsPanel`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NotesActionInvocation {
+    BuiltIn(NotesAction),
+    Sdk {
+        action_name: String,
+        protocol_index: usize,
+    },
+}
+
+/// Callback type for action execution.
+pub type NotesActionCallback = Arc<dyn Fn(NotesActionInvocation) + Send + Sync>;
 
 /// Available actions in the Notes actions panel
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -248,6 +259,99 @@ impl NotesActionItem {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct NotesSdkActionRow {
+    protocol_index: usize,
+    name: String,
+    description: Option<String>,
+    shortcut_keys: Vec<String>,
+    enabled: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NotesPanelRowKey {
+    BuiltIn(NotesAction),
+    Sdk(usize),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum NotesPanelRow {
+    BuiltIn(NotesActionItem),
+    Sdk(NotesSdkActionRow),
+}
+
+impl NotesPanelRow {
+    fn key(&self) -> NotesPanelRowKey {
+        match self {
+            Self::BuiltIn(item) => NotesPanelRowKey::BuiltIn(item.action),
+            Self::Sdk(row) => NotesPanelRowKey::Sdk(row.protocol_index),
+        }
+    }
+
+    fn label(&self) -> &str {
+        match self {
+            Self::BuiltIn(item) => item.action.label(),
+            Self::Sdk(row) => &row.name,
+        }
+    }
+
+    fn is_enabled(&self) -> bool {
+        match self {
+            Self::BuiltIn(item) => item.enabled,
+            Self::Sdk(row) => row.enabled,
+        }
+    }
+
+    fn icon(&self) -> IconName {
+        match self {
+            Self::BuiltIn(item) => item.action.icon(),
+            Self::Sdk(_) => IconName::Code,
+        }
+    }
+
+    fn section(&self) -> Option<NotesActionSection> {
+        match self {
+            Self::BuiltIn(item) => Some(item.section()),
+            Self::Sdk(_) => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct NotesActionSearchCache {
+    label_lower: String,
+    id_lower: String,
+    shortcut_lower: String,
+    description_lower: String,
+}
+
+impl NotesActionSearchCache {
+    fn from_row(row: &NotesPanelRow) -> Self {
+        match row {
+            NotesPanelRow::BuiltIn(item) => Self {
+                label_lower: item.action.label().to_lowercase(),
+                id_lower: item.action.id().to_lowercase(),
+                shortcut_lower: item.action.shortcut_display().to_lowercase(),
+                description_lower: String::new(),
+            },
+            NotesPanelRow::Sdk(row) => Self {
+                label_lower: row.name.to_lowercase(),
+                id_lower: format!("sdk_action_{}_{}", row.protocol_index, row.name).to_lowercase(),
+                shortcut_lower: row.shortcut_keys.join("").to_lowercase(),
+                description_lower: row.description.as_deref().unwrap_or("").to_lowercase(),
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NotesNavigationIntent {
+    Home,
+    End,
+    PageUp,
+    PageDown,
+}
+
 /// Panel dimensions and styling constants (matches main ActionsDialog)
 pub const PANEL_WIDTH: f32 = 320.0;
 /// Standardized to match main ActionsDialog POPUP_MAX_HEIGHT (was 580.0)
@@ -267,10 +371,8 @@ const NOTES_PANEL_PAGE_JUMP: usize = 8;
 // Shadow tokens — drop shadow for floating panel when vibrancy is off
 // =============================================================================
 
-/// Primary (close) drop-shadow opacity.
-const SHADOW_PRIMARY_ALPHA: f32 = 0.3;
-/// Secondary (far) drop-shadow opacity.
-const SHADOW_SECONDARY_ALPHA: f32 = 0.15;
+/// Secondary shadow opacity as a multiplier of the configured primary opacity.
+const SHADOW_SECONDARY_ALPHA_SCALE: f32 = 0.5;
 /// Primary shadow vertical offset (px).
 const SHADOW_PRIMARY_OFFSET_Y: f32 = 4.0;
 /// Primary shadow blur radius (px).
@@ -314,9 +416,6 @@ const NO_RESULTS_PX: f32 = 12.0;
 const ACTION_ROW_INNER_PAD: f32 = 8.0;
 /// Inner action row horizontal padding (px).
 const ACTION_ROW_INNER_PX: f32 = 8.0;
-/// Disabled state opacity — floor for legibility.
-const OPACITY_DISABLED: f32 = 0.5;
-
 pub fn panel_height_for_rows(row_count: usize) -> f32 {
     let items_height = (row_count as f32 * ACTION_ITEM_HEIGHT)
         .min(PANEL_MAX_HEIGHT - (PANEL_SEARCH_HEIGHT + 16.0));
@@ -370,10 +469,218 @@ fn find_page_down_selectable(selectable: &[bool], selected_index: usize) -> Opti
     })
 }
 
+fn resolve_navigation_intent(key: &str) -> Option<NotesNavigationIntent> {
+    match key {
+        "home" | "Home" => Some(NotesNavigationIntent::Home),
+        "end" | "End" => Some(NotesNavigationIntent::End),
+        "pageup" | "PageUp" => Some(NotesNavigationIntent::PageUp),
+        "pagedown" | "PageDown" => Some(NotesNavigationIntent::PageDown),
+        _ => None,
+    }
+}
+
+fn format_protocol_shortcut_keys(shortcut: Option<&str>) -> Vec<String> {
+    shortcut
+        .map(ActionsDialog::format_shortcut_hint)
+        .map(|hint| ActionsDialog::parse_shortcut_keycaps(&hint))
+        .unwrap_or_default()
+}
+
+fn build_sdk_rows(actions: &[ProtocolAction]) -> Vec<NotesPanelRow> {
+    actions
+        .iter()
+        .enumerate()
+        .filter_map(|(protocol_index, action)| {
+            if !action.is_visible() {
+                return None;
+            }
+
+            Some(NotesPanelRow::Sdk(NotesSdkActionRow {
+                protocol_index,
+                name: action.name.clone(),
+                description: action.description.clone(),
+                shortcut_keys: format_protocol_shortcut_keys(action.shortcut.as_deref()),
+                enabled: true,
+            }))
+        })
+        .collect()
+}
+
+fn row_invocation(row: &NotesPanelRow) -> Option<NotesActionInvocation> {
+    match row {
+        NotesPanelRow::BuiltIn(item) if item.enabled => {
+            Some(NotesActionInvocation::BuiltIn(item.action))
+        }
+        NotesPanelRow::Sdk(action) if action.enabled => Some(NotesActionInvocation::Sdk {
+            action_name: action.name.clone(),
+            protocol_index: action.protocol_index,
+        }),
+        _ => None,
+    }
+}
+
+fn score_notes_action(cache: &NotesActionSearchCache, query_lower: &str) -> i32 {
+    if query_lower.is_empty() {
+        return 1;
+    }
+
+    let label_score = score_match_candidate(&cache.label_lower, query_lower, 180, 120, 80);
+    let id_score = score_match_candidate(&cache.id_lower, query_lower, 70, 45, 30);
+    let shortcut_score = score_match_candidate(&cache.shortcut_lower, query_lower, 35, 25, 20);
+    let description_score =
+        score_match_candidate(&cache.description_lower, query_lower, 25, 15, 10);
+
+    let total = label_score + id_score + shortcut_score + description_score;
+    if total > 0 {
+        total
+    } else {
+        0
+    }
+}
+
+fn score_match_candidate(
+    candidate_lower: &str,
+    query_lower: &str,
+    prefix_base: i32,
+    contains_base: i32,
+    fuzzy_base: i32,
+) -> i32 {
+    if candidate_lower.is_empty() || query_lower.is_empty() {
+        return 0;
+    }
+
+    let mut best = 0;
+
+    if candidate_lower.starts_with(query_lower) {
+        best = best.max(prefix_base + 30);
+    }
+
+    if let Some(position) = candidate_lower.find(query_lower) {
+        let position_bonus = (24_i32 - position as i32).max(0);
+        let boundary_bonus = if position == 0
+            || candidate_lower
+                .as_bytes()
+                .get(position.saturating_sub(1))
+                .is_some_and(|byte| !byte.is_ascii_alphanumeric())
+        {
+            12
+        } else {
+            0
+        };
+        best = best.max(contains_base + position_bonus + boundary_bonus);
+    }
+
+    if let Some(fuzzy) = fuzzy_match_score(candidate_lower, query_lower) {
+        best = best.max(fuzzy_base + fuzzy);
+    }
+
+    best
+}
+
+fn fuzzy_match_score(haystack: &str, needle: &str) -> Option<i32> {
+    if needle.is_empty() {
+        return Some(0);
+    }
+
+    let haystack_chars: Vec<char> = haystack.chars().collect();
+    if haystack_chars.is_empty() {
+        return None;
+    }
+
+    let mut score = 0_i32;
+    let mut haystack_index = 0_usize;
+    let mut first_match: Option<usize> = None;
+    let mut last_match: Option<usize> = None;
+    let mut previous_match: Option<usize> = None;
+    let mut consecutive_streak = 0_i32;
+    let mut all_matches_at_word_start = true;
+
+    for needle_char in needle.chars() {
+        let mut found_index = None;
+        while haystack_index < haystack_chars.len() {
+            let ch = haystack_chars[haystack_index];
+            if ch == needle_char {
+                found_index = Some(haystack_index);
+                haystack_index += 1;
+                break;
+            }
+            haystack_index += 1;
+        }
+
+        let matched_index = found_index?;
+        first_match.get_or_insert(matched_index);
+        last_match = Some(matched_index);
+        score += 6;
+
+        let is_word_start = matched_index == 0
+            || haystack_chars
+                .get(matched_index.saturating_sub(1))
+                .is_some_and(|ch| !ch.is_alphanumeric());
+        if is_word_start {
+            score += 10;
+        } else {
+            all_matches_at_word_start = false;
+        }
+
+        if let Some(previous_index) = previous_match {
+            if matched_index == previous_index + 1 {
+                consecutive_streak += 1;
+                score += 9 + (consecutive_streak * 2);
+            } else {
+                consecutive_streak = 0;
+                let gap_penalty = (matched_index - previous_index - 1) as i32;
+                score -= gap_penalty.min(6);
+            }
+        } else {
+            score += (18_i32 - matched_index as i32).max(0);
+        }
+
+        previous_match = Some(matched_index);
+    }
+
+    if let (Some(first), Some(last)) = (first_match, last_match) {
+        let span = (last - first + 1) as i32;
+        let needle_len = needle.chars().count() as i32;
+        score += (needle_len * 4 - span).max(0);
+
+        if all_matches_at_word_start {
+            let word_start_count = haystack_chars
+                .iter()
+                .enumerate()
+                .filter(|(index, ch)| {
+                    ch.is_alphanumeric()
+                        && (*index == 0
+                            || !haystack_chars[index.saturating_sub(1)].is_alphanumeric())
+                })
+                .count() as i32;
+            if needle_len == word_start_count {
+                score += 12;
+            }
+        }
+    }
+
+    Some(score.max(1))
+}
+
+fn find_filtered_index_for_row_key(
+    filtered_indices: &[usize],
+    rows: &[NotesPanelRow],
+    target_key: NotesPanelRowKey,
+) -> Option<usize> {
+    filtered_indices.iter().position(|&row_index| {
+        rows.get(row_index)
+            .is_some_and(|row| row.key() == target_key)
+    })
+}
+
 /// Notes Actions Panel - Modal overlay for note operations
 pub struct NotesActionsPanel {
-    /// Available actions
+    /// Built-in notes actions (restored when SDK actions are cleared).
     actions: Vec<NotesActionItem>,
+    /// Active rows (built-in or SDK).
+    rows: Vec<NotesPanelRow>,
+    /// Precomputed lowercase caches for ranked filtering.
+    search_cache: Vec<NotesActionSearchCache>,
     /// Filtered action indices
     filtered_indices: Vec<usize>,
     /// Currently selected index (within filtered)
@@ -399,13 +706,21 @@ impl NotesActionsPanel {
         actions: Vec<NotesActionItem>,
         on_action: NotesActionCallback,
     ) -> Self {
-        let filtered_indices: Vec<usize> = (0..actions.len()).collect();
-        let selected_index = actions.iter().position(|item| item.enabled).unwrap_or(0);
+        let rows: Vec<NotesPanelRow> = actions
+            .iter()
+            .copied()
+            .map(NotesPanelRow::BuiltIn)
+            .collect();
+        let search_cache = rows.iter().map(NotesActionSearchCache::from_row).collect();
+        let filtered_indices: Vec<usize> = (0..rows.len()).collect();
+        let selected_index = rows.iter().position(NotesPanelRow::is_enabled).unwrap_or(0);
 
         debug!(action_count = actions.len(), "Notes actions panel created");
 
         Self {
             actions,
+            rows,
+            search_cache,
             filtered_indices,
             selected_index,
             search_text: String::new(),
@@ -425,18 +740,37 @@ impl NotesActionsPanel {
     /// Set SDK-provided actions (replaces built-in actions when present)
     pub fn set_sdk_actions(&mut self, actions: Vec<ProtocolAction>) {
         self.sdk_actions = Some(actions);
+        self.rebuild_rows();
         self.refilter();
     }
 
     /// Clear SDK actions and restore built-in actions
     pub fn clear_sdk_actions(&mut self) {
         self.sdk_actions = None;
+        self.rebuild_rows();
         self.refilter();
     }
 
     /// Check if SDK actions are currently active
     pub fn has_sdk_actions(&self) -> bool {
         self.sdk_actions.is_some()
+    }
+
+    fn rebuild_rows(&mut self) {
+        self.rows = if let Some(sdk_actions) = self.sdk_actions.as_ref() {
+            build_sdk_rows(sdk_actions)
+        } else {
+            self.actions
+                .iter()
+                .copied()
+                .map(NotesPanelRow::BuiltIn)
+                .collect()
+        };
+        self.search_cache = self
+            .rows
+            .iter()
+            .map(NotesActionSearchCache::from_row)
+            .collect();
     }
 
     pub fn focus_handle(&self) -> FocusHandle {
@@ -507,34 +841,34 @@ impl NotesActionsPanel {
 
     /// Handle panel-specific navigation keys not handled elsewhere.
     pub fn handle_navigation_key(&mut self, key: &str, cx: &mut Context<Self>) -> bool {
-        match key {
-            "home" | "Home" => {
+        match resolve_navigation_intent(key) {
+            Some(NotesNavigationIntent::Home) => {
                 self.select_first(cx);
                 true
             }
-            "end" | "End" => {
+            Some(NotesNavigationIntent::End) => {
                 self.select_last(cx);
                 true
             }
-            "pageup" | "PageUp" => {
+            Some(NotesNavigationIntent::PageUp) => {
                 self.select_page_up(cx);
                 true
             }
-            "pagedown" | "PageDown" => {
+            Some(NotesNavigationIntent::PageDown) => {
                 self.select_page_down(cx);
                 true
             }
-            _ => false,
+            None => false,
         }
     }
 
     /// Submit the selected action
     pub fn submit_selected(&mut self) {
-        if let Some(&action_idx) = self.filtered_indices.get(self.selected_index) {
-            if let Some(action) = self.actions.get(action_idx) {
-                if action.enabled {
-                    debug!(action = ?action.action, "Notes action selected");
-                    (self.on_action)(action.action);
+        if let Some(&row_idx) = self.filtered_indices.get(self.selected_index) {
+            if let Some(row) = self.rows.get(row_idx) {
+                if let Some(invocation) = row_invocation(row) {
+                    debug!(?invocation, "Notes action selected");
+                    (self.on_action)(invocation);
                 }
             }
         }
@@ -543,45 +877,74 @@ impl NotesActionsPanel {
     /// Cancel and close
     pub fn cancel(&mut self) {
         debug!("Notes actions panel cancelled");
-        (self.on_action)(NotesAction::Cancel);
+        (self.on_action)(NotesActionInvocation::BuiltIn(NotesAction::Cancel));
     }
 
     /// Get currently selected action
     pub fn get_selected_action(&self) -> Option<NotesAction> {
         self.filtered_indices
             .get(self.selected_index)
-            .and_then(|&idx| self.actions.get(idx))
-            .and_then(|item| {
-                if item.enabled {
-                    Some(item.action)
-                } else {
-                    None
-                }
+            .and_then(|&row_idx| self.rows.get(row_idx))
+            .and_then(|row| match row {
+                NotesPanelRow::BuiltIn(item) if item.enabled => Some(item.action),
+                _ => None,
             })
     }
 
     /// Refilter actions based on search text
     fn refilter(&mut self) {
+        let previously_selected = self.selected_row_key();
+
         if self.search_text.is_empty() {
-            self.filtered_indices = (0..self.actions.len()).collect();
+            self.filtered_indices = (0..self.rows.len()).collect();
         } else {
             let search_lower = self.search_text.to_lowercase();
-            self.filtered_indices = self
-                .actions
+            let mut scored: Vec<(usize, i32)> = self
+                .search_cache
                 .iter()
                 .enumerate()
-                .filter(|(_, action)| action.action.label().to_lowercase().contains(&search_lower))
-                .map(|(idx, _)| idx)
+                .filter_map(|(idx, cache)| {
+                    let score = score_notes_action(cache, &search_lower);
+                    if score > 0 {
+                        Some((idx, score))
+                    } else {
+                        None
+                    }
+                })
                 .collect();
+
+            scored.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+            self.filtered_indices = scored.into_iter().map(|(idx, _)| idx).collect();
         }
 
-        self.ensure_valid_selection();
+        self.restore_selection(previously_selected);
 
         // Scroll to keep selection visible
         if !self.filtered_indices.is_empty() {
             self.scroll_handle
                 .scroll_to_item(self.selected_index, ScrollStrategy::Nearest);
         }
+    }
+
+    fn selected_row_key(&self) -> Option<NotesPanelRowKey> {
+        self.filtered_indices
+            .get(self.selected_index)
+            .and_then(|&row_index| self.rows.get(row_index))
+            .map(NotesPanelRow::key)
+    }
+
+    fn restore_selection(&mut self, previously_selected: Option<NotesPanelRowKey>) {
+        if let Some(previous_key) = previously_selected {
+            if let Some(index) =
+                find_filtered_index_for_row_key(&self.filtered_indices, &self.rows, previous_key)
+            {
+                self.selected_index = index;
+                self.ensure_valid_selection();
+                return;
+            }
+        }
+
+        self.ensure_valid_selection();
     }
 
     fn ensure_valid_selection(&mut self) {
@@ -606,8 +969,8 @@ impl NotesActionsPanel {
     fn is_selectable(&self, filtered_idx: usize) -> bool {
         self.filtered_indices
             .get(filtered_idx)
-            .and_then(|&idx| self.actions.get(idx))
-            .map(|item| item.enabled)
+            .and_then(|&row_index| self.rows.get(row_index))
+            .map(NotesPanelRow::is_enabled)
             .unwrap_or(false)
     }
 
@@ -683,36 +1046,44 @@ impl NotesActionsPanel {
     /// Returns empty vec when vibrancy is enabled - shadows block vibrancy blur
     ///
     /// Uses cached theme to avoid file I/O on every render.
-    fn create_shadow() -> Vec<BoxShadow> {
-        let sk_theme = crate::theme::get_cached_theme();
-        if sk_theme.is_vibrancy_enabled() {
-            return vec![]; // No shadows for vibrancy - matches POC behavior
-        }
+    fn build_theme_drop_shadows(shadow_color_hex: u32, primary_alpha: f32) -> Vec<BoxShadow> {
+        let primary_alpha = primary_alpha.clamp(0.0, 1.0);
+        let secondary_alpha = (primary_alpha * SHADOW_SECONDARY_ALPHA_SCALE).clamp(0.0, 1.0);
 
         vec![
             BoxShadow {
-                color: Hsla {
-                    h: 0.0,
-                    s: 0.0,
-                    l: 0.0,
-                    a: SHADOW_PRIMARY_ALPHA,
-                },
+                color: crate::ui_foundation::hex_to_hsla_with_alpha(
+                    shadow_color_hex,
+                    primary_alpha,
+                ),
                 offset: point(px(0.0), px(SHADOW_PRIMARY_OFFSET_Y)),
                 blur_radius: px(SHADOW_PRIMARY_BLUR),
                 spread_radius: px(0.0),
             },
             BoxShadow {
-                color: Hsla {
-                    h: 0.0,
-                    s: 0.0,
-                    l: 0.0,
-                    a: SHADOW_SECONDARY_ALPHA,
-                },
+                color: crate::ui_foundation::hex_to_hsla_with_alpha(
+                    shadow_color_hex,
+                    secondary_alpha,
+                ),
                 offset: point(px(0.0), px(SHADOW_SECONDARY_OFFSET_Y)),
                 blur_radius: px(SHADOW_SECONDARY_BLUR),
                 spread_radius: px(SHADOW_SECONDARY_SPREAD),
             },
         ]
+    }
+
+    fn create_shadow() -> Vec<BoxShadow> {
+        let sk_theme = crate::theme::service::get_cached_theme();
+        if sk_theme.is_vibrancy_enabled() {
+            return vec![]; // No shadows for vibrancy - matches POC behavior
+        }
+
+        let shadow_config = sk_theme.get_drop_shadow();
+        if !shadow_config.enabled {
+            return vec![];
+        }
+
+        Self::build_theme_drop_shadows(shadow_config.color, shadow_config.opacity)
     }
 }
 
@@ -825,21 +1196,31 @@ impl Render for NotesActionsPanel {
                         let mut items = Vec::new();
 
                         for idx in visible_range {
-                            if let Some(&action_idx) = this.filtered_indices.get(idx) {
-                                if let Some(action) = this.actions.get(action_idx) {
-                                    let action: &NotesActionItem = action;
-                                    let is_enabled = action.enabled;
+                            if let Some(&row_idx) = this.filtered_indices.get(idx) {
+                                if let Some(row) = this.rows.get(row_idx) {
+                                    let row: &NotesPanelRow = row;
+                                    let is_enabled = row.is_enabled();
                                     let is_selected = idx == selected_index && is_enabled;
                                     let is_section_start = if idx > 0 {
-                                        this.filtered_indices
+                                        let previous_section = this
+                                            .filtered_indices
                                             .get(idx - 1)
-                                            .and_then(|&prev_idx| this.actions.get(prev_idx))
-                                            .map(|prev: &NotesActionItem| {
-                                                prev.section() != action.section()
-                                            })
-                                            .unwrap_or(false)
+                                            .and_then(|&prev_row_idx| this.rows.get(prev_row_idx))
+                                            .and_then(NotesPanelRow::section);
+                                        let current_section = row.section();
+                                        current_section.is_some() && current_section != previous_section
                                     } else {
                                         false
+                                    };
+                                    let row_label = row.label().to_string();
+
+                                    let shortcut_badges: AnyElement = match row {
+                                        NotesPanelRow::BuiltIn(item) => {
+                                            render_shortcut_keys(item.action.shortcut_keys(), theme)
+                                        }
+                                        NotesPanelRow::Sdk(action) => {
+                                            render_shortcut_keys_dynamic(&action.shortcut_keys, theme)
+                                        }
                                     };
 
                                     let transparent = Hsla::transparent_black();
@@ -896,7 +1277,7 @@ impl Render for NotesActionsPanel {
                                                                 // Icon
                                                                 .child(
                                                                     svg()
-                                                                        .external_path(action.action.icon().external_path())
+                                                                        .external_path(row.icon().external_path())
                                                                         .size(px(16.))
                                                                         .text_color(if is_enabled {
                                                                             theme.foreground
@@ -920,14 +1301,11 @@ impl Render for NotesActionsPanel {
                                                                                 gpui::FontWeight::NORMAL
                                                                             },
                                                                         )
-                                                                        .child(action.action.label()),
+                                                                        .child(row_label.clone()),
                                                                 ),
                                                         )
                                                         // Right: shortcut badge
-                                                        .child(render_shortcut_keys(
-                                                            action.action.shortcut_keys(),
-                                                            theme,
-                                                        )),
+                                                        .child(shortcut_badges),
                                                 ),
                                         )
                                         .when(is_enabled, |d| {
@@ -983,14 +1361,15 @@ impl Render for NotesActionsPanel {
     }
 }
 
-fn render_shortcut_keys(keys: &[&'static str], theme: &Theme) -> impl IntoElement {
-    if keys.is_empty() {
-        return div().into_any_element();
-    }
-
+fn render_shortcut_badges<'a>(
+    keys: impl IntoIterator<Item = &'a str>,
+    theme: &Theme,
+) -> AnyElement {
     let mut row = div().flex().flex_row().items_center().gap(px(4.0));
+    let mut has_keys = false;
 
     for key in keys {
+        has_keys = true;
         row = row.child(
             div()
                 .min_w(px(18.0))
@@ -1002,11 +1381,23 @@ fn render_shortcut_keys(keys: &[&'static str], theme: &Theme) -> impl IntoElemen
                 .rounded(px(5.0))
                 .text_xs()
                 .text_color(theme.muted_foreground)
-                .child(*key),
+                .child(key.to_string()),
         );
     }
 
-    row.into_any_element()
+    if has_keys {
+        row.into_any_element()
+    } else {
+        div().into_any_element()
+    }
+}
+
+fn render_shortcut_keys(keys: &[&'static str], theme: &Theme) -> AnyElement {
+    render_shortcut_badges(keys.iter().copied(), theme)
+}
+
+fn render_shortcut_keys_dynamic(keys: &[String], theme: &Theme) -> AnyElement {
+    render_shortcut_badges(keys.iter().map(String::as_str), theme)
 }
 
 #[cfg(test)]
@@ -1088,6 +1479,20 @@ mod tests {
     }
 
     #[test]
+    fn test_build_theme_drop_shadows_uses_theme_shadow_color_and_alpha_scaling() {
+        let shadows = NotesActionsPanel::build_theme_drop_shadows(0x123456, 0.4);
+        assert_eq!(shadows.len(), 2);
+        assert_eq!(
+            shadows[0].color,
+            crate::ui_foundation::hex_to_hsla_with_alpha(0x123456, 0.4)
+        );
+        assert_eq!(
+            shadows[1].color,
+            crate::ui_foundation::hex_to_hsla_with_alpha(0x123456, 0.2)
+        );
+    }
+
+    #[test]
     fn test_find_selectable_forward_returns_first_enabled_from_start() {
         let selectable = [false, false, true, false, true];
         assert_eq!(find_selectable_forward(&selectable, 0), Some(2));
@@ -1123,5 +1528,154 @@ mod tests {
         assert_eq!(find_page_down_selectable(&selectable, 0), Some(9));
         // selected = 9, target clamps to last index and falls back backward to 9
         assert_eq!(find_page_down_selectable(&selectable, 9), Some(9));
+    }
+
+    #[test]
+    fn test_resolve_navigation_intent_matches_lower_and_camel_case_keys() {
+        assert_eq!(
+            resolve_navigation_intent("home"),
+            Some(NotesNavigationIntent::Home)
+        );
+        assert_eq!(
+            resolve_navigation_intent("Home"),
+            Some(NotesNavigationIntent::Home)
+        );
+        assert_eq!(
+            resolve_navigation_intent("end"),
+            Some(NotesNavigationIntent::End)
+        );
+        assert_eq!(
+            resolve_navigation_intent("End"),
+            Some(NotesNavigationIntent::End)
+        );
+        assert_eq!(
+            resolve_navigation_intent("pageup"),
+            Some(NotesNavigationIntent::PageUp)
+        );
+        assert_eq!(
+            resolve_navigation_intent("PageUp"),
+            Some(NotesNavigationIntent::PageUp)
+        );
+        assert_eq!(
+            resolve_navigation_intent("pagedown"),
+            Some(NotesNavigationIntent::PageDown)
+        );
+        assert_eq!(
+            resolve_navigation_intent("PageDown"),
+            Some(NotesNavigationIntent::PageDown)
+        );
+        assert_eq!(resolve_navigation_intent("tab"), None);
+    }
+
+    #[test]
+    fn test_score_notes_action_prefers_earlier_word_boundary_matches() {
+        let early = NotesActionSearchCache {
+            label_lower: "copy note as".to_string(),
+            id_lower: "copy_note_as".to_string(),
+            shortcut_lower: "cmdc".to_string(),
+            description_lower: String::new(),
+        };
+        let late = NotesActionSearchCache {
+            label_lower: "bulk copy tool".to_string(),
+            id_lower: "bulk_copy_tool".to_string(),
+            shortcut_lower: String::new(),
+            description_lower: String::new(),
+        };
+
+        assert!(
+            score_notes_action(&early, "copy") > score_notes_action(&late, "copy"),
+            "expected earlier boundary match to rank higher"
+        );
+    }
+
+    #[test]
+    fn test_fuzzy_match_score_rewards_consecutive_characters() {
+        let consecutive = fuzzy_match_score("duplicate note", "dn");
+        let sparse = fuzzy_match_score("do not disturb", "dn");
+        assert!(consecutive > sparse);
+    }
+
+    #[test]
+    fn test_find_filtered_index_for_row_key_preserves_identity() {
+        let rows = vec![
+            NotesPanelRow::BuiltIn(NotesActionItem {
+                action: NotesAction::NewNote,
+                enabled: true,
+            }),
+            NotesPanelRow::BuiltIn(NotesActionItem {
+                action: NotesAction::DuplicateNote,
+                enabled: true,
+            }),
+            NotesPanelRow::Sdk(NotesSdkActionRow {
+                protocol_index: 4,
+                name: "Archive".to_string(),
+                description: None,
+                shortcut_keys: vec!["⌘".to_string(), "A".to_string()],
+                enabled: true,
+            }),
+        ];
+
+        let filtered_indices = vec![2, 1];
+        assert_eq!(
+            find_filtered_index_for_row_key(
+                &filtered_indices,
+                &rows,
+                NotesPanelRowKey::BuiltIn(NotesAction::DuplicateNote),
+            ),
+            Some(1)
+        );
+        assert_eq!(
+            find_filtered_index_for_row_key(&filtered_indices, &rows, NotesPanelRowKey::Sdk(4)),
+            Some(0)
+        );
+    }
+
+    #[test]
+    fn test_build_sdk_rows_filters_hidden_actions_and_preserves_protocol_index() {
+        let visible = ProtocolAction::new("Visible".to_string());
+        let hidden = ProtocolAction {
+            name: "Hidden".to_string(),
+            visible: Some(false),
+            ..ProtocolAction::new("Hidden".to_string())
+        };
+        let visible_after_hidden = ProtocolAction::with_value("Run".to_string(), "run".to_string());
+        let rows = build_sdk_rows(&[visible, hidden, visible_after_hidden]);
+
+        assert_eq!(rows.len(), 2);
+        match &rows[0] {
+            NotesPanelRow::Sdk(row) => assert_eq!(row.protocol_index, 0),
+            _ => panic!("expected sdk row at index 0"),
+        }
+        match &rows[1] {
+            NotesPanelRow::Sdk(row) => assert_eq!(row.protocol_index, 2),
+            _ => panic!("expected sdk row at index 1"),
+        }
+    }
+
+    #[test]
+    fn test_row_invocation_emits_builtin_and_sdk_variants() {
+        let built_in = NotesPanelRow::BuiltIn(NotesActionItem {
+            action: NotesAction::BrowseNotes,
+            enabled: true,
+        });
+        assert_eq!(
+            row_invocation(&built_in),
+            Some(NotesActionInvocation::BuiltIn(NotesAction::BrowseNotes))
+        );
+
+        let sdk = NotesPanelRow::Sdk(NotesSdkActionRow {
+            protocol_index: 7,
+            name: "Archive".to_string(),
+            description: None,
+            shortcut_keys: vec![],
+            enabled: true,
+        });
+        assert_eq!(
+            row_invocation(&sdk),
+            Some(NotesActionInvocation::Sdk {
+                action_name: "Archive".to_string(),
+                protocol_index: 7,
+            })
+        );
     }
 }
