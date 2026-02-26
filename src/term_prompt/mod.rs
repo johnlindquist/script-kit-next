@@ -645,8 +645,8 @@ impl TermPrompt {
     /// Render terminal content efficiently by batching consecutive cells with same style.
     /// Instead of creating 2400+ divs (80x30), we batch runs of same-styled text,
     /// typically reducing to ~50-100 elements per frame.
-    fn render_content(&self, content: &TerminalContent) -> impl IntoElement {
-        let colors = &self.theme.colors;
+    fn render_content(&self, content: &TerminalContent, theme: &Theme) -> impl IntoElement {
+        let colors = &theme.colors;
         // Colors for special cells (cursor, selection) - default cells are transparent for vibrancy
         let cursor_bg = rgb(colors.accent.selected);
         // Use low-opacity for vibrancy support (see VIBRANCY.md)
@@ -1041,8 +1041,9 @@ impl Render for TermPrompt {
         );
 
         // Render terminal content with styled cells
-        let colors = &self.theme.colors;
-        let terminal_content = self.render_content(&content);
+        let theme = crate::theme::get_cached_theme();
+        let colors = &theme.colors;
+        let terminal_content = self.render_content(&content, &theme);
 
         // Get padding from config
         let padding = self.config.get_padding();
@@ -1889,6 +1890,30 @@ mod tests {
         assert!(
             mono_reapply_idx > bold_style_idx,
             "terminal monospace font should be reapplied after bold/style transforms"
+        );
+    }
+
+    #[test]
+    fn test_render_uses_cached_theme_for_hot_reload() {
+        const TERM_PROMPT_SOURCE: &str = include_str!("mod.rs");
+
+        assert!(
+            TERM_PROMPT_SOURCE.contains("let theme = crate::theme::get_cached_theme();"),
+            "render should fetch cached theme at render time"
+        );
+        assert!(
+            TERM_PROMPT_SOURCE.contains("self.render_content(&content, &theme);"),
+            "render should pass current theme into render_content"
+        );
+        assert!(
+            TERM_PROMPT_SOURCE
+                .contains("fn render_content(&self, content: &TerminalContent, theme: &Theme)"),
+            "render_content should accept theme from render-time context"
+        );
+        let stale_theme_pattern = ["let colors = &self.", "theme.colors;"].concat();
+        assert!(
+            !TERM_PROMPT_SOURCE.contains(&stale_theme_pattern),
+            "render path should not read stale self.theme colors"
         );
     }
     #[test]
