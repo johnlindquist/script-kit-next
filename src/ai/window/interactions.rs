@@ -2,17 +2,39 @@ use super::*;
 
 impl AiApp {
     pub(super) fn hide_mouse_cursor(&mut self, cx: &mut Context<Self>) {
+        let mut should_notify = false;
+
+        if self.input_mode != InputMode::Keyboard {
+            self.input_mode = InputMode::Keyboard;
+            should_notify = true;
+        }
+
         if !self.mouse_cursor_hidden {
             self.mouse_cursor_hidden = true;
             crate::platform::hide_cursor_until_mouse_moves();
+            should_notify = true;
+        }
+
+        if should_notify {
             cx.notify();
         }
     }
 
     /// Show the mouse cursor when mouse moves.
     pub(super) fn show_mouse_cursor(&mut self, cx: &mut Context<Self>) {
+        let mut should_notify = false;
+
+        if self.input_mode != InputMode::Mouse {
+            self.input_mode = InputMode::Mouse;
+            should_notify = true;
+        }
+
         if self.mouse_cursor_hidden {
             self.mouse_cursor_hidden = false;
+            should_notify = true;
+        }
+
+        if should_notify {
             cx.notify();
         }
     }
@@ -35,7 +57,9 @@ impl AiApp {
 
         // Reset feedback after 2 seconds
         cx.spawn(async move |this, cx| {
-            gpui::Timer::after(std::time::Duration::from_millis(2000)).await;
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(2000))
+                .await;
             let _ = cx.update(|cx| {
                 this.update(cx, |this, cx| {
                     this.copied_message_id = None;
@@ -59,6 +83,42 @@ impl AiApp {
             let msg_id = last_assistant.id.clone();
             self.copy_message(msg_id, content, cx);
         }
+    }
+
+    /// Copy the current chat transcript as markdown to clipboard.
+    pub(super) fn copy_chat_transcript(&mut self, cx: &mut Context<Self>) {
+        if self.is_streaming || self.current_messages.is_empty() {
+            tracing::debug!(
+                is_streaming = self.is_streaming,
+                message_count = self.current_messages.len(),
+                "Skipping transcript copy because chat is not copyable"
+            );
+            return;
+        }
+
+        let transcript = ai_window_format_chat_transcript_markdown(&self.current_messages);
+        cx.write_to_clipboard(gpui::ClipboardItem::new_string(transcript));
+        self.chat_transcript_copied_at = Some(std::time::Instant::now());
+        cx.notify();
+
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(2000))
+                .await;
+            let _ = cx.update(|cx| {
+                this.update(cx, |this, cx| {
+                    this.chat_transcript_copied_at = None;
+                    cx.notify();
+                })
+            });
+        })
+        .detach();
+    }
+
+    /// Whether transcript copy feedback should currently be visible.
+    pub(super) fn is_showing_chat_transcript_copied_feedback(&self) -> bool {
+        self.chat_transcript_copied_at
+            .is_some_and(|at| at.elapsed() < std::time::Duration::from_millis(2000))
     }
 
     // === UX Batch 5 Methods ===
@@ -105,7 +165,9 @@ impl AiApp {
 
         // Reset feedback after 2 seconds
         cx.spawn(async move |this, cx| {
-            gpui::Timer::after(std::time::Duration::from_millis(2000)).await;
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(2000))
+                .await;
             let _ = cx.update(|cx| {
                 this.update(cx, |this, cx| {
                     this.export_copied_at = None;
@@ -524,6 +586,34 @@ fn ai_window_sidebar_preview_from_message(message: &Message) -> String {
     }
 }
 
+fn ai_window_format_chat_transcript_markdown(messages: &[Message]) -> String {
+    let mut markdown = String::new();
+
+    for (index, message) in messages.iter().enumerate() {
+        let role = match message.role {
+            MessageRole::User => "You",
+            MessageRole::Assistant => "Assistant",
+            MessageRole::System => "System",
+        };
+        markdown.push_str(&format!("## {}\n\n{}\n", role, message.content));
+
+        if !message.images.is_empty() {
+            let suffix = if message.images.len() == 1 { "" } else { "s" };
+            markdown.push_str(&format!(
+                "\n[{} image attachment{}]\n",
+                message.images.len(),
+                suffix
+            ));
+        }
+
+        if index + 1 < messages.len() {
+            markdown.push_str("\n---\n\n");
+        }
+    }
+
+    markdown
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -606,6 +696,49 @@ mod tests {
             message_previews.get(&chat_id).map(String::as_str),
             Some("Image attachment"),
             "Image-only messages should keep the same sidebar preview label after recomputation"
+        );
+    }
+
+    #[test]
+    fn test_ai_window_format_chat_transcript_markdown_includes_role_headers_and_separators() {
+        let chat_id = ChatId::new();
+        let messages = vec![
+            Message::user(chat_id, "How does this work?"),
+            Message::assistant(chat_id, "It streams tokens."),
+        ];
+
+        let transcript = ai_window_format_chat_transcript_markdown(&messages);
+
+        assert!(
+            transcript.contains("## You\n\nHow does this work?"),
+            "Transcript should include the user header and content"
+        );
+        assert!(
+            transcript.contains("## Assistant\n\nIt streams tokens."),
+            "Transcript should include the assistant header and content"
+        );
+        assert!(
+            transcript.contains("\n---\n"),
+            "Transcript should separate turns with markdown rules"
+        );
+    }
+
+    #[test]
+    fn test_ai_window_format_chat_transcript_markdown_includes_image_attachment_count() {
+        let chat_id = ChatId::new();
+        let mut message = Message::user(chat_id, " ");
+        message
+            .images
+            .push(ImageAttachment::png("image-1".to_string()));
+        message
+            .images
+            .push(ImageAttachment::png("image-2".to_string()));
+
+        let transcript = ai_window_format_chat_transcript_markdown(&[message]);
+
+        assert!(
+            transcript.contains("[2 image attachments]"),
+            "Transcript should preserve attachment count context for image turns"
         );
     }
 }

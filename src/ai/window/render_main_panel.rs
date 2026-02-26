@@ -25,6 +25,7 @@ impl AiApp {
         let input_char_count = self.input_state.read(cx).value().len();
         let input_is_long = input_char_count > 2000;
         let input_is_very_long = input_char_count > 4000;
+        let is_mouse_mode = self.input_mode == InputMode::Mouse;
         let composer_border_color = if input_is_very_long {
             cx.theme().danger.opacity(OPACITY_ACCENT_MEDIUM)
         } else if input_is_long {
@@ -85,7 +86,9 @@ impl AiApp {
                                 cx.theme().muted_foreground.opacity(OPACITY_BORDER)
                             })
                             .cursor_pointer()
-                            .hover(|s| s.bg(cx.theme().muted.opacity(OPACITY_HOVER)))
+                            .when(is_mouse_mode, |d| {
+                                d.hover(|s| s.bg(cx.theme().muted.opacity(OPACITY_HOVER)))
+                            })
                             .on_click(cx.listener(|this, _, window, cx| {
                                 if this.showing_attachments_picker {
                                     this.hide_attachments_picker(cx);
