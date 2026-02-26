@@ -34,13 +34,10 @@ pub mod focusable_prompt_wrapper;
 pub mod form_fields;
 #[cfg(test)]
 mod form_fields_tests;
-pub mod input_tokens;
 pub mod prompt_container;
 pub mod prompt_footer;
 pub mod prompt_header;
-pub mod prompt_input;
 pub mod prompt_layout_shell;
-pub mod script_kit_input;
 pub mod scrollbar;
 pub mod shortcut_recorder;
 pub mod text_input;
@@ -60,14 +57,6 @@ pub use focusable_prompt_wrapper::{
 #[allow(unused_imports)]
 pub use form_fields::{FormCheckbox, FormFieldColors, FormFieldState, FormTextArea, FormTextField};
 #[allow(unused_imports)]
-pub use input_tokens::{
-    INPUT_FONT_SIZE_ARG, INPUT_FONT_SIZE_CHAT, INPUT_FONT_SIZE_DEFAULT, INPUT_FONT_SIZE_MAIN_MENU,
-    INPUT_FONT_SIZE_SEARCH, INPUT_PLACEHOLDER_ARG, INPUT_PLACEHOLDER_CHAT,
-    INPUT_PLACEHOLDER_DEFAULT, INPUT_PLACEHOLDER_MAIN_MENU, INPUT_PLACEHOLDER_SEARCH,
-};
-#[allow(unused_imports)]
-pub use script_kit_input::{ScriptKitInput, ScriptKitInputConfig};
-#[allow(unused_imports)]
 pub use scrollbar::{
     Scrollbar, ScrollbarColors, MIN_THUMB_HEIGHT, SCROLLBAR_PADDING, SCROLLBAR_WIDTH,
 };
@@ -78,8 +67,6 @@ pub use prompt_container::{PromptContainer, PromptContainerColors, PromptContain
 pub use prompt_footer::{PromptFooter, PromptFooterColors, PromptFooterConfig};
 #[allow(unused_imports)]
 pub use prompt_header::{PromptHeader, PromptHeaderColors, PromptHeaderConfig};
-#[allow(unused_imports)]
-pub use prompt_input::{InputPadding, PromptInput, PromptInputColors, PromptInputConfig};
 #[allow(unused_imports)]
 pub use prompt_layout_shell::{prompt_shell_container, prompt_shell_content};
 #[allow(unused_imports)]
