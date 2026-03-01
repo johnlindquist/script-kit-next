@@ -245,6 +245,8 @@ impl ScriptListApp {
                 cx.notify();
             }
             PromptMessage::ShowForm { id, html, actions } => {
+                self.prepare_window_for_prompt("UI", "form", "");
+
                 tracing::info!(category = "UI", id = %id, "Showing form prompt");
 
                 // Store SDK actions for the actions panel (Cmd+K)
@@ -276,6 +278,8 @@ impl ScriptListApp {
                 command,
                 actions,
             } => {
+                self.prepare_window_for_prompt("UI", "term", "");
+
                 tracing::info!(
                     category = "UI",
                     id = %id,
@@ -328,6 +332,8 @@ impl ScriptListApp {
                 template,
                 actions,
             } => {
+                self.prepare_window_for_prompt("UI", "editor", "");
+
                 tracing::info!(
                     category = "UI",
                     id = %id,
@@ -1250,6 +1256,8 @@ impl ScriptListApp {
                 start_path,
                 hint,
             } => {
+                self.prepare_window_for_prompt("UI", "path", "");
+
                 tracing::info!(
                     category = "UI",
                     id = %id,
@@ -1336,6 +1344,8 @@ impl ScriptListApp {
                 prompt,
                 secret,
             } => {
+                self.prepare_window_for_prompt("UI", "env", "");
+
                 tracing::info!(id, key, ?prompt, secret, "ShowEnv received");
                 tracing::info!(
                     category = "UI",
@@ -1397,6 +1407,8 @@ impl ScriptListApp {
                 placeholder,
                 hint,
             } => {
+                self.prepare_window_for_prompt("UI", "drop", "");
+
                 tracing::info!(id, ?placeholder, ?hint, "ShowDrop received");
                 tracing::info!(
                     category = "UI",
@@ -1427,6 +1439,8 @@ impl ScriptListApp {
                 cx.notify();
             }
             PromptMessage::ShowTemplate { id, template } => {
+                self.prepare_window_for_prompt("UI", "template", "");
+
                 tracing::info!(id, template, "ShowTemplate received");
                 tracing::info!(
                     category = "UI",
@@ -1462,6 +1476,8 @@ impl ScriptListApp {
                 choices,
                 multiple,
             } => {
+                self.prepare_window_for_prompt("UI", "select", "");
+
                 tracing::info!(
                     id,
                     ?placeholder,
@@ -1610,8 +1626,7 @@ impl ScriptListApp {
                                 );
                             }
                         }
-                    })
-                    .ok();
+                    });
                 })
                 .detach();
 
