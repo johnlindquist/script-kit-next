@@ -969,6 +969,62 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "🌐",
         ));
 
+        // Preview AI commands are currently stubs and should only appear in debug builds.
+        #[cfg(debug_assertions)]
+        {
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin-send-screen-area-to-ai",
+                "Send Screen Area to AI Chat",
+                "Capture a selected screen area and send it to AI Chat (coming soon)",
+                vec![
+                    "send",
+                    "screen",
+                    "area",
+                    "selection",
+                    "capture",
+                    "ai",
+                    "chat",
+                    "coming",
+                    "soon",
+                ],
+                BuiltInFeature::AiCommand(AiCommandType::SendScreenAreaToAi),
+                "✂️",
+            ));
+
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin-create-ai-preset",
+                "Create AI Preset",
+                "Create a reusable AI preset template (coming soon)",
+                vec![
+                    "create", "ai", "preset", "template", "save", "coming", "soon",
+                ],
+                BuiltInFeature::AiCommand(AiCommandType::CreateAiPreset),
+                "🧪",
+            ));
+
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin-import-ai-presets",
+                "Import AI Presets",
+                "Import AI presets from a file (coming soon)",
+                vec![
+                    "import", "ai", "preset", "template", "file", "coming", "soon",
+                ],
+                BuiltInFeature::AiCommand(AiCommandType::ImportAiPresets),
+                "📥",
+            ));
+
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin-search-ai-presets",
+                "Search AI Presets",
+                "Search and browse saved AI presets (coming soon)",
+                vec![
+                    "search", "ai", "preset", "template", "browse", "coming", "soon",
+                ],
+                BuiltInFeature::AiCommand(AiCommandType::SearchAiPresets),
+                "🔎",
+            ));
+        }
+
         // =========================================================================
         // Script Commands
         // =========================================================================
@@ -1212,50 +1268,53 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         // =========================================================================
-        // Kit Store Commands
+        // Kit Store Commands (debug-only stubs)
         // =========================================================================
 
-        entries.push(BuiltInEntry::new_with_icon(
-            "builtin-browse-kit-store",
-            "Browse Kit Store",
-            "Browse available kits from the Kit Store",
-            vec!["kit", "store", "browse", "search", "discover", "extensions"],
-            BuiltInFeature::KitStoreCommand(KitStoreCommandType::BrowseKits),
-            "search",
-        ));
+        #[cfg(debug_assertions)]
+        {
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin-browse-kit-store",
+                "Browse Kit Store",
+                "Browse available kits from the Kit Store",
+                vec!["kit", "store", "browse", "search", "discover", "extensions"],
+                BuiltInFeature::KitStoreCommand(KitStoreCommandType::BrowseKits),
+                "search",
+            ));
 
-        entries.push(BuiltInEntry::new_with_icon(
-            "builtin-manage-installed-kits",
-            "Manage Installed Kits",
-            "View and manage kits already installed from the Kit Store",
-            vec![
-                "kit",
-                "store",
-                "installed",
-                "manage",
-                "extensions",
-                "packages",
-            ],
-            BuiltInFeature::KitStoreCommand(KitStoreCommandType::InstalledKits),
-            "package",
-        ));
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin-manage-installed-kits",
+                "Manage Installed Kits",
+                "View and manage kits already installed from the Kit Store",
+                vec![
+                    "kit",
+                    "store",
+                    "installed",
+                    "manage",
+                    "extensions",
+                    "packages",
+                ],
+                BuiltInFeature::KitStoreCommand(KitStoreCommandType::InstalledKits),
+                "package",
+            ));
 
-        entries.push(BuiltInEntry::new_with_icon(
-            "builtin-update-all-kits",
-            "Update All Kits",
-            "Update every installed kit to the latest version",
-            vec![
-                "kit",
-                "store",
-                "update",
-                "upgrade",
-                "refresh",
-                "all",
-                "extensions",
-            ],
-            BuiltInFeature::KitStoreCommand(KitStoreCommandType::UpdateAllKits),
-            "refresh-cw",
-        ));
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin-update-all-kits",
+                "Update All Kits",
+                "Update every installed kit to the latest version",
+                vec![
+                    "kit",
+                    "store",
+                    "update",
+                    "upgrade",
+                    "refresh",
+                    "all",
+                    "extensions",
+                ],
+                BuiltInFeature::KitStoreCommand(KitStoreCommandType::UpdateAllKits),
+                "refresh-cw",
+            ));
+        }
 
         // =========================================================================
         // File Search (Directory Navigation)
@@ -1795,28 +1854,39 @@ mod tests {
         );
     }
     #[test]
-    fn test_get_builtin_entries_hides_preview_ai_commands() {
+    fn test_get_builtin_entries_gates_stub_commands_to_debug_builds() {
         let config = BuiltInConfig::default();
         let entries = get_builtin_entries(&config);
 
-        assert!(
-            !entries
-                .iter()
-                .any(|e| e.id == "builtin-send-screen-area-to-ai"),
-            "Preview command should be hidden from built-in entries"
-        );
-        assert!(
-            !entries.iter().any(|e| e.id == "builtin-create-ai-preset"),
-            "Preview command should be hidden from built-in entries"
-        );
-        assert!(
-            !entries.iter().any(|e| e.id == "builtin-import-ai-presets"),
-            "Preview command should be hidden from built-in entries"
-        );
-        assert!(
-            !entries.iter().any(|e| e.id == "builtin-search-ai-presets"),
-            "Preview command should be hidden from built-in entries"
-        );
+        let stub_ids = [
+            "builtin-browse-kit-store",
+            "builtin-manage-installed-kits",
+            "builtin-update-all-kits",
+            "builtin-send-screen-area-to-ai",
+            "builtin-create-ai-preset",
+            "builtin-import-ai-presets",
+            "builtin-search-ai-presets",
+        ];
+
+        #[cfg(debug_assertions)]
+        {
+            for id in stub_ids {
+                assert!(
+                    entries.iter().any(|e| e.id == id),
+                    "stub command {id} should be visible in debug builds"
+                );
+            }
+        }
+
+        #[cfg(not(debug_assertions))]
+        {
+            for id in stub_ids {
+                assert!(
+                    !entries.iter().any(|e| e.id == id),
+                    "stub command {id} should be hidden in release builds"
+                );
+            }
+        }
     }
 
     #[test]
