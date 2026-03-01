@@ -41,16 +41,16 @@ After the gate passes, verify the change actually works:
 - Use `?` or graceful error handling — never `unwrap()` in unsafe/ObjC code
 - After any render-affecting mutation: `cx.notify()`
 - Use `theme.colors.*` — never hardcode `rgb(0x...)`
-- Keyboard keys — match both variants:
+- Every `unsafe` block must include a `// SAFETY:` comment.
+- Use `SharedString` for UI-facing text props; `String` for internal state.
+- Font: use `FONT_MONO` constant, never hardcode font family strings.
+- Keyboard keys — prefer `is_key_*` helpers from `crate::ui_foundation`:
   ```rust
-  match key.as_str() {
-    "up" | "arrowup" => ...,
-    "down" | "arrowdown" => ...,
-    "enter" | "Enter" => ...,
-    "escape" | "Escape" => ...,
-    _ => {}
-  }
+  use crate::ui_foundation::{is_key_up, is_key_down, is_key_enter, is_key_escape, ...};
+  let key = event.keystroke.key.as_str();
+  if is_key_up(key) { ... }
   ```
+  If raw matching is needed, always match both variants: `"up" | "arrowup"`, `"enter" | "Enter"`, etc.
 
 ### UI Testing
 - **Never** pass scripts as CLI args — use stdin JSON protocol
@@ -73,6 +73,16 @@ After the gate passes, verify the change actually works:
 4. Store subscriptions in struct fields, or explicitly call `.detach()`.
 5. Store spawned tasks in struct fields, or explicitly call `.detach()`.
 6. Closures outliving entities must capture `WeakEntity` via `.downgrade()`.
+7. Never create entities (`cx.new()`) inside `render()` — causes per-frame state loss and leaked subscriptions.
+8. Render trait: `fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement`. RenderOnce: `fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement`. Use `Render` for stateful views, `RenderOnce` for stateless consumed elements.
+9. Use `cx.listener(|this, event, window, cx| { ... })` to create entity-bound callbacks in render context.
+10. Flex children containing lists need `.min_h(px(0.))` to prevent overflow beyond parent bounds.
+
+## Keyboard Event Propagation
+
+- Call `cx.stop_propagation()` after handling a key to prevent parent handlers from also processing it.
+- In the `_ =>` fallthrough arm of key handlers, call `cx.propagate()` so unhandled keys bubble up.
+- Use `window.dispatch_action(action)` (not `cx.dispatch_action`) to dispatch actions from key handlers.
 
 ## ObjC Interop Rules
 
@@ -83,6 +93,9 @@ After the gate passes, verify the change actually works:
 - `src/platform/*.rs` often use `include!()` flat namespace rules.
 - Never call `orderOut:` directly; use `defer_hide_main_window`.
 - Use `c""` string literals for ObjC string interop.
+- Call `require_main_thread()` at the start of any function that touches AppKit APIs.
+- Every `unsafe` block must include a `// SAFETY:` comment explaining the invariants being upheld.
+- Every `#[cfg(target_os = "macos")]` function needs a `#[cfg(not(target_os = "macos"))]` no-op stub.
 
 ## Async & Channel Discipline
 
@@ -91,6 +104,11 @@ After the gate passes, verify the change actually works:
 - Use `parking_lot::Mutex` (non-poisoning) for shared mutable state.
 - Use `cx.background_executor().timer(...)` for delays/timeouts.
 - Prefer cancellation-safe flows that can early-return on stale generation checks.
+- No tokio — GPUI has its own async executor. Use `cx.spawn()` and `cx.background_executor()`.
+- Release `Mutex` locks before calling `entity.update()` or `cx.update()` to prevent deadlocks.
+- Never hold `Mutex` locks across `.await` boundaries.
+- Use `tx.send_blocking()` for sync-to-async channel bridges from `std::thread::spawn`.
+- Channel capacity: `1` for one-shot confirmations, `100-256` for streaming data.
 
 ## Serde Protocol Contracts
 
@@ -99,6 +117,29 @@ After the gate passes, verify the change actually works:
 - Optional/deprecated input fields use `#[serde(default)]`.
 - Optional output fields use `#[serde(skip_serializing_if = "Option::is_none")]`.
 - Keep wire names stable; add defaults before adding new required fields.
+- Simple string enums (roles, modifiers): use `#[serde(rename_all = "lowercase")]`.
+- Use `#[serde(untagged)]` only when enum variants are structurally distinct (different field sets).
+
+## Theme Details
+
+- Opacity: use constants from `src/theme/opacity.rs` (`OPACITY_HOVER`, `OPACITY_SELECTED`, etc.) — never magic floats.
+- Color methods via `HexColorExt` trait: `.to_rgb()`, `.rgba8(alpha_byte)`, `.with_opacity(f32)`.
+- Two theme systems coexist: `get_cached_theme()` (Script Kit's cached theme) and `cx.theme()` (gpui-component's theme). Prefer `get_cached_theme()` for Script Kit UI; `cx.theme()` only in gpui-component wrappers.
+
+## Error Handling Patterns
+
+- Use `.context("message")?` or `.with_context(|| format!(...))?` on all fallible operations (`anyhow::Context`).
+- For recoverable errors in event handlers: use `.log_err()` or `.warn_on_err()` (`ResultExt` trait).
+- For domain errors callers pattern-match on: define with `thiserror`, not `anyhow`.
+- `bail!("message")` for precondition failures.
+- Never log full protocol messages — they may contain base64 screenshots or clipboard data.
+
+## Component Structure
+
+- 4-file split: `component.rs` (struct + impl), `types.rs` (Colors/Config), `render.rs` (Render impl), `tests.rs`.
+- Colors struct: `#[derive(Clone, Copy)]` with `from_theme(&Theme)` constructor — extract BEFORE closures.
+- Stateless elements: `#[derive(IntoElement)]` + `impl RenderOnce` (consumed on render).
+- Stateful views: `impl Render` (borrowed, survives across frames).
 
 ## High-Risk Files
 
@@ -109,7 +150,8 @@ After the gate passes, verify the change actually works:
 | `src/main_sections/app_state.rs` | Shared app state and mutation pathways |
 | `src/protocol/message/mod.rs` | Wire protocol compatibility and serde contracts |
 | `src/prompts/term_prompt/mod.rs` | Terminal prompt IO flow and interaction edge cases |
-| Rule | Read the full file before editing any of the above |
+
+**Rule:** Read the full file before editing any of the above.
 
 ## Architecture Quick Ref
 
@@ -180,6 +222,8 @@ Detailed guidance lives in `.claude/skills/` — load only when relevant:
 | `script-kit-testing` | Writing tests, test organization |
 | `script-kit-scripting` | Script metadata, scriptlet bundles |
 | `script-kit-hive` | Task management, beads, issue tracking |
+
+**When to load skills:** If editing `src/platform/` load `gpui-patterns`. If editing `src/prompts/` or `src/render_prompts/` load `gpui-patterns`. If writing tests load `script-kit-testing`. If adding protocol messages load `script-kit-architecture`. If debugging UI load `script-kit-ui-testing` + `visual-test`.
 
 ## References
 
