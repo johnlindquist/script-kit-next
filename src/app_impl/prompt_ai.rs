@@ -195,19 +195,11 @@ fn generate_script_via_ai_backend(
 
 impl ScriptListApp {
     pub(crate) fn is_in_prompt(&self) -> bool {
-        matches!(
+        !matches!(
             self.current_view,
-            AppView::ArgPrompt { .. }
-                | AppView::DivPrompt { .. }
-                | AppView::FormPrompt { .. }
-                | AppView::TermPrompt { .. }
-                | AppView::EditorPrompt { .. }
-                | AppView::ClipboardHistoryView { .. }
-                | AppView::AppLauncherView { .. }
-                | AppView::WindowSwitcherView { .. }
-                | AppView::DesignGalleryView { .. }
-                | AppView::ScratchPadView { .. }
-                | AppView::QuickTerminalView { .. }
+            AppView::ScriptList
+                | AppView::ActionsDialog
+                | AppView::CreationFeedback { .. }
         )
     }
 
@@ -576,7 +568,7 @@ impl ScriptListApp {
             let app_entity = app_entity.clone();
             chat_cx
                 .spawn(async move |_this, cx| {
-                    let _ = cx.update(|cx| {
+                    cx.update(|cx| {
                         if let Some(app) = app_entity.upgrade() {
                             logging::log(
                                 "CHAT_SCRIPT_GEN",
