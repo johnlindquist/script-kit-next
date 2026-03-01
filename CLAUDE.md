@@ -57,6 +57,60 @@ After the gate passes, verify the change actually works:
 - Always use `SCRIPT_KIT_AI_LOG=1` for compact log output
 - After screenshots, **read the PNG file** to verify
 
+## Compilation Context
+
+- `include!()` into `main.rs` (shared `main.rs` scope): `main_sections/`, `app_impl/`, `render_prompts/`, `app_execute/`, `app_navigation/`, `prompt_handler/`, `execute_script/`, `render_script_list/`, `render_builtins/`, `app_actions/`, `app_render/`, `app_layout/`.
+- In `include!()` files: NO top-level `use` statements.
+- In `include!()` files: NO `mod` declarations.
+- In `include!()` files: use fully qualified paths or existing `main.rs` scope imports.
+- Proper module trees (normal `mod` + `use crate::...`): `theme/`, `protocol/`, `prompts/`, `components/`, `scripts/`, `builtins/`, `ai/`, `notes/`, `platform/`, `hotkeys/`, `watcher/`.
+
+## GPUI Lifecycle Rules
+
+1. `render()` is read-only: no state mutation and no `cx.notify()`.
+2. After any state mutation that affects UI, call `cx.notify()`.
+3. For async work, use `cx.spawn(...)`; do not use `std::thread::spawn`.
+4. Store subscriptions in struct fields, or explicitly call `.detach()`.
+5. Store spawned tasks in struct fields, or explicitly call `.detach()`.
+6. Closures outliving entities must capture `WeakEntity` via `.downgrade()`.
+
+## ObjC Interop Rules
+
+- Runtime crate is `objc = 0.2` (NOT `objc2`).
+- Correct imports: `objc::{class, msg_send, sel, sel_impl}`.
+- Use `msg_send!` with explicit return types at call sites.
+- Nil-check Objective-C pointers before sending follow-up messages.
+- `src/platform/*.rs` often use `include!()` flat namespace rules.
+- Never call `orderOut:` directly; use `defer_hide_main_window`.
+- Use `c""` string literals for ObjC string interop.
+
+## Async & Channel Discipline
+
+- Use bounded channels only: `async_channel::bounded(...)`.
+- Guard async result application with generation counters (drop stale updates).
+- Use `parking_lot::Mutex` (non-poisoning) for shared mutable state.
+- Use `cx.background_executor().timer(...)` for delays/timeouts.
+- Prefer cancellation-safe flows that can early-return on stale generation checks.
+
+## Serde Protocol Contracts
+
+- Protocol structs/enums use `#[serde(rename_all = "camelCase")]`.
+- Message enums use `#[serde(tag = "type")]` tagging.
+- Optional/deprecated input fields use `#[serde(default)]`.
+- Optional output fields use `#[serde(skip_serializing_if = "Option::is_none")]`.
+- Keep wire names stable; add defaults before adding new required fields.
+
+## High-Risk Files
+
+| Path | Why High Risk |
+|---|---|
+| `src/platform/*.rs` | ObjC interop + window lifecycle side effects |
+| `src/main_sections/render_impl.rs` | Central render dispatch and view routing |
+| `src/main_sections/app_state.rs` | Shared app state and mutation pathways |
+| `src/protocol/message/mod.rs` | Wire protocol compatibility and serde contracts |
+| `src/prompts/term_prompt/mod.rs` | Terminal prompt IO flow and interaction edge cases |
+| Rule | Read the full file before editing any of the above |
+
 ## Architecture Quick Ref
 
 - Built-in commands: `BuiltInFeature` (`src/builtins/mod.rs`) → `get_builtin_entries()` (startup/search) → `execute_builtin()` (`src/app_execute/builtin_execution.rs`) → `AppView` (`src/main_sections/app_view_state.rs`) → render dispatch (`src/main_sections/render_impl.rs`)
