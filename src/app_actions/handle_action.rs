@@ -1398,23 +1398,62 @@ impl ScriptListApp {
             }
             "copy_filename" => {
                 if let Some(ref path) = self.file_search_actions_path {
-                    let filename = std::path::Path::new(path)
+                    let Some(filename) = std::path::Path::new(path)
                         .file_name()
                         .and_then(|n| n.to_str())
-                        .unwrap_or("");
+                    else {
+                        tracing::error!(
+                            event = "copy_filename_missing_filename",
+                            attempted = "copy_filename",
+                            path = %path,
+                            "No filename found for path"
+                        );
+                        self.show_hud(
+                            "No filename found for selected path".to_string(),
+                            Some(HUD_MEDIUM_MS),
+                            cx,
+                        );
+                        self.file_search_actions_path = None;
+                        return;
+                    };
                     tracing::info!(category = "UI", message = ? &format!("Copy filename: {}", filename));
                     #[cfg(target_os = "macos")]
                     {
-                        let _ = self.pbcopy(filename);
+                        match self.pbcopy(filename) {
+                            Ok(()) => {
+                                self.show_hud(format!("Copied: {}", filename), Some(HUD_MEDIUM_MS), cx);
+                                self.file_search_actions_path = None;
+                                self.hide_main_and_reset(cx);
+                            }
+                            Err(e) => {
+                                tracing::error!(error = %e, "Clipboard write failed");
+                                self.show_hud(
+                                    "Failed to copy to clipboard".to_string(),
+                                    Some(HUD_LONG_MS),
+                                    cx,
+                                );
+                            }
+                        }
                     }
                     #[cfg(not(target_os = "macos"))]
                     {
                         use arboard::Clipboard;
-                        let _ = Clipboard::new().and_then(|mut c| c.set_text(filename));
+                        match Clipboard::new().and_then(|mut c| c.set_text(filename)) {
+                            Ok(()) => {
+                                self.show_hud(format!("Copied: {}", filename), Some(HUD_MEDIUM_MS), cx);
+                                self.file_search_actions_path = None;
+                                self.hide_main_and_reset(cx);
+                            }
+                            Err(e) => {
+                                tracing::error!(error = %e, "Clipboard write failed");
+                                self.show_hud(
+                                    "Failed to copy to clipboard".to_string(),
+                                    Some(HUD_LONG_MS),
+                                    cx,
+                                );
+                            }
+                        }
                     }
-                    self.show_hud(format!("Copied: {}", filename), Some(HUD_MEDIUM_MS), cx);
-                    self.file_search_actions_path = None;
-                    self.hide_main_and_reset(cx);
                 }
             }
             "clipboard_open_with" => {
@@ -1605,16 +1644,39 @@ impl ScriptListApp {
                         tracing::debug!(category = "OCR", message = ? "Using cached OCR text");
                         #[cfg(target_os = "macos")]
                         {
-                            let _ = self.pbcopy(cached_text);
+                            match self.pbcopy(cached_text) {
+                                Ok(()) => {
+                                    self.show_hud("Copied text from image".to_string(), Some(HUD_SHORT_MS), cx);
+                                    self.hide_main_and_reset(cx);
+                                }
+                                Err(e) => {
+                                    tracing::error!(error = %e, "Clipboard write failed");
+                                    self.show_hud(
+                                        "Failed to copy to clipboard".to_string(),
+                                        Some(HUD_LONG_MS),
+                                        cx,
+                                    );
+                                }
+                            }
                         }
                         #[cfg(not(target_os = "macos"))]
                         {
                             use arboard::Clipboard;
-                            let _ =
-                                Clipboard::new().and_then(|mut c| c.set_text(cached_text.clone()));
+                            match Clipboard::new().and_then(|mut c| c.set_text(cached_text.clone())) {
+                                Ok(()) => {
+                                    self.show_hud("Copied text from image".to_string(), Some(HUD_SHORT_MS), cx);
+                                    self.hide_main_and_reset(cx);
+                                }
+                                Err(e) => {
+                                    tracing::error!(error = %e, "Clipboard write failed");
+                                    self.show_hud(
+                                        "Failed to copy to clipboard".to_string(),
+                                        Some(HUD_LONG_MS),
+                                        cx,
+                                    );
+                                }
+                            }
                         }
-                        self.show_hud("Copied text from image".to_string(), Some(HUD_SHORT_MS), cx);
-                        self.hide_main_and_reset(cx);
                         cx.notify();
                         return;
                     }
@@ -1660,17 +1722,47 @@ impl ScriptListApp {
                                 // Copy to clipboard
                                 #[cfg(target_os = "macos")]
                                 {
-                                    let _ = self.pbcopy(&text);
+                                    match self.pbcopy(&text) {
+                                        Ok(()) => {
+                                            self.show_hud(
+                                                "Copied text from image".to_string(),
+                                                Some(HUD_SHORT_MS),
+                                                cx,
+                                            );
+                                            self.hide_main_and_reset(cx);
+                                        }
+                                        Err(e) => {
+                                            tracing::error!(error = %e, "Clipboard write failed");
+                                            self.show_hud(
+                                                "Failed to copy to clipboard".to_string(),
+                                                Some(HUD_LONG_MS),
+                                                cx,
+                                            );
+                                        }
+                                    }
                                 }
                                 #[cfg(not(target_os = "macos"))]
                                 {
                                     use arboard::Clipboard;
-                                    let _ =
-                                        Clipboard::new().and_then(|mut c| c.set_text(text.clone()));
+                                    match Clipboard::new().and_then(|mut c| c.set_text(text.clone())) {
+                                        Ok(()) => {
+                                            self.show_hud(
+                                                "Copied text from image".to_string(),
+                                                Some(HUD_SHORT_MS),
+                                                cx,
+                                            );
+                                            self.hide_main_and_reset(cx);
+                                        }
+                                        Err(e) => {
+                                            tracing::error!(error = %e, "Clipboard write failed");
+                                            self.show_hud(
+                                                "Failed to copy to clipboard".to_string(),
+                                                Some(HUD_LONG_MS),
+                                                cx,
+                                            );
+                                        }
+                                    }
                                 }
-
-                                self.show_hud("Copied text from image".to_string(), Some(HUD_SHORT_MS), cx);
-                                self.hide_main_and_reset(cx);
                             }
                         }
                         Err(e) => {
