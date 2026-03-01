@@ -990,7 +990,7 @@ impl Render for TermPrompt {
                     // Normal mode: \x1b[A (CSI A)
                     // Application mode: \x1bOA (SS3 A)
                     let bytes: Option<&[u8]> = match key_str.as_str() {
-                        "enter" => Some(b"\r"),
+                        "enter" | "return" => Some(b"\r"),
                         "backspace" => Some(b"\x7f"),
                         "tab" => Some(b"\t"),
                         // Arrow keys: use application mode sequences when DECCKM is set
