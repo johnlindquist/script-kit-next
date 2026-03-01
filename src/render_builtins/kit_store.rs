@@ -8,6 +8,7 @@ const KIT_STORE_GITHUB_ACCEPT: &str = "application/vnd.github+json";
 const KIT_STORE_GITHUB_VERSION: &str = "2022-11-28";
 const KIT_STORE_GITHUB_USER_AGENT: &str = "script-kit-gpui-kit-store-view";
 const KIT_STORE_GITHUB_TOPICS: [&str; 2] = ["scriptkit-kit", "script-kit"];
+const KIT_STORE_ROW_HEIGHT: f32 = 72.0;
 
 #[derive(Debug, Default, Deserialize)]
 struct KitStoreGithubSearchResponse {
@@ -555,7 +556,7 @@ impl ScriptListApp {
                                 div()
                                     .id(ElementId::NamedInteger("kit-store-browse-row".into(), ix as u64))
                                     .w_full()
-                                    .h(px(72.0))
+                                    .h(px(KIT_STORE_ROW_HEIGHT))
                                     .px(px(12.0))
                                     .py(px(8.0))
                                     .flex()
@@ -662,7 +663,7 @@ impl ScriptListApp {
                                             .child("Install"),
                                     )
                             } else {
-                                div().id(ix).h(px(72.0))
+                                div().id(ix).h(px(KIT_STORE_ROW_HEIGHT))
                             }
                         })
                         .collect()
@@ -912,7 +913,7 @@ impl ScriptListApp {
                                 div()
                                     .id(ElementId::NamedInteger("kit-store-installed-row".into(), ix as u64))
                                     .w_full()
-                                    .h(px(76.0))
+                                    .h(px(KIT_STORE_ROW_HEIGHT))
                                     .px(px(12.0))
                                     .py(px(8.0))
                                     .flex()
@@ -1052,7 +1053,7 @@ impl ScriptListApp {
                                             ),
                                     )
                             } else {
-                                div().id(ix).h(px(76.0))
+                                div().id(ix).h(px(KIT_STORE_ROW_HEIGHT))
                             }
                         })
                         .collect()
