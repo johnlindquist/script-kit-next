@@ -3,6 +3,7 @@ impl ScriptListApp {
         &self,
         window_size: gpui::Size<gpui::Pixels>,
     ) -> Vec<debug_grid::ComponentBounds> {
+        use crate::list_item::LIST_ITEM_HEIGHT;
         use debug_grid::{BoxModel, ComponentBounds, ComponentType};
 
         let mut bounds = Vec::new();
@@ -74,7 +75,7 @@ impl ScriptListApp {
             AppView::ScriptList => {
                 // ScriptList has left panel (50%) + right preview panel (50%)
                 let list_width = width * 0.5;
-                let item_height = px(48.0);
+                let item_height = px(LIST_ITEM_HEIGHT);
 
                 bounds.push(
                     ComponentBounds::new(
@@ -90,7 +91,7 @@ impl ScriptListApp {
 
                 // Add sample list items
                 for i in 0..5 {
-                    let item_top = content_top + px(i as f32 * 48.0);
+                    let item_top = content_top + px(i as f32 * LIST_ITEM_HEIGHT);
                     if item_top + item_height > height {
                         break;
                     }
@@ -184,7 +185,7 @@ impl ScriptListApp {
                     );
                 } else {
                     // Has choices - show list
-                    let item_height = px(48.0);
+                    let item_height = px(LIST_ITEM_HEIGHT);
                     bounds.push(
                         ComponentBounds::new(
                             "ChoicesList",
@@ -199,7 +200,7 @@ impl ScriptListApp {
 
                     // Add choice items
                     for i in 0..choices.len().min(5) {
-                        let item_top = content_top + px(i as f32 * 48.0);
+                        let item_top = content_top + px(i as f32 * LIST_ITEM_HEIGHT);
                         if item_top + item_height > height {
                             break;
                         }
@@ -234,7 +235,7 @@ impl ScriptListApp {
 
             AppView::SelectPrompt { .. } | AppView::PathPrompt { .. } => {
                 // List-based prompts
-                let item_height = px(48.0);
+                let item_height = px(LIST_ITEM_HEIGHT);
                 bounds.push(
                     ComponentBounds::new(
                         view_name,
@@ -248,7 +249,7 @@ impl ScriptListApp {
                 );
 
                 for i in 0..5 {
-                    let item_top = content_top + px(i as f32 * 48.0);
+                    let item_top = content_top + px(i as f32 * LIST_ITEM_HEIGHT);
                     if item_top + item_height > height {
                         break;
                     }
@@ -456,10 +457,10 @@ impl ScriptListApp {
 
             // List item icons (left side of each list item)
             // Icons are typically 24x24, positioned with some padding from left edge
-            // Item height is 48px, icon vertically centered: (48 - 24) / 2 = 12px from top
-            let item_height = px(48.0);
+            // Item height is LIST_ITEM_HEIGHT, icon vertically centered: (LIST_ITEM_HEIGHT - 24) / 2 from top
+            let item_height = px(LIST_ITEM_HEIGHT);
             for i in 0..5 {
-                let item_top = content_top + px(i as f32 * 48.0);
+                let item_top = content_top + px(i as f32 * LIST_ITEM_HEIGHT);
                 if item_top + item_height > height {
                     break;
                 }
@@ -467,7 +468,10 @@ impl ScriptListApp {
                     ComponentBounds::new(
                         format!("Icon[{}]", i),
                         gpui::Bounds {
-                            origin: gpui::point(px(content_padding), item_top + px(12.)),
+                            origin: gpui::point(
+                                px(content_padding),
+                                item_top + px((LIST_ITEM_HEIGHT - 24.0) / 2.0),
+                            ),
                             size: gpui::size(px(24.), px(24.)),
                         },
                     )
