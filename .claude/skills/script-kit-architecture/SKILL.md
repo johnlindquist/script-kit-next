@@ -10,23 +10,24 @@ Overview of the Script Kit GPUI codebase structure.
 ## Repository Structure (Key Modules)
 
 `src/`
-- `main.rs` - app entry + window setup + main render loop + ErrorNotification UI
-- `error.rs` - `ScriptKitError`, `ErrorSeverity`, `NotifyResultExt`
-- `theme.rs` - theme system
-- `prompts.rs` - ArgPrompt, DivPrompt, EditorPrompt
-- `actions.rs` - ActionsDialog
-- `protocol.rs` - stdin JSON protocol + `ParseResult`
-- `scripts.rs` - script loading + execution instrumentation
-- `config.rs` - config loading + defaults
-- `executor.rs` - bun execution + timing spans + structured logging
-- `watcher.rs` - file watchers
-- `panel.rs` - macOS panel configuration
-- `perf.rs` - perf timing utilities
-- `logging.rs` - dual-output logging (JSONL + pretty/compact)
-- `lib.rs` - exports
-- `utils.rs` - shared utilities
-- `notes/` - Notes window module
-- `ai/` - AI chat window module
+- `main.rs` — app entry, window setup, include!() hub for app_impl/main_sections/render_prompts/etc.
+- `lib.rs` — crate exports
+- `main_sections/` — app state, render dispatch, window visibility (include!() into main.rs)
+- `app_impl/` — app logic: shortcuts, input handling, startup (include!() into main.rs)
+- `app_execute/` — builtin execution, script execution (include!() into main.rs)
+- `render_prompts/` — outer prompt wrappers: arg, div, editor, form, etc. (include!() into main.rs)
+- `prompts/` — inner prompt entities: chat, env, select, term_prompt (proper module)
+- `components/` — reusable UI components: text_input, alias_input, shortcut_recorder (proper module)
+- `protocol/` — stdin/stdout JSON protocol, message types (proper module)
+- `theme/` — theme system, colors, opacity constants, HexColorExt (proper module)
+- `ai/` — AI chat window, providers, streaming (proper module)
+- `notes/` — Notes window module (proper module)
+- `platform/` — macOS ObjC interop, panel config, cursor, visibility (proper module with include!())
+- `scripts/` — script loading, execution (proper module)
+- `builtins/` — built-in command definitions (proper module)
+- `hotkeys/` — global hotkey registration (proper module)
+- `watcher/` — file system watchers (proper module)
+- `ui_foundation/` — key helpers (is_key_*), layout constants, hex color utils
 
 Logs: `~/.scriptkit/logs/script-kit-gpui.jsonl`
 
