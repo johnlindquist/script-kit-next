@@ -9,8 +9,8 @@
 //! 3. Light color palette matching Raycast's light theme
 
 use gpui::{
-    div, point, prelude::*, px, rgba, size, App, Application, Context, FocusHandle, Focusable,
-    Render, Window, WindowBackgroundAppearance, WindowBounds, WindowOptions,
+    div, point, prelude::*, px, rgba, size, App, Context, FocusHandle, Focusable, Render, Window,
+    WindowBackgroundAppearance, WindowBounds, WindowOptions,
 };
 use script_kit_gpui::theme::{
     get_cached_theme,
@@ -19,7 +19,7 @@ use script_kit_gpui::theme::{
 use script_kit_gpui::ui_foundation::hex_to_rgba_with_opacity;
 
 fn main() {
-    Application::new().run(|cx: &mut App| {
+    gpui_platform::application().run(|cx: &mut App| {
         ensure_theme_service(cx);
 
         // Window size similar to Raycast

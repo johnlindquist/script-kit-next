@@ -1,0 +1,59 @@
+[package]
+name = "gpui_macos"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "Apache-2.0"
+
+[lib]
+path = "src/gpui_macos.rs"
+
+[features]
+default = ["gpui/default"]
+test-support = ["gpui/test-support"]
+runtime_shaders = []
+font-kit = ["dep:font-kit"]
+screen-capture = ["gpui/screen-capture"]
+
+[dependencies]
+gpui = { path = "../gpui", default-features = false }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+anyhow = "1.0.86"
+async-task = "4.7"
+block = "0.1"
+cocoa = "=0.26.0"
+collections = { git = "https://github.com/zed-industries/zed", rev = "8da83f8521d383c123d022455fac01f4f26ba0af", package = "collections" }
+core-foundation = "=0.10.0"
+core-foundation-sys = "0.8.6"
+core-graphics = "0.24"
+core-text = "21"
+core-video = { version = "0.5.2", features = ["metal"] }
+ctor = "0.4.0"
+derive_more = "0.99.17"
+etagere = "0.2"
+# WARNING: If you change this, you must also publish a new version of zed-font-kit to crates.io
+font-kit = { git = "https://github.com/zed-industries/font-kit", rev = "110523127440aefb11ce0cf280ae7c5071337ec5", package = "zed-font-kit", version = "0.14.1-zed", optional = true }
+foreign-types = "0.5"
+futures = "0.3"
+image = "0.25.1"
+itertools = "0.14.0"
+libc = "0.2"
+log = { version = "0.4.16", features = ["kv_unstable_serde", "serde"] }
+mach2 = "0.5"
+media = { git = "https://github.com/zed-industries/zed", rev = "8da83f8521d383c123d022455fac01f4f26ba0af", package = "media" }
+metal = "0.33"
+objc = "0.2"
+parking_lot = "0.12.1"
+pathfinder_geometry = "0.5"
+raw-window-handle = "0.6"
+semver = { version = "1.0", features = ["serde"] }
+smallvec = { version = "1.6", features = ["union", "const_new"] }
+strum = { version = "0.27.2", features = ["derive"] }
+util = { git = "https://github.com/zed-industries/zed", rev = "8da83f8521d383c123d022455fac01f4f26ba0af", package = "util" }
+uuid = { version = "1.1.2", features = ["v4", "v5", "v7", "serde"] }
+
+[target.'cfg(target_os = "macos")'.build-dependencies]
+bindgen = "0.71"
+cbindgen = { version = "0.28.0", default-features = false }
+gpui = { path = "../gpui", default-features = false }
