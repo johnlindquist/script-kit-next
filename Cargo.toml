@@ -24,7 +24,7 @@ path = "src/bin/storybook.rs"
 test = false
 
 [dependencies]
-gpui = { git = "https://www.github.com/zed-industries/zed", rev = "94faaebfec5e46afa6d3aee5372cbbdb33b97c33" }
+gpui = { path = "vendor/gpui" }
 global-hotkey = "0.7"
 notify = "8.0"
 serde = { version = "1.0", features = ["derive"] }
@@ -101,10 +101,8 @@ open = "5"
 meval = "0.2"
 
 # gpui-component - Community UI component library for GPUI (FORKED)
-# Fork adds set_selection() method for programmatic text selection (snippet/template support)
-# Original: https://github.com/longbridge/gpui-component
-# Fork: https://github.com/johnlindquist/gpui-component
-gpui-component = { git = "https://github.com/johnlindquist/gpui-component", rev = "b9996cafc2eab35740d4b8dc2fe3268ecd76414e", package = "gpui-component" }
+# Local vendored fork keeps Script Kit-specific input APIs while adapting to gpui rev 03416097.
+gpui-component = { path = "vendor/gpui-component/crates/ui", package = "gpui-component" }
 
 # Tree-sitter markdown grammar for Notes editor highlighting
 tree-sitter-md = "0.5.2"
@@ -139,7 +137,7 @@ foreign-types = "0.5"
 smappservice-rs = "0.1"
 
 [patch."https://github.com/zed-industries/zed"]
-gpui = { git = "https://www.github.com/zed-industries/zed", rev = "94faaebfec5e46afa6d3aee5372cbbdb33b97c33" }
+gpui = { path = "vendor/gpui" }
 
 [features]
 default = ["ocr"]
