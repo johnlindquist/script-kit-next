@@ -3,8 +3,10 @@
 Concrete, code-first patterns for this repo. Prefer every `Right` pattern shown here.
 
 ## Vendored Dependencies
-`gpui` (core GPUI framework) is vendored at `vendor/gpui/` from Zed rev
-`03416097`.
+`gpui` is vendored from Zed tag `v0.226.0-pre`.
+Starting at `v0.226.0-pre`, GPUI is split into vendored crates under
+`vendor/`: `gpui` (core), `gpui_platform` (platform abstraction),
+`gpui_macos` (macOS backend), and `gpui_macros` (proc macros).
 `gpui-component` (UI component library) is vendored at
 `vendor/gpui-component/` from its own repository.
 Both are local copies so agents can patch integration details directly
