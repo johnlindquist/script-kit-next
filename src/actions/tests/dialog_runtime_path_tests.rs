@@ -1,7 +1,8 @@
 use super::dialog::{ActionsDialog, GroupedActionItem};
 use super::types::{Action, ActionCallback, ActionCategory, ActionsDialogConfig, SectionStyle};
 use crate::theme;
-use gpui::{App, AppContext, Application, Entity};
+use gpui::{App, AppContext, Entity};
+use gpui_platform::headless;
 use std::sync::{Arc, Mutex};
 
 fn sample_action(id: &str, title: &str, section: Option<&str>) -> Action {
@@ -16,7 +17,7 @@ fn run_headless_dialog_test(test_fn: impl FnOnce(&mut App) + 'static) {
     let did_run = Arc::new(Mutex::new(false));
     let did_run_for_app = Arc::clone(&did_run);
 
-    Application::headless().run(move |cx| {
+    headless().run(move |cx| {
         test_fn(cx);
         *did_run_for_app
             .lock()
