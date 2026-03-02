@@ -57,6 +57,21 @@ After the gate passes, verify the change actually works:
 - Always use `SCRIPT_KIT_AI_LOG=1` for compact log output
 - After screenshots, **read the PNG file** to verify
 
+## User Feedback Rules
+
+| Feedback type | When to use | Duration |
+|---------------|------------|----------|
+| **HUD** (show_hud()) | Lightweight confirmations: 'Copied', 'Saved', 'Pinned', status toggles | HUD_SHORT_MS to HUD_MEDIUM_MS |
+| **Toast** (toast_manager.push()) | Errors, warnings, multi-line info, messages needing user attention | TOAST_SUCCESS_MS to TOAST_CRITICAL_MS |
+| **Silent** (no feedback) | View transitions where the new view IS the feedback (opening ClipboardHistory, EmojiPicker) | N/A |
+
+Rules:
+- Never use last_output for new code — it is deprecated.
+- Never use inline duration numbers — always use named constants from helpers.rs.
+- Every error path must show Toast with .error() variant.
+- Success feedback is optional for view transitions but required for side-effect operations (copy, delete, save).
+- Never use both HUD and Toast for the same action.
+
 ## Compilation Context
 
 - `include!()` into `main.rs` (shared `main.rs` scope): `main_sections/`, `app_impl/`, `render_prompts/`, `app_execute/`, `app_navigation/`, `prompt_handler/`, `execute_script/`, `render_script_list/`, `render_builtins/`, `app_actions/`, `app_render/`, `app_layout/`.
