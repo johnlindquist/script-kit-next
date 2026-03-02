@@ -764,7 +764,7 @@ impl ScriptListApp {
                                     format!("Generated and opened {}", script_name),
                                     &app.theme,
                                 )
-                                .duration_ms(Some(3500)),
+                                .duration_ms(Some(TOAST_INFO_MS)),
                             );
                             app.close_and_reset_window(cx);
                         }
@@ -778,7 +778,7 @@ impl ScriptListApp {
                                     format!("Failed to generate script: {}", error),
                                     &app.theme,
                                 )
-                                .duration_ms(Some(7000)),
+                                .duration_ms(Some(TOAST_ERROR_DETAILED_MS)),
                             );
                             cx.notify();
                         }

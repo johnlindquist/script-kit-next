@@ -129,7 +129,7 @@ impl ScriptListApp {
                                             format!("Failed to focus window: {}", e),
                                             &this.theme,
                                         )
-                                        .duration_ms(Some(5000)),
+                                        .duration_ms(Some(TOAST_ERROR_MS)),
                                     );
                                     cx.notify();
                                 } else {

@@ -12,6 +12,13 @@ pub(crate) const HUD_3200_MS: u64 = 3200;
 pub(crate) const HUD_CONFLICT_MS: u64 = 4000;
 pub(crate) const HUD_SLOW_MS: u64 = 5000;
 
+pub(crate) const TOAST_SUCCESS_MS: u64 = 2500;
+pub(crate) const TOAST_INFO_MS: u64 = 3500;
+pub(crate) const TOAST_WARNING_MS: u64 = 5000;
+pub(crate) const TOAST_ERROR_MS: u64 = 5000;
+pub(crate) const TOAST_ERROR_DETAILED_MS: u64 = 8000;
+pub(crate) const TOAST_CRITICAL_MS: u64 = 10000;
+
 fn select_clipboard_entry_meta<'a>(
     entries: &'a [clipboard_history::ClipboardEntryMeta],
     filter: &str,
