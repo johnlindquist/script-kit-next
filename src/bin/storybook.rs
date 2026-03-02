@@ -60,7 +60,7 @@ fn main() {
 
     let should_screenshot = Arc::new(AtomicBool::new(auto_screenshot));
 
-    Application::new().run(move |cx| {
+    gpui_platform::application().run(move |cx| {
         // Create window options
         let window_size = size(px(1200.), px(800.));
         let options = WindowOptions {

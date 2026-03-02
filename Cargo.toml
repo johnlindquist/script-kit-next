@@ -25,6 +25,9 @@ test = false
 
 [dependencies]
 gpui = { path = "vendor/gpui" }
+gpui_platform = { path = "vendor/gpui_platform" }
+gpui_macos = { path = "vendor/gpui_macos" }
+gpui_macros = { path = "vendor/gpui_macros" }
 global-hotkey = "0.7"
 notify = "8.0"
 serde = { version = "1.0", features = ["derive"] }
@@ -127,7 +130,7 @@ tree-sitter-typescript = "0.23.2"
 # Note: We use core-graphics directly for Cmd+V simulation (more reliable than enigo on macOS)
 core-graphics = "0.24"
 cocoa = "0.26"
-core-video = { version = "0.4.3", features = ["metal"] }
+core-video = { version = "0.5.2", features = ["metal"] }
 objc = "0.2"
 macos-accessibility-client = "0.0.1"  # Permission checking for accessibility APIs
 # Core Foundation for CFRunLoop (keyboard monitoring)
@@ -138,6 +141,9 @@ smappservice-rs = "0.1"
 
 [patch."https://github.com/zed-industries/zed"]
 gpui = { path = "vendor/gpui" }
+gpui_platform = { path = "vendor/gpui_platform" }
+gpui_macos = { path = "vendor/gpui_macos" }
+gpui_macros = { path = "vendor/gpui_macros" }
 
 [features]
 default = ["ocr"]

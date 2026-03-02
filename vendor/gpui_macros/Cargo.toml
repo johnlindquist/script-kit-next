@@ -1,0 +1,24 @@
+[package]
+name = "gpui_macros"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "Apache-2.0"
+description = "Macros used by gpui"
+
+[features]
+inspector = []
+
+[lib]
+path = "src/gpui_macros.rs"
+proc-macro = true
+doctest = true
+
+[dependencies]
+heck = "0.5"
+proc-macro2 = "1.0.93"
+quote = "1.0.9"
+syn = { version = "2.0.101", features = ["full", "extra-traits", "visit-mut"] }
+
+[dev-dependencies]
+gpui = { path = "../gpui", default-features = false, features = ["inspector"] }

@@ -238,7 +238,7 @@
 
     // Register URL scheme handler for scriptkit:// deeplinks
     // This must be done before .run() as it's called on Application
-    let app = Application::new();
+    let app = gpui_platform::application();
     app.on_open_urls(|urls| {
         logging::log("DEEPLINK", &format!("Received {} URL(s)", urls.len()));
         for url in urls {
