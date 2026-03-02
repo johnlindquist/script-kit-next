@@ -8,10 +8,11 @@
 
 use gpui::{
     div, hsla, list, point, prelude::*, px, rgb, rgba, size, svg, uniform_list, AnyElement, App,
-    Application, BoxShadow, Context, CursorStyle, ElementId, Entity, FocusHandle, Focusable,
-    FontWeight, KeyDownEvent, ListAlignment, ListOffset, ListSizingBehavior, ListState,
-    MouseMoveEvent, Render, ScrollStrategy, SharedString, Subscription, UniformListScrollHandle,
-    Window, WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowKind, WindowOptions,
+    Bounds, BoxShadow, Context, CursorStyle, DisplayId, ElementId, Entity,
+    FocusHandle, Focusable, FontWeight, KeyDownEvent, ListAlignment, ListOffset,
+    ListSizingBehavior, ListState, MouseMoveEvent, Pixels, Render, ScrollStrategy, SharedString,
+    Subscription, UniformListScrollHandle, Window, WindowBackgroundAppearance, WindowBounds,
+    WindowHandle, WindowKind, WindowOptions,
 };
 
 // gpui-component Root wrapper for theme and context provision
