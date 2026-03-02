@@ -1,5 +1,6 @@
 use super::shared::to_deeplink_name;
 use super::types::{Action, ActionCategory, ScriptInfo};
+use crate::designs::icon_variations::IconName;
 use std::collections::HashSet;
 
 fn has_invalid_script_context_input(script: &ScriptInfo) -> bool {
@@ -71,6 +72,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
             ActionCategory::ScriptContext,
         )
         .with_shortcut("↵")
+        .with_icon(IconName::PlayFilled)
         .with_section("Actions"),
     );
 
@@ -83,6 +85,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⌘⇧K")
+            .with_icon(IconName::Settings)
             .with_section("Edit"),
         );
         destructive_actions.push(
@@ -93,6 +96,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⌘⌥K")
+            .with_icon(IconName::Trash)
             .with_section("Destructive"),
         );
     } else {
@@ -104,6 +108,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⌘⇧K")
+            .with_icon(IconName::Settings)
             .with_section("Edit"),
         );
     }
@@ -117,6 +122,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⌘⇧A")
+            .with_icon(IconName::Settings)
             .with_section("Edit"),
         );
         destructive_actions.push(
@@ -127,6 +133,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⌘⌥A")
+            .with_icon(IconName::Trash)
             .with_section("Destructive"),
         );
     } else {
@@ -138,6 +145,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⌘⇧A")
+            .with_icon(IconName::Settings)
             .with_section("Edit"),
         );
     }
@@ -154,6 +162,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 Some(description.to_string()),
                 ActionCategory::ScriptContext,
             )
+            .with_icon(IconName::Star)
             .with_section("Edit"),
         );
     }
@@ -167,6 +176,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⌘E")
+            .with_icon(IconName::Pencil)
             .with_section("Edit"),
         );
 
@@ -178,6 +188,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⌘L")
+            .with_icon(IconName::File)
             .with_section("Edit"),
         );
 
@@ -189,6 +200,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⌘⇧F")
+            .with_icon(IconName::FolderOpen)
             .with_section("Share"),
         );
 
@@ -200,6 +212,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⌘⇧C")
+            .with_icon(IconName::Copy)
             .with_section("Share"),
         );
 
@@ -211,6 +224,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⌘⌥C")
+            .with_icon(IconName::Copy)
             .with_section("Share"),
         );
     }
@@ -224,6 +238,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⌘E")
+            .with_icon(IconName::Pencil)
             .with_section("Edit"),
         );
 
@@ -235,6 +250,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⌘⇧F")
+            .with_icon(IconName::FolderOpen)
             .with_section("Share"),
         );
 
@@ -246,6 +262,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⌘⇧C")
+            .with_icon(IconName::Copy)
             .with_section("Share"),
         );
 
@@ -257,6 +274,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⌘⌥C")
+            .with_icon(IconName::Copy)
             .with_section("Share"),
         );
     }
@@ -270,6 +288,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⌘E")
+            .with_icon(IconName::Pencil)
             .with_section("Edit"),
         );
 
@@ -281,6 +300,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⌘⇧F")
+            .with_icon(IconName::FolderOpen)
             .with_section("Share"),
         );
 
@@ -292,6 +312,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⌘⇧C")
+            .with_icon(IconName::Copy)
             .with_section("Share"),
         );
 
@@ -303,6 +324,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⌘⌥C")
+            .with_icon(IconName::Copy)
             .with_section("Share"),
         );
     }
@@ -319,6 +341,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⌘⇧D")
+        .with_icon(IconName::Copy)
         .with_section("Share"),
     );
 
@@ -331,6 +354,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⌃⌘R")
+            .with_icon(IconName::Trash)
             .with_section("Destructive"),
         );
     }
@@ -389,6 +413,16 @@ mod tests {
 
     fn has_action(actions: &[Action], id: &str) -> bool {
         actions.iter().any(|action| action.id == id)
+    }
+
+    fn assert_all_actions_have_icons(context: &str, actions: &[Action]) {
+        for action in actions {
+            assert!(
+                action.icon.is_some(),
+                "context '{context}' action '{}' should include an icon",
+                action.id
+            );
+        }
     }
 
     #[test]
@@ -499,5 +533,47 @@ mod tests {
                 action.title
             );
         }
+    }
+
+    #[test]
+    fn test_get_script_context_actions_assigns_icons_for_all_contexts() {
+        let script = ScriptInfo::new("Script", "/tmp/script-context-icon-test.ts");
+        let builtin = ScriptInfo::builtin("Clipboard History");
+        let scriptlet =
+            ScriptInfo::scriptlet("Scriptlet", "/tmp/script-context-icon-test.md", None, None);
+        let agent = ScriptInfo::agent(
+            "Agent",
+            "/tmp/script-context-icon-test.agent.md",
+            None,
+            None,
+        );
+
+        let script_actions = get_script_context_actions(&script);
+        assert!(
+            !script_actions.is_empty(),
+            "script actions should not be empty"
+        );
+        assert_all_actions_have_icons("script", &script_actions);
+
+        let builtin_actions = get_script_context_actions(&builtin);
+        assert!(
+            !builtin_actions.is_empty(),
+            "builtin actions should not be empty"
+        );
+        assert_all_actions_have_icons("builtin", &builtin_actions);
+
+        let scriptlet_actions = get_script_context_actions(&scriptlet);
+        assert!(
+            !scriptlet_actions.is_empty(),
+            "scriptlet actions should not be empty"
+        );
+        assert_all_actions_have_icons("scriptlet", &scriptlet_actions);
+
+        let agent_actions = get_script_context_actions(&agent);
+        assert!(
+            !agent_actions.is_empty(),
+            "agent actions should not be empty"
+        );
+        assert_all_actions_have_icons("agent", &agent_actions);
     }
 }
