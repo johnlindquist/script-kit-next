@@ -214,8 +214,10 @@ These rules exist because mixed patterns break both human navigation and AI agen
 
 ## Vendored Dependencies
 
-`gpui` (core GPUI framework) is vendored locally at `vendor/gpui/` from
-Zed revision `03416097`.
+`gpui` is vendored locally from Zed tag `v0.226.0-pre`.
+Starting at `v0.226.0-pre`, GPUI is split into vendored crates under
+`vendor/`: `gpui` (core), `gpui_platform` (platform abstraction),
+`gpui_macos` (macOS backend), and `gpui_macros` (proc macros).
 `gpui-component` (UI component library) is vendored locally at
 `vendor/gpui-component/` from its upstream repository.
 These are intentional local copies so we can patch behavior without
