@@ -264,13 +264,13 @@ impl AiApp {
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _window, cx| {
                 this.handle_file_drop(paths, cx);
             }))
-            // Content area - this wrapper gets flex_1 to fill remaining space
-            // The scrollable content goes inside this bounded container
+            // Content area - fills remaining space above the input area.
+            // min_h_0 is critical: without it a flex child won't shrink below its
+            // content size, preventing overflow/scroll from working.
             .child(
                 div()
                     .flex_1()
-                    .flex()
-                    .flex_col()
+                    .min_h_0()
                     .overflow_hidden()
                     .child(if has_messages {
                         self.render_messages(cx).into_any_element()

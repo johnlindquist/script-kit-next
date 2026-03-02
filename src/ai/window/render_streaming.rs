@@ -4,6 +4,18 @@ use crate::theme::opacity::{
     OPACITY_STRONG,
 };
 
+fn ai_should_render_streaming_cursor(
+    is_streaming: bool,
+    streaming_chat_id: Option<ChatId>,
+    selected_chat_id: Option<ChatId>,
+    streaming_content: &str,
+) -> bool {
+    is_streaming
+        && streaming_chat_id.is_some()
+        && streaming_chat_id == selected_chat_id
+        && !streaming_content.trim().is_empty()
+}
+
 impl AiApp {
     pub(super) fn render_streaming_content(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = theme::PromptColors::from_theme(&crate::theme::get_cached_theme());
@@ -11,6 +23,12 @@ impl AiApp {
             .theme()
             .muted
             .opacity(OPACITY_MESSAGE_ASSISTANT_BACKGROUND);
+        let show_streaming_cursor = ai_should_render_streaming_cursor(
+            self.is_streaming,
+            self.streaming_chat_id,
+            self.selected_chat_id,
+            &self.streaming_content,
+        );
 
         let elapsed_label: SharedString = self
             .streaming_started_at
@@ -80,13 +98,25 @@ impl AiApp {
                 .into_any_element()
         } else {
             // Render markdown separately from cursor to avoid invalidating
-            // the markdown cache on every frame during streaming
+            // the markdown cache on every frame during streaming.
+            // Keep cursor absolutely positioned so it does not create an extra line.
             div()
+                .relative()
                 .w_full()
                 .min_w_0()
                 .overflow_x_hidden()
                 .child(render_markdown(&self.streaming_content, &colors))
-                .child(div().text_sm().text_color(cx.theme().accent).child("▌"))
+                .when(show_streaming_cursor, |d| {
+                    d.child(
+                        div()
+                            .absolute()
+                            .right(S2)
+                            .bottom(S2)
+                            .text_sm()
+                            .text_color(cx.theme().accent)
+                            .child("▌"),
+                    )
+                })
                 .into_any_element()
         };
 
@@ -348,5 +378,60 @@ impl AiApp {
                     .text_color(muted_fg)
                     .child("Esc to cancel  \u{00b7}  Enter to save"),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ai_should_render_streaming_cursor_returns_true_when_streaming_current_chat_has_content()
+    {
+        let chat_id = ChatId::new();
+        assert!(ai_should_render_streaming_cursor(
+            true,
+            Some(chat_id),
+            Some(chat_id),
+            "hello"
+        ));
+    }
+
+    #[test]
+    fn test_ai_should_render_streaming_cursor_returns_false_when_streaming_is_inactive() {
+        let chat_id = ChatId::new();
+        assert!(!ai_should_render_streaming_cursor(
+            false,
+            Some(chat_id),
+            Some(chat_id),
+            "hello"
+        ));
+    }
+
+    #[test]
+    fn test_ai_should_render_streaming_cursor_returns_false_when_content_is_empty_or_whitespace() {
+        let chat_id = ChatId::new();
+        assert!(!ai_should_render_streaming_cursor(
+            true,
+            Some(chat_id),
+            Some(chat_id),
+            ""
+        ));
+        assert!(!ai_should_render_streaming_cursor(
+            true,
+            Some(chat_id),
+            Some(chat_id),
+            "  \n\t"
+        ));
+    }
+
+    #[test]
+    fn test_ai_should_render_streaming_cursor_returns_false_when_streaming_chat_is_not_selected() {
+        assert!(!ai_should_render_streaming_cursor(
+            true,
+            Some(ChatId::new()),
+            Some(ChatId::new()),
+            "hello"
+        ));
     }
 }

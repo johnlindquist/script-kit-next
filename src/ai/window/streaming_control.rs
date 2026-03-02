@@ -1,6 +1,39 @@
 use super::*;
 
+fn ai_streaming_terminal_refresh_splice_range(
+    previous_item_count: usize,
+    next_item_count: usize,
+) -> Option<std::ops::Range<usize>> {
+    if next_item_count == 0 {
+        return None;
+    }
+
+    if previous_item_count == next_item_count {
+        let last_ix = next_item_count - 1;
+        Some(last_ix..next_item_count)
+    } else {
+        Some(0..previous_item_count)
+    }
+}
+
 impl AiApp {
+    fn refresh_messages_list_after_streaming_state_change(&mut self) {
+        let next_item_count = self.messages_list_item_count();
+        let previous_item_count = self.messages_list_state.item_count();
+        let Some(splice_range) =
+            ai_streaming_terminal_refresh_splice_range(previous_item_count, next_item_count)
+        else {
+            return;
+        };
+
+        if previous_item_count == next_item_count {
+            self.messages_list_state.splice(splice_range, 1);
+        } else {
+            self.messages_list_state
+                .splice(splice_range, next_item_count);
+        }
+    }
+
     pub(super) fn start_mock_streaming_response(
         &mut self,
         chat_id: ChatId,
@@ -40,8 +73,6 @@ impl AiApp {
             .collect();
 
         cx.spawn(async move |this, cx| {
-            use gpui::Timer;
-
             let mut accumulated = String::new();
             let mut delay_counter = 0u64;
 
@@ -49,31 +80,33 @@ impl AiApp {
                 // Vary delay slightly based on word position (30-60ms range)
                 delay_counter = delay_counter.wrapping_add(17); // Simple pseudo-variation
                 let delay = 30 + (delay_counter % 30);
-                Timer::after(std::time::Duration::from_millis(delay)).await;
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(delay))
+                    .await;
 
                 accumulated.push_str(&word);
 
                 let current_content = accumulated.clone();
-                let (should_break, should_persist_orphan) = cx
-                    .update(|cx| {
-                        this.update(cx, |app, cx| {
-                            // Guard: only update UI if this is the current streaming session
-                            if app.streaming_generation != generation
-                                || app.streaming_chat_id != Some(chat_id)
-                            {
-                                let should_persist =
-                                    app.should_persist_orphaned_completion(chat_id, generation);
-                                return (true, should_persist); // stale session
-                            }
-                            app.streaming_content = current_content;
-                            // Auto-scroll to bottom as new content arrives
-                            app.sync_messages_list_and_scroll_to_bottom();
-                            cx.notify();
-                            (false, false)
-                        })
-                        .unwrap_or((true, false))
+                let Some(this_entity) = this.upgrade() else {
+                    return;
+                };
+                let (should_break, should_persist_orphan) = cx.update(|cx| {
+                    this_entity.update(cx, |app, cx| {
+                        // Guard: only update UI if this is the current streaming session
+                        if app.streaming_generation != generation
+                            || app.streaming_chat_id != Some(chat_id)
+                        {
+                            let should_persist =
+                                app.should_persist_orphaned_completion(chat_id, generation);
+                            return (true, should_persist); // stale session
+                        }
+                        app.streaming_content = current_content;
+                        // Auto-scroll to bottom as new content arrives
+                        app.sync_messages_list_and_scroll_to_bottom();
+                        cx.notify();
+                        (false, false)
                     })
-                    .unwrap_or((true, false));
+                });
 
                 if should_break {
                     // Session was superseded. Persist only when not explicitly suppressed.
@@ -100,14 +133,18 @@ impl AiApp {
             }
 
             // Small delay before finishing
-            Timer::after(std::time::Duration::from_millis(100)).await;
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(100))
+                .await;
 
             // Finish streaming
-            let _ = cx.update(|cx| {
-                this.update(cx, |app, cx| {
-                    app.finish_streaming(chat_id, generation, cx);
-                })
-            });
+            if let Some(this_entity) = this.upgrade() {
+                cx.update(|cx| {
+                    this_entity.update(cx, |app, cx| {
+                        app.finish_streaming(chat_id, generation, cx);
+                    })
+                });
+            }
         })
         .detach();
     }
@@ -182,6 +219,7 @@ impl AiApp {
         self.streaming_chat_id = None;
         self.streaming_cancel = None;
         self.streaming_started_at = None;
+        self.refresh_messages_list_after_streaming_state_change();
         cx.notify();
     }
 
@@ -201,6 +239,7 @@ impl AiApp {
                 self.is_streaming = false;
                 self.streaming_content.clear();
                 self.streaming_started_at = None;
+                self.refresh_messages_list_after_streaming_state_change();
                 cx.notify();
                 return;
             }
@@ -356,6 +395,23 @@ mod tests {
             Some(1usize),
             "Missing cache entry should initialize to one message for background completion"
         );
+    }
+
+    #[test]
+    fn test_ai_streaming_terminal_refresh_splice_range_replaces_all_items_when_count_changes() {
+        assert_eq!(ai_streaming_terminal_refresh_splice_range(4, 5), Some(0..4));
+        assert_eq!(ai_streaming_terminal_refresh_splice_range(2, 1), Some(0..2));
+    }
+
+    #[test]
+    fn test_ai_streaming_terminal_refresh_splice_range_invalidates_last_item_when_count_unchanged()
+    {
+        assert_eq!(ai_streaming_terminal_refresh_splice_range(5, 5), Some(4..5));
+    }
+
+    #[test]
+    fn test_ai_streaming_terminal_refresh_splice_range_returns_none_when_list_becomes_empty() {
+        assert_eq!(ai_streaming_terminal_refresh_splice_range(1, 0), None);
     }
 
     #[test]
