@@ -212,6 +212,17 @@ These rules exist because mixed patterns break both human navigation and AI agen
 
 ---
 
+## Vendored Dependencies
+
+`gpui` (core GPUI framework) is vendored locally at `vendor/gpui/` from
+Zed revision `03416097`.
+`gpui-component` (UI component library) is vendored locally at
+`vendor/gpui-component/` from its upstream repository.
+These are intentional local copies so we can patch behavior without
+waiting for upstream releases.
+One common reason is adding repository-specific hooks such as layout
+debugging instrumentation.
+
 ## Session Completion
 
 Work is not done until `git push` succeeds.

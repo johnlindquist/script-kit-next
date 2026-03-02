@@ -1,6 +1,16 @@
 <!-- markdownlint-disable MD013 MD022 MD031 -->
 # Agent Cookbook — Right/Wrong Patterns
 Concrete, code-first patterns for this repo. Prefer every `Right` pattern shown here.
+
+## Vendored Dependencies
+`gpui` (core GPUI framework) is vendored at `vendor/gpui/` from Zed rev
+`03416097`.
+`gpui-component` (UI component library) is vendored at
+`vendor/gpui-component/` from its own repository.
+Both are local copies so agents can patch integration details directly
+in this repo.
+Typical local patches include diagnostics and layout-debugging hooks.
+
 ## GPUI Rendering (most common agent mistakes)
 ### `render()` is READ-ONLY
 ```rust
