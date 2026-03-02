@@ -20,64 +20,35 @@ impl AiApp {
     }
 
     /// Render the model picker button
-    /// Clicking cycles to the next model; shows current model name
+    /// Clicking cycles to the next model; shows current model name.
     pub(super) fn render_model_picker(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let button_colors =
+            crate::components::ButtonColors::from_theme(&crate::theme::get_cached_theme());
+        let entity = cx.entity();
+
         if self.available_models.is_empty() {
             let show_copied = self.is_showing_copied_feedback();
 
             // No models available - show actionable setup hint
-            return div()
-                .id("setup-hint")
-                .flex()
-                .items_center()
-                .gap(S2)
-                .px(S2)
-                .py(S1)
-                .rounded(R_SM)
-                .cursor_pointer()
-                .hover(|s| s.bg(cx.theme().muted.opacity(0.3)))
-                .on_click(cx.listener(|this, _, window, cx| {
+            let setup_entity = entity.clone();
+            return crate::components::Button::new(
+                if show_copied {
+                    "Copied!"
+                } else {
+                    "Setup Required"
+                },
+                button_colors,
+            )
+            .id("setup-hint")
+            .variant(crate::components::ButtonVariant::Ghost)
+            .shortcut_opt((!show_copied).then_some("↵".to_string()))
+            .on_click(Box::new(move |_, window, cx| {
+                setup_entity.update(cx, |this, cx| {
                     this.copy_setup_command(cx);
                     window.activate_window();
-                }))
-                .child(if show_copied {
-                    Icon::new(IconName::Check)
-                        .size(ICON_XS)
-                        .text_color(cx.theme().success)
-                        .into_any_element()
-                } else {
-                    Icon::new(IconName::TriangleAlert)
-                        .size(ICON_XS)
-                        .text_color(cx.theme().warning)
-                        .into_any_element()
-                })
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(if show_copied {
-                            cx.theme().success
-                        } else {
-                            cx.theme().muted_foreground
-                        })
-                        .child(if show_copied {
-                            "Copied!"
-                        } else {
-                            "Setup Required"
-                        }),
-                )
-                .when(!show_copied, |d| {
-                    d.child(
-                        div()
-                            .px(S1)
-                            .py(S0)
-                            .rounded(RADIUS_SM)
-                            .bg(cx.theme().muted)
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child("↵"),
-                    )
-                })
-                .into_any_element();
+                });
+            }))
+            .into_any_element();
         }
 
         // Get current model display name
@@ -88,18 +59,15 @@ impl AiApp {
             .unwrap_or_else(|| "Select Model".to_string())
             .into();
 
-        // Model display (read-only) - model selection now available via Actions (Cmd+K)
-        div()
+        let cycle_entity = entity.clone();
+        crate::components::Button::new(model_label, button_colors)
             .id("model-display")
-            .flex()
-            .items_center()
-            .gap(S1)
-            .px(S2)
-            .py(S1)
-            .rounded(R_SM)
-            .text_xs()
-            .text_color(cx.theme().muted_foreground)
-            .child(model_label)
+            .variant(crate::components::ButtonVariant::Ghost)
+            .on_click(Box::new(move |_, _window, cx| {
+                cycle_entity.update(cx, |this, cx| {
+                    this.cycle_model(cx);
+                });
+            }))
             .into_any_element()
     }
 

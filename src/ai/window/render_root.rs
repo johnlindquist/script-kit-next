@@ -248,8 +248,10 @@ impl Render for AiApp {
                 div()
                     .w_full()
                     .flex_1()
+                    .min_h_0()
                     .flex()
                     .flex_row()
+                    .overflow_hidden()
                     .child(self.render_sidebar(cx))
                     .child(self.render_main_panel(cx)),
             )
