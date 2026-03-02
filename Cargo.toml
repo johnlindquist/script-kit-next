@@ -141,7 +141,7 @@ smappservice-rs = "0.1"
 
 [patch."https://github.com/zed-industries/zed"]
 gpui = { path = "vendor/gpui" }
-gpui_platform = { path = "vendor/gpui_platform", features = ["font-kit"] }
+gpui_platform = { path = "vendor/gpui_platform" }
 gpui_macos = { path = "vendor/gpui_macos" }
 gpui_macros = { path = "vendor/gpui_macros" }
 

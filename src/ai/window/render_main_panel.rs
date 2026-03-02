@@ -43,8 +43,8 @@ impl AiApp {
             .border_t_1()
             .border_color(cx.theme().border.opacity(OPACITY_DISABLED))
             .px(PANEL_INSET_X)
-            .py(S3)
-            .gap(S2)
+            .py(S4)
+            .gap(S3)
             // Handle image file drops
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _window, cx| {
                 this.handle_file_drop(paths, cx);
