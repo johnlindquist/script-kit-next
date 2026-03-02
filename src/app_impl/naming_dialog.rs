@@ -75,7 +75,7 @@ impl ScriptListApp {
                         format!("Failed to parse naming result: {}", e),
                         &self.theme,
                     )
-                    .duration_ms(Some(5000)),
+                    .duration_ms(Some(TOAST_ERROR_MS)),
                 );
                 self.current_view = AppView::ScriptList;
                 self.request_script_list_main_filter_focus(cx);
@@ -133,7 +133,7 @@ impl ScriptListApp {
                             ),
                             &self.theme,
                         )
-                        .duration_ms(Some(5000)),
+                        .duration_ms(Some(TOAST_ERROR_MS)),
                     );
                 } else {
                     self.toast_manager.push(
@@ -141,7 +141,7 @@ impl ScriptListApp {
                             format!("New {} created and opened in editor", item_type),
                             &self.theme,
                         )
-                        .duration_ms(Some(3000)),
+                        .duration_ms(Some(HUD_LONG_MS)),
                     );
                 }
 
@@ -158,7 +158,7 @@ impl ScriptListApp {
                         format!("Failed to create {}: {}", item_type, e),
                         &self.theme,
                     )
-                    .duration_ms(Some(5000)),
+                    .duration_ms(Some(TOAST_ERROR_MS)),
                 );
                 self.current_view = AppView::ScriptList;
                 self.request_script_list_main_filter_focus(cx);

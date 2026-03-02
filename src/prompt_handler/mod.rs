@@ -630,7 +630,7 @@ impl ScriptListApp {
                 let details_text = stderr_output.clone().or_else(|| stack_trace.clone());
                 let toast = Toast::error(error_message.clone(), &self.theme)
                     .details_opt(details_text.clone())
-                    .duration_ms(Some(10000)); // 10 seconds for errors
+                    .duration_ms(Some(TOAST_CRITICAL_MS)); // 10 seconds for errors
 
                 // Add copy button action if we have stderr/stack trace
                 let toast = if let Some(ref trace) = details_text {
@@ -686,7 +686,7 @@ impl ScriptListApp {
 
                 let mut toast = Toast::from_severity(summary.clone(), severity, &self.theme)
                     .details_opt(details.clone())
-                    .duration_ms(Some(8000));
+                    .duration_ms(Some(TOAST_ERROR_DETAILED_MS));
 
                 if let Some(ref detail_text) = details {
                     let detail_clone = detail_text.clone();
@@ -712,7 +712,7 @@ impl ScriptListApp {
                 );
 
                 let toast = Toast::warning(unhandled_message_warning(&message_type), &self.theme)
-                    .duration_ms(Some(HUD_SLOW_MS));
+                    .duration_ms(Some(TOAST_WARNING_MS));
 
                 self.toast_manager.push(toast);
                 cx.notify();

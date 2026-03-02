@@ -284,7 +284,7 @@ impl ScriptListApp {
                         format!("Installed kit '{}'", installed.name),
                         &self.theme,
                     )
-                    .duration_ms(Some(2500)),
+                    .duration_ms(Some(TOAST_SUCCESS_MS)),
                 );
                 cx.notify();
             }
@@ -294,7 +294,7 @@ impl ScriptListApp {
                         format!("Failed to install kit: {}", error),
                         &self.theme,
                     )
-                    .duration_ms(Some(5000)),
+                    .duration_ms(Some(TOAST_ERROR_MS)),
                 );
                 cx.notify();
             }
@@ -309,7 +309,7 @@ impl ScriptListApp {
                         format!("Updated kit '{}'", kit.name),
                         &self.theme,
                     )
-                    .duration_ms(Some(2500)),
+                    .duration_ms(Some(TOAST_SUCCESS_MS)),
                 );
                 self.kit_store_refresh_installed_view(cx);
             }
@@ -319,7 +319,7 @@ impl ScriptListApp {
                         format!("Failed to update '{}': {}", kit.name, error),
                         &self.theme,
                     )
-                    .duration_ms(Some(5000)),
+                    .duration_ms(Some(TOAST_ERROR_MS)),
                 );
                 cx.notify();
             }
@@ -334,7 +334,7 @@ impl ScriptListApp {
                         format!("Removed kit '{}'", kit.name),
                         &self.theme,
                     )
-                    .duration_ms(Some(2500)),
+                    .duration_ms(Some(TOAST_SUCCESS_MS)),
                 );
                 self.kit_store_refresh_installed_view(cx);
             }
@@ -344,7 +344,7 @@ impl ScriptListApp {
                         format!("Failed to remove '{}': {}", kit.name, error),
                         &self.theme,
                     )
-                    .duration_ms(Some(5000)),
+                    .duration_ms(Some(TOAST_ERROR_MS)),
                 );
                 cx.notify();
             }

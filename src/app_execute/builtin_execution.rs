@@ -295,7 +295,7 @@ impl ScriptListApp {
                                     "No favorites yet. Use Add to Favorites from an item action menu.",
                                     &self.theme,
                                 )
-                                .duration_ms(Some(3500)),
+                                .duration_ms(Some(TOAST_INFO_MS)),
                             );
                         } else {
                             self.toast_manager.push(
@@ -303,7 +303,7 @@ impl ScriptListApp {
                                     favorites_loaded_message(favorites.script_ids.len()),
                                     &self.theme,
                                 )
-                                .duration_ms(Some(HUD_2500_MS)),
+                                .duration_ms(Some(TOAST_SUCCESS_MS)),
                             );
                         }
                     }
@@ -514,7 +514,7 @@ impl ScriptListApp {
                                 "No quicklinks found. Add quicklinks to ~/.scriptkit/quicklinks.json",
                                 &self.theme,
                             )
-                            .duration_ms(Some(3500)),
+                            .duration_ms(Some(TOAST_INFO_MS)),
                         );
                         cx.notify();
                         return;
@@ -592,7 +592,7 @@ impl ScriptListApp {
                                         );
                                         self.show_hud(
                                             format!("Opened {}", selected_quicklink.name),
-                                            Some(1700),
+                                            Some(HUD_SHORT_MS),
                                             cx,
                                         );
                                         self.close_and_reset_window(cx);
@@ -628,7 +628,7 @@ impl ScriptListApp {
                                         "Selected quicklink could not be resolved.",
                                         &self.theme,
                                     )
-                                    .duration_ms(Some(3500)),
+                                    .duration_ms(Some(TOAST_INFO_MS)),
                                 );
                                 cx.notify();
                             }
@@ -1475,7 +1475,7 @@ impl ScriptListApp {
                                     "{} running script process(es). Details copied.",
                                     process_count
                                 ),
-                                Some(2600),
+                                Some(HUD_MEDIUM_MS),
                                 cx,
                             );
                         }
@@ -1500,7 +1500,7 @@ impl ScriptListApp {
                             crate::process_manager::PROCESS_MANAGER.kill_all_processes();
                             self.show_hud(
                                 format!("Stopped {} running script process(es).", process_count),
-                                Some(2600),
+                                Some(HUD_MEDIUM_MS),
                                 cx,
                             );
                             self.close_and_reset_window(cx);

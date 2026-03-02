@@ -353,7 +353,7 @@ impl ScriptListApp {
                                                             );
                                                             this.show_hud(
                                                                 format!("Copied {}", emoji_value),
-                                                                Some(1200),
+                                                                Some(HUD_FLASH_MS),
                                                                 cx,
                                                             );
                                                             this.close_and_reset_window(cx);

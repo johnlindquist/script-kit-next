@@ -33,7 +33,7 @@ impl ScriptListApp {
                     format!("Failed to focus window: {}", e),
                     &self.theme,
                 )
-                .duration_ms(Some(5000)),
+                .duration_ms(Some(TOAST_ERROR_MS)),
             );
             cx.notify();
         } else {
@@ -153,7 +153,7 @@ impl ScriptListApp {
                     format!("{} API key saved successfully", provider),
                     &self.theme,
                 )
-                .duration_ms(Some(3000)),
+                .duration_ms(Some(HUD_LONG_MS)),
             );
 
             // Rebuild provider registry so new key is available next time chat opens
@@ -214,7 +214,7 @@ impl ScriptListApp {
                                     .to_string(),
                                 &self.theme,
                             )
-                            .duration_ms(Some(5000)),
+                            .duration_ms(Some(TOAST_ERROR_MS)),
                         );
                     }
                     Ok(false) => {
@@ -226,7 +226,7 @@ impl ScriptListApp {
                                 ),
                                 &self.theme,
                             )
-                            .duration_ms(Some(5000)),
+                            .duration_ms(Some(TOAST_ERROR_MS)),
                         );
                     }
                     Err(recover_err) => {
@@ -242,7 +242,7 @@ impl ScriptListApp {
                                 ),
                                 &self.theme,
                             )
-                            .duration_ms(Some(5000)),
+                            .duration_ms(Some(TOAST_ERROR_MS)),
                         );
                     }
                 }
@@ -256,7 +256,7 @@ impl ScriptListApp {
                         format!("Failed to enable Claude Code: {}", e),
                         &self.theme,
                     )
-                    .duration_ms(Some(5000)),
+                    .duration_ms(Some(TOAST_ERROR_MS)),
                 );
                 cx.notify();
                 return;
@@ -288,7 +288,7 @@ impl ScriptListApp {
                     "Claude Code enabled! Ready to use.".to_string(),
                     &self.theme,
                 )
-                .duration_ms(Some(3000)),
+                .duration_ms(Some(HUD_LONG_MS)),
             );
 
             // Go back to main menu, then re-show inline chat
@@ -301,7 +301,7 @@ impl ScriptListApp {
                         .to_string(),
                     &self.theme,
                 )
-                .duration_ms(Some(8000)),
+                .duration_ms(Some(TOAST_ERROR_DETAILED_MS)),
             );
             logging::log(
                 "EXEC",
@@ -336,7 +336,7 @@ impl ScriptListApp {
                         format!("Failed to create directory: {}", e),
                         &self.theme,
                     )
-                    .duration_ms(Some(5000)),
+                    .duration_ms(Some(TOAST_ERROR_MS)),
                 );
                 cx.notify();
                 return;
@@ -363,7 +363,7 @@ impl ScriptListApp {
                         format!("Failed to read scratch pad: {}", e),
                         &self.theme,
                     )
-                    .duration_ms(Some(5000)),
+                    .duration_ms(Some(TOAST_ERROR_MS)),
                 );
                 cx.notify();
                 return;

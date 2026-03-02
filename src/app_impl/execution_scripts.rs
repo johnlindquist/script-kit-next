@@ -183,7 +183,7 @@ impl ScriptListApp {
                             format!("Failed to write scriptlet: {}", e),
                             &self.theme,
                         )
-                        .duration_ms(Some(5000)),
+                        .duration_ms(Some(TOAST_ERROR_MS)),
                     );
                     cx.notify();
                     return;
@@ -244,7 +244,7 @@ impl ScriptListApp {
                             format!("Failed to write extension: {}", e),
                             &self.theme,
                         )
-                        .duration_ms(Some(5000)),
+                        .duration_ms(Some(TOAST_ERROR_MS)),
                     );
                     cx.notify();
                     return;
@@ -260,7 +260,7 @@ impl ScriptListApp {
                             format!("Failed to run extension: {}", e),
                             &self.theme,
                         )
-                        .duration_ms(Some(5000)),
+                        .duration_ms(Some(TOAST_ERROR_MS)),
                     );
                     cx.notify();
                 }
@@ -357,7 +357,7 @@ impl ScriptListApp {
                             format!("Scriptlet failed: {}", error_msg),
                             &self.theme,
                         )
-                        .duration_ms(Some(5000)),
+                        .duration_ms(Some(TOAST_ERROR_MS)),
                     );
                     cx.notify();
                 }
@@ -373,7 +373,7 @@ impl ScriptListApp {
                         format!("Failed to execute: {}", e),
                         &self.theme,
                     )
-                    .duration_ms(Some(5000)),
+                    .duration_ms(Some(TOAST_ERROR_MS)),
                 );
                 cx.notify();
             }

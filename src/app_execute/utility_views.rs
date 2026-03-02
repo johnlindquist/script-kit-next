@@ -110,7 +110,7 @@ impl ScriptListApp {
                         format!("Failed to open terminal: {}", e),
                         &self.theme,
                     )
-                    .duration_ms(Some(5000)),
+                    .duration_ms(Some(TOAST_ERROR_MS)),
                 );
                 cx.notify();
             }
@@ -338,7 +338,7 @@ impl ScriptListApp {
                         format!("Failed to open terminal: {}", e),
                         &self.theme,
                     )
-                    .duration_ms(Some(5000)),
+                    .duration_ms(Some(TOAST_ERROR_MS)),
                 );
                 cx.notify();
             }
@@ -483,7 +483,7 @@ impl ScriptListApp {
                 "Webcam capture is only supported on macOS",
                 &self.theme,
             )
-            .duration_ms(Some(4000)),
+            .duration_ms(Some(HUD_CONFLICT_MS)),
         );
 
         self.current_view = AppView::WebcamView { entity };
