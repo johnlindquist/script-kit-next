@@ -180,7 +180,8 @@ impl Render for AiApp {
                             .h_full()
                             .flex()
                             .items_center()
-                            .px(S4)
+                            // left padding clears macOS traffic lights (~70px) + gap
+                            .pl(px(78.))
                             .child(self.render_sidebar_toggle(cx)),
                     )
                     .child(
