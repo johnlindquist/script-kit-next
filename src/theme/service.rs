@@ -27,7 +27,7 @@
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use anyhow::Context;
-use gpui::{App, Timer};
+use gpui::App;
 use tracing::{debug, error, info, warn};
 
 use super::types::AppearanceMode;
@@ -263,7 +263,9 @@ pub fn ensure_theme_service(cx: &mut App) {
             } else {
                 SLOW_POLL_MS
             };
-            Timer::after(std::time::Duration::from_millis(poll_interval)).await;
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(poll_interval))
+                .await;
 
             let file_changed = drain_pending_events(&rx);
             let appearance_changed = theme_poll_detect_appearance_change_if_auto(

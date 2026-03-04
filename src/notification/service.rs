@@ -5,7 +5,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 
-use gpui::{App, BorrowAppContext, Global, Timer};
+use gpui::{App, BorrowAppContext, Global};
 
 use super::types::*;
 
@@ -187,7 +187,7 @@ impl NotificationService {
     /// Schedule auto-dismiss for a notification
     fn schedule_auto_dismiss(&self, id: NotificationId, duration: Duration, cx: &mut App) {
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
-            Timer::after(duration).await;
+            cx.background_executor().timer(duration).await;
 
             let _ = cx.update(|cx| {
                 if cx.has_global::<NotificationService>() {

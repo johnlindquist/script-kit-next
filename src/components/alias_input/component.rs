@@ -171,7 +171,9 @@ impl AliasInput {
 
         self.overlay_animation_tick_scheduled = true;
         cx.spawn(async move |this, cx| {
-            gpui::Timer::after(std::time::Duration::from_millis(16)).await;
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(16))
+                .await;
             let _ = cx.update(|cx| {
                 let _ = this.update(cx, |app, cx| {
                     app.overlay_animation_tick_scheduled = false;

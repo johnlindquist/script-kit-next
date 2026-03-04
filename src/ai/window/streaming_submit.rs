@@ -385,10 +385,11 @@ impl AiApp {
         let error_for_poll = shared_error.clone();
 
         cx.spawn(async move |this, cx| {
-            use gpui::Timer;
             let mut accumulated_content = String::new();
             loop {
-                Timer::after(std::time::Duration::from_millis(50)).await;
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(50))
+                    .await;
 
                 let drained_delta = match ai_window_drain_streaming_deltas(
                     &deltas_for_poll,

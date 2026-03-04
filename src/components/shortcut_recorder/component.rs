@@ -290,7 +290,9 @@ impl ShortcutRecorder {
 
         self.overlay_animation_tick_scheduled = true;
         cx.spawn(async move |this, cx| {
-            gpui::Timer::after(Duration::from_millis(16)).await;
+            cx.background_executor()
+                .timer(Duration::from_millis(16))
+                .await;
             let _ = cx.update(|cx| {
                 let _ = this.update(cx, |recorder, cx| {
                     recorder.overlay_animation_tick_scheduled = false;
