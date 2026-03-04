@@ -312,7 +312,7 @@ export default {
                         cx.background_executor()
                             .timer(std::time::Duration::from_millis(1))
                             .await;
-                        let _ = cx.update(|cx| {
+                        cx.update(|cx| {
                             if let Some(app) = app_entity.upgrade() {
                                 app.update(cx, |this, cx| {
                                     this.handle_shortcut_save(&recorded, cx);
@@ -330,7 +330,7 @@ export default {
                         cx.background_executor()
                             .timer(std::time::Duration::from_millis(1))
                             .await;
-                        let _ = cx.update(|cx| {
+                        cx.update(|cx| {
                             if let Some(app) = app_entity.upgrade() {
                                 app.update(cx, |this, cx| {
                                     this.close_shortcut_recorder(cx);
