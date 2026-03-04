@@ -11,7 +11,9 @@ impl ScriptListApp {
         if self.filter_coalescer.queue(value) {
             cx.spawn(async move |this, cx| {
                 // Wait 8ms for coalescing window (half frame at 60fps)
-                Timer::after(std::time::Duration::from_millis(8)).await;
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(8))
+                    .await;
 
                 let _ = cx.update(|cx| {
                     this.update(cx, |app, cx| {
