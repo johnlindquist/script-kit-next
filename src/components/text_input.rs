@@ -9,8 +9,14 @@
 
 #[path = "text_input/core.rs"]
 mod core;
+#[path = "text_input/render.rs"]
+mod render;
 #[cfg(test)]
 #[path = "text_input/tests.rs"]
 mod tests;
 
 pub use core::{TextInputState, TextSelection};
+#[allow(unused_imports)]
+pub(crate) use render::{
+    render_text_input_cursor_selection, TextInputRenderConfig, TextInputRenderIndicator,
+};
