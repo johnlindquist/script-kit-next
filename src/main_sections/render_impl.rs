@@ -33,7 +33,18 @@ impl Render for ScriptListApp {
         // Check for API key configuration completion (from built-in commands)
         // The EnvPrompt callback signals completion via channel
         if let Ok((provider, success)) = self.api_key_completion_receiver.try_recv() {
-            self.handle_api_key_completion(provider, success, window, cx);
+            let app_entity = cx.entity().downgrade();
+            window.defer(cx, move |window, cx| {
+                if let Some(app) = app_entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.handle_api_key_completion(provider, success, window, cx);
+                    });
+                } else {
+                    tracing::warn!(
+                        "API key completion deferred update skipped because app entity was dropped"
+                    );
+                }
+            });
         }
 
         // Check for builtin confirmation modal completion
