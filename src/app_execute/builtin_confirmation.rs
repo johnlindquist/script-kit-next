@@ -163,9 +163,9 @@ impl ScriptListApp {
                             logging::log("EXEC", "Confirmed system action executed successfully");
                             if let Some(message) = self.system_action_feedback_message(action_type)
                             {
-                                cx.notify();
                                 self.show_hud(message, Some(HUD_MEDIUM_MS), cx);
                                 self.hide_main_and_reset(cx);
+                                cx.notify();
                             } else {
                                 self.close_and_reset_window(cx);
                             }
