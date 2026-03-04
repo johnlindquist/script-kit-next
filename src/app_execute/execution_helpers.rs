@@ -1,16 +1,16 @@
 impl ScriptListApp {
     fn execute_app(&mut self, app: &app_launcher::AppInfo, cx: &mut Context<Self>) {
-        logging::log("EXEC", &format!("Launching app from search: {}", app.name));
+        tracing::info!(message = %&format!("Launching app from search: {}", app.name));
 
         if let Err(e) = app_launcher::launch_application(app) {
-            logging::log("ERROR", &format!("Failed to launch {}: {}", app.name, e));
+            tracing::error!(message = %&format!("Failed to launch {}: {}", app.name, e));
             self.last_output = Some(SharedString::from(format!(
                 "Failed to launch: {}",
                 app.name
             )));
             cx.notify();
         } else {
-            logging::log("EXEC", &format!("Launched app: {}", app.name));
+            tracing::info!(message = %&format!("Launched app: {}", app.name));
             self.close_and_reset_window(cx);
         }
     }
@@ -21,13 +21,11 @@ impl ScriptListApp {
         window: &window_control::WindowInfo,
         cx: &mut Context<Self>,
     ) {
-        logging::log(
-            "EXEC",
-            &format!("Focusing window: {} - {}", window.app, window.title),
+        tracing::info!(message = %&format!("Focusing window: {} - {}", window.app, window.title),
         );
 
         if let Err(e) = window_control::focus_window(window.id) {
-            logging::log("ERROR", &format!("Failed to focus window: {}", e));
+            tracing::error!(message = %&format!("Failed to focus window: {}", e));
             self.toast_manager.push(
                 components::toast::Toast::error(
                     format!("Failed to focus window: {}", e),
@@ -37,7 +35,7 @@ impl ScriptListApp {
             );
             cx.notify();
         } else {
-            logging::log("EXEC", &format!("Focused window: {}", window.title));
+            tracing::info!(message = %&format!("Focused window: {}", window.title));
             self.close_and_reset_window(cx);
         }
     }
@@ -55,9 +53,7 @@ impl ScriptListApp {
         provider_name: &str,
         cx: &mut Context<Self>,
     ) {
-        logging::log(
-            "EXEC",
-            &format!("Showing API key prompt for: {}", provider_name),
+        tracing::info!(message = %&format!("Showing API key prompt for: {}", provider_name),
         );
 
         let id = format!("configure-{}", key_name.to_lowercase());
@@ -77,9 +73,7 @@ impl ScriptListApp {
                 // Value being Some means the user submitted a value (key was saved)
                 // Value being None means the user cancelled
                 let success = value.is_some();
-                logging::log(
-                    "EXEC",
-                    &format!(
+                tracing::info!(message = %&format!(
                         "API key config callback: provider={}, success={}",
                         provider_for_callback, success
                     ),
@@ -98,9 +92,7 @@ impl ScriptListApp {
         let modified_at = secret_info.map(|info| info.modified_at);
 
         if exists_in_keyring {
-            logging::log(
-                "EXEC",
-                &format!(
+            tracing::info!(message = %&format!(
                     "{} API key already configured (modified: {:?}) - showing update prompt",
                     provider_name, modified_at
                 ),
@@ -183,7 +175,7 @@ impl ScriptListApp {
     pub fn enable_claude_code_in_config(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         use crate::config::editor::{self, ConfigWriteError, WriteOutcome};
 
-        logging::log("EXEC", "Enabling Claude Code in config.ts");
+        tracing::info!(message = %"Enabling Claude Code in config.ts");
 
         let config_path =
             std::path::PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/config.ts").as_ref());
@@ -191,22 +183,20 @@ impl ScriptListApp {
 
         match editor::enable_claude_code_safely(&config_path, bun_path) {
             Ok(WriteOutcome::Written) => {
-                logging::log("EXEC", "Claude Code enabled in config.ts");
+                tracing::info!(message = %"Claude Code enabled in config.ts");
             }
             Ok(WriteOutcome::Created) => {
-                logging::log("EXEC", "Created new config.ts with Claude Code enabled");
+                tracing::info!(message = %"Created new config.ts with Claude Code enabled");
             }
             Ok(WriteOutcome::AlreadySet) => {
-                logging::log("EXEC", "Claude Code already enabled in config.ts");
+                tracing::info!(message = %"Claude Code already enabled in config.ts");
             }
             Err(ConfigWriteError::ValidationFailed(reason)) => {
-                logging::log("EXEC", &format!("Config validation failed: {}", reason));
+                tracing::info!(message = %&format!("Config validation failed: {}", reason));
                 // Attempt to recover from backup
                 match editor::recover_from_backup(&config_path, bun_path) {
                     Ok(true) => {
-                        logging::log(
-                            "EXEC",
-                            "Config restored from backup after validation failure",
+                        tracing::info!(message = %"Config restored from backup after validation failure",
                         );
                         self.toast_manager.push(
                             components::toast::Toast::error(
@@ -230,9 +220,7 @@ impl ScriptListApp {
                         );
                     }
                     Err(recover_err) => {
-                        logging::log(
-                            "EXEC",
-                            &format!("Backup recovery also failed: {}", recover_err),
+                        tracing::info!(message = %&format!("Backup recovery also failed: {}", recover_err),
                         );
                         self.toast_manager.push(
                             components::toast::Toast::error(
@@ -250,7 +238,7 @@ impl ScriptListApp {
                 return;
             }
             Err(e) => {
-                logging::log("EXEC", &format!("Failed to enable Claude Code: {}", e));
+                tracing::info!(message = %&format!("Failed to enable Claude Code: {}", e));
                 self.toast_manager.push(
                     components::toast::Toast::error(
                         format!("Failed to enable Claude Code: {}", e),
@@ -303,9 +291,7 @@ impl ScriptListApp {
                 )
                 .duration_ms(Some(TOAST_ERROR_DETAILED_MS)),
             );
-            logging::log(
-                "EXEC",
-                "Claude Code config saved but CLI not found - user needs to install it",
+            tracing::info!(message = %"Claude Code config saved but CLI not found - user needs to install it",
             );
         }
 
@@ -319,7 +305,7 @@ impl ScriptListApp {
 
     /// Open the scratch pad editor with auto-save functionality
     fn open_scratch_pad(&mut self, cx: &mut Context<Self>) {
-        logging::log("EXEC", "Opening Scratch Pad");
+        tracing::info!(message = %"Opening Scratch Pad");
 
         // Get or create scratch pad file path
         let scratch_path = Self::get_scratch_pad_path();
@@ -327,9 +313,7 @@ impl ScriptListApp {
         // Ensure parent directory exists
         if let Some(parent) = scratch_path.parent() {
             if let Err(e) = std::fs::create_dir_all(parent) {
-                logging::log(
-                    "ERROR",
-                    &format!("Failed to create scratch pad directory: {}", e),
+                tracing::error!(message = %&format!("Failed to create scratch pad directory: {}", e),
                 );
                 self.toast_manager.push(
                     components::toast::Toast::error(
@@ -349,15 +333,13 @@ impl ScriptListApp {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 // Create empty file
                 if let Err(write_err) = std::fs::write(&scratch_path, "") {
-                    logging::log(
-                        "ERROR",
-                        &format!("Failed to create scratch pad file: {}", write_err),
+                    tracing::error!(message = %&format!("Failed to create scratch pad file: {}", write_err),
                     );
                 }
                 String::new()
             }
             Err(e) => {
-                logging::log("ERROR", &format!("Failed to read scratch pad: {}", e));
+                tracing::error!(message = %&format!("Failed to read scratch pad: {}", e));
                 self.toast_manager.push(
                     components::toast::Toast::error(
                         format!("Failed to read scratch pad: {}", e),
@@ -370,9 +352,7 @@ impl ScriptListApp {
             }
         };
 
-        logging::log(
-            "EXEC",
-            &format!("Loaded scratch pad with {} bytes", content.len()),
+        tracing::info!(message = %&format!("Loaded scratch pad with {} bytes", content.len()),
         );
 
         // Create editor focus handle

@@ -7,9 +7,7 @@ impl ScriptListApp {
         search_files: impl Fn(&str, Option<&str>, usize) -> Vec<crate::file_search::FileResult>,
     ) -> Vec<crate::file_search::FileResult> {
         if is_directory_path(query) {
-            logging::log(
-                "EXEC",
-                &format!("Detected directory path, listing: {}", query),
+            tracing::info!(message = %&format!("Detected directory path, listing: {}", query),
             );
 
             let expanded = expand_path(query);
@@ -20,9 +18,7 @@ impl ScriptListApp {
 
             let directory_results = list_directory(query, crate::file_search::DEFAULT_CACHE_LIMIT);
             if directory_results.is_empty() && !is_real_dir {
-                logging::log(
-                    "EXEC",
-                    "Path mode not a real directory; falling back to Spotlight search",
+                tracing::info!(message = %"Path mode not a real directory; falling back to Spotlight search",
                 );
                 return search_files(query, None, crate::file_search::DEFAULT_SEARCH_LIMIT);
             }
@@ -51,22 +47,17 @@ impl ScriptListApp {
         self.cached_file_results = results;
         self.file_search_display_indices.clear();
         self.recompute_file_search_display_indices();
-        logging::log(
-            "SEARCH",
-            &format!(
-                "update_file_search_results: cached {} -> {} display={}",
-                previous_cached_count,
-                self.cached_file_results.len(),
-                self.file_search_display_indices.len()
-            ),
+        tracing::debug!(
+            event = "update_file_search_results",
+            previous_cached_count,
+            cached_count = self.cached_file_results.len(),
+            display_count = self.file_search_display_indices.len()
         );
     }
 
     /// Open a terminal with a specific command (for fallback "Run in Terminal")
     pub fn open_terminal_with_command(&mut self, command: String, cx: &mut Context<Self>) {
-        logging::log(
-            "EXEC",
-            &format!("Opening terminal with command: {}", command),
+        tracing::info!(message = %&format!("Opening terminal with command: {}", command),
         );
 
         // Create submit callback that just closes on exit/escape
@@ -104,7 +95,7 @@ impl ScriptListApp {
                 cx.notify();
             }
             Err(e) => {
-                logging::log("ERROR", &format!("Failed to create terminal: {}", e));
+                tracing::error!(message = %&format!("Failed to create terminal: {}", e));
                 self.toast_manager.push(
                     components::toast::Toast::error(
                         format!("Failed to open terminal: {}", e),
@@ -179,15 +170,11 @@ impl ScriptListApp {
     /// - Enter: Open file in default application
     /// - Cmd+Enter: Reveal in Finder
     pub fn open_file_search(&mut self, query: String, cx: &mut Context<Self>) {
-        logging::log(
-            "EXEC",
-            &format!("Opening File Search with query: {}", query),
+        tracing::info!(message = %&format!("Opening File Search with query: {}", query),
         );
 
         let results = Self::resolve_file_search_results(&query);
-        logging::log(
-            "EXEC",
-            &format!("File search found {} results", results.len()),
+        tracing::info!(message = %&format!("File search found {} results", results.len()),
         );
 
         // Set up the view state
@@ -270,24 +257,20 @@ impl ScriptListApp {
             .into_iter()
             .map(|(idx, _)| idx)
             .collect();
-            logging::log(
-                "SEARCH",
-                &format!(
-                    "recompute_display_indices: pattern='{}' cached={} -> display={}",
-                    pattern,
-                    cached_count,
-                    indices.len()
-                ),
+            tracing::debug!(
+                event = "recompute_display_indices",
+                pattern = %pattern,
+                cached_count,
+                display_count = indices.len()
             );
             indices
         } else {
             // No filter - show all results in order
-            logging::log(
-                "SEARCH",
-                &format!(
-                    "recompute_display_indices: no_filter cached={} -> display={}",
-                    cached_count, cached_count
-                ),
+            tracing::debug!(
+                event = "recompute_display_indices",
+                mode = "no_filter",
+                cached_count,
+                display_count = cached_count
             );
             (0..self.cached_file_results.len()).collect()
         };
@@ -295,7 +278,7 @@ impl ScriptListApp {
 
     /// Open the quick terminal
     fn open_quick_terminal(&mut self, cx: &mut Context<Self>) {
-        logging::log("EXEC", "Opening Quick Terminal");
+        tracing::info!(message = %"Opening Quick Terminal");
 
         // Create submit callback that just closes on exit/escape
         let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
@@ -332,7 +315,7 @@ impl ScriptListApp {
                 cx.notify();
             }
             Err(e) => {
-                logging::log("ERROR", &format!("Failed to create quick terminal: {}", e));
+                tracing::error!(message = %&format!("Failed to create quick terminal: {}", e));
                 self.toast_manager.push(
                     components::toast::Toast::error(
                         format!("Failed to open terminal: {}", e),
@@ -348,15 +331,13 @@ impl ScriptListApp {
     /// Open the webcam prompt
     #[cfg(target_os = "macos")]
     fn open_webcam(&mut self, cx: &mut Context<Self>) {
-        logging::log("EXEC", "Opening Webcam prompt");
+        tracing::info!(message = %"Opening Webcam prompt");
 
         let focus_handle = self.focus_handle.clone();
         let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
             std::sync::Arc::new(|_id: String, value: Option<String>| {
                 if let Some(data) = value {
-                    logging::log(
-                        "EXEC",
-                        &format!("Webcam capture data: {} bytes", data.len()),
+                    tracing::info!(message = %&format!("Webcam capture data: {} bytes", data.len()),
                     );
                 }
             });
@@ -378,7 +359,7 @@ impl ScriptListApp {
         let (frame_rx, capture_handle) = match crate::camera::start_capture(640) {
             Ok(pair) => pair,
             Err(err) => {
-                logging::log("ERROR", &format!("Failed to start webcam: {}", err));
+                tracing::error!(message = %&format!("Failed to start webcam: {}", err));
                 // Still show the prompt with an error
                 let entity_weak2 = entity.downgrade();
                 let err_msg = err.to_string();
@@ -460,7 +441,7 @@ impl ScriptListApp {
     /// Open the webcam prompt
     #[cfg(not(target_os = "macos"))]
     fn open_webcam(&mut self, cx: &mut Context<Self>) {
-        logging::log("EXEC", "Opening Webcam prompt (unsupported platform)");
+        tracing::info!(message = %"Opening Webcam prompt (unsupported platform)");
 
         let focus_handle = self.focus_handle.clone();
         let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =

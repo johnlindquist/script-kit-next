@@ -8,16 +8,12 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         if !confirmed {
-            logging::log(
-                "EXEC",
-                &format!("Builtin confirmation cancelled: {}", entry_id),
+            tracing::info!(message = %&format!("Builtin confirmation cancelled: {}", entry_id),
             );
             return;
         }
 
-        logging::log(
-            "EXEC",
-            &format!("Builtin confirmation accepted, executing: {}", entry_id),
+        tracing::info!(message = %&format!("Builtin confirmation accepted, executing: {}", entry_id),
         );
 
         // Find the builtin entry by ID and execute it
@@ -27,9 +23,7 @@ impl ScriptListApp {
             // Skip confirmation check since we're coming from the modal callback
             self.execute_builtin_confirmed(entry, cx);
         } else {
-            logging::log(
-                "ERROR",
-                &format!("Builtin entry not found for confirmed action: {}", entry_id),
+            tracing::error!(message = %&format!("Builtin entry not found for confirmed action: {}", entry_id),
             );
         }
     }
@@ -41,9 +35,7 @@ impl ScriptListApp {
         entry: &builtins::BuiltInEntry,
         cx: &mut Context<Self>,
     ) {
-        logging::log(
-            "EXEC",
-            &format!(
+        tracing::info!(message = %&format!(
                 "Executing confirmed built-in: {} (id: {})",
                 entry.name, entry.id
             ),
@@ -53,9 +45,7 @@ impl ScriptListApp {
         match &entry.feature {
             // System Actions that can be dangerous
             builtins::BuiltInFeature::SystemAction(action_type) => {
-                logging::log(
-                    "EXEC",
-                    &format!("Executing confirmed system action: {:?}", action_type),
+                tracing::info!(message = %&format!("Executing confirmed system action: {:?}", action_type),
                 );
 
                 #[cfg(target_os = "macos")]
@@ -87,7 +77,7 @@ impl ScriptListApp {
 
                         // App control
                         SystemActionType::QuitScriptKit => {
-                            logging::log("EXEC", "Quitting Script Kit (confirmed)");
+                            tracing::info!(message = %"Quitting Script Kit (confirmed)");
                             cx.quit();
                             return;
                         }
@@ -96,9 +86,7 @@ impl ScriptListApp {
                         // fall through to execute them
                         _ => {
                             // These shouldn't typically be confirmed, but handle gracefully
-                            logging::log(
-                                "EXEC",
-                                &format!(
+                            tracing::info!(message = %&format!(
                                     "Executing non-dangerous system action: {:?}",
                                     action_type
                                 ),
@@ -160,7 +148,7 @@ impl ScriptListApp {
 
                     match result {
                         Ok(()) => {
-                            logging::log("EXEC", "Confirmed system action executed successfully");
+                            tracing::info!(message = %"Confirmed system action executed successfully");
                             if let Some(message) = self.system_action_feedback_message(action_type)
                             {
                                 self.show_hud(message, Some(HUD_MEDIUM_MS), cx);
@@ -171,9 +159,7 @@ impl ScriptListApp {
                             }
                         }
                         Err(e) => {
-                            logging::log(
-                                "ERROR",
-                                &format!("Confirmed system action failed: {}", e),
+                            tracing::error!(message = %&format!("Confirmed system action failed: {}", e),
                             );
                             self.toast_manager.push(
                                 components::toast::Toast::error(
@@ -189,7 +175,7 @@ impl ScriptListApp {
 
                 #[cfg(not(target_os = "macos"))]
                 {
-                    logging::log("WARN", "System actions only supported on macOS");
+                    tracing::warn!(message = %"System actions only supported on macOS");
                     self.toast_manager.push(
                         components::toast::Toast::warning(
                             "System actions are only supported on macOS",
@@ -204,9 +190,7 @@ impl ScriptListApp {
             // For any other builtin type that somehow got confirmed,
             // just execute it normally (shouldn't happen in practice)
             _ => {
-                logging::log(
-                    "WARN",
-                    &format!("Unexpected confirmed builtin type: {:?}", entry.feature),
+                tracing::warn!(message = %&format!("Unexpected confirmed builtin type: {:?}", entry.feature),
                 );
             }
         }
