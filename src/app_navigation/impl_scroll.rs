@@ -52,7 +52,7 @@ impl ScriptListApp {
 
         // Schedule fade-out after 1000ms of inactivity
         cx.spawn(async move |this, cx| {
-            Timer::after(SCROLLBAR_IDLE_DELAY).await;
+            cx.background_executor().timer(SCROLLBAR_IDLE_DELAY).await;
 
             let should_start_fade = cx
                 .update(|cx| {
@@ -66,7 +66,6 @@ impl ScriptListApp {
                             .unwrap_or(false)
                     })
                 })
-                .unwrap_or(Ok(false))
                 .unwrap_or(false);
 
             if !should_start_fade {
@@ -98,14 +97,13 @@ impl ScriptListApp {
                             t < 1.0
                         })
                     })
-                    .unwrap_or(Ok(false))
                     .unwrap_or(false);
 
                 if !continue_fade {
                     break;
                 }
 
-                Timer::after(SCROLLBAR_FADE_TICK).await;
+                cx.background_executor().timer(SCROLLBAR_FADE_TICK).await;
             }
         })
         .detach();
@@ -359,7 +357,7 @@ impl ScriptListApp {
         self.nav_coalescer.flush_task_running = true;
         cx.spawn(async move |this, cx| {
             loop {
-                Timer::after(NavCoalescer::WINDOW).await;
+                cx.background_executor().timer(NavCoalescer::WINDOW).await;
                 let keep_running = cx
                     .update(|cx| {
                         this.update(cx, |this, cx| {
@@ -381,7 +379,6 @@ impl ScriptListApp {
                             }
                         })
                     })
-                    .unwrap_or(Ok(false))
                     .unwrap_or(false);
                 if !keep_running {
                     break;
