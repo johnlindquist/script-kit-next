@@ -162,7 +162,9 @@ impl ChatPrompt {
     pub fn start_cursor_blink(&mut self, cx: &mut Context<Self>) {
         cx.spawn(async move |this, cx| {
             loop {
-                Timer::after(Duration::from_millis(530)).await;
+                cx.background_executor()
+                    .timer(Duration::from_millis(530))
+                    .await;
 
                 // Skip cx.update() entirely when main window is hidden
                 // to avoid unnecessary GPUI context access at idle
