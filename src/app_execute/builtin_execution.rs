@@ -128,9 +128,7 @@ impl ScriptListApp {
         query_override: Option<&str>,
         cx: &mut Context<Self>,
     ) {
-        logging::log(
-            "EXEC",
-            &format!("Executing built-in: {} (id: {})", entry.name, entry.id),
+        tracing::info!(message = %&format!("Executing built-in: {} (id: {})", entry.name, entry.id),
         );
 
         // Clear any stale actions popup from previous view
@@ -139,9 +137,7 @@ impl ScriptListApp {
 
         // Check if this command requires confirmation - open modal if so
         if self.config.requires_confirmation(&entry.id) {
-            logging::log(
-                "EXEC",
-                &format!("Opening confirmation modal for: {}", entry.id),
+            tracing::info!(message = %&format!("Opening confirmation modal for: {}", entry.id),
             );
 
             // Clone what we need for the spawned task
@@ -184,9 +180,7 @@ impl ScriptListApp {
                     let sender = confirm_sender.clone();
                     let id_for_callback = entry_id.clone();
                     let on_choice: ConfirmCallback = std::sync::Arc::new(move |confirmed| {
-                        logging::log(
-                            "EXEC",
-                            &format!(
+                        tracing::info!(message = %&format!(
                                 "Confirmation modal result for {}: {}",
                                 id_for_callback,
                                 if confirmed { "confirmed" } else { "cancelled" }
@@ -207,13 +201,9 @@ impl ScriptListApp {
                         Some("Cancel".to_string()),
                         on_choice,
                     ) {
-                        logging::log(
-                            "ERROR",
-                            &format!("Failed to open confirmation modal: {}", e),
+                        tracing::error!(message = %&format!("Failed to open confirmation modal: {}", e),
                         );
-                        logging::log(
-                            "EXEC",
-                            &format!(
+                        tracing::info!(message = %&format!(
                                 "Skipping dangerous action '{}' because confirmation modal failed to open",
                                 entry_id
                             ),
@@ -233,16 +223,14 @@ impl ScriptListApp {
 
         match &entry.feature {
             builtins::BuiltInFeature::ClipboardHistory => {
-                logging::log("EXEC", "Opening Clipboard History");
+                tracing::info!(message = %"Opening Clipboard History");
                 // P0 FIX: Store data in self, view holds only state
                 self.cached_clipboard_entries = clipboard_history::get_cached_entries(100);
                 self.focused_clipboard_entry_id = self
                     .cached_clipboard_entries
                     .first()
                     .map(|entry| entry.id.clone());
-                logging::log(
-                    "EXEC",
-                    &format!(
+                tracing::info!(message = %&format!(
                         "Loaded {} clipboard entries (cached)",
                         self.cached_clipboard_entries.len()
                     ),
@@ -268,7 +256,7 @@ impl ScriptListApp {
                 cx.notify();
             }
             builtins::BuiltInFeature::PasteSequentially => {
-                logging::log("EXEC", "Opening Paste Sequentially");
+                tracing::info!(message = %"Opening Paste Sequentially");
                 let prompt = prompts::PasteSequentialPrompt::new(
                     "builtin-paste-sequentially".to_string(),
                     self.focus_handle.clone(),
@@ -285,7 +273,7 @@ impl ScriptListApp {
                 cx.notify();
             }
             builtins::BuiltInFeature::Favorites => {
-                logging::log("EXEC", "Opening Favorites");
+                tracing::info!(message = %"Opening Favorites");
 
                 match crate::favorites::load_favorites() {
                     Ok(favorites) => {
@@ -308,7 +296,7 @@ impl ScriptListApp {
                         }
                     }
                     Err(error) => {
-                        logging::log("ERROR", &format!("Failed to load favorites: {}", error));
+                        tracing::error!(message = %&format!("Failed to load favorites: {}", error));
                         self.toast_manager.push(
                             components::toast::Toast::error(
                                 format!("Failed to load favorites: {}", error),
@@ -321,11 +309,11 @@ impl ScriptListApp {
                 cx.notify();
             }
             builtins::BuiltInFeature::AppLauncher => {
-                logging::log("EXEC", "Opening App Launcher");
+                tracing::info!(message = %"Opening App Launcher");
                 // P0 FIX: Use self.apps which is already cached
                 // Refresh apps list when opening launcher
                 self.apps = app_launcher::scan_applications().clone();
-                logging::log("EXEC", &format!("Loaded {} applications", self.apps.len()));
+                tracing::info!(message = %&format!("Loaded {} applications", self.apps.len()));
                 // Invalidate caches since apps changed
                 self.invalidate_filter_cache();
                 self.invalidate_grouped_cache();
@@ -350,34 +338,34 @@ impl ScriptListApp {
                 cx.notify();
             }
             builtins::BuiltInFeature::App(app_name) => {
-                logging::log("EXEC", &format!("Launching app: {}", app_name));
+                tracing::info!(message = %&format!("Launching app: {}", app_name));
                 // Find and launch the specific application
                 let apps = app_launcher::scan_applications();
                 if let Some(app) = apps.iter().find(|a| a.name == *app_name) {
                     if let Err(e) = app_launcher::launch_application(app) {
-                        logging::log("ERROR", &format!("Failed to launch {}: {}", app_name, e));
+                        tracing::error!(message = %&format!("Failed to launch {}: {}", app_name, e));
                         self.last_output = Some(SharedString::from(format!(
                             "Failed to launch: {}",
                             app_name
                         )));
                     } else {
-                        logging::log("EXEC", &format!("Launched app: {}", app_name));
+                        tracing::info!(message = %&format!("Launched app: {}", app_name));
                         self.close_and_reset_window(cx);
                     }
                 } else {
-                    logging::log("ERROR", &format!("App not found: {}", app_name));
+                    tracing::error!(message = %&format!("App not found: {}", app_name));
                     self.last_output =
                         Some(SharedString::from(format!("App not found: {}", app_name)));
                 }
                 cx.notify();
             }
             builtins::BuiltInFeature::WindowSwitcher => {
-                logging::log("EXEC", "Opening Window Switcher");
+                tracing::info!(message = %"Opening Window Switcher");
                 // P0 FIX: Store data in self, view holds only state
                 // Load windows when view is opened (windows change frequently)
                 match window_control::list_windows() {
                     Ok(windows) => {
-                        logging::log("EXEC", &format!("Loaded {} windows", windows.len()));
+                        tracing::info!(message = %&format!("Loaded {} windows", windows.len()));
                         self.cached_windows = windows;
                         // Clear the shared input for fresh search (sync on next render)
                         self.filter_text = String::new();
@@ -397,7 +385,7 @@ impl ScriptListApp {
                         self.focused_input = FocusedInput::MainFilter;
                     }
                     Err(e) => {
-                        logging::log("ERROR", &format!("Failed to list windows: {}", e));
+                        tracing::error!(message = %&format!("Failed to list windows: {}", e));
                         self.toast_manager.push(
                             components::toast::Toast::error(
                                 format!("Failed to list windows: {}", e),
@@ -410,7 +398,7 @@ impl ScriptListApp {
                 cx.notify();
             }
             builtins::BuiltInFeature::DesignGallery => {
-                logging::log("EXEC", "Opening Design Gallery");
+                tracing::info!(message = %"Opening Design Gallery");
                 // Clear the shared input for fresh search (sync on next render)
                 self.filter_text = String::new();
                 self.pending_filter_sync = true;
@@ -430,7 +418,7 @@ impl ScriptListApp {
                 cx.notify();
             }
             builtins::BuiltInFeature::AiChat => {
-                logging::log("EXEC", "Opening AI Chat window");
+                tracing::info!(message = %"Opening AI Chat window");
                 // Reset state and hide main window first
                 script_kit_gpui::set_main_window_visible(false);
                 self.reset_to_script_list(cx);
@@ -447,7 +435,7 @@ impl ScriptListApp {
 
                     cx.update(|cx| {
                         if let Err(e) = ai::open_ai_window(cx) {
-                            logging::log("ERROR", &format!("Failed to open AI window: {}", e));
+                            tracing::error!(message = %&format!("Failed to open AI window: {}", e));
                             let _ = this.update(cx, |this, cx| {
                                 this.toast_manager.push(
                                     components::toast::Toast::error(
@@ -464,13 +452,13 @@ impl ScriptListApp {
                 .detach();
             }
             builtins::BuiltInFeature::Notes => {
-                logging::log("EXEC", "Opening Notes window");
+                tracing::info!(message = %"Opening Notes window");
                 // Reset state, hide main window, and open Notes window
                 script_kit_gpui::set_main_window_visible(false);
                 self.reset_to_script_list(cx);
                 platform::defer_hide_main_window(cx);
                 if let Err(e) = notes::open_notes_window(cx) {
-                    logging::log("ERROR", &format!("Failed to open Notes window: {}", e));
+                    tracing::error!(message = %&format!("Failed to open Notes window: {}", e));
                     self.toast_manager.push(
                         components::toast::Toast::error(
                             format!("Failed to open Notes: {}", e),
@@ -482,9 +470,7 @@ impl ScriptListApp {
                 }
             }
             builtins::BuiltInFeature::EmojiPicker => {
-                logging::log(
-                    "EXEC",
-                    "correlation_id=builtin-emoji-picker-start action=show-emoji-grid",
+                tracing::info!(message = %"correlation_id=builtin-emoji-picker-start action=show-emoji-grid",
                 );
                 self.filter_text = String::new();
                 self.pending_filter_sync = true;
@@ -500,9 +486,7 @@ impl ScriptListApp {
                 cx.notify();
             }
             builtins::BuiltInFeature::Quicklinks => {
-                logging::log(
-                    "EXEC",
-                    "correlation_id=builtin-quicklinks-start action=show-quicklinks-list",
+                tracing::info!(message = %"correlation_id=builtin-quicklinks-start action=show-quicklinks-list",
                 );
 
                 #[cfg(target_os = "macos")]
@@ -542,9 +526,7 @@ impl ScriptListApp {
                                     ) {
                                         Ok(Some(value)) => value,
                                         Ok(None) => {
-                                            logging::log(
-                                                "EXEC",
-                                                &format!(
+                                            tracing::info!(message = %&format!(
                                                     "correlation_id=builtin-quicklinks-cancelled id={}",
                                                     selected_quicklink.id
                                                 ),
@@ -552,9 +534,7 @@ impl ScriptListApp {
                                             return;
                                         }
                                         Err(error) => {
-                                            logging::log(
-                                                "ERROR",
-                                                &format!(
+                                            tracing::error!(message = %&format!(
                                                     "correlation_id=builtin-quicklinks-query-error id={} attempted=prompt-query error={}",
                                                     selected_quicklink.id, error
                                                 ),
@@ -583,9 +563,7 @@ impl ScriptListApp {
                                 );
                                 match open::that(&expanded_url) {
                                     Ok(_) => {
-                                        logging::log(
-                                            "EXEC",
-                                            &format!(
+                                        tracing::info!(message = %&format!(
                                                 "correlation_id=builtin-quicklinks-opened id={} url={}",
                                                 selected_quicklink.id, expanded_url
                                             ),
@@ -598,9 +576,7 @@ impl ScriptListApp {
                                         self.close_and_reset_window(cx);
                                     }
                                     Err(error) => {
-                                        logging::log(
-                                            "ERROR",
-                                            &format!(
+                                        tracing::error!(message = %&format!(
                                                 "correlation_id=builtin-quicklinks-open-failed id={} url={} error={}",
                                                 selected_quicklink.id, expanded_url, error
                                             ),
@@ -616,9 +592,7 @@ impl ScriptListApp {
                                     }
                                 }
                             } else {
-                                logging::log(
-                                    "ERROR",
-                                    &format!(
+                                tracing::error!(message = %&format!(
                                         "correlation_id=builtin-quicklinks-missing-selection selected_label=\"{}\"",
                                         selected_label
                                     ),
@@ -634,12 +608,10 @@ impl ScriptListApp {
                             }
                         }
                         Ok(None) => {
-                            logging::log("EXEC", "correlation_id=builtin-quicklinks-cancelled");
+                            tracing::info!(message = %"correlation_id=builtin-quicklinks-cancelled");
                         }
                         Err(error) => {
-                            logging::log(
-                                "ERROR",
-                                &format!(
+                            tracing::error!(message = %&format!(
                                     "correlation_id=builtin-quicklinks-list-error attempted=list-quicklinks error={}",
                                     error
                                 ),
@@ -657,9 +629,7 @@ impl ScriptListApp {
                 }
                 #[cfg(not(target_os = "macos"))]
                 {
-                    logging::log(
-                        "WARN",
-                        "correlation_id=builtin-quicklinks-unsupported platform=non-macos",
+                    tracing::warn!(message = %"correlation_id=builtin-quicklinks-unsupported platform=non-macos",
                     );
                     self.toast_manager.push(
                         components::toast::Toast::warning(
@@ -672,9 +642,7 @@ impl ScriptListApp {
                 }
             }
             builtins::BuiltInFeature::MenuBarAction(action) => {
-                logging::log(
-                    "EXEC",
-                    &format!(
+                tracing::info!(message = %&format!(
                         "Executing menu bar action: {} -> {}",
                         action.bundle_id,
                         action.menu_path.join(" → ")
@@ -688,11 +656,11 @@ impl ScriptListApp {
                         &action.menu_path,
                     ) {
                         Ok(()) => {
-                            logging::log("EXEC", "Menu action executed successfully");
+                            tracing::info!(message = %"Menu action executed successfully");
                             self.close_and_reset_window(cx);
                         }
                         Err(e) => {
-                            logging::log("ERROR", &format!("Menu action failed: {}", e));
+                            tracing::error!(message = %&format!("Menu action failed: {}", e));
                             self.toast_manager.push(
                                 components::toast::Toast::error(
                                     format!("Menu action failed: {}", e),
@@ -706,7 +674,7 @@ impl ScriptListApp {
                 }
                 #[cfg(not(target_os = "macos"))]
                 {
-                    logging::log("WARN", "Menu bar actions only supported on macOS");
+                    tracing::warn!(message = %"Menu bar actions only supported on macOS");
                     self.toast_manager.push(
                         components::toast::Toast::warning(
                             "Menu bar actions are only supported on macOS",
@@ -722,9 +690,7 @@ impl ScriptListApp {
             // System Actions
             // =========================================================================
             builtins::BuiltInFeature::SystemAction(action_type) => {
-                logging::log(
-                    "EXEC",
-                    &format!("Executing system action: {:?}", action_type),
+                tracing::info!(message = %&format!("Executing system action: {:?}", action_type),
                 );
 
                 #[cfg(target_os = "macos")]
@@ -771,7 +737,7 @@ impl ScriptListApp {
 
                         // App control
                         SystemActionType::QuitScriptKit => {
-                            logging::log("EXEC", "Quitting Script Kit");
+                            tracing::info!(message = %"Quitting Script Kit");
                             cx.quit();
                             return;
                         }
@@ -811,7 +777,7 @@ impl ScriptListApp {
 
                     match result {
                         Ok(()) => {
-                            logging::log("EXEC", "System action executed successfully");
+                            tracing::info!(message = %"System action executed successfully");
                             if let Some(message) = self.system_action_feedback_message(action_type)
                             {
                                 cx.notify();
@@ -822,7 +788,7 @@ impl ScriptListApp {
                             }
                         }
                         Err(e) => {
-                            logging::log("ERROR", &format!("System action failed: {}", e));
+                            tracing::error!(message = %&format!("System action failed: {}", e));
                             self.toast_manager.push(
                                 components::toast::Toast::error(
                                     format!("System action failed: {}", e),
@@ -837,7 +803,7 @@ impl ScriptListApp {
 
                 #[cfg(not(target_os = "macos"))]
                 {
-                    logging::log("WARN", "System actions only supported on macOS");
+                    tracing::warn!(message = %"System actions only supported on macOS");
                     self.toast_manager.push(
                         components::toast::Toast::warning(
                             "System actions are only supported on macOS",
@@ -856,7 +822,7 @@ impl ScriptListApp {
             // Notes Commands
             // =========================================================================
             builtins::BuiltInFeature::NotesCommand(cmd_type) => {
-                logging::log("EXEC", &format!("Executing notes command: {:?}", cmd_type));
+                tracing::info!(message = %&format!("Executing notes command: {:?}", cmd_type));
 
                 use builtins::NotesCommandType;
 
@@ -873,7 +839,7 @@ impl ScriptListApp {
                 };
 
                 if let Err(e) = result {
-                    logging::log("ERROR", &format!("Notes command failed: {}", e));
+                    tracing::error!(message = %&format!("Notes command failed: {}", e));
                     self.toast_manager.push(
                         components::toast::Toast::error(
                             format!("Notes command failed: {}", e),
@@ -889,7 +855,7 @@ impl ScriptListApp {
             // AI Commands
             // =========================================================================
             builtins::BuiltInFeature::AiCommand(cmd_type) => {
-                logging::log("EXEC", &format!("Executing AI command: {:?}", cmd_type));
+                tracing::info!(message = %&format!("Executing AI command: {:?}", cmd_type));
 
                 use builtins::AiCommandType;
 
@@ -905,7 +871,7 @@ impl ScriptListApp {
                     AiCommandType::OpenAi | AiCommandType::NewConversation => {
                         // Basic open/new conversation
                         if let Err(e) = ai::open_ai_window(cx) {
-                            logging::log("ERROR", &format!("AI command failed: {}", e));
+                            tracing::error!(message = %&format!("AI command failed: {}", e));
                             self.toast_manager.push(
                                 components::toast::Toast::error(
                                     ai_open_failure_message(&e),
@@ -923,9 +889,7 @@ impl ScriptListApp {
                                 // Force a fresh AI window state so cleared history is reflected immediately.
                                 ai::close_ai_window(cx);
                                 if let Err(e) = ai::open_ai_window(cx) {
-                                    logging::log(
-                                        "ERROR",
-                                        &format!(
+                                    tracing::error!(message = %&format!(
                                             "AI history cleared but failed to reopen AI window: {}",
                                             e
                                         ),
@@ -950,9 +914,7 @@ impl ScriptListApp {
                                 }
                             }
                             Err(e) => {
-                                logging::log(
-                                    "ERROR",
-                                    &format!("Failed to clear AI conversations: {}", e),
+                                tracing::error!(message = %&format!("Failed to clear AI conversations: {}", e),
                                 );
                                 self.toast_manager.push(
                                     components::toast::Toast::error(
@@ -983,9 +945,7 @@ impl ScriptListApp {
                                     "[Screenshot captured: {}x{} pixels]\n\nPlease analyze this screenshot.",
                                     width, height
                                 );
-                                logging::log(
-                                    "EXEC",
-                                    &format!(
+                                tracing::info!(message = %&format!(
                                         "Screen captured: {}x{}, {} bytes",
                                         width,
                                         height,
@@ -993,7 +953,7 @@ impl ScriptListApp {
                                     ),
                                 );
                                 if let Err(e) = ai::open_ai_window(cx) {
-                                    logging::log("ERROR", &ai_open_failure_message(&e));
+                                    tracing::error!(message = %&ai_open_failure_message(&e));
                                     self.toast_manager.push(
                                         components::toast::Toast::error(
                                             ai_open_failure_message(&e),
@@ -1008,7 +968,7 @@ impl ScriptListApp {
                                 }
                             }
                             Err(e) => {
-                                logging::log("ERROR", &format!("Failed to capture screen: {}", e));
+                                tracing::error!(message = %&format!("Failed to capture screen: {}", e));
                                 self.toast_manager.push(
                                     components::toast::Toast::error(
                                         format!("Failed to capture screen: {}", e),
@@ -1033,9 +993,7 @@ impl ScriptListApp {
                                     "[Window: {} - {}x{} pixels]\n\nPlease analyze this window screenshot.",
                                     window_title, width, height
                                 );
-                                logging::log(
-                                    "EXEC",
-                                    &format!(
+                                tracing::info!(message = %&format!(
                                         "Window '{}' captured: {}x{}, {} bytes",
                                         window_title,
                                         width,
@@ -1044,7 +1002,7 @@ impl ScriptListApp {
                                     ),
                                 );
                                 if let Err(e) = ai::open_ai_window(cx) {
-                                    logging::log("ERROR", &ai_open_failure_message(&e));
+                                    tracing::error!(message = %&ai_open_failure_message(&e));
                                     self.toast_manager.push(
                                         components::toast::Toast::error(
                                             ai_open_failure_message(&e),
@@ -1058,7 +1016,7 @@ impl ScriptListApp {
                                 }
                             }
                             Err(e) => {
-                                logging::log("ERROR", &format!("Failed to capture window: {}", e));
+                                tracing::error!(message = %&format!("Failed to capture window: {}", e));
                                 self.toast_manager.push(
                                     components::toast::Toast::error(
                                         format!("Failed to capture window: {}", e),
@@ -1079,12 +1037,10 @@ impl ScriptListApp {
                                     "I've selected the following text:\n\n```\n{}\n```\n\nPlease help me with this.",
                                     text
                                 );
-                                logging::log(
-                                    "EXEC",
-                                    &format!("Selected text captured: {} chars", text.len()),
+                                tracing::info!(message = %&format!("Selected text captured: {} chars", text.len()),
                                 );
                                 if let Err(e) = ai::open_ai_window(cx) {
-                                    logging::log("ERROR", &ai_open_failure_message(&e));
+                                    tracing::error!(message = %&ai_open_failure_message(&e));
                                     self.toast_manager.push(
                                         components::toast::Toast::error(
                                             ai_open_failure_message(&e),
@@ -1109,9 +1065,7 @@ impl ScriptListApp {
                                 cx.notify();
                             }
                             Err(e) => {
-                                logging::log(
-                                    "ERROR",
-                                    &format!("Failed to get selected text: {}", e),
+                                tracing::error!(message = %&format!("Failed to get selected text: {}", e),
                                 );
                                 self.toast_manager.push(
                                     components::toast::Toast::error(
@@ -1133,9 +1087,9 @@ impl ScriptListApp {
                                     "I'm looking at this webpage:\n\n{}\n\nPlease help me analyze or understand its content.",
                                     url
                                 );
-                                logging::log("EXEC", &format!("Browser URL captured: {}", url));
+                                tracing::info!(message = %&format!("Browser URL captured: {}", url));
                                 if let Err(e) = ai::open_ai_window(cx) {
-                                    logging::log("ERROR", &ai_open_failure_message(&e));
+                                    tracing::error!(message = %&ai_open_failure_message(&e));
                                     self.toast_manager.push(
                                         components::toast::Toast::error(
                                             ai_open_failure_message(&e),
@@ -1149,7 +1103,7 @@ impl ScriptListApp {
                                 }
                             }
                             Err(e) => {
-                                logging::log("ERROR", &format!("Failed to get browser URL: {}", e));
+                                tracing::error!(message = %&format!("Failed to get browser URL: {}", e));
                                 self.toast_manager.push(
                                     components::toast::Toast::error(
                                         format!("Failed to get browser URL: {}", e),
@@ -1187,7 +1141,7 @@ impl ScriptListApp {
                             .duration_ms(Some(HUD_LONG_MS)),
                         );
                         if let Err(e) = ai::open_ai_window(cx) {
-                            logging::log("ERROR", &ai_open_failure_message(&e));
+                            tracing::error!(message = %&ai_open_failure_message(&e));
                             self.toast_manager.push(
                                 components::toast::Toast::error(
                                     ai_open_failure_message(&e),
@@ -1205,7 +1159,7 @@ impl ScriptListApp {
             // Script Commands
             // =========================================================================
             builtins::BuiltInFeature::ScriptCommand(cmd_type) => {
-                logging::log("EXEC", &format!("Executing script command: {:?}", cmd_type));
+                tracing::info!(message = %&format!("Executing script command: {:?}", cmd_type));
 
                 use builtins::ScriptCommandType;
 
@@ -1220,9 +1174,7 @@ impl ScriptListApp {
             // Permission Commands
             // =========================================================================
             builtins::BuiltInFeature::PermissionCommand(cmd_type) => {
-                logging::log(
-                    "EXEC",
-                    &format!("Executing permission command: {:?}", cmd_type),
+                tracing::info!(message = %&format!("Executing permission command: {:?}", cmd_type),
                 );
 
                 use builtins::PermissionCommandType;
@@ -1277,9 +1229,7 @@ impl ScriptListApp {
                     }
                     PermissionCommandType::OpenAccessibilitySettings => {
                         if let Err(e) = permissions_wizard::open_accessibility_settings() {
-                            logging::log(
-                                "ERROR",
-                                &format!("Failed to open accessibility settings: {}", e),
+                            tracing::error!(message = %&format!("Failed to open accessibility settings: {}", e),
                             );
                             self.toast_manager.push(
                                 components::toast::Toast::error(
@@ -1300,9 +1250,7 @@ impl ScriptListApp {
             // Frecency/Suggested Commands
             // =========================================================================
             builtins::BuiltInFeature::FrecencyCommand(cmd_type) => {
-                logging::log(
-                    "EXEC",
-                    &format!("Executing frecency command: {:?}", cmd_type),
+                tracing::info!(message = %&format!("Executing frecency command: {:?}", cmd_type),
                 );
 
                 use builtins::FrecencyCommandType;
@@ -1312,7 +1260,7 @@ impl ScriptListApp {
                         // Clear all frecency data
                         self.frecency_store.clear();
                         if let Err(e) = self.frecency_store.save() {
-                            logging::log("ERROR", &format!("Failed to save frecency data: {}", e));
+                            tracing::error!(message = %&format!("Failed to save frecency data: {}", e));
                             self.toast_manager.push(
                                 components::toast::Toast::error(
                                     format!("Failed to clear suggested: {}", e),
@@ -1321,7 +1269,7 @@ impl ScriptListApp {
                                 .duration_ms(Some(HUD_SLOW_MS)),
                             );
                         } else {
-                            logging::log("EXEC", "Cleared all suggested items");
+                            tracing::info!(message = %"Cleared all suggested items");
                             // Invalidate the grouped cache so the UI updates
                             self.invalidate_grouped_cache();
                             // Reset the main input and window to clean state
@@ -1345,9 +1293,7 @@ impl ScriptListApp {
             // Settings Commands (Reset Window Positions, etc.)
             // =========================================================================
             builtins::BuiltInFeature::SettingsCommand(cmd_type) => {
-                logging::log(
-                    "EXEC",
-                    &format!("Executing settings command: {:?}", cmd_type),
+                tracing::info!(message = %&format!("Executing settings command: {:?}", cmd_type),
                 );
 
                 use builtins::SettingsCommandType;
@@ -1360,7 +1306,7 @@ impl ScriptListApp {
 
                         // Reset all window positions to defaults
                         crate::window_state::reset_all_positions();
-                        logging::log("EXEC", "Reset all window positions to defaults");
+                        tracing::info!(message = %"Reset all window positions to defaults");
 
                         // Show toast confirmation
                         self.toast_manager.push(
@@ -1400,7 +1346,7 @@ impl ScriptListApp {
                         );
                     }
                     SettingsCommandType::ChooseTheme => {
-                        logging::log("EXEC", "Opening Theme Chooser");
+                        tracing::info!(message = %"Opening Theme Chooser");
                         // Back up current theme for cancel/restore
                         self.theme_before_chooser = Some(self.theme.clone());
                         // Clear the shared input for fresh search (sync on next render)
@@ -1428,9 +1374,7 @@ impl ScriptListApp {
             // Utility Commands (Scratch Pad, Quick Terminal, Process Manager)
             // =========================================================================
             builtins::BuiltInFeature::UtilityCommand(cmd_type) => {
-                logging::log(
-                    "EXEC",
-                    &format!("Executing utility command: {:?}", cmd_type),
+                tracing::info!(message = %&format!("Executing utility command: {:?}", cmd_type),
                 );
 
                 use builtins::UtilityCommandType;
@@ -1451,9 +1395,7 @@ impl ScriptListApp {
                         let report =
                             crate::process_manager::PROCESS_MANAGER.format_active_process_report(8);
 
-                        logging::log(
-                            "EXEC",
-                            &format!(
+                        tracing::info!(message = %&format!(
                                 "correlation_id=process-manager-inspect active_process_count={}",
                                 process_count
                             ),
@@ -1482,9 +1424,7 @@ impl ScriptListApp {
                     }
                     UtilityCommandType::StopAllProcesses => {
                         let process_count = crate::process_manager::PROCESS_MANAGER.active_count();
-                        logging::log(
-                            "EXEC",
-                            &format!(
+                        tracing::info!(message = %&format!(
                                 "correlation_id=process-manager-stop-all requested_count={}",
                                 process_count
                             ),
@@ -1513,9 +1453,7 @@ impl ScriptListApp {
             // Kit Store Commands
             // =========================================================================
             builtins::BuiltInFeature::KitStoreCommand(cmd_type) => {
-                logging::log(
-                    "EXEC",
-                    &format!("Executing kit store command: {:?}", cmd_type),
+                tracing::info!(message = %&format!("Executing kit store command: {:?}", cmd_type),
                 );
 
                 use builtins::KitStoreCommandType;
@@ -1539,12 +1477,12 @@ impl ScriptListApp {
             // File Search (Directory Navigation)
             // =========================================================================
             builtins::BuiltInFeature::Webcam => {
-                logging::log("EXEC", "Opening Webcam");
+                tracing::info!(message = %"Opening Webcam");
                 self.opened_from_main_menu = true;
                 self.open_webcam(cx);
             }
             builtins::BuiltInFeature::FileSearch => {
-                logging::log("EXEC", "Opening File Search");
+                tracing::info!(message = %"Opening File Search");
                 // Mark as opened from main menu - ESC will return to main menu
                 self.opened_from_main_menu = true;
                 self.open_file_search(String::new(), cx);
