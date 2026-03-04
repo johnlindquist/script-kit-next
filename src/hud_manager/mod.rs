@@ -531,7 +531,7 @@ pub fn show_hud(text: String, duration_ms: Option<u64>, cx: &mut App) {
 
                 // IMPORTANT: All AppKit calls must happen on the main thread.
                 // cx.update() ensures we're on the main thread.
-                let _ = cx.update(|cx| {
+                cx.update(|cx| {
                     // Dismiss by ID using GPUI's WindowHandle API
                     dismiss_hud_by_id(hud_id, cx);
                 });
@@ -668,7 +668,7 @@ pub fn show_hud_with_action(
 
                 // IMPORTANT: All AppKit calls must happen on the main thread.
                 // cx.update() ensures we're on the main thread.
-                let _ = cx.update(|cx| {
+                cx.update(|cx| {
                     // Dismiss by ID using GPUI's WindowHandle API
                     dismiss_hud_by_id(hud_id, cx);
                 });
@@ -850,9 +850,11 @@ fn dismiss_hud_by_id(hud_id: u64, cx: &mut App) {
     // Close the window using GPUI's proper API
     if let Some(window_handle) = window_to_close {
         // Use WindowHandle.update() to access window.remove_window()
-        window_handle.update(cx, |_view, window, _cx| {
-            window.remove_window();
-        });
+        window_handle
+            .update(cx, |_view, window, _cx| {
+                window.remove_window();
+            })
+            .ok();
 
         logging::log("HUD", &format!("Dismissed HUD id={}", hud_id));
 
