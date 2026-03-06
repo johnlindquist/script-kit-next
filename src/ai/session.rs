@@ -91,15 +91,20 @@ impl ClaudeSession {
         });
         let line = serde_json::to_string(&msg)?;
 
-        tracing::debug!(
+        tracing::info!(
             session_id = %self.session_id,
             message_len = content.len(),
-            "Sending message to persistent Claude session"
+            "Sending message to persistent Claude session via stdin"
         );
 
         self.stdin.write_all(line.as_bytes())?;
         self.stdin.write_all(b"\n")?;
         self.stdin.flush()?;
+
+        tracing::info!(
+            session_id = %self.session_id,
+            "Message flushed to Claude stdin, waiting for response"
+        );
 
         // Read events until we get a Result or Error
         #[allow(unused_assignments)]
@@ -120,18 +125,44 @@ impl ClaudeSession {
                         on_chunk(&chunk);
                     }
                     SessionEvent::Result(result) => {
+                        tracing::info!(
+                            session_id = %self.session_id,
+                            result_len = result.len(),
+                            elapsed_ms = start.elapsed().as_millis() as u64,
+                            "Claude session received final result"
+                        );
                         final_result = Some(result);
                         break;
                     }
                     SessionEvent::Error(err) => {
+                        tracing::error!(
+                            session_id = %self.session_id,
+                            error = %err,
+                            elapsed_ms = start.elapsed().as_millis() as u64,
+                            "Claude session received error event"
+                        );
                         return Err(anyhow!("Claude session error: {}", err));
                     }
                     SessionEvent::Exited(code) => {
+                        tracing::error!(
+                            session_id = %self.session_id,
+                            exit_code = code,
+                            elapsed_ms = start.elapsed().as_millis() as u64,
+                            "Claude session process exited unexpectedly"
+                        );
                         return Err(anyhow!("Claude session exited with code: {}", code));
                     }
                 },
                 Err(mpsc::RecvTimeoutError::Timeout) => {
-                    // Continue waiting
+                    // Log periodically so we know the session is still waiting
+                    let elapsed_secs = start.elapsed().as_secs();
+                    if elapsed_secs > 0 && elapsed_secs.is_multiple_of(5) {
+                        tracing::info!(
+                            session_id = %self.session_id,
+                            elapsed_secs = elapsed_secs,
+                            "Claude session still waiting for response..."
+                        );
+                    }
                 }
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
                     return Err(anyhow!("Claude session reader disconnected"));
@@ -415,6 +446,12 @@ impl ClaudeSessionManager {
 
         let mut child = cmd.spawn().context("Failed to spawn claude CLI")?;
 
+        tracing::info!(
+            session_id = %session_id,
+            pid = child.id(),
+            "Claude CLI process spawned successfully"
+        );
+
         // Take stdin
         let stdin = child
             .stdin
@@ -466,16 +503,16 @@ impl ClaudeSessionManager {
             tracing::debug!(session_id = %session_id_clone, "Claude stdout reader exited");
         });
 
-        // Spawn stderr reader thread (just for logging)
+        // Spawn stderr reader thread - log at warn level since stderr usually means trouble
         let session_id_clone2 = session_id.to_string();
         thread::spawn(move || {
             let reader = BufReader::new(stderr);
             for line in reader.lines().map_while(Result::ok) {
                 if !line.trim().is_empty() {
-                    tracing::trace!(
+                    tracing::warn!(
                         session_id = %session_id_clone2,
-                        stderr = %line,
-                        "Claude stderr"
+                        stderr_line = %line,
+                        "Claude session stderr"
                     );
                 }
             }
@@ -661,7 +698,13 @@ fn parse_claude_event(line: &str) -> Option<SessionEvent> {
                 .to_string();
             Some(SessionEvent::Error(error))
         }
-        _ => None,
+        other => {
+            tracing::debug!(
+                event_type = %other,
+                "Ignoring unhandled Claude session event type"
+            );
+            None
+        }
     }
 }
 
