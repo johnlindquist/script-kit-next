@@ -111,6 +111,7 @@ impl ClaudeSession {
         let mut final_result: Option<String> = None;
         let timeout = Duration::from_secs(120);
         let start = Instant::now();
+        let mut last_logged_secs: u64 = 0;
 
         loop {
             // Check timeout
@@ -154,12 +155,14 @@ impl ClaudeSession {
                     }
                 },
                 Err(mpsc::RecvTimeoutError::Timeout) => {
-                    // Log periodically so we know the session is still waiting
+                    // Log once per 5-second boundary (not every poll tick)
                     let elapsed_secs = start.elapsed().as_secs();
-                    if elapsed_secs > 0 && elapsed_secs.is_multiple_of(5) {
+                    if elapsed_secs >= last_logged_secs + 5 {
+                        last_logged_secs = elapsed_secs;
                         tracing::info!(
                             session_id = %self.session_id,
                             elapsed_secs = elapsed_secs,
+                            pid = self.child.id(),
                             "Claude session still waiting for response..."
                         );
                     }
@@ -432,6 +435,11 @@ impl ClaudeSessionManager {
             .filter(|s| !s.trim().is_empty())
             .unwrap_or("You are a helpful AI assistant");
         cmd.arg("--system-prompt").arg(effective_prompt);
+
+        // Clear CLAUDECODE env var so the spawned CLI doesn't think it's a nested session.
+        // When Script Kit is running inside a Claude Code session, this var is inherited
+        // and causes the child `claude` process to hang or refuse to start.
+        cmd.env_remove("CLAUDECODE");
 
         // Set up pipes
         cmd.stdin(Stdio::piped())
