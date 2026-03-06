@@ -1073,7 +1073,7 @@ impl NotesActionsPanel {
     }
 
     fn create_shadow() -> Vec<BoxShadow> {
-        let sk_theme = crate::theme::service::get_cached_theme();
+        let sk_theme = crate::theme::get_cached_theme();
         if sk_theme.is_vibrancy_enabled() {
             return vec![]; // No shadows for vibrancy - matches POC behavior
         }
