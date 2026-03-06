@@ -47,6 +47,55 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
+/// Credential-related keys to extract from the user's `~/.claude/settings.json`.
+/// These are merged into the `--settings` JSON so the CLI can authenticate
+/// even when `--setting-sources ""` disables normal settings loading.
+const CREDENTIAL_KEYS: &[&str] = &[
+    "apiKeyHelper",
+    "env", // may contain ANTHROPIC_BASE_URL, ANTHROPIC_API_KEY, etc.
+    "oauthAccount",
+    "primaryApiKey",
+];
+
+/// Read the user's `~/.claude/settings.json` and extract only credential/connection
+/// fields.  Returns a `serde_json::Value::Object` with only the whitelisted keys
+/// that were present, or an empty object if the file doesn't exist / can't be read.
+pub fn read_user_credential_settings() -> serde_json::Value {
+    let settings_path = dirs::home_dir()
+        .map(|h| h.join(".claude").join("settings.json"))
+        .unwrap_or_default();
+
+    let content = match std::fs::read_to_string(&settings_path) {
+        Ok(c) => c,
+        Err(_) => return serde_json::json!({}),
+    };
+
+    let parsed: serde_json::Value = match serde_json::from_str(&content) {
+        Ok(v) => v,
+        Err(_) => return serde_json::json!({}),
+    };
+
+    let obj = match parsed.as_object() {
+        Some(o) => o,
+        None => return serde_json::json!({}),
+    };
+
+    let mut creds = serde_json::Map::new();
+    for &key in CREDENTIAL_KEYS {
+        if let Some(val) = obj.get(key) {
+            creds.insert(key.to_string(), val.clone());
+        }
+    }
+
+    let extracted_keys: Vec<&str> = creds.keys().map(|k| k.as_str()).collect();
+    tracing::debug!(
+        keys = ?extracted_keys,
+        "Extracted credential settings from user config"
+    );
+
+    serde_json::Value::Object(creds)
+}
+
 /// Events from the stdout reader thread
 #[derive(Debug, Clone)]
 pub enum SessionEvent {
@@ -408,11 +457,22 @@ impl ClaudeSessionManager {
 
         let mut cmd = Command::new(&self.config.claude_path);
 
-        // Assistant mode configuration
-        // NOTE: Do NOT use --setting-sources "" here — it disables API key loading,
-        // causing the CLI to have apiKeySource=none and silently fail to respond.
-        cmd.arg("--settings")
-            .arg(r#"{"disableAllHooks": true, "permissions": {"allow": ["WebSearch", "WebFetch", "Read"]}}"#);
+        // Full isolation: --setting-sources "" prevents loading project/local settings,
+        // but also kills API key loading. We fix this by extracting credential fields
+        // from the user's ~/.claude/settings.json and merging them into --settings.
+        cmd.arg("--setting-sources").arg("");
+
+        let mut merged_settings = read_user_credential_settings();
+        if let Some(obj) = merged_settings.as_object_mut() {
+            obj.insert("disableAllHooks".to_string(), serde_json::json!(true));
+            obj.insert(
+                "permissions".to_string(),
+                serde_json::json!({"allow": ["WebSearch", "WebFetch", "Read"]}),
+            );
+        }
+        let settings_json = serde_json::to_string(&merged_settings)
+            .unwrap_or_else(|_| r#"{"disableAllHooks":true}"#.to_string());
+        cmd.arg("--settings").arg(&settings_json);
         cmd.arg("--tools").arg("WebSearch, WebFetch, Read");
         cmd.arg("--no-chrome");
         cmd.arg("--disable-slash-commands");
