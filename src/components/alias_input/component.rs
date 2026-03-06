@@ -174,7 +174,7 @@ impl AliasInput {
             cx.background_executor()
                 .timer(std::time::Duration::from_millis(16))
                 .await;
-            let _ = cx.update(|cx| {
+            cx.update(|cx| {
                 let _ = this.update(cx, |app, cx| {
                     app.overlay_animation_tick_scheduled = false;
                     cx.notify();

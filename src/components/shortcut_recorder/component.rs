@@ -293,7 +293,7 @@ impl ShortcutRecorder {
             cx.background_executor()
                 .timer(Duration::from_millis(16))
                 .await;
-            let _ = cx.update(|cx| {
+            cx.update(|cx| {
                 let _ = this.update(cx, |recorder, cx| {
                     recorder.overlay_animation_tick_scheduled = false;
                     cx.notify();

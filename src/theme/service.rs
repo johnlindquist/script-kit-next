@@ -26,7 +26,6 @@
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
-use anyhow::Context;
 use gpui::App;
 use tracing::{debug, error, info, warn};
 
@@ -282,18 +281,15 @@ pub fn ensure_theme_service(cx: &mut App) {
                     validate_theme_json_before_reload();
                 }
 
-                let update_result = cx
-                    .update(|cx| {
-                        // Keep cache update + gpui sync + revision bump in one app update.
-                        let theme = reload_theme_cache_sync_and_bump_revision(cx);
-                        let updated_auto_appearance =
-                            matches!(theme.appearance, AppearanceMode::Auto);
+                let update_result: Result<bool, anyhow::Error> = Ok(cx.update(|cx| {
+                    // Keep cache update + gpui sync + revision bump in one app update.
+                    let theme = reload_theme_cache_sync_and_bump_revision(cx);
+                    let updated_auto_appearance = matches!(theme.appearance, AppearanceMode::Auto);
 
-                        // Notify all registered windows to re-render
-                        windows::notify_all_windows(cx);
-                        updated_auto_appearance
-                    })
-                    .context("theme service failed to update app context");
+                    // Notify all registered windows to re-render
+                    windows::notify_all_windows(cx);
+                    updated_auto_appearance
+                }));
 
                 let updated_auto_appearance = match update_result {
                     Ok(updated_auto_appearance) => updated_auto_appearance,

@@ -189,7 +189,7 @@ impl NotificationService {
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             cx.background_executor().timer(duration).await;
 
-            let _ = cx.update(|cx| {
+            cx.update(|cx| {
                 if cx.has_global::<NotificationService>() {
                     cx.update_global::<NotificationService, _>(
                         |service: &mut NotificationService, cx| {

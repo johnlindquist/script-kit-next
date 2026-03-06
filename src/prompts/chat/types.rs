@@ -180,6 +180,7 @@ pub(crate) enum ChatInputKeyAction {
     CopyLastResponse,
     ClearConversation,
     Paste,
+    JumpToLatest,
     DelegateToInput,
     Ignore,
 }
@@ -431,8 +432,7 @@ impl ChatErrorType {
             || s_lower.contains("401")
         {
             ChatErrorType::NoApiKey
-        } else if s_lower
-            .contains("cannot be launched inside another claude code session")
+        } else if s_lower.contains("cannot be launched inside another claude code session")
             || s_lower.contains("nested sessions")
         {
             ChatErrorType::ClaudeCodeNested
@@ -471,9 +471,7 @@ impl ChatErrorType {
             || s_lower.contains("internal server error")
         {
             ChatErrorType::ServerError
-        } else if s_lower.contains("cli exited with status")
-            || s_lower.contains("returned error")
-        {
+        } else if s_lower.contains("cli exited with status") || s_lower.contains("returned error") {
             ChatErrorType::ProviderError
         } else {
             ChatErrorType::Unknown
@@ -504,9 +502,7 @@ impl ChatErrorType {
                 "\u{26a0} Claude Code CLI not found. \
                  Install it from https://docs.anthropic.com/en/docs/claude-code"
             }
-            ChatErrorType::ProviderError => {
-                "\u{26a0} AI provider error. Check the details below."
-            }
+            ChatErrorType::ProviderError => "\u{26a0} AI provider error. Check the details below.",
             ChatErrorType::ServerError => {
                 "\u{26a0} Server error. The AI provider may be experiencing issues."
             }
