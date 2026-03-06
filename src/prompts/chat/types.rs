@@ -416,6 +416,10 @@ pub enum ChatErrorType {
     RateLimited,
     InvalidModel,
     TokenLimit,
+    ClaudeCodeNested,
+    ClaudeCodeNotFound,
+    ProviderError,
+    ServerError,
     Unknown,
 }
 
@@ -427,6 +431,17 @@ impl ChatErrorType {
             || s_lower.contains("401")
         {
             ChatErrorType::NoApiKey
+        } else if s_lower
+            .contains("cannot be launched inside another claude code session")
+            || s_lower.contains("nested sessions")
+        {
+            ChatErrorType::ClaudeCodeNested
+        } else if s_lower.contains("claude")
+            && (s_lower.contains("not found")
+                || s_lower.contains("no such file")
+                || s_lower.contains("command not found"))
+        {
+            ChatErrorType::ClaudeCodeNotFound
         } else if s_lower.contains("network")
             || s_lower.contains("connection")
             || s_lower.contains("timeout")
@@ -449,6 +464,17 @@ impl ChatErrorType {
             || s_lower.contains("length")
         {
             ChatErrorType::TokenLimit
+        } else if s_lower.contains("500")
+            || s_lower.contains("502")
+            || s_lower.contains("503")
+            || s_lower.contains("server error")
+            || s_lower.contains("internal server error")
+        {
+            ChatErrorType::ServerError
+        } else if s_lower.contains("cli exited with status")
+            || s_lower.contains("returned error")
+        {
+            ChatErrorType::ProviderError
         } else {
             ChatErrorType::Unknown
         }
@@ -456,13 +482,35 @@ impl ChatErrorType {
 
     pub fn display_message(&self) -> &'static str {
         match self {
-            ChatErrorType::NoApiKey => "⚠ API key not configured. Set up your API key to continue.",
-            ChatErrorType::NetworkError => "⚠ Network error. Check your connection and try again.",
-            ChatErrorType::StreamInterrupted => "⚠ Response interrupted. Click retry to continue.",
-            ChatErrorType::RateLimited => "⚠ Rate limited. Please wait a moment and try again.",
-            ChatErrorType::InvalidModel => "⚠ Model unavailable. Using default model.",
-            ChatErrorType::TokenLimit => "⚠ Message too long. Try a shorter prompt.",
-            ChatErrorType::Unknown => "⚠ Something went wrong. Please try again.",
+            ChatErrorType::NoApiKey => {
+                "\u{26a0} API key not configured. Set up your API key to continue."
+            }
+            ChatErrorType::NetworkError => {
+                "\u{26a0} Network error. Check your connection and try again."
+            }
+            ChatErrorType::StreamInterrupted => {
+                "\u{26a0} Response interrupted. Click retry to continue."
+            }
+            ChatErrorType::RateLimited => {
+                "\u{26a0} Rate limited. Please wait a moment and try again."
+            }
+            ChatErrorType::InvalidModel => "\u{26a0} Model unavailable. Using default model.",
+            ChatErrorType::TokenLimit => "\u{26a0} Message too long. Try a shorter prompt.",
+            ChatErrorType::ClaudeCodeNested => {
+                "\u{26a0} Cannot run Claude Code inside an existing Claude Code session. \
+                 Close the outer session first."
+            }
+            ChatErrorType::ClaudeCodeNotFound => {
+                "\u{26a0} Claude Code CLI not found. \
+                 Install it from https://docs.anthropic.com/en/docs/claude-code"
+            }
+            ChatErrorType::ProviderError => {
+                "\u{26a0} AI provider error. Check the details below."
+            }
+            ChatErrorType::ServerError => {
+                "\u{26a0} Server error. The AI provider may be experiencing issues."
+            }
+            ChatErrorType::Unknown => "\u{26a0} Something went wrong. Please try again.",
         }
     }
 
@@ -472,6 +520,8 @@ impl ChatErrorType {
             ChatErrorType::NetworkError
                 | ChatErrorType::StreamInterrupted
                 | ChatErrorType::RateLimited
+                | ChatErrorType::ProviderError
+                | ChatErrorType::ServerError
                 | ChatErrorType::Unknown
         )
     }

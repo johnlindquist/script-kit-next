@@ -11,6 +11,7 @@
 //! - Keyboard navigation (arrow keys, enter to select, escape to close)
 //! - Filter notes as user types in search
 
+use crate::ui_foundation::{is_key_down, is_key_enter, is_key_escape, is_key_up};
 use gpui::{
     div, prelude::*, px, rgba, uniform_list, AnyElement, App, Context, ElementId, Entity,
     FocusHandle, Focusable, IntoElement, KeyDownEvent, MouseButton, ParentElement, Render,
@@ -23,7 +24,6 @@ use gpui_component::{
     tooltip::Tooltip,
     IconName, Sizable,
 };
-use crate::ui_foundation::{is_key_down, is_key_enter, is_key_escape, is_key_up};
 
 use super::model::{Note, NoteId};
 
@@ -683,8 +683,9 @@ mod tests {
             "Selected row highlight should only render in keyboard mode"
         );
         assert!(
-            BROWSE_PANEL_SOURCE
-                .contains("self.hovered_index == Some(index) && self.input_mode == InputMode::Mouse"),
+            BROWSE_PANEL_SOURCE.contains(
+                "self.hovered_index == Some(index) && self.input_mode == InputMode::Mouse"
+            ),
             "Hover highlight should only render in mouse mode"
         );
     }
