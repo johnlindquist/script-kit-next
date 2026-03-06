@@ -308,11 +308,24 @@ impl ChatPrompt {
         let session_id = self.cli_session_id.clone();
 
         // Background thread: accumulate raw chunks from the provider
+        let model_id_for_thread = model_id.clone();
         std::thread::spawn(move || {
+            logging::log(
+                "CHAT",
+                &format!(
+                    "Background provider thread started for model={}",
+                    model_id_for_thread
+                ),
+            );
+            let chunk_count = std::sync::atomic::AtomicUsize::new(0);
             let result = ai_provider.stream_message(
                 &api_messages,
                 &model_id_clone,
                 Box::new(move |chunk| {
+                    let count = chunk_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if count == 0 {
+                        logging::log("CHAT", "First chunk received from provider");
+                    }
                     if let Ok(mut content) = content_clone.lock() {
                         content.push_str(&chunk);
                     }
@@ -323,9 +336,11 @@ impl ChatPrompt {
 
             match result {
                 Ok(()) => {
+                    logging::log("CHAT", "Provider stream_message completed successfully");
                     done_clone.store(true, Ordering::SeqCst);
                 }
                 Err(e) => {
+                    logging::log("CHAT", &format!("Provider stream_message failed: {}", e));
                     if let Ok(mut err) = error_clone.lock() {
                         *err = Some(e.to_string());
                     }
