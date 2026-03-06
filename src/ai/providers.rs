@@ -1620,9 +1620,8 @@ impl ClaudeCodeProvider {
 
         // ASSISTANT MODE: Disable all coding features, act as a helpful assistant
         // This makes Claude Code CLI behave as a conversational AI, not a coding agent
-
-        // Disable all setting sources (project settings, local settings, etc.)
-        cmd.arg("--setting-sources").arg("");
+        // NOTE: Do NOT use --setting-sources "" — it disables API key loading,
+        // causing the CLI to have apiKeySource=none and silently fail to respond.
 
         // Disable hooks, limit permissions to safe read-only operations
         let settings_json = r#"{"disableAllHooks": true, "permissions": {"allow": ["WebSearch", "WebFetch", "Read"]}}"#;
