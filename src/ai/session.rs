@@ -159,12 +159,34 @@ impl ClaudeSession {
                     let elapsed_secs = start.elapsed().as_secs();
                     if elapsed_secs >= last_logged_secs + 5 {
                         last_logged_secs = elapsed_secs;
+                        // Check if process is still alive
+                        let alive = matches!(self.child.try_wait(), Ok(None));
+                        let exit_status = if !alive {
+                            self.child
+                                .try_wait()
+                                .ok()
+                                .flatten()
+                                .map(|s| format!("{}", s))
+                        } else {
+                            None
+                        };
                         tracing::info!(
                             session_id = %self.session_id,
                             elapsed_secs = elapsed_secs,
                             pid = self.child.id(),
+                            process_alive = alive,
+                            exit_status = ?exit_status,
                             "Claude session still waiting for response..."
                         );
+                        if !alive {
+                            return Err(anyhow!(
+                                "Claude CLI process (PID {}) exited while waiting for response{}",
+                                self.child.id(),
+                                exit_status
+                                    .map(|s| format!(" with status: {}", s))
+                                    .unwrap_or_default()
+                            ));
+                        }
                     }
                 }
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
@@ -387,7 +409,8 @@ impl ClaudeSessionManager {
         let mut cmd = Command::new(&self.config.claude_path);
 
         // Assistant mode configuration
-        cmd.arg("--setting-sources").arg("");
+        // NOTE: Do NOT use --setting-sources "" here — it disables API key loading,
+        // causing the CLI to have apiKeySource=none and silently fail to respond.
         cmd.arg("--settings")
             .arg(r#"{"disableAllHooks": true, "permissions": {"allow": ["WebSearch", "WebFetch", "Read"]}}"#);
         cmd.arg("--tools").arg("WebSearch, WebFetch, Read");
@@ -446,9 +469,25 @@ impl ClaudeSessionManager {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
-        tracing::debug!(
+        // Log the full command for manual reproduction
+        let cmd_debug = format!(
+            "{} {}",
+            self.config.claude_path,
+            cmd.get_args()
+                .map(|a| {
+                    let s = a.to_string_lossy();
+                    if s.contains(' ') || s.contains('{') {
+                        format!("'{}'", s)
+                    } else {
+                        s.to_string()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
+        tracing::info!(
             session_id = %session_id,
-            model_id = %model_id,
+            cmd = %cmd_debug,
             "Spawning persistent Claude CLI process"
         );
 
@@ -487,10 +526,30 @@ impl ClaudeSessionManager {
         let tx_clone = tx.clone();
         thread::spawn(move || {
             let reader = BufReader::new(stdout);
+            let mut line_count: usize = 0;
+            tracing::info!(
+                session_id = %session_id_clone,
+                "Claude stdout reader thread started, waiting for first output..."
+            );
             for line in reader.lines() {
                 match line {
                     Ok(line) if line.trim().is_empty() => continue,
                     Ok(line) => {
+                        line_count += 1;
+                        if line_count <= 3 {
+                            // Log first few lines to understand protocol init
+                            let preview = if line.len() > 200 {
+                                format!("{}...", &line[..200])
+                            } else {
+                                line.clone()
+                            };
+                            tracing::info!(
+                                session_id = %session_id_clone,
+                                line_num = line_count,
+                                line = %preview,
+                                "Claude stdout line received"
+                            );
+                        }
                         if let Some(event) = parse_claude_event(&line) {
                             if tx_clone.send(event).is_err() {
                                 break; // Receiver dropped
@@ -508,7 +567,11 @@ impl ClaudeSessionManager {
                     }
                 }
             }
-            tracing::debug!(session_id = %session_id_clone, "Claude stdout reader exited");
+            tracing::info!(
+                session_id = %session_id_clone,
+                total_lines = line_count,
+                "Claude stdout reader exited"
+            );
         });
 
         // Spawn stderr reader thread - log at warn level since stderr usually means trouble
