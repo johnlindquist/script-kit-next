@@ -1670,6 +1670,9 @@ impl ClaudeCodeProvider {
             .unwrap_or("You are a helpful AI assistant");
         cmd.arg("--system-prompt").arg(effective_system_prompt);
 
+        // Clear CLAUDECODE env var so the spawned CLI doesn't think it's a nested session
+        cmd.env_remove("CLAUDECODE");
+
         cmd.stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
