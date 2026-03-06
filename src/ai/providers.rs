@@ -1797,8 +1797,22 @@ impl ClaudeCodeProvider {
                     // Final result message - check for errors
                     let is_error = v.get("is_error").and_then(|x| x.as_bool()).unwrap_or(false);
                     if is_error {
-                        let errors = v.get("errors").cloned().unwrap_or(serde_json::Value::Null);
-                        return Err(anyhow!("Claude Code returned error: {}", errors));
+                        // Extract human-readable message from errors JSON
+                        let error_msg = v
+                            .get("errors")
+                            .and_then(|e| e.as_array())
+                            .and_then(|arr| {
+                                arr.iter()
+                                    .filter_map(|e| {
+                                        e.get("message")
+                                            .or_else(|| e.get("error"))
+                                            .and_then(|m| m.as_str())
+                                    })
+                                    .next()
+                            })
+                            .or_else(|| v.get("errors").and_then(|e| e.as_str()))
+                            .unwrap_or("Unknown error");
+                        return Err(anyhow!("Claude Code error: {}", error_msg));
                     }
                     if let Some(r) = v.get("result").and_then(|x| x.as_str()) {
                         final_result = Some(r.to_string());
@@ -1828,11 +1842,24 @@ impl ClaudeCodeProvider {
                     status = %status,
                     "Claude CLI failed with stderr output"
                 );
-                return Err(anyhow!(
-                    "`claude` CLI exited with status {}: {}",
-                    status,
+                // Surface the meaningful part of stderr directly
+                let clean_msg = if stderr_msg
+                    .contains("cannot be launched inside another Claude Code session")
+                {
+                    "Claude Code cannot be launched inside another Claude Code session. \
+                     Nested sessions share runtime resources and will crash all active sessions."
+                        .to_string()
+                } else if stderr_msg.contains("command not found") {
+                    "Claude Code CLI is not installed".to_string()
+                } else {
+                    // Strip common prefixes like "Error: " for cleaner display
                     stderr_msg
-                ));
+                        .trim()
+                        .strip_prefix("Error: ")
+                        .unwrap_or(stderr_msg.trim())
+                        .to_string()
+                };
+                return Err(anyhow!("{}", clean_msg));
             }
         }
 

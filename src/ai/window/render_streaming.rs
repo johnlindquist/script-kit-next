@@ -291,6 +291,18 @@ impl AiApp {
             || err_lower.contains("server error")
         {
             Some("Server error \u{2014} the provider may be experiencing issues")
+        } else if err_lower.contains("cannot be launched inside another")
+            || err_lower.contains("nested sessions")
+        {
+            Some("Close the outer Claude Code session and retry")
+        } else if err_lower.contains("claude")
+            && (err_lower.contains("not found")
+                || err_lower.contains("no such file")
+                || err_lower.contains("command not found"))
+        {
+            Some("Install the Claude Code CLI to use this provider")
+        } else if err_lower.contains("cli exited with status") {
+            Some("The AI provider process failed \u{2014} check the error details")
         } else {
             None
         };

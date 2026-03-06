@@ -98,16 +98,19 @@ impl ChatPrompt {
             // Show raw error detail so the actual cause is visible
             let detail = error_str.trim();
             if !detail.is_empty() && detail != error_message {
-                // Truncate very long error strings for display
-                let truncated = if detail.chars().count() > 200 {
-                    format!("{}…", truncate_str_chars(detail, 200))
+                // Unknown errors: full opacity + more chars since raw message is the only info
+                let is_unknown = error_type == ChatErrorType::Unknown;
+                let max_chars = if is_unknown { 400 } else { 200 };
+                let truncated = if detail.chars().count() > max_chars {
+                    format!("{}…", truncate_str_chars(detail, max_chars))
                 } else {
                     detail.to_string()
                 };
+                let detail_opacity = if is_unknown { 1.0 } else { 0.5 };
                 content = content.child(
                     div()
                         .text_xs()
-                        .opacity(0.5)
+                        .opacity(detail_opacity)
                         .text_color(rgb(error_color))
                         .child(truncated),
                 );
