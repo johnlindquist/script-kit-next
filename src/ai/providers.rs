@@ -1619,13 +1619,22 @@ impl ClaudeCodeProvider {
         let mut cmd = Command::new(&self.claude_path);
 
         // ASSISTANT MODE: Disable all coding features, act as a helpful assistant
-        // This makes Claude Code CLI behave as a conversational AI, not a coding agent
-        // NOTE: Do NOT use --setting-sources "" — it disables API key loading,
-        // causing the CLI to have apiKeySource=none and silently fail to respond.
+        // Full isolation via --setting-sources "" prevents loading project/local settings.
+        // We extract credential fields from ~/.claude/settings.json and merge them
+        // into --settings so the CLI can authenticate.
+        cmd.arg("--setting-sources").arg("");
 
-        // Disable hooks, limit permissions to safe read-only operations
-        let settings_json = r#"{"disableAllHooks": true, "permissions": {"allow": ["WebSearch", "WebFetch", "Read"]}}"#;
-        cmd.arg("--settings").arg(settings_json);
+        let mut merged_settings = super::session::read_user_credential_settings();
+        if let Some(obj) = merged_settings.as_object_mut() {
+            obj.insert("disableAllHooks".to_string(), serde_json::json!(true));
+            obj.insert(
+                "permissions".to_string(),
+                serde_json::json!({"allow": ["WebSearch", "WebFetch", "Read"]}),
+            );
+        }
+        let settings_json = serde_json::to_string(&merged_settings)
+            .unwrap_or_else(|_| r#"{"disableAllHooks":true}"#.to_string());
+        cmd.arg("--settings").arg(&settings_json);
 
         // Only allow safe, non-destructive tools
         cmd.arg("--tools").arg("WebSearch, WebFetch, Read");
