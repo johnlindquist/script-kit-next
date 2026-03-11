@@ -459,13 +459,7 @@ impl ScriptListApp {
             prompt.set_error("Webcam capture is only supported on macOS".to_string(), cx);
         });
 
-        self.toast_manager.push(
-            components::toast::Toast::error(
-                "Webcam capture is only supported on macOS",
-                &self.theme,
-            )
-            .duration_ms(Some(HUD_CONFLICT_MS)),
-        );
+        self.show_error_toast("Webcam capture is only supported on macOS", cx);
 
         self.current_view = AppView::WebcamView { entity };
         self.focused_input = FocusedInput::None;

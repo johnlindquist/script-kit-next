@@ -10,7 +10,6 @@ use std::sync::mpsc::SyncSender;
 
 use gpui::SharedString;
 
-use crate::logging;
 use crate::protocol::{self, ProtocolAction};
 use crate::scripts::SearchResult;
 
@@ -131,8 +130,52 @@ pub fn pbcopy(text: &str) -> Result<(), std::io::Error> {
     }
 
     // Now it's safe to wait - pbcopy has received EOF
-    child.wait()?;
+    let status = child.wait()?;
+    if !status.success() {
+        return Err(std::io::Error::other(format!(
+            "pbcopy exited with status: {}",
+            status
+        )));
+    }
     Ok(())
+}
+
+/// Result of attempting to trigger an SDK action.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SdkActionResult {
+    /// Message was successfully sent to the response channel.
+    Sent,
+    /// No response channel available (no running script).
+    NoSender,
+    /// Action has no handler and no value — nothing to send.
+    NoEffect,
+    /// Response channel is full — message was dropped.
+    ChannelFull,
+    /// Response channel is disconnected — script has exited.
+    ChannelDisconnected,
+}
+
+impl SdkActionResult {
+    /// Whether the action was successfully dispatched.
+    pub fn is_sent(&self) -> bool {
+        matches!(self, SdkActionResult::Sent)
+    }
+
+    /// User-facing error message, if any.
+    pub fn error_message(&self, action_name: &str) -> Option<String> {
+        match self {
+            SdkActionResult::Sent | SdkActionResult::NoEffect => None,
+            SdkActionResult::NoSender => {
+                Some(format!("Action '{}' failed: no active script", action_name))
+            }
+            SdkActionResult::ChannelFull => {
+                Some(format!("Action '{}' failed: channel busy", action_name))
+            }
+            SdkActionResult::ChannelDisconnected => {
+                Some("Action failed: script has exited".to_string())
+            }
+        }
+    }
 }
 
 /// Trigger an SDK action and send the appropriate message to the response channel.
@@ -142,29 +185,21 @@ pub fn pbcopy(text: &str) -> Result<(), std::io::Error> {
 /// - `false` with value: Sends `Submit` message with the value
 /// - `false` without value: Logs warning, no message sent
 ///
-/// Returns `true` if a message was successfully sent, `false` otherwise.
+/// Returns an `SdkActionResult` indicating what happened, so callers can
+/// show appropriate feedback (e.g. Toast on error).
 pub fn trigger_sdk_action(
     action_name: &str,
     action: &ProtocolAction,
     current_input: &str,
     sender: Option<&SyncSender<protocol::Message>>,
-) -> bool {
+) -> SdkActionResult {
     let Some(sender) = sender else {
-        logging::log(
-            "WARN",
-            &format!("No response sender for SDK action '{}'", action_name),
-        );
-        return false;
+        tracing::warn!(action = %action_name, "no response sender for SDK action");
+        return SdkActionResult::NoSender;
     };
 
     let send_result = if action.has_action {
-        logging::log(
-            "ACTIONS",
-            &format!(
-                "SDK action with handler: '{}' (has_action=true), sending ActionTriggered",
-                action_name
-            ),
-        );
+        tracing::info!(action = %action_name, "SDK action with handler, sending ActionTriggered");
         let msg = protocol::Message::action_triggered(
             action_name.to_string(),
             action.value.clone(),
@@ -172,50 +207,26 @@ pub fn trigger_sdk_action(
         );
         sender.try_send(msg)
     } else if let Some(ref value) = action.value {
-        logging::log(
-            "ACTIONS",
-            &format!(
-                "SDK action without handler: '{}' (has_action=false), submitting value: {:?}",
-                action_name, value
-            ),
-        );
+        tracing::info!(action = %action_name, value = ?value, "SDK action without handler, submitting value");
         let msg = protocol::Message::Submit {
             id: "action".to_string(),
             value: Some(value.clone()),
         };
         sender.try_send(msg)
     } else {
-        logging::log(
-            "ACTIONS",
-            &format!(
-                "SDK action '{}' has no value and has_action=false",
-                action_name
-            ),
-        );
-        return false;
+        tracing::info!(action = %action_name, "SDK action has no value and has_action=false");
+        return SdkActionResult::NoEffect;
     };
 
     match send_result {
-        Ok(()) => true,
+        Ok(()) => SdkActionResult::Sent,
         Err(std::sync::mpsc::TrySendError::Full(_)) => {
-            logging::log(
-                "WARN",
-                &format!(
-                    "Response channel full - SDK action '{}' dropped",
-                    action_name
-                ),
-            );
-            false
+            tracing::warn!(action = %action_name, "response channel full - SDK action dropped");
+            SdkActionResult::ChannelFull
         }
         Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-            logging::log(
-                "UI",
-                &format!(
-                    "Response channel disconnected - script exited (action '{}')",
-                    action_name
-                ),
-            );
-            false
+            tracing::info!(action = %action_name, "response channel disconnected - script exited");
+            SdkActionResult::ChannelDisconnected
         }
     }
 }
@@ -265,13 +276,7 @@ pub fn find_sdk_action<'a>(
     let actions = actions?;
 
     if warn_on_shadow && is_reserved_action_id(action_name) {
-        logging::log(
-            "WARN",
-            &format!(
-                "SDK action '{}' shadows a built-in action - SDK action will be ignored",
-                action_name
-            ),
-        );
+        tracing::warn!(action = %action_name, "SDK action shadows a built-in action - will be ignored");
     }
 
     actions.iter().find(|a| a.name == action_name)

@@ -15,7 +15,6 @@
 //! - **Permission Commands**: Accessibility permission management
 //!
 
-// --- merged from part_000.rs ---
 use crate::config::BuiltInConfig;
 use crate::menu_bar::MenuBarItem;
 use tracing::debug;

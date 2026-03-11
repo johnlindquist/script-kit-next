@@ -33,6 +33,8 @@ use platform::{
 #[macro_use]
 extern crate objc;
 
+#[allow(dead_code)] // The bin only uses trigger_sdk_action; the rest is shared with lib/tests.
+mod action_helpers;
 mod actions;
 #[cfg(test)]
 mod actions_button_visibility_tests;
@@ -41,8 +43,6 @@ mod ai;
 mod aliases;
 pub mod calculator;
 mod camera;
-#[cfg(test)]
-mod clipboard_actions_tests;
 mod components;
 mod config;
 mod confirm;

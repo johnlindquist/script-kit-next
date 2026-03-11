@@ -141,7 +141,7 @@ impl ScriptListApp {
                             format!("New {} created and opened in editor", item_type),
                             &self.theme,
                         )
-                        .duration_ms(Some(HUD_LONG_MS)),
+                        .duration_ms(Some(TOAST_SUCCESS_MS)),
                     );
                 }
 

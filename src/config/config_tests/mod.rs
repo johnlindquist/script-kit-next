@@ -1404,6 +1404,9 @@ fn test_default_confirmation_commands_constant() {
     assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin-log-out"));
     assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin-empty-trash"));
     assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin-sleep"));
+    assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin-force-quit"));
+    assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin-stop-all-processes"));
+    assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin-clear-suggested"));
     assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin-test-confirmation"));
 }
 
@@ -1417,6 +1420,9 @@ fn test_requires_confirmation_default_commands() {
     assert!(config.requires_confirmation("builtin-log-out"));
     assert!(config.requires_confirmation("builtin-empty-trash"));
     assert!(config.requires_confirmation("builtin-sleep"));
+    assert!(config.requires_confirmation("builtin-force-quit"));
+    assert!(config.requires_confirmation("builtin-stop-all-processes"));
+    assert!(config.requires_confirmation("builtin-clear-suggested"));
     assert!(config.requires_confirmation("builtin-test-confirmation"));
 }
 

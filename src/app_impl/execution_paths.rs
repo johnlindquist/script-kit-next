@@ -44,152 +44,21 @@ impl ScriptListApp {
             }
             "copy_path" => {
                 // Copy full path to clipboard
-                #[cfg(target_os = "macos")]
-                {
-                    use std::io::Write;
-                    use std::process::{Command, Stdio};
-
-                    match Command::new("pbcopy").stdin(Stdio::piped()).spawn() {
-                        Ok(mut child) => {
-                            if let Some(ref mut stdin) = child.stdin {
-                                if stdin.write_all(path_info.path.as_bytes()).is_ok() {
-                                    let _ = child.wait();
-                                    logging::log(
-                                        "UI",
-                                        &format!("Copied path to clipboard: {}", path_info.path),
-                                    );
-                                    self.last_output = Some(SharedString::from(format!(
-                                        "Copied: {}",
-                                        path_info.path
-                                    )));
-                                    self.show_hud(
-                                        format!("Copied path: {}", path_info.path),
-                                        Some(HUD_MEDIUM_MS),
-                                        cx,
-                                    );
-                                } else {
-                                    logging::log("ERROR", "Failed to write to pbcopy stdin");
-                                    self.last_output =
-                                        Some(SharedString::from("Failed to copy path"));
-                                    self.show_hud(
-                                        "Failed to copy path".to_string(),
-                                        Some(HUD_2500_MS),
-                                        cx,
-                                    );
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            logging::log("ERROR", &format!("Failed to spawn pbcopy: {}", e));
-                            self.last_output = Some(SharedString::from("Failed to copy path"));
-                            self.show_hud(format!("Failed to copy path: {}", e), Some(HUD_2500_MS), cx);
-                        }
-                    }
-                }
-
-                #[cfg(not(target_os = "macos"))]
-                {
-                    use arboard::Clipboard;
-                    match Clipboard::new() {
-                        Ok(mut clipboard) => match clipboard.set_text(&path_info.path) {
-                            Ok(_) => {
-                                logging::log(
-                                    "UI",
-                                    &format!("Copied path to clipboard: {}", path_info.path),
-                                );
-                                self.last_output =
-                                    Some(SharedString::from(format!("Copied: {}", path_info.path)));
-                                self.show_hud(
-                                    format!("Copied path: {}", path_info.path),
-                                    Some(HUD_MEDIUM_MS),
-                                    cx,
-                                );
-                            }
-                            Err(e) => {
-                                logging::log("ERROR", &format!("Failed to copy path: {}", e));
-                                self.last_output = Some(SharedString::from("Failed to copy path"));
-                                self.show_hud(
-                                    format!("Failed to copy path: {}", e),
-                                    Some(HUD_2500_MS),
-                                    cx,
-                                );
-                            }
-                        },
-                        Err(e) => {
-                            logging::log("ERROR", &format!("Failed to access clipboard: {}", e));
-                            self.last_output =
-                                Some(SharedString::from("Failed to access clipboard"));
-                            self.show_hud(
-                                format!("Failed to access clipboard: {}", e),
-                                Some(HUD_2500_MS),
-                                cx,
-                            );
-                        }
-                    }
-                }
+                self.copy_to_clipboard_with_feedback(
+                    &path_info.path,
+                    format!("Copied path: {}", path_info.path),
+                    false,
+                    cx,
+                );
             }
             "copy_filename" => {
                 // Copy just the filename to clipboard
-                #[cfg(target_os = "macos")]
-                {
-                    use std::io::Write;
-                    use std::process::{Command, Stdio};
-
-                    match Command::new("pbcopy").stdin(Stdio::piped()).spawn() {
-                        Ok(mut child) => {
-                            if let Some(ref mut stdin) = child.stdin {
-                                if stdin.write_all(path_info.name.as_bytes()).is_ok() {
-                                    let _ = child.wait();
-                                    logging::log(
-                                        "UI",
-                                        &format!(
-                                            "Copied filename to clipboard: {}",
-                                            path_info.name
-                                        ),
-                                    );
-                                    self.last_output = Some(SharedString::from(format!(
-                                        "Copied: {}",
-                                        path_info.name
-                                    )));
-                                    self.show_hud(
-                                        format!("Copied filename: {}", path_info.name),
-                                        Some(HUD_MEDIUM_MS),
-                                        cx,
-                                    );
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            logging::log("ERROR", &format!("Failed to spawn pbcopy: {}", e));
-                            self.show_hud(
-                                format!("Failed to copy filename: {}", e),
-                                Some(HUD_2500_MS),
-                                cx,
-                            );
-                        }
-                    }
-                }
-
-                #[cfg(not(target_os = "macos"))]
-                {
-                    use arboard::Clipboard;
-                    match Clipboard::new().and_then(|mut c| c.set_text(&path_info.name)) {
-                        Ok(_) => {
-                            self.show_hud(
-                                format!("Copied filename: {}", path_info.name),
-                                Some(HUD_MEDIUM_MS),
-                                cx,
-                            );
-                        }
-                        Err(e) => {
-                            self.show_hud(
-                                format!("Failed to copy filename: {}", e),
-                                Some(HUD_2500_MS),
-                                cx,
-                            );
-                        }
-                    }
-                }
+                self.copy_to_clipboard_with_feedback(
+                    &path_info.name,
+                    format!("Copied filename: {}", path_info.name),
+                    false,
+                    cx,
+                );
             }
             "open_in_finder" => {
                 let file_manager = if cfg!(target_os = "macos") {
@@ -214,11 +83,7 @@ impl ScriptListApp {
                             "ERROR",
                             &format!("Failed to reveal in {}: {}", file_manager, e),
                         );
-                        self.show_hud(
-                            format!("Failed to open in {}: {}", file_manager, e),
-                            Some(HUD_2500_MS),
-                            cx,
-                        );
+                        self.show_error_toast(format!("Failed to open in {}: {}", file_manager, e), cx);
                     }
                 }
             }
@@ -239,11 +104,7 @@ impl ScriptListApp {
                     }
                     Err(e) => {
                         logging::log("ERROR", &format!("Failed to open in editor: {}", e));
-                        self.show_hud(
-                            format!("Failed to open in {}: {}", editor, e),
-                            Some(HUD_2500_MS),
-                            cx,
-                        );
+                        self.show_error_toast(format!("Failed to open in {}: {}", editor, e), cx);
                     }
                 }
             }
@@ -260,7 +121,7 @@ impl ScriptListApp {
                     }
                     Err(e) => {
                         logging::log("ERROR", &format!("Failed to open terminal: {}", e));
-                        self.show_hud(format!("Failed to open terminal: {}", e), Some(HUD_2500_MS), cx);
+                        self.show_error_toast(format!("Failed to open terminal: {}", e), cx);
                     }
                 }
             }
@@ -324,11 +185,7 @@ impl ScriptListApp {
                                     "ERROR",
                                     &format!("Failed to open confirmation modal: {}", e),
                                 );
-                                this.show_hud(
-                                    "Failed to open confirmation dialog".to_string(),
-                                    Some(HUD_2500_MS),
-                                    cx,
-                                );
+                                this.show_error_toast("Failed to open confirmation dialog", cx);
                             });
                             return;
                         }
@@ -361,11 +218,7 @@ impl ScriptListApp {
                                 logging::log("ERROR", &format!("Failed to move to trash: {}", e));
                                 this.last_output =
                                     Some(SharedString::from("Failed to move to Trash"));
-                                this.show_hud(
-                                    format!("Failed to move to Trash: {}", e),
-                                    Some(HUD_2500_MS),
-                                    cx,
-                                );
+                                this.show_error_toast(format!("Failed to move to Trash: {}", e), cx);
                             }
                         }
                         cx.notify();

@@ -47,7 +47,9 @@ impl ScriptListApp {
             let uv_stride = pixel_buffer.get_bytes_per_row_of_plane(1);
             let uv_height = pixel_buffer.get_height_of_plane(1);
 
+            // SAFETY: The pixel buffer is locked for reading above and the plane index is valid (checked via is_planar + plane_count >= 2).
             let y_plane_ptr = unsafe { pixel_buffer.get_base_address_of_plane(0) as *const u8 };
+            // SAFETY: Same lock guard as y_plane_ptr; plane 1 exists per the plane_count check.
             let uv_plane_ptr = unsafe { pixel_buffer.get_base_address_of_plane(1) as *const u8 };
             if y_plane_ptr.is_null() || uv_plane_ptr.is_null() {
                 return Err("Webcam frame memory is unavailable".to_string());
@@ -72,7 +74,9 @@ impl ScriptListApp {
                     format!("Webcam RGB buffer size overflow (width={} height={})", width, height)
                 })?;
 
+            // SAFETY: y_plane_ptr is non-null (checked above), and y_plane_len = y_stride * height is within the locked buffer.
             let y_plane = unsafe { std::slice::from_raw_parts(y_plane_ptr, y_plane_len) };
+            // SAFETY: uv_plane_ptr is non-null (checked above), and uv_plane_len = uv_stride * uv_height is within the locked buffer.
             let uv_plane = unsafe { std::slice::from_raw_parts(uv_plane_ptr, uv_plane_len) };
 
             let mut rgb = vec![0u8; rgb_len];
@@ -122,13 +126,7 @@ impl ScriptListApp {
 
         let unlock_status = pixel_buffer.unlock_base_address(lock_flags);
         if unlock_status != core_video::r#return::kCVReturnSuccess {
-            logging::log(
-                "ERROR",
-                &format!(
-                    "Failed to unlock webcam frame (status={}) after capture",
-                    unlock_status
-                ),
-            );
+            tracing::error!(status = unlock_status, "Failed to unlock webcam frame after capture");
         }
 
         result
@@ -143,32 +141,25 @@ impl ScriptListApp {
 
         let Some(pixel_buffer) = pixel_buffer else {
             cx.notify();
-            self.show_hud("No camera frame available yet".to_string(), Some(HUD_MEDIUM_MS), cx);
+            self.show_error_toast("No camera frame available yet", cx);
             return false;
         };
 
         let png_data = match Self::encode_webcam_frame_to_png(&pixel_buffer) {
             Ok(data) => data,
             Err(e) => {
-                logging::log("ERROR", &format!("Failed to capture webcam photo: {}", e));
+                tracing::error!(error = %e, "Failed to capture webcam photo");
                 cx.notify();
-                self.show_hud(format!("Failed to capture photo: {}", e), Some(HUD_LONG_MS), cx);
+                self.show_error_toast(format!("Failed to capture photo: {}", e), cx);
                 return false;
             }
         };
 
         let save_dir = Self::webcam_photo_directory();
         if let Err(e) = std::fs::create_dir_all(&save_dir) {
-            logging::log(
-                "ERROR",
-                &format!("Failed to create webcam photo directory: {}", e),
-            );
+            tracing::error!(error = %e, "Failed to create webcam photo directory");
             cx.notify();
-            self.show_hud(
-                format!("Failed to create photo directory: {}", e),
-                Some(HUD_LONG_MS),
-                cx,
-            );
+            self.show_error_toast(format!("Failed to create photo directory: {}", e), cx);
             return false;
         }
 
@@ -187,16 +178,19 @@ impl ScriptListApp {
                 cx.notify();
                 self.show_hud(
                     format!("Photo saved to {}", save_path.display()),
-                    Some(3500),
+                    Some(HUD_LONG_MS),
                     cx,
                 );
-                self.reveal_in_finder(&save_path);
+                let save_path_str = save_path.to_string_lossy().to_string();
+                if let Err(error) = crate::file_search::reveal_in_finder(&save_path_str) {
+                    tracing::warn!(path = %save_path.display(), error = %error, "Failed to reveal saved webcam photo");
+                }
                 true
             }
             Err(e) => {
-                logging::log("ERROR", &format!("Failed to save webcam photo: {}", e));
+                tracing::error!(error = %e, "Failed to save webcam photo");
                 cx.notify();
-                self.show_hud(format!("Failed to save photo: {}", e), Some(HUD_LONG_MS), cx);
+                self.show_error_toast(format!("Failed to save photo: {}", e), cx);
                 false
             }
         }
@@ -209,11 +203,7 @@ impl ScriptListApp {
             "capture_webcam_photo requested on unsupported platform",
         );
         cx.notify();
-        self.show_hud(
-            "Webcam capture is only supported on macOS".to_string(),
-            Some(HUD_2500_MS),
-            cx,
-        );
+        self.show_unsupported_platform_toast("Webcam capture", cx);
         false
     }
 

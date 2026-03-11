@@ -669,7 +669,7 @@ impl ScriptListApp {
         if !registry.has_any_provider() {
             self.toast_manager.push(
                 components::toast::Toast::error("No AI providers configured for script generation", &self.theme)
-                    .duration_ms(Some(HUD_SLOW_MS)),
+                    .duration_ms(Some(TOAST_ERROR_MS)),
             );
             cx.notify();
             return;
@@ -691,7 +691,7 @@ impl ScriptListApp {
                         "No AI models available for script generation",
                         &self.theme,
                     )
-                    .duration_ms(Some(HUD_SLOW_MS)),
+                    .duration_ms(Some(TOAST_ERROR_MS)),
                 );
                 cx.notify();
                 return;

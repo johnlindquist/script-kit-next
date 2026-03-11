@@ -1,6 +1,43 @@
 // Actions handling methods - extracted from app_impl.rs
 // This file is included via include!() macro in main.rs
 // Contains: handle_action, trigger_action_by_name
+//
+// ============================================================================
+// Feedback Consistency Matrix
+// ============================================================================
+//
+// Every action handler MUST follow these rules:
+//
+// | Category             | Feedback Type | When                                      |
+// |----------------------|---------------|-------------------------------------------|
+// | **Side-effect: copy**| HUD           | Clipboard write succeeded                 |
+// | **Side-effect: paste**| HUD (flash)  | Simulated Cmd+V succeeded                 |
+// | **Side-effect: pin** | HUD           | Clipboard pin/unpin toggled               |
+// | **Side-effect: share**| HUD          | Share sheet opened                        |
+// | **Side-effect: save**| HUD           | File/snippet saved to disk                |
+// | **Side-effect: delete**| HUD         | Entry/script moved to trash               |
+// | **Side-effect: shortcut/alias change** | HUD | Shortcut removed, alias removed    |
+// | **Side-effect: reload**| HUD         | Scripts reloaded                          |
+// | **Side-effect: system action**| HUD  | System action (volume, dark mode) ok      |
+// | **Side-effect: open external**| HUD  | Editor/Finder/app launched                |
+// | **Side-effect: OCR** | HUD (via copy)| Text extracted and copied                 |
+// | **View transition**  | Silent        | Opening ClipboardHistory, EmojiPicker,    |
+// |                      |               | AppLauncher, WindowSwitcher, FileSearch,  |
+// |                      |               | ThemeChooser, DesignGallery, Webcam,      |
+// |                      |               | ScratchPad, QuickTerminal, ShortcutRec,   |
+// |                      |               | AliasInput, NamingDialog, ActionsDialog   |
+// | **Info / coming soon**| Toast (info) | Feature not yet available, empty state     |
+// | **Warning**          | Toast (warning)| Missing permissions, unsupported platform |
+// | **Error**            | Toast (error) | ALL failure paths — no exceptions          |
+//
+// Rules (enforced by tests in app_actions_tests):
+//  1. Never use both HUD and Toast for the same action path.
+//  2. All error paths MUST show Toast with .error() variant.
+//  3. All HUD/Toast calls MUST use named duration constants below — no inline ms.
+//  4. View transitions are Silent; the new view IS the feedback.
+//  5. Use show_error_toast() helper for errors, copy_to_clipboard_with_feedback()
+//     for clipboard writes, show_unsupported_platform_toast() for platform guards.
+// ============================================================================
 
 pub(crate) const HUD_FLASH_MS: u64 = 1000;
 pub(crate) const HUD_SHORT_MS: u64 = 1500;
@@ -8,7 +45,6 @@ pub(crate) const HUD_MEDIUM_MS: u64 = 2000;
 pub(crate) const HUD_2200_MS: u64 = 2200;
 pub(crate) const HUD_2500_MS: u64 = 2500;
 pub(crate) const HUD_LONG_MS: u64 = 3000;
-pub(crate) const HUD_3200_MS: u64 = 3200;
 pub(crate) const HUD_CONFLICT_MS: u64 = 4000;
 pub(crate) const HUD_SLOW_MS: u64 = 5000;
 
@@ -18,6 +54,12 @@ pub(crate) const TOAST_WARNING_MS: u64 = 5000;
 pub(crate) const TOAST_ERROR_MS: u64 = 5000;
 pub(crate) const TOAST_ERROR_DETAILED_MS: u64 = 8000;
 pub(crate) const TOAST_CRITICAL_MS: u64 = 10000;
+
+/// Unsupported platform message for macOS-only features.
+/// Returns a consistent "only supported on macOS" string for the given feature.
+fn unsupported_platform_message(feature: &str) -> String {
+    format!("{} is only supported on macOS", feature)
+}
 
 fn select_clipboard_entry_meta<'a>(
     entries: &'a [clipboard_history::ClipboardEntryMeta],
@@ -66,10 +108,10 @@ fn file_search_action_success_hud(action_id: &str) -> Option<&'static str> {
 
 fn file_search_action_error_hud_prefix(action_id: &str) -> Option<&'static str> {
     match action_id {
-        "open_file" | "open_directory" => Some("Open failed"),
-        "quick_look" => Some("Quick Look failed"),
-        "open_with" => Some("Open With failed"),
-        "show_info" => Some("Show Info failed"),
+        "open_file" | "open_directory" => Some("Failed to open"),
+        "quick_look" => Some("Failed to Quick Look"),
+        "open_with" => Some("Failed to Open With"),
+        "show_info" => Some("Failed to Show Info"),
         _ => None,
     }
 }
@@ -88,10 +130,12 @@ fn selection_required_message_for_action(action_id: &str) -> &'static str {
         "remove_shortcut" => "Select an item to remove its shortcut.",
         "add_alias" | "update_alias" => "Select an item to add or update its alias.",
         "remove_alias" => "Select an item to remove its alias.",
+        "edit_script" => "Select a script to edit.",
         "edit_scriptlet" => "Select a scriptlet to edit.",
         "reveal_scriptlet_in_finder" => "Select a scriptlet to reveal in Finder.",
         "copy_scriptlet_path" => "Select a scriptlet to copy its path.",
         "copy_content" => "Select a script, agent, or scriptlet to copy its content.",
+        "remove_script" | "delete_script" => "Select a script to remove.",
         "reset_ranking" => "Select an item to reset its ranking.",
         action if action.starts_with("scriptlet_action:") => {
             "Select a scriptlet to run this action."
@@ -171,6 +215,64 @@ end tell"#,
     }
 }
 
+/// Show a confirmation modal centered over the main window and return whether
+/// the user confirmed.  Encapsulates the bounded-channel + open_confirm_window
+/// boilerplate that was previously duplicated across every destructive action.
+///
+/// Returns `Ok(true)` if the user clicks confirm, `Ok(false)` if they cancel
+/// or close the window, and `Err` if the modal could not be opened.
+async fn confirm_with_modal(
+    cx: &mut gpui::AsyncApp,
+    message: String,
+    confirm_label: &str,
+    cancel_label: &str,
+) -> anyhow::Result<bool> {
+    let (confirm_tx, confirm_rx) = async_channel::bounded::<bool>(1);
+
+    cx.update(|cx| {
+        let main_bounds = if let Some((x, y, w, h)) = platform::get_main_window_bounds() {
+            gpui::Bounds {
+                origin: gpui::Point {
+                    x: gpui::px(x as f32),
+                    y: gpui::px(y as f32),
+                },
+                size: gpui::Size {
+                    width: gpui::px(w as f32),
+                    height: gpui::px(h as f32),
+                },
+            }
+        } else {
+            gpui::Bounds {
+                origin: gpui::Point {
+                    x: gpui::px(100.0),
+                    y: gpui::px(100.0),
+                },
+                size: gpui::Size {
+                    width: gpui::px(600.0),
+                    height: gpui::px(400.0),
+                },
+            }
+        };
+
+        let sender = confirm_tx.clone();
+        let on_choice: confirm::ConfirmCallback = std::sync::Arc::new(move |confirmed| {
+            let _ = sender.try_send(confirmed);
+        });
+
+        confirm::open_confirm_window(
+            cx,
+            main_bounds,
+            None,
+            message,
+            Some(confirm_label.to_string()),
+            Some(cancel_label.to_string()),
+            on_choice,
+        )
+    })?;
+
+    Ok(confirm_rx.recv().await.unwrap_or(false))
+}
+
 #[cfg(test)]
 mod app_actions_tests {
     use super::{
@@ -182,8 +284,8 @@ mod app_actions_tests {
     };
     use crate::clipboard_history::{ClipboardEntryMeta, ContentType};
     use crate::scripts;
+    use crate::test_utils::{count_occurrences, read_source as read};
     use crate::AppView;
-    use std::fs;
     use std::path::PathBuf;
     use std::sync::Arc;
 
@@ -201,14 +303,6 @@ mod app_actions_tests {
         }
     }
 
-    fn read(path: &str) -> String {
-        fs::read_to_string(path).unwrap_or_else(|_| panic!("Failed to read {path}"))
-    }
-
-    fn count_occurrences(haystack: &str, needle: &str) -> usize {
-        haystack.match_indices(needle).count()
-    }
-
     #[test]
     fn test_select_clipboard_entry_meta_filters_and_clamps() {
         let entries = vec![entry("1", "Alpha"), entry("2", "Beta"), entry("3", "Gamma")];
@@ -218,6 +312,49 @@ mod app_actions_tests {
 
         let clamped = select_clipboard_entry_meta(&entries, "", 99).unwrap();
         assert_eq!(clamped.id, "3");
+    }
+
+    #[test]
+    fn test_select_clipboard_entry_meta_empty_entries_returns_none() {
+        let entries: Vec<ClipboardEntryMeta> = vec![];
+
+        assert!(
+            select_clipboard_entry_meta(&entries, "", 0).is_none(),
+            "Empty entries with no filter should return None"
+        );
+        assert!(
+            select_clipboard_entry_meta(&entries, "search", 0).is_none(),
+            "Empty entries with filter should return None"
+        );
+    }
+
+    #[test]
+    fn test_select_clipboard_entry_meta_filter_no_match_returns_none() {
+        let entries = vec![entry("1", "Alpha"), entry("2", "Beta")];
+
+        assert!(
+            select_clipboard_entry_meta(&entries, "zzz", 0).is_none(),
+            "Filter with no matches should return None"
+        );
+    }
+
+    #[test]
+    fn test_select_clipboard_entry_meta_case_insensitive_filter() {
+        let entries = vec![entry("1", "Hello World"), entry("2", "goodbye")];
+
+        let result = select_clipboard_entry_meta(&entries, "HELLO", 0).unwrap();
+        assert_eq!(result.id, "1", "Filter should be case-insensitive");
+
+        let result = select_clipboard_entry_meta(&entries, "Goodbye", 0).unwrap();
+        assert_eq!(result.id, "2", "Filter should be case-insensitive");
+    }
+
+    #[test]
+    fn test_select_clipboard_entry_meta_zero_index_no_filter() {
+        let entries = vec![entry("1", "First"), entry("2", "Second")];
+
+        let result = select_clipboard_entry_meta(&entries, "", 0).unwrap();
+        assert_eq!(result.id, "1", "Index 0 with no filter should return first entry");
     }
 
     #[test]
@@ -259,23 +396,23 @@ mod app_actions_tests {
     fn test_file_search_action_error_hud_prefixes() {
         assert_eq!(
             file_search_action_error_hud_prefix("open_file"),
-            Some("Open failed")
+            Some("Failed to open")
         );
         assert_eq!(
             file_search_action_error_hud_prefix("open_directory"),
-            Some("Open failed")
+            Some("Failed to open")
         );
         assert_eq!(
             file_search_action_error_hud_prefix("quick_look"),
-            Some("Quick Look failed")
+            Some("Failed to Quick Look")
         );
         assert_eq!(
             file_search_action_error_hud_prefix("open_with"),
-            Some("Open With failed")
+            Some("Failed to Open With")
         );
         assert_eq!(
             file_search_action_error_hud_prefix("show_info"),
-            Some("Show Info failed")
+            Some("Failed to Show Info")
         );
         assert_eq!(file_search_action_error_hud_prefix("copy_filename"), None);
     }
@@ -300,6 +437,116 @@ mod app_actions_tests {
     fn test_selection_required_message_for_action_returns_safe_default() {
         assert_eq!(
             selection_required_message_for_action("unknown-action"),
+            "Select an item to continue."
+        );
+    }
+
+    // Comprehensive coverage for all selection_required_message_for_action branches
+
+    #[test]
+    fn test_selection_required_message_copy_deeplink() {
+        assert_eq!(
+            selection_required_message_for_action("copy_deeplink"),
+            "Select an item to copy its deeplink."
+        );
+    }
+
+    #[test]
+    fn test_selection_required_message_shortcut_variants() {
+        // All shortcut-related actions share the same message
+        for action in &["configure_shortcut", "add_shortcut", "update_shortcut"] {
+            assert_eq!(
+                selection_required_message_for_action(action),
+                "Select an item to configure its shortcut.",
+                "Action '{action}' should produce shortcut configuration message"
+            );
+        }
+    }
+
+    #[test]
+    fn test_selection_required_message_alias_variants() {
+        for action in &["add_alias", "update_alias"] {
+            assert_eq!(
+                selection_required_message_for_action(action),
+                "Select an item to add or update its alias.",
+                "Action '{action}' should produce alias message"
+            );
+        }
+        assert_eq!(
+            selection_required_message_for_action("remove_alias"),
+            "Select an item to remove its alias."
+        );
+    }
+
+    #[test]
+    fn test_selection_required_message_edit_actions() {
+        assert_eq!(
+            selection_required_message_for_action("edit_script"),
+            "Select a script to edit."
+        );
+        assert_eq!(
+            selection_required_message_for_action("edit_scriptlet"),
+            "Select a scriptlet to edit."
+        );
+    }
+
+    #[test]
+    fn test_selection_required_message_scriptlet_finder_and_copy() {
+        assert_eq!(
+            selection_required_message_for_action("reveal_scriptlet_in_finder"),
+            "Select a scriptlet to reveal in Finder."
+        );
+        assert_eq!(
+            selection_required_message_for_action("copy_scriptlet_path"),
+            "Select a scriptlet to copy its path."
+        );
+    }
+
+    #[test]
+    fn test_selection_required_message_copy_content() {
+        assert_eq!(
+            selection_required_message_for_action("copy_content"),
+            "Select a script, agent, or scriptlet to copy its content."
+        );
+    }
+
+    #[test]
+    fn test_selection_required_message_remove_script() {
+        assert_eq!(
+            selection_required_message_for_action("remove_script"),
+            "Select a script to remove."
+        );
+        assert_eq!(
+            selection_required_message_for_action("delete_script"),
+            "Select a script to remove."
+        );
+    }
+
+    #[test]
+    fn test_selection_required_message_reset_ranking() {
+        assert_eq!(
+            selection_required_message_for_action("reset_ranking"),
+            "Select an item to reset its ranking."
+        );
+    }
+
+    #[test]
+    fn test_selection_required_message_scriptlet_action_prefix() {
+        // Any action starting with "scriptlet_action:" should match
+        assert_eq!(
+            selection_required_message_for_action("scriptlet_action:run"),
+            "Select a scriptlet to run this action."
+        );
+        assert_eq!(
+            selection_required_message_for_action("scriptlet_action:foo_bar"),
+            "Select a scriptlet to run this action."
+        );
+    }
+
+    #[test]
+    fn test_selection_required_message_default_for_empty_string() {
+        assert_eq!(
+            selection_required_message_for_action(""),
             "Select an item to continue."
         );
     }
@@ -402,8 +649,9 @@ mod app_actions_tests {
         );
 
         assert!(
-            content.contains("this.show_hud(message, Some(HUD_LONG_MS), cx);"),
-            "Expected async editor launch failure to surface a HUD error message"
+            content.contains("Toast::error(message, &this.theme)")
+                && content.contains("TOAST_ERROR_MS"),
+            "Expected async editor launch failure to surface a Toast error message"
         );
     }
 
@@ -432,6 +680,263 @@ mod app_actions_tests {
         assert!(
             content.contains("this.show_hud(\"Opened in Finder\".to_string(), Some(HUD_SHORT_MS), cx);"),
             "Expected reveal success HUD to be emitted from async completion callback"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Scriptlet edit/copy-path/reveal — error handling and HUD feedback
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_edit_scriptlet_shows_error_when_no_file_path() {
+        let content = read("src/app_actions/handle_action.rs");
+
+        let edit_section = content
+            .find("\"edit_scriptlet\"")
+            .expect("Expected edit_scriptlet action handler");
+        let block = &content[edit_section..edit_section + 800];
+
+        assert!(
+            block.contains("Scriptlet has no source file path"),
+            "Expected edit_scriptlet to show error toast when scriptlet has no file_path"
+        );
+        assert!(
+            block.contains("Selected item is not a scriptlet"),
+            "Expected edit_scriptlet to show error when item is not a scriptlet"
+        );
+    }
+
+    #[test]
+    fn test_edit_scriptlet_strips_anchor_from_file_path() {
+        let content = read("src/app_actions/handle_action.rs");
+
+        let edit_section = content
+            .find("\"edit_scriptlet\"")
+            .expect("Expected edit_scriptlet action handler");
+        let block = &content[edit_section..edit_section + 400];
+
+        assert!(
+            block.contains("file_path.split('#').next()"),
+            "Expected edit_scriptlet to strip anchor from file path before opening editor"
+        );
+    }
+
+    #[test]
+    fn test_edit_scriptlet_uses_async_editor_launch() {
+        let content = read("src/app_actions/handle_action.rs");
+
+        let edit_section = content
+            .find("\"edit_scriptlet\"")
+            .expect("Expected edit_scriptlet action handler");
+        let block = &content[edit_section..edit_section + 600];
+
+        assert!(
+            block.contains("self.launch_editor_with_feedback_async(&path)"),
+            "Expected edit_scriptlet to use async editor launch for proper error feedback"
+        );
+    }
+
+    #[test]
+    fn test_copy_scriptlet_path_shows_error_when_no_file_path() {
+        let content = read("src/app_actions/handle_action.rs");
+
+        let copy_section = content
+            .find("\"copy_scriptlet_path\"")
+            .expect("Expected copy_scriptlet_path action handler");
+        let block = &content[copy_section..copy_section + 600];
+
+        assert!(
+            block.contains("Scriptlet has no source file path"),
+            "Expected copy_scriptlet_path to show error when scriptlet has no file_path"
+        );
+        assert!(
+            block.contains("Selected item is not a scriptlet"),
+            "Expected copy_scriptlet_path to show error when item is not a scriptlet"
+        );
+    }
+
+    #[test]
+    fn test_copy_scriptlet_path_uses_clipboard_feedback() {
+        let content = read("src/app_actions/handle_action.rs");
+
+        let copy_section = content
+            .find("\"copy_scriptlet_path\"")
+            .expect("Expected copy_scriptlet_path action handler");
+        let block = &content[copy_section..copy_section + 600];
+
+        assert!(
+            block.contains("self.copy_to_clipboard_with_feedback("),
+            "Expected copy_scriptlet_path to use copy_to_clipboard_with_feedback for consistent UX"
+        );
+    }
+
+    #[test]
+    fn test_reveal_scriptlet_in_finder_shows_error_when_no_file_path() {
+        let content = read("src/app_actions/handle_action.rs");
+
+        let reveal_section = content
+            .find("\"reveal_scriptlet_in_finder\"")
+            .expect("Expected reveal_scriptlet_in_finder action handler");
+        let block = &content[reveal_section..reveal_section + 800];
+
+        assert!(
+            block.contains("Scriptlet has no source file path"),
+            "Expected reveal_scriptlet to show error when scriptlet has no file_path"
+        );
+        assert!(
+            block.contains("Selected item is not a scriptlet"),
+            "Expected reveal_scriptlet to show error when item is not a scriptlet"
+        );
+    }
+
+    #[test]
+    fn test_reveal_scriptlet_in_finder_uses_async_reveal() {
+        let content = read("src/app_actions/handle_action.rs");
+
+        let reveal_section = content
+            .find("\"reveal_scriptlet_in_finder\"")
+            .expect("Expected reveal_scriptlet_in_finder action handler");
+        let block = &content[reveal_section..reveal_section + 600];
+
+        assert!(
+            block.contains("self.reveal_in_finder_with_feedback_async(path)"),
+            "Expected reveal_scriptlet to use async reveal for proper error feedback"
+        );
+    }
+
+    #[test]
+    fn test_reveal_scriptlet_in_finder_shows_error_on_failure() {
+        let content = read("src/app_actions/handle_action.rs");
+
+        let reveal_section = content
+            .find("\"reveal_scriptlet_in_finder\"")
+            .expect("Expected reveal_scriptlet_in_finder action handler");
+        let block = &content[reveal_section..reveal_section + 800];
+
+        assert!(
+            block.contains("this.show_error_toast(message, cx)"),
+            "Expected reveal_scriptlet failure path to show error toast"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Script removal — confirmation requirement and Toast on failure
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_remove_script_requires_confirmation_modal() {
+        let content = read("src/app_actions/handle_action.rs");
+
+        let remove_section = content
+            .find("\"remove_script\" | \"delete_script\"")
+            .expect("Expected remove_script action handler");
+        let block = &content[remove_section..remove_section + 800];
+
+        assert!(
+            block.contains("confirm_with_modal("),
+            "Expected remove_script to use confirm_with_modal before deleting"
+        );
+        assert!(
+            block.contains("Move to Trash"),
+            "Expected confirmation dialog to say 'Move to Trash'"
+        );
+    }
+
+    #[test]
+    fn test_remove_script_shows_toast_on_failure() {
+        let content = read("src/app_actions/handle_action.rs");
+
+        let remove_section = content
+            .find("\"remove_script\" | \"delete_script\"")
+            .expect("Expected remove_script action handler");
+        let block = &content[remove_section..remove_section + 1200];
+
+        assert!(
+            block.contains("Failed to remove:"),
+            "Expected remove_script failure to show descriptive error toast"
+        );
+        assert!(
+            block.contains("show_error_toast("),
+            "Expected remove_script failure to use show_error_toast for consistent UX"
+        );
+    }
+
+    #[test]
+    fn test_remove_script_shows_error_when_path_does_not_exist() {
+        let content = read("src/app_actions/handle_action.rs");
+
+        let remove_section = content
+            .find("\"remove_script\" | \"delete_script\"")
+            .expect("Expected remove_script action handler");
+        let block = &content[remove_section..remove_section + 600];
+
+        assert!(
+            block.contains("target.path.exists()"),
+            "Expected remove_script to check if path exists before confirmation"
+        );
+        assert!(
+            block.contains("no longer exists"),
+            "Expected remove_script to show 'no longer exists' error for missing files"
+        );
+    }
+
+    #[test]
+    fn test_remove_script_shows_error_when_no_selection() {
+        let content = read("src/app_actions/handle_action.rs");
+
+        let remove_section = content
+            .find("\"remove_script\" | \"delete_script\"")
+            .expect("Expected remove_script action handler");
+        let block = &content[remove_section..remove_section + 400];
+
+        assert!(
+            block.contains("selection_required_message_for_action(action_id)"),
+            "Expected remove_script to use selection_required_message_for_action on missing selection"
+        );
+    }
+
+    #[test]
+    fn test_remove_script_shows_error_for_unsupported_item_type() {
+        let content = read("src/app_actions/handle_action.rs");
+
+        let remove_section = content
+            .find("\"remove_script\" | \"delete_script\"")
+            .expect("Expected remove_script action handler");
+        let block = &content[remove_section..remove_section + 500];
+
+        assert!(
+            block.contains("Cannot remove this item type"),
+            "Expected remove_script to show error for unsupported item types"
+        );
+    }
+
+    #[test]
+    fn test_remove_script_shows_hud_on_success() {
+        let content = read("src/app_actions/handle_action.rs");
+
+        let remove_section = content
+            .find("\"remove_script\" | \"delete_script\"")
+            .expect("Expected remove_script action handler");
+        let block = &content[remove_section..remove_section + 1200];
+
+        assert!(
+            block.contains("Moved '{}' to Trash"),
+            "Expected remove_script success to show HUD with item name"
+        );
+    }
+
+    #[test]
+    fn test_remove_script_shows_error_when_confirm_modal_fails() {
+        let content = read("src/app_actions/handle_action.rs");
+
+        let remove_section = content
+            .find("\"remove_script\" | \"delete_script\"")
+            .expect("Expected remove_script action handler");
+        let block = &content[remove_section..remove_section + 1000];
+
+        assert!(
+            block.contains("Failed to open confirmation dialog"),
+            "Expected remove_script to show error toast when modal cannot be opened"
         );
     }
 }
