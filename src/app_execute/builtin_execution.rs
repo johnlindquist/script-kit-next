@@ -254,7 +254,15 @@ impl ScriptListApp {
         query_override: Option<&str>,
         cx: &mut Context<Self>,
     ) {
-        tracing::info!(message = %&format!("Executing built-in: {} (id: {})", entry.name, entry.id),
+        let trace_id = uuid::Uuid::new_v4().to_string();
+        let start = std::time::Instant::now();
+
+        tracing::info!(
+            category = "BUILTIN",
+            trace_id = %trace_id,
+            builtin_id = %entry.id,
+            builtin_name = %entry.name,
+            "Builtin execution started"
         );
 
         // Clear any stale actions popup from previous view
@@ -344,6 +352,14 @@ impl ScriptListApp {
             })
             .detach();
 
+            tracing::info!(
+                category = "BUILTIN",
+                trace_id = %trace_id,
+                builtin_id = %entry.id,
+                status = "awaiting_confirmation",
+                duration_ms = start.elapsed().as_millis() as u64,
+                "Builtin execution deferred to confirmation modal"
+            );
             return; // Wait for modal callback
         }
 
@@ -1305,6 +1321,15 @@ impl ScriptListApp {
                 self.open_file_search(String::new(), cx);
             }
         }
+
+        tracing::info!(
+            category = "BUILTIN",
+            trace_id = %trace_id,
+            builtin_id = %entry.id,
+            status = "completed",
+            duration_ms = start.elapsed().as_millis() as u64,
+            "Builtin execution completed"
+        );
     }
 }
 

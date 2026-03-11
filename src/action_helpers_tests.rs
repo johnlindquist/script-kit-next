@@ -541,6 +541,26 @@ fn trigger_sdk_action_returns_no_effect_when_no_handler_no_value() {
     assert!(result.error_message("test").is_none());
 }
 
+// Tests for Cancelled variant behavior — modal dismissal is not an error
+
+#[test]
+fn cancelled_is_distinct_from_error_variants() {
+    // Cancelled has error_code (for machine consumption) but no error_message (no toast)
+    let cancelled = SdkActionResult::Cancelled;
+    let no_sender = SdkActionResult::NoSender;
+
+    // Both have error codes
+    assert!(cancelled.error_code().is_some());
+    assert!(no_sender.error_code().is_some());
+
+    // But only the real error has an error message
+    assert!(cancelled.error_message("test").is_none());
+    assert!(no_sender.error_message("test").is_some());
+
+    // And their codes are different
+    assert_ne!(cancelled.error_code(), no_sender.error_code());
+}
+
 #[test]
 fn trigger_sdk_action_returns_channel_full_when_buffer_exhausted() {
     use std::sync::mpsc;
@@ -563,8 +583,8 @@ fn trigger_sdk_action_returns_channel_full_when_buffer_exhausted() {
     assert!(!result.is_sent());
     let err = result.error_message("busy_action").unwrap();
     assert!(
-        err.contains("channel busy"),
-        "Expected 'channel busy' in error: {err}"
+        err.contains("channel is busy"),
+        "Expected 'channel is busy' in error: {err}"
     );
 }
 
@@ -615,4 +635,115 @@ fn test_pbcopy_empty_string() {
 fn test_pbcopy_unicode() {
     let result = pbcopy("Hello 🌍 世界");
     assert!(result.is_ok());
+}
+
+// ============================================================================
+// Error code tests
+// ============================================================================
+
+#[test]
+fn error_code_constants_are_stable_strings() {
+    // Verify error codes are stable string constants (not enum variant names).
+    assert_eq!(ERROR_CHANNEL_FULL, "channel_full");
+    assert_eq!(ERROR_CHANNEL_DISCONNECTED, "channel_disconnected");
+    assert_eq!(ERROR_UNSUPPORTED_PLATFORM, "unsupported_platform");
+    assert_eq!(ERROR_LAUNCH_FAILED, "launch_failed");
+    assert_eq!(ERROR_REVEAL_FAILED, "reveal_failed");
+    assert_eq!(ERROR_MODAL_FAILED, "modal_failed");
+    assert_eq!(ERROR_CANCELLED, "cancelled");
+    assert_eq!(ERROR_NO_SENDER, "no_sender");
+}
+
+#[test]
+fn sdk_action_result_error_code_for_success_variants() {
+    assert_eq!(SdkActionResult::Sent.error_code(), None);
+    assert_eq!(SdkActionResult::NoEffect.error_code(), None);
+}
+
+#[test]
+fn sdk_action_result_error_code_for_failure_variants() {
+    assert_eq!(
+        SdkActionResult::NoSender.error_code(),
+        Some(ERROR_NO_SENDER)
+    );
+    assert_eq!(
+        SdkActionResult::ChannelFull.error_code(),
+        Some(ERROR_CHANNEL_FULL)
+    );
+    assert_eq!(
+        SdkActionResult::ChannelDisconnected.error_code(),
+        Some(ERROR_CHANNEL_DISCONNECTED)
+    );
+}
+
+#[test]
+fn sdk_action_result_error_message_never_contains_variant_names() {
+    // Ensure raw enum variant names like "ChannelFull" or "ChannelDisconnected"
+    // never leak into user-facing messages.
+    let variants = [
+        SdkActionResult::NoSender,
+        SdkActionResult::ChannelFull,
+        SdkActionResult::ChannelDisconnected,
+        SdkActionResult::Cancelled,
+    ];
+
+    for variant in &variants {
+        if let Some(msg) = variant.error_message("test") {
+            assert!(
+                !msg.contains("ChannelFull"),
+                "error_message leaked variant name 'ChannelFull': {msg}"
+            );
+            assert!(
+                !msg.contains("ChannelDisconnected"),
+                "error_message leaked variant name 'ChannelDisconnected': {msg}"
+            );
+            assert!(
+                !msg.contains("NoSender"),
+                "error_message leaked variant name 'NoSender': {msg}"
+            );
+            assert!(
+                !msg.contains("Cancelled"),
+                "error_message leaked variant name 'Cancelled': {msg}"
+            );
+        }
+    }
+}
+
+// ============================================================================
+// Modal cancellation tests — Cancelled is NOT an error
+// ============================================================================
+
+#[test]
+fn cancelled_variant_has_error_code_but_no_error_message() {
+    // Cancellation is machine-readable (error_code = "cancelled") but is NOT
+    // an error from the user's perspective — no toast should be shown.
+    let result = SdkActionResult::Cancelled;
+    assert_eq!(
+        result.error_code(),
+        Some(ERROR_CANCELLED),
+        "Cancelled should have a machine-readable error code"
+    );
+    assert!(
+        result.error_message("any_action").is_none(),
+        "Cancelled should NOT produce an error message (no toast)"
+    );
+}
+
+#[test]
+fn cancelled_variant_is_not_sent() {
+    assert!(
+        !SdkActionResult::Cancelled.is_sent(),
+        "Cancelled should not be is_sent()"
+    );
+}
+
+#[test]
+fn cancelled_error_code_matches_stable_constant() {
+    assert_eq!(
+        SdkActionResult::Cancelled
+            .error_code()
+            .expect("should have code"),
+        "cancelled",
+        "Cancelled error_code must be the stable string 'cancelled'"
+    );
 }

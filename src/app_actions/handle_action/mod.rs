@@ -41,13 +41,35 @@ impl ScriptListApp {
     ///
     /// Consolidates the repeated pattern of pushing an error toast, setting the
     /// duration to TOAST_ERROR_MS, and calling cx.notify().
+    ///
+    /// The optional `error_code` is logged for machine-readable diagnostics but
+    /// never shown to the user.  Use the stable constants from
+    /// `crate::action_helpers` (e.g. `ERROR_LAUNCH_FAILED`).
     fn show_error_toast(
         &mut self,
         message: impl Into<String>,
         cx: &mut Context<Self>,
     ) {
+        self.show_error_toast_with_code(message, None, cx);
+    }
+
+    /// Like `show_error_toast` but also logs a stable error code.
+    fn show_error_toast_with_code(
+        &mut self,
+        message: impl Into<String>,
+        error_code: Option<&str>,
+        cx: &mut Context<Self>,
+    ) {
+        let msg: String = message.into();
+        if let Some(code) = error_code {
+            tracing::warn!(
+                error_code = code,
+                message = %msg,
+                "Action error"
+            );
+        }
         self.toast_manager.push(
-            components::toast::Toast::error(message.into(), &self.theme)
+            components::toast::Toast::error(msg, &self.theme)
                 .duration_ms(Some(TOAST_ERROR_MS)),
         );
         cx.notify();
@@ -97,13 +119,19 @@ impl ScriptListApp {
     /// Show a consistent "not supported on this platform" warning toast.
     ///
     /// Uses Toast::warning (not error) per the feedback matrix — unsupported
-    /// platform is a warning, not an error.
+    /// platform is a warning, not an error.  Internally logs with the
+    /// `unsupported_platform` error code.
     #[cfg_attr(target_os = "macos", allow(dead_code))]
     fn show_unsupported_platform_toast(
         &mut self,
         feature: &str,
         cx: &mut Context<Self>,
     ) {
+        tracing::warn!(
+            error_code = crate::action_helpers::ERROR_UNSUPPORTED_PLATFORM,
+            feature = feature,
+            "Unsupported platform"
+        );
         self.toast_manager.push(
             components::toast::Toast::warning(
                 unsupported_platform_message(feature),
@@ -389,10 +417,14 @@ impl ScriptListApp {
 
     /// Handle action selection from the actions dialog
     fn handle_action(&mut self, action_id: String, cx: &mut Context<Self>) {
+        let trace_id = uuid::Uuid::new_v4().to_string();
+        let start = std::time::Instant::now();
+
         tracing::info!(
             category = "UI",
             action = %action_id,
-            "Action selected"
+            trace_id = %trace_id,
+            "Action dispatch started"
         );
 
         let action_id = action_id
@@ -411,7 +443,16 @@ impl ScriptListApp {
         };
 
         // Clipboard actions handle their own transitions and notifications.
-        if self.handle_clipboard_action(action_id, selected_clipboard_entry, cx) {
+        if self.handle_clipboard_action(action_id, selected_clipboard_entry, &trace_id, cx) {
+            tracing::info!(
+                category = "UI",
+                action = %action_id,
+                trace_id = %trace_id,
+                handler = "clipboard",
+                status = "completed",
+                duration_ms = start.elapsed().as_millis() as u64,
+                "Action dispatch completed"
+            );
             return;
         }
 
@@ -420,15 +461,58 @@ impl ScriptListApp {
             self.transition_to_script_list_after_action(cx);
         }
 
-        if self.handle_shortcut_alias_action(action_id, cx)
-            || self.handle_script_action(action_id, cx)
-            || self.handle_file_action(action_id, cx)
-            || self.handle_scriptlet_action(action_id, cx)
-        {
-            // Handled by a sub-handler
+        if self.handle_shortcut_alias_action(action_id, &trace_id, cx) {
+            tracing::info!(
+                category = "UI",
+                action = %action_id,
+                trace_id = %trace_id,
+                handler = "shortcut_alias",
+                status = "completed",
+                duration_ms = start.elapsed().as_millis() as u64,
+                "Action dispatch completed"
+            );
+        } else if self.handle_script_action(action_id, &trace_id, cx) {
+            tracing::info!(
+                category = "UI",
+                action = %action_id,
+                trace_id = %trace_id,
+                handler = "script",
+                status = "completed",
+                duration_ms = start.elapsed().as_millis() as u64,
+                "Action dispatch completed"
+            );
+        } else if self.handle_file_action(action_id, &trace_id, cx) {
+            tracing::info!(
+                category = "UI",
+                action = %action_id,
+                trace_id = %trace_id,
+                handler = "file",
+                status = "completed",
+                duration_ms = start.elapsed().as_millis() as u64,
+                "Action dispatch completed"
+            );
+        } else if self.handle_scriptlet_action(action_id, &trace_id, cx) {
+            tracing::info!(
+                category = "UI",
+                action = %action_id,
+                trace_id = %trace_id,
+                handler = "scriptlet",
+                status = "completed",
+                duration_ms = start.elapsed().as_millis() as u64,
+                "Action dispatch completed"
+            );
         } else {
             // Handle SDK actions using shared helper
             self.trigger_sdk_action_internal(action_id);
+            tracing::info!(
+                category = "UI",
+                action = %action_id,
+                trace_id = %trace_id,
+                handler = "sdk_fallback",
+                status = "completed",
+                duration_ms = start.elapsed().as_millis() as u64,
+                "Action dispatch completed"
+            );
         }
 
         cx.notify();

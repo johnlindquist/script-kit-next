@@ -140,6 +140,39 @@ pub fn pbcopy(text: &str) -> Result<(), std::io::Error> {
     Ok(())
 }
 
+// ============================================================================
+// Stable Action Error Codes
+// ============================================================================
+//
+// Machine-readable error codes for action outcomes. These are stable identifiers
+// that never expose internal transport/enum names to the UI or external tooling.
+//
+// Convention: lowercase_snake_case, prefixed by category.
+
+/// Channel was full when attempting to send a message — the message was dropped.
+pub const ERROR_CHANNEL_FULL: &str = "channel_full";
+
+/// Channel was disconnected — the receiving script has exited.
+pub const ERROR_CHANNEL_DISCONNECTED: &str = "channel_disconnected";
+
+/// Feature is not supported on the current platform.
+pub const ERROR_UNSUPPORTED_PLATFORM: &str = "unsupported_platform";
+
+/// External process (editor, Finder, etc.) failed to launch.
+pub const ERROR_LAUNCH_FAILED: &str = "launch_failed";
+
+/// Reveal-in-Finder (or equivalent) operation failed.
+pub const ERROR_REVEAL_FAILED: &str = "reveal_failed";
+
+/// Confirmation modal could not be opened.
+pub const ERROR_MODAL_FAILED: &str = "modal_failed";
+
+/// User explicitly cancelled the operation (e.g. dismissed a confirmation modal).
+pub const ERROR_CANCELLED: &str = "cancelled";
+
+/// No response channel available — no running script to receive the message.
+pub const ERROR_NO_SENDER: &str = "no_sender";
+
 /// Result of attempting to trigger an SDK action.
 #[derive(Debug, Clone, PartialEq)]
 pub enum SdkActionResult {
@@ -153,6 +186,9 @@ pub enum SdkActionResult {
     ChannelFull,
     /// Response channel is disconnected — script has exited.
     ChannelDisconnected,
+    /// User explicitly cancelled the operation (e.g. dismissed a confirmation modal).
+    /// This is NOT an error — no toast should be shown.
+    Cancelled,
 }
 
 impl SdkActionResult {
@@ -161,16 +197,37 @@ impl SdkActionResult {
         matches!(self, SdkActionResult::Sent)
     }
 
-    /// User-facing error message, if any.
-    pub fn error_message(&self, action_name: &str) -> Option<String> {
+    /// Stable error code for machine consumption, if this is a failure or cancellation.
+    ///
+    /// Returns `Some` for all non-success outcomes (including `Cancelled`),
+    /// allowing machine consumers to distinguish cancellation from errors.
+    pub fn error_code(&self) -> Option<&'static str> {
         match self {
             SdkActionResult::Sent | SdkActionResult::NoEffect => None,
+            SdkActionResult::NoSender => Some(ERROR_NO_SENDER),
+            SdkActionResult::ChannelFull => Some(ERROR_CHANNEL_FULL),
+            SdkActionResult::ChannelDisconnected => Some(ERROR_CHANNEL_DISCONNECTED),
+            SdkActionResult::Cancelled => Some(ERROR_CANCELLED),
+        }
+    }
+
+    /// User-facing error message, if any.
+    ///
+    /// Never exposes raw transport enum variant names — uses human-readable
+    /// descriptions backed by stable error codes.
+    ///
+    /// `Cancelled` returns `None` because cancellation is a normal user action,
+    /// not an error — no toast should be shown.
+    pub fn error_message(&self, action_name: &str) -> Option<String> {
+        match self {
+            SdkActionResult::Sent | SdkActionResult::NoEffect | SdkActionResult::Cancelled => None,
             SdkActionResult::NoSender => {
                 Some(format!("Action '{}' failed: no active script", action_name))
             }
-            SdkActionResult::ChannelFull => {
-                Some(format!("Action '{}' failed: channel busy", action_name))
-            }
+            SdkActionResult::ChannelFull => Some(format!(
+                "Action '{}' failed: response channel is busy",
+                action_name,
+            )),
             SdkActionResult::ChannelDisconnected => {
                 Some("Action failed: script has exited".to_string())
             }

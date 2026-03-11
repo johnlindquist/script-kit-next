@@ -8,8 +8,10 @@ impl ScriptListApp {
     fn handle_shortcut_alias_action(
         &mut self,
         action_id: &str,
+        trace_id: &str,
         cx: &mut Context<Self>,
     ) -> bool {
+        let _ = trace_id; // Reserved for future async path logging
         match action_id {
             // Handle both legacy "configure_shortcut" and new dynamic actions
             // "add_shortcut" and "update_shortcut" open the shortcut recorder

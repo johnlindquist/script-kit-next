@@ -6,6 +6,7 @@
 use script_kit_gpui::action_helpers::{
     extract_path_for_copy, extract_path_for_edit, extract_path_for_reveal, find_sdk_action,
     is_reserved_action_id, trigger_sdk_action, PathExtractionError, SdkActionResult,
+    ERROR_CANCELLED, ERROR_CHANNEL_DISCONNECTED, ERROR_CHANNEL_FULL, ERROR_NO_SENDER,
 };
 use script_kit_gpui::protocol::{self, ProtocolAction};
 use std::sync::mpsc;
@@ -86,7 +87,7 @@ fn sdk_action_on_full_channel_returns_error_with_message() {
         .error_message("slow_action")
         .expect("should have error message");
     assert!(
-        msg.contains("channel busy"),
+        msg.contains("channel is busy"),
         "Error should mention channel busy: {msg}"
     );
 }
@@ -387,4 +388,78 @@ fn sdk_action_triggered_with_empty_input_and_no_value() {
         }
         other => panic!("Expected ActionTriggered, got {:?}", other),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Modal cancellation — Cancelled is machine-readable but not a user error
+// ---------------------------------------------------------------------------
+
+#[test]
+fn cancelled_has_stable_error_code_but_no_error_message() {
+    let result = SdkActionResult::Cancelled;
+
+    // Machine consumers can detect cancellation via error_code
+    assert_eq!(result.error_code(), Some(ERROR_CANCELLED));
+    assert_eq!(result.error_code(), Some("cancelled"));
+
+    // But the UI should NOT show a toast for user cancellation
+    assert!(
+        result.error_message("delete_item").is_none(),
+        "Cancelled must not produce a user-facing error"
+    );
+}
+
+#[test]
+fn cancelled_is_not_sent() {
+    assert!(!SdkActionResult::Cancelled.is_sent());
+}
+
+// ---------------------------------------------------------------------------
+// Error code stability — all codes are defined constants
+// ---------------------------------------------------------------------------
+
+#[test]
+fn all_error_variants_map_to_defined_constants() {
+    assert_eq!(SdkActionResult::NoSender.error_code(), Some(ERROR_NO_SENDER));
+    assert_eq!(SdkActionResult::ChannelFull.error_code(), Some(ERROR_CHANNEL_FULL));
+    assert_eq!(
+        SdkActionResult::ChannelDisconnected.error_code(),
+        Some(ERROR_CHANNEL_DISCONNECTED)
+    );
+    assert_eq!(SdkActionResult::Cancelled.error_code(), Some(ERROR_CANCELLED));
+
+    // Success variants have no code
+    assert_eq!(SdkActionResult::Sent.error_code(), None);
+    assert_eq!(SdkActionResult::NoEffect.error_code(), None);
+}
+
+#[test]
+fn error_messages_never_contain_raw_transport_enum_names() {
+    let forbidden = ["NoSender", "ChannelFull", "ChannelDisconnected", "Cancelled"];
+
+    for variant in &[
+        SdkActionResult::NoSender,
+        SdkActionResult::ChannelFull,
+        SdkActionResult::ChannelDisconnected,
+        SdkActionResult::Cancelled,
+    ] {
+        if let Some(msg) = variant.error_message("test_action") {
+            for name in &forbidden {
+                assert!(
+                    !msg.contains(name),
+                    "error_message leaked variant name '{name}': {msg}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn is_sent_exhaustive_across_all_variants() {
+    assert!(SdkActionResult::Sent.is_sent());
+    assert!(!SdkActionResult::NoSender.is_sent());
+    assert!(!SdkActionResult::NoEffect.is_sent());
+    assert!(!SdkActionResult::ChannelFull.is_sent());
+    assert!(!SdkActionResult::ChannelDisconnected.is_sent());
+    assert!(!SdkActionResult::Cancelled.is_sent());
 }

@@ -6,6 +6,7 @@
 use script_kit_gpui::action_helpers::{
     extract_path_for_copy, extract_path_for_edit, extract_path_for_reveal, find_sdk_action,
     is_reserved_action_id, trigger_sdk_action, PathExtractionError, SdkActionResult,
+    ERROR_CANCELLED, ERROR_CHANNEL_DISCONNECTED, ERROR_CHANNEL_FULL, ERROR_NO_SENDER,
 };
 use script_kit_gpui::protocol::{self, ProtocolAction};
 use std::sync::mpsc;
@@ -84,7 +85,7 @@ fn sdk_action_on_full_channel_returns_error_with_message() {
 
     let msg = result.error_message("slow_action").expect("should have error message");
     assert!(
-        msg.contains("channel busy"),
+        msg.contains("channel is busy"),
         "Error should mention channel busy: {msg}"
     );
 }
@@ -362,5 +363,53 @@ fn sdk_action_triggered_with_empty_input_and_no_value() {
             assert_eq!(input, "", "empty input should be empty string");
         }
         other => panic!("Expected ActionTriggered, got {:?}", other),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Cancelled variant — modal dismissal is not an error
+// ---------------------------------------------------------------------------
+
+#[test]
+fn cancelled_has_error_code_but_no_toast_message() {
+    let result = SdkActionResult::Cancelled;
+    assert_eq!(result.error_code(), Some(ERROR_CANCELLED));
+    assert!(result.error_message("any").is_none());
+    assert!(!result.is_sent());
+}
+
+// ---------------------------------------------------------------------------
+// Error code stability — all variants map to defined constants
+// ---------------------------------------------------------------------------
+
+#[test]
+fn error_codes_match_stable_constants() {
+    assert_eq!(SdkActionResult::NoSender.error_code(), Some(ERROR_NO_SENDER));
+    assert_eq!(SdkActionResult::ChannelFull.error_code(), Some(ERROR_CHANNEL_FULL));
+    assert_eq!(
+        SdkActionResult::ChannelDisconnected.error_code(),
+        Some(ERROR_CHANNEL_DISCONNECTED)
+    );
+    assert_eq!(SdkActionResult::Cancelled.error_code(), Some(ERROR_CANCELLED));
+}
+
+#[test]
+fn no_raw_transport_names_in_any_error_message() {
+    let forbidden = ["NoSender", "ChannelFull", "ChannelDisconnected", "Cancelled"];
+
+    for variant in &[
+        SdkActionResult::NoSender,
+        SdkActionResult::ChannelFull,
+        SdkActionResult::ChannelDisconnected,
+        SdkActionResult::Cancelled,
+    ] {
+        if let Some(msg) = variant.error_message("test") {
+            for name in &forbidden {
+                assert!(
+                    !msg.contains(name),
+                    "error_message leaked '{name}': {msg}"
+                );
+            }
+        }
     }
 }
