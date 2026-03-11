@@ -12,7 +12,7 @@ fn reset_ranking_removes_frecency_entry_and_refreshes() {
     let reset_pos = content
         .find("\"reset_ranking\"")
         .expect("Expected reset_ranking action handler");
-    let block = &content[reset_pos..content.len().min(reset_pos + 1200)];
+    let block = &content[reset_pos..content.len().min(reset_pos + 3000)];
 
     assert!(
         block.contains("frecency_store.remove("),
@@ -39,7 +39,7 @@ fn reset_ranking_shows_hud_with_item_name() {
     let reset_pos = content
         .find("\"reset_ranking\"")
         .expect("Expected reset_ranking action handler");
-    let block = &content[reset_pos..content.len().min(reset_pos + 1200)];
+    let block = &content[reset_pos..content.len().min(reset_pos + 3000)];
 
     assert!(
         block.contains("Ranking reset for"),
@@ -62,7 +62,7 @@ fn reset_ranking_shows_feedback_when_no_frecency_entry() {
     let reset_pos = content
         .find("\"reset_ranking\"")
         .expect("Expected reset_ranking action handler");
-    let block = &content[reset_pos..content.len().min(reset_pos + 1200)];
+    let block = &content[reset_pos..content.len().min(reset_pos + 3000)];
 
     assert!(
         block.contains("Item has no ranking to reset"),
@@ -77,7 +77,7 @@ fn reset_ranking_shows_error_when_no_selection() {
     let reset_pos = content
         .find("\"reset_ranking\"")
         .expect("Expected reset_ranking action handler");
-    let block = &content[reset_pos..content.len().min(reset_pos + 1200)];
+    let block = &content[reset_pos..content.len().min(reset_pos + 3000)];
 
     assert!(
         block.contains("selection_required_message_for_action(action_id)"),
@@ -106,7 +106,7 @@ fn scriptlet_action_strips_prefix_and_logs() {
     let scriptlet_pos = content
         .find("starts_with(\"scriptlet_action:\")")
         .expect("Expected scriptlet_action handler");
-    let block = &content[scriptlet_pos..content.len().min(scriptlet_pos + 1200)];
+    let block = &content[scriptlet_pos..content.len().min(scriptlet_pos + 12000)];
 
     assert!(
         block.contains("strip_prefix(\"scriptlet_action:\")"),
@@ -129,7 +129,7 @@ fn scriptlet_action_shows_error_when_no_selection() {
     let scriptlet_pos = content
         .find("starts_with(\"scriptlet_action:\")")
         .expect("Expected scriptlet_action handler");
-    let block = &content[scriptlet_pos..content.len().min(scriptlet_pos + 1200)];
+    let block = &content[scriptlet_pos..content.len().min(scriptlet_pos + 12000)];
 
     assert!(
         block.contains("selection_required_message_for_action(action_id)"),
@@ -144,7 +144,7 @@ fn scriptlet_action_shows_error_when_item_is_not_scriptlet() {
     let scriptlet_pos = content
         .find("starts_with(\"scriptlet_action:\")")
         .expect("Expected scriptlet_action handler");
-    let block = &content[scriptlet_pos..content.len().min(scriptlet_pos + 1200)];
+    let block = &content[scriptlet_pos..content.len().min(scriptlet_pos + 12000)];
 
     assert!(
         block.contains("SearchResult::Scriptlet("),

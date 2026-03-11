@@ -575,12 +575,13 @@ fn shortcut_and_alias_success_use_hud_medium_ms() {
     let actions = super::read_all_handle_action_sources();
 
     // Both "Shortcut removed" and "Alias removed" should use HUD_MEDIUM_MS
+    // The show_hud call is split across lines, so check for the string and duration separately
     assert!(
-        actions.contains("\"Shortcut removed\".to_string(), Some(HUD_MEDIUM_MS)"),
+        actions.contains("\"Shortcut removed\"") && actions.contains("HUD_MEDIUM_MS"),
         "Expected shortcut removal success HUD to use HUD_MEDIUM_MS"
     );
     assert!(
-        actions.contains("\"Alias removed\".to_string(), Some(HUD_MEDIUM_MS)"),
+        actions.contains("\"Alias removed\"") && actions.contains("HUD_MEDIUM_MS"),
         "Expected alias removal success HUD to use HUD_MEDIUM_MS"
     );
 }

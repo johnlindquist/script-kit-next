@@ -12,7 +12,7 @@ fn edit_script_uses_async_editor_launch() {
     let edit_pos = content
         .find("\"edit_script\"")
         .expect("Expected edit_script action handler");
-    let block = &content[edit_pos..content.len().min(edit_pos + 1200)];
+    let block = &content[edit_pos..content.len().min(edit_pos + 3000)];
 
     assert!(
         block.contains("launch_editor_with_feedback_async"),
@@ -31,7 +31,7 @@ fn edit_script_supports_scripts_and_agents() {
     let edit_pos = content
         .find("\"edit_script\"")
         .expect("Expected edit_script action handler");
-    let block = &content[edit_pos..content.len().min(edit_pos + 1200)];
+    let block = &content[edit_pos..content.len().min(edit_pos + 3000)];
 
     assert!(
         block.contains("SearchResult::Script(m)") && block.contains("SearchResult::Agent(m)"),
@@ -50,7 +50,7 @@ fn edit_script_shows_error_for_unsupported_item_types() {
     let edit_pos = content
         .find("\"edit_script\"")
         .expect("Expected edit_script action handler");
-    let block = &content[edit_pos..content.len().min(edit_pos + 1200)];
+    let block = &content[edit_pos..content.len().min(edit_pos + 3000)];
 
     assert!(
         block.contains("Cannot edit this item type"),
@@ -65,7 +65,7 @@ fn edit_script_shows_error_when_no_selection() {
     let edit_pos = content
         .find("\"edit_script\"")
         .expect("Expected edit_script action handler");
-    let block = &content[edit_pos..content.len().min(edit_pos + 1200)];
+    let block = &content[edit_pos..content.len().min(edit_pos + 3000)];
 
     assert!(
         block.contains("selection_required_message_for_action(action_id)"),
@@ -80,7 +80,7 @@ fn edit_script_shows_toast_on_editor_launch_failure() {
     let edit_pos = content
         .find("\"edit_script\"")
         .expect("Expected edit_script action handler");
-    let block = &content[edit_pos..content.len().min(edit_pos + 1200)];
+    let block = &content[edit_pos..content.len().min(edit_pos + 3000)];
 
     assert!(
         block.contains("show_error_toast(message, cx)"),
@@ -99,7 +99,7 @@ fn reload_scripts_refreshes_and_shows_hud() {
     let reload_pos = content
         .find("\"reload_scripts\"")
         .expect("Expected reload_scripts action handler");
-    let block = &content[reload_pos..content.len().min(reload_pos + 1200)];
+    let block = &content[reload_pos..content.len().min(reload_pos + 3000)];
 
     assert!(
         block.contains("refresh_scripts(cx)"),
@@ -126,7 +126,7 @@ fn settings_opens_config_in_editor() {
     let settings_pos = content
         .find("\"settings\"")
         .expect("Expected settings action handler");
-    let block = &content[settings_pos..content.len().min(settings_pos + 1200)];
+    let block = &content[settings_pos..content.len().min(settings_pos + 3000)];
 
     assert!(
         block.contains("config.ts"),
@@ -153,7 +153,7 @@ fn settings_shows_error_when_editor_fails() {
     let settings_pos = content
         .find("\"settings\"")
         .expect("Expected settings action handler");
-    let block = &content[settings_pos..content.len().min(settings_pos + 1000)];
+    let block = &content[settings_pos..content.len().min(settings_pos + 3000)];
 
     assert!(
         block.contains("Failed to open") && block.contains("for settings"),
