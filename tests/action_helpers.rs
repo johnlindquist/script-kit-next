@@ -659,7 +659,10 @@ fn all_sdk_action_result_variants_have_consistent_error_code_mapping() {
 
     // Error variants: stable codes
     assert_eq!(SdkActionResult::NoSender.error_code(), Some("no_sender"));
-    assert_eq!(SdkActionResult::ChannelFull.error_code(), Some("channel_full"));
+    assert_eq!(
+        SdkActionResult::ChannelFull.error_code(),
+        Some("channel_full")
+    );
     assert_eq!(
         SdkActionResult::ChannelDisconnected.error_code(),
         Some("channel_disconnected")
@@ -671,7 +674,12 @@ fn all_sdk_action_result_variants_have_consistent_error_code_mapping() {
 
 #[test]
 fn error_messages_never_expose_transport_enum_names() {
-    let forbidden = ["NoSender", "ChannelFull", "ChannelDisconnected", "Cancelled"];
+    let forbidden = [
+        "NoSender",
+        "ChannelFull",
+        "ChannelDisconnected",
+        "Cancelled",
+    ];
 
     for variant in &[
         SdkActionResult::NoSender,
