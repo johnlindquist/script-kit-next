@@ -420,13 +420,22 @@ fn cancelled_is_not_sent() {
 
 #[test]
 fn all_error_variants_map_to_defined_constants() {
-    assert_eq!(SdkActionResult::NoSender.error_code(), Some(ERROR_NO_SENDER));
-    assert_eq!(SdkActionResult::ChannelFull.error_code(), Some(ERROR_CHANNEL_FULL));
+    assert_eq!(
+        SdkActionResult::NoSender.error_code(),
+        Some(ERROR_NO_SENDER)
+    );
+    assert_eq!(
+        SdkActionResult::ChannelFull.error_code(),
+        Some(ERROR_CHANNEL_FULL)
+    );
     assert_eq!(
         SdkActionResult::ChannelDisconnected.error_code(),
         Some(ERROR_CHANNEL_DISCONNECTED)
     );
-    assert_eq!(SdkActionResult::Cancelled.error_code(), Some(ERROR_CANCELLED));
+    assert_eq!(
+        SdkActionResult::Cancelled.error_code(),
+        Some(ERROR_CANCELLED)
+    );
 
     // Success variants have no code
     assert_eq!(SdkActionResult::Sent.error_code(), None);
@@ -435,7 +444,12 @@ fn all_error_variants_map_to_defined_constants() {
 
 #[test]
 fn error_messages_never_contain_raw_transport_enum_names() {
-    let forbidden = ["NoSender", "ChannelFull", "ChannelDisconnected", "Cancelled"];
+    let forbidden = [
+        "NoSender",
+        "ChannelFull",
+        "ChannelDisconnected",
+        "Cancelled",
+    ];
 
     for variant in &[
         SdkActionResult::NoSender,

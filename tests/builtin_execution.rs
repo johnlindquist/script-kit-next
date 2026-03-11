@@ -4,8 +4,8 @@
 //! source code for string patterns.
 
 use script_kit_gpui::action_helpers::{
-    find_sdk_action, trigger_sdk_action, SdkActionResult, RESERVED_ACTION_IDS, ERROR_CANCELLED,
-    ERROR_CHANNEL_DISCONNECTED, ERROR_CHANNEL_FULL, ERROR_NO_SENDER,
+    find_sdk_action, trigger_sdk_action, SdkActionResult, ERROR_CANCELLED,
+    ERROR_CHANNEL_DISCONNECTED, ERROR_CHANNEL_FULL, ERROR_NO_SENDER, RESERVED_ACTION_IDS,
 };
 use script_kit_gpui::protocol::{self, ProtocolAction};
 use std::sync::mpsc;
@@ -242,7 +242,10 @@ fn all_error_variants_produce_distinct_error_codes() {
 
     // All should be Some
     for code in &codes {
-        assert!(code.is_some(), "All non-success variants must have error codes");
+        assert!(
+            code.is_some(),
+            "All non-success variants must have error codes"
+        );
     }
 
     // All should be distinct
