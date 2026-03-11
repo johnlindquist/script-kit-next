@@ -21,8 +21,8 @@ mod tests {
     }
 
     fn app_action_handler_region() -> String {
-        // All clipboard action handlers live in handle_action.rs (the single canonical source).
-        read_source("src/app_actions/handle_action.rs")
+        // All clipboard action handlers live in the modular handle_action/ directory.
+        crate::test_utils::read_all_handle_action_sources()
     }
 
     #[test]

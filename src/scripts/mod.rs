@@ -35,12 +35,10 @@ pub use self::scriptlet_loader::{load_scriptlets, read_scriptlets_from_file};
 pub use self::search::{
     compute_match_indices_for_result, fuzzy_search_unified, fuzzy_search_unified_all, NucleoCtx,
 };
-pub use self::types::{AgentMatch, FallbackConfig, Script, Scriptlet, SearchResult};
-
-// Additional re-exports needed by tests (only compiled when testing)
-#[cfg(test)]
-pub(crate) use self::types::{
-    BuiltInMatch, MatchIndices, ScriptMatch, ScriptletMatch, WindowMatch,
+#[allow(unused_imports)]
+pub use self::types::{
+    AgentMatch, AppMatch, BuiltInMatch, FallbackConfig, FallbackMatch, MatchIndices, Script,
+    ScriptMatch, Scriptlet, ScriptletMatch, SearchResult, WindowMatch,
 };
 
 #[cfg(test)]

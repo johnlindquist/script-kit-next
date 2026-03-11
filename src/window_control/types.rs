@@ -70,6 +70,19 @@ impl WindowInfo {
         }
     }
 
+    /// Create a WindowInfo without an AX reference (e.g. for testing).
+    #[doc(hidden)]
+    pub fn for_test(id: u32, app: String, title: String, bounds: Bounds, pid: i32) -> Self {
+        Self {
+            id,
+            app,
+            title,
+            bounds,
+            pid,
+            ax_window: None,
+        }
+    }
+
     /// Get the internal window reference for operations
     fn window_ref(&self) -> Option<AXUIElementRef> {
         self.ax_window.map(|ptr| ptr as AXUIElementRef)

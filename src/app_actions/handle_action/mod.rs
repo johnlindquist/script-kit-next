@@ -98,6 +98,7 @@ impl ScriptListApp {
     ///
     /// Uses Toast::warning (not error) per the feedback matrix — unsupported
     /// platform is a warning, not an error.
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
     fn show_unsupported_platform_toast(
         &mut self,
         feature: &str,

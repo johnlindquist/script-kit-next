@@ -102,18 +102,13 @@ fn make_agent_match(name: &str, path: &str) -> AgentMatch {
 
 fn make_window_match() -> WindowMatch {
     WindowMatch {
-        window: window_control::WindowInfo {
-            id: 1,
-            app: "Test App".to_string(),
-            title: "Test Window".to_string(),
-            bounds: window_control::Bounds {
-                x: 0,
-                y: 0,
-                width: 800,
-                height: 600,
-            },
-            pid: 1234,
-        },
+        window: window_control::WindowInfo::for_test(
+            1,
+            "Test App".to_string(),
+            "Test Window".to_string(),
+            window_control::Bounds::new(0, 0, 800, 600),
+            1234,
+        ),
         score: 100,
     }
 }

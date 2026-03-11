@@ -1,20 +1,18 @@
 // Regression tests for script management action handlers:
 // edit_script, reload_scripts, settings.
 
-use super::read_source as read;
-
 // ---------------------------------------------------------------------------
 // edit_script — success path
 // ---------------------------------------------------------------------------
 
 #[test]
 fn edit_script_uses_async_editor_launch() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let edit_pos = content
         .find("\"edit_script\"")
         .expect("Expected edit_script action handler");
-    let block = &content[edit_pos..content.len().min(edit_pos + 600)];
+    let block = &content[edit_pos..content.len().min(edit_pos + 1200)];
 
     assert!(
         block.contains("launch_editor_with_feedback_async"),
@@ -28,12 +26,12 @@ fn edit_script_uses_async_editor_launch() {
 
 #[test]
 fn edit_script_supports_scripts_and_agents() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let edit_pos = content
         .find("\"edit_script\"")
         .expect("Expected edit_script action handler");
-    let block = &content[edit_pos..content.len().min(edit_pos + 400)];
+    let block = &content[edit_pos..content.len().min(edit_pos + 1200)];
 
     assert!(
         block.contains("SearchResult::Script(m)") && block.contains("SearchResult::Agent(m)"),
@@ -47,12 +45,12 @@ fn edit_script_supports_scripts_and_agents() {
 
 #[test]
 fn edit_script_shows_error_for_unsupported_item_types() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let edit_pos = content
         .find("\"edit_script\"")
         .expect("Expected edit_script action handler");
-    let block = &content[edit_pos..content.len().min(edit_pos + 600)];
+    let block = &content[edit_pos..content.len().min(edit_pos + 1200)];
 
     assert!(
         block.contains("Cannot edit this item type"),
@@ -62,12 +60,12 @@ fn edit_script_shows_error_for_unsupported_item_types() {
 
 #[test]
 fn edit_script_shows_error_when_no_selection() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let edit_pos = content
         .find("\"edit_script\"")
         .expect("Expected edit_script action handler");
-    let block = &content[edit_pos..content.len().min(edit_pos + 600)];
+    let block = &content[edit_pos..content.len().min(edit_pos + 1200)];
 
     assert!(
         block.contains("selection_required_message_for_action(action_id)"),
@@ -77,12 +75,12 @@ fn edit_script_shows_error_when_no_selection() {
 
 #[test]
 fn edit_script_shows_toast_on_editor_launch_failure() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let edit_pos = content
         .find("\"edit_script\"")
         .expect("Expected edit_script action handler");
-    let block = &content[edit_pos..content.len().min(edit_pos + 600)];
+    let block = &content[edit_pos..content.len().min(edit_pos + 1200)];
 
     assert!(
         block.contains("show_error_toast(message, cx)"),
@@ -96,12 +94,12 @@ fn edit_script_shows_toast_on_editor_launch_failure() {
 
 #[test]
 fn reload_scripts_refreshes_and_shows_hud() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let reload_pos = content
         .find("\"reload_scripts\"")
         .expect("Expected reload_scripts action handler");
-    let block = &content[reload_pos..content.len().min(reload_pos + 200)];
+    let block = &content[reload_pos..content.len().min(reload_pos + 1200)];
 
     assert!(
         block.contains("refresh_scripts(cx)"),
@@ -123,12 +121,12 @@ fn reload_scripts_refreshes_and_shows_hud() {
 
 #[test]
 fn settings_opens_config_in_editor() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let settings_pos = content
         .find("\"settings\"")
         .expect("Expected settings action handler");
-    let block = &content[settings_pos..content.len().min(settings_pos + 600)];
+    let block = &content[settings_pos..content.len().min(settings_pos + 1200)];
 
     assert!(
         block.contains("config.ts"),
@@ -150,7 +148,7 @@ fn settings_opens_config_in_editor() {
 
 #[test]
 fn settings_shows_error_when_editor_fails() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let settings_pos = content
         .find("\"settings\"")

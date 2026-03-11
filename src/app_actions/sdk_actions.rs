@@ -5,7 +5,7 @@ impl ScriptListApp {
                 let result = crate::action_helpers::trigger_sdk_action(
                     action_name,
                     action,
-                    &self.arg_input.text().to_string(),
+                    self.arg_input.text(),
                     self.response_sender.as_ref(),
                 );
 

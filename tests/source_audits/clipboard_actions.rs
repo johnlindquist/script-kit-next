@@ -4,11 +4,11 @@ use super::read_source as read;
 
 #[test]
 fn clipboard_delete_multiple_requires_confirmation_before_delete() {
-    let actions = read("src/app_actions/handle_action.rs");
+    let actions = super::read_all_handle_action_sources();
 
     assert!(
         actions.contains("\"clipboard_delete_multiple\""),
-        "Expected handle_action.rs to handle clipboard_delete_multiple"
+        "Expected handle_action/ to handle clipboard_delete_multiple"
     );
     assert!(
         actions.contains("Are you sure you want to delete these")
@@ -23,11 +23,11 @@ fn clipboard_delete_multiple_requires_confirmation_before_delete() {
 
 #[test]
 fn clipboard_delete_all_requires_confirmation_before_delete() {
-    let actions = read("src/app_actions/handle_action.rs");
+    let actions = super::read_all_handle_action_sources();
 
     assert!(
         actions.contains("\"clipboard_delete_all\""),
-        "Expected handle_action.rs to handle clipboard_delete_all"
+        "Expected handle_action/ to handle clipboard_delete_all"
     );
     assert!(
         actions.contains("Are you sure you want to delete all")
@@ -70,11 +70,11 @@ fn builtin_confirmation_modal_failure_does_not_auto_confirm() {
 
 #[test]
 fn clipboard_save_snippet_rejects_non_text_entries() {
-    let actions = read("src/app_actions/handle_action.rs");
+    let actions = super::read_all_handle_action_sources();
 
     assert!(
         actions.contains("\"clipboard_save_snippet\""),
-        "Expected handle_action.rs to handle clipboard_save_snippet"
+        "Expected handle_action/ to handle clipboard_save_snippet"
     );
     assert!(
         actions.contains("entry.content_type != clipboard_history::ContentType::Text"),

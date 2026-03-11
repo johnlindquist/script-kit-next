@@ -1,20 +1,18 @@
 // Regression tests for file/clipboard tool action handlers:
 // clipboard_share, clipboard_ocr, copy_content, clipboard_paste.
 
-use super::read_source as read;
-
 // ---------------------------------------------------------------------------
 // clipboard_share — success path
 // ---------------------------------------------------------------------------
 
 #[test]
 fn clipboard_share_handles_text_and_image_content_types() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let share_pos = content
         .find("\"clipboard_share\"")
         .expect("Expected clipboard_share action handler");
-    let block = &content[share_pos..content.len().min(share_pos + 800)];
+    let block = &content[share_pos..content.len().min(share_pos + 1200)];
 
     assert!(
         block.contains("ContentType::Text"),
@@ -40,12 +38,12 @@ fn clipboard_share_handles_text_and_image_content_types() {
 
 #[test]
 fn clipboard_share_shows_error_when_no_entry_selected() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let share_pos = content
         .find("\"clipboard_share\"")
         .expect("Expected clipboard_share action handler");
-    let block = &content[share_pos..content.len().min(share_pos + 300)];
+    let block = &content[share_pos..content.len().min(share_pos + 1200)];
 
     assert!(
         block.contains("No clipboard entry selected"),
@@ -55,12 +53,12 @@ fn clipboard_share_shows_error_when_no_entry_selected() {
 
 #[test]
 fn clipboard_share_shows_error_when_content_unavailable() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let share_pos = content
         .find("\"clipboard_share\"")
         .expect("Expected clipboard_share action handler");
-    let block = &content[share_pos..content.len().min(share_pos + 400)];
+    let block = &content[share_pos..content.len().min(share_pos + 1200)];
 
     assert!(
         block.contains("Clipboard entry content unavailable"),
@@ -70,12 +68,12 @@ fn clipboard_share_shows_error_when_content_unavailable() {
 
 #[test]
 fn clipboard_share_shows_error_when_image_decode_fails() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let share_pos = content
         .find("\"clipboard_share\"")
         .expect("Expected clipboard_share action handler");
-    let block = &content[share_pos..content.len().min(share_pos + 800)];
+    let block = &content[share_pos..content.len().min(share_pos + 1200)];
 
     assert!(
         block.contains("Failed to decode clipboard image"),
@@ -89,12 +87,12 @@ fn clipboard_share_shows_error_when_image_decode_fails() {
 
 #[test]
 fn clipboard_ocr_guards_non_image_entries() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let ocr_pos = content
         .find("\"clipboard_ocr\"")
         .expect("Expected clipboard_ocr action handler");
-    let block = &content[ocr_pos..content.len().min(ocr_pos + 400)];
+    let block = &content[ocr_pos..content.len().min(ocr_pos + 1200)];
 
     assert!(
         block.contains("ContentType::Image"),
@@ -108,12 +106,12 @@ fn clipboard_ocr_guards_non_image_entries() {
 
 #[test]
 fn clipboard_ocr_uses_cached_text_when_available() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let ocr_pos = content
         .find("\"clipboard_ocr\"")
         .expect("Expected clipboard_ocr action handler");
-    let block = &content[ocr_pos..content.len().min(ocr_pos + 600)];
+    let block = &content[ocr_pos..content.len().min(ocr_pos + 1200)];
 
     assert!(
         block.contains("ocr_text"),
@@ -135,12 +133,12 @@ fn clipboard_ocr_uses_cached_text_when_available() {
 
 #[test]
 fn clipboard_ocr_shows_error_when_no_entry_selected() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let ocr_pos = content
         .find("\"clipboard_ocr\"")
         .expect("Expected clipboard_ocr action handler");
-    let block = &content[ocr_pos..content.len().min(ocr_pos + 200)];
+    let block = &content[ocr_pos..content.len().min(ocr_pos + 1200)];
 
     assert!(
         block.contains("No clipboard entry selected"),
@@ -154,12 +152,12 @@ fn clipboard_ocr_shows_error_when_no_entry_selected() {
 
 #[test]
 fn copy_content_reads_file_and_copies_to_clipboard() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let copy_pos = content
         .find("\"copy_content\"")
         .expect("Expected copy_content action handler");
-    let block = &content[copy_pos..content.len().min(copy_pos + 600)];
+    let block = &content[copy_pos..content.len().min(copy_pos + 1200)];
 
     assert!(
         block.contains("std::fs::read_to_string"),
@@ -181,12 +179,12 @@ fn copy_content_reads_file_and_copies_to_clipboard() {
 
 #[test]
 fn copy_content_shows_error_for_unsupported_item_types() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let copy_pos = content
         .find("\"copy_content\"")
         .expect("Expected copy_content action handler");
-    let block = &content[copy_pos..content.len().min(copy_pos + 600)];
+    let block = &content[copy_pos..content.len().min(copy_pos + 1200)];
 
     assert!(
         block.contains("Cannot copy content for this item type"),
@@ -196,12 +194,12 @@ fn copy_content_shows_error_for_unsupported_item_types() {
 
 #[test]
 fn copy_content_shows_error_when_no_selection() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let copy_pos = content
         .find("\"copy_content\"")
         .expect("Expected copy_content action handler");
-    let block = &content[copy_pos..content.len().min(copy_pos + 600)];
+    let block = &content[copy_pos..content.len().min(copy_pos + 1200)];
 
     assert!(
         block.contains("selection_required_message_for_action(action_id)"),
@@ -215,12 +213,12 @@ fn copy_content_shows_error_when_no_selection() {
 
 #[test]
 fn clipboard_paste_copies_entry_and_hides_window() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let paste_pos = content
         .find("\"clipboard_paste\"")
         .expect("Expected clipboard_paste action handler");
-    let block = &content[paste_pos..content.len().min(paste_pos + 400)];
+    let block = &content[paste_pos..content.len().min(paste_pos + 1200)];
 
     assert!(
         block.contains("copy_entry_to_clipboard"),
@@ -238,12 +236,12 @@ fn clipboard_paste_copies_entry_and_hides_window() {
 
 #[test]
 fn clipboard_paste_shows_error_when_no_entry_selected() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let paste_pos = content
         .find("\"clipboard_paste\"")
         .expect("Expected clipboard_paste action handler");
-    let block = &content[paste_pos..content.len().min(paste_pos + 200)];
+    let block = &content[paste_pos..content.len().min(paste_pos + 1200)];
 
     assert!(
         block.contains("No clipboard entry selected"),

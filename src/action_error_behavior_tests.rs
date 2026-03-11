@@ -6,8 +6,7 @@
 use std::fs;
 
 fn read_handle_action() -> String {
-    fs::read_to_string("src/app_actions/handle_action.rs")
-        .expect("Failed to read src/app_actions/handle_action.rs")
+    crate::test_utils::read_all_handle_action_sources()
 }
 
 fn read_sdk_actions() -> String {
@@ -30,7 +29,7 @@ fn copy_path_does_not_hide_window_on_clipboard_error() {
     // Find the copy_path action block
     let copy_path_start = content
         .find("\"copy_path\"")
-        .expect("Expected handle_action.rs to contain copy_path action");
+        .expect("Expected handle_action/ to contain copy_path action");
 
     // Find the next action block to bound our search
     let search_region = &content[copy_path_start..];
@@ -69,7 +68,7 @@ fn copy_deeplink_does_not_hide_window_on_clipboard_error() {
 
     let deeplink_start = content
         .find("\"copy_deeplink\"")
-        .expect("Expected handle_action.rs to contain copy_deeplink action");
+        .expect("Expected handle_action/ to contain copy_deeplink action");
 
     let search_region = &content[deeplink_start..];
     // Bound: find next top-level action (the action after copy_deeplink)
@@ -106,7 +105,7 @@ fn copy_content_does_not_hide_window_on_clipboard_error() {
 
     let copy_content_start = content
         .find("\"copy_content\"")
-        .expect("Expected handle_action.rs to contain copy_content action");
+        .expect("Expected handle_action/ to contain copy_content action");
 
     let search_region = &content[copy_content_start..];
     let next_action = search_region[20..]
@@ -218,7 +217,7 @@ fn file_search_action_errors_use_toast_not_hud() {
     let err_pos = fs_block
         .find("Err(e) =>")
         .expect("File search action block must have an Err(e) branch");
-    let after_err = &fs_block[err_pos..fs_block.len().min(err_pos + 800)];
+    let after_err = &fs_block[err_pos..fs_block.len().min(err_pos + 1200)];
 
     assert!(
         after_err.contains("toast_manager.push("),

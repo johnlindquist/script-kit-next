@@ -2,12 +2,9 @@
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-
     #[test]
     fn test_has_actions_helper_exists_and_handles_clipboard() {
-        let content = fs::read_to_string("src/app_actions/handle_action.rs")
-            .expect("Failed to read src/app_actions/handle_action.rs");
+        let content = crate::test_utils::read_all_handle_action_sources();
 
         assert!(
             content.contains("fn has_actions"),

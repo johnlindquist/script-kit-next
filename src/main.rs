@@ -50,6 +50,8 @@ mod designs;
 mod editor;
 #[allow(dead_code)] // Public API in lib.rs; binary only uses ErrorSeverity currently
 mod error;
+#[cfg(test)]
+mod execution_helpers_tests;
 mod executor;
 mod filter_coalescer;
 mod focus_coordinator;
@@ -79,6 +81,8 @@ mod stdin_commands;
 mod syntax;
 mod term_prompt;
 mod terminal;
+#[cfg(test)]
+mod test_utils;
 mod theme;
 mod transitions;
 mod tray;
