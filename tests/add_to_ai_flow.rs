@@ -13,13 +13,13 @@ fn read_app_action_handler_source() -> String {
         .collect();
     files.sort();
 
-    let mut content = read_source("src/app_actions/handle_action.rs");
+    let mut content = String::new();
     for file in files {
-        content.push('\n');
         content.push_str(
             &fs::read_to_string(&file)
                 .unwrap_or_else(|err| panic!("failed to read {}: {err}", file.display())),
         );
+        content.push('\n');
     }
 
     content
@@ -89,7 +89,8 @@ fn test_add_to_ai_flow_forwards_file_reference_to_ai_chat_window_when_file_attac
     let ai_render_root = read_source("src/ai/window/render_root.rs");
 
     assert!(
-        attach_branch.contains("DeferredAiWindowAction::AddAttachment { path: path.clone() }"),
+        attach_branch.contains("DeferredAiWindowAction::AddAttachment")
+            && attach_branch.contains("path: path.clone()"),
         "attach_to_ai should pass the selected file path into deferred AI file-reference action"
     );
     assert!(

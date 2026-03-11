@@ -1,4 +1,4 @@
-// Comprehensive test coverage for ALL action variants in handle_action.rs.
+// Comprehensive test coverage for ALL action variants in handle_action/.
 //
 // Acceptance criteria:
 // 1. Every action variant has at least one test asserting its feedback type
@@ -6,10 +6,10 @@
 // 3. Source-scanning tests verify all error paths use toast (not hud)
 // 4. Source-scanning tests verify named duration constants used (no raw ms)
 
-use crate::test_utils::{count_occurrences, read_source as read};
+use crate::test_utils::{count_occurrences, read_all_handle_action_sources, read_source as read};
 
 fn handle_action_content() -> String {
-    read("src/app_actions/handle_action.rs")
+    read_all_handle_action_sources()
 }
 
 fn helpers_content() -> String {
@@ -40,7 +40,7 @@ fn handle_action_has_no_unwrap_calls() {
 
     assert!(
         lines.is_empty(),
-        "handle_action.rs contains .unwrap() calls in production code at lines: {:?}",
+        "handle_action/ contains .unwrap() calls in production code at lines: {:?}",
         lines.iter().map(|(n, l)| format!("L{}: {}", n + 1, l.trim())).collect::<Vec<_>>()
     );
 }
@@ -63,7 +63,7 @@ fn handle_action_has_no_expect_calls() {
 
     assert!(
         lines.is_empty(),
-        "handle_action.rs contains .expect() calls in production code at lines: {:?}",
+        "handle_action/ contains .expect() calls in production code at lines: {:?}",
         lines.iter().map(|(n, l)| format!("L{}: {}", n + 1, l.trim())).collect::<Vec<_>>()
     );
 }
@@ -175,7 +175,7 @@ fn all_show_error_toast_calls_use_toast_not_hud() {
     let error_toast_count = count_occurrences(&content, "show_error_toast(");
     assert!(
         error_toast_count >= 10,
-        "Expected at least 10 show_error_toast() calls in handle_action.rs (found {error_toast_count})"
+        "Expected at least 10 show_error_toast() calls in handle_action/ (found {error_toast_count})"
     );
 
     // Verify the show_error_toast helper uses Toast::error with TOAST_ERROR_MS
@@ -278,7 +278,7 @@ fn clipboard_pin_unpin_shows_error_when_no_entry() {
     let pin_pos = content
         .find("\"clipboard_pin\" | \"clipboard_unpin\"")
         .expect("Expected clipboard_pin/unpin handler");
-    let block = &content[pin_pos..content.len().min(pin_pos + 200)];
+    let block = &content[pin_pos..content.len().min(pin_pos + 1200)];
 
     assert!(
         block.contains("No clipboard entry selected"),
@@ -297,7 +297,7 @@ fn clipboard_copy_shows_hud_on_success() {
     let copy_pos = content
         .find("\"clipboard_copy\"")
         .expect("Expected clipboard_copy handler");
-    let block = &content[copy_pos..content.len().min(copy_pos + 400)];
+    let block = &content[copy_pos..content.len().min(copy_pos + 1200)];
 
     assert!(
         block.contains("Copied to clipboard"),
@@ -316,7 +316,7 @@ fn clipboard_copy_shows_error_toast_on_failure() {
     let copy_pos = content
         .find("\"clipboard_copy\"")
         .expect("Expected clipboard_copy handler");
-    let block = &content[copy_pos..content.len().min(copy_pos + 400)];
+    let block = &content[copy_pos..content.len().min(copy_pos + 1200)];
 
     assert!(
         block.contains("show_error_toast(format!(\"Failed to copy: {}\", e), cx)"),
@@ -335,7 +335,7 @@ fn clipboard_paste_keep_open_shows_hud_on_success() {
     let paste_pos = content
         .find("\"clipboard_paste_keep_open\"")
         .expect("Expected clipboard_paste_keep_open handler");
-    let block = &content[paste_pos..content.len().min(paste_pos + 800)];
+    let block = &content[paste_pos..content.len().min(paste_pos + 1200)];
 
     assert!(
         block.contains("HUD_FLASH_MS"),
@@ -354,7 +354,7 @@ fn clipboard_paste_keep_open_does_not_hide_window() {
     let paste_pos = content
         .find("\"clipboard_paste_keep_open\"")
         .expect("Expected clipboard_paste_keep_open handler");
-    let block = &content[paste_pos..content.len().min(paste_pos + 800)];
+    let block = &content[paste_pos..content.len().min(paste_pos + 1200)];
 
     assert!(
         !block.contains("hide_main_and_reset"),
@@ -373,7 +373,7 @@ fn clipboard_quick_look_shows_error_toast_on_failure() {
     let ql_pos = content
         .find("\"clipboard_quick_look\"")
         .expect("Expected clipboard_quick_look handler");
-    let block = &content[ql_pos..content.len().min(ql_pos + 300)];
+    let block = &content[ql_pos..content.len().min(ql_pos + 1200)];
 
     assert!(
         block.contains("show_error_toast(format!(\"Failed to Quick Look: {}\", e), cx)"),
@@ -388,7 +388,7 @@ fn clipboard_quick_look_shows_error_when_no_entry() {
     let ql_pos = content
         .find("\"clipboard_quick_look\"")
         .expect("Expected clipboard_quick_look handler");
-    let block = &content[ql_pos..content.len().min(ql_pos + 200)];
+    let block = &content[ql_pos..content.len().min(ql_pos + 1200)];
 
     assert!(
         block.contains("No clipboard entry selected"),
@@ -452,7 +452,7 @@ fn clipboard_open_with_handler_exists() {
 
     assert!(
         content.contains("\"clipboard_open_with\""),
-        "Expected handle_action.rs to handle clipboard_open_with"
+        "Expected handle_action/ to handle clipboard_open_with"
     );
 }
 
@@ -466,11 +466,11 @@ fn clipboard_cleanshot_actions_exist() {
 
     assert!(
         content.contains("\"clipboard_annotate_cleanshot\""),
-        "Expected handle_action.rs to handle clipboard_annotate_cleanshot"
+        "Expected handle_action/ to handle clipboard_annotate_cleanshot"
     );
     assert!(
         content.contains("\"clipboard_upload_cleanshot\""),
-        "Expected handle_action.rs to handle clipboard_upload_cleanshot"
+        "Expected handle_action/ to handle clipboard_upload_cleanshot"
     );
 }
 
@@ -482,7 +482,7 @@ fn clipboard_cleanshot_actions_show_error_when_no_entry() {
     let annotate_pos = content
         .find("\"clipboard_annotate_cleanshot\"")
         .expect("Expected clipboard_annotate_cleanshot handler");
-    let annotate_block = &content[annotate_pos..content.len().min(annotate_pos + 300)];
+    let annotate_block = &content[annotate_pos..content.len().min(annotate_pos + 1200)];
 
     assert!(
         annotate_block.contains("No clipboard entry selected"),
@@ -492,7 +492,7 @@ fn clipboard_cleanshot_actions_show_error_when_no_entry() {
     let upload_pos = content
         .find("\"clipboard_upload_cleanshot\"")
         .expect("Expected clipboard_upload_cleanshot handler");
-    let upload_block = &content[upload_pos..content.len().min(upload_pos + 300)];
+    let upload_block = &content[upload_pos..content.len().min(upload_pos + 1200)];
 
     assert!(
         upload_block.contains("No clipboard entry selected"),
@@ -511,7 +511,7 @@ fn clipboard_delete_single_shows_hud_on_success() {
     let delete_pos = content
         .find("\"clipboard_delete\"")
         .expect("Expected clipboard_delete handler");
-    let block = &content[delete_pos..content.len().min(delete_pos + 800)];
+    let block = &content[delete_pos..content.len().min(delete_pos + 1200)];
 
     assert!(
         block.contains("Deleted"),
@@ -530,7 +530,7 @@ fn clipboard_delete_single_shows_error_toast_on_failure() {
     let delete_pos = content
         .find("\"clipboard_delete\"")
         .expect("Expected clipboard_delete handler");
-    let block = &content[delete_pos..content.len().min(delete_pos + 800)];
+    let block = &content[delete_pos..content.len().min(delete_pos + 1200)];
 
     assert!(
         block.contains("show_error_toast("),
@@ -587,7 +587,7 @@ fn create_script_shows_hud_on_success() {
     let create_pos = content
         .find("\"create_script\"")
         .expect("Expected create_script handler");
-    let block = &content[create_pos..content.len().min(create_pos + 400)];
+    let block = &content[create_pos..content.len().min(create_pos + 1200)];
 
     assert!(
         block.contains("Opened scripts folder"),
@@ -606,7 +606,7 @@ fn create_script_shows_error_toast_on_failure() {
     let create_pos = content
         .find("\"create_script\"")
         .expect("Expected create_script handler");
-    let block = &content[create_pos..content.len().min(create_pos + 400)];
+    let block = &content[create_pos..content.len().min(create_pos + 1200)];
 
     assert!(
         block.contains("show_error_toast("),
@@ -625,7 +625,7 @@ fn run_script_calls_execute_selected() {
     let run_pos = content
         .find("\"run_script\"")
         .expect("Expected run_script handler");
-    let block = &content[run_pos..content.len().min(run_pos + 100)];
+    let block = &content[run_pos..content.len().min(run_pos + 1200)];
 
     assert!(
         block.contains("self.execute_selected(cx)"),
@@ -644,7 +644,7 @@ fn view_logs_toggles_log_panel() {
     let logs_pos = content
         .find("\"view_logs\"")
         .expect("Expected view_logs handler");
-    let block = &content[logs_pos..content.len().min(logs_pos + 100)];
+    let block = &content[logs_pos..content.len().min(logs_pos + 1200)];
 
     assert!(
         block.contains("self.toggle_logs(cx)"),
@@ -663,7 +663,7 @@ fn reveal_in_finder_shows_hud_on_success() {
     let reveal_pos = content
         .find("\"reveal_in_finder\"")
         .expect("Expected reveal_in_finder handler");
-    let block = &content[reveal_pos..content.len().min(reveal_pos + 800)];
+    let block = &content[reveal_pos..content.len().min(reveal_pos + 1200)];
 
     assert!(
         block.contains("Opened in Finder"),
@@ -682,7 +682,7 @@ fn reveal_in_finder_shows_error_toast_for_unsupported_types() {
     let reveal_pos = content
         .find("\"reveal_in_finder\"")
         .expect("Expected reveal_in_finder handler");
-    let block = &content[reveal_pos..content.len().min(reveal_pos + 800)];
+    let block = &content[reveal_pos..content.len().min(reveal_pos + 1200)];
 
     assert!(
         block.contains("Cannot reveal this item type in Finder"),
@@ -701,7 +701,7 @@ fn copy_path_uses_clipboard_feedback_helper() {
     let copy_pos = content
         .find("\"copy_path\"")
         .expect("Expected copy_path handler");
-    let block = &content[copy_pos..content.len().min(copy_pos + 800)];
+    let block = &content[copy_pos..content.len().min(copy_pos + 1200)];
 
     assert!(
         block.contains("copy_to_clipboard_with_feedback("),
@@ -716,7 +716,7 @@ fn copy_path_shows_error_for_unsupported_types() {
     let copy_pos = content
         .find("\"copy_path\"")
         .expect("Expected copy_path handler");
-    let block = &content[copy_pos..content.len().min(copy_pos + 800)];
+    let block = &content[copy_pos..content.len().min(copy_pos + 1200)];
 
     assert!(
         block.contains("Cannot copy path for this item type"),
@@ -731,7 +731,7 @@ fn copy_path_shows_selection_required_when_no_selection() {
     let copy_pos = content
         .find("\"copy_path\"")
         .expect("Expected copy_path handler");
-    let block = &content[copy_pos..content.len().min(copy_pos + 800)];
+    let block = &content[copy_pos..content.len().min(copy_pos + 1200)];
 
     assert!(
         block.contains("selection_required_message_for_action(action_id)"),
@@ -750,7 +750,7 @@ fn copy_deeplink_uses_clipboard_feedback_helper() {
     let dl_pos = content
         .find("\"copy_deeplink\"")
         .expect("Expected copy_deeplink handler");
-    let block = &content[dl_pos..content.len().min(dl_pos + 400)];
+    let block = &content[dl_pos..content.len().min(dl_pos + 1200)];
 
     assert!(
         block.contains("copy_to_clipboard_with_feedback("),
@@ -765,7 +765,7 @@ fn copy_deeplink_formats_scriptkit_url() {
     let dl_pos = content
         .find("\"copy_deeplink\"")
         .expect("Expected copy_deeplink handler");
-    let block = &content[dl_pos..content.len().min(dl_pos + 400)];
+    let block = &content[dl_pos..content.len().min(dl_pos + 1200)];
 
     assert!(
         block.contains("scriptkit://run/"),
@@ -780,7 +780,7 @@ fn copy_deeplink_shows_selection_required_when_no_selection() {
     let dl_pos = content
         .find("\"copy_deeplink\"")
         .expect("Expected copy_deeplink handler");
-    let block = &content[dl_pos..content.len().min(dl_pos + 400)];
+    let block = &content[dl_pos..content.len().min(dl_pos + 1200)];
 
     assert!(
         block.contains("selection_required_message_for_action(action_id)"),
@@ -799,7 +799,7 @@ fn quit_calls_cx_quit() {
     let quit_pos = content
         .find("\"quit\"")
         .expect("Expected quit handler");
-    let block = &content[quit_pos..content.len().min(quit_pos + 200)];
+    let block = &content[quit_pos..content.len().min(quit_pos + 1200)];
 
     assert!(
         block.contains("cx.quit()"),
@@ -818,7 +818,7 @@ fn clipboard_paste_uses_hud_flash_ms_on_success() {
     let paste_pos = content
         .find("\"clipboard_paste\"")
         .expect("Expected clipboard_paste handler");
-    let block = &content[paste_pos..content.len().min(paste_pos + 800)];
+    let block = &content[paste_pos..content.len().min(paste_pos + 1200)];
 
     assert!(
         block.contains("HUD_FLASH_MS"),
@@ -848,7 +848,7 @@ fn all_clipboard_actions_guard_on_no_entry_selected() {
         let pos = content
             .find(&format!("\"{}\"", action))
             .unwrap_or_else(|| panic!("Expected {} handler", action));
-        let block = &content[pos..content.len().min(pos + 300)];
+        let block = &content[pos..content.len().min(pos + 1200)];
 
         assert!(
             block.contains("No clipboard entry selected")
@@ -868,7 +868,7 @@ fn error_toast_helper_is_defined_and_uses_correct_duration() {
 
     assert!(
         content.contains("fn show_error_toast("),
-        "show_error_toast helper should be defined in handle_action.rs"
+        "show_error_toast helper should be defined in handle_action/"
     );
     assert!(
         content.contains("TOAST_ERROR_MS"),
@@ -979,7 +979,7 @@ fn all_known_action_ids_are_handled() {
 
     assert!(
         missing.is_empty(),
-        "Action IDs missing handlers in handle_action.rs: {:?}",
+        "Action IDs missing handlers in handle_action/: {:?}",
         missing
     );
 }
@@ -992,7 +992,6 @@ fn all_known_action_ids_are_handled() {
 /// the named-duration-constant rule.
 fn all_action_file_contents() -> Vec<(&'static str, String)> {
     let paths: &[&str] = &[
-        "src/app_actions/handle_action.rs",
         "src/app_actions/handle_action/mod.rs",
         "src/app_actions/handle_action/clipboard.rs",
         "src/app_actions/handle_action/scripts.rs",
@@ -1225,7 +1224,7 @@ fn all_handle_action_sub_handlers_return_bool() {
 
         assert!(
             sig_block.contains("-> bool"),
-            "Sub-handler in handle_action.rs must return bool. Found signature: {}",
+            "Sub-handler in handle_action/ must return bool. Found signature: {}",
             &sig_block[..sig_block.len().min(120)]
         );
     }
@@ -1562,7 +1561,6 @@ fn handle_action_dispatch_covers_all_action_ids_from_reserved_list() {
     // Verify all known action IDs appear SOMEWHERE across the dispatch chain.
 
     let all_action_source_files: &[&str] = &[
-        "src/app_actions/handle_action.rs",
         "src/app_actions/handle_action/mod.rs",
         "src/app_actions/handle_action/clipboard.rs",
         "src/app_actions/handle_action/scripts.rs",

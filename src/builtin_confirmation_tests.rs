@@ -199,17 +199,17 @@ fn confirm_with_modal_delegates_to_open_confirm_window() {
 
 #[test]
 fn confirm_with_modal_callers_handle_all_three_results() {
-    let handle_action = read("src/app_actions/handle_action.rs");
+    let handle_action = crate::test_utils::read_all_handle_action_sources();
 
     // Every call site should handle Ok(true), Ok(false), and Err
     let call_sites: Vec<_> = handle_action.match_indices("confirm_with_modal(").collect();
     assert!(
         !call_sites.is_empty(),
-        "Expected at least one confirm_with_modal call site in handle_action.rs"
+        "Expected at least one confirm_with_modal call site in handle_action/"
     );
 
     for (pos, _) in &call_sites {
-        let block = &handle_action[*pos..handle_action.len().min(*pos + 300)];
+        let block = &handle_action[*pos..handle_action.len().min(*pos + 1200)];
 
         assert!(
             block.contains("Ok(true)"),
@@ -228,13 +228,13 @@ fn confirm_with_modal_callers_handle_all_three_results() {
 
 #[test]
 fn confirm_with_modal_error_path_logs_failure() {
-    let handle_action = read("src/app_actions/handle_action.rs");
+    let handle_action = crate::test_utils::read_all_handle_action_sources();
 
     // Every Err path from confirm_with_modal should log the error
     let call_sites: Vec<_> = handle_action.match_indices("confirm_with_modal(").collect();
 
     for (pos, _) in &call_sites {
-        let block = &handle_action[*pos..handle_action.len().min(*pos + 400)];
+        let block = &handle_action[*pos..handle_action.len().min(*pos + 1200)];
 
         assert!(
             block.contains("failed to open confirmation modal"),

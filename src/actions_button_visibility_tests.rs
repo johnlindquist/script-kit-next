@@ -6,8 +6,19 @@ mod tests {
 
     #[test]
     fn test_has_actions_helper_exists_and_handles_clipboard() {
-        let content = fs::read_to_string("src/app_actions/handle_action.rs")
-            .expect("Failed to read src/app_actions/handle_action.rs");
+        let dir = "src/app_actions/handle_action";
+        let mut content = String::new();
+        for entry in fs::read_dir(dir).expect("Failed to read handle_action directory") {
+            let entry = entry.expect("dir entry");
+            let path = entry.path();
+            if path.extension().is_some_and(|ext| ext == "rs") {
+                content.push_str(
+                    &fs::read_to_string(&path)
+                        .unwrap_or_else(|_| panic!("Failed to read {}", path.display())),
+                );
+                content.push('\n');
+            }
+        }
 
         assert!(
             content.contains("fn has_actions"),

@@ -57,6 +57,7 @@ pub(crate) const TOAST_CRITICAL_MS: u64 = 10000;
 
 /// Unsupported platform message for macOS-only features.
 /// Returns a consistent "only supported on macOS" string for the given feature.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
 fn unsupported_platform_message(feature: &str) -> String {
     format!("{} is only supported on macOS", feature)
 }
@@ -284,7 +285,7 @@ mod app_actions_tests {
     };
     use crate::clipboard_history::{ClipboardEntryMeta, ContentType};
     use crate::scripts;
-    use crate::test_utils::{count_occurrences, read_source as read};
+    use crate::test_utils::count_occurrences;
     use crate::AppView;
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -634,7 +635,7 @@ mod app_actions_tests {
 
     #[test]
     fn test_edit_actions_show_error_feedback_when_editor_launch_fails() {
-        let content = read("src/app_actions/handle_action.rs");
+        let content = crate::test_utils::read_all_handle_action_sources();
 
         assert!(
             content.contains("fn launch_editor_with_feedback_async"),
@@ -657,7 +658,7 @@ mod app_actions_tests {
 
     #[test]
     fn test_reveal_actions_show_success_hud_after_async_completion() {
-        let content = read("src/app_actions/handle_action.rs");
+        let content = crate::test_utils::read_all_handle_action_sources();
 
         assert!(
             content.contains("fn reveal_in_finder_with_feedback_async"),
@@ -689,7 +690,7 @@ mod app_actions_tests {
 
     #[test]
     fn test_edit_scriptlet_shows_error_when_no_file_path() {
-        let content = read("src/app_actions/handle_action.rs");
+        let content = crate::test_utils::read_all_handle_action_sources();
 
         let edit_section = content
             .find("\"edit_scriptlet\"")
@@ -708,7 +709,7 @@ mod app_actions_tests {
 
     #[test]
     fn test_edit_scriptlet_strips_anchor_from_file_path() {
-        let content = read("src/app_actions/handle_action.rs");
+        let content = crate::test_utils::read_all_handle_action_sources();
 
         let edit_section = content
             .find("\"edit_scriptlet\"")
@@ -723,7 +724,7 @@ mod app_actions_tests {
 
     #[test]
     fn test_edit_scriptlet_uses_async_editor_launch() {
-        let content = read("src/app_actions/handle_action.rs");
+        let content = crate::test_utils::read_all_handle_action_sources();
 
         let edit_section = content
             .find("\"edit_scriptlet\"")
@@ -738,7 +739,7 @@ mod app_actions_tests {
 
     #[test]
     fn test_copy_scriptlet_path_shows_error_when_no_file_path() {
-        let content = read("src/app_actions/handle_action.rs");
+        let content = crate::test_utils::read_all_handle_action_sources();
 
         let copy_section = content
             .find("\"copy_scriptlet_path\"")
@@ -757,7 +758,7 @@ mod app_actions_tests {
 
     #[test]
     fn test_copy_scriptlet_path_uses_clipboard_feedback() {
-        let content = read("src/app_actions/handle_action.rs");
+        let content = crate::test_utils::read_all_handle_action_sources();
 
         let copy_section = content
             .find("\"copy_scriptlet_path\"")
@@ -772,7 +773,7 @@ mod app_actions_tests {
 
     #[test]
     fn test_reveal_scriptlet_in_finder_shows_error_when_no_file_path() {
-        let content = read("src/app_actions/handle_action.rs");
+        let content = crate::test_utils::read_all_handle_action_sources();
 
         let reveal_section = content
             .find("\"reveal_scriptlet_in_finder\"")
@@ -791,7 +792,7 @@ mod app_actions_tests {
 
     #[test]
     fn test_reveal_scriptlet_in_finder_uses_async_reveal() {
-        let content = read("src/app_actions/handle_action.rs");
+        let content = crate::test_utils::read_all_handle_action_sources();
 
         let reveal_section = content
             .find("\"reveal_scriptlet_in_finder\"")
@@ -806,7 +807,7 @@ mod app_actions_tests {
 
     #[test]
     fn test_reveal_scriptlet_in_finder_shows_error_on_failure() {
-        let content = read("src/app_actions/handle_action.rs");
+        let content = crate::test_utils::read_all_handle_action_sources();
 
         let reveal_section = content
             .find("\"reveal_scriptlet_in_finder\"")
@@ -825,7 +826,7 @@ mod app_actions_tests {
 
     #[test]
     fn test_remove_script_requires_confirmation_modal() {
-        let content = read("src/app_actions/handle_action.rs");
+        let content = crate::test_utils::read_all_handle_action_sources();
 
         let remove_section = content
             .find("\"remove_script\" | \"delete_script\"")
@@ -844,7 +845,7 @@ mod app_actions_tests {
 
     #[test]
     fn test_remove_script_shows_toast_on_failure() {
-        let content = read("src/app_actions/handle_action.rs");
+        let content = crate::test_utils::read_all_handle_action_sources();
 
         let remove_section = content
             .find("\"remove_script\" | \"delete_script\"")
@@ -863,7 +864,7 @@ mod app_actions_tests {
 
     #[test]
     fn test_remove_script_shows_error_when_path_does_not_exist() {
-        let content = read("src/app_actions/handle_action.rs");
+        let content = crate::test_utils::read_all_handle_action_sources();
 
         let remove_section = content
             .find("\"remove_script\" | \"delete_script\"")
@@ -882,7 +883,7 @@ mod app_actions_tests {
 
     #[test]
     fn test_remove_script_shows_error_when_no_selection() {
-        let content = read("src/app_actions/handle_action.rs");
+        let content = crate::test_utils::read_all_handle_action_sources();
 
         let remove_section = content
             .find("\"remove_script\" | \"delete_script\"")
@@ -897,7 +898,7 @@ mod app_actions_tests {
 
     #[test]
     fn test_remove_script_shows_error_for_unsupported_item_type() {
-        let content = read("src/app_actions/handle_action.rs");
+        let content = crate::test_utils::read_all_handle_action_sources();
 
         let remove_section = content
             .find("\"remove_script\" | \"delete_script\"")
@@ -912,7 +913,7 @@ mod app_actions_tests {
 
     #[test]
     fn test_remove_script_shows_hud_on_success() {
-        let content = read("src/app_actions/handle_action.rs");
+        let content = crate::test_utils::read_all_handle_action_sources();
 
         let remove_section = content
             .find("\"remove_script\" | \"delete_script\"")
@@ -927,7 +928,7 @@ mod app_actions_tests {
 
     #[test]
     fn test_remove_script_shows_error_when_confirm_modal_fails() {
-        let content = read("src/app_actions/handle_action.rs");
+        let content = crate::test_utils::read_all_handle_action_sources();
 
         let remove_section = content
             .find("\"remove_script\" | \"delete_script\"")

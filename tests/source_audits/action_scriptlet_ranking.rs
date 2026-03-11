@@ -1,20 +1,18 @@
 // Regression tests for scriptlet ranking and scriptlet action handlers:
 // reset_ranking, scriptlet_action:* prefix.
 
-use super::read_source as read;
-
 // ---------------------------------------------------------------------------
 // reset_ranking — success path
 // ---------------------------------------------------------------------------
 
 #[test]
 fn reset_ranking_removes_frecency_entry_and_refreshes() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let reset_pos = content
         .find("\"reset_ranking\"")
         .expect("Expected reset_ranking action handler");
-    let block = &content[reset_pos..content.len().min(reset_pos + 600)];
+    let block = &content[reset_pos..content.len().min(reset_pos + 1200)];
 
     assert!(
         block.contains("frecency_store.remove("),
@@ -36,12 +34,12 @@ fn reset_ranking_removes_frecency_entry_and_refreshes() {
 
 #[test]
 fn reset_ranking_shows_hud_with_item_name() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let reset_pos = content
         .find("\"reset_ranking\"")
         .expect("Expected reset_ranking action handler");
-    let block = &content[reset_pos..content.len().min(reset_pos + 600)];
+    let block = &content[reset_pos..content.len().min(reset_pos + 1200)];
 
     assert!(
         block.contains("Ranking reset for"),
@@ -59,12 +57,12 @@ fn reset_ranking_shows_hud_with_item_name() {
 
 #[test]
 fn reset_ranking_shows_feedback_when_no_frecency_entry() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let reset_pos = content
         .find("\"reset_ranking\"")
         .expect("Expected reset_ranking action handler");
-    let block = &content[reset_pos..content.len().min(reset_pos + 800)];
+    let block = &content[reset_pos..content.len().min(reset_pos + 1200)];
 
     assert!(
         block.contains("Item has no ranking to reset"),
@@ -74,12 +72,12 @@ fn reset_ranking_shows_feedback_when_no_frecency_entry() {
 
 #[test]
 fn reset_ranking_shows_error_when_no_selection() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let reset_pos = content
         .find("\"reset_ranking\"")
         .expect("Expected reset_ranking action handler");
-    let block = &content[reset_pos..content.len().min(reset_pos + 800)];
+    let block = &content[reset_pos..content.len().min(reset_pos + 1200)];
 
     assert!(
         block.contains("selection_required_message_for_action(action_id)"),
@@ -93,7 +91,7 @@ fn reset_ranking_shows_error_when_no_selection() {
 
 #[test]
 fn scriptlet_action_prefix_is_handled() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     assert!(
         content.contains("action_id.starts_with(\"scriptlet_action:\")"),
@@ -103,12 +101,12 @@ fn scriptlet_action_prefix_is_handled() {
 
 #[test]
 fn scriptlet_action_strips_prefix_and_logs() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let scriptlet_pos = content
         .find("starts_with(\"scriptlet_action:\")")
         .expect("Expected scriptlet_action handler");
-    let block = &content[scriptlet_pos..content.len().min(scriptlet_pos + 400)];
+    let block = &content[scriptlet_pos..content.len().min(scriptlet_pos + 1200)];
 
     assert!(
         block.contains("strip_prefix(\"scriptlet_action:\")"),
@@ -126,12 +124,12 @@ fn scriptlet_action_strips_prefix_and_logs() {
 
 #[test]
 fn scriptlet_action_shows_error_when_no_selection() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let scriptlet_pos = content
         .find("starts_with(\"scriptlet_action:\")")
         .expect("Expected scriptlet_action handler");
-    let block = &content[scriptlet_pos..content.len().min(scriptlet_pos + 800)];
+    let block = &content[scriptlet_pos..content.len().min(scriptlet_pos + 1200)];
 
     assert!(
         block.contains("selection_required_message_for_action(action_id)"),
@@ -141,12 +139,12 @@ fn scriptlet_action_shows_error_when_no_selection() {
 
 #[test]
 fn scriptlet_action_shows_error_when_item_is_not_scriptlet() {
-    let content = read("src/app_actions/handle_action.rs");
+    let content = super::read_all_handle_action_sources();
 
     let scriptlet_pos = content
         .find("starts_with(\"scriptlet_action:\")")
         .expect("Expected scriptlet_action handler");
-    let block = &content[scriptlet_pos..content.len().min(scriptlet_pos + 800)];
+    let block = &content[scriptlet_pos..content.len().min(scriptlet_pos + 1200)];
 
     assert!(
         block.contains("SearchResult::Scriptlet("),

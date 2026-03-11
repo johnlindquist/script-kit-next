@@ -34,21 +34,17 @@ fn feedback_contract_constants_defined() {
 /// Verify that the action handler files have the expected dispatch structure.
 #[test]
 fn action_handler_dispatch_structure_exists() {
-    // Collect all handler source (main file + chunk files)
-    let mut content = fs::read_to_string("src/app_actions/handle_action.rs")
-        .expect("Failed to read handle_action.rs");
-
+    // Collect all handler source from modular handler directory
     let handler_dir = std::path::Path::new("src/app_actions/handle_action");
-    if handler_dir.is_dir() {
-        for entry in fs::read_dir(handler_dir).expect("Failed to read handle_action directory") {
-            let entry = entry.expect("Failed to read directory entry");
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) == Some("rs") {
-                let chunk = fs::read_to_string(&path)
-                    .unwrap_or_else(|_| panic!("Failed to read {}", path.display()));
-                content.push('\n');
-                content.push_str(&chunk);
-            }
+    let mut content = String::new();
+    for entry in fs::read_dir(handler_dir).expect("Failed to read handle_action directory") {
+        let entry = entry.expect("Failed to read directory entry");
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) == Some("rs") {
+            let chunk = fs::read_to_string(&path)
+                .unwrap_or_else(|_| panic!("Failed to read {}", path.display()));
+            content.push_str(&chunk);
+            content.push('\n');
         }
     }
 
@@ -103,27 +99,22 @@ fn sdk_actions_uses_modern_logging() {
 // Structural coverage tests for action handler consistency
 // ---------------------------------------------------------------------------
 
-/// Every known action ID that appears in handle_action.rs and its included
-/// handler files must have a match arm. This test collects all quoted action
+/// Every known action ID that appears in the modular handle_action handlers
+/// must have a match arm. This test collects all quoted action
 /// ID strings from the dispatch match and verifies they form a known set.
 #[test]
 fn all_action_ids_have_handler_arms() {
-    let main_handler = fs::read_to_string("src/app_actions/handle_action.rs")
-        .expect("Failed to read handle_action.rs");
-
-    // Collect all handler chunk files
+    // Collect all handler source from modular handler directory
     let handler_dir = std::path::Path::new("src/app_actions/handle_action");
-    let mut all_content = main_handler.clone();
-    if handler_dir.is_dir() {
-        for entry in fs::read_dir(handler_dir).expect("Failed to read handle_action directory") {
-            let entry = entry.expect("Failed to read directory entry");
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) == Some("rs") {
-                let chunk = fs::read_to_string(&path)
-                    .unwrap_or_else(|_| panic!("Failed to read {}", path.display()));
-                all_content.push('\n');
-                all_content.push_str(&chunk);
-            }
+    let mut all_content = String::new();
+    for entry in fs::read_dir(handler_dir).expect("Failed to read handle_action directory") {
+        let entry = entry.expect("Failed to read directory entry");
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) == Some("rs") {
+            let chunk = fs::read_to_string(&path)
+                .unwrap_or_else(|_| panic!("Failed to read {}", path.display()));
+            all_content.push_str(&chunk);
+            all_content.push('\n');
         }
     }
 
@@ -196,21 +187,18 @@ fn all_action_ids_have_handler_arms() {
     }
 }
 
-/// No handler files (handle_action.rs or its chunks) should use the legacy
-/// `logging::log()` pattern. All logging must use `tracing::` macros.
+/// No handler files should use the legacy `logging::log()` pattern.
+/// All logging must use `tracing::` macros.
 #[test]
 fn no_legacy_logging_in_handler_files() {
     let handler_dir = std::path::Path::new("src/app_actions/handle_action");
     let files_to_check: Vec<std::path::PathBuf> = {
-        let mut files = vec![std::path::PathBuf::from("src/app_actions/handle_action.rs")];
-        if handler_dir.is_dir() {
-            for entry in fs::read_dir(handler_dir).expect("Failed to read handle_action directory")
-            {
-                let entry = entry.expect("Failed to read directory entry");
-                let path = entry.path();
-                if path.extension().and_then(|e| e.to_str()) == Some("rs") {
-                    files.push(path);
-                }
+        let mut files = Vec::new();
+        for entry in fs::read_dir(handler_dir).expect("Failed to read handle_action directory") {
+            let entry = entry.expect("Failed to read directory entry");
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) == Some("rs") {
+                files.push(path);
             }
         }
         files

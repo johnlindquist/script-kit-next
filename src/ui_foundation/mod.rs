@@ -898,12 +898,19 @@ mod tests {
 
     #[test]
     fn test_resolve_window_vibrancy_opacity_uses_mode_defaults_when_unset() {
-        let dark_theme = Theme::dark_default();
+        // Create themes with opacity.vibrancy_background = None to test fallback
+        let mut dark_theme = Theme::dark_default();
+        if let Some(ref mut opacity) = dark_theme.opacity {
+            opacity.vibrancy_background = None;
+        }
         assert!(
             (resolve_window_vibrancy_opacity(&dark_theme) - VIBRANCY_DARK_OPACITY).abs() < 0.0001
         );
 
-        let light_theme = Theme::light_default();
+        let mut light_theme = Theme::light_default();
+        if let Some(ref mut opacity) = light_theme.opacity {
+            opacity.vibrancy_background = None;
+        }
         assert!(
             (resolve_window_vibrancy_opacity(&light_theme) - VIBRANCY_LIGHT_OPACITY).abs() < 0.0001
         );
