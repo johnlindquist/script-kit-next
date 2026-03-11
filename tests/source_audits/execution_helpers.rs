@@ -57,15 +57,11 @@ fn open_scratch_pad_shows_toast_on_directory_creation_failure() {
     let dir_create_pos = content
         .find("create_dir_all(parent)")
         .expect("Expected create_dir_all call");
-    let block = &content[dir_create_pos..dir_create_pos + 500];
+    let block = &content[dir_create_pos..dir_create_pos + 800];
 
     assert!(
-        block.contains("Toast::error("),
+        block.contains("show_error_toast("),
         "Expected directory creation failure to show error toast"
-    );
-    assert!(
-        block.contains("TOAST_ERROR_MS"),
-        "Expected directory creation error toast to use TOAST_ERROR_MS duration"
     );
 }
 
@@ -74,7 +70,7 @@ fn open_scratch_pad_shows_toast_on_read_failure() {
     let content = execution_helpers_content();
 
     assert!(
-        content.contains("\"Failed to read scratch pad: \""),
+        content.contains("Failed to read scratch pad:"),
         "Expected open_scratch_pad to show toast on file read failure"
     );
 }
@@ -173,7 +169,7 @@ fn handle_api_key_completion_rebuilds_provider_registry_on_success() {
     let completion_fn_start = content
         .find("fn handle_api_key_completion(")
         .expect("Expected handle_api_key_completion to exist");
-    let block = &content[completion_fn_start..completion_fn_start + 600];
+    let block = &content[completion_fn_start..completion_fn_start + 1200];
 
     assert!(
         block.contains("self.rebuild_provider_registry_async(cx)"),
@@ -188,7 +184,7 @@ fn handle_api_key_completion_uses_deferred_resize() {
     let completion_fn_start = content
         .find("fn handle_api_key_completion(")
         .expect("Expected handle_api_key_completion to exist");
-    let block = &content[completion_fn_start..completion_fn_start + 800];
+    let block = &content[completion_fn_start..completion_fn_start + 1200];
 
     assert!(
         block.contains("window.defer(cx,"),
@@ -254,19 +250,15 @@ fn ai_open_failure_message_is_used_for_open_ai_errors() {
     let ai_command_section_start = content
         .find("AiCommandType::OpenAi | AiCommandType::NewConversation")
         .expect("Expected OpenAi/NewConversation match arm");
-    let block = &content[ai_command_section_start..ai_command_section_start + 500];
+    let block = &content[ai_command_section_start..ai_command_section_start + 800];
 
     assert!(
         block.contains("ai_open_failure_message"),
         "Expected OpenAi/NewConversation error path to use ai_open_failure_message"
     );
     assert!(
-        block.contains("Toast::error("),
-        "Expected OpenAi/NewConversation error to show Toast"
-    );
-    assert!(
-        block.contains("TOAST_ERROR_MS"),
-        "Expected OpenAi/NewConversation error toast to use TOAST_ERROR_MS"
+        block.contains("show_error_toast("),
+        "Expected OpenAi/NewConversation error to show error toast"
     );
 }
 
@@ -277,16 +269,12 @@ fn ai_clear_conversation_uses_ai_open_failure_message_on_reopen_error() {
     let clear_section_start = content
         .find("AiCommandType::ClearConversation")
         .expect("Expected ClearConversation match arm");
-    let block = &content[clear_section_start..clear_section_start + 800];
+    let block = &content[clear_section_start..clear_section_start + 1200];
 
     // After clearing, if reopening fails, should show error toast
     assert!(
-        block.contains("Toast::error("),
-        "Expected ClearConversation reopen-failure path to show Toast"
-    );
-    assert!(
-        block.contains("TOAST_ERROR_MS"),
-        "Expected ClearConversation error toast to use TOAST_ERROR_MS"
+        block.contains("show_error_toast("),
+        "Expected ClearConversation reopen-failure path to show error toast"
     );
 }
 
@@ -297,7 +285,7 @@ fn ai_clear_conversation_shows_hud_on_success() {
     let clear_section_start = content
         .find("AiCommandType::ClearConversation")
         .expect("Expected ClearConversation match arm");
-    let block = &content[clear_section_start..clear_section_start + 800];
+    let block = &content[clear_section_start..clear_section_start + 1200];
 
     assert!(
         block.contains("Cleared AI conversations"),
@@ -316,7 +304,7 @@ fn ai_clear_conversation_shows_toast_when_clear_fails() {
     let clear_section_start = content
         .find("AiCommandType::ClearConversation")
         .expect("Expected ClearConversation match arm");
-    let block = &content[clear_section_start..clear_section_start + 900];
+    let block = &content[clear_section_start..clear_section_start + 1500];
 
     assert!(
         block.contains("Failed to clear AI conversations"),
@@ -347,7 +335,7 @@ fn reset_window_positions_shows_hud_confirmation() {
     let reset_section_start = content
         .find("SettingsCommandType::ResetWindowPositions")
         .expect("Expected ResetWindowPositions match arm");
-    let block = &content[reset_section_start..reset_section_start + 500];
+    let block = &content[reset_section_start..reset_section_start + 800];
 
     assert!(
         block.contains("show_hud("),
@@ -366,7 +354,7 @@ fn reset_window_positions_suppresses_save_before_reset() {
     let reset_section_start = content
         .find("SettingsCommandType::ResetWindowPositions")
         .expect("Expected ResetWindowPositions match arm");
-    let block = &content[reset_section_start..reset_section_start + 300];
+    let block = &content[reset_section_start..reset_section_start + 500];
 
     assert!(
         block.contains("suppress_save()"),

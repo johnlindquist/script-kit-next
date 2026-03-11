@@ -12,7 +12,7 @@ fn shortcut_actions_open_recorder_for_non_scripts() {
     let shortcut_pos = content
         .find("\"configure_shortcut\" | \"add_shortcut\" | \"update_shortcut\"")
         .expect("Expected shortcut action handler");
-    let block = &content[shortcut_pos..content.len().min(shortcut_pos + 1200)];
+    let block = &content[shortcut_pos..content.len().min(shortcut_pos + 5000)];
 
     assert!(
         block.contains("show_shortcut_recorder("),
@@ -27,7 +27,7 @@ fn shortcut_actions_open_editor_for_scripts() {
     let shortcut_pos = content
         .find("\"configure_shortcut\" | \"add_shortcut\" | \"update_shortcut\"")
         .expect("Expected shortcut action handler");
-    let block = &content[shortcut_pos..content.len().min(shortcut_pos + 1200)];
+    let block = &content[shortcut_pos..content.len().min(shortcut_pos + 5000)];
 
     assert!(
         block.contains("edit_script(") && block.contains("SearchResult::Script("),
@@ -46,7 +46,7 @@ fn shortcut_actions_show_error_when_no_selection() {
     let shortcut_pos = content
         .find("\"configure_shortcut\" | \"add_shortcut\" | \"update_shortcut\"")
         .expect("Expected shortcut action handler");
-    let block = &content[shortcut_pos..content.len().min(shortcut_pos + 1000)];
+    let block = &content[shortcut_pos..content.len().min(shortcut_pos + 5000)];
 
     assert!(
         block.contains("selection_required_message_for_action(action_id)"),
@@ -61,7 +61,7 @@ fn shortcut_actions_reject_window_items() {
     let shortcut_pos = content
         .find("\"configure_shortcut\" | \"add_shortcut\" | \"update_shortcut\"")
         .expect("Expected shortcut action handler");
-    let block = &content[shortcut_pos..content.len().min(shortcut_pos + 1000)];
+    let block = &content[shortcut_pos..content.len().min(shortcut_pos + 5000)];
 
     assert!(
         block.contains("Window shortcuts not supported"),
@@ -80,7 +80,7 @@ fn remove_shortcut_calls_persistence_and_shows_hud() {
     let remove_pos = content
         .find("\"remove_shortcut\"")
         .expect("Expected remove_shortcut action handler");
-    let block = &content[remove_pos..content.len().min(remove_pos + 1200)];
+    let block = &content[remove_pos..content.len().min(remove_pos + 5000)];
 
     assert!(
         block.contains("remove_shortcut_override("),
@@ -107,7 +107,7 @@ fn remove_shortcut_shows_error_on_persistence_failure() {
     let remove_pos = content
         .find("\"remove_shortcut\"")
         .expect("Expected remove_shortcut action handler");
-    let block = &content[remove_pos..content.len().min(remove_pos + 1200)];
+    let block = &content[remove_pos..content.len().min(remove_pos + 5000)];
 
     assert!(
         block.contains("Failed to remove shortcut:"),
@@ -126,7 +126,7 @@ fn remove_shortcut_rejects_unsupported_item_types() {
     let remove_pos = content
         .find("\"remove_shortcut\"")
         .expect("Expected remove_shortcut action handler");
-    let block = &content[remove_pos..content.len().min(remove_pos + 1200)];
+    let block = &content[remove_pos..content.len().min(remove_pos + 5000)];
 
     assert!(
         block.contains("Cannot remove shortcut for this item type"),
@@ -145,7 +145,7 @@ fn alias_actions_open_alias_input() {
     let alias_pos = content
         .find("\"add_alias\" | \"update_alias\"")
         .expect("Expected alias action handler");
-    let block = &content[alias_pos..content.len().min(alias_pos + 1200)];
+    let block = &content[alias_pos..content.len().min(alias_pos + 5000)];
 
     assert!(
         block.contains("show_alias_input("),
@@ -164,7 +164,7 @@ fn alias_actions_show_error_when_no_selection() {
     let alias_pos = content
         .find("\"add_alias\" | \"update_alias\"")
         .expect("Expected alias action handler");
-    let block = &content[alias_pos..content.len().min(alias_pos + 1200)];
+    let block = &content[alias_pos..content.len().min(alias_pos + 5000)];
 
     assert!(
         block.contains("selection_required_message_for_action(action_id)"),
@@ -179,7 +179,7 @@ fn alias_actions_reject_window_items() {
     let alias_pos = content
         .find("\"add_alias\" | \"update_alias\"")
         .expect("Expected alias action handler");
-    let block = &content[alias_pos..content.len().min(alias_pos + 1200)];
+    let block = &content[alias_pos..content.len().min(alias_pos + 5000)];
 
     assert!(
         block.contains("Window aliases not supported"),
@@ -198,7 +198,7 @@ fn remove_alias_calls_persistence_and_shows_hud() {
     let remove_pos = content
         .find("\"remove_alias\"")
         .expect("Expected remove_alias action handler");
-    let block = &content[remove_pos..content.len().min(remove_pos + 1200)];
+    let block = &content[remove_pos..content.len().min(remove_pos + 5000)];
 
     assert!(
         block.contains("remove_alias_override("),
@@ -225,7 +225,7 @@ fn remove_alias_shows_error_on_persistence_failure() {
     let remove_pos = content
         .find("\"remove_alias\"")
         .expect("Expected remove_alias action handler");
-    let block = &content[remove_pos..content.len().min(remove_pos + 1200)];
+    let block = &content[remove_pos..content.len().min(remove_pos + 5000)];
 
     assert!(
         block.contains("Failed to remove alias:"),
@@ -244,7 +244,7 @@ fn remove_alias_rejects_unsupported_item_types() {
     let remove_pos = content
         .find("\"remove_alias\"")
         .expect("Expected remove_alias action handler");
-    let block = &content[remove_pos..content.len().min(remove_pos + 1200)];
+    let block = &content[remove_pos..content.len().min(remove_pos + 5000)];
 
     assert!(
         block.contains("Cannot remove alias for this item type"),

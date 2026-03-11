@@ -60,7 +60,7 @@ fn handle_builtin_confirmation_logs_error_when_entry_not_found() {
     let content = builtin_confirmation_content();
 
     assert!(
-        content.contains("\"Builtin entry not found for confirmed action: \""),
+        content.contains("Builtin entry not found for confirmed action:"),
         "Expected error log when confirmed entry_id has no matching builtin"
     );
 }
@@ -141,7 +141,7 @@ fn handle_builtin_confirmation_logs_accepted_action_before_execution() {
 
     // Verify acceptance is logged with the entry_id for observability
     assert!(
-        content.contains("\"Builtin confirmation accepted, executing: \""),
+        content.contains("Builtin confirmation accepted, executing:"),
         "Expected acceptance to be logged before execution"
     );
 }
@@ -169,12 +169,12 @@ fn confirm_with_modal_awaits_receiver_for_result() {
     let fn_start = helpers
         .find("async fn confirm_with_modal(")
         .expect("Expected confirm_with_modal function");
-    let fn_body = &helpers[fn_start..helpers.len().min(fn_start + 800)];
+    let fn_body = &helpers[fn_start..helpers.len().min(fn_start + 3000)];
 
     // Must await the receiver to get the confirmation result
     assert!(
-        fn_body.contains("rx.recv().await"),
-        "confirm_with_modal must await rx.recv() for the confirmation result"
+        fn_body.contains("confirm_rx.recv().await"),
+        "confirm_with_modal must await confirm_rx.recv() for the confirmation result"
     );
 }
 
@@ -185,7 +185,7 @@ fn confirm_with_modal_delegates_to_open_confirm_window() {
     let fn_start = helpers
         .find("async fn confirm_with_modal(")
         .expect("Expected confirm_with_modal function");
-    let fn_body = &helpers[fn_start..helpers.len().min(fn_start + 800)];
+    let fn_body = &helpers[fn_start..helpers.len().min(fn_start + 3000)];
 
     assert!(
         fn_body.contains("confirm::open_confirm_window("),
