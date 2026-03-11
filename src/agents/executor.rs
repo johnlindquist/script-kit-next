@@ -538,12 +538,9 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
     use std::process::Command;
-    use std::sync::{Mutex, OnceLock};
     use tempfile::TempDir;
 
     fn with_temp_kit_agents_dir(test_fn: impl FnOnce(&std::path::Path, &std::path::Path)) {
-        static SK_PATH_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-
         struct SkPathGuard {
             previous: Option<OsString>,
         }
@@ -558,10 +555,10 @@ mod tests {
             }
         }
 
-        let _lock = SK_PATH_LOCK
-            .get_or_init(|| Mutex::new(()))
+        let _lock = crate::test_utils::SK_PATH_TEST_LOCK
+            .get_or_init(|| std::sync::Mutex::new(()))
             .lock()
-            .expect("SK_PATH lock poisoned");
+            .unwrap_or_else(|e| e.into_inner());
 
         let temp_dir = TempDir::new().expect("create temp dir");
         let kit_root = temp_dir.path().join("scriptkit");

@@ -1436,72 +1436,75 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
+    /// Run a test body while holding the shared SK_PATH lock.
+    /// Automatically sets SK_PATH to `kit_root` and removes it on exit.
+    fn with_sk_path<F: FnOnce(&std::path::Path)>(f: F) {
+        let lock = crate::test_utils::SK_PATH_TEST_LOCK
+            .get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+
+        let temp_dir = TempDir::new().unwrap();
+        let kit_root = temp_dir.path().to_path_buf();
+        std::env::set_var(SK_PATH_ENV, kit_root.to_str().unwrap());
+
+        f(&kit_root);
+
+        std::env::remove_var(SK_PATH_ENV);
+        drop(lock);
+    }
+
     /// Test that kit directory structure uses kit/ subdirectory
     /// Expected structure: ~/.scriptkit/kit/main/scripts, ~/.scriptkit/kit/main/extensions
     #[test]
     fn test_kit_directory_uses_kit_subdirectory() {
-        let temp_dir = TempDir::new().unwrap();
-        let kit_root = temp_dir.path().to_path_buf();
+        with_sk_path(|kit_root| {
+            let result = ensure_kit_setup();
 
-        // Set SK_PATH to our temp directory
-        std::env::set_var(SK_PATH_ENV, kit_root.to_str().unwrap());
+            let kit_main_scripts = kit_root.join("kit").join("main").join("scripts");
+            let kit_main_extensions = kit_root.join("kit").join("main").join("extensions");
 
-        // Run setup
-        let result = ensure_kit_setup();
+            assert!(
+                kit_main_scripts.exists(),
+                "Expected kit/main/scripts to exist at {:?}",
+                kit_main_scripts
+            );
+            assert!(
+                kit_main_extensions.exists(),
+                "Expected kit/main/extensions to exist at {:?}",
+                kit_main_extensions
+            );
 
-        // Verify the kit/ subdirectory structure exists
-        let kit_main_scripts = kit_root.join("kit").join("main").join("scripts");
-        let kit_main_extensions = kit_root.join("kit").join("main").join("extensions");
+            let old_main_scripts = kit_root.join("main").join("scripts");
+            assert!(
+                !old_main_scripts.exists(),
+                "Old structure main/scripts should NOT exist at {:?}",
+                old_main_scripts
+            );
 
-        assert!(
-            kit_main_scripts.exists(),
-            "Expected kit/main/scripts to exist at {:?}",
-            kit_main_scripts
-        );
-        assert!(
-            kit_main_extensions.exists(),
-            "Expected kit/main/extensions to exist at {:?}",
-            kit_main_extensions
-        );
-
-        // The old structure should NOT exist
-        let old_main_scripts = kit_root.join("main").join("scripts");
-        assert!(
-            !old_main_scripts.exists(),
-            "Old structure main/scripts should NOT exist at {:?}",
-            old_main_scripts
-        );
-
-        // Cleanup
-        std::env::remove_var(SK_PATH_ENV);
-        assert!(!result.warnings.iter().any(|w| w.contains("Failed")));
+            assert!(!result.warnings.iter().any(|w| w.contains("Failed")));
+        });
     }
 
     /// Test that sample files are created in kit/main/scripts
     #[test]
     fn test_sample_files_in_kit_subdirectory() {
-        let temp_dir = TempDir::new().unwrap();
-        let kit_root = temp_dir.path().to_path_buf();
+        with_sk_path(|kit_root| {
+            let result = ensure_kit_setup();
 
-        std::env::set_var(SK_PATH_ENV, kit_root.to_str().unwrap());
-
-        let result = ensure_kit_setup();
-
-        // On fresh install, sample hello-world.ts should be in kit/main/scripts
-        if result.is_fresh_install {
-            let hello_script = kit_root
-                .join("kit")
-                .join("main")
-                .join("scripts")
-                .join("hello-world.ts");
-            assert!(
-                hello_script.exists(),
-                "Expected hello-world.ts at {:?}",
-                hello_script
-            );
-        }
-
-        std::env::remove_var(SK_PATH_ENV);
+            if result.is_fresh_install {
+                let hello_script = kit_root
+                    .join("kit")
+                    .join("main")
+                    .join("scripts")
+                    .join("hello-world.ts");
+                assert!(
+                    hello_script.exists(),
+                    "Expected hello-world.ts at {:?}",
+                    hello_script
+                );
+            }
+        });
     }
 
     #[test]
@@ -1521,33 +1524,49 @@ mod tests {
 
     #[test]
     fn test_get_kit_path_default() {
-        // Without SK_PATH set, should return ~/.scriptkit
+        let lock = crate::test_utils::SK_PATH_TEST_LOCK
+            .get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         std::env::remove_var(SK_PATH_ENV);
         let path = get_kit_path();
         assert!(path.to_string_lossy().contains(".scriptkit"));
+        drop(lock);
     }
 
     #[test]
     fn test_get_kit_path_with_override() {
-        // With SK_PATH set, should return the override
+        let lock = crate::test_utils::SK_PATH_TEST_LOCK
+            .get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         std::env::set_var(SK_PATH_ENV, "/custom/path");
         let path = get_kit_path();
         assert_eq!(path, PathBuf::from("/custom/path"));
         std::env::remove_var(SK_PATH_ENV);
+        drop(lock);
     }
 
     #[test]
     fn test_get_kit_path_with_tilde() {
-        // SK_PATH with tilde should expand
+        let lock = crate::test_utils::SK_PATH_TEST_LOCK
+            .get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         std::env::set_var(SK_PATH_ENV, "~/.config/kit");
         let path = get_kit_path();
         assert!(!path.to_string_lossy().contains("~"));
         assert!(path.to_string_lossy().contains(".config/kit"));
         std::env::remove_var(SK_PATH_ENV);
+        drop(lock);
     }
 
     #[test]
     fn test_get_kit_path_with_env_var_expansion() {
+        let lock = crate::test_utils::SK_PATH_TEST_LOCK
+            .get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let env_var = "SCRIPT_KIT_TEST_SK_PATH_ROOT";
         std::env::set_var(env_var, "/tmp/script-kit-env-root");
         std::env::set_var(SK_PATH_ENV, format!("${env_var}/kit"));
@@ -1557,6 +1576,7 @@ mod tests {
 
         std::env::remove_var(SK_PATH_ENV);
         std::env::remove_var(env_var);
+        drop(lock);
     }
 
     /// Comprehensive setup verification test
@@ -1583,6 +1603,10 @@ mod tests {
     /// ```
     #[test]
     fn test_complete_setup_structure() {
+        let lock = crate::test_utils::SK_PATH_TEST_LOCK
+            .get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let temp_dir = TempDir::new().unwrap();
         // Use a subdirectory that definitely doesn't exist for fresh install detection
         let kit_root = temp_dir.path().join("scriptkit-test");
@@ -1790,11 +1814,16 @@ mod tests {
         );
 
         std::env::remove_var(SK_PATH_ENV);
+        drop(lock);
     }
 
     /// Test that paths in AGENTS.md match actual setup paths
     #[test]
     fn test_agents_md_paths_match_setup() {
+        let lock = crate::test_utils::SK_PATH_TEST_LOCK
+            .get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let temp_dir = TempDir::new().unwrap();
         let kit_root = temp_dir.path().to_path_buf();
 
@@ -1839,5 +1868,6 @@ mod tests {
         }
 
         std::env::remove_var(SK_PATH_ENV);
+        drop(lock);
     }
 }

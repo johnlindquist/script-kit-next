@@ -3,7 +3,18 @@
 //! Consolidates the `read()` helper that was previously duplicated in every
 //! test module that asserts against source file contents.
 
+#![allow(dead_code)]
+
 use std::fs;
+use std::sync::{Mutex, OnceLock};
+
+/// Global lock for tests that mutate the `SK_PATH` environment variable.
+///
+/// `std::env::set_var` is process-global, so any test that changes `SK_PATH`
+/// must hold this lock to avoid racing with other tests that also read or
+/// write the same variable.  Use `unwrap_or_else(|e| e.into_inner())` when
+/// acquiring to recover from a poisoned mutex (prior test panic).
+pub static SK_PATH_TEST_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 /// Read a source file and panic with a clear message on failure.
 ///

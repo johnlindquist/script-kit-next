@@ -404,6 +404,12 @@ impl ScriptListApp {
                 match crate::favorites::load_favorites() {
                     Ok(favorites) => {
                         if favorites.script_ids.is_empty() {
+                            // Clear stale favorites filter to prevent state leak
+                            self.active_favorites = None;
+                            self.invalidate_filter_cache();
+                            self.invalidate_grouped_cache();
+                            self.sync_list_state();
+
                             self.toast_manager.push(
                                 components::toast::Toast::info(
                                     "No favorites yet. Use Add to Favorites from an item action menu.",
