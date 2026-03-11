@@ -13,7 +13,7 @@
 /// 3. Positions at eye-line on the display containing the mouse
 /// 4. Configures as floating panel (first time only)
 /// 5. If NEEDS_RESET is set, resets to script list before showing
-/// 6. Shows the window, activates it, and focuses the input
+/// 6. Shows the window as a non-activating panel and focuses the input
 /// 7. Resets resize debounce
 ///
 /// # Arguments
@@ -115,7 +115,7 @@ fn show_main_window_helper(
         });
     }
 
-    // 7. Show, activate, and focus (DEFERRED via cx.spawn).
+    // 7. Show without app activation, then focus (DEFERRED via cx.spawn).
     //
     // macOS makeKeyWindow / makeKeyAndOrderFront: synchronously fires
     // windowDidBecomeKey: → GPUI request_frame_callback → AsyncApp::update().
@@ -133,7 +133,6 @@ fn show_main_window_helper(
             // Platform calls — trigger macOS delegate callbacks.
             // Safe here: no AppCell borrow is active.
             platform::show_main_window_without_activation();
-            platform::activate_main_window();
             platform::send_ai_window_to_back();
 
             logging::bench_log("window_activated");
@@ -143,6 +142,7 @@ fn show_main_window_helper(
                 app_entity.update(cx, |view, ctx| {
                     let focus_handle = view.focus_handle(ctx);
                     let _ = window.update(ctx, |_root, win, _cx| {
+                        win.activate_window();
                         win.focus(&focus_handle, _cx);
                     });
 

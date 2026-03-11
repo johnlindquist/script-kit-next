@@ -85,8 +85,8 @@ impl ScriptListApp {
                     self.show_hud("Alias removed".to_string(), Some(HUD_MEDIUM_MS), cx);
                 }
                 Err(e) => {
-                    logging::log("ERROR", &format!("Failed to remove alias: {}", e));
-                    self.show_hud(format!("Failed to remove alias: {}", e), Some(HUD_CONFLICT_MS), cx);
+                    tracing::error!(error = %e, "Failed to remove alias");
+                    self.show_error_toast(format!("Failed to remove alias: {}", e), cx);
                 }
             }
         } else {
@@ -95,9 +95,8 @@ impl ScriptListApp {
                 .chars()
                 .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
             {
-                self.show_hud(
-                    "Alias must contain only letters, numbers, hyphens, or underscores".to_string(),
-                    Some(HUD_CONFLICT_MS),
+                self.show_error_toast(
+                    "Alias must contain only letters, numbers, hyphens, or underscores",
                     cx,
                 );
                 return;
@@ -123,8 +122,8 @@ impl ScriptListApp {
                     self.refresh_scripts(cx);
                 }
                 Err(e) => {
-                    logging::log("ERROR", &format!("Failed to save alias: {}", e));
-                    self.show_hud(format!("Failed to save alias: {}", e), Some(HUD_CONFLICT_MS), cx);
+                    tracing::error!(error = %e, "Failed to save alias");
+                    self.show_error_toast(format!("Failed to save alias: {}", e), cx);
                 }
             }
         }

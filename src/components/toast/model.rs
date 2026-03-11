@@ -3,6 +3,11 @@ use std::rc::Rc;
 
 use super::{ToastAction, ToastColors, ToastDismissCallback, ToastVariant};
 
+/// Default auto-dismiss duration for toasts (5 seconds).
+/// Callers should override via `.duration_ms()` with the appropriate named
+/// constant from `helpers.rs` (e.g. `TOAST_ERROR_MS`, `TOAST_INFO_MS`).
+const TOAST_DEFAULT_DURATION_MS: u64 = 5000;
+
 /// A reusable toast notification component
 ///
 /// Supports:
@@ -39,7 +44,7 @@ impl Toast {
             message: message.into(),
             colors,
             variant: ToastVariant::default(),
-            duration_ms: Some(5000), // Default 5 second auto-dismiss
+            duration_ms: Some(TOAST_DEFAULT_DURATION_MS),
             dismissible: true,
             details: None,
             actions: Vec::new(),

@@ -5,13 +5,11 @@
 
 #[cfg(test)]
 mod tests {
+    use crate::test_utils::read_source;
     use std::collections::BTreeSet;
-    use std::fs;
-    use std::path::PathBuf;
 
     fn clipboard_builder_ids() -> BTreeSet<String> {
-        let region = fs::read_to_string("src/actions/builders/clipboard.rs")
-            .expect("Failed to read src/actions/builders/clipboard.rs");
+        let region = read_source("src/actions/builders/clipboard.rs");
 
         let mut ids = BTreeSet::new();
         let re = regex::Regex::new(r#"Action::new\(\s*"(clipboard_[a-z0-9_]+)""#)
@@ -23,24 +21,8 @@ mod tests {
     }
 
     fn app_action_handler_region() -> String {
-        let mut files: Vec<PathBuf> = fs::read_dir("src/app_actions/handle_action")
-            .expect("Failed to read src/app_actions/handle_action")
-            .filter_map(|entry| entry.ok().map(|e| e.path()))
-            .filter(|path| path.extension().is_some_and(|ext| ext == "rs"))
-            .collect();
-        files.sort();
-
-        let mut content = fs::read_to_string("src/app_actions/handle_action.rs")
-            .expect("Failed to read src/app_actions/handle_action.rs");
-        for file in files {
-            content.push('\n');
-            content.push_str(
-                &fs::read_to_string(&file)
-                    .unwrap_or_else(|_| panic!("Failed to read {}", file.display())),
-            );
-        }
-
-        content
+        // All clipboard action handlers live in handle_action.rs (the single canonical source).
+        read_source("src/app_actions/handle_action.rs")
     }
 
     #[test]

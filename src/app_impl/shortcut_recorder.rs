@@ -43,7 +43,7 @@ impl ScriptListApp {
         let config_path_buf = std::path::PathBuf::from(&config_path);
         if !config_path_buf.exists() {
             if let Err(e) = Self::create_config_template(&config_path_buf) {
-                logging::log("ERROR", &format!("Failed to create config.ts: {}", e));
+                tracing::error!(error = %e, "Failed to create config.ts");
             }
         }
 
@@ -51,7 +51,7 @@ impl ScriptListApp {
         #[cfg(target_os = "macos")]
         {
             if let Err(e) = self.pbcopy(command_id) {
-                logging::log("ERROR", &format!("Failed to copy command ID: {}", e));
+                tracing::error!(error = %e, "Failed to copy command ID to clipboard");
             } else {
                 self.last_output = Some(gpui::SharedString::from(format!(
                     "Copied '{}' to clipboard - paste in config.ts commands section",
@@ -78,7 +78,7 @@ impl ScriptListApp {
             use std::process::Command;
             match Command::new(&editor).arg(&config_path_clone).spawn() {
                 Ok(_) => logging::log("UI", &format!("Opened config.ts in {}", editor)),
-                Err(e) => logging::log("ERROR", &format!("Failed to open config.ts: {}", e)),
+                Err(e) => tracing::error!(error = %e, "Failed to open config.ts in editor"),
             }
         });
     }
@@ -432,8 +432,8 @@ export default {
                 }
             }
             Err(e) => {
-                logging::log("ERROR", &format!("Failed to save shortcut: {}", e));
-                self.show_hud(format!("Failed to save shortcut: {}", e), Some(HUD_CONFLICT_MS), cx);
+                tracing::error!(error = %e, "Failed to save shortcut");
+                self.show_error_toast(format!("Failed to save shortcut: {}", e), cx);
             }
         }
 

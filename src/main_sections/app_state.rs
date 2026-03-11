@@ -267,6 +267,9 @@ struct ScriptListApp {
     /// Whether the current built-in view was opened from the main menu.
     /// When true, ESC returns to main menu. When false (opened via hotkey/protocol), ESC closes window.
     opened_from_main_menu: bool,
+    /// When Some, the script list is filtered to only show scripts whose names
+    /// match one of these IDs. Set by the Favorites builtin, cleared on reset.
+    active_favorites: Option<Vec<String>>,
     /// Sender for inline chat escape signals
     /// The ChatPrompt escape callback uses this to signal when ESC is pressed
     inline_chat_escape_sender: mpsc::SyncSender<()>,

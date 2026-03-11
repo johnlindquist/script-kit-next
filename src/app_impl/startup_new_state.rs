@@ -195,6 +195,7 @@
             api_key_completion_receiver: api_key_rx,
             // Navigation tracking: starts false, set to true when opening built-in views from main menu
             opened_from_main_menu: false,
+            active_favorites: None,
             // Inline chat escape channel - for ChatPrompt escape callback to signal return to main menu
             inline_chat_escape_sender: inline_chat_escape_tx,
             inline_chat_escape_receiver: inline_chat_escape_rx,

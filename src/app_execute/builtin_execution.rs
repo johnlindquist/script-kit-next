@@ -1,3 +1,6 @@
+/// Small async yield (in ms) before opening the AI window to let pending GPUI operations complete.
+const AI_WINDOW_ASYNC_YIELD_MS: u64 = 1;
+
 fn ai_open_failure_message(error: impl std::fmt::Display) -> String {
     format!("Failed to open AI: {}", error)
 }
@@ -118,6 +121,129 @@ impl ScriptListApp {
         builtins::system_action_hud_message(*action_type, dark_mode_enabled)
     }
 
+    /// Shared dispatch for system actions — used by both the normal and confirmed paths.
+    /// Maps a `SystemActionType` to its implementation, handles special cases
+    /// (TestConfirmation, QuitScriptKit), and routes the result through
+    /// `handle_system_action_result`.
+    fn dispatch_system_action(
+        &mut self,
+        action_type: &builtins::SystemActionType,
+        cx: &mut Context<Self>,
+    ) {
+        #[cfg(target_os = "macos")]
+        {
+            use builtins::SystemActionType;
+
+            let result = match action_type {
+                // Power management
+                SystemActionType::EmptyTrash => system_actions::empty_trash(),
+                SystemActionType::LockScreen => system_actions::lock_screen(),
+                SystemActionType::Sleep => system_actions::sleep(),
+                SystemActionType::Restart => system_actions::restart(),
+                SystemActionType::ShutDown => system_actions::shut_down(),
+                SystemActionType::LogOut => system_actions::log_out(),
+
+                // UI controls
+                SystemActionType::ToggleDarkMode => system_actions::toggle_dark_mode(),
+                SystemActionType::ShowDesktop => system_actions::show_desktop(),
+                SystemActionType::MissionControl => system_actions::mission_control(),
+                SystemActionType::Launchpad => system_actions::launchpad(),
+                SystemActionType::ForceQuitApps => system_actions::force_quit_apps(),
+
+                // Volume controls (preset levels)
+                SystemActionType::Volume0 => system_actions::set_volume(0),
+                SystemActionType::Volume25 => system_actions::set_volume(25),
+                SystemActionType::Volume50 => system_actions::set_volume(50),
+                SystemActionType::Volume75 => system_actions::set_volume(75),
+                SystemActionType::Volume100 => system_actions::set_volume(100),
+                SystemActionType::VolumeMute => system_actions::volume_mute(),
+
+                // Dev/test actions
+                #[cfg(debug_assertions)]
+                SystemActionType::TestConfirmation => {
+                    self.toast_manager.push(
+                        components::toast::Toast::success(
+                            "Confirmation test passed!",
+                            &self.theme,
+                        )
+                        .duration_ms(Some(TOAST_SUCCESS_MS)),
+                    );
+                    cx.notify();
+                    return; // Don't hide window for test
+                }
+
+                // App control
+                SystemActionType::QuitScriptKit => {
+                    tracing::info!(message = %"Quitting Script Kit");
+                    cx.quit();
+                    return;
+                }
+
+                // System utilities
+                SystemActionType::ToggleDoNotDisturb => {
+                    system_actions::toggle_do_not_disturb()
+                }
+                SystemActionType::StartScreenSaver => system_actions::start_screen_saver(),
+
+                // System Preferences
+                SystemActionType::OpenSystemPreferences => {
+                    system_actions::open_system_preferences_main()
+                }
+                SystemActionType::OpenPrivacySettings => system_actions::open_privacy_settings(),
+                SystemActionType::OpenDisplaySettings => {
+                    system_actions::open_display_settings()
+                }
+                SystemActionType::OpenSoundSettings => system_actions::open_sound_settings(),
+                SystemActionType::OpenNetworkSettings => {
+                    system_actions::open_network_settings()
+                }
+                SystemActionType::OpenKeyboardSettings => {
+                    system_actions::open_keyboard_settings()
+                }
+                SystemActionType::OpenBluetoothSettings => {
+                    system_actions::open_bluetooth_settings()
+                }
+                SystemActionType::OpenNotificationsSettings => {
+                    system_actions::open_notifications_settings()
+                }
+            };
+
+            self.handle_system_action_result(result, action_type, cx);
+        }
+
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = action_type;
+            tracing::warn!(message = %"System actions only supported on macOS");
+            self.show_unsupported_platform_toast("System actions", cx);
+        }
+    }
+
+    /// Shared result handler for system actions — shows HUD on success, Toast on error.
+    fn handle_system_action_result(
+        &mut self,
+        result: Result<(), String>,
+        action_type: &builtins::SystemActionType,
+        cx: &mut Context<Self>,
+    ) {
+        match result {
+            Ok(()) => {
+                tracing::info!(message = %"System action executed successfully");
+                if let Some(message) = self.system_action_feedback_message(action_type) {
+                    cx.notify();
+                    self.show_hud(message, Some(HUD_MEDIUM_MS), cx);
+                    self.hide_main_and_reset(cx);
+                } else {
+                    self.close_and_reset_window(cx);
+                }
+            }
+            Err(e) => {
+                tracing::error!(message = %&format!("System action failed: {}", e));
+                self.show_error_toast(format!("System action failed: {}", e), cx);
+            }
+        }
+    }
+
     fn execute_builtin(&mut self, entry: &builtins::BuiltInEntry, cx: &mut Context<Self>) {
         self.execute_builtin_with_query(entry, None, cx);
     }
@@ -148,7 +274,7 @@ impl ScriptListApp {
             // Spawn a task to open the confirm modal
             // We need to do this async because we need App context for open_confirm_window
             cx.spawn(async move |this, cx| {
-                cx.update(|cx| {
+                let open_result = cx.update(|cx| {
                     // Get main window bounds from native API for positioning
                     let main_bounds = if let Some((x, y, w, h)) = platform::get_main_window_bounds()
                     {
@@ -192,7 +318,7 @@ impl ScriptListApp {
 
                     // Open the confirm modal
                     let message = format!("Are you sure you want to {}?", entry_name);
-                    if let Err(e) = open_confirm_window(
+                    open_confirm_window(
                         cx,
                         main_bounds,
                         None, // display_id - let system choose based on position
@@ -200,20 +326,20 @@ impl ScriptListApp {
                         Some("Yes".to_string()),
                         Some("Cancel".to_string()),
                         on_choice,
-                    ) {
-                        tracing::error!(message = %&format!("Failed to open confirmation modal: {}", e),
-                        );
-                        tracing::info!(message = %&format!(
-                                "Skipping dangerous action '{}' because confirmation modal failed to open",
-                                entry_id
-                            ),
-                        );
-                    }
+                    )
                 });
 
-                // Notify main window to re-render (in case UI state changed)
-                let _ = this.update(cx, |_this, cx| {
-                    cx.notify();
+                // Show error toast if confirmation modal failed to open
+                let _ = this.update(cx, |this, cx| {
+                    if let Err(e) = open_result {
+                        tracing::error!(message = %&format!("Failed to open confirmation modal: {}", e));
+                        this.show_error_toast(
+                            format!("Failed to open confirmation dialog: {}", e),
+                            cx,
+                        );
+                    } else {
+                        cx.notify();
+                    }
                 });
             })
             .detach();
@@ -286,8 +412,14 @@ impl ScriptListApp {
                                 .duration_ms(Some(TOAST_INFO_MS)),
                             );
                         } else {
+                            // Store loaded favorites so the script list can filter by them
+                            self.active_favorites = Some(favorites.script_ids.clone());
+                            self.invalidate_filter_cache();
+                            self.invalidate_grouped_cache();
+                            self.sync_list_state();
+
                             self.toast_manager.push(
-                                components::toast::Toast::info(
+                                components::toast::Toast::success(
                                     favorites_loaded_message(favorites.script_ids.len()),
                                     &self.theme,
                                 )
@@ -297,12 +429,9 @@ impl ScriptListApp {
                     }
                     Err(error) => {
                         tracing::error!(message = %&format!("Failed to load favorites: {}", error));
-                        self.toast_manager.push(
-                            components::toast::Toast::error(
-                                format!("Failed to load favorites: {}", error),
-                                &self.theme,
-                            )
-                            .duration_ms(Some(HUD_SLOW_MS)),
+                        self.show_error_toast(
+                            format!("Failed to load favorites: {}", error),
+                            cx,
                         );
                     }
                 }
@@ -344,20 +473,15 @@ impl ScriptListApp {
                 if let Some(app) = apps.iter().find(|a| a.name == *app_name) {
                     if let Err(e) = app_launcher::launch_application(app) {
                         tracing::error!(message = %&format!("Failed to launch {}: {}", app_name, e));
-                        self.last_output = Some(SharedString::from(format!(
-                            "Failed to launch: {}",
-                            app_name
-                        )));
+                        self.show_error_toast(format!("Failed to launch {}: {}", app_name, e), cx);
                     } else {
                         tracing::info!(message = %&format!("Launched app: {}", app_name));
                         self.close_and_reset_window(cx);
                     }
                 } else {
                     tracing::error!(message = %&format!("App not found: {}", app_name));
-                    self.last_output =
-                        Some(SharedString::from(format!("App not found: {}", app_name)));
+                    self.show_error_toast(format!("App not found: {}", app_name), cx);
                 }
-                cx.notify();
             }
             builtins::BuiltInFeature::WindowSwitcher => {
                 tracing::info!(message = %"Opening Window Switcher");
@@ -386,13 +510,7 @@ impl ScriptListApp {
                     }
                     Err(e) => {
                         tracing::error!(message = %&format!("Failed to list windows: {}", e));
-                        self.toast_manager.push(
-                            components::toast::Toast::error(
-                                format!("Failed to list windows: {}", e),
-                                &self.theme,
-                            )
-                            .duration_ms(Some(HUD_SLOW_MS)),
-                        );
+                        self.show_error_toast(format!("Failed to list windows: {}", e), cx);
                     }
                 }
                 cx.notify();
@@ -430,21 +548,14 @@ impl ScriptListApp {
                 cx.spawn(async move |this, cx| {
                     // Small yield to let any pending GPUI operations complete
                     cx.background_executor()
-                        .timer(std::time::Duration::from_millis(1))
+                        .timer(std::time::Duration::from_millis(AI_WINDOW_ASYNC_YIELD_MS))
                         .await;
 
                     cx.update(|cx| {
                         if let Err(e) = ai::open_ai_window(cx) {
                             tracing::error!(message = %&format!("Failed to open AI window: {}", e));
                             let _ = this.update(cx, |this, cx| {
-                                this.toast_manager.push(
-                                    components::toast::Toast::error(
-                                        ai_open_failure_message(&e),
-                                        &this.theme,
-                                    )
-                                    .duration_ms(Some(HUD_SLOW_MS)),
-                                );
-                                cx.notify();
+                                this.show_error_toast(ai_open_failure_message(&e), cx);
                             });
                         }
                     });
@@ -459,14 +570,7 @@ impl ScriptListApp {
                 platform::defer_hide_main_window(cx);
                 if let Err(e) = notes::open_notes_window(cx) {
                     tracing::error!(message = %&format!("Failed to open Notes window: {}", e));
-                    self.toast_manager.push(
-                        components::toast::Toast::error(
-                            format!("Failed to open Notes: {}", e),
-                            &self.theme,
-                        )
-                        .duration_ms(Some(HUD_SLOW_MS)),
-                    );
-                    cx.notify();
+                    self.show_error_toast(format!("Failed to open Notes: {}", e), cx);
                 }
             }
             builtins::BuiltInFeature::EmojiPicker => {
@@ -539,17 +643,13 @@ impl ScriptListApp {
                                                     selected_quicklink.id, error
                                                 ),
                                             );
-                                            self.toast_manager.push(
-                                                components::toast::Toast::error(
-                                                    format!(
-                                                        "Failed to get quicklink query: {}",
-                                                        error
-                                                    ),
-                                                    &self.theme,
-                                                )
-                                                .duration_ms(Some(HUD_SLOW_MS)),
+                                            self.show_error_toast(
+                                                format!(
+                                                    "Failed to get quicklink query: {}",
+                                                    error
+                                                ),
+                                                cx,
                                             );
-                                            cx.notify();
                                             return;
                                         }
                                     }
@@ -581,14 +681,7 @@ impl ScriptListApp {
                                                 selected_quicklink.id, expanded_url, error
                                             ),
                                         );
-                                        self.toast_manager.push(
-                                            components::toast::Toast::error(
-                                                format!("Failed to open quicklink: {}", error),
-                                                &self.theme,
-                                            )
-                                            .duration_ms(Some(HUD_SLOW_MS)),
-                                        );
-                                        cx.notify();
+                                        self.show_error_toast(format!("Failed to open quicklink: {}", error), cx);
                                     }
                                 }
                             } else {
@@ -597,14 +690,7 @@ impl ScriptListApp {
                                         selected_label
                                     ),
                                 );
-                                self.toast_manager.push(
-                                    components::toast::Toast::error(
-                                        "Selected quicklink could not be resolved.",
-                                        &self.theme,
-                                    )
-                                    .duration_ms(Some(TOAST_INFO_MS)),
-                                );
-                                cx.notify();
+                                self.show_error_toast("Selected quicklink could not be resolved.", cx);
                             }
                         }
                         Ok(None) => {
@@ -616,14 +702,7 @@ impl ScriptListApp {
                                     error
                                 ),
                             );
-                            self.toast_manager.push(
-                                components::toast::Toast::error(
-                                    format!("Failed to open Quicklinks: {}", error),
-                                    &self.theme,
-                                )
-                                .duration_ms(Some(HUD_SLOW_MS)),
-                            );
-                            cx.notify();
+                            self.show_error_toast(format!("Failed to open Quicklinks: {}", error), cx);
                         }
                     }
                 }
@@ -631,14 +710,7 @@ impl ScriptListApp {
                 {
                     tracing::warn!(message = %"correlation_id=builtin-quicklinks-unsupported platform=non-macos",
                     );
-                    self.toast_manager.push(
-                        components::toast::Toast::warning(
-                            "Quicklinks currently requires macOS.",
-                            &self.theme,
-                        )
-                        .duration_ms(Some(HUD_LONG_MS)),
-                    );
-                    cx.notify();
+                    self.show_unsupported_platform_toast("Quicklinks", cx);
                 }
             }
             builtins::BuiltInFeature::MenuBarAction(action) => {
@@ -661,28 +733,14 @@ impl ScriptListApp {
                         }
                         Err(e) => {
                             tracing::error!(message = %&format!("Menu action failed: {}", e));
-                            self.toast_manager.push(
-                                components::toast::Toast::error(
-                                    format!("Menu action failed: {}", e),
-                                    &self.theme,
-                                )
-                                .duration_ms(Some(HUD_SLOW_MS)),
-                            );
-                            cx.notify();
+                            self.show_error_toast(format!("Menu action failed: {}", e), cx);
                         }
                     }
                 }
                 #[cfg(not(target_os = "macos"))]
                 {
                     tracing::warn!(message = %"Menu bar actions only supported on macOS");
-                    self.toast_manager.push(
-                        components::toast::Toast::warning(
-                            "Menu bar actions are only supported on macOS",
-                            &self.theme,
-                        )
-                        .duration_ms(Some(HUD_LONG_MS)),
-                    );
-                    cx.notify();
+                    self.show_unsupported_platform_toast("Menu bar actions", cx);
                 }
             }
 
@@ -690,129 +748,8 @@ impl ScriptListApp {
             // System Actions
             // =========================================================================
             builtins::BuiltInFeature::SystemAction(action_type) => {
-                tracing::info!(message = %&format!("Executing system action: {:?}", action_type),
-                );
-
-                #[cfg(target_os = "macos")]
-                {
-                    use builtins::SystemActionType;
-
-                    let result = match action_type {
-                        // Power management
-                        SystemActionType::EmptyTrash => system_actions::empty_trash(),
-                        SystemActionType::LockScreen => system_actions::lock_screen(),
-                        SystemActionType::Sleep => system_actions::sleep(),
-                        SystemActionType::Restart => system_actions::restart(),
-                        SystemActionType::ShutDown => system_actions::shut_down(),
-                        SystemActionType::LogOut => system_actions::log_out(),
-
-                        // UI controls
-                        SystemActionType::ToggleDarkMode => system_actions::toggle_dark_mode(),
-                        SystemActionType::ShowDesktop => system_actions::show_desktop(),
-                        SystemActionType::MissionControl => system_actions::mission_control(),
-                        SystemActionType::Launchpad => system_actions::launchpad(),
-                        SystemActionType::ForceQuitApps => system_actions::force_quit_apps(),
-
-                        // Volume controls (preset levels)
-                        SystemActionType::Volume0 => system_actions::set_volume(0),
-                        SystemActionType::Volume25 => system_actions::set_volume(25),
-                        SystemActionType::Volume50 => system_actions::set_volume(50),
-                        SystemActionType::Volume75 => system_actions::set_volume(75),
-                        SystemActionType::Volume100 => system_actions::set_volume(100),
-                        SystemActionType::VolumeMute => system_actions::volume_mute(),
-
-                        // Dev/test actions
-                        #[cfg(debug_assertions)]
-                        SystemActionType::TestConfirmation => {
-                            self.toast_manager.push(
-                                components::toast::Toast::success(
-                                    "Confirmation test passed!",
-                                    &self.theme,
-                                )
-                                .duration_ms(Some(HUD_LONG_MS)),
-                            );
-                            cx.notify();
-                            return; // Don't hide window for test
-                        }
-
-                        // App control
-                        SystemActionType::QuitScriptKit => {
-                            tracing::info!(message = %"Quitting Script Kit");
-                            cx.quit();
-                            return;
-                        }
-
-                        // System utilities
-                        SystemActionType::ToggleDoNotDisturb => {
-                            system_actions::toggle_do_not_disturb()
-                        }
-                        SystemActionType::StartScreenSaver => system_actions::start_screen_saver(),
-
-                        // System Preferences
-                        SystemActionType::OpenSystemPreferences => {
-                            system_actions::open_system_preferences_main()
-                        }
-                        SystemActionType::OpenPrivacySettings => {
-                            system_actions::open_privacy_settings()
-                        }
-                        SystemActionType::OpenDisplaySettings => {
-                            system_actions::open_display_settings()
-                        }
-                        SystemActionType::OpenSoundSettings => {
-                            system_actions::open_sound_settings()
-                        }
-                        SystemActionType::OpenNetworkSettings => {
-                            system_actions::open_network_settings()
-                        }
-                        SystemActionType::OpenKeyboardSettings => {
-                            system_actions::open_keyboard_settings()
-                        }
-                        SystemActionType::OpenBluetoothSettings => {
-                            system_actions::open_bluetooth_settings()
-                        }
-                        SystemActionType::OpenNotificationsSettings => {
-                            system_actions::open_notifications_settings()
-                        }
-                    };
-
-                    match result {
-                        Ok(()) => {
-                            tracing::info!(message = %"System action executed successfully");
-                            if let Some(message) = self.system_action_feedback_message(action_type)
-                            {
-                                cx.notify();
-                                self.show_hud(message, Some(HUD_MEDIUM_MS), cx);
-                                self.hide_main_and_reset(cx);
-                            } else {
-                                self.close_and_reset_window(cx);
-                            }
-                        }
-                        Err(e) => {
-                            tracing::error!(message = %&format!("System action failed: {}", e));
-                            self.toast_manager.push(
-                                components::toast::Toast::error(
-                                    format!("System action failed: {}", e),
-                                    &self.theme,
-                                )
-                                .duration_ms(Some(HUD_SLOW_MS)),
-                            );
-                            cx.notify();
-                        }
-                    }
-                }
-
-                #[cfg(not(target_os = "macos"))]
-                {
-                    tracing::warn!(message = %"System actions only supported on macOS");
-                    self.toast_manager.push(
-                        components::toast::Toast::warning(
-                            "System actions are only supported on macOS",
-                            &self.theme,
-                        )
-                        .duration_ms(Some(HUD_LONG_MS)),
-                    );
-                    cx.notify();
-                }
+                tracing::info!(message = %&format!("Executing system action: {:?}", action_type));
+                self.dispatch_system_action(action_type, cx);
             }
 
             // NOTE: Window Actions removed - now handled by window-management extension
@@ -840,14 +777,7 @@ impl ScriptListApp {
 
                 if let Err(e) = result {
                     tracing::error!(message = %&format!("Notes command failed: {}", e));
-                    self.toast_manager.push(
-                        components::toast::Toast::error(
-                            format!("Notes command failed: {}", e),
-                            &self.theme,
-                        )
-                        .duration_ms(Some(HUD_SLOW_MS)),
-                    );
-                    cx.notify();
+                    self.show_error_toast(format!("Notes command failed: {}", e), cx);
                 }
             }
 
@@ -872,14 +802,7 @@ impl ScriptListApp {
                         // Basic open/new conversation
                         if let Err(e) = ai::open_ai_window(cx) {
                             tracing::error!(message = %&format!("AI command failed: {}", e));
-                            self.toast_manager.push(
-                                components::toast::Toast::error(
-                                    ai_open_failure_message(&e),
-                                    &self.theme,
-                                )
-                                .duration_ms(Some(HUD_SLOW_MS)),
-                            );
-                            cx.notify();
+                            self.show_error_toast(ai_open_failure_message(&e), cx);
                         }
                     }
 
@@ -894,17 +817,7 @@ impl ScriptListApp {
                                             e
                                         ),
                                     );
-                                    self.toast_manager.push(
-                                        components::toast::Toast::error(
-                                            format!(
-                                                "AI history cleared, but failed to open AI: {}",
-                                                e
-                                            ),
-                                            &self.theme,
-                                        )
-                                        .duration_ms(Some(HUD_SLOW_MS)),
-                                    );
-                                    cx.notify();
+                                    self.show_error_toast(format!("AI history cleared, but failed to open AI: {}", e), cx);
                                 } else {
                                     self.show_hud(
                                         "Cleared AI conversations".to_string(),
@@ -916,14 +829,7 @@ impl ScriptListApp {
                             Err(e) => {
                                 tracing::error!(message = %&format!("Failed to clear AI conversations: {}", e),
                                 );
-                                self.toast_manager.push(
-                                    components::toast::Toast::error(
-                                        format!("Failed to clear AI conversations: {}", e),
-                                        &self.theme,
-                                    )
-                                    .duration_ms(Some(HUD_SLOW_MS)),
-                                );
-                                cx.notify();
+                                self.show_error_toast(format!("Failed to clear AI conversations: {}", e), cx);
                             }
                         }
                     }
@@ -954,14 +860,7 @@ impl ScriptListApp {
                                 );
                                 if let Err(e) = ai::open_ai_window(cx) {
                                     tracing::error!(message = %&ai_open_failure_message(&e));
-                                    self.toast_manager.push(
-                                        components::toast::Toast::error(
-                                            ai_open_failure_message(&e),
-                                            &self.theme,
-                                        )
-                                        .duration_ms(Some(HUD_SLOW_MS)),
-                                    );
-                                    cx.notify();
+                                    self.show_error_toast(ai_open_failure_message(&e), cx);
                                 } else {
                                     // Set input with the screenshot context
                                     ai::set_ai_input_with_image(cx, &message, &base64_data, false);
@@ -969,14 +868,7 @@ impl ScriptListApp {
                             }
                             Err(e) => {
                                 tracing::error!(message = %&format!("Failed to capture screen: {}", e));
-                                self.toast_manager.push(
-                                    components::toast::Toast::error(
-                                        format!("Failed to capture screen: {}", e),
-                                        &self.theme,
-                                    )
-                                    .duration_ms(Some(HUD_SLOW_MS)),
-                                );
-                                cx.notify();
+                                self.show_error_toast(format!("Failed to capture screen: {}", e), cx);
                             }
                         }
                     }
@@ -1003,28 +895,14 @@ impl ScriptListApp {
                                 );
                                 if let Err(e) = ai::open_ai_window(cx) {
                                     tracing::error!(message = %&ai_open_failure_message(&e));
-                                    self.toast_manager.push(
-                                        components::toast::Toast::error(
-                                            ai_open_failure_message(&e),
-                                            &self.theme,
-                                        )
-                                        .duration_ms(Some(HUD_SLOW_MS)),
-                                    );
-                                    cx.notify();
+                                    self.show_error_toast(ai_open_failure_message(&e), cx);
                                 } else {
                                     ai::set_ai_input_with_image(cx, &message, &base64_data, false);
                                 }
                             }
                             Err(e) => {
                                 tracing::error!(message = %&format!("Failed to capture window: {}", e));
-                                self.toast_manager.push(
-                                    components::toast::Toast::error(
-                                        format!("Failed to capture window: {}", e),
-                                        &self.theme,
-                                    )
-                                    .duration_ms(Some(HUD_SLOW_MS)),
-                                );
-                                cx.notify();
+                                self.show_error_toast(format!("Failed to capture window: {}", e), cx);
                             }
                         }
                     }
@@ -1041,14 +919,7 @@ impl ScriptListApp {
                                 );
                                 if let Err(e) = ai::open_ai_window(cx) {
                                     tracing::error!(message = %&ai_open_failure_message(&e));
-                                    self.toast_manager.push(
-                                        components::toast::Toast::error(
-                                            ai_open_failure_message(&e),
-                                            &self.theme,
-                                        )
-                                        .duration_ms(Some(HUD_SLOW_MS)),
-                                    );
-                                    cx.notify();
+                                    self.show_error_toast(ai_open_failure_message(&e), cx);
                                 } else {
                                     ai::set_ai_input(cx, &message, false);
                                 }
@@ -1060,21 +931,14 @@ impl ScriptListApp {
                                         "No text selected. Select some text first.",
                                         &self.theme,
                                     )
-                                    .duration_ms(Some(HUD_LONG_MS)),
+                                    .duration_ms(Some(TOAST_INFO_MS)),
                                 );
                                 cx.notify();
                             }
                             Err(e) => {
                                 tracing::error!(message = %&format!("Failed to get selected text: {}", e),
                                 );
-                                self.toast_manager.push(
-                                    components::toast::Toast::error(
-                                        format!("Failed to get selected text: {}", e),
-                                        &self.theme,
-                                    )
-                                    .duration_ms(Some(HUD_SLOW_MS)),
-                                );
-                                cx.notify();
+                                self.show_error_toast(format!("Failed to get selected text: {}", e), cx);
                             }
                         }
                     }
@@ -1090,28 +954,14 @@ impl ScriptListApp {
                                 tracing::info!(message = %&format!("Browser URL captured: {}", url));
                                 if let Err(e) = ai::open_ai_window(cx) {
                                     tracing::error!(message = %&ai_open_failure_message(&e));
-                                    self.toast_manager.push(
-                                        components::toast::Toast::error(
-                                            ai_open_failure_message(&e),
-                                            &self.theme,
-                                        )
-                                        .duration_ms(Some(HUD_SLOW_MS)),
-                                    );
-                                    cx.notify();
+                                    self.show_error_toast(ai_open_failure_message(&e), cx);
                                 } else {
                                     ai::set_ai_input(cx, &message, false);
                                 }
                             }
                             Err(e) => {
                                 tracing::error!(message = %&format!("Failed to get browser URL: {}", e));
-                                self.toast_manager.push(
-                                    components::toast::Toast::error(
-                                        format!("Failed to get browser URL: {}", e),
-                                        &self.theme,
-                                    )
-                                    .duration_ms(Some(HUD_SLOW_MS)),
-                                );
-                                cx.notify();
+                                self.show_error_toast(format!("Failed to get browser URL: {}", e), cx);
                             }
                         }
                     }
@@ -1124,7 +974,7 @@ impl ScriptListApp {
                                 "Screen area selection coming soon. Use 'Send Screen to AI' for now.",
                                 &self.theme,
                             )
-                            .duration_ms(Some(HUD_LONG_MS)),
+                            .duration_ms(Some(TOAST_INFO_MS)),
                         );
                         cx.notify();
                     }
@@ -1133,22 +983,20 @@ impl ScriptListApp {
                     | AiCommandType::ImportAiPresets
                     | AiCommandType::SearchAiPresets => {
                         // Preset management - open AI window with a future preset UI
-                        self.toast_manager.push(
-                            components::toast::Toast::info(
-                                "AI Presets feature coming soon!",
-                                &self.theme,
-                            )
-                            .duration_ms(Some(HUD_LONG_MS)),
-                        );
-                        if let Err(e) = ai::open_ai_window(cx) {
-                            tracing::error!(message = %&ai_open_failure_message(&e));
-                            self.toast_manager.push(
-                                components::toast::Toast::error(
-                                    ai_open_failure_message(&e),
-                                    &self.theme,
-                                )
-                                .duration_ms(Some(HUD_SLOW_MS)),
-                            );
+                        match ai::open_ai_window(cx) {
+                            Ok(()) => {
+                                self.toast_manager.push(
+                                    components::toast::Toast::info(
+                                        "AI Presets feature coming soon!",
+                                        &self.theme,
+                                    )
+                                    .duration_ms(Some(TOAST_INFO_MS)),
+                                );
+                            }
+                            Err(e) => {
+                                tracing::error!(message = %&ai_open_failure_message(&e));
+                                self.show_error_toast(ai_open_failure_message(&e), cx);
+                            }
                         }
                         cx.notify();
                     }
@@ -1183,13 +1031,7 @@ impl ScriptListApp {
                     PermissionCommandType::CheckPermissions => {
                         let status = permissions_wizard::check_all_permissions();
                         if status.all_granted() {
-                            self.toast_manager.push(
-                                components::toast::Toast::success(
-                                    "All permissions granted!",
-                                    &self.theme,
-                                )
-                                .duration_ms(Some(HUD_LONG_MS)),
-                            );
+                            self.show_hud("All permissions granted!".to_string(), Some(HUD_SHORT_MS), cx);
                         } else {
                             let missing: Vec<_> = status
                                 .missing_permissions()
@@ -1201,7 +1043,7 @@ impl ScriptListApp {
                                     format!("Missing permissions: {}", missing.join(", ")),
                                     &self.theme,
                                 )
-                                .duration_ms(Some(HUD_SLOW_MS)),
+                                .duration_ms(Some(TOAST_WARNING_MS)),
                             );
                         }
                         cx.notify();
@@ -1209,20 +1051,14 @@ impl ScriptListApp {
                     PermissionCommandType::RequestAccessibility => {
                         let granted = permissions_wizard::request_accessibility_permission();
                         if granted {
-                            self.toast_manager.push(
-                                components::toast::Toast::success(
-                                    "Accessibility permission granted!",
-                                    &self.theme,
-                                )
-                                .duration_ms(Some(HUD_LONG_MS)),
-                            );
+                            self.show_hud("Accessibility permission granted!".to_string(), Some(HUD_SHORT_MS), cx);
                         } else {
                             self.toast_manager.push(
                                 components::toast::Toast::warning(
                                     "Accessibility permission not granted. Some features may not work.",
                                     &self.theme,
                                 )
-                                .duration_ms(Some(HUD_SLOW_MS)),
+                                .duration_ms(Some(TOAST_WARNING_MS)),
                             );
                         }
                         cx.notify();
@@ -1231,14 +1067,7 @@ impl ScriptListApp {
                         if let Err(e) = permissions_wizard::open_accessibility_settings() {
                             tracing::error!(message = %&format!("Failed to open accessibility settings: {}", e),
                             );
-                            self.toast_manager.push(
-                                components::toast::Toast::error(
-                                    format!("Failed to open settings: {}", e),
-                                    &self.theme,
-                                )
-                                .duration_ms(Some(HUD_SLOW_MS)),
-                            );
-                            cx.notify();
+                            self.show_error_toast(format!("Failed to open settings: {}", e), cx);
                         } else {
                             self.close_and_reset_window(cx);
                         }
@@ -1261,13 +1090,7 @@ impl ScriptListApp {
                         self.frecency_store.clear();
                         if let Err(e) = self.frecency_store.save() {
                             tracing::error!(message = %&format!("Failed to save frecency data: {}", e));
-                            self.toast_manager.push(
-                                components::toast::Toast::error(
-                                    format!("Failed to clear suggested: {}", e),
-                                    &self.theme,
-                                )
-                                .duration_ms(Some(HUD_SLOW_MS)),
-                            );
+                            self.show_error_toast(format!("Failed to clear suggested: {}", e), cx);
                         } else {
                             tracing::info!(message = %"Cleared all suggested items");
                             // Invalidate the grouped cache so the UI updates
@@ -1275,13 +1098,7 @@ impl ScriptListApp {
                             // Reset the main input and window to clean state
                             self.reset_to_script_list(cx);
                             resize_to_view_sync(ViewType::ScriptList, 0);
-                            self.toast_manager.push(
-                                components::toast::Toast::success(
-                                    "Suggested items cleared",
-                                    &self.theme,
-                                )
-                                .duration_ms(Some(HUD_LONG_MS)),
-                            );
+                            self.show_hud("Suggested items cleared".to_string(), Some(HUD_SHORT_MS), cx);
                         }
                         // Note: cx.notify() is called by reset_to_script_list, but we still need it for error case
                         cx.notify();
@@ -1309,13 +1126,7 @@ impl ScriptListApp {
                         tracing::info!(message = %"Reset all window positions to defaults");
 
                         // Show toast confirmation
-                        self.toast_manager.push(
-                            components::toast::Toast::success(
-                                "Window positions reset - takes effect next open",
-                                &self.theme,
-                            )
-                            .duration_ms(Some(HUD_LONG_MS)),
-                        );
+                        self.show_hud("Window positions reset - takes effect next open".to_string(), Some(HUD_SHORT_MS), cx);
 
                         // Close and reset window - this hides the window which is required
                         // for the reset to take effect (as the toast message states)
@@ -1468,7 +1279,7 @@ impl ScriptListApp {
 
                 self.toast_manager.push(
                     components::toast::Toast::info(message, &self.theme)
-                        .duration_ms(Some(HUD_LONG_MS)),
+                        .duration_ms(Some(TOAST_INFO_MS)),
                 );
                 cx.notify();
             }

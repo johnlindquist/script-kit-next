@@ -166,13 +166,27 @@ impl ScriptListApp {
         opened_log: &'static str,
         failed_prefix: &'static str,
     ) {
-        cx.spawn(async move |_this, cx| {
+        cx.spawn(async move |this, cx| {
             cx.update(|cx| match open_actions_window(cx, main_bounds, display_id, dialog, position) {
                 Ok(_handle) => {
                     logging::log("ACTIONS", opened_log);
                 }
                 Err(e) => {
-                    logging::log("ACTIONS", &format!("{}: {}", failed_prefix, e));
+                    tracing::error!(error = %e, "{}", failed_prefix);
+                    // Roll back popup state and show Toast on failure
+                    let _ = this.update(cx, |app, cx| {
+                        app.show_actions_popup = false;
+                        app.actions_dialog = None;
+                        app.pop_focus_overlay(cx);
+                        app.toast_manager.push(
+                            components::toast::Toast::error(
+                                format!("{}: {}", failed_prefix, e),
+                                &app.theme,
+                            )
+                            .duration_ms(Some(TOAST_ERROR_MS)),
+                        );
+                        cx.notify();
+                    });
                 }
             });
         })
@@ -281,7 +295,14 @@ impl ScriptListApp {
         cx.notify();
     }
 
-    /// Toggle actions dialog for arg prompts with SDK-defined actions
+    /// Toggle actions dialog for arg prompts with SDK-defined actions.
+    ///
+    /// Opens the dialog inline (not as a separate window) since arg prompts
+    /// host the actions overlay within the main window. Uses the same
+    /// open/close state contract as other popup toggles:
+    /// - Sets `show_actions_popup` + pushes focus overlay on open
+    /// - Clears `gpui_input_focused` to prevent stale input routing
+    /// - Always ends with `cx.notify()` to flush UI state
     pub(crate) fn toggle_arg_actions(&mut self, cx: &mut Context<Self>, window: &mut Window) {
         logging::log(
             "KEY",
@@ -306,6 +327,7 @@ impl ScriptListApp {
                     // Open - push overlay to save arg prompt focus state
                     self.show_actions_popup = true;
                     self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
+                    self.gpui_input_focused = false;
 
                     let theme_arc = std::sync::Arc::clone(&self.theme);
                     let dialog = cx.new(|cx| {
@@ -320,8 +342,6 @@ impl ScriptListApp {
                         dialog.set_sdk_actions(sdk_actions);
                         dialog
                     });
-
-                    // Show search input at bottom (Raycast-style)
 
                     // Focus the dialog's internal focus handle
                     self.actions_dialog = Some(dialog.clone());
@@ -342,6 +362,7 @@ impl ScriptListApp {
                 logging::log("KEY", "No SDK actions defined for this arg prompt (None)");
             }
         }
+        cx.notify();
     }
     /// Toggle actions dialog for webcam prompt (built-in command).
     /// Opens as a separate window (same pattern as toggle_chat_actions).
@@ -726,7 +747,17 @@ mod on_close_reentrancy_tests {
             .expect("toggle_arg_actions source section should exist");
         assert!(
             !toggle_arg_actions_source.contains("self.begin_actions_popup_window_open(cx, window);"),
-            "toggle_arg_actions should not use begin_actions_popup_window_open"
+            "toggle_arg_actions should not use begin_actions_popup_window_open (inline dialog, not a window)"
+        );
+
+        // toggle_arg_actions must still follow the same state contract as window-based toggles
+        assert!(
+            toggle_arg_actions_source.contains("self.gpui_input_focused = false;"),
+            "toggle_arg_actions must clear gpui_input_focused on open (same contract as begin_actions_popup_window_open)"
+        );
+        assert!(
+            toggle_arg_actions_source.contains("cx.notify();"),
+            "toggle_arg_actions must end with cx.notify() (same contract as other popup toggles)"
         );
 
         let toggle_terminal_commands_source = impl_source

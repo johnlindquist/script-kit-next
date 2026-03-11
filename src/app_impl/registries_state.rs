@@ -217,6 +217,9 @@ impl ScriptListApp {
         // Clear filter and selection state for fresh menu
         self.reset_script_list_filter_and_selection_state(cx);
 
+        // Clear favorites filter
+        self.active_favorites = None;
+
         // NOTE: Window resize is NOT done here to avoid RefCell borrow conflicts.
         // Callers that need resize should use deferred resize via window_ops::queue_resize
         // after the update closure completes. The show_main_window_helper handles this

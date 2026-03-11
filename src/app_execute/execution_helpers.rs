@@ -4,11 +4,7 @@ impl ScriptListApp {
 
         if let Err(e) = app_launcher::launch_application(app) {
             tracing::error!(message = %&format!("Failed to launch {}: {}", app.name, e));
-            self.last_output = Some(SharedString::from(format!(
-                "Failed to launch: {}",
-                app.name
-            )));
-            cx.notify();
+            self.show_error_toast(format!("Failed to launch {}: {}", app.name, e), cx);
         } else {
             tracing::info!(message = %&format!("Launched app: {}", app.name));
             self.close_and_reset_window(cx);
@@ -26,14 +22,7 @@ impl ScriptListApp {
 
         if let Err(e) = window_control::focus_window(window.id) {
             tracing::error!(message = %&format!("Failed to focus window: {}", e));
-            self.toast_manager.push(
-                components::toast::Toast::error(
-                    format!("Failed to focus window: {}", e),
-                    &self.theme,
-                )
-                .duration_ms(Some(TOAST_ERROR_MS)),
-            );
-            cx.notify();
+            self.show_error_toast(format!("Failed to focus window: {}", e), cx);
         } else {
             tracing::info!(message = %&format!("Focused window: {}", window.title));
             self.close_and_reset_window(cx);
@@ -145,7 +134,7 @@ impl ScriptListApp {
                     format!("{} API key saved successfully", provider),
                     &self.theme,
                 )
-                .duration_ms(Some(HUD_LONG_MS)),
+                .duration_ms(Some(TOAST_SUCCESS_MS)),
             );
 
             // Rebuild provider registry so new key is available next time chat opens
@@ -198,55 +187,37 @@ impl ScriptListApp {
                     Ok(true) => {
                         tracing::info!(message = %"Config restored from backup after validation failure",
                         );
-                        self.toast_manager.push(
-                            components::toast::Toast::error(
-                                "Failed to enable Claude Code (invalid config). Backup restored."
-                                    .to_string(),
-                                &self.theme,
-                            )
-                            .duration_ms(Some(TOAST_ERROR_MS)),
+                        self.show_error_toast(
+                            "Failed to enable Claude Code (invalid config). Backup restored.",
+                            cx,
                         );
                     }
                     Ok(false) => {
-                        self.toast_manager.push(
-                            components::toast::Toast::error(
-                                format!(
-                                    "Failed to enable Claude Code: {}. No backup available.",
-                                    reason
-                                ),
-                                &self.theme,
-                            )
-                            .duration_ms(Some(TOAST_ERROR_MS)),
+                        self.show_error_toast(
+                            format!(
+                                "Failed to enable Claude Code: {}. No backup available.",
+                                reason
+                            ),
+                            cx,
                         );
                     }
                     Err(recover_err) => {
                         tracing::info!(message = %&format!("Backup recovery also failed: {}", recover_err),
                         );
-                        self.toast_manager.push(
-                            components::toast::Toast::error(
-                                format!(
-                                    "Failed to enable Claude Code: {}. Recovery failed: {}",
-                                    reason, recover_err
-                                ),
-                                &self.theme,
-                            )
-                            .duration_ms(Some(TOAST_ERROR_MS)),
+                        self.show_error_toast(
+                            format!(
+                                "Failed to enable Claude Code: {}. Recovery failed: {}",
+                                reason, recover_err
+                            ),
+                            cx,
                         );
                     }
                 }
-                cx.notify();
                 return;
             }
             Err(e) => {
                 tracing::info!(message = %&format!("Failed to enable Claude Code: {}", e));
-                self.toast_manager.push(
-                    components::toast::Toast::error(
-                        format!("Failed to enable Claude Code: {}", e),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(TOAST_ERROR_MS)),
-                );
-                cx.notify();
+                self.show_error_toast(format!("Failed to enable Claude Code: {}", e), cx);
                 return;
             }
         }
@@ -276,7 +247,7 @@ impl ScriptListApp {
                     "Claude Code enabled! Ready to use.".to_string(),
                     &self.theme,
                 )
-                .duration_ms(Some(HUD_LONG_MS)),
+                .duration_ms(Some(TOAST_SUCCESS_MS)),
             );
 
             // Go back to main menu, then re-show inline chat
@@ -315,14 +286,7 @@ impl ScriptListApp {
             if let Err(e) = std::fs::create_dir_all(parent) {
                 tracing::error!(message = %&format!("Failed to create scratch pad directory: {}", e),
                 );
-                self.toast_manager.push(
-                    components::toast::Toast::error(
-                        format!("Failed to create directory: {}", e),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(TOAST_ERROR_MS)),
-                );
-                cx.notify();
+                self.show_error_toast(format!("Failed to create directory: {}", e), cx);
                 return;
             }
         }
@@ -335,19 +299,14 @@ impl ScriptListApp {
                 if let Err(write_err) = std::fs::write(&scratch_path, "") {
                     tracing::error!(message = %&format!("Failed to create scratch pad file: {}", write_err),
                     );
+                    self.show_error_toast(format!("Failed to create scratch pad: {}", write_err), cx);
+                    return;
                 }
                 String::new()
             }
             Err(e) => {
                 tracing::error!(message = %&format!("Failed to read scratch pad: {}", e));
-                self.toast_manager.push(
-                    components::toast::Toast::error(
-                        format!("Failed to read scratch pad: {}", e),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(TOAST_ERROR_MS)),
-                );
-                cx.notify();
+                self.show_error_toast(format!("Failed to read scratch pad: {}", e), cx);
                 return;
             }
         };
@@ -358,19 +317,31 @@ impl ScriptListApp {
         // Create editor focus handle
         let editor_focus_handle = cx.focus_handle();
 
-        // Create submit callback that saves and closes
+        // Create submit callback that saves and signals errors via channel
         let scratch_path_clone = scratch_path.clone();
+        let (save_err_tx, save_err_rx) = async_channel::bounded::<String>(1);
         let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
             std::sync::Arc::new(move |_id: String, value: Option<String>| {
                 if let Some(content) = value {
                     // Save the content to disk
                     if let Err(e) = std::fs::write(&scratch_path_clone, &content) {
                         tracing::error!(error = %e, "Failed to save scratch pad on submit");
+                        let _ = save_err_tx.try_send(format!("Failed to save scratch pad: {}", e));
                     } else {
                         tracing::info!(bytes = content.len(), "Scratch pad saved on submit");
                     }
                 }
             });
+
+        // Listen for submit-save errors and show toast
+        cx.spawn(async move |this, cx| {
+            if let Ok(err_msg) = save_err_rx.recv().await {
+                let _ = this.update(cx, |this, cx| {
+                    this.show_error_toast(err_msg, cx);
+                });
+            }
+        })
+        .detach();
 
         // Get the target height for editor view (subtract footer height for unified footer)
         let editor_height = px(700.0 - window_resize::layout::FOOTER_HEIGHT);
@@ -392,6 +363,7 @@ impl ScriptListApp {
         // Set up auto-save timer using weak reference
         let scratch_path_for_save = scratch_path;
         let entity_weak = entity.downgrade();
+        let (autosave_err_tx, autosave_err_rx) = async_channel::bounded::<String>(1);
         cx.spawn(async move |_this, cx| {
             loop {
                 // Auto-save every 2 seconds
@@ -406,6 +378,7 @@ impl ScriptListApp {
                         let content: String = entity.update(cx, |editor, cx| editor.content(cx));
                         if let Err(e) = std::fs::write(&scratch_path_for_save, &content) {
                             tracing::warn!(error = %e, "Auto-save failed");
+                            let _ = autosave_err_tx.try_send(format!("Auto-save failed: {}", e));
                         } else {
                             tracing::debug!(bytes = content.len(), "Auto-saved scratch pad");
                         }
@@ -419,6 +392,16 @@ impl ScriptListApp {
                     continue;
                 }
                 break; // Entity gone, stop the task
+            }
+        })
+        .detach();
+
+        // Listen for auto-save errors and show toast (only first error)
+        cx.spawn(async move |this, cx| {
+            if let Ok(err_msg) = autosave_err_rx.recv().await {
+                let _ = this.update(cx, |this, cx| {
+                    this.show_error_toast(err_msg, cx);
+                });
             }
         })
         .detach();

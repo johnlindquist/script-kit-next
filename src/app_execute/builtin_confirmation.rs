@@ -41,157 +41,58 @@ impl ScriptListApp {
             ),
         );
 
-        // Direct execution - same logic as execute_builtin but without confirmation check
         match &entry.feature {
-            // System Actions that can be dangerous
             builtins::BuiltInFeature::SystemAction(action_type) => {
-                tracing::info!(message = %&format!("Executing confirmed system action: {:?}", action_type),
-                );
+                tracing::info!(message = %&format!("Executing confirmed system action: {:?}", action_type));
+                self.dispatch_system_action(action_type, cx);
+            }
 
-                #[cfg(target_os = "macos")]
-                {
-                    use builtins::SystemActionType;
-
-                    let result = match action_type {
-                        // Power management
-                        SystemActionType::EmptyTrash => system_actions::empty_trash(),
-                        SystemActionType::LockScreen => system_actions::lock_screen(),
-                        SystemActionType::Sleep => system_actions::sleep(),
-                        SystemActionType::Restart => system_actions::restart(),
-                        SystemActionType::ShutDown => system_actions::shut_down(),
-                        SystemActionType::LogOut => system_actions::log_out(),
-
-                        // Dev/test actions
-                        #[cfg(debug_assertions)]
-                        SystemActionType::TestConfirmation => {
-                            self.toast_manager.push(
-                                components::toast::Toast::success(
-                                    "Confirmation test passed!",
-                                    &self.theme,
-                                )
-                                .duration_ms(Some(HUD_LONG_MS)),
-                            );
-                            cx.notify();
-                            return;
-                        }
-
-                        // App control
-                        SystemActionType::QuitScriptKit => {
-                            tracing::info!(message = %"Quitting Script Kit (confirmed)");
-                            cx.quit();
-                            return;
-                        }
-
-                        // For other system actions that don't need confirmation,
-                        // fall through to execute them
-                        _ => {
-                            // These shouldn't typically be confirmed, but handle gracefully
-                            tracing::info!(message = %&format!(
-                                    "Executing non-dangerous system action: {:?}",
-                                    action_type
-                                ),
-                            );
-                            // Call the original execute_builtin for these
-                            // Note: This creates a temp config with no confirmation to avoid loop
-                            match action_type {
-                                SystemActionType::ToggleDarkMode => {
-                                    system_actions::toggle_dark_mode()
-                                }
-                                SystemActionType::ShowDesktop => system_actions::show_desktop(),
-                                SystemActionType::MissionControl => {
-                                    system_actions::mission_control()
-                                }
-                                SystemActionType::Launchpad => system_actions::launchpad(),
-                                SystemActionType::ForceQuitApps => {
-                                    system_actions::force_quit_apps()
-                                }
-                                SystemActionType::Volume0 => system_actions::set_volume(0),
-                                SystemActionType::Volume25 => system_actions::set_volume(25),
-                                SystemActionType::Volume50 => system_actions::set_volume(50),
-                                SystemActionType::Volume75 => system_actions::set_volume(75),
-                                SystemActionType::Volume100 => system_actions::set_volume(100),
-                                SystemActionType::VolumeMute => system_actions::volume_mute(),
-                                SystemActionType::ToggleDoNotDisturb => {
-                                    system_actions::toggle_do_not_disturb()
-                                }
-                                SystemActionType::StartScreenSaver => {
-                                    system_actions::start_screen_saver()
-                                }
-                                SystemActionType::OpenSystemPreferences => {
-                                    system_actions::open_system_preferences_main()
-                                }
-                                SystemActionType::OpenPrivacySettings => {
-                                    system_actions::open_privacy_settings()
-                                }
-                                SystemActionType::OpenDisplaySettings => {
-                                    system_actions::open_display_settings()
-                                }
-                                SystemActionType::OpenSoundSettings => {
-                                    system_actions::open_sound_settings()
-                                }
-                                SystemActionType::OpenNetworkSettings => {
-                                    system_actions::open_network_settings()
-                                }
-                                SystemActionType::OpenKeyboardSettings => {
-                                    system_actions::open_keyboard_settings()
-                                }
-                                SystemActionType::OpenBluetoothSettings => {
-                                    system_actions::open_bluetooth_settings()
-                                }
-                                SystemActionType::OpenNotificationsSettings => {
-                                    system_actions::open_notifications_settings()
-                                }
-                                _ => Ok(()),
-                            }
-                        }
-                    };
-
-                    match result {
-                        Ok(()) => {
-                            tracing::info!(message = %"Confirmed system action executed successfully");
-                            if let Some(message) = self.system_action_feedback_message(action_type)
-                            {
-                                self.show_hud(message, Some(HUD_MEDIUM_MS), cx);
-                                self.hide_main_and_reset(cx);
-                                cx.notify();
-                            } else {
-                                self.close_and_reset_window(cx);
-                            }
-                        }
-                        Err(e) => {
-                            tracing::error!(message = %&format!("Confirmed system action failed: {}", e),
-                            );
-                            self.toast_manager.push(
-                                components::toast::Toast::error(
-                                    format!("System action failed: {}", e),
-                                    &self.theme,
-                                )
-                                .duration_ms(Some(HUD_SLOW_MS)),
-                            );
-                            cx.notify();
-                        }
-                    }
+            builtins::BuiltInFeature::UtilityCommand(builtins::UtilityCommandType::StopAllProcesses) => {
+                tracing::info!(message = %"Executing confirmed stop-all-processes");
+                let process_count = crate::process_manager::PROCESS_MANAGER.active_count();
+                if process_count == 0 {
+                    self.show_hud(
+                        "No running scripts to stop.".to_string(),
+                        Some(HUD_2200_MS),
+                        cx,
+                    );
+                } else {
+                    crate::process_manager::PROCESS_MANAGER.kill_all_processes();
+                    self.show_hud(
+                        format!("Stopped {} running script process(es).", process_count),
+                        Some(HUD_MEDIUM_MS),
+                        cx,
+                    );
+                    self.close_and_reset_window(cx);
                 }
+            }
 
-                #[cfg(not(target_os = "macos"))]
-                {
-                    tracing::warn!(message = %"System actions only supported on macOS");
+            builtins::BuiltInFeature::FrecencyCommand(builtins::FrecencyCommandType::ClearSuggested) => {
+                tracing::info!(message = %"Executing confirmed clear-suggested");
+                self.frecency_store.clear();
+                if let Err(e) = self.frecency_store.save() {
+                    tracing::error!(message = %&format!("Failed to save frecency data: {}", e));
                     self.toast_manager.push(
-                        components::toast::Toast::warning(
-                            "System actions are only supported on macOS",
+                        components::toast::Toast::error(
+                            format!("Failed to clear suggested: {}", e),
                             &self.theme,
                         )
-                        .duration_ms(Some(HUD_LONG_MS)),
+                        .duration_ms(Some(TOAST_ERROR_MS)),
                     );
-                    cx.notify();
+                } else {
+                    tracing::info!(message = %"Cleared all suggested items");
+                    self.invalidate_grouped_cache();
+                    self.reset_to_script_list(cx);
+                    resize_to_view_sync(ViewType::ScriptList, 0);
+                    self.show_hud("Suggested items cleared".to_string(), Some(HUD_SHORT_MS), cx);
                 }
+                cx.notify();
             }
 
             // For any other builtin type that somehow got confirmed,
             // just execute it normally (shouldn't happen in practice)
             _ => {
-                tracing::warn!(message = %&format!("Unexpected confirmed builtin type: {:?}", entry.feature),
-                );
+                tracing::warn!(message = %&format!("Unexpected confirmed builtin type: {:?}", entry.feature));
             }
         }
     }

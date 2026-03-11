@@ -175,10 +175,13 @@
                             if has_cmd && !has_shift && key.eq_ignore_ascii_case("m") {
                                 logging::log("KEY", "Interceptor: Cmd+M -> cycle vibrancy material");
                                 let description = platform::cycle_vibrancy_material();
-                                this.toast_manager.push(components::toast::Toast::info(
-                                    description,
-                                    &this.theme,
-                                ));
+                                this.toast_manager.push(
+                                    components::toast::Toast::info(
+                                        description,
+                                        &this.theme,
+                                    )
+                                    .duration_ms(Some(TOAST_INFO_MS)),
+                                );
                                 cx.notify();
                                 cx.stop_propagation();
                                 return;
@@ -188,10 +191,13 @@
                             if has_cmd && has_shift && key.eq_ignore_ascii_case("a") {
                                 logging::log("KEY", "Interceptor: Cmd+Shift+A -> cycle vibrancy appearance");
                                 let description = platform::cycle_appearance();
-                                this.toast_manager.push(components::toast::Toast::info(
-                                    description,
-                                    &this.theme,
-                                ));
+                                this.toast_manager.push(
+                                    components::toast::Toast::info(
+                                        description,
+                                        &this.theme,
+                                    )
+                                    .duration_ms(Some(TOAST_INFO_MS)),
+                                );
                                 cx.notify();
                                 cx.stop_propagation();
                                 return;

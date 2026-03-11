@@ -113,10 +113,13 @@ impl ScriptListApp {
 
         // Show toast with current opacity level
         let percent = (new_opacity * 100.0).round() as i32;
-        self.toast_manager.push(components::toast::Toast::info(
-            format!("Opacity: {}%", percent),
-            &self.theme,
-        ));
+        self.toast_manager.push(
+            components::toast::Toast::info(
+                format!("Opacity: {}%", percent),
+                &self.theme,
+            )
+            .duration_ms(Some(TOAST_INFO_MS)),
+        );
 
         cx.notify();
     }
