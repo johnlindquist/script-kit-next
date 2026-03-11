@@ -4,7 +4,8 @@
 //! source code for string patterns.
 
 use script_kit_gpui::action_helpers::{
-    find_sdk_action, trigger_sdk_action, SdkActionResult, RESERVED_ACTION_IDS,
+    find_sdk_action, trigger_sdk_action, SdkActionResult, RESERVED_ACTION_IDS, ERROR_CANCELLED,
+    ERROR_CHANNEL_DISCONNECTED, ERROR_CHANNEL_FULL, ERROR_NO_SENDER,
 };
 use script_kit_gpui::protocol::{self, ProtocolAction};
 use std::sync::mpsc;
@@ -153,7 +154,7 @@ fn channel_full_error_includes_action_name_in_message() {
         "Error should include action name"
     );
     assert!(
-        msg.contains("channel busy"),
+        msg.contains("channel is busy"),
         "Error should explain the failure"
     );
 }
@@ -205,4 +206,52 @@ fn disconnected_channel_is_detected_and_reported() {
     let result = trigger_sdk_action("trigger", &action, "", Some(&tx));
     assert_eq!(result, SdkActionResult::ChannelDisconnected);
     assert!(!result.is_sent());
+}
+
+// ---------------------------------------------------------------------------
+// Error code stability — builtin execution relies on stable codes
+// ---------------------------------------------------------------------------
+
+#[test]
+fn error_codes_are_stable_lowercase_snake_case_strings() {
+    assert_eq!(ERROR_NO_SENDER, "no_sender");
+    assert_eq!(ERROR_CHANNEL_FULL, "channel_full");
+    assert_eq!(ERROR_CHANNEL_DISCONNECTED, "channel_disconnected");
+    assert_eq!(ERROR_CANCELLED, "cancelled");
+}
+
+#[test]
+fn cancelled_result_has_code_but_no_user_error() {
+    let result = SdkActionResult::Cancelled;
+    // Machine-readable: has a code
+    assert_eq!(result.error_code(), Some(ERROR_CANCELLED));
+    // Not a user error: no toast message
+    assert!(result.error_message("force_quit").is_none());
+    // Not sent
+    assert!(!result.is_sent());
+}
+
+#[test]
+fn all_error_variants_produce_distinct_error_codes() {
+    let codes: Vec<Option<&str>> = vec![
+        SdkActionResult::NoSender.error_code(),
+        SdkActionResult::ChannelFull.error_code(),
+        SdkActionResult::ChannelDisconnected.error_code(),
+        SdkActionResult::Cancelled.error_code(),
+    ];
+
+    // All should be Some
+    for code in &codes {
+        assert!(code.is_some(), "All non-success variants must have error codes");
+    }
+
+    // All should be distinct
+    let mut unique: Vec<&str> = codes.iter().map(|c| c.expect("checked above")).collect();
+    unique.sort();
+    unique.dedup();
+    assert_eq!(
+        unique.len(),
+        codes.len(),
+        "All error codes must be distinct"
+    );
 }

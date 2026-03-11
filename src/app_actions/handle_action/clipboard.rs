@@ -66,6 +66,7 @@ impl ScriptListApp {
         &mut self,
         action_id: &str,
         selected_clipboard_entry: Option<clipboard_history::ClipboardEntryMeta>,
+        trace_id: &str,
         cx: &mut Context<Self>,
     ) -> bool {
         match action_id {
@@ -602,16 +603,33 @@ impl ScriptListApp {
                     "Are you sure you want to delete these {} matching clipboard entries?",
                     delete_count
                 );
+                let trace_id = trace_id.to_string();
+                let start = std::time::Instant::now();
 
                 cx.spawn(async move |this, cx| {
                     match confirm_with_modal(cx, message, "Yes", "Cancel").await {
                         Ok(true) => {}
-                        Ok(false) => return,
+                        Ok(false) => {
+                            tracing::info!(
+                                trace_id = %trace_id,
+                                status = "cancelled",
+                                duration_ms = start.elapsed().as_millis() as u64,
+                                "Async action cancelled: clipboard_delete_multiple"
+                            );
+                            return;
+                        }
                         Err(e) => {
                             let _ = this.update(cx, |this, cx| {
-                                tracing::error!(error = %e, "failed to open confirmation modal");
-                                this.show_error_toast(
+                                tracing::error!(
+                                    trace_id = %trace_id,
+                                    status = "failed",
+                                    duration_ms = start.elapsed().as_millis() as u64,
+                                    error = %e,
+                                    "failed to open confirmation modal"
+                                );
+                                this.show_error_toast_with_code(
                                     "Failed to open confirmation dialog",
+                                    Some(crate::action_helpers::ERROR_MODAL_FAILED),
                                     cx,
                                 );
                             });
@@ -697,16 +715,33 @@ impl ScriptListApp {
                     "Are you sure you want to delete all {} unpinned clipboard entries?",
                     unpinned_count
                 );
+                let trace_id = trace_id.to_string();
+                let start = std::time::Instant::now();
 
                 cx.spawn(async move |this, cx| {
                     match confirm_with_modal(cx, message, "Yes", "Cancel").await {
                         Ok(true) => {}
-                        Ok(false) => return,
+                        Ok(false) => {
+                            tracing::info!(
+                                trace_id = %trace_id,
+                                status = "cancelled",
+                                duration_ms = start.elapsed().as_millis() as u64,
+                                "Async action cancelled: clipboard_delete_all"
+                            );
+                            return;
+                        }
                         Err(e) => {
                             let _ = this.update(cx, |this, cx| {
-                                tracing::error!(error = %e, "failed to open confirmation modal");
-                                this.show_error_toast(
+                                tracing::error!(
+                                    trace_id = %trace_id,
+                                    status = "failed",
+                                    duration_ms = start.elapsed().as_millis() as u64,
+                                    error = %e,
+                                    "failed to open confirmation modal"
+                                );
+                                this.show_error_toast_with_code(
                                     "Failed to open confirmation dialog",
+                                    Some(crate::action_helpers::ERROR_MODAL_FAILED),
                                     cx,
                                 );
                             });
@@ -792,6 +827,8 @@ impl ScriptListApp {
                         tracing::info!(path = ?save_path, "saved clipboard to file");
                         let reveal_result_rx =
                             self.reveal_in_finder_with_feedback_async(&save_path);
+                        let trace_id = trace_id.to_string();
+                        let start = std::time::Instant::now();
                         cx.spawn(async move |this, cx| {
                             let Ok(reveal_result) = reveal_result_rx.recv().await else {
                                 return;
@@ -799,6 +836,12 @@ impl ScriptListApp {
 
                             let _ = this.update(cx, |this, cx| match reveal_result {
                                 Ok(()) => {
+                                    tracing::info!(
+                                        trace_id = %trace_id,
+                                        status = "completed",
+                                        duration_ms = start.elapsed().as_millis() as u64,
+                                        "Async action completed: clipboard_save_file"
+                                    );
                                     this.show_hud(
                                         format!("Saved to: {}", save_path.display()),
                                         Some(HUD_LONG_MS),
@@ -810,8 +853,11 @@ impl ScriptListApp {
                                     // File was saved but reveal failed — log the reveal error,
                                     // show only HUD for the successful save (no dual feedback).
                                     tracing::warn!(
+                                        trace_id = %trace_id,
+                                        status = "completed",
+                                        duration_ms = start.elapsed().as_millis() as u64,
                                         error = %message,
-                                        "Reveal failed after save"
+                                        "Async action completed with warning: clipboard_save_file reveal failed"
                                     );
                                     this.show_hud(
                                         format!("Saved to: {}", save_path.display()),

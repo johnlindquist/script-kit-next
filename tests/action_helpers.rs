@@ -6,6 +6,7 @@
 use script_kit_gpui::action_helpers::{
     extract_path_for_copy, extract_path_for_edit, extract_path_for_reveal, find_sdk_action,
     is_reserved_action_id, trigger_sdk_action, PathExtractionError, SdkActionResult,
+    ERROR_CANCELLED, ERROR_CHANNEL_DISCONNECTED, ERROR_CHANNEL_FULL, ERROR_NO_SENDER,
 };
 use script_kit_gpui::agents::Agent;
 use script_kit_gpui::app_launcher;
@@ -569,8 +570,8 @@ fn trigger_sdk_action_returns_channel_full_when_buffer_exhausted() {
     assert!(!result.is_sent());
     let err = result.error_message("busy_action").unwrap();
     assert!(
-        err.contains("channel busy"),
-        "Expected 'channel busy' in error: {err}"
+        err.contains("channel is busy"),
+        "Expected 'channel is busy' in error: {err}"
     );
 }
 
@@ -624,4 +625,67 @@ fn test_pbcopy_unicode() {
     use script_kit_gpui::action_helpers::pbcopy;
     let result = pbcopy("Hello 🌍 世界");
     assert!(result.is_ok());
+}
+
+// ============================================================================
+// Error code and Cancelled variant tests
+// ============================================================================
+
+#[test]
+fn error_code_constants_are_stable_strings() {
+    assert_eq!(ERROR_NO_SENDER, "no_sender");
+    assert_eq!(ERROR_CHANNEL_FULL, "channel_full");
+    assert_eq!(ERROR_CHANNEL_DISCONNECTED, "channel_disconnected");
+    assert_eq!(ERROR_CANCELLED, "cancelled");
+}
+
+#[test]
+fn cancelled_variant_produces_code_but_no_error_message() {
+    let result = SdkActionResult::Cancelled;
+
+    assert_eq!(result.error_code(), Some(ERROR_CANCELLED));
+    assert!(
+        result.error_message("delete_all").is_none(),
+        "Cancelled must NOT produce a user-facing error message"
+    );
+    assert!(!result.is_sent());
+}
+
+#[test]
+fn all_sdk_action_result_variants_have_consistent_error_code_mapping() {
+    // Success variants: no code
+    assert!(SdkActionResult::Sent.error_code().is_none());
+    assert!(SdkActionResult::NoEffect.error_code().is_none());
+
+    // Error variants: stable codes
+    assert_eq!(SdkActionResult::NoSender.error_code(), Some("no_sender"));
+    assert_eq!(SdkActionResult::ChannelFull.error_code(), Some("channel_full"));
+    assert_eq!(
+        SdkActionResult::ChannelDisconnected.error_code(),
+        Some("channel_disconnected")
+    );
+
+    // Cancellation: code but no error message
+    assert_eq!(SdkActionResult::Cancelled.error_code(), Some("cancelled"));
+}
+
+#[test]
+fn error_messages_never_expose_transport_enum_names() {
+    let forbidden = ["NoSender", "ChannelFull", "ChannelDisconnected", "Cancelled"];
+
+    for variant in &[
+        SdkActionResult::NoSender,
+        SdkActionResult::ChannelFull,
+        SdkActionResult::ChannelDisconnected,
+        SdkActionResult::Cancelled,
+    ] {
+        if let Some(msg) = variant.error_message("test") {
+            for name in &forbidden {
+                assert!(
+                    !msg.contains(name),
+                    "error_message leaked transport name '{name}': {msg}"
+                );
+            }
+        }
+    }
 }

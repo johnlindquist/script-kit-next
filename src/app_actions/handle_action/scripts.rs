@@ -9,12 +9,15 @@ impl ScriptListApp {
     fn handle_script_action(
         &mut self,
         action_id: &str,
+        trace_id: &str,
         cx: &mut Context<Self>,
     ) -> bool {
         match action_id {
             "create_script" => {
-                tracing::info!(category = "UI", "create script action - opening scripts folder");
+                tracing::info!(category = "UI", trace_id = %trace_id, "create script action - opening scripts folder");
                 let scripts_dir = shellexpand::tilde("~/.scriptkit/scripts").to_string();
+                let trace_id = trace_id.to_string();
+                let start = std::time::Instant::now();
                 cx.spawn(async move |this, cx| {
                     let result = cx
                         .background_executor()
@@ -25,7 +28,13 @@ impl ScriptListApp {
                         .await;
                     let _ = this.update(cx, |this, cx| match result {
                         Ok(_) => {
-                            tracing::info!(category = "UI", "opened scripts folder");
+                            tracing::info!(
+                                category = "UI",
+                                trace_id = %trace_id,
+                                status = "completed",
+                                duration_ms = start.elapsed().as_millis() as u64,
+                                "Async action completed: create_script"
+                            );
                             this.show_hud(
                                 "Opened scripts folder".to_string(),
                                 Some(HUD_SHORT_MS),
@@ -34,7 +43,13 @@ impl ScriptListApp {
                             this.hide_main_and_reset(cx);
                         }
                         Err(e) => {
-                            tracing::error!(error = %e, "failed to open scripts folder");
+                            tracing::error!(
+                                trace_id = %trace_id,
+                                status = "failed",
+                                duration_ms = start.elapsed().as_millis() as u64,
+                                error = %e,
+                                "Async action failed: create_script"
+                            );
                             this.show_error_toast(
                                 format!("Failed to open scripts folder: {}", e),
                                 cx,
@@ -70,6 +85,8 @@ impl ScriptListApp {
 
                     if let Some(path) = path_opt {
                         let editor_launch_rx = self.launch_editor_with_feedback_async(&path);
+                        let trace_id = trace_id.to_string();
+                        let start = std::time::Instant::now();
                         cx.spawn(async move |this, cx| {
                             let Ok(launch_result) = editor_launch_rx.recv().await else {
                                 return;
@@ -77,10 +94,27 @@ impl ScriptListApp {
 
                             let _ = this.update(cx, |this, cx| match launch_result {
                                 Ok(()) => {
+                                    tracing::info!(
+                                        trace_id = %trace_id,
+                                        status = "completed",
+                                        duration_ms = start.elapsed().as_millis() as u64,
+                                        "Async action completed: edit_script"
+                                    );
                                     this.hide_main_and_reset(cx);
                                 }
                                 Err(message) => {
-                                    this.show_error_toast(message, cx);
+                                    tracing::error!(
+                                        trace_id = %trace_id,
+                                        status = "failed",
+                                        duration_ms = start.elapsed().as_millis() as u64,
+                                        error = %message,
+                                        "Async action failed: edit_script"
+                                    );
+                                    this.show_error_toast_with_code(
+                                        message,
+                                        Some(crate::action_helpers::ERROR_LAUNCH_FAILED),
+                                        cx,
+                                    );
                                 }
                             });
                         })
@@ -123,15 +157,32 @@ impl ScriptListApp {
                     target.item_kind, target.name
                 );
 
+                let trace_id = trace_id.to_string();
+                let start = std::time::Instant::now();
                 cx.spawn(async move |this, cx| {
                     match confirm_with_modal(cx, message, "Move to Trash", "Cancel").await {
                         Ok(true) => {}
-                        Ok(false) => return,
+                        Ok(false) => {
+                            tracing::info!(
+                                trace_id = %trace_id,
+                                status = "cancelled",
+                                duration_ms = start.elapsed().as_millis() as u64,
+                                "Async action cancelled: remove_script"
+                            );
+                            return;
+                        }
                         Err(e) => {
                             let _ = this.update(cx, |this, cx| {
-                                tracing::error!(error = %e, "failed to open confirmation modal");
-                                this.show_error_toast(
+                                tracing::error!(
+                                    trace_id = %trace_id,
+                                    status = "failed",
+                                    duration_ms = start.elapsed().as_millis() as u64,
+                                    error = %e,
+                                    "failed to open confirmation modal"
+                                );
+                                this.show_error_toast_with_code(
                                     "Failed to open confirmation dialog",
+                                    Some(crate::action_helpers::ERROR_MODAL_FAILED),
                                     cx,
                                 );
                             });
@@ -144,10 +195,13 @@ impl ScriptListApp {
                             Ok(()) => {
                                 tracing::info!(
                                     category = "UI",
+                                    trace_id = %trace_id,
+                                    status = "completed",
+                                    duration_ms = start.elapsed().as_millis() as u64,
                                     item_kind = target.item_kind,
                                     name = %target.name,
                                     path = %target.path.display(),
-                                    "moved item to trash"
+                                    "Async action completed: remove_script"
                                 );
                                 this.refresh_scripts(cx);
                                 this.show_hud(
@@ -160,11 +214,14 @@ impl ScriptListApp {
                             }
                             Err(e) => {
                                 tracing::error!(
+                                    trace_id = %trace_id,
+                                    status = "failed",
+                                    duration_ms = start.elapsed().as_millis() as u64,
                                     item_kind = target.item_kind,
                                     name = %target.name,
                                     path = %target.path.display(),
                                     error = %e,
-                                    "failed to move item to trash"
+                                    "Async action failed: remove_script"
                                 );
                                 this.show_error_toast(format!("Failed to remove: {}", e), cx);
                             }
@@ -188,6 +245,8 @@ impl ScriptListApp {
                 let config_file = format!("{}/config.ts", config_dir);
 
                 let editor_for_hud = editor.clone();
+                let trace_id = trace_id.to_string();
+                let start = std::time::Instant::now();
 
                 cx.spawn(async move |this, cx| {
                     let result = cx
@@ -218,7 +277,14 @@ impl ScriptListApp {
                         .await;
                     let _ = this.update(cx, |this, cx| match result {
                         Ok(_) => {
-                            tracing::info!(category = "UI", editor = %editor_for_hud, "opened config.ts in editor");
+                            tracing::info!(
+                                category = "UI",
+                                trace_id = %trace_id,
+                                status = "completed",
+                                duration_ms = start.elapsed().as_millis() as u64,
+                                editor = %editor_for_hud,
+                                "Async action completed: settings"
+                            );
                             this.show_hud(
                                 format!("Opening config.ts in {}", editor_for_hud),
                                 Some(HUD_SHORT_MS),
@@ -227,7 +293,14 @@ impl ScriptListApp {
                             this.hide_main_and_reset(cx);
                         }
                         Err(e) => {
-                            tracing::error!(editor = %editor_for_hud, error = %e, "failed to open editor for settings");
+                            tracing::error!(
+                                trace_id = %trace_id,
+                                status = "failed",
+                                duration_ms = start.elapsed().as_millis() as u64,
+                                editor = %editor_for_hud,
+                                error = %e,
+                                "Async action failed: settings"
+                            );
                             this.show_error_toast(
                                 format!(
                                     "Failed to open {} for settings: {}",

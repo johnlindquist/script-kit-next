@@ -65,7 +65,7 @@ fn edit_script_shows_error_when_no_selection() {
     let edit_pos = content
         .find("\"edit_script\"")
         .expect("Expected edit_script action handler");
-    let block = &content[edit_pos..content.len().min(edit_pos + 3000)];
+    let block = &content[edit_pos..content.len().min(edit_pos + 4000)];
 
     assert!(
         block.contains("selection_required_message_for_action(action_id)"),
@@ -80,10 +80,10 @@ fn edit_script_shows_toast_on_editor_launch_failure() {
     let edit_pos = content
         .find("\"edit_script\"")
         .expect("Expected edit_script action handler");
-    let block = &content[edit_pos..content.len().min(edit_pos + 3000)];
+    let block = &content[edit_pos..content.len().min(edit_pos + 4000)];
 
     assert!(
-        block.contains("show_error_toast(message, cx)"),
+        block.contains("show_error_toast_with_code("),
         "edit_script should show error toast when editor launch fails"
     );
 }
@@ -153,7 +153,7 @@ fn settings_shows_error_when_editor_fails() {
     let settings_pos = content
         .find("\"settings\"")
         .expect("Expected settings action handler");
-    let block = &content[settings_pos..content.len().min(settings_pos + 3000)];
+    let block = &content[settings_pos..content.len().min(settings_pos + 4000)];
 
     assert!(
         block.contains("Failed to open") && block.contains("for settings"),

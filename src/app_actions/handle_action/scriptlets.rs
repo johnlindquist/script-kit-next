@@ -8,6 +8,7 @@ impl ScriptListApp {
     fn handle_scriptlet_action(
         &mut self,
         action_id: &str,
+        trace_id: &str,
         cx: &mut Context<Self>,
     ) -> bool {
         match action_id {
@@ -22,6 +23,8 @@ impl ScriptListApp {
                             let path = std::path::PathBuf::from(path_str);
                             let editor_launch_rx =
                                 self.launch_editor_with_feedback_async(&path);
+                            let trace_id = trace_id.to_string();
+                            let start = std::time::Instant::now();
                             cx.spawn(async move |this, cx| {
                                 let Ok(launch_result) = editor_launch_rx.recv().await
                                 else {
@@ -31,9 +34,22 @@ impl ScriptListApp {
                                 let _ =
                                     this.update(cx, |this, cx| match launch_result {
                                         Ok(()) => {
+                                            tracing::info!(
+                                                trace_id = %trace_id,
+                                                status = "completed",
+                                                duration_ms = start.elapsed().as_millis() as u64,
+                                                "Async action completed: edit_scriptlet"
+                                            );
                                             this.hide_main_and_reset(cx);
                                         }
                                         Err(message) => {
+                                            tracing::error!(
+                                                trace_id = %trace_id,
+                                                status = "failed",
+                                                duration_ms = start.elapsed().as_millis() as u64,
+                                                error = %message,
+                                                "Async action failed: edit_scriptlet"
+                                            );
                                             this.show_error_toast(message, cx);
                                         }
                                     });
@@ -67,6 +83,8 @@ impl ScriptListApp {
                             let path = std::path::Path::new(path_str);
                             let reveal_result_rx =
                                 self.reveal_in_finder_with_feedback_async(path);
+                            let trace_id = trace_id.to_string();
+                            let start = std::time::Instant::now();
                             cx.spawn(async move |this, cx| {
                                 let Ok(reveal_result) = reveal_result_rx.recv().await
                                 else {
@@ -76,6 +94,12 @@ impl ScriptListApp {
                                 let _ =
                                     this.update(cx, |this, cx| match reveal_result {
                                         Ok(()) => {
+                                            tracing::info!(
+                                                trace_id = %trace_id,
+                                                status = "completed",
+                                                duration_ms = start.elapsed().as_millis() as u64,
+                                                "Async action completed: reveal_scriptlet_in_finder"
+                                            );
                                             this.show_hud(
                                                 "Opened in Finder".to_string(),
                                                 Some(HUD_SHORT_MS),
@@ -84,6 +108,13 @@ impl ScriptListApp {
                                             this.hide_main_and_reset(cx);
                                         }
                                         Err(message) => {
+                                            tracing::error!(
+                                                trace_id = %trace_id,
+                                                status = "failed",
+                                                duration_ms = start.elapsed().as_millis() as u64,
+                                                error = %message,
+                                                "Async action failed: reveal_scriptlet_in_finder"
+                                            );
                                             this.show_error_toast(message, cx);
                                         }
                                     });

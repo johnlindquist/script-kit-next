@@ -188,7 +188,7 @@ fn all_show_error_toast_calls_use_toast_not_hud() {
     // Verify the show_error_toast helper uses Toast::error with TOAST_ERROR_MS
     let helper_content = handle_action_content();
     assert!(
-        helper_content.contains("Toast::error(message.into(), &self.theme)")
+        helper_content.contains("Toast::error(msg, &self.theme)")
             && helper_content.contains("TOAST_ERROR_MS"),
         "show_error_toast helper must use Toast::error with TOAST_ERROR_MS"
     );
@@ -563,7 +563,7 @@ fn clipboard_save_file_shows_hud_on_success() {
     let save_pos = content
         .find("\"clipboard_save_file\"")
         .expect("Expected clipboard_save_file handler");
-    let block = &content[save_pos..content.len().min(save_pos + 3000)];
+    let block = &content[save_pos..content.len().min(save_pos + 4000)];
 
     assert!(
         block.contains("Saved to"),
@@ -696,7 +696,7 @@ fn reveal_in_finder_shows_error_toast_for_unsupported_types() {
     let reveal_pos = content
         .find("\"reveal_in_finder\"")
         .expect("Expected reveal_in_finder handler");
-    let block = &content[reveal_pos..content.len().min(reveal_pos + 3000)];
+    let block = &content[reveal_pos..content.len().min(reveal_pos + 4000)];
 
     assert!(
         block.contains("Cannot reveal this item type in Finder"),

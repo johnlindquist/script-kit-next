@@ -144,7 +144,7 @@ fn channel_full_error_includes_action_name_in_message() {
         .expect("ChannelFull should produce error message");
     assert!(msg.contains("run_build"), "Error should include action name");
     assert!(
-        msg.contains("channel busy"),
+        msg.contains("channel is busy"),
         "Error should explain the failure"
     );
 }
