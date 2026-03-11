@@ -25,6 +25,10 @@ impl ScriptListApp {
         } else {
             tracing::error!(message = %&format!("Builtin entry not found for confirmed action: {}", entry_id),
             );
+            self.show_error_toast(
+                format!("Builtin not found: {}", entry_id),
+                cx,
+            );
         }
     }
 

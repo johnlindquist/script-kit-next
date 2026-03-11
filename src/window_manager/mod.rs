@@ -523,6 +523,21 @@ mod tests {
     #[cfg(target_os = "macos")]
     mod macos_tests {
         use super::super::*;
+        use std::sync::Mutex;
+        use std::sync::OnceLock;
+
+        /// Tests that touch the global window registry must run serially
+        /// to avoid races on the shared singleton.
+        static REGISTRY_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+        fn with_registry_lock<F: FnOnce()>(f: F) {
+            let lock = REGISTRY_LOCK
+                .get_or_init(|| Mutex::new(()))
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            f();
+            drop(lock);
+        }
 
         /// Test registration handle wrapper
         #[test]
@@ -540,52 +555,53 @@ mod tests {
         /// Note: Uses a mock pointer since we can't create real NSWindow in tests
         #[test]
         fn test_register_and_get_window() {
-            // Create a mock window ID (don't actually use this pointer!)
-            let mock_id: id = 0x12345678 as id;
+            with_registry_lock(|| {
+                let mock_id: id = 0x12345678 as id;
+                register_window(WindowRole::Main, mock_id);
 
-            // Register the window
-            register_window(WindowRole::Main, mock_id);
-
-            // Retrieve it
-            let retrieved = get_window(WindowRole::Main);
-            assert!(retrieved.is_some());
-            assert_eq!(retrieved.unwrap(), mock_id);
+                let retrieved = get_window(WindowRole::Main);
+                assert!(retrieved.is_some());
+                assert_eq!(retrieved.unwrap(), mock_id);
+            });
         }
 
         /// Test get_main_window convenience function
         #[test]
         fn test_get_main_window_convenience() {
-            let mock_id: id = 0x87654321 as id;
-            register_window(WindowRole::Main, mock_id);
+            with_registry_lock(|| {
+                let mock_id: id = 0x87654321 as id;
+                register_window(WindowRole::Main, mock_id);
 
-            let retrieved = get_main_window();
-            assert!(retrieved.is_some());
-            assert_eq!(retrieved.unwrap(), mock_id);
+                let retrieved = get_main_window();
+                assert!(retrieved.is_some());
+                assert_eq!(retrieved.unwrap(), mock_id);
+            });
         }
 
         /// Test is_window_registered
         #[test]
         fn test_is_window_registered() {
-            let mock_id: id = 0xABCDEF00 as id;
+            with_registry_lock(|| {
+                let mock_id: id = 0xABCDEF00 as id;
+                register_window(WindowRole::Main, mock_id);
 
-            // Register it
-            register_window(WindowRole::Main, mock_id);
-
-            // Should be registered now
-            assert!(is_window_registered(WindowRole::Main));
+                assert!(is_window_registered(WindowRole::Main));
+            });
         }
 
         /// Test that registration overwrites previous value
         #[test]
         fn test_registration_overwrites() {
-            let first_id: id = 0x11111111 as id;
-            let second_id: id = 0x22222222 as id;
+            with_registry_lock(|| {
+                let first_id: id = 0x11111111 as id;
+                let second_id: id = 0x22222222 as id;
 
-            register_window(WindowRole::Main, first_id);
-            assert_eq!(get_window(WindowRole::Main), Some(first_id));
+                register_window(WindowRole::Main, first_id);
+                assert_eq!(get_window(WindowRole::Main), Some(first_id));
 
-            register_window(WindowRole::Main, second_id);
-            assert_eq!(get_window(WindowRole::Main), Some(second_id));
+                register_window(WindowRole::Main, second_id);
+                assert_eq!(get_window(WindowRole::Main), Some(second_id));
+            });
         }
 
         /// Test WindowManager internal struct

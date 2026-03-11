@@ -5,6 +5,44 @@
 // and save snippet.
 
 impl ScriptListApp {
+    /// Refresh clipboard selection after a delete operation, respecting the active filter.
+    ///
+    /// After entries are removed from `cached_clipboard_entries`, this method
+    /// re-applies the current filter, clamps `selected_index` to the visible
+    /// set, scrolls to the new position, and updates `focused_clipboard_entry_id`
+    /// to point at a visible entry.
+    fn refresh_clipboard_selection_after_delete(&mut self) {
+        if let AppView::ClipboardHistoryView {
+            filter,
+            selected_index,
+        } = &mut self.current_view
+        {
+            let filtered_entries: Vec<_> = if filter.is_empty() {
+                self.cached_clipboard_entries.iter().enumerate().collect()
+            } else {
+                let filter_lower = filter.to_lowercase();
+                self.cached_clipboard_entries
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, e)| e.text_preview.to_lowercase().contains(&filter_lower))
+                    .collect()
+            };
+
+            if !filtered_entries.is_empty() {
+                *selected_index =
+                    (*selected_index).min(filtered_entries.len().saturating_sub(1));
+                self.clipboard_list_scroll_handle
+                    .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
+                self.focused_clipboard_entry_id = filtered_entries
+                    .get(*selected_index)
+                    .map(|(_, entry)| entry.id.clone());
+            } else {
+                *selected_index = 0;
+                self.focused_clipboard_entry_id = None;
+            }
+        }
+    }
+
     fn spawn_clipboard_paste_simulation(&self) {
         std::thread::spawn(|| {
             std::thread::sleep(std::time::Duration::from_millis(100));
@@ -596,18 +634,7 @@ impl ScriptListApp {
 
                         this.cached_clipboard_entries =
                             clipboard_history::get_cached_entries(CLIPBOARD_CACHE_SIZE);
-                        if let AppView::ClipboardHistoryView { selected_index, .. } =
-                            &mut this.current_view
-                        {
-                            *selected_index = 0;
-                            if let Some(first) = this.cached_clipboard_entries.first() {
-                                this.focused_clipboard_entry_id = Some(first.id.clone());
-                                this.clipboard_list_scroll_handle
-                                    .scroll_to_item(0, ScrollStrategy::Top);
-                            } else {
-                                this.focused_clipboard_entry_id = None;
-                            }
-                        }
+                        this.refresh_clipboard_selection_after_delete();
                         cx.notify();
 
                         if failed == 0 {
@@ -640,39 +667,8 @@ impl ScriptListApp {
                         self.cached_clipboard_entries =
                             clipboard_history::get_cached_entries(CLIPBOARD_CACHE_SIZE);
 
-                        // Update selection in ClipboardHistoryView
-                        if let AppView::ClipboardHistoryView {
-                            filter,
-                            selected_index,
-                        } = &mut self.current_view
-                        {
-                            let filtered_entries: Vec<_> = if filter.is_empty() {
-                                self.cached_clipboard_entries.iter().enumerate().collect()
-                            } else {
-                                let filter_lower = filter.to_lowercase();
-                                self.cached_clipboard_entries
-                                    .iter()
-                                    .enumerate()
-                                    .filter(|(_, e)| {
-                                        e.text_preview.to_lowercase().contains(&filter_lower)
-                                    })
-                                    .collect()
-                            };
-
-                            // Keep selection in bounds after deletion
-                            if !filtered_entries.is_empty() {
-                                *selected_index = (*selected_index)
-                                    .min(filtered_entries.len().saturating_sub(1));
-                                self.clipboard_list_scroll_handle
-                                    .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
-                                self.focused_clipboard_entry_id = filtered_entries
-                                    .get(*selected_index)
-                                    .map(|(_, entry)| entry.id.clone());
-                            } else {
-                                *selected_index = 0;
-                                self.focused_clipboard_entry_id = None;
-                            }
-                        }
+                        // Update selection respecting active filter
+                        self.refresh_clipboard_selection_after_delete();
 
                         self.show_hud("Entry deleted".to_string(), Some(HUD_SHORT_MS), cx);
                         cx.notify();
@@ -725,19 +721,8 @@ impl ScriptListApp {
                                 this.cached_clipboard_entries =
                                     clipboard_history::get_cached_entries(CLIPBOARD_CACHE_SIZE);
 
-                                // Reset selection
-                                if let AppView::ClipboardHistoryView {
-                                    selected_index, ..
-                                } = &mut this.current_view
-                                {
-                                    *selected_index = 0;
-                                    if let Some(first) = this.cached_clipboard_entries.first() {
-                                        this.focused_clipboard_entry_id =
-                                            Some(first.id.clone());
-                                    } else {
-                                        this.focused_clipboard_entry_id = None;
-                                    }
-                                }
+                                // Reset selection respecting active filter
+                                this.refresh_clipboard_selection_after_delete();
 
                                 this.show_hud(
                                     format!(

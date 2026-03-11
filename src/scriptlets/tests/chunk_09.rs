@@ -298,10 +298,7 @@ fn test_merge_shared_actions_mixed() {
 
 fn with_temp_scriptlet_extensions_dir(test_fn: impl FnOnce(&std::path::Path)) {
     use std::ffi::OsString;
-    use std::sync::{Mutex, OnceLock};
     use tempfile::TempDir;
-
-    static SK_PATH_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
     struct SkPathGuard {
         previous: Option<OsString>,
@@ -317,10 +314,10 @@ fn with_temp_scriptlet_extensions_dir(test_fn: impl FnOnce(&std::path::Path)) {
         }
     }
 
-    let lock = SK_PATH_LOCK
-        .get_or_init(|| Mutex::new(()))
+    let lock = crate::test_utils::SK_PATH_TEST_LOCK
+        .get_or_init(|| std::sync::Mutex::new(()))
         .lock()
-        .expect("SK_PATH lock poisoned");
+        .unwrap_or_else(|e| e.into_inner());
 
     let temp_dir = TempDir::new().expect("create temp dir for scriptlet tests");
     let extensions_dir = temp_dir.path().join("kit").join("main").join("extensions");

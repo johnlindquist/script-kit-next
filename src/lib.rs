@@ -254,6 +254,9 @@ pub mod watcher;
 // Window state management tests - code audit to prevent regressions
 // Verifies that app_execute.rs uses close_and_reset_window() correctly
 #[cfg(test)]
+mod test_utils;
+
+#[cfg(test)]
 mod window_state_tests;
 
 #[cfg(test)]
