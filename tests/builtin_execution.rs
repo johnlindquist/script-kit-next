@@ -105,7 +105,13 @@ fn action_with_handler_sends_action_triggered_with_correct_fields() {
     let (tx, rx) = mpsc::sync_channel::<protocol::Message>(10);
     let action = make_action("confirm_delete", true, Some("item_99"));
 
-    let result = trigger_sdk_action("confirm_delete", &action, "search query", Some(&tx), "test-trace");
+    let result = trigger_sdk_action(
+        "confirm_delete",
+        &action,
+        "search query",
+        Some(&tx),
+        "test-trace",
+    );
     assert_eq!(result, SdkActionResult::Sent);
 
     match rx.try_recv().expect("expected message") {
