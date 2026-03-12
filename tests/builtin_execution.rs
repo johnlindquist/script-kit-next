@@ -4,7 +4,7 @@
 //! source code for string patterns.
 
 use script_kit_gpui::action_helpers::{
-    find_sdk_action, trigger_sdk_action, SdkActionResult, ERROR_CANCELLED,
+    find_sdk_action, trigger_sdk_action, ActionOutcomeStatus, SdkActionResult, ERROR_CANCELLED,
     ERROR_CHANNEL_DISCONNECTED, ERROR_CHANNEL_FULL, ERROR_NO_SENDER, RESERVED_ACTION_IDS,
 };
 use script_kit_gpui::protocol::{self, ProtocolAction};
@@ -229,6 +229,58 @@ fn cancelled_result_has_code_but_no_user_error() {
     assert!(result.error_message("force_quit").is_none());
     // Not sent
     assert!(!result.is_sent());
+}
+
+// ---------------------------------------------------------------------------
+// Status mapping — every variant maps to the correct ActionOutcomeStatus
+// ---------------------------------------------------------------------------
+
+#[test]
+fn status_maps_all_variants_to_correct_buckets() {
+    assert_eq!(SdkActionResult::Sent.status(), ActionOutcomeStatus::Success);
+    assert_eq!(
+        SdkActionResult::NoEffect.status(),
+        ActionOutcomeStatus::NoEffect
+    );
+    assert_eq!(
+        SdkActionResult::Cancelled.status(),
+        ActionOutcomeStatus::Cancelled
+    );
+    assert_eq!(
+        SdkActionResult::NoSender.status(),
+        ActionOutcomeStatus::Error
+    );
+    assert_eq!(
+        SdkActionResult::ChannelFull.status(),
+        ActionOutcomeStatus::Error
+    );
+    assert_eq!(
+        SdkActionResult::ChannelDisconnected.status(),
+        ActionOutcomeStatus::Error
+    );
+}
+
+#[test]
+fn status_and_error_code_are_consistent() {
+    // Success/NoEffect: no error code
+    for variant in &[SdkActionResult::Sent, SdkActionResult::NoEffect] {
+        assert!(variant.error_code().is_none(), "success variants have no error code");
+    }
+    // Error variants: have error code, status is Error
+    for variant in &[
+        SdkActionResult::NoSender,
+        SdkActionResult::ChannelFull,
+        SdkActionResult::ChannelDisconnected,
+    ] {
+        assert_eq!(variant.status(), ActionOutcomeStatus::Error);
+        assert!(variant.error_code().is_some(), "error variants must have error code");
+    }
+    // Cancelled: has error code but status is Cancelled (not Error)
+    assert_eq!(
+        SdkActionResult::Cancelled.status(),
+        ActionOutcomeStatus::Cancelled
+    );
+    assert!(SdkActionResult::Cancelled.error_code().is_some());
 }
 
 #[test]

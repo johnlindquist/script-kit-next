@@ -733,8 +733,8 @@ fn copy_path_shows_error_for_unsupported_types() {
     let block = &content[copy_pos..content.len().min(copy_pos + 3000)];
 
     assert!(
-        block.contains("Cannot copy path for this item type"),
-        "copy_path should show error for unsupported types"
+        block.contains("extract_path_for_copy") || block.contains("resolve_file_action_path"),
+        "copy_path should use shared path extraction helper for type-specific errors"
     );
 }
 

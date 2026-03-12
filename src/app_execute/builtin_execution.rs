@@ -278,79 +278,42 @@ impl ScriptListApp {
             let entry_id = entry.id.clone();
             let entry_name = entry.name.clone();
             let query_owned = query_override.map(|s| s.to_string());
-            let confirm_sender = self.builtin_confirm_sender.clone();
 
-            // Spawn a task to open the confirm modal
-            // We need to do this async because we need App context for open_confirm_window
+            // Spawn a task to show confirmation modal via confirm_with_modal helper
             cx.spawn(async move |this, cx| {
-                let open_result = cx.update(|cx| {
-                    // Get main window bounds from native API for positioning
-                    let main_bounds = if let Some((x, y, w, h)) = platform::get_main_window_bounds()
-                    {
-                        gpui::Bounds {
-                            origin: gpui::Point {
-                                x: gpui::px(x as f32),
-                                y: gpui::px(y as f32),
-                            },
-                            size: gpui::Size {
-                                width: gpui::px(w as f32),
-                                height: gpui::px(h as f32),
-                            },
-                        }
-                    } else {
-                        // Fallback: use sensible defaults
-                        gpui::Bounds {
-                            origin: gpui::Point {
-                                x: gpui::px(100.0),
-                                y: gpui::px(100.0),
-                            },
-                            size: gpui::Size {
-                                width: gpui::px(600.0),
-                                height: gpui::px(400.0),
-                            },
-                        }
-                    };
-
-                    // Create the callback that sends result via channel
-                    let sender = confirm_sender.clone();
-                    let id_for_callback = entry_id.clone();
-                    let query_for_callback = query_owned.clone();
-                    let on_choice: ConfirmCallback = std::sync::Arc::new(move |confirmed| {
-                        tracing::info!(message = %&format!(
-                                "Confirmation modal result for {}: {}",
-                                id_for_callback,
-                                if confirmed { "confirmed" } else { "cancelled" }
-                            ),
-                        );
-                        // Send the result to be processed in render()
-                        let _ = sender.try_send((id_for_callback.clone(), confirmed, query_for_callback.clone()));
-                    });
-
-                    // Open the confirm modal
-                    let message = format!("Are you sure you want to {}?", entry_name);
-                    open_confirm_window(
-                        cx,
-                        main_bounds,
-                        None, // display_id - let system choose based on position
-                        message,
-                        Some("Yes".to_string()),
-                        Some("Cancel".to_string()),
-                        on_choice,
-                    )
-                });
-
-                // Show error toast if confirmation modal failed to open
-                let _ = this.update(cx, |this, cx| {
-                    if let Err(e) = open_result {
-                        tracing::error!(message = %&format!("Failed to open confirmation modal: {}", e));
-                        this.show_error_toast(
-                            format!("Failed to open confirmation dialog: {}", e),
-                            cx,
-                        );
-                    } else {
-                        cx.notify();
+                let message = format!("Are you sure you want to {}?", entry_name);
+                match confirm_with_modal(cx, message, "Yes", "Cancel").await {
+                    Ok(true) => {
+                        let _ = this.update(cx, |this, cx| {
+                            this.handle_builtin_confirmation(
+                                entry_id,
+                                true,
+                                query_owned,
+                                cx,
+                            );
+                        });
                     }
-                });
+                    Ok(false) => {
+                        tracing::info!(
+                            builtin_id = %entry_id,
+                            "Builtin confirmation cancelled by user"
+                        );
+                    }
+                    Err(e) => {
+                        let _ = this.update(cx, |this, cx| {
+                            tracing::error!(
+                                builtin_id = %entry_id,
+                                error = %e,
+                                "failed to open confirmation modal"
+                            );
+                            this.show_error_toast_with_code(
+                                "Failed to open confirmation dialog",
+                                Some(crate::action_helpers::ERROR_MODAL_FAILED),
+                                cx,
+                            );
+                        });
+                    }
+                }
             })
             .detach();
 

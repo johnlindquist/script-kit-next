@@ -172,6 +172,33 @@ fn confirmation_flow_is_gated_by_config_requires_confirmation() {
     );
 }
 
+#[test]
+fn builtin_execution_uses_confirm_with_modal_not_direct_open() {
+    let execution_content = read("src/app_execute/builtin_execution.rs");
+
+    // Must NOT contain direct open_confirm_window calls — use confirm_with_modal instead
+    assert!(
+        !execution_content.contains("open_confirm_window("),
+        "builtin_execution.rs must not call open_confirm_window directly; use confirm_with_modal"
+    );
+
+    // Must use the shared confirm_with_modal helper
+    assert!(
+        execution_content.contains("confirm_with_modal("),
+        "builtin_execution.rs must use confirm_with_modal for confirmation dialogs"
+    );
+}
+
+#[test]
+fn builtin_confirmation_does_not_call_open_confirm_window() {
+    let content = builtin_confirmation_content();
+
+    assert!(
+        !content.contains("open_confirm_window("),
+        "builtin_confirmation.rs must not call open_confirm_window directly"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // confirm_with_modal helper — channel patterns
 // ---------------------------------------------------------------------------

@@ -173,6 +173,23 @@ pub const ERROR_CANCELLED: &str = "cancelled";
 /// No response channel available — no running script to receive the message.
 pub const ERROR_NO_SENDER: &str = "no_sender";
 
+/// High-level outcome status for any action dispatch.
+///
+/// Maps the transport-specific `SdkActionResult` variants into four
+/// coarse-grained buckets that callers can switch on without knowing
+/// channel internals.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActionOutcomeStatus {
+    /// The action completed successfully (message sent).
+    Success,
+    /// The action failed due to a transport or system error.
+    Error,
+    /// The user explicitly cancelled the operation.
+    Cancelled,
+    /// The action had nothing to do (no handler, no value).
+    NoEffect,
+}
+
 /// Result of attempting to trigger an SDK action.
 #[derive(Debug, Clone, PartialEq)]
 pub enum SdkActionResult {
@@ -195,6 +212,21 @@ impl SdkActionResult {
     /// Whether the action was successfully dispatched.
     pub fn is_sent(&self) -> bool {
         matches!(self, SdkActionResult::Sent)
+    }
+
+    /// Coarse-grained outcome status.
+    ///
+    /// Maps transport-specific variants to one of four buckets:
+    /// `Success`, `Error`, `Cancelled`, or `NoEffect`.
+    pub fn status(&self) -> ActionOutcomeStatus {
+        match self {
+            SdkActionResult::Sent => ActionOutcomeStatus::Success,
+            SdkActionResult::NoEffect => ActionOutcomeStatus::NoEffect,
+            SdkActionResult::Cancelled => ActionOutcomeStatus::Cancelled,
+            SdkActionResult::NoSender
+            | SdkActionResult::ChannelFull
+            | SdkActionResult::ChannelDisconnected => ActionOutcomeStatus::Error,
+        }
     }
 
     /// Stable error code for machine consumption, if this is a failure or cancellation.
@@ -230,6 +262,24 @@ impl SdkActionResult {
             )),
             SdkActionResult::ChannelDisconnected => {
                 Some("Action failed: script has exited".to_string())
+            }
+        }
+    }
+
+    /// Context-free user-facing message, if any.
+    ///
+    /// Unlike `error_message`, this does not require an action name and returns
+    /// a generic description suitable for logging or machine consumption.
+    /// Returns `None` for `Sent`, `NoEffect`, and `Cancelled`.
+    pub fn user_message(&self) -> Option<String> {
+        match self {
+            SdkActionResult::Sent | SdkActionResult::NoEffect | SdkActionResult::Cancelled => None,
+            SdkActionResult::NoSender => Some("No active script to receive the action".to_string()),
+            SdkActionResult::ChannelFull => {
+                Some("Response channel is busy — action dropped".to_string())
+            }
+            SdkActionResult::ChannelDisconnected => {
+                Some("Script has exited — action not delivered".to_string())
             }
         }
     }
