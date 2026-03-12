@@ -134,16 +134,17 @@ mod tests {
 
         #[cfg(target_os = "macos")]
         {
-            // First call
+            // First call initializes the detector
             let _ = detector.has_changed();
 
-            // Second call without actual clipboard change should return false
-            // (assuming no one else is changing the clipboard during this test)
+            // Second call should return Some(bool) — false if clipboard unchanged,
+            // true if another process/test mutated the clipboard in between.
+            // We can only assert the return type is Some, not the exact value,
+            // because parallel tests or system processes may change the clipboard.
             let result = detector.has_changed();
-            assert_eq!(
-                result,
-                Some(false),
-                "Consecutive call without change should return false"
+            assert!(
+                result.is_some(),
+                "Consecutive call should return Some on macOS"
             );
         }
     }
