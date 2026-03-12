@@ -50,8 +50,8 @@ impl Render for ScriptListApp {
         // Check for builtin confirmation modal completion
         // When user confirms/cancels a dangerous action (Quit, Shut Down, etc.),
         // the modal callback sends the result through this channel
-        if let Ok((entry_id, confirmed)) = self.builtin_confirm_receiver.try_recv() {
-            self.handle_builtin_confirmation(entry_id, confirmed, cx);
+        if let Ok((entry_id, confirmed, query_override)) = self.builtin_confirm_receiver.try_recv() {
+            self.handle_builtin_confirmation(entry_id, confirmed, query_override, cx);
         }
 
         // Check for inline chat escape (from built-in ChatPrompt)

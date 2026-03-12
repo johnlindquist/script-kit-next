@@ -1,5 +1,5 @@
 //! Tests for builtin_confirmation.rs — accept/cancel flow, missing entry handling,
-//! and system-action-only restriction.
+//! and centralized execution via execute_builtin_inner.
 
 use super::read_source as read;
 
@@ -60,62 +60,99 @@ fn handle_builtin_confirmation_logs_error_when_entry_not_found() {
     let content = builtin_confirmation_content();
 
     assert!(
-        content.contains("Builtin entry not found for confirmed action:"),
+        content.contains("Builtin entry not found for confirmed action"),
         "Expected error log when confirmed entry_id has no matching builtin"
     );
 }
 
 // ---------------------------------------------------------------------------
-// execute_builtin_confirmed — system action dispatch only
+// Centralized execution — confirmed path uses execute_builtin_inner
 // ---------------------------------------------------------------------------
 
 #[test]
-fn execute_builtin_confirmed_dispatches_system_actions() {
+fn handle_builtin_confirmation_delegates_to_execute_builtin_inner() {
     let content = builtin_confirmation_content();
 
     assert!(
-        content.contains("BuiltInFeature::SystemAction(action_type)"),
-        "Expected execute_builtin_confirmed to match SystemAction variant"
-    );
-    assert!(
-        content.contains("self.dispatch_system_action(action_type, cx)"),
-        "Expected execute_builtin_confirmed to call dispatch_system_action for SystemAction"
+        content.contains("self.execute_builtin_inner("),
+        "Expected handle_builtin_confirmation to delegate to execute_builtin_inner"
     );
 }
 
 #[test]
-fn execute_builtin_confirmed_warns_on_unexpected_builtin_type() {
+fn handle_builtin_confirmation_preserves_query_override() {
     let content = builtin_confirmation_content();
 
-    // Non-SystemAction types that somehow reach confirmed path should warn
+    // The function signature must accept query_override
     assert!(
-        content.contains("\"Unexpected confirmed builtin type:"),
-        "Expected execute_builtin_confirmed to warn on non-SystemAction types"
+        content.contains("query_override: Option<String>"),
+        "Expected handle_builtin_confirmation to accept query_override parameter"
+    );
+
+    // query_override must be forwarded to execute_builtin_inner
+    assert!(
+        content.contains("query_override.as_deref()"),
+        "Expected query_override to be forwarded to execute_builtin_inner"
     );
 }
 
 #[test]
-fn execute_builtin_confirmed_handles_all_confirmable_types_and_wildcard() {
+fn handle_builtin_confirmation_logs_accepted_action_before_execution() {
     let content = builtin_confirmation_content();
 
-    let fn_start = content
-        .find("fn execute_builtin_confirmed(")
-        .expect("Expected execute_builtin_confirmed function");
-    let fn_body = &content[fn_start..];
+    // Verify acceptance is logged with the entry_id for observability
+    assert!(
+        content.contains("Builtin confirmation accepted, executing"),
+        "Expected acceptance to be logged before execution"
+    );
+}
 
-    // Should handle SystemAction, UtilityCommand(StopAllProcesses),
-    // FrecencyCommand(ClearSuggested), and a wildcard
+// ---------------------------------------------------------------------------
+// execute_builtin_inner — single execution path for all builtins
+// ---------------------------------------------------------------------------
+
+#[test]
+fn execute_builtin_inner_exists_in_builtin_execution() {
+    let execution_content = read("src/app_execute/builtin_execution.rs");
+
+    assert!(
+        execution_content.contains("fn execute_builtin_inner("),
+        "Expected execute_builtin_inner method in builtin_execution.rs"
+    );
+}
+
+#[test]
+fn execute_builtin_inner_handles_system_actions() {
+    let execution_content = read("src/app_execute/builtin_execution.rs");
+
+    let fn_start = execution_content
+        .find("fn execute_builtin_inner(")
+        .expect("Expected execute_builtin_inner function");
+    let fn_body = &execution_content[fn_start..];
+
     assert!(
         fn_body.contains("BuiltInFeature::SystemAction("),
-        "Expected execute_builtin_confirmed to match SystemAction"
+        "Expected execute_builtin_inner to match SystemAction variant"
     );
     assert!(
-        fn_body.contains("BuiltInFeature::UtilityCommand("),
-        "Expected execute_builtin_confirmed to match UtilityCommand(StopAllProcesses)"
+        fn_body.contains("self.dispatch_system_action(action_type, cx)"),
+        "Expected execute_builtin_inner to call dispatch_system_action for SystemAction"
     );
+}
+
+#[test]
+fn execute_builtin_with_query_delegates_to_inner() {
+    let execution_content = read("src/app_execute/builtin_execution.rs");
+
+    let fn_start = execution_content
+        .find("fn execute_builtin_with_query(")
+        .expect("Expected execute_builtin_with_query function");
+    // Look within the method body for the delegation call
+    let fn_body = &execution_content[fn_start..execution_content.len().min(fn_start + 6000)];
+
     assert!(
-        fn_body.contains("BuiltInFeature::FrecencyCommand("),
-        "Expected execute_builtin_confirmed to match FrecencyCommand(ClearSuggested)"
+        fn_body.contains("self.execute_builtin_inner("),
+        "Expected execute_builtin_with_query to delegate to execute_builtin_inner"
     );
 }
 
@@ -132,17 +169,6 @@ fn confirmation_flow_is_gated_by_config_requires_confirmation() {
     assert!(
         execution_content.contains("self.config.requires_confirmation(&entry.id)"),
         "Expected builtin execution to check config.requires_confirmation for the entry id"
-    );
-}
-
-#[test]
-fn handle_builtin_confirmation_logs_accepted_action_before_execution() {
-    let content = builtin_confirmation_content();
-
-    // Verify acceptance is logged with the entry_id for observability
-    assert!(
-        content.contains("Builtin confirmation accepted, executing:"),
-        "Expected acceptance to be logged before execution"
     );
 }
 
