@@ -35,6 +35,9 @@ mod action_scriptlet_ranking;
 #[path = "source_audits/action_shortcut_alias.rs"]
 mod action_shortcut_alias;
 
+#[path = "source_audits/file_action_path_helpers.rs"]
+mod file_action_path_helpers;
+
 /// Regression guard: fails if the deleted monolithic `handle_action.rs` file
 /// reappears or if any `.rs` file under `src/` or `tests/` references the old
 /// monolith path. This prevents accidental resurrection of the pre-split handler.

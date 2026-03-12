@@ -638,6 +638,95 @@ fn test_pbcopy_unicode() {
 }
 
 // ============================================================================
+// ActionOutcomeStatus tests
+// ============================================================================
+
+#[test]
+fn status_maps_sent_to_success() {
+    assert_eq!(SdkActionResult::Sent.status(), ActionOutcomeStatus::Success);
+}
+
+#[test]
+fn status_maps_no_effect_to_no_effect() {
+    assert_eq!(
+        SdkActionResult::NoEffect.status(),
+        ActionOutcomeStatus::NoEffect
+    );
+}
+
+#[test]
+fn status_maps_cancelled_to_cancelled() {
+    assert_eq!(
+        SdkActionResult::Cancelled.status(),
+        ActionOutcomeStatus::Cancelled
+    );
+}
+
+#[test]
+fn status_maps_error_variants_to_error() {
+    assert_eq!(
+        SdkActionResult::NoSender.status(),
+        ActionOutcomeStatus::Error
+    );
+    assert_eq!(
+        SdkActionResult::ChannelFull.status(),
+        ActionOutcomeStatus::Error
+    );
+    assert_eq!(
+        SdkActionResult::ChannelDisconnected.status(),
+        ActionOutcomeStatus::Error
+    );
+}
+
+#[test]
+fn action_outcome_status_is_copy() {
+    // Verify Copy semantics work (important for pattern matching / logging)
+    let s = ActionOutcomeStatus::Success;
+    let s2 = s;
+    assert_eq!(s, s2);
+}
+
+// ============================================================================
+// user_message tests
+// ============================================================================
+
+#[test]
+fn user_message_none_for_success_variants() {
+    assert!(SdkActionResult::Sent.user_message().is_none());
+    assert!(SdkActionResult::NoEffect.user_message().is_none());
+    assert!(SdkActionResult::Cancelled.user_message().is_none());
+}
+
+#[test]
+fn user_message_present_for_error_variants() {
+    assert!(SdkActionResult::NoSender.user_message().is_some());
+    assert!(SdkActionResult::ChannelFull.user_message().is_some());
+    assert!(SdkActionResult::ChannelDisconnected
+        .user_message()
+        .is_some());
+}
+
+#[test]
+fn user_message_never_contains_variant_names() {
+    for variant in &[
+        SdkActionResult::NoSender,
+        SdkActionResult::ChannelFull,
+        SdkActionResult::ChannelDisconnected,
+    ] {
+        let msg = variant.user_message().unwrap();
+        assert!(!msg.contains("NoSender"), "leaked variant name in: {msg}");
+        assert!(
+            !msg.contains("ChannelFull"),
+            "leaked variant name in: {msg}"
+        );
+        assert!(
+            !msg.contains("ChannelDisconnected"),
+            "leaked variant name in: {msg}"
+        );
+    }
+}
+
+// ============================================================================
 // Error code tests
 // ============================================================================
 

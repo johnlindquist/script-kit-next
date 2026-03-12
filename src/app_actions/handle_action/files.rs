@@ -5,6 +5,29 @@
 // copy_filename, __cancel__.
 
 impl ScriptListApp {
+    /// Resolve the target path for a file action.
+    ///
+    /// Priority: `file_search_actions_path` (consumed) > selected SearchResult.
+    /// The `extractor` callback is used for SearchResult-based path extraction so
+    /// callers can choose `extract_path_for_reveal` vs `extract_path_for_copy`.
+    fn resolve_file_action_path<F>(
+        &mut self,
+        extractor: F,
+    ) -> Result<std::path::PathBuf, Option<gpui::SharedString>>
+    where
+        F: FnOnce(
+            Option<&scripts::SearchResult>,
+        ) -> Result<std::path::PathBuf, crate::action_helpers::PathExtractionError>,
+    {
+        // file_search_actions_path takes priority (consumed on use)
+        if let Some(path) = self.file_search_actions_path.take() {
+            return Ok(std::path::PathBuf::from(path));
+        }
+        // Fall back to main menu selected result via the shared extractor
+        let selected = self.get_selected_result();
+        extractor(selected.as_ref()).map_err(|e| Some(e.message()))
+    }
+
     /// Handle file-related actions. Returns `true` if handled.
     fn handle_file_action(
         &mut self,
@@ -15,26 +38,10 @@ impl ScriptListApp {
         match action_id {
             "reveal_in_finder" => {
                 tracing::info!(category = "UI", "reveal in Finder action");
-                // First check if we have a file search path (takes priority)
-                let path_opt = if let Some(path) = self.file_search_actions_path.take() {
-                    tracing::info!(category = "UI", path = %path, "reveal in Finder (file search)");
-                    Some(std::path::PathBuf::from(path))
-                } else if let Some(result) = self.get_selected_result() {
-                    // Fall back to main menu selected result
-                    match result {
-                        scripts::SearchResult::Script(m) => Some(m.script.path.clone()),
-                        scripts::SearchResult::App(m) => Some(m.app.path.clone()),
-                        scripts::SearchResult::Agent(m) => Some(m.agent.path.clone()),
-                        scripts::SearchResult::Scriptlet(_) => None,
-                        scripts::SearchResult::BuiltIn(_) => None,
-                        scripts::SearchResult::Window(_) => None,
-                        scripts::SearchResult::Fallback(_) => None,
-                    }
-                } else {
-                    None
-                };
+                let path_result =
+                    self.resolve_file_action_path(crate::action_helpers::extract_path_for_reveal);
 
-                if let Some(path) = path_opt {
+                if let Ok(path) = path_result {
                     let reveal_result_rx = self.reveal_in_finder_with_feedback_async(&path);
                     let trace_id = trace_id.to_string();
                     let start = std::time::Instant::now();
@@ -76,59 +83,38 @@ impl ScriptListApp {
                     })
                     .detach();
                 } else {
-                    self.show_error_toast(
-                        "Cannot reveal this item type in Finder",
-                        cx,
-                    );
+                    let msg = path_result
+                        .err()
+                        .flatten()
+                        .unwrap_or_else(|| gpui::SharedString::from("Cannot reveal this item type in Finder"));
+                    self.show_error_toast(msg.to_string(), cx);
                 }
                 true
             }
             "copy_path" => {
                 tracing::info!(category = "UI", "copy path action");
-                // First check if we have a file search path (takes priority)
-                let path_str = if let Some(path) = self.file_search_actions_path.take() {
-                    tracing::info!(category = "UI", path = %path, "copy path (file search)");
-                    Some(path)
-                } else if let Some(result) = self.get_selected_result() {
-                    // Fall back to main menu selected result
-                    let path_opt = match result {
-                        scripts::SearchResult::Script(m) => {
-                            Some(m.script.path.to_string_lossy().to_string())
-                        }
-                        scripts::SearchResult::App(m) => {
-                            Some(m.app.path.to_string_lossy().to_string())
-                        }
-                        scripts::SearchResult::Agent(m) => {
-                            Some(m.agent.path.to_string_lossy().to_string())
-                        }
-                        scripts::SearchResult::Scriptlet(_) => None,
-                        scripts::SearchResult::BuiltIn(_) => None,
-                        scripts::SearchResult::Window(_) => None,
-                        scripts::SearchResult::Fallback(_) => None,
-                    };
-                    if path_opt.is_none() {
-                        self.show_error_toast(
-                            "Cannot copy path for this item type",
+                let path_result =
+                    self.resolve_file_action_path(crate::action_helpers::extract_path_for_copy);
+
+                match path_result {
+                    Ok(path) => {
+                        let path_str = path.to_string_lossy().to_string();
+                        tracing::info!(category = "UI", path = %path_str, "copying path to clipboard");
+                        self.copy_to_clipboard_with_feedback(
+                            &path_str,
+                            format!("Copied: {}", path_str),
+                            true,
                             cx,
                         );
                     }
-                    path_opt
-                } else {
-                    self.show_error_toast(
-                        selection_required_message_for_action(action_id),
-                        cx,
-                    );
-                    None
-                };
-
-                if let Some(path_str) = path_str {
-                    tracing::info!(category = "UI", path = %path_str, "copying path to clipboard");
-                    self.copy_to_clipboard_with_feedback(
-                        &path_str,
-                        format!("Copied: {}", path_str),
-                        true,
-                        cx,
-                    );
+                    Err(msg) => {
+                        let error_msg = msg
+                            .map(|m| m.to_string())
+                            .unwrap_or_else(|| {
+                                selection_required_message_for_action(action_id).to_string()
+                            });
+                        self.show_error_toast(error_msg, cx);
+                    }
                 }
                 true
             }

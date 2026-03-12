@@ -226,11 +226,6 @@ struct ScriptListApp {
     focus_coordinator: focus_coordinator::FocusCoordinator,
     // Show warning banner when bun is not available
     show_bun_warning: bool,
-    // Builtin confirmation channel - for modal callback to signal completion
-    // When a dangerous builtin requires confirmation, we open a modal and the callback
-    // sends (entry_id, confirmed, query_override) through this channel
-    builtin_confirm_sender: async_channel::Sender<(String, bool, Option<String>)>,
-    builtin_confirm_receiver: async_channel::Receiver<(String, bool, Option<String>)>,
     // Scroll stabilization: track last scrolled-to index for each scroll handle
     #[allow(dead_code)]
     last_scrolled_main: Option<usize>,
