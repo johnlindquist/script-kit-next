@@ -128,9 +128,17 @@ impl ScriptListApp {
     fn dispatch_system_action(
         &mut self,
         action_type: &builtins::SystemActionType,
+        trace_id: &str,
         cx: &mut Context<Self>,
     ) {
         let start = std::time::Instant::now();
+
+        tracing::info!(
+            action_type = ?action_type,
+            trace_id = %trace_id,
+            status = "dispatched",
+            "system_action_dispatch"
+        );
 
         #[cfg(target_os = "macos")]
         {
@@ -165,6 +173,7 @@ impl ScriptListApp {
                 SystemActionType::TestConfirmation => {
                     tracing::info!(
                         action_type = ?action_type,
+                        trace_id = %trace_id,
                         status = "success",
                         duration_ms = start.elapsed().as_millis() as u64,
                         "system_action_dispatch"
@@ -184,6 +193,7 @@ impl ScriptListApp {
                 SystemActionType::QuitScriptKit => {
                     tracing::info!(
                         action_type = ?action_type,
+                        trace_id = %trace_id,
                         status = "success",
                         duration_ms = start.elapsed().as_millis() as u64,
                         "system_action_dispatch"
@@ -221,7 +231,7 @@ impl ScriptListApp {
                 }
             };
 
-            self.handle_system_action_result(result, action_type, start.elapsed(), cx);
+            self.handle_system_action_result(result, action_type, trace_id, start.elapsed(), cx);
         }
 
         #[cfg(not(target_os = "macos"))]
@@ -229,6 +239,7 @@ impl ScriptListApp {
             let _ = action_type;
             let elapsed = start.elapsed();
             tracing::warn!(
+                trace_id = %trace_id,
                 status = "error",
                 error_code = crate::action_helpers::ERROR_UNSUPPORTED_PLATFORM,
                 duration_ms = elapsed.as_millis() as u64,
@@ -243,6 +254,7 @@ impl ScriptListApp {
         &mut self,
         result: Result<(), String>,
         action_type: &builtins::SystemActionType,
+        trace_id: &str,
         elapsed: std::time::Duration,
         cx: &mut Context<Self>,
     ) {
@@ -251,6 +263,7 @@ impl ScriptListApp {
             Ok(()) => {
                 tracing::info!(
                     action_type = ?action_type,
+                    trace_id = %trace_id,
                     status = "success",
                     duration_ms,
                     "system_action_dispatch"
@@ -266,6 +279,7 @@ impl ScriptListApp {
             Err(e) => {
                 tracing::error!(
                     action_type = ?action_type,
+                    trace_id = %trace_id,
                     status = "error",
                     error_code = crate::action_helpers::ERROR_LAUNCH_FAILED,
                     duration_ms,
@@ -323,6 +337,7 @@ impl ScriptListApp {
                                 entry_id,
                                 true,
                                 query_owned,
+                                &trace_id_owned,
                                 cx,
                             );
                         });
@@ -330,6 +345,8 @@ impl ScriptListApp {
                     Ok(false) => {
                         tracing::info!(
                             builtin_id = %entry_id,
+                            trace_id = %trace_id_owned,
+                            status = "cancelled",
                             "Builtin confirmation cancelled by user"
                         );
                     }
@@ -337,6 +354,7 @@ impl ScriptListApp {
                         let _ = this.update(cx, |this, cx| {
                             tracing::error!(
                                 builtin_id = %entry_id,
+                                trace_id = %trace_id_owned,
                                 error = %e,
                                 "failed to open confirmation modal"
                             );
@@ -784,7 +802,7 @@ impl ScriptListApp {
             // =========================================================================
             builtins::BuiltInFeature::SystemAction(action_type) => {
                 tracing::info!(message = %&format!("Executing system action: {:?}", action_type));
-                self.dispatch_system_action(action_type, cx);
+                self.dispatch_system_action(action_type, trace_id, cx);
             }
 
             // NOTE: Window Actions removed - now handled by window-management extension

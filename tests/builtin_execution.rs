@@ -105,7 +105,7 @@ fn action_with_handler_sends_action_triggered_with_correct_fields() {
     let (tx, rx) = mpsc::sync_channel::<protocol::Message>(10);
     let action = make_action("confirm_delete", true, Some("item_99"));
 
-    let result = trigger_sdk_action("confirm_delete", &action, "search query", Some(&tx));
+    let result = trigger_sdk_action("confirm_delete", &action, "search query", Some(&tx), "test-trace");
     assert_eq!(result, SdkActionResult::Sent);
 
     match rx.try_recv().expect("expected message") {
@@ -127,7 +127,7 @@ fn action_without_handler_submits_value_as_submit_message() {
     let (tx, rx) = mpsc::sync_channel::<protocol::Message>(10);
     let action = make_action("pick_option", false, Some("option_a"));
 
-    let result = trigger_sdk_action("pick_option", &action, "", Some(&tx));
+    let result = trigger_sdk_action("pick_option", &action, "", Some(&tx), "test-trace");
     assert_eq!(result, SdkActionResult::Sent);
 
     match rx.try_recv().expect("expected message") {
@@ -192,7 +192,7 @@ fn full_channel_is_detected_and_reported() {
     let (tx, _rx) = mpsc::sync_channel::<protocol::Message>(0);
     let action = make_action("trigger", true, None);
 
-    let result = trigger_sdk_action("trigger", &action, "", Some(&tx));
+    let result = trigger_sdk_action("trigger", &action, "", Some(&tx), "test-trace");
     assert_eq!(result, SdkActionResult::ChannelFull);
     assert!(!result.is_sent());
 }
@@ -203,7 +203,7 @@ fn disconnected_channel_is_detected_and_reported() {
     drop(rx);
     let action = make_action("trigger", true, None);
 
-    let result = trigger_sdk_action("trigger", &action, "", Some(&tx));
+    let result = trigger_sdk_action("trigger", &action, "", Some(&tx), "test-trace");
     assert_eq!(result, SdkActionResult::ChannelDisconnected);
     assert!(!result.is_sent());
 }

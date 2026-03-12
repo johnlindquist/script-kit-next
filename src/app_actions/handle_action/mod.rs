@@ -511,8 +511,8 @@ impl ScriptListApp {
                         if o.was_handled() {
                             ("scriptlet", o)
                         } else {
-                            // SDK actions as final fallback
-                            ("sdk_fallback", self.trigger_sdk_action_internal(&action_id_stripped))
+                            // SDK actions as final fallback — thread trace_id from dctx
+                            ("sdk_fallback", self.trigger_sdk_action_with_trace(&action_id_stripped, &dctx.trace_id))
                         }
                     }
                 }

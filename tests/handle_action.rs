@@ -36,7 +36,7 @@ fn sdk_action_with_handler_sends_action_triggered_message() {
     let (tx, rx) = mpsc::sync_channel::<protocol::Message>(10);
     let action = make_action("refresh", true, Some("all"));
 
-    let result = trigger_sdk_action("refresh", &action, "query text", Some(&tx));
+    let result = trigger_sdk_action("refresh", &action, "query text", Some(&tx), "test-trace");
     assert_eq!(result, SdkActionResult::Sent);
 
     match rx.try_recv().expect("expected a message") {
@@ -58,7 +58,7 @@ fn sdk_action_without_handler_submits_value() {
     let (tx, rx) = mpsc::sync_channel::<protocol::Message>(10);
     let action = make_action("select_item", false, Some("item_42"));
 
-    let result = trigger_sdk_action("select_item", &action, "", Some(&tx));
+    let result = trigger_sdk_action("select_item", &action, "", Some(&tx), "test-trace");
     assert_eq!(result, SdkActionResult::Sent);
 
     match rx.try_recv().expect("expected a message") {
@@ -80,7 +80,7 @@ fn sdk_action_on_full_channel_returns_error_with_message() {
     let (tx, _rx) = mpsc::sync_channel::<protocol::Message>(0);
     let action = make_action("slow_action", true, None);
 
-    let result = trigger_sdk_action("slow_action", &action, "", Some(&tx));
+    let result = trigger_sdk_action("slow_action", &action, "", Some(&tx), "test-trace");
     assert_eq!(result, SdkActionResult::ChannelFull);
 
     let msg = result
@@ -99,7 +99,7 @@ fn sdk_action_on_disconnected_channel_returns_error_with_message() {
 
     let action = make_action("post_exit", true, Some("val"));
 
-    let result = trigger_sdk_action("post_exit", &action, "", Some(&tx));
+    let result = trigger_sdk_action("post_exit", &action, "", Some(&tx), "test-trace");
     assert_eq!(result, SdkActionResult::ChannelDisconnected);
 
     let msg = result
@@ -115,7 +115,7 @@ fn sdk_action_on_disconnected_channel_returns_error_with_message() {
 fn sdk_action_without_sender_returns_no_sender_error() {
     let action = make_action("orphan", true, Some("val"));
 
-    let result = trigger_sdk_action("orphan", &action, "", None);
+    let result = trigger_sdk_action("orphan", &action, "", None, "test-trace");
     assert_eq!(result, SdkActionResult::NoSender);
     assert!(result.error_message("orphan").is_some());
 }
@@ -129,7 +129,7 @@ fn sdk_action_with_no_handler_and_no_value_returns_no_effect() {
     let (tx, _rx) = mpsc::sync_channel::<protocol::Message>(10);
     let action = make_action("noop", false, None);
 
-    let result = trigger_sdk_action("noop", &action, "", Some(&tx));
+    let result = trigger_sdk_action("noop", &action, "", Some(&tx), "test-trace");
     assert_eq!(result, SdkActionResult::NoEffect);
     // NoEffect is not an error — no toast should be shown
     assert!(result.error_message("noop").is_none());
@@ -354,7 +354,7 @@ fn sdk_action_triggered_includes_current_input_text() {
     let (tx, rx) = mpsc::sync_channel::<protocol::Message>(10);
     let action = make_action("search", true, None);
 
-    let result = trigger_sdk_action("search", &action, "hello world", Some(&tx));
+    let result = trigger_sdk_action("search", &action, "hello world", Some(&tx), "test-trace");
     assert_eq!(result, SdkActionResult::Sent);
 
     match rx.try_recv().expect("expected a message") {
@@ -373,7 +373,7 @@ fn sdk_action_triggered_with_empty_input_and_no_value() {
     let (tx, rx) = mpsc::sync_channel::<protocol::Message>(10);
     let action = make_action("bare", true, None);
 
-    let result = trigger_sdk_action("bare", &action, "", Some(&tx));
+    let result = trigger_sdk_action("bare", &action, "", Some(&tx), "test-trace");
     assert_eq!(result, SdkActionResult::Sent);
 
     match rx.try_recv().expect("expected a message") {
