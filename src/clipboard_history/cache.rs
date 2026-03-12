@@ -245,6 +245,11 @@ pub fn clear_all_caches() {
 mod tests {
     use super::*;
     use crate::clipboard_history::types::ContentType;
+    use parking_lot::Mutex as ParkingMutex;
+
+    /// All cache tests must hold this lock to prevent interference
+    /// from parallel test execution on the shared global ENTRY_CACHE.
+    static TEST_LOCK: ParkingMutex<()> = ParkingMutex::new(());
 
     fn make_meta(id: &str, timestamp: i64, pinned: bool) -> ClipboardEntryMeta {
         ClipboardEntryMeta {
@@ -262,7 +267,7 @@ mod tests {
 
     #[test]
     fn test_upsert_new_entry() {
-        // Clear cache first
+        let _guard = TEST_LOCK.lock();
         invalidate_entry_cache();
 
         let entry = make_meta("test1", 1000, false);
@@ -275,6 +280,7 @@ mod tests {
 
     #[test]
     fn test_upsert_updates_existing() {
+        let _guard = TEST_LOCK.lock();
         invalidate_entry_cache();
 
         // Add initial entry
@@ -290,6 +296,7 @@ mod tests {
 
     #[test]
     fn test_upsert_maintains_pinned_order() {
+        let _guard = TEST_LOCK.lock();
         invalidate_entry_cache();
 
         // Add unpinned entry first
@@ -306,6 +313,7 @@ mod tests {
 
     #[test]
     fn test_remove_entry_from_cache() {
+        let _guard = TEST_LOCK.lock();
         invalidate_entry_cache();
 
         upsert_entry_in_cache(make_meta("to_remove", 1000, false));
@@ -320,6 +328,7 @@ mod tests {
 
     #[test]
     fn test_update_pin_status() {
+        let _guard = TEST_LOCK.lock();
         invalidate_entry_cache();
 
         upsert_entry_in_cache(make_meta("entry1", 2000, false));
@@ -336,6 +345,7 @@ mod tests {
 
     #[test]
     fn test_update_ocr_text_in_cache_sets_text_when_entry_exists() {
+        let _guard = TEST_LOCK.lock();
         init_cache_timestamp();
         invalidate_entry_cache();
 
