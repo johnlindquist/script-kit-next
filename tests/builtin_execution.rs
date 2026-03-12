@@ -264,7 +264,10 @@ fn status_maps_all_variants_to_correct_buckets() {
 fn status_and_error_code_are_consistent() {
     // Success/NoEffect: no error code
     for variant in &[SdkActionResult::Sent, SdkActionResult::NoEffect] {
-        assert!(variant.error_code().is_none(), "success variants have no error code");
+        assert!(
+            variant.error_code().is_none(),
+            "success variants have no error code"
+        );
     }
     // Error variants: have error code, status is Error
     for variant in &[
@@ -273,7 +276,10 @@ fn status_and_error_code_are_consistent() {
         SdkActionResult::ChannelDisconnected,
     ] {
         assert_eq!(variant.status(), ActionOutcomeStatus::Error);
-        assert!(variant.error_code().is_some(), "error variants must have error code");
+        assert!(
+            variant.error_code().is_some(),
+            "error variants must have error code"
+        );
     }
     // Cancelled: has error code but status is Cancelled (not Error)
     assert_eq!(
