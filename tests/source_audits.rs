@@ -3,42 +3,10 @@
 //! These tests read source files and assert the presence of expected patterns,
 //! ensuring coding conventions are maintained across the codebase.
 
-use std::fs;
-
-/// Read a source file and panic with a clear message on failure.
-pub fn read_source(path: &str) -> String {
-    fs::read_to_string(path).unwrap_or_else(|_| panic!("Failed to read {path}"))
-}
-
-/// Count non-overlapping occurrences of `needle` in `haystack`.
-pub fn count_occurrences(haystack: &str, needle: &str) -> usize {
-    haystack.match_indices(needle).count()
-}
-
-/// Read and concatenate all modular handle_action source files.
-pub fn read_all_handle_action_sources() -> String {
-    let dir = "src/app_actions/handle_action";
-    let mut combined = String::new();
-    if let Ok(entries) = fs::read_dir(dir) {
-        let mut paths: Vec<_> = entries
-            .filter_map(|e| e.ok())
-            .map(|e| e.path())
-            .filter(|p| p.extension().is_some_and(|ext| ext == "rs"))
-            .collect();
-        paths.sort();
-        for path in paths {
-            if let Ok(content) = fs::read_to_string(&path) {
-                combined.push_str(&content);
-                combined.push('\n');
-            }
-        }
-    }
-    assert!(
-        !combined.is_empty(),
-        "Failed to read any handle_action module files from {dir}/"
-    );
-    combined
-}
+// Re-export shared test utilities so submodules can use `super::*`.
+pub use script_kit_gpui::test_utils::{
+    count_occurrences, read_all_handle_action_sources, read_source, LIVE_HANDLE_ACTION_FILES,
+};
 
 #[path = "source_audits/builtin_confirmation.rs"]
 mod builtin_confirmation;
@@ -66,3 +34,71 @@ mod action_scriptlet_ranking;
 
 #[path = "source_audits/action_shortcut_alias.rs"]
 mod action_shortcut_alias;
+
+/// Regression guard: fails if the deleted monolithic `handle_action.rs` file
+/// reappears or if any `.rs` file under `src/` or `tests/` references the old
+/// monolith path. This prevents accidental resurrection of the pre-split handler.
+#[cfg(test)]
+mod no_old_monolith {
+    use std::path::Path;
+
+    /// The old monolithic handler file must not exist on disk.
+    #[test]
+    fn test_no_old_monolith_file_exists() {
+        let old_monolith = Path::new("src/app_actions/handle_action.rs");
+        assert!(
+            !old_monolith.exists(),
+            "Old monolithic handler file still exists at {old_monolith:?}. \
+             It was replaced by the modular split under src/app_actions/handle_action/."
+        );
+    }
+
+    /// No `.rs` source file should contain a string-literal reference to the
+    /// old monolith path (`handle_action.rs` as a bare file, not the directory).
+    #[test]
+    fn test_no_old_monolith_references() {
+        let needle = "handle_action.rs";
+        let mut violations = Vec::new();
+
+        for dir in &["src", "tests"] {
+            collect_rs_files_with_needle(Path::new(dir), needle, &mut violations);
+        }
+
+        // Exclude this very test file — it legitimately mentions the old path.
+        let self_path = Path::new("tests/source_audits.rs")
+            .canonicalize()
+            .unwrap_or_default();
+        violations.retain(|v: &String| {
+            let canon = Path::new(v.split(':').next().unwrap_or(""))
+                .canonicalize()
+                .unwrap_or_default();
+            canon != self_path
+        });
+
+        assert!(
+            violations.is_empty(),
+            "Found references to the deleted monolith path `{needle}` in:\n{}",
+            violations.join("\n")
+        );
+    }
+
+    fn collect_rs_files_with_needle(dir: &Path, needle: &str, out: &mut Vec<String>) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                collect_rs_files_with_needle(&path, needle, out);
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    for (i, line) in content.lines().enumerate() {
+                        if line.contains(needle) {
+                            out.push(format!("{}:{}: {}", path.display(), i + 1, line.trim()));
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

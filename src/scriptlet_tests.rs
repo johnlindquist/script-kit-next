@@ -1,9 +1,0 @@
-include!("scriptlet_tests/chunk_01.rs");
-include!("scriptlet_tests/chunk_02.rs");
-include!("scriptlet_tests/chunk_03.rs");
-include!("scriptlet_tests/chunk_04.rs");
-include!("scriptlet_tests/chunk_05.rs");
-include!("scriptlet_tests/chunk_06.rs");
-include!("scriptlet_tests/chunk_07.rs");
-include!("scriptlet_tests/chunk_08.rs");
-include!("scriptlet_tests/chunk_09.rs");
