@@ -130,6 +130,8 @@ impl ScriptListApp {
         action_type: &builtins::SystemActionType,
         cx: &mut Context<Self>,
     ) {
+        let start = std::time::Instant::now();
+
         #[cfg(target_os = "macos")]
         {
             use builtins::SystemActionType;
@@ -161,6 +163,12 @@ impl ScriptListApp {
                 // Dev/test actions
                 #[cfg(debug_assertions)]
                 SystemActionType::TestConfirmation => {
+                    tracing::info!(
+                        action_type = ?action_type,
+                        status = "success",
+                        duration_ms = start.elapsed().as_millis() as u64,
+                        "system_action_dispatch"
+                    );
                     self.toast_manager.push(
                         components::toast::Toast::success(
                             "Confirmation test passed!",
@@ -174,7 +182,12 @@ impl ScriptListApp {
 
                 // App control
                 SystemActionType::QuitScriptKit => {
-                    tracing::info!(message = %"Quitting Script Kit");
+                    tracing::info!(
+                        action_type = ?action_type,
+                        status = "success",
+                        duration_ms = start.elapsed().as_millis() as u64,
+                        "system_action_dispatch"
+                    );
                     cx.quit();
                     return;
                 }
@@ -208,13 +221,19 @@ impl ScriptListApp {
                 }
             };
 
-            self.handle_system_action_result(result, action_type, cx);
+            self.handle_system_action_result(result, action_type, start.elapsed(), cx);
         }
 
         #[cfg(not(target_os = "macos"))]
         {
             let _ = action_type;
-            tracing::warn!(message = %"System actions only supported on macOS");
+            let elapsed = start.elapsed();
+            tracing::warn!(
+                status = "error",
+                error_code = crate::action_helpers::ERROR_UNSUPPORTED_PLATFORM,
+                duration_ms = elapsed.as_millis() as u64,
+                "system_action_dispatch"
+            );
             self.show_unsupported_platform_toast("System actions", cx);
         }
     }
@@ -224,11 +243,18 @@ impl ScriptListApp {
         &mut self,
         result: Result<(), String>,
         action_type: &builtins::SystemActionType,
+        elapsed: std::time::Duration,
         cx: &mut Context<Self>,
     ) {
+        let duration_ms = elapsed.as_millis() as u64;
         match result {
             Ok(()) => {
-                tracing::info!(message = %"System action executed successfully");
+                tracing::info!(
+                    action_type = ?action_type,
+                    status = "success",
+                    duration_ms,
+                    "system_action_dispatch"
+                );
                 if let Some(message) = self.system_action_feedback_message(action_type) {
                     cx.notify();
                     self.show_hud(message, Some(HUD_MEDIUM_MS), cx);
@@ -238,7 +264,14 @@ impl ScriptListApp {
                 }
             }
             Err(e) => {
-                tracing::error!(message = %&format!("System action failed: {}", e));
+                tracing::error!(
+                    action_type = ?action_type,
+                    status = "error",
+                    error_code = crate::action_helpers::ERROR_LAUNCH_FAILED,
+                    duration_ms,
+                    error = %e,
+                    "system_action_dispatch"
+                );
                 self.show_error_toast(format!("System action failed: {}", e), cx);
             }
         }
@@ -1305,6 +1338,7 @@ impl ScriptListApp {
             category = "BUILTIN",
             trace_id = %trace_id,
             builtin_id = %entry.id,
+            builtin_name = %entry.name,
             status = "completed",
             duration_ms = start.elapsed().as_millis() as u64,
             "Builtin execution completed"

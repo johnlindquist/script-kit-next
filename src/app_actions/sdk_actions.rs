@@ -9,6 +9,16 @@ impl ScriptListApp {
                     self.response_sender.as_ref(),
                 );
 
+                let status = result.status();
+                let error_code = result.error_code();
+                tracing::info!(
+                    action_name = %action_name,
+                    status = %status,
+                    error_code = error_code,
+                    handler = "sdk",
+                    "SDK action outcome"
+                );
+
                 // Surface send errors as Toast so the user knows the action failed
                 if let Some(msg) = result.error_message(action_name) {
                     self.toast_manager.push(
