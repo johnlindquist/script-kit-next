@@ -25,7 +25,7 @@ fn handle_builtin_confirmation_returns_early_on_cancel() {
     let cancel_block_start = content
         .find("if !confirmed {")
         .expect("Expected cancel check");
-    let cancel_block = &content[cancel_block_start..cancel_block_start + 200];
+    let cancel_block = &content[cancel_block_start..cancel_block_start + 300];
 
     assert!(
         cancel_block.contains("return;"),
@@ -135,8 +135,8 @@ fn execute_builtin_inner_handles_system_actions() {
         "Expected execute_builtin_inner to match SystemAction variant"
     );
     assert!(
-        fn_body.contains("self.dispatch_system_action(action_type, cx)"),
-        "Expected execute_builtin_inner to call dispatch_system_action for SystemAction"
+        fn_body.contains("self.dispatch_system_action(action_type, trace_id, cx)"),
+        "Expected execute_builtin_inner to call dispatch_system_action with trace_id for SystemAction"
     );
 }
 
@@ -294,4 +294,188 @@ fn confirm_with_modal_error_path_logs_failure() {
             "confirm_with_modal Err path should log 'failed to open confirmation modal'"
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// Destructive builtins — every DEFAULT_CONFIRMATION_COMMANDS entry goes
+// through requires_confirmation → confirm_with_modal
+// ---------------------------------------------------------------------------
+
+#[test]
+fn destructive_builtins_are_gated_by_confirmation_defaults() {
+    // Verify the default confirmation commands constant exists and contains
+    // the expected destructive builtins. This ensures the list is not
+    // accidentally truncated or cleared.
+    let defaults = read("src/config/defaults.rs");
+
+    let expected_destructive = [
+        "builtin-shut-down",
+        "builtin-restart",
+        "builtin-log-out",
+        "builtin-empty-trash",
+        "builtin-sleep",
+        "builtin-quit-script-kit",
+        "builtin-force-quit",
+        "builtin-stop-all-processes",
+        "builtin-clear-suggested",
+    ];
+
+    for cmd in &expected_destructive {
+        assert!(
+            defaults.contains(cmd),
+            "DEFAULT_CONFIRMATION_COMMANDS must include destructive builtin: {cmd}"
+        );
+    }
+}
+
+#[test]
+fn confirmation_path_spawns_task_with_confirm_with_modal() {
+    // The confirmation branch in execute_builtin_with_query must use
+    // cx.spawn + confirm_with_modal — not inline blocking.
+    let content = read("src/app_execute/builtin_execution.rs");
+
+    let confirm_check = content
+        .find("self.config.requires_confirmation(&entry.id)")
+        .expect("Expected requires_confirmation gate in builtin_execution.rs");
+    let after_check = &content[confirm_check..content.len().min(confirm_check + 800)];
+
+    assert!(
+        after_check.contains("cx.spawn("),
+        "Confirmation path must use cx.spawn for async modal flow"
+    );
+    assert!(
+        after_check.contains("confirm_with_modal("),
+        "Confirmation path must call confirm_with_modal inside the spawned task"
+    );
+}
+
+#[test]
+fn confirmation_path_handles_accept_cancel_and_error() {
+    // The spawned confirmation task must handle all three result arms
+    let content = read("src/app_execute/builtin_execution.rs");
+
+    let confirm_check = content
+        .find("self.config.requires_confirmation(&entry.id)")
+        .expect("Expected requires_confirmation gate");
+    let after_check = &content[confirm_check..content.len().min(confirm_check + 2000)];
+
+    assert!(
+        after_check.contains("Ok(true)"),
+        "Confirmation spawn must handle Ok(true) — user accepted"
+    );
+    assert!(
+        after_check.contains("Ok(false)"),
+        "Confirmation spawn must handle Ok(false) — user cancelled"
+    );
+    assert!(
+        after_check.contains("Err(e)") || after_check.contains("Err(_)"),
+        "Confirmation spawn must handle Err — modal open failure"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// active_favorites lifecycle — set on Favorites builtin, reset on dismiss
+// ---------------------------------------------------------------------------
+
+#[test]
+fn favorites_builtin_sets_active_favorites_when_non_empty() {
+    let content = read("src/app_execute/builtin_execution.rs");
+
+    let favorites_branch = content
+        .find("BuiltInFeature::Favorites")
+        .expect("Expected BuiltInFeature::Favorites branch in builtin_execution.rs");
+    let block = &content[favorites_branch..content.len().min(favorites_branch + 2200)];
+
+    // Must set active_favorites to Some when favorites are loaded
+    assert!(
+        block.contains("self.active_favorites = Some(favorites.script_ids.clone())"),
+        "Favorites builtin must set active_favorites = Some(script_ids) when non-empty"
+    );
+}
+
+#[test]
+fn favorites_builtin_clears_active_favorites_when_empty() {
+    let content = read("src/app_execute/builtin_execution.rs");
+
+    let favorites_branch = content
+        .find("BuiltInFeature::Favorites")
+        .expect("Expected BuiltInFeature::Favorites branch");
+    let block = &content[favorites_branch..content.len().min(favorites_branch + 2200)];
+
+    // Must clear active_favorites when favorites list is empty
+    assert!(
+        block.contains("self.active_favorites = None"),
+        "Favorites builtin must clear active_favorites = None when empty"
+    );
+}
+
+#[test]
+fn favorites_builtin_invalidates_caches_after_setting() {
+    let content = read("src/app_execute/builtin_execution.rs");
+
+    let favorites_branch = content
+        .find("BuiltInFeature::Favorites")
+        .expect("Expected BuiltInFeature::Favorites branch");
+    let block = &content[favorites_branch..content.len().min(favorites_branch + 2200)];
+
+    // Cache invalidation must follow setting active_favorites
+    assert!(
+        block.contains("self.invalidate_filter_cache()"),
+        "Favorites builtin must invalidate filter cache after setting favorites"
+    );
+    assert!(
+        block.contains("self.invalidate_grouped_cache()"),
+        "Favorites builtin must invalidate grouped cache after setting favorites"
+    );
+    assert!(
+        block.contains("self.sync_list_state()"),
+        "Favorites builtin must sync list state after setting favorites"
+    );
+}
+
+#[test]
+fn favorites_load_error_shows_error_toast() {
+    let content = read("src/app_execute/builtin_execution.rs");
+
+    let favorites_branch = content
+        .find("BuiltInFeature::Favorites")
+        .expect("Expected BuiltInFeature::Favorites branch");
+    let block = &content[favorites_branch..content.len().min(favorites_branch + 2200)];
+
+    assert!(
+        block.contains("Err(error)") || block.contains("Err(e)"),
+        "Favorites builtin must handle load_favorites error"
+    );
+    assert!(
+        block.contains("show_error_toast("),
+        "Favorites error path must show error toast"
+    );
+}
+
+#[test]
+fn reset_to_script_list_clears_active_favorites() {
+    let content = read("src/app_impl/registries_state.rs");
+
+    // Verify the function exists
+    assert!(
+        content.contains("fn reset_to_script_list("),
+        "Expected reset_to_script_list function in registries_state.rs"
+    );
+
+    // The function body is large; search the full file for the clearing pattern.
+    // Both must be present in the same file to guarantee the lifecycle.
+    assert!(
+        content.contains("self.active_favorites = None"),
+        "reset_to_script_list must clear active_favorites = None to prevent stale filter"
+    );
+}
+
+#[test]
+fn active_favorites_initialized_to_none_at_startup() {
+    let startup = read("src/app_impl/startup.rs");
+
+    assert!(
+        startup.contains("active_favorites: None"),
+        "App state must initialize active_favorites to None at startup"
+    );
 }

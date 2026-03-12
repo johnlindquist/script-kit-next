@@ -166,10 +166,10 @@ fn trigger_sdk_action_internal_converts_via_from_sdk() {
         "trigger_sdk_action_internal must delegate to crate::action_helpers::trigger_sdk_action"
     );
 
-    // Must convert via DispatchOutcome::from_sdk
+    // Must convert via DispatchOutcome::from_sdk_with_trace (propagates trace_id)
     assert!(
-        fn_body.contains("DispatchOutcome::from_sdk("),
-        "trigger_sdk_action_internal must convert SdkActionResult via DispatchOutcome::from_sdk"
+        fn_body.contains("DispatchOutcome::from_sdk_with_trace("),
+        "trigger_sdk_action_with_trace must convert SdkActionResult via DispatchOutcome::from_sdk_with_trace"
     );
 }
 

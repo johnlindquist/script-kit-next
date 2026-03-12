@@ -455,7 +455,7 @@ fn trigger_sdk_action_returns_no_sender_when_sender_is_none() {
         close: None,
     };
 
-    let result = trigger_sdk_action("test", &action, "", None);
+    let result = trigger_sdk_action("test", &action, "", None, "test-trace");
     assert_eq!(result, SdkActionResult::NoSender);
     assert!(!result.is_sent());
     assert!(result.error_message("test").is_some());
@@ -477,7 +477,7 @@ fn trigger_sdk_action_sends_action_triggered_when_has_action() {
         close: None,
     };
 
-    let result = trigger_sdk_action("test", &action, "current input", Some(&sender));
+    let result = trigger_sdk_action("test", &action, "current input", Some(&sender), "test-trace");
     assert_eq!(result, SdkActionResult::Sent);
     assert!(result.is_sent());
     assert!(result.error_message("test").is_none());
@@ -513,7 +513,7 @@ fn trigger_sdk_action_sends_submit_when_no_handler_but_has_value() {
         close: None,
     };
 
-    let result = trigger_sdk_action("test", &action, "", Some(&sender));
+    let result = trigger_sdk_action("test", &action, "", Some(&sender), "test-trace");
     assert_eq!(result, SdkActionResult::Sent);
 
     let msg = receiver.try_recv().unwrap();
@@ -542,7 +542,7 @@ fn trigger_sdk_action_returns_no_effect_when_no_handler_no_value() {
         close: None,
     };
 
-    let result = trigger_sdk_action("test", &action, "", Some(&sender));
+    let result = trigger_sdk_action("test", &action, "", Some(&sender), "test-trace");
     assert_eq!(result, SdkActionResult::NoEffect);
     assert!(!result.is_sent());
     // NoEffect is not an error — no Toast needed
@@ -566,7 +566,7 @@ fn trigger_sdk_action_returns_channel_full_when_buffer_exhausted() {
         close: None,
     };
 
-    let result = trigger_sdk_action("busy_action", &action, "", Some(&sender));
+    let result = trigger_sdk_action("busy_action", &action, "", Some(&sender), "test-trace");
     assert_eq!(result, SdkActionResult::ChannelFull);
     assert!(!result.is_sent());
     let err = result.error_message("busy_action").unwrap();
@@ -593,7 +593,7 @@ fn trigger_sdk_action_returns_channel_disconnected_when_receiver_dropped() {
         close: None,
     };
 
-    let result = trigger_sdk_action("late_action", &action, "", Some(&sender));
+    let result = trigger_sdk_action("late_action", &action, "", Some(&sender), "test-trace");
     assert_eq!(result, SdkActionResult::ChannelDisconnected);
     let err = result.error_message("late_action").unwrap();
     assert!(

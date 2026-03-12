@@ -272,6 +272,10 @@ pub struct DispatchOutcome {
     pub user_message: Option<String>,
     /// Optional detail for structured logging (never shown to the user).
     pub detail: Option<String>,
+    /// Trace ID propagated from the originating `DispatchContext`.
+    /// Set by `from_sdk_with_trace` or `with_trace_id` so that async
+    /// continuations can correlate back to the originating gesture.
+    pub trace_id: Option<String>,
 }
 
 impl DispatchOutcome {
@@ -282,6 +286,7 @@ impl DispatchOutcome {
             error_code: None,
             user_message: None,
             detail: None,
+            trace_id: None,
         }
     }
 
@@ -292,6 +297,7 @@ impl DispatchOutcome {
             error_code: None,
             user_message: None,
             detail: None,
+            trace_id: None,
         }
     }
 
@@ -302,6 +308,7 @@ impl DispatchOutcome {
             error_code: Some(code),
             user_message: Some(msg.into()),
             detail: None,
+            trace_id: None,
         }
     }
 
@@ -312,6 +319,7 @@ impl DispatchOutcome {
             error_code: Some(ERROR_CANCELLED),
             user_message: None,
             detail: None,
+            trace_id: None,
         }
     }
 
@@ -328,12 +336,35 @@ impl DispatchOutcome {
             error_code: result.error_code(),
             user_message: result.error_message(action_name),
             detail: None,
+            trace_id: None,
+        }
+    }
+
+    /// Build from an `SdkActionResult` with an explicit trace_id from the
+    /// originating dispatch context.
+    pub fn from_sdk_with_trace(
+        result: &SdkActionResult,
+        action_name: &str,
+        trace_id: impl Into<String>,
+    ) -> Self {
+        Self {
+            status: result.status(),
+            error_code: result.error_code(),
+            user_message: result.error_message(action_name),
+            detail: None,
+            trace_id: Some(trace_id.into()),
         }
     }
 
     /// Attach optional detail for logging.
     pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
         self.detail = Some(detail.into());
+        self
+    }
+
+    /// Attach a trace_id to this outcome for correlation.
+    pub fn with_trace_id(mut self, trace_id: impl Into<String>) -> Self {
+        self.trace_id = Some(trace_id.into());
         self
     }
 }
@@ -440,6 +471,9 @@ impl SdkActionResult {
 /// - `false` with value: Sends `Submit` message with the value
 /// - `false` without value: Logs warning, no message sent
 ///
+/// The `trace_id` parameter is threaded through from the originating dispatch
+/// context so every log line can be correlated back to the user gesture.
+///
 /// Returns an `SdkActionResult` indicating what happened, so callers can
 /// show appropriate feedback (e.g. Toast on error).
 pub fn trigger_sdk_action(
@@ -447,14 +481,15 @@ pub fn trigger_sdk_action(
     action: &ProtocolAction,
     current_input: &str,
     sender: Option<&SyncSender<protocol::Message>>,
+    trace_id: &str,
 ) -> SdkActionResult {
     let Some(sender) = sender else {
-        tracing::warn!(action = %action_name, "no response sender for SDK action");
+        tracing::warn!(action = %action_name, trace_id = %trace_id, "no response sender for SDK action");
         return SdkActionResult::NoSender;
     };
 
     let send_result = if action.has_action {
-        tracing::info!(action = %action_name, "SDK action with handler, sending ActionTriggered");
+        tracing::info!(action = %action_name, trace_id = %trace_id, "SDK action with handler, sending ActionTriggered");
         let msg = protocol::Message::action_triggered(
             action_name.to_string(),
             action.value.clone(),
@@ -462,25 +497,25 @@ pub fn trigger_sdk_action(
         );
         sender.try_send(msg)
     } else if let Some(ref value) = action.value {
-        tracing::info!(action = %action_name, value = ?value, "SDK action without handler, submitting value");
+        tracing::info!(action = %action_name, trace_id = %trace_id, value = ?value, "SDK action without handler, submitting value");
         let msg = protocol::Message::Submit {
             id: "action".to_string(),
             value: Some(value.clone()),
         };
         sender.try_send(msg)
     } else {
-        tracing::info!(action = %action_name, "SDK action has no value and has_action=false");
+        tracing::info!(action = %action_name, trace_id = %trace_id, "SDK action has no value and has_action=false");
         return SdkActionResult::NoEffect;
     };
 
     match send_result {
         Ok(()) => SdkActionResult::Sent,
         Err(std::sync::mpsc::TrySendError::Full(_)) => {
-            tracing::warn!(action = %action_name, "response channel full - SDK action dropped");
+            tracing::warn!(action = %action_name, trace_id = %trace_id, "response channel full - SDK action dropped");
             SdkActionResult::ChannelFull
         }
         Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-            tracing::info!(action = %action_name, "response channel disconnected - script exited");
+            tracing::info!(action = %action_name, trace_id = %trace_id, "response channel disconnected - script exited");
             SdkActionResult::ChannelDisconnected
         }
     }
