@@ -227,7 +227,14 @@ async fn confirm_with_modal(
     message: String,
     confirm_label: &str,
     cancel_label: &str,
+    trace_id: &str,
 ) -> anyhow::Result<bool> {
+    tracing::info!(
+        category = "UI",
+        trace_id = %trace_id,
+        event = "confirm_modal_open",
+        "Opening confirmation modal"
+    );
     let (confirm_tx, confirm_rx) = async_channel::bounded::<bool>(1);
 
     cx.update(|cx| {
@@ -271,7 +278,15 @@ async fn confirm_with_modal(
         )
     })?;
 
-    Ok(confirm_rx.recv().await.unwrap_or(false))
+    let confirmed = confirm_rx.recv().await.unwrap_or(false);
+    tracing::info!(
+        category = "UI",
+        trace_id = %trace_id,
+        event = "confirm_modal_result",
+        confirmed,
+        "Confirmation modal resolved"
+    );
+    Ok(confirmed)
 }
 
 #[cfg(test)]
@@ -643,7 +658,7 @@ mod app_actions_tests {
         );
 
         let usage_count =
-            count_occurrences(&content, "self.launch_editor_with_feedback_async(&path)");
+            count_occurrences(&content, "self.launch_editor_with_feedback_async(&path, trace_id)");
         assert!(
             usage_count >= 2,
             "Expected edit_script and edit_scriptlet to use async editor launch feedback (found {usage_count} usages)"
@@ -666,8 +681,9 @@ mod app_actions_tests {
         );
 
         let usage_count =
-            count_occurrences(&content, "self.reveal_in_finder_with_feedback_async(&path)")
-                + count_occurrences(&content, "self.reveal_in_finder_with_feedback_async(path)");
+            count_occurrences(&content, "self.reveal_in_finder_with_feedback_async(&path, trace_id)")
+                + count_occurrences(&content, "self.reveal_in_finder_with_feedback_async(path, trace_id)")
+                + count_occurrences(&content, "self.reveal_in_finder_with_feedback_async(&save_path, trace_id)");
         assert!(
             usage_count >= 2,
             "Expected reveal actions to use async reveal feedback helper (found {usage_count} usages)"
@@ -732,7 +748,7 @@ mod app_actions_tests {
         let block = &content[edit_section..edit_section + 600];
 
         assert!(
-            block.contains("self.launch_editor_with_feedback_async(&path)"),
+            block.contains("self.launch_editor_with_feedback_async(&path, trace_id)"),
             "Expected edit_scriptlet to use async editor launch for proper error feedback"
         );
     }
@@ -800,7 +816,7 @@ mod app_actions_tests {
         let block = &content[reveal_section..reveal_section + 600];
 
         assert!(
-            block.contains("self.reveal_in_finder_with_feedback_async(path)"),
+            block.contains("self.reveal_in_finder_with_feedback_async(path, trace_id)"),
             "Expected reveal_scriptlet to use async reveal for proper error feedback"
         );
     }

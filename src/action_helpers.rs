@@ -167,11 +167,65 @@ pub const ERROR_REVEAL_FAILED: &str = "reveal_failed";
 /// Confirmation modal could not be opened.
 pub const ERROR_MODAL_FAILED: &str = "modal_failed";
 
+/// Generic action handler failure (sync error paths in handler dispatch).
+pub const ERROR_ACTION_FAILED: &str = "action_failed";
+
 /// User explicitly cancelled the operation (e.g. dismissed a confirmation modal).
 pub const ERROR_CANCELLED: &str = "cancelled";
 
 /// No response channel available — no running script to receive the message.
 pub const ERROR_NO_SENDER: &str = "no_sender";
+
+/// The surface that initiated an action dispatch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DispatchSurface {
+    /// Dispatched from the action dialog / handler chain.
+    Action,
+    /// Dispatched from builtin execution.
+    Builtin,
+}
+
+impl std::fmt::Display for DispatchSurface {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DispatchSurface::Action => f.write_str("action"),
+            DispatchSurface::Builtin => f.write_str("builtin"),
+        }
+    }
+}
+
+/// Context threaded through action dispatch so that every log line —
+/// including those emitted from async helpers — can be correlated back
+/// to the originating user gesture.
+#[derive(Debug, Clone)]
+pub struct DispatchContext {
+    /// Unique identifier for this dispatch, used as a structured tracing field.
+    pub trace_id: String,
+    /// Whether this dispatch originated from the action dialog or builtin execution.
+    pub surface: DispatchSurface,
+    /// The action or builtin ID being dispatched.
+    pub action_id: String,
+}
+
+impl DispatchContext {
+    /// Create a new dispatch context for an action.
+    pub fn for_action(action_id: impl Into<String>) -> Self {
+        Self {
+            trace_id: uuid::Uuid::new_v4().to_string(),
+            surface: DispatchSurface::Action,
+            action_id: action_id.into(),
+        }
+    }
+
+    /// Create a new dispatch context for a builtin.
+    pub fn for_builtin(builtin_id: impl Into<String>) -> Self {
+        Self {
+            trace_id: uuid::Uuid::new_v4().to_string(),
+            surface: DispatchSurface::Builtin,
+            action_id: builtin_id.into(),
+        }
+    }
+}
 
 /// High-level outcome status for any action dispatch.
 ///
@@ -198,6 +252,89 @@ impl std::fmt::Display for ActionOutcomeStatus {
             ActionOutcomeStatus::Cancelled => f.write_str("cancelled"),
             ActionOutcomeStatus::NoEffect => f.write_str("no_effect"),
         }
+    }
+}
+
+/// Structured outcome from any action dispatch (builtin, SDK, or handler).
+///
+/// Every `handle_*_action` function returns this so the top-level router can
+/// log consistent structured fields and derive user-facing feedback from a
+/// single object.
+#[derive(Debug, Clone, PartialEq)]
+#[must_use]
+pub struct DispatchOutcome {
+    /// Coarse-grained status bucket.
+    pub status: ActionOutcomeStatus,
+    /// Stable machine-readable error code (from `ERROR_*` constants), if any.
+    pub error_code: Option<&'static str>,
+    /// User-facing message suitable for Toast display.  `None` when no
+    /// feedback is needed (e.g. success where the UI change IS the feedback).
+    pub user_message: Option<String>,
+    /// Optional detail for structured logging (never shown to the user).
+    pub detail: Option<String>,
+}
+
+impl DispatchOutcome {
+    /// The action completed successfully.
+    pub fn success() -> Self {
+        Self {
+            status: ActionOutcomeStatus::Success,
+            error_code: None,
+            user_message: None,
+            detail: None,
+        }
+    }
+
+    /// The action had nothing to do (not handled by this handler).
+    pub fn not_handled() -> Self {
+        Self {
+            status: ActionOutcomeStatus::NoEffect,
+            error_code: None,
+            user_message: None,
+            detail: None,
+        }
+    }
+
+    /// The action failed.
+    pub fn error(code: &'static str, msg: impl Into<String>) -> Self {
+        Self {
+            status: ActionOutcomeStatus::Error,
+            error_code: Some(code),
+            user_message: Some(msg.into()),
+            detail: None,
+        }
+    }
+
+    /// The user explicitly cancelled the operation.
+    pub fn cancelled() -> Self {
+        Self {
+            status: ActionOutcomeStatus::Cancelled,
+            error_code: Some(ERROR_CANCELLED),
+            user_message: None,
+            detail: None,
+        }
+    }
+
+    /// Whether this outcome represents a handled action (not `NoEffect`).
+    pub fn was_handled(&self) -> bool {
+        self.status != ActionOutcomeStatus::NoEffect
+    }
+
+    /// Build from an `SdkActionResult`, carrying over status, error code, and
+    /// user message.
+    pub fn from_sdk(result: &SdkActionResult, action_name: &str) -> Self {
+        Self {
+            status: result.status(),
+            error_code: result.error_code(),
+            user_message: result.error_message(action_name),
+            detail: None,
+        }
+    }
+
+    /// Attach optional detail for logging.
+    pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
+        self.detail = Some(detail.into());
+        self
     }
 }
 

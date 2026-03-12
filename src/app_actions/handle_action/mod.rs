@@ -1,3 +1,5 @@
+use crate::action_helpers::{ActionOutcomeStatus, DispatchContext, DispatchOutcome};
+
 // Action dispatch facade.
 //
 // This module splits the monolithic action handler into semantic submodules:
@@ -213,8 +215,10 @@ impl ScriptListApp {
     fn reveal_in_finder_with_feedback_async(
         &self,
         path: &std::path::Path,
+        trace_id: &str,
     ) -> async_channel::Receiver<Result<(), String>> {
         let path_str = path.to_string_lossy().to_string();
+        let trace_id = trace_id.to_string();
         let (result_tx, result_rx) = async_channel::bounded::<Result<(), String>>(1);
 
         std::thread::spawn(move || {
@@ -229,6 +233,7 @@ impl ScriptListApp {
             tracing::info!(
                 category = "UI",
                 event = "action_reveal_in_finder_start",
+                trace_id = %trace_id,
                 file_manager,
                 path = %path_str,
                 "Reveal in file manager started"
@@ -239,6 +244,7 @@ impl ScriptListApp {
                     tracing::info!(
                         category = "UI",
                         event = "action_reveal_in_finder_success",
+                        trace_id = %trace_id,
                         file_manager,
                         path = %path_str,
                         "Reveal in file manager succeeded"
@@ -249,6 +255,7 @@ impl ScriptListApp {
                     tracing::error!(
                         event = "action_reveal_in_finder_failed",
                         attempted = "reveal_in_finder",
+                        trace_id = %trace_id,
                         file_manager,
                         path = %path_str,
                         error = %error,
@@ -268,9 +275,11 @@ impl ScriptListApp {
     fn launch_editor_with_feedback_async(
         &self,
         path: &std::path::Path,
+        trace_id: &str,
     ) -> async_channel::Receiver<Result<(), String>> {
         let editor = self.config.get_editor();
         let path_str = path.to_string_lossy().to_string();
+        let trace_id = trace_id.to_string();
         let (result_tx, result_rx) = async_channel::bounded::<Result<(), String>>(1);
 
         std::thread::spawn(move || {
@@ -279,6 +288,7 @@ impl ScriptListApp {
             tracing::info!(
                 category = "UI",
                 event = "action_editor_launch_start",
+                trace_id = %trace_id,
                 editor = %editor,
                 path = %path_str,
                 "Editor launch started"
@@ -289,6 +299,7 @@ impl ScriptListApp {
                     tracing::info!(
                         category = "UI",
                         event = "action_editor_launch_success",
+                        trace_id = %trace_id,
                         editor = %editor,
                         path = %path_str,
                         "Editor launch succeeded"
@@ -299,6 +310,7 @@ impl ScriptListApp {
                     tracing::error!(
                         event = "action_editor_launch_failed",
                         attempted = "launch_editor",
+                        trace_id = %trace_id,
                         editor = %editor,
                         path = %path_str,
                         error = %error,
@@ -415,44 +427,64 @@ impl ScriptListApp {
         encoded
     }
 
+    /// Derive user-facing toast feedback from a `DispatchOutcome` at the
+    /// dispatch boundary.
+    ///
+    /// Shows an error toast when the outcome carries an error with a
+    /// user-facing message.  Success, NoEffect, and Cancelled outcomes
+    /// produce no feedback here — success HUDs are the handler's
+    /// responsibility since only the handler knows the right message.
+    fn show_outcome_feedback(
+        &mut self,
+        outcome: &DispatchOutcome,
+        cx: &mut Context<Self>,
+    ) {
+        if outcome.status == ActionOutcomeStatus::Error {
+            if let Some(ref msg) = outcome.user_message {
+                self.show_error_toast_with_code(
+                    msg.clone(),
+                    outcome.error_code,
+                    cx,
+                );
+            }
+        }
+    }
+
     /// Handle action selection from the actions dialog
     fn handle_action(&mut self, action_id: String, cx: &mut Context<Self>) {
-        let trace_id = uuid::Uuid::new_v4().to_string();
         let start = std::time::Instant::now();
 
-        tracing::info!(
-            category = "UI",
-            action = %action_id,
-            trace_id = %trace_id,
-            "Action dispatch started"
-        );
-
-        let action_id = action_id
+        let action_id_stripped = action_id
             .strip_prefix("clip:")
             .or_else(|| action_id.strip_prefix("file:"))
             .or_else(|| action_id.strip_prefix("chat:"))
-            .unwrap_or(action_id.as_str());
+            .unwrap_or(action_id.as_str())
+            .to_string();
+
+        let dctx = DispatchContext::for_action(&action_id_stripped);
+
+        tracing::info!(
+            category = "UI",
+            action = %action_id_stripped,
+            trace_id = %dctx.trace_id,
+            surface = %dctx.surface,
+            "Action dispatch started"
+        );
 
         let should_transition_to_script_list =
             should_transition_to_script_list_after_action(&self.current_view);
 
-        let selected_clipboard_entry = if action_id.starts_with("clipboard_") {
+        let selected_clipboard_entry = if action_id_stripped.starts_with("clipboard_") {
             self.selected_clipboard_entry()
         } else {
             None
         };
 
         // Clipboard actions handle their own transitions and notifications.
-        if self.handle_clipboard_action(action_id, selected_clipboard_entry, &trace_id, cx) {
-            tracing::info!(
-                category = "UI",
-                action = %action_id,
-                trace_id = %trace_id,
-                handler = "clipboard",
-                status = "completed",
-                duration_ms = start.elapsed().as_millis() as u64,
-                "Action dispatch completed"
-            );
+        let clipboard_outcome = self.handle_clipboard_action(&action_id_stripped, selected_clipboard_entry, &dctx, cx);
+        if clipboard_outcome.was_handled() {
+            log_dispatch_outcome(&action_id_stripped, &dctx.trace_id, "clipboard", &clipboard_outcome, &start);
+            self.show_outcome_feedback(&clipboard_outcome, cx);
             return;
         }
 
@@ -461,62 +493,56 @@ impl ScriptListApp {
             self.transition_to_script_list_after_action(cx);
         }
 
-        if self.handle_shortcut_alias_action(action_id, &trace_id, cx) {
-            tracing::info!(
-                category = "UI",
-                action = %action_id,
-                trace_id = %trace_id,
-                handler = "shortcut_alias",
-                status = "completed",
-                duration_ms = start.elapsed().as_millis() as u64,
-                "Action dispatch completed"
-            );
-        } else if self.handle_script_action(action_id, &trace_id, cx) {
-            tracing::info!(
-                category = "UI",
-                action = %action_id,
-                trace_id = %trace_id,
-                handler = "script",
-                status = "completed",
-                duration_ms = start.elapsed().as_millis() as u64,
-                "Action dispatch completed"
-            );
-        } else if self.handle_file_action(action_id, &trace_id, cx) {
-            tracing::info!(
-                category = "UI",
-                action = %action_id,
-                trace_id = %trace_id,
-                handler = "file",
-                status = "completed",
-                duration_ms = start.elapsed().as_millis() as u64,
-                "Action dispatch completed"
-            );
-        } else if self.handle_scriptlet_action(action_id, &trace_id, cx) {
-            tracing::info!(
-                category = "UI",
-                action = %action_id,
-                trace_id = %trace_id,
-                handler = "scriptlet",
-                status = "completed",
-                duration_ms = start.elapsed().as_millis() as u64,
-                "Action dispatch completed"
-            );
-        } else {
-            // Handle SDK actions using shared helper
-            self.trigger_sdk_action_internal(action_id);
-            tracing::info!(
-                category = "UI",
-                action = %action_id,
-                trace_id = %trace_id,
-                handler = "sdk_fallback",
-                status = "completed",
-                duration_ms = start.elapsed().as_millis() as u64,
-                "Action dispatch completed"
-            );
-        }
+        // Dispatch through handler chain, collecting the final outcome.
+        let (handler, outcome) = {
+            let o = self.handle_shortcut_alias_action(&action_id_stripped, &dctx, cx);
+            if o.was_handled() {
+                ("shortcut_alias", o)
+            } else {
+                let o = self.handle_script_action(&action_id_stripped, &dctx, cx);
+                if o.was_handled() {
+                    ("script", o)
+                } else {
+                    let o = self.handle_file_action(&action_id_stripped, &dctx, cx);
+                    if o.was_handled() {
+                        ("file", o)
+                    } else {
+                        let o = self.handle_scriptlet_action(&action_id_stripped, &dctx, cx);
+                        if o.was_handled() {
+                            ("scriptlet", o)
+                        } else {
+                            // SDK actions as final fallback
+                            ("sdk_fallback", self.trigger_sdk_action_internal(&action_id_stripped))
+                        }
+                    }
+                }
+            }
+        };
 
+        log_dispatch_outcome(&action_id_stripped, &dctx.trace_id, handler, &outcome, &start);
+        self.show_outcome_feedback(&outcome, cx);
         cx.notify();
     }
+}
+
+/// Log structured outcome at the end of action dispatch.
+fn log_dispatch_outcome(
+    action_id: &str,
+    trace_id: &str,
+    handler: &str,
+    outcome: &DispatchOutcome,
+    start: &std::time::Instant,
+) {
+    tracing::info!(
+        category = "UI",
+        action = %action_id,
+        trace_id = %trace_id,
+        handler = handler,
+        status = %outcome.status,
+        error_code = outcome.error_code,
+        duration_ms = start.elapsed().as_millis() as u64,
+        "Action dispatch completed"
+    );
 }
 
 // Include semantic submodules — each adds `impl ScriptListApp` methods.

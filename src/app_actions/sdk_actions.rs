@@ -1,5 +1,5 @@
 impl ScriptListApp {
-    fn trigger_sdk_action_internal(&mut self, action_name: &str) {
+    fn trigger_sdk_action_internal(&mut self, action_name: &str) -> crate::action_helpers::DispatchOutcome {
         if let Some(ref actions) = self.sdk_actions {
             if let Some(action) = actions.iter().find(|a| a.name == action_name) {
                 let result = crate::action_helpers::trigger_sdk_action(
@@ -9,28 +9,16 @@ impl ScriptListApp {
                     self.response_sender.as_ref(),
                 );
 
-                let status = result.status();
-                let error_code = result.error_code();
-                tracing::info!(
-                    action_name = %action_name,
-                    status = %status,
-                    error_code = error_code,
-                    handler = "sdk",
-                    "SDK action outcome"
-                );
-
-                // Surface send errors as Toast so the user knows the action failed
-                if let Some(msg) = result.error_message(action_name) {
-                    self.toast_manager.push(
-                        components::toast::Toast::error(msg, &self.theme)
-                            .duration_ms(Some(TOAST_ERROR_MS)),
-                    );
-                }
+                // Outcome carries user_message for errors — the dispatch
+                // boundary's show_outcome_feedback() will show the toast.
+                crate::action_helpers::DispatchOutcome::from_sdk(&result, action_name)
             } else {
                 tracing::warn!(action = %action_name, "Unknown SDK action");
+                crate::action_helpers::DispatchOutcome::not_handled()
             }
         } else {
             tracing::warn!(action = %action_name, "Unknown SDK action (no actions defined)");
+            crate::action_helpers::DispatchOutcome::not_handled()
         }
     }
 
@@ -40,7 +28,7 @@ impl ScriptListApp {
         if let Some(ref actions) = self.sdk_actions {
             if actions.iter().any(|a| a.name == action_name) {
                 tracing::info!(action = %action_name, "Triggering SDK action via shortcut");
-                self.trigger_sdk_action_internal(action_name);
+                let _outcome = self.trigger_sdk_action_internal(action_name);
                 cx.notify();
                 return true;
             }

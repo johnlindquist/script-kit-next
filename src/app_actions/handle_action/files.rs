@@ -32,9 +32,10 @@ impl ScriptListApp {
     fn handle_file_action(
         &mut self,
         action_id: &str,
-        trace_id: &str,
+        dctx: &DispatchContext,
         cx: &mut Context<Self>,
-    ) -> bool {
+    ) -> DispatchOutcome {
+        let trace_id = &dctx.trace_id;
         match action_id {
             "reveal_in_finder" => {
                 tracing::info!(category = "UI", "reveal in Finder action");
@@ -42,7 +43,7 @@ impl ScriptListApp {
                     self.resolve_file_action_path(crate::action_helpers::extract_path_for_reveal);
 
                 if let Ok(path) = path_result {
-                    let reveal_result_rx = self.reveal_in_finder_with_feedback_async(&path);
+                    let reveal_result_rx = self.reveal_in_finder_with_feedback_async(&path, trace_id);
                     let trace_id = trace_id.to_string();
                     let start = std::time::Instant::now();
                     cx.spawn(async move |this, cx| {
@@ -87,9 +88,12 @@ impl ScriptListApp {
                         .err()
                         .flatten()
                         .unwrap_or_else(|| gpui::SharedString::from("Cannot reveal this item type in Finder"));
-                    self.show_error_toast(msg.to_string(), cx);
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        msg.to_string(),
+                    );
                 }
-                true
+                DispatchOutcome::success()
             }
             "copy_path" => {
                 tracing::info!(category = "UI", "copy path action");
@@ -113,10 +117,13 @@ impl ScriptListApp {
                             .unwrap_or_else(|| {
                                 selection_required_message_for_action(action_id).to_string()
                             });
-                        self.show_error_toast(error_msg, cx);
+                        return DispatchOutcome::error(
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            error_msg,
+                        );
                     }
                 }
-                true
+                DispatchOutcome::success()
             }
             "copy_deeplink" => {
                 tracing::info!(category = "UI", "copy deeplink action");
@@ -133,18 +140,18 @@ impl ScriptListApp {
                         cx,
                     );
                 } else {
-                    self.show_error_toast(
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
                         selection_required_message_for_action(action_id),
-                        cx,
                     );
                 }
-                true
+                DispatchOutcome::success()
             }
             "__cancel__" => {
                 tracing::info!(category = "UI", "actions dialog cancelled");
                 // Clear file search actions path on cancel
                 self.file_search_actions_path = None;
-                true
+                DispatchOutcome::success()
             }
             // File search specific actions
             "open_file" | "open_directory" | "quick_look" | "open_with" | "show_info"
@@ -197,12 +204,15 @@ impl ScriptListApp {
                                 file_search_action_error_hud_prefix(action_id)
                                     .unwrap_or("Failed to complete action")
                             };
-                            self.show_error_toast(format!("{}: {}", prefix, e), cx);
                             self.file_search_actions_path = None;
+                            return DispatchOutcome::error(
+                                crate::action_helpers::ERROR_ACTION_FAILED,
+                                format!("{}: {}", prefix, e),
+                            );
                         }
                     }
                 }
-                true
+                DispatchOutcome::success()
             }
             "copy_filename" => {
                 if let Some(path) = self.file_search_actions_path.clone() {
@@ -216,9 +226,11 @@ impl ScriptListApp {
                             path = %path,
                             "No filename found for path"
                         );
-                        self.show_error_toast("No filename found for selected path", cx);
                         self.file_search_actions_path = None;
-                        return true;
+                        return DispatchOutcome::error(
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            "No filename found for selected path",
+                        );
                     };
                     tracing::info!(category = "UI", filename = %filename, "copy filename");
                     self.file_search_actions_path = None;
@@ -229,9 +241,9 @@ impl ScriptListApp {
                         cx,
                     );
                 }
-                true
+                DispatchOutcome::success()
             }
-            _ => false,
+            _ => DispatchOutcome::not_handled(),
         }
     }
 }

@@ -836,3 +836,149 @@ fn cancelled_error_code_matches_stable_constant() {
         "Cancelled error_code must be the stable string 'cancelled'"
     );
 }
+
+// ============================================================================
+// DispatchOutcome tests
+// ============================================================================
+
+#[test]
+fn dispatch_outcome_success_has_no_error() {
+    let outcome = DispatchOutcome::success();
+    assert_eq!(outcome.status, ActionOutcomeStatus::Success);
+    assert!(outcome.error_code.is_none());
+    assert!(outcome.user_message.is_none());
+    assert!(outcome.was_handled());
+}
+
+#[test]
+fn dispatch_outcome_not_handled_is_no_effect() {
+    let outcome = DispatchOutcome::not_handled();
+    assert_eq!(outcome.status, ActionOutcomeStatus::NoEffect);
+    assert!(!outcome.was_handled());
+}
+
+#[test]
+fn dispatch_outcome_error_carries_code_and_message() {
+    let outcome = DispatchOutcome::error(ERROR_LAUNCH_FAILED, "Editor not found");
+    assert_eq!(outcome.status, ActionOutcomeStatus::Error);
+    assert_eq!(outcome.error_code, Some(ERROR_LAUNCH_FAILED));
+    assert_eq!(outcome.user_message.as_deref(), Some("Editor not found"));
+    assert!(outcome.was_handled());
+}
+
+#[test]
+fn dispatch_outcome_cancelled_has_code_but_no_message() {
+    let outcome = DispatchOutcome::cancelled();
+    assert_eq!(outcome.status, ActionOutcomeStatus::Cancelled);
+    assert_eq!(outcome.error_code, Some(ERROR_CANCELLED));
+    assert!(outcome.user_message.is_none());
+    assert!(outcome.was_handled());
+}
+
+#[test]
+fn dispatch_outcome_from_sdk_sent() {
+    let outcome = DispatchOutcome::from_sdk(&SdkActionResult::Sent, "test");
+    assert_eq!(outcome.status, ActionOutcomeStatus::Success);
+    assert!(outcome.error_code.is_none());
+    assert!(outcome.user_message.is_none());
+}
+
+#[test]
+fn dispatch_outcome_from_sdk_error() {
+    let outcome = DispatchOutcome::from_sdk(&SdkActionResult::NoSender, "test");
+    assert_eq!(outcome.status, ActionOutcomeStatus::Error);
+    assert_eq!(outcome.error_code, Some(ERROR_NO_SENDER));
+    assert!(outcome.user_message.is_some());
+}
+
+#[test]
+fn dispatch_outcome_with_detail() {
+    let outcome = DispatchOutcome::success().with_detail("extra context");
+    assert_eq!(outcome.detail.as_deref(), Some("extra context"));
+    assert_eq!(outcome.status, ActionOutcomeStatus::Success);
+}
+
+#[test]
+fn dispatch_outcome_from_sdk_cancelled() {
+    let outcome = DispatchOutcome::from_sdk(&SdkActionResult::Cancelled, "delete_all");
+    assert_eq!(outcome.status, ActionOutcomeStatus::Cancelled);
+    assert_eq!(outcome.error_code, Some(ERROR_CANCELLED));
+    assert!(
+        outcome.user_message.is_none(),
+        "Cancelled should not produce a user message"
+    );
+}
+
+#[test]
+fn dispatch_outcome_from_sdk_no_effect() {
+    let outcome = DispatchOutcome::from_sdk(&SdkActionResult::NoEffect, "noop");
+    assert_eq!(outcome.status, ActionOutcomeStatus::NoEffect);
+    assert!(outcome.error_code.is_none());
+    assert!(outcome.user_message.is_none());
+    assert!(!outcome.was_handled());
+}
+
+#[test]
+fn dispatch_outcome_from_sdk_channel_full() {
+    let outcome = DispatchOutcome::from_sdk(&SdkActionResult::ChannelFull, "busy_action");
+    assert_eq!(outcome.status, ActionOutcomeStatus::Error);
+    assert_eq!(outcome.error_code, Some(ERROR_CHANNEL_FULL));
+    assert!(outcome.user_message.is_some());
+}
+
+#[test]
+fn dispatch_outcome_from_sdk_channel_disconnected() {
+    let outcome = DispatchOutcome::from_sdk(&SdkActionResult::ChannelDisconnected, "late_action");
+    assert_eq!(outcome.status, ActionOutcomeStatus::Error);
+    assert_eq!(outcome.error_code, Some(ERROR_CHANNEL_DISCONNECTED));
+    assert!(outcome.user_message.is_some());
+}
+
+// ============================================================================
+// DispatchContext tests
+// ============================================================================
+
+#[test]
+fn dispatch_context_for_action_sets_action_surface() {
+    let ctx = DispatchContext::for_action("copy_path");
+    assert_eq!(ctx.surface, DispatchSurface::Action);
+    assert_eq!(ctx.action_id, "copy_path");
+    assert!(!ctx.trace_id.is_empty(), "trace_id must be non-empty");
+}
+
+#[test]
+fn dispatch_context_for_builtin_sets_builtin_surface() {
+    let ctx = DispatchContext::for_builtin("clipboard_history");
+    assert_eq!(ctx.surface, DispatchSurface::Builtin);
+    assert_eq!(ctx.action_id, "clipboard_history");
+    assert!(!ctx.trace_id.is_empty(), "trace_id must be non-empty");
+}
+
+#[test]
+fn dispatch_context_trace_ids_are_unique() {
+    let ctx1 = DispatchContext::for_action("a");
+    let ctx2 = DispatchContext::for_action("a");
+    assert_ne!(
+        ctx1.trace_id, ctx2.trace_id,
+        "Each dispatch context must get a unique trace_id"
+    );
+}
+
+#[test]
+fn dispatch_context_accepts_string_and_str() {
+    // Verify Into<String> works for both &str and String
+    let ctx_str = DispatchContext::for_action("literal");
+    let ctx_string = DispatchContext::for_action(String::from("owned"));
+    assert_eq!(ctx_str.action_id, "literal");
+    assert_eq!(ctx_string.action_id, "owned");
+}
+
+#[test]
+fn dispatch_surface_display_action() {
+    assert_eq!(DispatchSurface::Action.to_string(), "action");
+}
+
+#[test]
+fn dispatch_surface_display_builtin() {
+    assert_eq!(DispatchSurface::Builtin.to_string(), "builtin");
+}

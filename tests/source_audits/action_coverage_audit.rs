@@ -1202,8 +1202,8 @@ fn all_handle_action_sub_handlers_return_bool() {
             let sig_block = &content[start..content.len().min(start + 300)];
 
             assert!(
-                sig_block.contains("-> bool"),
-                "Sub-handler in {} must return bool. Found signature: {}",
+                sig_block.contains("-> DispatchOutcome"),
+                "Sub-handler in {} must return DispatchOutcome. Found signature: {}",
                 path,
                 &sig_block[..sig_block.len().min(120)]
             );
@@ -1217,8 +1217,8 @@ fn all_handle_action_sub_handlers_return_bool() {
         let sig_block = &monolithic[start..monolithic.len().min(start + 300)];
 
         assert!(
-            sig_block.contains("-> bool"),
-            "Sub-handler in handle_action/ must return bool. Found signature: {}",
+            sig_block.contains("-> DispatchOutcome"),
+            "Sub-handler in handle_action/ must return DispatchOutcome. Found signature: {}",
             &sig_block[..sig_block.len().min(120)]
         );
     }

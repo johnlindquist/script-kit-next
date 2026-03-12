@@ -4,14 +4,14 @@
 // add_alias, update_alias, remove_alias.
 
 impl ScriptListApp {
-    /// Handle shortcut and alias actions. Returns `true` if handled.
+    /// Handle shortcut and alias actions. Returns `DispatchOutcome` indicating if handled.
     fn handle_shortcut_alias_action(
         &mut self,
         action_id: &str,
-        trace_id: &str,
+        dctx: &DispatchContext,
         cx: &mut Context<Self>,
-    ) -> bool {
-        let _ = trace_id; // Reserved for future async path logging
+    ) -> DispatchOutcome {
+        let _ = dctx; // Reserved for future async path logging
         match action_id {
             // Handle both legacy "configure_shortcut" and new dynamic actions
             // "add_shortcut" and "update_shortcut" open the shortcut recorder
@@ -53,9 +53,9 @@ impl ScriptListApp {
                             self.show_shortcut_recorder(command_id, command_name, cx);
                         }
                         scripts::SearchResult::Window(_) => {
-                            self.show_error_toast(
+                            return DispatchOutcome::error(
+                                crate::action_helpers::ERROR_ACTION_FAILED,
                                 "Window shortcuts not supported - windows are transient",
-                                cx,
                             );
                         }
                         scripts::SearchResult::Fallback(m) => match &m.fallback {
@@ -73,12 +73,12 @@ impl ScriptListApp {
                         },
                     }
                 } else {
-                    self.show_error_toast(
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
                         selection_required_message_for_action(action_id),
-                        cx,
                     );
                 }
-                true
+                DispatchOutcome::success()
             }
             // "remove_shortcut" removes the existing shortcut from the registry
             "remove_shortcut" => {
@@ -132,26 +132,28 @@ impl ScriptListApp {
                             }
                             Err(e) => {
                                 tracing::error!(error = %e, "failed to remove shortcut");
-                                self.show_error_toast(
+                                self.hide_main_and_reset(cx);
+                                return DispatchOutcome::error(
+                                    crate::action_helpers::ERROR_ACTION_FAILED,
                                     format!("Failed to remove shortcut: {}", e),
-                                    cx,
                                 );
                             }
                         }
                     } else {
-                        self.show_error_toast(
+                        self.hide_main_and_reset(cx);
+                        return DispatchOutcome::error(
+                            crate::action_helpers::ERROR_ACTION_FAILED,
                             "Cannot remove shortcut for this item type",
-                            cx,
                         );
                     }
                     self.hide_main_and_reset(cx);
                 } else {
-                    self.show_error_toast(
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
                         selection_required_message_for_action(action_id),
-                        cx,
                     );
                 }
-                true
+                DispatchOutcome::success()
             }
             // Alias actions: add_alias, update_alias open the alias input
             "add_alias" | "update_alias" => {
@@ -183,11 +185,10 @@ impl ScriptListApp {
                             (format!("agent/{}", m.agent.name), m.agent.name.clone())
                         }
                         scripts::SearchResult::Window(_) => {
-                            self.show_error_toast(
+                            return DispatchOutcome::error(
+                                crate::action_helpers::ERROR_ACTION_FAILED,
                                 "Window aliases not supported - windows are transient",
-                                cx,
                             );
-                            return true;
                         }
                         scripts::SearchResult::Fallback(m) => (
                             format!("fallback/{}", m.fallback.name()),
@@ -196,12 +197,12 @@ impl ScriptListApp {
                     };
                     self.show_alias_input(command_id, command_name, cx);
                 } else {
-                    self.show_error_toast(
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
                         selection_required_message_for_action(action_id),
-                        cx,
                     );
                 }
-                true
+                DispatchOutcome::success()
             }
             // "remove_alias" removes the existing alias from persistence
             "remove_alias" => {
@@ -255,28 +256,30 @@ impl ScriptListApp {
                             }
                             Err(e) => {
                                 tracing::error!(error = %e, "failed to remove alias");
-                                self.show_error_toast(
+                                self.hide_main_and_reset(cx);
+                                return DispatchOutcome::error(
+                                    crate::action_helpers::ERROR_ACTION_FAILED,
                                     format!("Failed to remove alias: {}", e),
-                                    cx,
                                 );
                             }
                         }
                     } else {
-                        self.show_error_toast(
+                        self.hide_main_and_reset(cx);
+                        return DispatchOutcome::error(
+                            crate::action_helpers::ERROR_ACTION_FAILED,
                             "Cannot remove alias for this item type",
-                            cx,
                         );
                     }
                     self.hide_main_and_reset(cx);
                 } else {
-                    self.show_error_toast(
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
                         selection_required_message_for_action(action_id),
-                        cx,
                     );
                 }
-                true
+                DispatchOutcome::success()
             }
-            _ => false,
+            _ => DispatchOutcome::not_handled(),
         }
     }
 }
