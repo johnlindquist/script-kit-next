@@ -137,7 +137,7 @@ fn execute_builtin_inner_accepts_trace_id_parameter() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn trigger_sdk_action_internal_logs_status_field() {
+fn trigger_sdk_action_internal_returns_dispatch_outcome() {
     let content = read("src/app_actions/sdk_actions.rs");
 
     let fn_start = content
@@ -146,28 +146,13 @@ fn trigger_sdk_action_internal_logs_status_field() {
     let fn_body = &content[fn_start..content.len().min(fn_start + 1500)];
 
     assert!(
-        fn_body.contains("status = %status"),
-        "trigger_sdk_action_internal must log status as a structured field"
+        fn_body.contains("-> crate::action_helpers::DispatchOutcome"),
+        "trigger_sdk_action_internal must return DispatchOutcome"
     );
 }
 
 #[test]
-fn trigger_sdk_action_internal_logs_error_code_field() {
-    let content = read("src/app_actions/sdk_actions.rs");
-
-    let fn_start = content
-        .find("fn trigger_sdk_action_internal(")
-        .expect("Expected trigger_sdk_action_internal function");
-    let fn_body = &content[fn_start..content.len().min(fn_start + 1500)];
-
-    assert!(
-        fn_body.contains("error_code ="),
-        "trigger_sdk_action_internal must log error_code as a structured field"
-    );
-}
-
-#[test]
-fn trigger_sdk_action_internal_uses_sdk_action_result() {
+fn trigger_sdk_action_internal_converts_via_from_sdk() {
     let content = read("src/app_actions/sdk_actions.rs");
 
     let fn_start = content
@@ -181,28 +166,34 @@ fn trigger_sdk_action_internal_uses_sdk_action_result() {
         "trigger_sdk_action_internal must delegate to crate::action_helpers::trigger_sdk_action"
     );
 
-    // Must extract status and error_code from the result
+    // Must convert via DispatchOutcome::from_sdk
     assert!(
-        fn_body.contains("result.status()"),
-        "trigger_sdk_action_internal must call .status() on the SdkActionResult"
-    );
-    assert!(
-        fn_body.contains("result.error_code()"),
-        "trigger_sdk_action_internal must call .error_code() on the SdkActionResult"
+        fn_body.contains("DispatchOutcome::from_sdk("),
+        "trigger_sdk_action_internal must convert SdkActionResult via DispatchOutcome::from_sdk"
     );
 }
 
 #[test]
-fn trigger_sdk_action_internal_logs_handler_field() {
-    let content = read("src/app_actions/sdk_actions.rs");
+fn handle_action_logs_status_and_error_code() {
+    let content = read("src/app_actions/handle_action/mod.rs");
 
-    let fn_start = content
-        .find("fn trigger_sdk_action_internal(")
-        .expect("Expected trigger_sdk_action_internal function");
-    let fn_body = &content[fn_start..content.len().min(fn_start + 1500)];
+    // The dispatch outcome logger must log status and error_code
+    assert!(
+        content.contains("status = %outcome.status"),
+        "handle_action dispatch must log outcome status as a structured field"
+    );
+    assert!(
+        content.contains("error_code = outcome.error_code"),
+        "handle_action dispatch must log outcome error_code as a structured field"
+    );
+}
+
+#[test]
+fn handle_action_logs_handler_for_sdk_fallback() {
+    let content = read("src/app_actions/handle_action/mod.rs");
 
     assert!(
-        fn_body.contains(r#"handler = "sdk""#),
-        "trigger_sdk_action_internal must identify itself with handler = \"sdk\""
+        content.contains(r#""sdk_fallback""#),
+        "handle_action must identify the SDK fallback handler"
     );
 }

@@ -5,13 +5,14 @@
 // reset_ranking, settings, quit.
 
 impl ScriptListApp {
-    /// Handle script management actions. Returns `true` if handled.
+    /// Handle script management actions. Returns `DispatchOutcome` indicating if handled.
     fn handle_script_action(
         &mut self,
         action_id: &str,
-        trace_id: &str,
+        dctx: &DispatchContext,
         cx: &mut Context<Self>,
-    ) -> bool {
+    ) -> DispatchOutcome {
+        let trace_id = &dctx.trace_id;
         match action_id {
             "create_script" => {
                 tracing::info!(category = "UI", trace_id = %trace_id, "create script action - opening scripts folder");
@@ -58,17 +59,17 @@ impl ScriptListApp {
                     });
                 })
                 .detach();
-                true
+                DispatchOutcome::success()
             }
             "run_script" => {
                 tracing::info!(category = "UI", "run script action");
                 self.execute_selected(cx);
-                true
+                DispatchOutcome::success()
             }
             "view_logs" => {
                 tracing::info!(category = "UI", "view logs action");
                 self.toggle_logs(cx);
-                true
+                DispatchOutcome::success()
             }
             "edit_script" => {
                 tracing::info!(category = "UI", "edit script action");
@@ -84,7 +85,7 @@ impl ScriptListApp {
                     };
 
                     if let Some(path) = path_opt {
-                        let editor_launch_rx = self.launch_editor_with_feedback_async(&path);
+                        let editor_launch_rx = self.launch_editor_with_feedback_async(&path, trace_id);
                         let trace_id = trace_id.to_string();
                         let start = std::time::Instant::now();
                         cx.spawn(async move |this, cx| {
@@ -120,36 +121,42 @@ impl ScriptListApp {
                         })
                         .detach();
                     } else {
-                        self.show_error_toast("Cannot edit this item type", cx);
+                        return DispatchOutcome::error(
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            "Cannot edit this item type",
+                        );
                     }
                 } else {
-                    self.show_error_toast(
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
                         selection_required_message_for_action(action_id),
-                        cx,
                     );
                 }
-                true
+                DispatchOutcome::success()
             }
             "remove_script" | "delete_script" => {
                 tracing::info!(category = "UI", action = action_id, "action triggered");
 
                 let Some(result) = self.get_selected_result() else {
-                    self.show_error_toast(
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
                         selection_required_message_for_action(action_id),
-                        cx,
                     );
-                    return true;
                 };
 
                 let Some(target) = script_removal_target_from_result(&result) else {
-                    self.show_error_toast("Cannot remove this item type", cx);
-                    return true;
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        "Cannot remove this item type",
+                    );
                 };
 
                 if !target.path.exists() {
-                    self.show_error_toast(format!("{} no longer exists", target.name), cx);
                     self.refresh_scripts(cx);
-                    return true;
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        format!("{} no longer exists", target.name),
+                    );
                 }
 
                 let message = format!(
@@ -160,7 +167,7 @@ impl ScriptListApp {
                 let trace_id = trace_id.to_string();
                 let start = std::time::Instant::now();
                 cx.spawn(async move |this, cx| {
-                    match confirm_with_modal(cx, message, "Move to Trash", "Cancel").await {
+                    match confirm_with_modal(cx, message, "Move to Trash", "Cancel", &trace_id).await {
                         Ok(true) => {}
                         Ok(false) => {
                             tracing::info!(
@@ -228,13 +235,13 @@ impl ScriptListApp {
                         });
                 })
                 .detach();
-                true
+                DispatchOutcome::success()
             }
             "reload_scripts" => {
                 tracing::info!(category = "UI", "reload scripts action");
                 self.refresh_scripts(cx);
                 self.show_hud("Scripts reloaded".to_string(), Some(HUD_SHORT_MS), cx);
-                true
+                DispatchOutcome::success()
             }
             "settings" => {
                 tracing::info!(category = "UI", "settings action - opening config.ts");
@@ -312,14 +319,14 @@ impl ScriptListApp {
                     });
                 })
                 .detach();
-                true
+                DispatchOutcome::success()
             }
             "quit" => {
                 tracing::info!(category = "UI", "quit action");
                 PROCESS_MANAGER.kill_all_processes();
                 PROCESS_MANAGER.remove_main_pid();
                 cx.quit();
-                true
+                DispatchOutcome::success()
             }
             "copy_content" => {
                 tracing::info!(category = "UI", "copy content action");
@@ -356,22 +363,25 @@ impl ScriptListApp {
                             }
                             Err(e) => {
                                 tracing::error!(path = %file_path, error = %e, "failed to read file");
-                                self.show_error_toast(
+                                return DispatchOutcome::error(
+                                    crate::action_helpers::ERROR_ACTION_FAILED,
                                     format!("Failed to read file: {}", e),
-                                    cx,
                                 );
                             }
                         }
                     } else {
-                        self.show_error_toast("Cannot copy content for this item type", cx);
+                        return DispatchOutcome::error(
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            "Cannot copy content for this item type",
+                        );
                     }
                 } else {
-                    self.show_error_toast(
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
                         selection_required_message_for_action(action_id),
-                        cx,
                     );
                 }
-                true
+                DispatchOutcome::success()
             }
             "reset_ranking" => {
                 tracing::info!(category = "UI", "reset ranking action");
@@ -405,18 +415,21 @@ impl ScriptListApp {
                             );
                         }
                     } else {
-                        self.show_error_toast("Item has no ranking to reset", cx);
+                        return DispatchOutcome::error(
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            "Item has no ranking to reset",
+                        );
                     }
                 } else {
-                    self.show_error_toast(
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
                         selection_required_message_for_action(action_id),
-                        cx,
                     );
                 }
                 // Don't hide main window - stay in the main menu so user can see the change
-                true
+                DispatchOutcome::success()
             }
-            _ => false,
+            _ => DispatchOutcome::not_handled(),
         }
     }
 }

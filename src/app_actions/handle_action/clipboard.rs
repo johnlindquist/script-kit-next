@@ -61,19 +61,20 @@ impl ScriptListApp {
     /// Handle clipboard-specific actions. Returns `true` if handled.
     ///
     /// Clipboard actions manage their own `cx.notify()` calls and early returns;
-    /// the caller should **not** call `cx.notify()` when this returns `true`.
+    /// the caller should **not** call `cx.notify()` when this returns a handled outcome.
     fn handle_clipboard_action(
         &mut self,
         action_id: &str,
         selected_clipboard_entry: Option<clipboard_history::ClipboardEntryMeta>,
-        trace_id: &str,
+        dctx: &DispatchContext,
         cx: &mut Context<Self>,
-    ) -> bool {
+    ) -> DispatchOutcome {
+        let trace_id = &dctx.trace_id;
         match action_id {
             "clipboard_pin" | "clipboard_unpin" => {
                 let Some(entry) = selected_clipboard_entry else {
                     self.show_error_toast("No clipboard entry selected", cx);
-                    return true;
+                    return DispatchOutcome::success();
                 };
 
                 let result = if action_id == "clipboard_pin" {
@@ -137,17 +138,17 @@ impl ScriptListApp {
                         self.show_error_toast(format!("Failed to update pin: {}", e), cx);
                     }
                 }
-                true
+                DispatchOutcome::success()
             }
             "clipboard_share" => {
                 let Some(entry) = selected_clipboard_entry else {
                     self.show_error_toast("No clipboard entry selected", cx);
-                    return true;
+                    return DispatchOutcome::success();
                 };
 
                 let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
                     self.show_error_toast("Clipboard entry content unavailable", cx);
-                    return true;
+                    return DispatchOutcome::success();
                 };
 
                 tracing::info!(entry_id = %entry.id, content_type = ?entry.content_type, "opening share sheet");
@@ -186,13 +187,13 @@ impl ScriptListApp {
                         self.show_error_toast(message, cx);
                     }
                 }
-                true
+                DispatchOutcome::success()
             }
             // Paste to active app and close window (Enter)
             "clipboard_paste" => {
                 let Some(entry) = selected_clipboard_entry else {
                     self.show_error_toast("No clipboard entry selected", cx);
-                    return true;
+                    return DispatchOutcome::success();
                 };
 
                 tracing::info!(entry_id = %entry.id, "paste entry");
@@ -211,17 +212,17 @@ impl ScriptListApp {
                         self.show_error_toast(format!("Failed to paste: {}", e), cx);
                     }
                 }
-                true
+                DispatchOutcome::success()
             }
             "clipboard_attach_to_ai" => {
                 let Some(entry) = selected_clipboard_entry else {
                     self.show_error_toast("No clipboard entry selected", cx);
-                    return true;
+                    return DispatchOutcome::success();
                 };
 
                 let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
                     self.show_error_toast("Clipboard entry content unavailable", cx);
-                    return true;
+                    return DispatchOutcome::success();
                 };
 
                 tracing::info!(
@@ -242,7 +243,7 @@ impl ScriptListApp {
                             shellexpand::tilde(content.trim()).into_owned();
                         if attachment_path.is_empty() {
                             self.show_error_toast("Clipboard file path is empty", cx);
-                            return true;
+                            return DispatchOutcome::success();
                         }
 
                         DeferredAiWindowAction::AddAttachment {
@@ -254,7 +255,7 @@ impl ScriptListApp {
                             clipboard_history::content_to_png_bytes(&content)
                         else {
                             self.show_error_toast("Failed to decode clipboard image", cx);
-                            return true;
+                            return DispatchOutcome::success();
                         };
 
                         use base64::Engine;
@@ -268,13 +269,13 @@ impl ScriptListApp {
                 };
 
                 self.open_ai_window_after_main_hide(deferred_action, "Attached to AI", cx);
-                true
+                DispatchOutcome::success()
             }
             // Copy to clipboard without pasting (Cmd+Enter)
             "clipboard_copy" => {
                 let Some(entry) = selected_clipboard_entry else {
                     self.show_error_toast("No clipboard entry selected", cx);
-                    return true;
+                    return DispatchOutcome::success();
                 };
 
                 tracing::info!(entry_id = %entry.id, "copying entry to clipboard");
@@ -293,13 +294,13 @@ impl ScriptListApp {
                         self.show_error_toast(format!("Failed to copy: {}", e), cx);
                     }
                 }
-                true
+                DispatchOutcome::success()
             }
             // Paste and keep window open (Opt+Enter)
             "clipboard_paste_keep_open" => {
                 let Some(entry) = selected_clipboard_entry else {
                     self.show_error_toast("No clipboard entry selected", cx);
-                    return true;
+                    return DispatchOutcome::success();
                 };
 
                 tracing::info!(entry_id = %entry.id, "paste and keep open");
@@ -318,29 +319,29 @@ impl ScriptListApp {
                         self.show_error_toast(format!("Failed to paste: {}", e), cx);
                     }
                 }
-                true
+                DispatchOutcome::success()
             }
             "clipboard_quick_look" => {
                 let Some(entry) = selected_clipboard_entry else {
                     self.show_error_toast("No clipboard entry selected", cx);
-                    return true;
+                    return DispatchOutcome::success();
                 };
 
                 if let Err(e) = clipboard_history::quick_look_entry(&entry) {
                     tracing::error!(error = %e, "failed to Quick Look");
                     self.show_error_toast(format!("Failed to Quick Look: {}", e), cx);
                 }
-                true
+                DispatchOutcome::success()
             }
             "clipboard_open_with" => {
                 let Some(entry) = selected_clipboard_entry else {
                     self.show_error_toast("No clipboard entry selected", cx);
-                    return true;
+                    return DispatchOutcome::success();
                 };
 
                 let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
                     self.show_error_toast("Failed to load clipboard content", cx);
-                    return true;
+                    return DispatchOutcome::success();
                 };
 
                 let full_entry = clipboard_history::ClipboardEntry {
@@ -359,7 +360,7 @@ impl ScriptListApp {
                     Err(e) => {
                         tracing::error!(error = %e, "failed to save temp file");
                         self.show_error_toast("Failed to save temp file", cx);
-                        return true;
+                        return DispatchOutcome::success();
                     }
                 };
 
@@ -377,12 +378,12 @@ impl ScriptListApp {
                     let _ = temp_path;
                     self.show_unsupported_platform_toast("Open With", cx);
                 }
-                true
+                DispatchOutcome::success()
             }
             "clipboard_annotate_cleanshot" => {
                 let Some(entry) = selected_clipboard_entry else {
                     self.show_error_toast("No clipboard entry selected", cx);
-                    return true;
+                    return DispatchOutcome::success();
                 };
 
                 if entry.content_type != clipboard_history::ContentType::Image {
@@ -390,7 +391,7 @@ impl ScriptListApp {
                         "CleanShot actions are only available for images",
                         cx,
                     );
-                    return true;
+                    return DispatchOutcome::success();
                 }
 
                 #[cfg(target_os = "macos")]
@@ -398,7 +399,7 @@ impl ScriptListApp {
                     if let Err(e) = clipboard_history::copy_entry_to_clipboard(&entry.id) {
                         tracing::error!(error = %e, "failed to copy image");
                         self.show_error_toast("Failed to copy image", cx);
-                        return true;
+                        return DispatchOutcome::success();
                     }
 
                     let url = "cleanshot://open-from-clipboard";
@@ -422,12 +423,12 @@ impl ScriptListApp {
                 {
                     self.show_unsupported_platform_toast("CleanShot", cx);
                 }
-                true
+                DispatchOutcome::success()
             }
             "clipboard_upload_cleanshot" => {
                 let Some(entry) = selected_clipboard_entry else {
                     self.show_error_toast("No clipboard entry selected", cx);
-                    return true;
+                    return DispatchOutcome::success();
                 };
 
                 if entry.content_type != clipboard_history::ContentType::Image {
@@ -435,20 +436,20 @@ impl ScriptListApp {
                         "CleanShot actions are only available for images",
                         cx,
                     );
-                    return true;
+                    return DispatchOutcome::success();
                 }
 
                 #[cfg(target_os = "macos")]
                 {
                     let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
                         self.show_error_toast("Failed to load image content", cx);
-                        return true;
+                        return DispatchOutcome::success();
                     };
 
                     let Some(png_bytes) = clipboard_history::content_to_png_bytes(&content)
                     else {
                         self.show_error_toast("Failed to decode image", cx);
-                        return true;
+                        return DispatchOutcome::success();
                     };
 
                     let temp_path = std::env::temp_dir()
@@ -457,7 +458,7 @@ impl ScriptListApp {
                     if let Err(e) = std::fs::write(&temp_path, png_bytes) {
                         tracing::error!(error = %e, "failed to write temp image");
                         self.show_error_toast("Failed to save image", cx);
-                        return true;
+                        return DispatchOutcome::success();
                     }
 
                     let path_str = temp_path.to_string_lossy();
@@ -487,17 +488,17 @@ impl ScriptListApp {
                 {
                     self.show_unsupported_platform_toast("CleanShot", cx);
                 }
-                true
+                DispatchOutcome::success()
             }
             "clipboard_ocr" => {
                 let Some(entry) = selected_clipboard_entry else {
                     self.show_error_toast("No clipboard entry selected", cx);
-                    return true;
+                    return DispatchOutcome::success();
                 };
 
                 if entry.content_type != clipboard_history::ContentType::Image {
                     self.show_error_toast("OCR is only available for images", cx);
-                    return true;
+                    return DispatchOutcome::success();
                 }
 
                 // Check if we already have cached OCR text
@@ -510,7 +511,7 @@ impl ScriptListApp {
                             true,
                             cx,
                         );
-                        return true;
+                        return DispatchOutcome::success();
                     }
                 }
 
@@ -519,7 +520,7 @@ impl ScriptListApp {
                     // Get image content
                     let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
                         self.show_error_toast("Failed to load image content", cx);
-                        return true;
+                        return DispatchOutcome::success();
                     };
 
                     // Decode to RGBA bytes for OCR
@@ -527,7 +528,7 @@ impl ScriptListApp {
                         clipboard_history::decode_to_rgba_bytes(&content)
                     else {
                         self.show_error_toast("Failed to decode image", cx);
-                        return true;
+                        return DispatchOutcome::success();
                     };
 
                     tracing::debug!(width, height, "starting OCR on image");
@@ -568,7 +569,7 @@ impl ScriptListApp {
                 {
                     self.show_unsupported_platform_toast("OCR", cx);
                 }
-                true
+                DispatchOutcome::success()
             }
             // Clipboard delete actions
             "clipboard_delete_multiple" => {
@@ -582,7 +583,7 @@ impl ScriptListApp {
                         "Type in search first, then use Delete Entries...",
                         cx,
                     );
-                    return true;
+                    return DispatchOutcome::success();
                 }
 
                 let filter_lower = filter_text.to_lowercase();
@@ -595,7 +596,7 @@ impl ScriptListApp {
 
                 if ids_to_delete.is_empty() {
                     self.show_error_toast("No matching entries to delete", cx);
-                    return true;
+                    return DispatchOutcome::success();
                 }
 
                 let delete_count = ids_to_delete.len();
@@ -607,7 +608,7 @@ impl ScriptListApp {
                 let start = std::time::Instant::now();
 
                 cx.spawn(async move |this, cx| {
-                    match confirm_with_modal(cx, message, "Yes", "Cancel").await {
+                    match confirm_with_modal(cx, message, "Yes", "Cancel", &trace_id).await {
                         Ok(true) => {}
                         Ok(false) => {
                             tracing::info!(
@@ -670,12 +671,12 @@ impl ScriptListApp {
                     });
                 })
                 .detach();
-                true
+                DispatchOutcome::success()
             }
             "clipboard_delete" => {
                 let Some(entry) = selected_clipboard_entry else {
                     self.show_error_toast("No clipboard entry selected", cx);
-                    return true;
+                    return DispatchOutcome::success();
                 };
 
                 match clipboard_history::remove_entry(&entry.id) {
@@ -696,7 +697,7 @@ impl ScriptListApp {
                         self.show_error_toast(format!("Failed to delete: {}", e), cx);
                     }
                 }
-                true
+                DispatchOutcome::success()
             }
             "clipboard_delete_all" => {
                 // Delete all unpinned entries
@@ -708,7 +709,7 @@ impl ScriptListApp {
 
                 if unpinned_count == 0 {
                     self.show_error_toast("No unpinned entries to delete", cx);
-                    return true;
+                    return DispatchOutcome::success();
                 }
 
                 let message = format!(
@@ -719,7 +720,7 @@ impl ScriptListApp {
                 let start = std::time::Instant::now();
 
                 cx.spawn(async move |this, cx| {
-                    match confirm_with_modal(cx, message, "Yes", "Cancel").await {
+                    match confirm_with_modal(cx, message, "Yes", "Cancel", &trace_id).await {
                         Ok(true) => {}
                         Ok(false) => {
                             tracing::info!(
@@ -777,18 +778,18 @@ impl ScriptListApp {
                     });
                 })
                 .detach();
-                true
+                DispatchOutcome::success()
             }
 
             "clipboard_save_file" => {
                 let Some(entry) = selected_clipboard_entry.clone() else {
                     self.show_error_toast("No clipboard entry selected", cx);
-                    return true;
+                    return DispatchOutcome::success();
                 };
 
                 let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
                     self.show_error_toast("Clipboard content unavailable", cx);
-                    return true;
+                    return DispatchOutcome::success();
                 };
 
                 // Determine filename and content based on type
@@ -802,7 +803,7 @@ impl ScriptListApp {
                             clipboard_history::content_to_png_bytes(&content)
                         else {
                             self.show_error_toast("Failed to decode image", cx);
-                            return true;
+                            return DispatchOutcome::success();
                         };
                         (png_bytes, "png")
                     }
@@ -826,7 +827,7 @@ impl ScriptListApp {
                     Ok(()) => {
                         tracing::info!(path = ?save_path, "saved clipboard to file");
                         let reveal_result_rx =
-                            self.reveal_in_finder_with_feedback_async(&save_path);
+                            self.reveal_in_finder_with_feedback_async(&save_path, trace_id);
                         let trace_id = trace_id.to_string();
                         let start = std::time::Instant::now();
                         cx.spawn(async move |this, cx| {
@@ -875,22 +876,22 @@ impl ScriptListApp {
                         self.show_error_toast(format!("Failed to save: {}", e), cx);
                     }
                 }
-                true
+                DispatchOutcome::success()
             }
             "clipboard_save_snippet" => {
                 let Some(entry) = selected_clipboard_entry else {
                     self.show_error_toast("No clipboard entry selected", cx);
-                    return true;
+                    return DispatchOutcome::success();
                 };
 
                 if entry.content_type != clipboard_history::ContentType::Text {
                     self.show_error_toast("Only text can be saved as snippet", cx);
-                    return true;
+                    return DispatchOutcome::success();
                 }
 
                 let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
                     self.show_error_toast("Clipboard content unavailable", cx);
-                    return true;
+                    return DispatchOutcome::success();
                 };
 
                 // Generate a default keyword from the first few words
@@ -921,7 +922,7 @@ impl ScriptListApp {
                             format!("Failed to create snippets: {}", e),
                             cx,
                         );
-                        return true;
+                        return DispatchOutcome::success();
                     }
                 }
 
@@ -976,10 +977,10 @@ impl ScriptListApp {
                         self.show_error_toast(format!("Failed to save: {}", e), cx);
                     }
                 }
-                true
+                DispatchOutcome::success()
             }
 
-            _ => false,
+            _ => DispatchOutcome::not_handled(),
         }
     }
 }

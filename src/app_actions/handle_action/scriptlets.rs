@@ -4,13 +4,14 @@
 // and dynamic scriptlet_action:* handlers.
 
 impl ScriptListApp {
-    /// Handle scriptlet-specific actions. Returns `true` if handled.
+    /// Handle scriptlet-specific actions. Returns `DispatchOutcome` indicating if handled.
     fn handle_scriptlet_action(
         &mut self,
         action_id: &str,
-        trace_id: &str,
+        dctx: &DispatchContext,
         cx: &mut Context<Self>,
-    ) -> bool {
+    ) -> DispatchOutcome {
+        let trace_id = &dctx.trace_id;
         match action_id {
             "edit_scriptlet" => {
                 tracing::info!(category = "UI", "edit scriptlet action");
@@ -22,7 +23,7 @@ impl ScriptListApp {
                                 file_path.split('#').next().unwrap_or(file_path);
                             let path = std::path::PathBuf::from(path_str);
                             let editor_launch_rx =
-                                self.launch_editor_with_feedback_async(&path);
+                                self.launch_editor_with_feedback_async(&path, trace_id);
                             let trace_id = trace_id.to_string();
                             let start = std::time::Instant::now();
                             cx.spawn(async move |this, cx| {
@@ -56,21 +57,24 @@ impl ScriptListApp {
                             })
                             .detach();
                         } else {
-                            self.show_error_toast(
+                            return DispatchOutcome::error(
+                                crate::action_helpers::ERROR_ACTION_FAILED,
                                 "Scriptlet has no source file path",
-                                cx,
                             );
                         }
                     } else {
-                        self.show_error_toast("Selected item is not a scriptlet", cx);
+                        return DispatchOutcome::error(
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            "Selected item is not a scriptlet",
+                        );
                     }
                 } else {
-                    self.show_error_toast(
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
                         selection_required_message_for_action(action_id),
-                        cx,
                     );
                 }
-                true
+                DispatchOutcome::success()
             }
             "reveal_scriptlet_in_finder" => {
                 tracing::info!(category = "UI", "reveal scriptlet in Finder action");
@@ -82,7 +86,7 @@ impl ScriptListApp {
                                 file_path.split('#').next().unwrap_or(file_path);
                             let path = std::path::Path::new(path_str);
                             let reveal_result_rx =
-                                self.reveal_in_finder_with_feedback_async(path);
+                                self.reveal_in_finder_with_feedback_async(path, trace_id);
                             let trace_id = trace_id.to_string();
                             let start = std::time::Instant::now();
                             cx.spawn(async move |this, cx| {
@@ -121,21 +125,24 @@ impl ScriptListApp {
                             })
                             .detach();
                         } else {
-                            self.show_error_toast(
+                            return DispatchOutcome::error(
+                                crate::action_helpers::ERROR_ACTION_FAILED,
                                 "Scriptlet has no source file path",
-                                cx,
                             );
                         }
                     } else {
-                        self.show_error_toast("Selected item is not a scriptlet", cx);
+                        return DispatchOutcome::error(
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            "Selected item is not a scriptlet",
+                        );
                     }
                 } else {
-                    self.show_error_toast(
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
                         selection_required_message_for_action(action_id),
-                        cx,
                     );
                 }
-                true
+                DispatchOutcome::success()
             }
             "copy_scriptlet_path" => {
                 tracing::info!(category = "UI", "copy scriptlet path action");
@@ -154,21 +161,24 @@ impl ScriptListApp {
                                 cx,
                             );
                         } else {
-                            self.show_error_toast(
+                            return DispatchOutcome::error(
+                                crate::action_helpers::ERROR_ACTION_FAILED,
                                 "Scriptlet has no source file path",
-                                cx,
                             );
                         }
                     } else {
-                        self.show_error_toast("Selected item is not a scriptlet", cx);
+                        return DispatchOutcome::error(
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            "Selected item is not a scriptlet",
+                        );
                     }
                 } else {
-                    self.show_error_toast(
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
                         selection_required_message_for_action(action_id),
-                        cx,
                     );
                 }
-                true
+                DispatchOutcome::success()
             }
             // Handle scriptlet actions defined via H3 headers
             action_id if action_id.starts_with("scriptlet_action:") => {
@@ -313,23 +323,26 @@ impl ScriptListApp {
 
                         if !action_found {
                             tracing::error!(action = %action_command, "scriptlet action not found");
-                            self.show_error_toast("Scriptlet action not found", cx);
+                            return DispatchOutcome::error(
+                                crate::action_helpers::ERROR_ACTION_FAILED,
+                                "Scriptlet action not found",
+                            );
                         }
                     } else {
-                        self.show_error_toast(
+                        return DispatchOutcome::error(
+                            crate::action_helpers::ERROR_ACTION_FAILED,
                             "Selected item is not a scriptlet",
-                            cx,
                         );
                     }
                 } else {
-                    self.show_error_toast(
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
                         selection_required_message_for_action(action_id),
-                        cx,
                     );
                 }
-                true
+                DispatchOutcome::success()
             }
-            _ => false,
+            _ => DispatchOutcome::not_handled(),
         }
     }
 }

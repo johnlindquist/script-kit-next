@@ -311,11 +311,12 @@ impl ScriptListApp {
             let entry_id = entry.id.clone();
             let entry_name = entry.name.clone();
             let query_owned = query_override.map(|s| s.to_string());
+            let trace_id_owned = trace_id.clone();
 
             // Spawn a task to show confirmation modal via confirm_with_modal helper
             cx.spawn(async move |this, cx| {
                 let message = format!("Are you sure you want to {}?", entry_name);
-                match confirm_with_modal(cx, message, "Yes", "Cancel").await {
+                match confirm_with_modal(cx, message, "Yes", "Cancel", &trace_id_owned).await {
                     Ok(true) => {
                         let _ = this.update(cx, |this, cx| {
                             this.handle_builtin_confirmation(

@@ -111,11 +111,13 @@ fn remove_shortcut_shows_error_on_persistence_failure() {
 
     assert!(
         block.contains("Failed to remove shortcut:"),
-        "remove_shortcut should show error toast on persistence failure"
+        "remove_shortcut should surface error on persistence failure"
     );
+    // Error may be surfaced via DispatchOutcome::error (centralized feedback)
+    // or show_error_toast (inline feedback).
     assert!(
-        block.contains("show_error_toast("),
-        "remove_shortcut should use show_error_toast for consistent UX"
+        block.contains("DispatchOutcome::error(") || block.contains("show_error_toast("),
+        "remove_shortcut should return DispatchOutcome::error or call show_error_toast"
     );
 }
 
@@ -229,11 +231,13 @@ fn remove_alias_shows_error_on_persistence_failure() {
 
     assert!(
         block.contains("Failed to remove alias:"),
-        "remove_alias should show error toast on persistence failure"
+        "remove_alias should surface error on persistence failure"
     );
+    // Error may be surfaced via DispatchOutcome::error (centralized feedback)
+    // or show_error_toast (inline feedback).
     assert!(
-        block.contains("show_error_toast("),
-        "remove_alias should use show_error_toast for consistent UX"
+        block.contains("DispatchOutcome::error(") || block.contains("show_error_toast("),
+        "remove_alias should return DispatchOutcome::error or call show_error_toast"
     );
 }
 

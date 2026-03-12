@@ -5,8 +5,9 @@
 
 use script_kit_gpui::action_helpers::{
     extract_path_for_copy, extract_path_for_edit, extract_path_for_reveal, find_sdk_action,
-    is_reserved_action_id, trigger_sdk_action, PathExtractionError, SdkActionResult,
-    ERROR_CANCELLED, ERROR_CHANNEL_DISCONNECTED, ERROR_CHANNEL_FULL, ERROR_NO_SENDER,
+    is_reserved_action_id, trigger_sdk_action, ActionOutcomeStatus, DispatchContext,
+    DispatchOutcome, DispatchSurface, PathExtractionError, SdkActionResult, ERROR_CANCELLED,
+    ERROR_CHANNEL_DISCONNECTED, ERROR_CHANNEL_FULL, ERROR_NO_SENDER,
 };
 use script_kit_gpui::agents::Agent;
 use script_kit_gpui::app_launcher;
@@ -696,4 +697,123 @@ fn error_messages_never_expose_transport_enum_names() {
             }
         }
     }
+}
+
+// ============================================================================
+// DispatchOutcome — constructors and from_sdk conversion
+// ============================================================================
+
+#[test]
+fn dispatch_outcome_success_is_handled() {
+    let outcome = DispatchOutcome::success();
+    assert_eq!(outcome.status, ActionOutcomeStatus::Success);
+    assert!(outcome.was_handled());
+    assert!(outcome.error_code.is_none());
+    assert!(outcome.user_message.is_none());
+}
+
+#[test]
+fn dispatch_outcome_not_handled_is_not_handled() {
+    let outcome = DispatchOutcome::not_handled();
+    assert_eq!(outcome.status, ActionOutcomeStatus::NoEffect);
+    assert!(!outcome.was_handled());
+}
+
+#[test]
+fn dispatch_outcome_error_is_handled_with_code_and_message() {
+    let outcome = DispatchOutcome::error(ERROR_NO_SENDER, "No active script");
+    assert_eq!(outcome.status, ActionOutcomeStatus::Error);
+    assert!(outcome.was_handled());
+    assert_eq!(outcome.error_code, Some(ERROR_NO_SENDER));
+    assert_eq!(outcome.user_message.as_deref(), Some("No active script"));
+}
+
+#[test]
+fn dispatch_outcome_cancelled_is_handled_with_code_but_no_message() {
+    let outcome = DispatchOutcome::cancelled();
+    assert_eq!(outcome.status, ActionOutcomeStatus::Cancelled);
+    assert!(outcome.was_handled());
+    assert_eq!(outcome.error_code, Some(ERROR_CANCELLED));
+    assert!(outcome.user_message.is_none());
+}
+
+#[test]
+fn dispatch_outcome_from_sdk_all_variants() {
+    // Sent → Success
+    let o = DispatchOutcome::from_sdk(&SdkActionResult::Sent, "x");
+    assert_eq!(o.status, ActionOutcomeStatus::Success);
+    assert!(o.error_code.is_none());
+
+    // NoEffect → NoEffect (not handled)
+    let o = DispatchOutcome::from_sdk(&SdkActionResult::NoEffect, "x");
+    assert_eq!(o.status, ActionOutcomeStatus::NoEffect);
+    assert!(!o.was_handled());
+
+    // Cancelled → Cancelled
+    let o = DispatchOutcome::from_sdk(&SdkActionResult::Cancelled, "x");
+    assert_eq!(o.status, ActionOutcomeStatus::Cancelled);
+    assert_eq!(o.error_code, Some(ERROR_CANCELLED));
+    assert!(o.user_message.is_none());
+
+    // NoSender → Error
+    let o = DispatchOutcome::from_sdk(&SdkActionResult::NoSender, "my_action");
+    assert_eq!(o.status, ActionOutcomeStatus::Error);
+    assert_eq!(o.error_code, Some(ERROR_NO_SENDER));
+    assert!(o.user_message.is_some());
+
+    // ChannelFull → Error
+    let o = DispatchOutcome::from_sdk(&SdkActionResult::ChannelFull, "my_action");
+    assert_eq!(o.status, ActionOutcomeStatus::Error);
+    assert_eq!(o.error_code, Some(ERROR_CHANNEL_FULL));
+
+    // ChannelDisconnected → Error
+    let o = DispatchOutcome::from_sdk(&SdkActionResult::ChannelDisconnected, "my_action");
+    assert_eq!(o.status, ActionOutcomeStatus::Error);
+    assert_eq!(o.error_code, Some(ERROR_CHANNEL_DISCONNECTED));
+}
+
+#[test]
+fn dispatch_outcome_with_detail_preserves_status() {
+    let outcome = DispatchOutcome::error(ERROR_NO_SENDER, "msg").with_detail("extra");
+    assert_eq!(outcome.status, ActionOutcomeStatus::Error);
+    assert_eq!(outcome.detail.as_deref(), Some("extra"));
+}
+
+// ============================================================================
+// DispatchContext — creation and trace_id propagation
+// ============================================================================
+
+#[test]
+fn dispatch_context_for_action_has_action_surface() {
+    let ctx = DispatchContext::for_action("copy_path");
+    assert_eq!(ctx.surface, DispatchSurface::Action);
+    assert_eq!(ctx.action_id, "copy_path");
+    assert!(!ctx.trace_id.is_empty());
+}
+
+#[test]
+fn dispatch_context_for_builtin_has_builtin_surface() {
+    let ctx = DispatchContext::for_builtin("clipboard_history");
+    assert_eq!(ctx.surface, DispatchSurface::Builtin);
+    assert_eq!(ctx.action_id, "clipboard_history");
+    assert!(!ctx.trace_id.is_empty());
+}
+
+#[test]
+fn dispatch_context_trace_ids_are_unique_across_calls() {
+    let a = DispatchContext::for_action("x");
+    let b = DispatchContext::for_action("x");
+    assert_ne!(a.trace_id, b.trace_id);
+}
+
+#[test]
+fn dispatch_context_accepts_owned_string() {
+    let ctx = DispatchContext::for_action(String::from("owned_id"));
+    assert_eq!(ctx.action_id, "owned_id");
+}
+
+#[test]
+fn dispatch_surface_display_values() {
+    assert_eq!(format!("{}", DispatchSurface::Action), "action");
+    assert_eq!(format!("{}", DispatchSurface::Builtin), "builtin");
 }
