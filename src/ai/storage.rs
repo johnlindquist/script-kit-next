@@ -23,18 +23,15 @@ fn get_ai_db_path() -> PathBuf {
     kit_dir.join("db").join("ai-chats.sqlite")
 }
 
-/// Initialize the AI chats database
+/// Initialize the AI chats database with a specific path.
 ///
-/// This function is idempotent - calling it multiple times is safe and will
-/// succeed if the database is already initialized.
-pub fn init_ai_db() -> Result<()> {
+/// This is the inner implementation shared by both production and test init.
+fn init_ai_db_at(db_path: PathBuf) -> Result<()> {
     // Check if already initialized - return early (idempotent behavior)
     if AI_DB.get().is_some() {
         debug!("AI database already initialized, skipping");
         return Ok(());
     }
-
-    let db_path = get_ai_db_path();
 
     // Ensure directory exists
     if let Some(parent) = db_path.parent() {
@@ -217,6 +214,14 @@ pub fn init_ai_db() -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Initialize the AI chats database
+///
+/// This function is idempotent - calling it multiple times is safe and will
+/// succeed if the database is already initialized.
+pub fn init_ai_db() -> Result<()> {
+    init_ai_db_at(get_ai_db_path())
 }
 
 /// Get a reference to the AI database connection
@@ -1433,6 +1438,24 @@ pub fn clear_all_chats() -> Result<()> {
 mod tests {
     use super::*;
 
+    /// Per-process temp directory for test DB isolation.
+    /// All tests in this binary share one temp DB (serialized by the global Mutex),
+    /// but it is separate from the production DB and from other test binaries.
+    static TEST_DB_INIT: std::sync::Once = std::sync::Once::new();
+    static TEST_DB_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+    fn init_test_db() {
+        TEST_DB_INIT.call_once(|| {
+            let dir =
+                std::env::temp_dir().join(format!("script-kit-ai-test-{}", std::process::id()));
+            std::fs::create_dir_all(&dir).expect("Should create test DB directory");
+            let db_path = dir.join("ai-chats-test.sqlite");
+            let _ = TEST_DB_DIR.set(dir);
+            init_ai_db_at(db_path).expect("Should initialize test DB");
+        });
+        // For threads that lost the race, just wait for init to complete (Once handles this).
+    }
+
     #[test]
     fn test_db_path() {
         let path = get_ai_db_path();
@@ -1445,15 +1468,10 @@ mod tests {
 
     #[test]
     fn test_init_ai_db_is_idempotent() {
-        // First call should succeed (may already be initialized from other tests)
-        let result1 = init_ai_db();
-        // If it fails, it should only be because it's already initialized (which is OK)
-        if let Err(ref e) = result1 {
-            // This is the old behavior we're fixing - it shouldn't error
-            panic!("init_ai_db() should be idempotent but got error: {}", e);
-        }
+        // First call via test helper sets up the temp DB
+        init_test_db();
 
-        // Second call should also succeed (idempotent)
+        // Subsequent calls to init_ai_db should succeed (OnceLock already set)
         let result2 = init_ai_db();
         assert!(
             result2.is_ok(),
@@ -1473,7 +1491,7 @@ mod tests {
     #[test]
     fn test_search_chats_does_not_error() {
         // Ensure DB is initialized
-        let _ = init_ai_db();
+        init_test_db();
 
         // Empty search should return all chats (not error)
         let result = search_chats("");
@@ -1511,7 +1529,7 @@ mod tests {
     #[test]
     fn test_fts_triggers_use_update_of_column() {
         // Ensure DB is initialized
-        let _ = init_ai_db();
+        init_test_db();
 
         let db = get_db().expect("Should get db connection");
         let conn = db.lock().expect("Should lock connection");
@@ -1553,7 +1571,7 @@ mod tests {
     #[test]
     fn test_ai_db_has_required_pragmas() {
         // Ensure DB is initialized
-        let _ = init_ai_db();
+        init_test_db();
 
         let db = get_db().expect("Should get db connection");
         let conn = db.lock().expect("Should lock connection");
@@ -1590,7 +1608,7 @@ mod tests {
 
     #[test]
     fn test_save_message_persists_images_and_getters_populate_them() {
-        let _ = init_ai_db();
+        init_test_db();
 
         let chat = Chat::new("test-model-images", "test-provider-images");
         create_chat(&chat).expect("Should create chat");
@@ -1626,7 +1644,7 @@ mod tests {
 
     #[test]
     fn test_save_message_replaces_existing_images_on_upsert() {
-        let _ = init_ai_db();
+        init_test_db();
 
         let chat = Chat::new("test-model-image-upsert", "test-provider-image-upsert");
         create_chat(&chat).expect("Should create chat");
@@ -1659,7 +1677,7 @@ mod tests {
 
     #[test]
     fn test_delete_messages_batch_rolls_back_when_any_message_missing() {
-        let _ = init_ai_db();
+        init_test_db();
 
         let chat = Chat::new("test-model-batch-delete", "test-provider-batch-delete");
         create_chat(&chat).expect("Should create chat");
