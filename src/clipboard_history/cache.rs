@@ -4,8 +4,9 @@
 
 use gpui::RenderImage;
 use lru::LruCache;
+use parking_lot::Mutex;
 use std::num::NonZeroUsize;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 use tracing::debug;
 
 use super::database::get_clipboard_history_meta;
@@ -52,25 +53,24 @@ pub fn init_cache_timestamp() {
 
 /// Get cached image by entry ID (updates LRU order)
 pub fn get_cached_image(id: &str) -> Option<Arc<RenderImage>> {
-    get_image_cache().lock().ok()?.get(id).cloned()
+    get_image_cache().lock().get(id).cloned()
 }
 
 /// Cache a decoded image (with LRU eviction at MAX_IMAGE_CACHE_ENTRIES limit)
 pub fn cache_image(id: &str, image: Arc<RenderImage>) {
-    if let Ok(mut cache) = get_image_cache().lock() {
-        // LruCache automatically evicts oldest entry when capacity is exceeded
-        let evicted = cache.len() >= cache.cap().get();
-        cache.put(id.to_string(), image);
-        if evicted {
-            debug!(
-                id = %id,
-                cache_size = cache.len(),
-                max_size = MAX_IMAGE_CACHE_ENTRIES,
-                "Cached decoded image (evicted oldest)"
-            );
-        } else {
-            debug!(id = %id, cache_size = cache.len(), "Cached decoded image");
-        }
+    let mut cache = get_image_cache().lock();
+    // LruCache automatically evicts oldest entry when capacity is exceeded
+    let evicted = cache.len() >= cache.cap().get();
+    cache.put(id.to_string(), image);
+    if evicted {
+        debug!(
+            id = %id,
+            cache_size = cache.len(),
+            max_size = MAX_IMAGE_CACHE_ENTRIES,
+            "Cached decoded image (evicted oldest)"
+        );
+    } else {
+        debug!(id = %id, cache_size = cache.len(), "Cached decoded image");
     }
 }
 
@@ -78,52 +78,49 @@ pub fn cache_image(id: &str, image: Arc<RenderImage>) {
 /// Falls back to SQLite if cache is empty.
 /// Returns Arc to avoid cloning the entire cache - caller can clone individual entries if needed.
 pub fn get_cached_entries(limit: usize) -> Vec<ClipboardEntryMeta> {
-    if let Ok(cache) = get_entry_cache().lock() {
-        if !cache.is_empty() {
-            // Only clone the entries we need, not the entire cache
-            let result: Vec<_> = cache.iter().take(limit).cloned().collect();
-            debug!(
-                count = result.len(),
-                cached = true,
-                "Retrieved clipboard entry metadata from cache"
-            );
-            return result;
-        }
+    let cache = get_entry_cache().lock();
+    if !cache.is_empty() {
+        // Only clone the entries we need, not the entire cache
+        let result: Vec<_> = cache.iter().take(limit).cloned().collect();
+        debug!(
+            count = result.len(),
+            cached = true,
+            "Retrieved clipboard entry metadata from cache"
+        );
+        return result;
     }
+    drop(cache);
     // Fall back to database (metadata-only query)
     get_clipboard_history_meta(limit, 0)
 }
 
 /// Invalidate the entry cache (called when entries change)
 pub fn invalidate_entry_cache() {
-    if let Ok(mut cache) = get_entry_cache().lock() {
-        *cache = Arc::new(Vec::new());
-    }
+    let mut cache = get_entry_cache().lock();
+    *cache = Arc::new(Vec::new());
 }
 
 /// Refresh the entry cache from database (metadata only, no content payload)
 pub fn refresh_entry_cache() {
     // Use metadata-only query to avoid loading full content
     let entries = get_clipboard_history_meta(MAX_CACHED_ENTRIES, 0);
-    if let Ok(mut cache) = get_entry_cache().lock() {
-        // Replace the Arc with a new one containing the refreshed entries
-        *cache = Arc::new(entries);
-        debug!(count = cache.len(), "Refreshed entry metadata cache");
-    }
+    let mut cache = get_entry_cache().lock();
+    // Replace the Arc with a new one containing the refreshed entries
+    *cache = Arc::new(entries);
+    debug!(count = cache.len(), "Refreshed entry metadata cache");
+    drop(cache);
     if let Some(updated) = CACHE_UPDATED.get() {
-        if let Ok(mut ts) = updated.lock() {
-            *ts = chrono::Utc::now().timestamp_millis();
-        }
+        let mut ts = updated.lock();
+        *ts = chrono::Utc::now().timestamp_millis();
     }
 }
 
 /// Evict a single entry from the image cache
 pub fn evict_image_cache(id: &str) {
     if let Some(cache) = IMAGE_CACHE.get() {
-        if let Ok(mut cache) = cache.lock() {
-            cache.pop(id);
-            debug!(id = %id, "Evicted image from cache");
-        }
+        let mut cache = cache.lock();
+        cache.pop(id);
+        debug!(id = %id, "Evicted image from cache");
     }
 }
 
@@ -136,33 +133,33 @@ pub fn evict_image_cache(id: &str) {
 ///
 /// Use this after add_entry() instead of refresh_entry_cache().
 pub fn upsert_entry_in_cache(entry: ClipboardEntryMeta) {
-    if let Ok(mut cache_arc) = get_entry_cache().lock() {
-        // Clone the Vec to modify it (Arc::make_mut would clone if refcount > 1)
-        let mut cache = (**cache_arc).clone();
+    let mut cache_arc = get_entry_cache().lock();
+    // Clone the Vec to modify it (Arc::make_mut would clone if refcount > 1)
+    let mut cache = (**cache_arc).clone();
 
-        // Remove existing entry with same ID (if any)
-        cache.retain(|e| e.id != entry.id);
+    // Remove existing entry with same ID (if any)
+    cache.retain(|e| e.id != entry.id);
 
-        // Insert at the correct position (pinned first, then by timestamp desc)
-        // For efficiency, we insert at position 0 or after pinned entries
-        // since new/touched entries have the latest timestamp
-        let insert_pos = if entry.pinned {
-            0 // Pinned entries go to front
-        } else {
-            // Find first non-pinned entry
-            cache.iter().position(|e| !e.pinned).unwrap_or(0)
-        };
+    // Insert at the correct position (pinned first, then by timestamp desc)
+    // For efficiency, we insert at position 0 or after pinned entries
+    // since new/touched entries have the latest timestamp
+    let insert_pos = if entry.pinned {
+        0 // Pinned entries go to front
+    } else {
+        // Find first non-pinned entry
+        cache.iter().position(|e| !e.pinned).unwrap_or(0)
+    };
 
-        cache.insert(insert_pos, entry);
+    cache.insert(insert_pos, entry);
 
-        // Truncate to max size
-        cache.truncate(MAX_CACHED_ENTRIES);
+    // Truncate to max size
+    cache.truncate(MAX_CACHED_ENTRIES);
 
-        debug!(cache_size = cache.len(), "Incremental cache upsert");
+    debug!(cache_size = cache.len(), "Incremental cache upsert");
 
-        // Replace the Arc with the modified Vec
-        *cache_arc = Arc::new(cache);
-    }
+    // Replace the Arc with the modified Vec
+    *cache_arc = Arc::new(cache);
+    drop(cache_arc);
 
     // Update timestamp
     update_cache_timestamp();
@@ -172,16 +169,16 @@ pub fn upsert_entry_in_cache(entry: ClipboardEntryMeta) {
 ///
 /// Use this after remove_entry() instead of refresh_entry_cache().
 pub fn remove_entry_from_cache(id: &str) {
-    if let Ok(mut cache_arc) = get_entry_cache().lock() {
-        let mut cache = (**cache_arc).clone();
-        let before = cache.len();
-        cache.retain(|e| e.id != id);
-        if cache.len() < before {
-            debug!(id = %id, "Removed entry from cache");
-            // Only update Arc if we actually removed something
-            *cache_arc = Arc::new(cache);
-        }
+    let mut cache_arc = get_entry_cache().lock();
+    let mut cache = (**cache_arc).clone();
+    let before = cache.len();
+    cache.retain(|e| e.id != id);
+    if cache.len() < before {
+        debug!(id = %id, "Removed entry from cache");
+        // Only update Arc if we actually removed something
+        *cache_arc = Arc::new(cache);
     }
+    drop(cache_arc);
     update_cache_timestamp();
 }
 
@@ -190,49 +187,47 @@ pub fn remove_entry_from_cache(id: &str) {
 /// Re-sorts the cache to maintain pinned-first ordering.
 /// Use this after pin_entry/unpin_entry() instead of refresh_entry_cache().
 pub fn update_pin_status_in_cache(id: &str, pinned: bool) {
-    if let Ok(mut cache_arc) = get_entry_cache().lock() {
-        let mut cache = (**cache_arc).clone();
-        if let Some(entry) = cache.iter_mut().find(|e| e.id == id) {
-            entry.pinned = pinned;
-        }
-        // Re-sort: pinned first, then by timestamp descending
-        cache.sort_by(|a, b| {
-            b.pinned
-                .cmp(&a.pinned)
-                .then_with(|| b.timestamp.cmp(&a.timestamp))
-        });
-        debug!(id = %id, pinned = pinned, "Updated pin status in cache");
-        *cache_arc = Arc::new(cache);
+    let mut cache_arc = get_entry_cache().lock();
+    let mut cache = (**cache_arc).clone();
+    if let Some(entry) = cache.iter_mut().find(|e| e.id == id) {
+        entry.pinned = pinned;
     }
+    // Re-sort: pinned first, then by timestamp descending
+    cache.sort_by(|a, b| {
+        b.pinned
+            .cmp(&a.pinned)
+            .then_with(|| b.timestamp.cmp(&a.timestamp))
+    });
+    debug!(id = %id, pinned = pinned, "Updated pin status in cache");
+    *cache_arc = Arc::new(cache);
+    drop(cache_arc);
     update_cache_timestamp();
 }
 
 /// Update OCR text for a single cached entry.
 pub(crate) fn update_ocr_text_in_cache(id: &str, text: String) {
-    if let Ok(mut cache_arc) = get_entry_cache().lock() {
-        let mut cache = (**cache_arc).clone();
-        let mut updated = false;
+    let mut cache_arc = get_entry_cache().lock();
+    let mut cache = (**cache_arc).clone();
+    let mut updated = false;
 
-        if let Some(entry) = cache.iter_mut().find(|e| e.id == id) {
-            entry.ocr_text = Some(text);
-            updated = true;
-        }
+    if let Some(entry) = cache.iter_mut().find(|e| e.id == id) {
+        entry.ocr_text = Some(text);
+        updated = true;
+    }
 
-        if updated {
-            debug!(id = %id, "Updated OCR text in cache");
-            *cache_arc = Arc::new(cache);
-            drop(cache_arc);
-            update_cache_timestamp();
-        }
+    if updated {
+        debug!(id = %id, "Updated OCR text in cache");
+        *cache_arc = Arc::new(cache);
+        drop(cache_arc);
+        update_cache_timestamp();
     }
 }
 
 /// Update the cache timestamp (internal helper)
 fn update_cache_timestamp() {
     if let Some(updated) = CACHE_UPDATED.get() {
-        if let Ok(mut ts) = updated.lock() {
-            *ts = chrono::Utc::now().timestamp_millis();
-        }
+        let mut ts = updated.lock();
+        *ts = chrono::Utc::now().timestamp_millis();
     }
 }
 
@@ -240,10 +235,9 @@ fn update_cache_timestamp() {
 pub fn clear_all_caches() {
     invalidate_entry_cache();
     if let Some(cache) = IMAGE_CACHE.get() {
-        if let Ok(mut cache) = cache.lock() {
-            cache.clear();
-            debug!("Cleared image cache");
-        }
+        let mut cache = cache.lock();
+        cache.clear();
+        debug!("Cleared image cache");
     }
 }
 
