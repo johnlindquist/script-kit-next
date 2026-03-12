@@ -277,6 +277,7 @@ impl ScriptListApp {
             // Clone what we need for the spawned task
             let entry_id = entry.id.clone();
             let entry_name = entry.name.clone();
+            let query_owned = query_override.map(|s| s.to_string());
             let confirm_sender = self.builtin_confirm_sender.clone();
 
             // Spawn a task to open the confirm modal
@@ -313,6 +314,7 @@ impl ScriptListApp {
                     // Create the callback that sends result via channel
                     let sender = confirm_sender.clone();
                     let id_for_callback = entry_id.clone();
+                    let query_for_callback = query_owned.clone();
                     let on_choice: ConfirmCallback = std::sync::Arc::new(move |confirmed| {
                         tracing::info!(message = %&format!(
                                 "Confirmation modal result for {}: {}",
@@ -321,7 +323,7 @@ impl ScriptListApp {
                             ),
                         );
                         // Send the result to be processed in render()
-                        let _ = sender.try_send((id_for_callback.clone(), confirmed));
+                        let _ = sender.try_send((id_for_callback.clone(), confirmed, query_for_callback.clone()));
                     });
 
                     // Open the confirm modal
@@ -363,6 +365,20 @@ impl ScriptListApp {
             return; // Wait for modal callback
         }
 
+        self.execute_builtin_inner(entry, query_override, &trace_id, start, cx);
+    }
+
+    /// Inner builtin executor — runs the actual action logic.
+    /// Called from both the normal path (after confirmation check) and the
+    /// confirmed path (after modal approval), ensuring a single implementation.
+    fn execute_builtin_inner(
+        &mut self,
+        entry: &builtins::BuiltInEntry,
+        query_override: Option<&str>,
+        trace_id: &str,
+        start: std::time::Instant,
+        cx: &mut Context<Self>,
+    ) {
         match &entry.feature {
             builtins::BuiltInFeature::ClipboardHistory => {
                 tracing::info!(message = %"Opening Clipboard History");
