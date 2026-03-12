@@ -214,9 +214,11 @@ fn handle_system_action_result_logs_trace_id_on_success() {
     let fn_body = &content[fn_start..content.len().min(fn_start + 1500)];
 
     // The success path must include trace_id
-    let success_start = fn_body.find(r#"status = "success""#)
+    let success_start = fn_body
+        .find(r#"status = "success""#)
         .expect("Expected success status in handle_system_action_result");
-    let success_window = &fn_body[success_start.saturating_sub(200)..fn_body.len().min(success_start + 200)];
+    let success_window =
+        &fn_body[success_start.saturating_sub(200)..fn_body.len().min(success_start + 200)];
 
     assert!(
         success_window.contains("trace_id = %trace_id"),
@@ -234,9 +236,11 @@ fn handle_system_action_result_logs_trace_id_on_error() {
     let fn_body = &content[fn_start..content.len().min(fn_start + 1500)];
 
     // The error path must include trace_id
-    let error_start = fn_body.find(r#"status = "error""#)
+    let error_start = fn_body
+        .find(r#"status = "error""#)
         .expect("Expected error status in handle_system_action_result");
-    let error_window = &fn_body[error_start.saturating_sub(200)..fn_body.len().min(error_start + 200)];
+    let error_window =
+        &fn_body[error_start.saturating_sub(200)..fn_body.len().min(error_start + 200)];
 
     assert!(
         error_window.contains("trace_id = %trace_id"),
@@ -270,7 +274,8 @@ fn handle_builtin_confirmation_logs_trace_id_on_cancel() {
     let cancel_start = content
         .find("Builtin confirmation cancelled")
         .expect("Expected cancel log");
-    let cancel_window = &content[cancel_start.saturating_sub(200)..content.len().min(cancel_start + 50)];
+    let cancel_window =
+        &content[cancel_start.saturating_sub(200)..content.len().min(cancel_start + 50)];
 
     assert!(
         cancel_window.contains("trace_id = %trace_id"),
@@ -285,7 +290,8 @@ fn handle_builtin_confirmation_logs_trace_id_on_accept() {
     let accept_start = content
         .find("Builtin confirmation accepted, executing")
         .expect("Expected accept log");
-    let accept_window = &content[accept_start.saturating_sub(200)..content.len().min(accept_start + 50)];
+    let accept_window =
+        &content[accept_start.saturating_sub(200)..content.len().min(accept_start + 50)];
 
     assert!(
         accept_window.contains("trace_id = %trace_id"),
@@ -336,7 +342,8 @@ fn confirmation_spawn_logs_trace_id_on_cancel() {
     let cancel_start = after_check
         .find("Builtin confirmation cancelled by user")
         .expect("Expected cancel log in spawn");
-    let cancel_window = &after_check[cancel_start.saturating_sub(200)..after_check.len().min(cancel_start + 50)];
+    let cancel_window =
+        &after_check[cancel_start.saturating_sub(200)..after_check.len().min(cancel_start + 50)];
 
     assert!(
         cancel_window.contains("trace_id"),
@@ -357,7 +364,8 @@ fn confirmation_spawn_logs_trace_id_on_error() {
     let error_start = after_check
         .find("failed to open confirmation modal")
         .expect("Expected error log in spawn");
-    let error_window = &after_check[error_start.saturating_sub(200)..after_check.len().min(error_start + 50)];
+    let error_window =
+        &after_check[error_start.saturating_sub(200)..after_check.len().min(error_start + 50)];
 
     assert!(
         error_window.contains("trace_id"),
@@ -396,7 +404,8 @@ fn confirm_with_modal_logs_trace_id_at_resolution() {
     let result_start = fn_body
         .find("confirm_modal_result")
         .expect("Expected confirm_modal_result event");
-    let result_window = &fn_body[result_start.saturating_sub(200)..fn_body.len().min(result_start + 200)];
+    let result_window =
+        &fn_body[result_start.saturating_sub(200)..fn_body.len().min(result_start + 200)];
 
     assert!(
         result_window.contains("trace_id = %trace_id"),

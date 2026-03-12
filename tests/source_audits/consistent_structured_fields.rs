@@ -290,7 +290,9 @@ fn no_log_crate_in_action_dispatch_files() {
     for path in &dispatch_files {
         let content = read(path);
         assert!(
-            !content.contains("log::info!") && !content.contains("log::warn!") && !content.contains("log::error!"),
+            !content.contains("log::info!")
+                && !content.contains("log::warn!")
+                && !content.contains("log::error!"),
             "{path} must not use log:: macros — use tracing:: instead"
         );
     }
