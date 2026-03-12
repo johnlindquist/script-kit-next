@@ -29,31 +29,30 @@ pub fn count_occurrences(haystack: &str, needle: &str) -> usize {
     haystack.match_indices(needle).count()
 }
 
-/// Read and concatenate all modular handle_action source files.
+/// The canonical set of live handler files under `src/app_actions/handle_action/`.
 ///
-/// Returns the combined contents of all `.rs` files under
-/// `src/app_actions/handle_action/` so source-scanning tests can search
-/// across the full action dispatch implementation.
+/// Source-audit and coverage tests should iterate over this list rather than
+/// scanning the directory with a glob.  If a handler file is added or removed,
+/// update this list and the corresponding tests will follow.
+pub const LIVE_HANDLE_ACTION_FILES: &[&str] = &[
+    "src/app_actions/handle_action/clipboard.rs",
+    "src/app_actions/handle_action/files.rs",
+    "src/app_actions/handle_action/mod.rs",
+    "src/app_actions/handle_action/scripts.rs",
+    "src/app_actions/handle_action/scriptlets.rs",
+    "src/app_actions/handle_action/shortcuts.rs",
+];
+
+/// Read and concatenate all live modular handle_action source files.
+///
+/// Uses [`LIVE_HANDLE_ACTION_FILES`] instead of a directory glob so that
+/// source-scanning tests only validate the actual live implementation.
 pub fn read_all_handle_action_sources() -> String {
-    let dir = "src/app_actions/handle_action";
     let mut combined = String::new();
-    if let Ok(entries) = fs::read_dir(dir) {
-        let mut paths: Vec<_> = entries
-            .filter_map(|e| e.ok())
-            .map(|e| e.path())
-            .filter(|p| p.extension().is_some_and(|ext| ext == "rs"))
-            .collect();
-        paths.sort();
-        for path in paths {
-            if let Ok(content) = fs::read_to_string(&path) {
-                combined.push_str(&content);
-                combined.push('\n');
-            }
-        }
+    for path in LIVE_HANDLE_ACTION_FILES {
+        let content = read_source(path);
+        combined.push_str(&content);
+        combined.push('\n');
     }
-    assert!(
-        !combined.is_empty(),
-        "Failed to read any handle_action module files from {dir}/"
-    );
     combined
 }

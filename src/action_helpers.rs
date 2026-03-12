@@ -340,5 +340,4 @@ pub fn find_sdk_action<'a>(
 }
 
 #[cfg(test)]
-#[path = "action_helpers_tests.rs"]
 mod tests;

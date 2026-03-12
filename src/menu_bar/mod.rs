@@ -668,5 +668,4 @@ pub fn get_menu_bar_for_pid(pid: i32) -> Result<Vec<MenuBarItem>> {
 // ============================================================================
 
 #[cfg(test)]
-#[path = "../menu_bar_tests.rs"]
 mod tests;

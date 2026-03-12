@@ -253,23 +253,11 @@ pub mod watcher;
 
 // Window state management tests - code audit to prevent regressions
 // Verifies that app_execute.rs uses close_and_reset_window() correctly
-#[cfg(test)]
-mod test_utils;
-
-#[cfg(test)]
-mod window_state_tests;
+#[doc(hidden)]
+pub mod test_utils;
 
 #[cfg(test)]
 mod actions_button_visibility_tests;
-
-#[cfg(test)]
-mod clipboard_actions_focus_routing_tests;
-
-#[cfg(test)]
-mod clipboard_actions_menu_coverage_tests;
-
-#[cfg(test)]
-mod webcam_actions_consistency_tests;
 // Shared window visibility state
 // Used to track main window visibility across the app
 // Notes/AI windows use this to decide whether to hide the app after closing

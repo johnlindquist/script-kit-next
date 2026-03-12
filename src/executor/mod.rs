@@ -66,7 +66,6 @@ fn test_runner_helpers_available_for_executor_tests() {
 }
 
 #[cfg(test)]
-#[path = "../executor_tests.rs"]
 mod tests;
 
 #[cfg(test)]

@@ -475,7 +475,13 @@ pub struct SplitSession {
     pub process_handle: ProcessHandle,
 }
 
+#[allow(dead_code)]
 impl ScriptSession {
+    /// Get the process ID
+    pub fn pid(&self) -> u32 {
+        self.process_handle.pid
+    }
+
     /// Split the session into separate read/write components
     /// This allows using separate threads for reading and writing
     pub fn split(self) -> SplitSession {

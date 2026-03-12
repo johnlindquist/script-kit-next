@@ -582,5 +582,4 @@ fn navigate_and_execute_menu_path(menu_bar: AXUIElementRef, menu_path: &[String]
 // ============================================================================
 
 #[cfg(test)]
-#[path = "../menu_executor_tests.rs"]
 mod tests;

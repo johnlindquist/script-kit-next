@@ -1,28 +1,7 @@
-use std::fs;
-use std::path::PathBuf;
-
-fn read_source(path: &str) -> String {
-    fs::read_to_string(path).unwrap_or_else(|err| panic!("failed to read {path}: {err}"))
-}
+use script_kit_gpui::test_utils::{read_all_handle_action_sources, read_source};
 
 fn read_app_action_handler_source() -> String {
-    let mut files: Vec<PathBuf> = fs::read_dir("src/app_actions/handle_action")
-        .unwrap_or_else(|err| panic!("failed to read src/app_actions/handle_action: {err}"))
-        .filter_map(|entry| entry.ok().map(|e| e.path()))
-        .filter(|path| path.extension().is_some_and(|ext| ext == "rs"))
-        .collect();
-    files.sort();
-
-    let mut content = String::new();
-    for file in files {
-        content.push_str(
-            &fs::read_to_string(&file)
-                .unwrap_or_else(|err| panic!("failed to read {}: {err}", file.display())),
-        );
-        content.push('\n');
-    }
-
-    content
+    read_all_handle_action_sources()
 }
 
 fn slice_from<'a>(source: &'a str, needle: &str) -> &'a str {

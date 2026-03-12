@@ -78,5 +78,4 @@ pub(crate) use search::{
 };
 
 #[cfg(test)]
-#[path = "../scripts_tests.rs"]
 mod tests;
