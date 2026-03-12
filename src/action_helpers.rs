@@ -190,6 +190,17 @@ pub enum ActionOutcomeStatus {
     NoEffect,
 }
 
+impl std::fmt::Display for ActionOutcomeStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ActionOutcomeStatus::Success => f.write_str("success"),
+            ActionOutcomeStatus::Error => f.write_str("error"),
+            ActionOutcomeStatus::Cancelled => f.write_str("cancelled"),
+            ActionOutcomeStatus::NoEffect => f.write_str("no_effect"),
+        }
+    }
+}
+
 /// Result of attempting to trigger an SDK action.
 #[derive(Debug, Clone, PartialEq)]
 pub enum SdkActionResult {
