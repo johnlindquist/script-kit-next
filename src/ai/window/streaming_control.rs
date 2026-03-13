@@ -48,6 +48,13 @@ impl AiApp {
         self.streaming_started_at = Some(std::time::Instant::now());
         let generation = self.streaming_generation;
 
+        // Publish streaming state for SDK handlers
+        publish_streaming_state(AiStreamingSnapshot {
+            is_streaming: true,
+            chat_id: Some(chat_id.as_str()),
+            partial_content: None,
+        });
+
         // Get the last user message to generate a contextual mock response
         let user_message = self
             .current_messages
@@ -219,6 +226,7 @@ impl AiApp {
         self.streaming_chat_id = None;
         self.streaming_cancel = None;
         self.streaming_started_at = None;
+        publish_streaming_state(AiStreamingSnapshot::default());
         self.refresh_messages_list_after_streaming_state_change();
         cx.notify();
     }
@@ -292,6 +300,7 @@ impl AiApp {
         self.streaming_content.clear();
         self.streaming_chat_id = None;
         self.streaming_started_at = None;
+        publish_streaming_state(AiStreamingSnapshot::default());
         self.force_scroll_to_bottom();
         cx.notify();
     }

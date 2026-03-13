@@ -329,6 +329,8 @@ impl ScriptListApp {
             focused_clipboard_entry_id: None,
             cached_windows: Vec::new(),
             cached_file_results: Vec::new(),
+            cached_processes: Vec::new(),
+            process_manager_refresh_task: None,
             selected_index: 0,
             filter_text: String::new(),
             inline_calculator: None,
@@ -364,6 +366,7 @@ impl ScriptListApp {
             clipboard_list_scroll_handle: UniformListScrollHandle::new(),
             emoji_scroll_handle: UniformListScrollHandle::new(),
             window_list_scroll_handle: UniformListScrollHandle::new(),
+            process_list_scroll_handle: UniformListScrollHandle::new(),
             design_gallery_scroll_handle: UniformListScrollHandle::new(),
             file_search_scroll_handle: UniformListScrollHandle::new(),
             theme_chooser_scroll_handle: UniformListScrollHandle::new(),
@@ -1054,6 +1057,41 @@ impl ScriptListApp {
                                             *selected_index,
                                             gpui::ScrollStrategy::Nearest,
                                         );
+                                        cx.notify();
+                                    }
+                                    cx.stop_propagation();
+                                }
+                                AppView::ProcessManagerView {
+                                    selected_index,
+                                    filter: _,
+                                } => {
+                                    let filtered_len = this.cached_processes.len();
+                                    if is_up && *selected_index > 0 {
+                                        *selected_index -= 1;
+                                        this.process_list_scroll_handle.scroll_to_item(
+                                            *selected_index,
+                                            gpui::ScrollStrategy::Nearest,
+                                        );
+                                        cx.notify();
+                                    } else if is_down && *selected_index + 1 < filtered_len {
+                                        *selected_index += 1;
+                                        this.process_list_scroll_handle.scroll_to_item(
+                                            *selected_index,
+                                            gpui::ScrollStrategy::Nearest,
+                                        );
+                                        cx.notify();
+                                    }
+                                    cx.stop_propagation();
+                                }
+                                AppView::SearchAiPresetsView {
+                                    selected_index,
+                                    filter: _,
+                                } => {
+                                    if is_up && *selected_index > 0 {
+                                        *selected_index -= 1;
+                                        cx.notify();
+                                    } else if is_down {
+                                        *selected_index += 1;
                                         cx.notify();
                                     }
                                     cx.stop_propagation();

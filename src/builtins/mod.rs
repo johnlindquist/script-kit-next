@@ -131,6 +131,8 @@ pub enum AiCommandType {
     ImportAiPresets,
     /// Search through saved AI chat presets
     SearchAiPresets,
+    /// Export AI chat presets to a user-chosen file
+    ExportAiPresets,
 }
 /// Script creation command types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -259,6 +261,8 @@ pub enum BuiltInFeature {
     FileSearch,
     /// Webcam capture
     Webcam,
+    /// Settings hub for viewing configuration panels
+    Settings,
 }
 /// A built-in feature entry that appears in the main search
 #[derive(Debug, Clone)]
@@ -993,9 +997,9 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             entries.push(BuiltInEntry::new_with_icon(
                 "builtin-create-ai-preset",
                 "Create AI Preset",
-                "Create a reusable AI preset template (coming soon)",
+                "Create a reusable AI preset with name, system prompt, and model",
                 vec![
-                    "create", "ai", "preset", "template", "save", "coming", "soon",
+                    "create", "ai", "preset", "template", "save", "new",
                 ],
                 BuiltInFeature::AiCommand(AiCommandType::CreateAiPreset),
                 "🧪",
@@ -1004,20 +1008,31 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             entries.push(BuiltInEntry::new_with_icon(
                 "builtin-import-ai-presets",
                 "Import AI Presets",
-                "Import AI presets from a file (coming soon)",
+                "Import AI presets from a JSON file via file picker",
                 vec![
-                    "import", "ai", "preset", "template", "file", "coming", "soon",
+                    "import", "ai", "preset", "template", "file", "load",
                 ],
                 BuiltInFeature::AiCommand(AiCommandType::ImportAiPresets),
                 "📥",
             ));
 
             entries.push(BuiltInEntry::new_with_icon(
+                "builtin-export-ai-presets",
+                "Export AI Presets",
+                "Export AI presets to a JSON file via file picker",
+                vec![
+                    "export", "ai", "preset", "template", "file", "save", "backup",
+                ],
+                BuiltInFeature::AiCommand(AiCommandType::ExportAiPresets),
+                "📤",
+            ));
+
+            entries.push(BuiltInEntry::new_with_icon(
                 "builtin-search-ai-presets",
                 "Search AI Presets",
-                "Search and browse saved AI presets (coming soon)",
+                "Search and browse saved AI presets to start a new chat",
                 vec![
-                    "search", "ai", "preset", "template", "browse", "coming", "soon",
+                    "search", "ai", "preset", "template", "browse", "find",
                 ],
                 BuiltInFeature::AiCommand(AiCommandType::SearchAiPresets),
                 "🔎",
@@ -1120,6 +1135,24 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
     // --- merged from part_001_entries/entries_003.rs ---
     {
+        // Settings Hub
+        // =========================================================================
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-settings",
+            "Settings",
+            "Open settings to configure API keys, themes, window positions, and more",
+            vec![
+                "settings",
+                "preferences",
+                "config",
+                "configure",
+                "options",
+                "setup",
+            ],
+            BuiltInFeature::Settings,
+            "⚙️",
+        ));
+
         // Settings Commands
         // =========================================================================
 
@@ -1864,6 +1897,7 @@ mod tests {
             "builtin-send-screen-area-to-ai",
             "builtin-create-ai-preset",
             "builtin-import-ai-presets",
+            "builtin-export-ai-presets",
             "builtin-search-ai-presets",
         ];
 

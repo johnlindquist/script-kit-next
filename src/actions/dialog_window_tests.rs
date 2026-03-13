@@ -199,7 +199,7 @@ fn chat_no_messages_no_response_has_only_continue() {
     assert!(ids.contains(&"chat:continue_in_chat"));
     assert!(!ids.contains(&"chat:copy_response"));
     assert!(!ids.contains(&"chat:clear_conversation"));
-    assert_eq!(actions.len(), 1);
+    assert_eq!(actions.len(), 2);
 }
 
 #[test]

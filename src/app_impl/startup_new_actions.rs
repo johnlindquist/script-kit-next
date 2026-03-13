@@ -267,6 +267,28 @@
                             return;
                         }
 
+                        // Handle Enter/Escape for AI preset views
+                        // These don't have actions dialogs but need key routing through the interceptor
+                        // because the Input component has focus
+                        if matches!(
+                            this.current_view,
+                            AppView::SearchAiPresetsView { .. }
+                                | AppView::CreateAiPresetView { .. }
+                        ) {
+                            if matches!(this.current_view, AppView::CreateAiPresetView { .. }) {
+                                this.handle_create_ai_preset_key(key, window, cx);
+                                cx.stop_propagation();
+                            } else {
+                                this.handle_search_ai_presets_key(key, window, cx);
+                                if crate::ui_foundation::is_key_enter(key)
+                                    || crate::ui_foundation::is_key_escape(key)
+                                {
+                                    cx.stop_propagation();
+                                }
+                            }
+                            return;
+                        }
+
                         // Only handle remaining keys if actions popup is open (FileSearchView)
                         if !this.show_actions_popup {
                             return;

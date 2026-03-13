@@ -34,6 +34,7 @@
 
 pub(crate) mod config;
 pub(crate) mod model;
+pub(crate) mod presets;
 pub(crate) mod providers;
 pub(crate) mod script_generation;
 pub(crate) mod sdk_handlers;
@@ -52,7 +53,8 @@ pub use self::storage::{
     get_deleted_chats, init_ai_db, insert_mock_data, save_message, search_chats, update_chat_title,
 };
 pub use self::window::{
-    add_ai_attachment, close_ai_window, is_ai_window, is_ai_window_open, open_ai_window,
-    open_ai_window_with_chat, set_ai_input, set_ai_input_with_image, set_ai_search,
-    show_ai_command_bar, simulate_ai_key,
+    add_ai_attachment, apply_ai_preset, close_ai_window, is_ai_window, is_ai_window_open,
+    open_ai_window, open_ai_window_with_chat, reload_ai_presets, set_ai_input,
+    set_ai_input_with_image, set_ai_search, show_ai_command_bar, simulate_ai_key,
+    PendingChatMessage,
 };

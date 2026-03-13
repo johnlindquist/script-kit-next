@@ -156,6 +156,8 @@ impl Render for ScriptListApp {
                 | AppView::DesignGalleryView { .. }
                 | AppView::FileSearchView { .. }
                 | AppView::ThemeChooserView { .. }
+                | AppView::ProcessManagerView { .. }
+                | AppView::SearchAiPresetsView { .. }
         ) {
             self.sync_filter_input_if_needed(window, cx);
         }
@@ -212,6 +214,20 @@ impl Render for ScriptListApp {
             AppView::ChatPrompt { entity, .. } => {
                 self.render_chat_prompt(entity, cx).into_any_element()
             }
+            AppView::MiniPrompt {
+                id,
+                placeholder,
+                choices,
+            } => self
+                .render_arg_prompt(id, placeholder, choices, None, cx)
+                .into_any_element(),
+            AppView::MicroPrompt {
+                id,
+                placeholder,
+                choices,
+            } => self
+                .render_arg_prompt(id, placeholder, choices, None, cx)
+                .into_any_element(),
             // P0 FIX: View state only - data comes from self.cached_clipboard_entries
             AppView::ClipboardHistoryView {
                 filter,
@@ -284,6 +300,29 @@ impl Render for ScriptListApp {
             } => self
                 .render_installed_kits(selected_index, kits, cx)
                 .into_any_element(),
+            AppView::ProcessManagerView {
+                filter,
+                selected_index,
+            } => self
+                .render_process_manager(filter, selected_index, cx)
+                .into_any_element(),
+            AppView::SearchAiPresetsView {
+                filter,
+                selected_index,
+            } => self
+                .render_search_ai_presets(filter, selected_index, cx)
+                .into_any_element(),
+            AppView::CreateAiPresetView {
+                name,
+                system_prompt,
+                model,
+                active_field,
+            } => self
+                .render_create_ai_preset(name, system_prompt, model, active_field, cx)
+                .into_any_element(),
+            AppView::SettingsView { selected_index } => {
+                self.render_settings(selected_index, cx)
+            }
         };
 
         // Wrap content in a container that can have the debug grid overlay

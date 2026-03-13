@@ -207,8 +207,6 @@ impl RenderOnce for Button {
                 .as_ref()
                 .map(|handle| handle.is_focused(window)),
         );
-        let show_focus_indicator =
-            Self::should_show_focus_indicator(focused, has_click_handler, disabled, loading);
         let label_text = if loading {
             loading_label.unwrap_or_else(|| label.clone())
         } else {
@@ -228,23 +226,22 @@ impl RenderOnce for Button {
 
         let (text_color, bg_color, border_color) = match variant {
             ButtonVariant::Primary => {
-                // Primary: accent-colored background with dark text for strong contrast
+                // Primary: accent text on subtle dark bg, accent border for emphasis
                 let bg = if focused {
-                    rgba((colors.accent << 8) | 0xFF)
+                    rgba((colors.accent << 8) | 0x30)
                 } else {
-                    rgba((colors.accent << 8) | 0xE0)
+                    rgba((colors.accent << 8) | 0x18)
                 };
-                // Dark text on bright accent background
-                let text = rgb(0x1a1a1a);
+                let text = rgb(colors.accent);
                 let border = if focused {
                     focus_ring_color
                 } else {
-                    rgba((colors.accent << 8) | 0x80)
+                    rgba((colors.accent << 8) | 0x60)
                 };
                 (text, bg, border)
             }
             ButtonVariant::Ghost => {
-                // Ghost: accent text, transparent bg, visible border
+                // Ghost: primary text, transparent bg, subtle border
                 let bg = if focused {
                     focus_tint
                 } else {
@@ -255,7 +252,7 @@ impl RenderOnce for Button {
                 } else {
                     unfocused_border
                 };
-                (rgb(colors.accent), bg, border)
+                (rgb(colors.text_color), bg, border)
             }
             ButtonVariant::Icon => {
                 // Icon: compact, accent color

@@ -248,44 +248,48 @@ impl ScriptListApp {
         // Don't change view here - wait for next message from script
     }
 
-    /// Get filtered choices for arg prompt
+    /// Get filtered choices for arg prompt (also handles mini/micro variants)
     pub(crate) fn filtered_arg_choices(&self) -> Vec<(usize, &Choice)> {
-        if let AppView::ArgPrompt { choices, .. } = &self.current_view {
-            if self.arg_input.is_empty() {
-                choices.iter().enumerate().collect()
-            } else {
-                let filter = self.arg_input.text().to_lowercase();
-                choices
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, c)| c.name.to_lowercase().contains(&filter))
-                    .collect()
-            }
+        let choices = match &self.current_view {
+            AppView::ArgPrompt { choices, .. }
+            | AppView::MiniPrompt { choices, .. }
+            | AppView::MicroPrompt { choices, .. } => choices,
+            _ => return vec![],
+        };
+        if self.arg_input.is_empty() {
+            choices.iter().enumerate().collect()
         } else {
-            vec![]
+            let filter = self.arg_input.text().to_lowercase();
+            choices
+                .iter()
+                .enumerate()
+                .filter(|(_, c)| c.name.to_lowercase().contains(&filter))
+                .collect()
         }
     }
 
     /// P0: Get filtered choices as owned data for uniform_list closure
     pub(crate) fn get_filtered_arg_choices_owned(&self) -> Vec<(usize, Choice)> {
-        if let AppView::ArgPrompt { choices, .. } = &self.current_view {
-            if self.arg_input.is_empty() {
-                choices
-                    .iter()
-                    .enumerate()
-                    .map(|(i, c)| (i, c.clone()))
-                    .collect()
-            } else {
-                let filter = self.arg_input.text().to_lowercase();
-                choices
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, c)| c.name.to_lowercase().contains(&filter))
-                    .map(|(i, c)| (i, c.clone()))
-                    .collect()
-            }
+        let choices = match &self.current_view {
+            AppView::ArgPrompt { choices, .. }
+            | AppView::MiniPrompt { choices, .. }
+            | AppView::MicroPrompt { choices, .. } => choices,
+            _ => return vec![],
+        };
+        if self.arg_input.is_empty() {
+            choices
+                .iter()
+                .enumerate()
+                .map(|(i, c)| (i, c.clone()))
+                .collect()
         } else {
-            vec![]
+            let filter = self.arg_input.text().to_lowercase();
+            choices
+                .iter()
+                .enumerate()
+                .filter(|(_, c)| c.name.to_lowercase().contains(&filter))
+                .map(|(i, c)| (i, c.clone()))
+                .collect()
         }
     }
 
@@ -561,6 +565,35 @@ impl ScriptListApp {
         let noop_callback: ChatSubmitCallback = std::sync::Arc::new(|_id, _text| {
             // Built-in AI mode handles this internally
         });
+        let app_entity_for_saved = cx.entity().downgrade();
+        let script_saved_callback = move |script_path: std::path::PathBuf,
+                                          chat_cx: &mut gpui::Context<ChatPrompt>| {
+            let path_clone = script_path.clone();
+            let app_entity = app_entity_for_saved.clone();
+            chat_cx
+                .spawn(async move |_this, cx| {
+                    cx.update(|cx| {
+                        if let Some(app) = app_entity.upgrade() {
+                            logging::log(
+                                "CHAT_SCRIPT_GEN",
+                                &format!(
+                                    "state=show_creation_feedback path={}",
+                                    path_clone.display()
+                                ),
+                            );
+                            app.update(cx, |app, cx| {
+                                app.current_view = AppView::CreationFeedback {
+                                    path: path_clone,
+                                };
+                                app.opened_from_main_menu = true;
+                                cx.notify();
+                            });
+                        }
+                    });
+                })
+                .detach();
+        };
+
         let app_entity = cx.entity().downgrade();
         let run_script_callback = move |script_path: std::path::PathBuf,
                                         chat_cx: &mut gpui::Context<ChatPrompt>| {
@@ -610,6 +643,7 @@ impl ScriptListApp {
         .with_save_history(false)
         .with_escape_callback(escape_callback)
         .with_run_script_callback(run_script_callback)
+        .with_script_saved_callback(script_saved_callback)
         .with_builtin_ai(registry, true) // true = prefer Vercel AI Gateway
         .with_builtin_system_prompt(crate::ai::script_generation::AI_SCRIPT_GENERATION_SYSTEM_PROMPT)
         .with_script_generation_mode(true);

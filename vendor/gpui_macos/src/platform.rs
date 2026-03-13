@@ -711,6 +711,24 @@ impl Platform for MacPlatform {
 
                     panel.setCanCreateDirectories(true.to_objc());
                     panel.setResolvesAliases_(false.to_objc());
+
+                    // SAFETY: We build an NSArray of NSStrings from the
+                    // caller-provided extension list and pass it to
+                    // setAllowedFileTypes: which retains the array.
+                    if !options.allowed_extensions.is_empty() {
+                        let ns_exts: Vec<id> = options
+                            .allowed_extensions
+                            .iter()
+                            .map(|ext| ns_string(ext))
+                            .collect();
+                        let ns_array: id = msg_send![
+                            class!(NSArray),
+                            arrayWithObjects: ns_exts.as_ptr()
+                            count: ns_exts.len()
+                        ];
+                        let _: () = msg_send![panel, setAllowedFileTypes: ns_array];
+                    }
+
                     let done_tx = Cell::new(Some(done_tx));
                     let block = ConcreteBlock::new(move |response: NSModalResponse| {
                         let result = if response == NSModalResponse::NSModalResponseOk {

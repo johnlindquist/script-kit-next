@@ -466,6 +466,68 @@ impl ChatPrompt {
         }
     }
 
+    /// Launch interactive screen area capture and attach the result as a pending image.
+    ///
+    /// Runs macOS `screencapture -i` on a background thread. On completion the captured
+    /// image is base64-encoded and set as the pending image attachment. Escape cancels
+    /// the capture silently.
+    pub fn capture_screen_area_attachment(&mut self, cx: &mut Context<Self>) {
+        tracing::info!(action = "capture_screen_area_start", "Starting screen area capture for ChatPrompt attachment");
+
+        cx.spawn(async move |this, cx| {
+            let capture_result = cx
+                .background_executor()
+                .spawn(async { crate::platform::capture_screen_area() })
+                .await;
+
+            match capture_result {
+                Ok(Some(capture)) => {
+                    use base64::Engine;
+                    let base64_data =
+                        base64::engine::general_purpose::STANDARD.encode(&capture.png_data);
+                    let size_kb = capture.png_data.len() / 1024;
+
+                    // Decode to RenderImage for preview
+                    let render_img =
+                        crate::list_item::decode_png_to_render_image_with_bgra_conversion(
+                            &capture.png_data,
+                        )
+                        .ok();
+
+                    this.update(cx, |this, cx| {
+                        if let Some(img) = render_img {
+                            this.pending_image_render = Some(img);
+                        }
+                        this.pending_image = Some(base64_data);
+                        tracing::info!(
+                            action = "capture_screen_area_attached",
+                            width = capture.width,
+                            height = capture.height,
+                            size_kb = size_kb,
+                            "Screen area captured and attached to ChatPrompt"
+                        );
+                        cx.notify();
+                    })
+                    .ok();
+                }
+                Ok(None) => {
+                    tracing::info!(
+                        action = "capture_screen_area_cancelled",
+                        "User cancelled screen area capture"
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        action = "capture_screen_area_error",
+                        error = %e,
+                        "Screen area capture failed"
+                    );
+                }
+            }
+        })
+        .detach();
+    }
+
     /// Remove the pending image attachment
     pub(super) fn remove_pending_image(&mut self, cx: &mut Context<Self>) {
         self.pending_image = None;

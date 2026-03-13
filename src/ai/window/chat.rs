@@ -1,5 +1,6 @@
 use super::window_api::get_pending_chat;
 use super::*;
+use crate::ai::model::ImageAttachment;
 
 impl AiApp {
     fn model_matches_chat_identity(model: &ModelInfo, chat: &Chat) -> bool {
@@ -29,6 +30,7 @@ impl AiApp {
         self.streaming_chat_id = None;
         self.streaming_started_at = None;
         self.streaming_error = Some(message);
+        publish_streaming_state(AiStreamingSnapshot::default());
         cx.notify();
     }
 
@@ -74,8 +76,8 @@ impl AiApp {
         let chat_id = chat.id;
 
         // Generate title from the first user message (if any)
-        if let Some((_, content)) = messages.iter().find(|(role, _)| *role == MessageRole::User) {
-            let title = Chat::generate_title_from_content(content);
+        if let Some(msg) = messages.iter().find(|m| m.role == MessageRole::User) {
+            let title = Chat::generate_title_from_content(&msg.content);
             chat.set_title(&title);
         }
 
@@ -87,8 +89,14 @@ impl AiApp {
 
         // Save all messages to storage and build the current_messages list
         let mut saved_messages = Vec::new();
-        for (role, content) in messages {
-            let message = Message::new(chat_id, role, content);
+        for msg in messages {
+            let mut message = Message::new(chat_id, msg.role, msg.content);
+            // Attach image if present (transferred from inline ChatPrompt)
+            if let Some(image_data) = msg.image_base64 {
+                message
+                    .images
+                    .push(ImageAttachment::png(image_data));
+            }
             if let Err(e) = storage::save_message(&message) {
                 tracing::error!(error = %e, "Failed to save message in transferred conversation");
                 continue;
@@ -111,6 +119,7 @@ impl AiApp {
         // Add chat to the list and select it
         self.chats.insert(0, chat);
         self.selected_chat_id = Some(chat_id);
+        publish_active_chat_id(Some(&chat_id));
         self.cache_message_images(&saved_messages);
         self.current_messages = saved_messages;
 
@@ -171,6 +180,7 @@ impl AiApp {
         self.pending_delete_chat_id = None;
 
         self.selected_chat_id = Some(id);
+        publish_active_chat_id(Some(&id));
 
         // Load messages for this chat
         let mut provider_error_message: Option<String> = None;
@@ -242,6 +252,7 @@ impl AiApp {
         // Note: streaming_chat_id is intentionally NOT cleared here
         // This allows the background streaming to complete and save to DB correctly
         // while UI shows the newly selected chat's messages
+        publish_streaming_state(AiStreamingSnapshot::default());
 
         // Reset UX state for new chat
         self.editing_message_id = None;

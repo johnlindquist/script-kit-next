@@ -1423,6 +1423,24 @@ impl ScriptListApp {
                                         choices,
                                         multiple: multiple.unwrap_or(false),
                                     }),
+                                    Message::Mini {
+                                        id,
+                                        placeholder,
+                                        choices,
+                                    } => Some(PromptMessage::ShowMini {
+                                        id,
+                                        placeholder,
+                                        choices,
+                                    }),
+                                    Message::Micro {
+                                        id,
+                                        placeholder,
+                                        choices,
+                                    } => Some(PromptMessage::ShowMicro {
+                                        id,
+                                        placeholder,
+                                        choices,
+                                    }),
                                     Message::Confirm {
                                         id,
                                         message,

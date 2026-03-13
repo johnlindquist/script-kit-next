@@ -22,6 +22,8 @@ impl ScriptListApp {
             AppView::DropPrompt { .. } => "drop",
             AppView::TemplatePrompt { .. } => "template",
             AppView::ChatPrompt { .. } => "chat",
+            AppView::MiniPrompt { .. } => "mini",
+            AppView::MicroPrompt { .. } => "micro",
             AppView::ClipboardHistoryView { .. } => "clipboardHistory",
             AppView::AppLauncherView { .. } => "appLauncher",
             AppView::WindowSwitcherView { .. } => "windowSwitcher",
@@ -37,6 +39,10 @@ impl ScriptListApp {
             AppView::NamingPrompt { .. } => "namingPrompt",
             AppView::BrowseKitsView { .. } => "browseKits",
             AppView::InstalledKitsView { .. } => "installedKits",
+            AppView::ProcessManagerView { .. } => "processManager",
+            AppView::SearchAiPresetsView { .. } => "searchAiPresets",
+            AppView::CreateAiPresetView { .. } => "createAiPreset",
+            AppView::SettingsView { .. } => "settings",
         };
 
         let mut components = Vec::new();

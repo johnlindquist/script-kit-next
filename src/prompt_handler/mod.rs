@@ -186,6 +186,74 @@ impl ScriptListApp {
                 resize_to_view_sync(view_type, choice_count);
                 cx.notify();
             }
+            PromptMessage::ShowMini {
+                id,
+                placeholder,
+                choices,
+            } => {
+                self.prepare_window_for_prompt("UI", "mini", "");
+
+                tracing::info!(
+                    category = "UI",
+                    id = %id,
+                    choice_count = choices.len(),
+                    "Showing mini prompt"
+                );
+                let choice_count = choices.len();
+
+                // Clear any previous SDK actions (mini has no actions)
+                self.sdk_actions = None;
+                self.action_shortcuts.clear();
+
+                self.current_view = AppView::MiniPrompt {
+                    id,
+                    placeholder,
+                    choices,
+                };
+                self.arg_input.clear();
+                self.arg_selected_index = 0;
+                self.focused_input = FocusedInput::ArgPrompt;
+                self.pending_focus = Some(FocusTarget::AppRoot);
+                // Mini shows limited choices (capped at 5 items height)
+                let view_type = if choice_count == 0 {
+                    ViewType::ArgPromptNoChoices
+                } else {
+                    ViewType::ArgPromptWithChoices
+                };
+                resize_to_view_sync(view_type, choice_count.min(5));
+                cx.notify();
+            }
+            PromptMessage::ShowMicro {
+                id,
+                placeholder,
+                choices,
+            } => {
+                self.prepare_window_for_prompt("UI", "micro", "");
+
+                tracing::info!(
+                    category = "UI",
+                    id = %id,
+                    choice_count = choices.len(),
+                    "Showing micro prompt"
+                );
+
+                // Clear any previous SDK actions (micro has no actions)
+                self.sdk_actions = None;
+                self.action_shortcuts.clear();
+
+                self.current_view = AppView::MicroPrompt {
+                    id,
+                    placeholder,
+                    choices,
+                };
+                self.arg_input.clear();
+                self.arg_selected_index = 0;
+                self.focused_input = FocusedInput::ArgPrompt;
+                self.pending_focus = Some(FocusTarget::AppRoot);
+                // Micro always uses compact (no-choices) height
+                resize_to_view_sync(ViewType::ArgPromptNoChoices, 0);
+                cx.notify();
+            }
             PromptMessage::ShowDiv {
                 id,
                 html,
@@ -894,6 +962,46 @@ impl ScriptListApp {
                         -1,
                         None,
                     ),
+                    AppView::MiniPrompt {
+                        id,
+                        placeholder,
+                        choices,
+                    } => {
+                        let filtered = self.get_filtered_arg_choices(choices);
+                        let selected_value = filtered
+                            .get(self.arg_selected_index)
+                            .map(|c| c.value.clone());
+                        (
+                            "mini".to_string(),
+                            Some(id.clone()),
+                            Some(placeholder.clone()),
+                            self.arg_input.text().to_string(),
+                            choices.len(),
+                            filtered.len(),
+                            self.arg_selected_index as i32,
+                            selected_value,
+                        )
+                    }
+                    AppView::MicroPrompt {
+                        id,
+                        placeholder,
+                        choices,
+                    } => {
+                        let filtered = self.get_filtered_arg_choices(choices);
+                        let selected_value = filtered
+                            .get(self.arg_selected_index)
+                            .map(|c| c.value.clone());
+                        (
+                            "micro".to_string(),
+                            Some(id.clone()),
+                            Some(placeholder.clone()),
+                            self.arg_input.text().to_string(),
+                            choices.len(),
+                            filtered.len(),
+                            self.arg_selected_index as i32,
+                            selected_value,
+                        )
+                    }
                     AppView::ActionsDialog => (
                         "actions".to_string(),
                         None,
@@ -1126,6 +1234,66 @@ impl ScriptListApp {
                         String::new(),
                         kits.len(),
                         kits.len(),
+                        *selected_index as i32,
+                        None,
+                    ),
+                    AppView::ProcessManagerView {
+                        filter,
+                        selected_index,
+                    } => {
+                        let total = self.cached_processes.len();
+                        let filtered_count = if filter.is_empty() {
+                            total
+                        } else {
+                            let filter_lower = filter.to_lowercase();
+                            self.cached_processes
+                                .iter()
+                                .filter(|p| {
+                                    p.script_path.to_lowercase().contains(&filter_lower)
+                                })
+                                .count()
+                        };
+                        (
+                            "processManager".to_string(),
+                            None,
+                            None,
+                            filter.clone(),
+                            total,
+                            filtered_count,
+                            *selected_index as i32,
+                            None,
+                        )
+                    }
+                    AppView::SearchAiPresetsView {
+                        filter,
+                        selected_index,
+                    } => (
+                        "searchAiPresets".to_string(),
+                        None,
+                        None,
+                        filter.clone(),
+                        0,
+                        0,
+                        *selected_index as i32,
+                        None,
+                    ),
+                    AppView::CreateAiPresetView { .. } => (
+                        "createAiPreset".to_string(),
+                        None,
+                        None,
+                        String::new(),
+                        0,
+                        0,
+                        0,
+                        None,
+                    ),
+                    AppView::SettingsView { selected_index } => (
+                        "settings".to_string(),
+                        None,
+                        None,
+                        String::new(),
+                        0,
+                        0,
                         *selected_index as i32,
                         None,
                     ),

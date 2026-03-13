@@ -210,6 +210,7 @@ impl ProcessManager {
     }
 
     /// Build a human-readable process report that can be shown in the UI/clipboard.
+    #[allow(dead_code)]
     pub fn format_active_process_report(&self, max_entries: usize) -> String {
         let processes = self.get_active_processes_sorted();
         if processes.is_empty() {
@@ -299,6 +300,8 @@ impl ProcessManager {
         #[cfg(unix)]
         {
             let pgid = -(pid as i32);
+            // SAFETY: libc::kill with a negative PID targets the process group.
+            // The PID is validated as a tracked process before calling.
             let ret = unsafe { libc::kill(pgid, libc::SIGKILL) };
 
             if ret == 0 {
@@ -316,6 +319,80 @@ impl ProcessManager {
         #[cfg(not(unix))]
         {
             warn!(pid, "process_manager.kill_process.unsupported_platform");
+        }
+    }
+
+    /// Gracefully terminate a single process by PID and unregister it.
+    ///
+    /// Sends SIGTERM to the process group on Unix, allowing cleanup.
+    /// Returns Ok(()) on success, Err with message on failure.
+    /// Timeout in seconds before escalating from SIGTERM to SIGKILL.
+    const SIGKILL_TIMEOUT_SECS: u64 = 5;
+
+    pub fn terminate_process(&self, pid: u32) -> Result<(), String> {
+        info!(pid, "process_manager.terminate_process.start");
+
+        // Check if process is still tracked
+        let is_tracked = if let Ok(procs) = self.active_processes.read() {
+            procs.contains_key(&pid)
+        } else {
+            return Err("Failed to read process list".to_string());
+        };
+
+        if !is_tracked {
+            return Err(format!("Process {} is not tracked", pid));
+        }
+
+        #[cfg(unix)]
+        {
+            let pgid = -(pid as i32);
+            // SAFETY: libc::kill with a negative PID targets the process group.
+            // The PID was validated as tracked above.
+            let ret = unsafe { libc::kill(pgid, libc::SIGTERM) };
+
+            if ret == 0 {
+                info!(pid, "process_manager.terminate_process.sigterm_sent");
+                self.unregister_process(pid);
+
+                // Spawn a background thread to escalate to SIGKILL if the process
+                // doesn't exit within the timeout.
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(
+                        ProcessManager::SIGKILL_TIMEOUT_SECS,
+                    ));
+                    // SAFETY: libc::kill with signal 0 checks if the process group
+                    // still exists without sending a signal.
+                    let still_running = unsafe { libc::kill(pgid, 0) } == 0;
+                    if still_running {
+                        warn!(
+                            pid,
+                            timeout_secs = ProcessManager::SIGKILL_TIMEOUT_SECS,
+                            "process_manager.terminate_process.sigkill_escalation"
+                        );
+                        // SAFETY: libc::kill with SIGKILL forcefully terminates the
+                        // process group. The PID was validated as a tracked process.
+                        unsafe { libc::kill(pgid, libc::SIGKILL) };
+                    }
+                });
+
+                Ok(())
+            } else {
+                let err = std::io::Error::last_os_error();
+                if err.kind() == ErrorKind::NotFound {
+                    info!(pid, "process_manager.terminate_process.already_exited");
+                    self.unregister_process(pid);
+                    Ok(())
+                } else {
+                    warn!(pid, %err, "process_manager.terminate_process.failed");
+                    Err(format!("Failed to terminate PID {}: {}", pid, err))
+                }
+            }
+        }
+
+        #[cfg(not(unix))]
+        {
+            let _ = pid;
+            Err("Process termination not supported on this platform".to_string())
         }
     }
 

@@ -68,6 +68,10 @@ pub type ChatShowActionsCallback = Arc<dyn Fn(String) + Send + Sync>;
 pub type RunScriptCallback =
     Arc<dyn Fn(std::path::PathBuf, &mut gpui::Context<super::prompt::ChatPrompt>) + Send + Sync>;
 
+/// Callback type for when a generated script has been saved to disk: (script_path)
+pub type ScriptSavedCallback =
+    Arc<dyn Fn(std::path::PathBuf, &mut gpui::Context<super::prompt::ChatPrompt>) + Send + Sync>;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SetupCardAction {
     None,

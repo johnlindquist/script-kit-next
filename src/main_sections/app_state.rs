@@ -18,6 +18,10 @@ struct ScriptListApp {
     cached_windows: Vec<window_control::WindowInfo>,
     /// Cached file results for FileSearchView (avoids cloning per frame)
     cached_file_results: Vec<file_search::FileResult>,
+    /// Cached process list for ProcessManagerView (avoids cloning per frame)
+    cached_processes: Vec<crate::process_manager::ProcessInfo>,
+    /// Background refresh task for ProcessManagerView (dropped on view change)
+    process_manager_refresh_task: Option<gpui::Task<()>>,
     selected_index: usize,
     /// Main menu filter text (mirrors gpui-component input state)
     filter_text: String,
@@ -78,6 +82,8 @@ struct ScriptListApp {
     emoji_scroll_handle: UniformListScrollHandle,
     // Scroll handle for window switcher list
     window_list_scroll_handle: UniformListScrollHandle,
+    // Scroll handle for process manager list
+    process_list_scroll_handle: UniformListScrollHandle,
     // Scroll handle for design gallery list
     design_gallery_scroll_handle: UniformListScrollHandle,
     // Scroll handle for file search list

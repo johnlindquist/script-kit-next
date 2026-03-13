@@ -284,6 +284,13 @@ impl AiApp {
         self.streaming_started_at = Some(std::time::Instant::now());
         let generation = self.streaming_generation;
 
+        // Publish streaming state for SDK handlers
+        publish_streaming_state(AiStreamingSnapshot {
+            is_streaming: true,
+            chat_id: Some(chat_id.as_str()),
+            partial_content: None,
+        });
+
         info!(
             chat_id = %chat_id,
             generation = generation,
@@ -417,6 +424,7 @@ impl AiApp {
                                 app.streaming_content.clear();
                                 app.streaming_chat_id = None;
                                 app.streaming_cancel = None;
+                                publish_streaming_state(AiStreamingSnapshot::default());
                                 cx.notify();
                             })
                         });
@@ -526,6 +534,7 @@ impl AiApp {
                                 app.streaming_content.clear();
                                 app.streaming_chat_id = None;
                                 app.streaming_cancel = None;
+                                publish_streaming_state(AiStreamingSnapshot::default());
                             } else if let Some(content) = final_content {
                                 app.streaming_content = content;
                                 app.finish_streaming(chat_id, generation, cx);

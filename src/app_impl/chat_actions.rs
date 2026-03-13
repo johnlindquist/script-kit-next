@@ -129,6 +129,13 @@ impl ScriptListApp {
                 })
                 .detach();
             }
+            "capture_screen_area" => {
+                if let AppView::ChatPrompt { entity, .. } = &self.current_view {
+                    entity.update(cx, |chat, cx| {
+                        chat.capture_screen_area_attachment(cx);
+                    });
+                }
+            }
             _ => {
                 logging::log("ACTIONS", &format!("Unknown chat action: {}", action_id));
             }

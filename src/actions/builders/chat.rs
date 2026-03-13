@@ -119,6 +119,16 @@ pub fn get_chat_context_actions(info: &ChatPromptInfo) -> Vec<Action> {
         );
     }
 
+    actions.push(
+        Action::new(
+            "chat:capture_screen_area",
+            "Capture Screen Area",
+            Some("Select a screen region to attach as image".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::MagnifyingGlass),
+    );
+
     actions
 }
 
@@ -197,6 +207,14 @@ pub fn get_ai_command_bar_actions() -> Vec<Action> {
         )
         .with_shortcut("⌘V")
         .with_icon(IconName::File)
+        .with_section("Attachments"),
+        Action::new(
+            "chat:capture_screen_area",
+            "Capture Screen Area",
+            Some("Select a screen region to attach as image".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::MagnifyingGlass)
         .with_section("Attachments"),
         Action::new(
             "chat:export_markdown",

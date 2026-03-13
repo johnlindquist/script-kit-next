@@ -232,13 +232,20 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
     Ok(())
 }
 
+/// A single message in a pending chat transfer, including optional image data.
+pub struct PendingChatMessage {
+    pub role: MessageRole,
+    pub content: String,
+    /// Optional base64-encoded PNG image data attached to this message.
+    pub image_base64: Option<String>,
+}
+
 /// Pending chat to initialize after window opens.
 /// This is used by open_ai_window_with_chat to pass messages to the newly created window.
-#[allow(clippy::type_complexity)]
-static AI_PENDING_CHAT: std::sync::OnceLock<std::sync::Mutex<Option<Vec<(MessageRole, String)>>>> =
+static AI_PENDING_CHAT: std::sync::OnceLock<std::sync::Mutex<Option<Vec<PendingChatMessage>>>> =
     std::sync::OnceLock::new();
 
-pub(super) fn get_pending_chat() -> &'static std::sync::Mutex<Option<Vec<(MessageRole, String)>>> {
+pub(super) fn get_pending_chat() -> &'static std::sync::Mutex<Option<Vec<PendingChatMessage>>> {
     AI_PENDING_CHAT.get_or_init(|| std::sync::Mutex::new(None))
 }
 
@@ -251,7 +258,10 @@ pub(super) fn get_pending_chat() -> &'static std::sync::Mutex<Option<Vec<(Messag
 ///
 /// Use this for "Continue in Chat" functionality to transfer a conversation
 /// from the chat prompt to the AI window.
-pub fn open_ai_window_with_chat(cx: &mut App, messages: Vec<(MessageRole, String)>) -> Result<()> {
+pub fn open_ai_window_with_chat(
+    cx: &mut App,
+    messages: Vec<PendingChatMessage>,
+) -> Result<()> {
     use crate::logging;
 
     logging::log(
@@ -309,6 +319,9 @@ pub fn close_ai_window(cx: &mut App) {
 
     // Clear the focus request flag (no longer needed after window closes)
     AI_FOCUS_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst);
+
+    // Clear SDK-visible state so handlers report correct state
+    clear_sdk_state();
 }
 
 /// Check if the AI window is currently open
@@ -549,6 +562,63 @@ pub fn simulate_ai_key(key: &str, modifiers: Vec<KeyModifier>) {
             key
         ),
     );
+}
+
+/// Apply a preset by ID in the AI window.
+///
+/// Opens the AI window if needed, then creates a new chat with the preset's
+/// system prompt and preferred model.
+pub fn apply_ai_preset(cx: &mut App, preset_id: &str) {
+    use crate::logging;
+
+    if !is_ai_window_open() {
+        if let Err(e) = open_ai_window(cx) {
+            logging::log("AI", &format!("Failed to open AI window: {}", e));
+            return;
+        }
+    }
+
+    push_ai_command(AiCommand::ApplyPreset {
+        preset_id: preset_id.to_string(),
+    });
+
+    let handle = {
+        let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
+    };
+
+    if let Some(handle) = handle {
+        let _ = handle.update(cx, |_root, _window, cx| {
+            cx.notify();
+        });
+        tracing::info!(
+            preset_id = %preset_id,
+            action = "apply_ai_preset",
+            "Applying preset in AI window"
+        );
+    }
+}
+
+/// Reload presets from disk in the AI window.
+///
+/// Call this after creating or importing presets to refresh the AI window's preset list.
+pub fn reload_ai_presets(cx: &mut App) {
+    if !is_ai_window_open() {
+        return;
+    }
+
+    push_ai_command(AiCommand::ReloadPresets);
+
+    let handle = {
+        let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
+    };
+
+    if let Some(handle) = handle {
+        let _ = handle.update(cx, |_root, _window, cx| {
+            cx.notify();
+        });
+    }
 }
 
 #[cfg(test)]

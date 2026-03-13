@@ -85,15 +85,23 @@ impl ChatPrompt {
             CHAT_LAYOUT_FOOTER_BG_LIGHT_ALPHA
         };
         let model_text = self.model.clone().unwrap_or_else(|| "Select Model".into());
+        let has_assistant = self.has_assistant_turn();
         let (primary_action, primary_label, primary_shortcut) = if self.is_streaming() {
             (ChatFooterButtonAction::StopStreaming, "Stop", "Esc")
         } else if self.script_generation_mode {
             (ChatFooterButtonAction::SaveAndRun, "Save and Run", "⌘↵")
-        } else {
+        } else if has_assistant {
             (
                 ChatFooterButtonAction::ContinueInChat,
                 "Continue in Chat",
                 "⌘↵",
+            )
+        } else {
+            // No assistant turn yet — show actions toggle as primary
+            (
+                ChatFooterButtonAction::ToggleActionsPanel,
+                "Actions",
+                "⌘K",
             )
         };
 

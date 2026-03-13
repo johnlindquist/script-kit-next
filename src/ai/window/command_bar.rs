@@ -256,6 +256,9 @@ impl AiApp {
                 self.show_attachments_picker(window, cx);
             }
             "paste_image" => self.paste_image_from_clipboard(cx),
+            "capture_screen_area" => {
+                self.capture_screen_area_attachment(cx);
+            }
             "change_model" => {
                 // Model selection now available via Actions (Cmd+K)
                 // Cycle to next model as a convenience
@@ -473,13 +476,16 @@ impl AiApp {
         info!("No code block found to copy");
     }
 
-    /// Paste image from clipboard as attachment
+    /// Paste image from clipboard as attachment.
+    ///
+    /// Delegates to `handle_paste_for_image` which reads clipboard via arboard,
+    /// encodes any image as base64 PNG, and sets it as the pending image attachment.
     pub(super) fn paste_image_from_clipboard(&mut self, cx: &mut Context<Self>) {
-        // Get the current clipboard text or image
-        // Note: GPUI's clipboard API may not support raw image data directly
-        // For now, we'll use a placeholder that can be enhanced later
-        info!("Paste image from clipboard - checking for image data");
-        // TODO: Implement proper image clipboard support when GPUI supports it
-        cx.notify();
+        info!(action = "paste_image_from_clipboard", "Checking clipboard for image data");
+        if self.handle_paste_for_image(cx) {
+            info!(action = "paste_image_from_clipboard_success", "Image pasted from clipboard");
+        } else {
+            info!(action = "paste_image_from_clipboard_none", "No image found in clipboard");
+        }
     }
 }

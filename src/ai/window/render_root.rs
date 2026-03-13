@@ -107,6 +107,32 @@ impl AiApp {
                     self.show_command_bar(window, cx);
                     crate::logging::log("AI", "Command bar shown via stdin command");
                 }
+                AiCommand::ApplyPreset { preset_id } => {
+                    if let Some(idx) = self.presets.iter().position(|p| p.id == preset_id) {
+                        self.presets_selected_index = idx;
+                        self.create_chat_with_preset(window, cx);
+                        tracing::info!(
+                            preset_id = %preset_id,
+                            action = "apply_preset",
+                            "Applied AI preset via command"
+                        );
+                    } else {
+                        tracing::warn!(
+                            preset_id = %preset_id,
+                            action = "apply_preset_not_found",
+                            "Preset not found"
+                        );
+                    }
+                }
+                AiCommand::ReloadPresets => {
+                    self.presets = AiPreset::load_all_presets();
+                    tracing::info!(
+                        count = self.presets.len(),
+                        action = "reload_presets",
+                        "Reloaded AI presets"
+                    );
+                    cx.notify();
+                }
                 AiCommand::SimulateKey { key, modifiers } => {
                     self.handle_simulated_key(&key, &modifiers, window, cx);
                 }

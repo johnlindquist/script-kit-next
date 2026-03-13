@@ -153,6 +153,8 @@ impl ScriptListApp {
             AppView::DropPrompt { .. } => "DropPrompt",
             AppView::TemplatePrompt { .. } => "TemplatePrompt",
             AppView::ChatPrompt { .. } => "ChatPrompt",
+            AppView::MiniPrompt { .. } => "MiniPrompt",
+            AppView::MicroPrompt { .. } => "MicroPrompt",
             AppView::ClipboardHistoryView { .. } => "ClipboardHistoryView",
             AppView::EmojiPickerView { .. } => "EmojiPickerView",
             AppView::AppLauncherView { .. } => "AppLauncherView",
@@ -167,6 +169,10 @@ impl ScriptListApp {
             AppView::NamingPrompt { .. } => "NamingPrompt",
             AppView::BrowseKitsView { .. } => "BrowseKitsView",
             AppView::InstalledKitsView { .. } => "InstalledKitsView",
+            AppView::ProcessManagerView { .. } => "ProcessManagerView",
+            AppView::SearchAiPresetsView { .. } => "SearchAiPresetsView",
+            AppView::CreateAiPresetView { .. } => "CreateAiPresetView",
+            AppView::SettingsView { .. } => "SettingsView",
         };
 
         let old_focused_input = self.focused_input;
@@ -192,6 +198,9 @@ impl ScriptListApp {
                     .output();
             }
         }
+
+        // Stop process manager refresh if it was running
+        self.stop_process_manager_refresh();
 
         // Reset view
         self.current_view = AppView::ScriptList;
