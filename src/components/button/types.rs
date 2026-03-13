@@ -45,6 +45,8 @@ pub struct ButtonColors {
     /// Text color when hovering (reserved for future use)
     #[allow(dead_code)]
     pub text_hover: u32,
+    /// Text color for content on accent backgrounds (e.g. Primary button text)
+    pub text_on_accent: u32,
     /// Background color (for Primary variant)
     pub background: u32,
     /// Background color when hovering
@@ -75,6 +77,7 @@ impl ButtonColors {
         Self {
             text_color: theme.colors.accent.selected, // Yellow/gold - matches logo & highlights
             text_hover: theme.colors.text.primary,
+            text_on_accent: theme.colors.text.on_accent, // Contrasting text for accent backgrounds
             background: theme.colors.accent.selected_subtle,
             background_hover: theme.colors.accent.selected_subtle,
             accent: theme.colors.accent.selected, // Yellow/gold - matches logo & highlights

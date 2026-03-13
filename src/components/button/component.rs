@@ -223,37 +223,53 @@ impl RenderOnce for Button {
         let focus_ring_color = rgba((colors.focus_ring << 8) | 0xA0);
         // 0x20 = 12.5% opacity for subtle background tint
         let focus_tint = rgba((colors.focus_tint << 8) | 0x20);
-        let (text_color, bg_color) = match variant {
+        // Border color for unfocused state — subtle but visible
+        let unfocused_border = rgba((colors.border << 8) | 0x60);
+
+        let (text_color, bg_color, border_color) = match variant {
             ButtonVariant::Primary => {
-                // Primary: filled background with accent color
-                // When focused, add subtle tint on top
-                let base_bg = rgba((colors.background << 8) | 0x80);
+                // Primary: accent-colored background with dark text for strong contrast
                 let bg = if focused {
-                    // Brighter when focused
-                    rgba((colors.background << 8) | 0xA0)
+                    rgba((colors.accent << 8) | 0xFF)
                 } else {
-                    base_bg
+                    rgba((colors.accent << 8) | 0xE0)
                 };
-                (rgb(colors.accent), bg)
+                // Dark text on bright accent background
+                let text = rgb(0x1a1a1a);
+                let border = if focused {
+                    focus_ring_color
+                } else {
+                    rgba((colors.accent << 8) | 0x80)
+                };
+                (text, bg, border)
             }
             ButtonVariant::Ghost => {
-                // Ghost: text only (accent color), white overlay on hover
-                // When focused, add subtle tint
+                // Ghost: accent text, transparent bg, visible border
                 let bg = if focused {
                     focus_tint
                 } else {
                     rgba(TRANSPARENT)
                 };
-                (rgb(colors.accent), bg)
+                let border = if focused {
+                    focus_ring_color
+                } else {
+                    unfocused_border
+                };
+                (rgb(colors.accent), bg, border)
             }
             ButtonVariant::Icon => {
-                // Icon: compact, accent color, white overlay on hover
+                // Icon: compact, accent color
                 let bg = if focused {
                     focus_tint
                 } else {
                     rgba(TRANSPARENT)
                 };
-                (rgb(colors.accent), bg)
+                let border = if focused {
+                    focus_ring_color
+                } else {
+                    rgba(TRANSPARENT)
+                };
+                (rgb(colors.accent), bg, border)
             }
         };
 
@@ -314,16 +330,10 @@ impl RenderOnce for Button {
             button = button.child(div().text_xs().opacity(0.7).child("…"));
         }
 
-        // Apply border styling - consistent 2px border to prevent layout shift
-        if show_focus_indicator {
-            button = button
-                .border(px(FOCUS_BORDER_WIDTH))
-                .border_color(focus_ring_color);
-        } else {
-            button = button
-                .border(px(FOCUS_BORDER_WIDTH))
-                .border_color(gpui::transparent_black());
-        }
+        // Apply border — consistent 2px width to prevent layout shift on focus change
+        button = button
+            .border(px(FOCUS_BORDER_WIDTH))
+            .border_color(border_color);
 
         // Apply hover styles unless disabled
         // Keep text color the same, just add subtle background lift
