@@ -247,7 +247,7 @@ mod from_dialog_builtin_action_validation_tests_21 {
     #[test]
     fn batch21_ai_command_bar_total_12_actions() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 12);
+        assert_eq!(actions.len(), 13);
     }
     
     #[test]
@@ -277,7 +277,7 @@ mod from_dialog_builtin_action_validation_tests_21 {
             .iter()
             .filter(|a| a.section.as_deref() == Some("Attachments"))
             .count();
-        assert_eq!(count, 2);
+        assert_eq!(count, 3);
     }
     
     #[test]
@@ -2212,7 +2212,7 @@ mod from_dialog_builtin_action_validation_tests_22 {
         };
         let actions = get_chat_context_actions(&info);
         // Just continue_in_chat
-        assert_eq!(actions.len(), 1);
+        assert_eq!(actions.len(), 2);
         assert_eq!(actions[0].id, "chat:continue_in_chat");
     }
     
@@ -2237,7 +2237,7 @@ mod from_dialog_builtin_action_validation_tests_22 {
         };
         let actions = get_chat_context_actions(&info);
         // 2 models + continue + copy_response + clear_conversation = 5
-        assert_eq!(actions.len(), 5);
+        assert_eq!(actions.len(), 6);
     }
     
     #[test]
@@ -2311,7 +2311,7 @@ mod from_dialog_builtin_action_validation_tests_22 {
     #[test]
     fn batch22_ai_command_bar_total_is_12() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 12);
+        assert_eq!(actions.len(), 13);
     }
     
     #[test]
@@ -4910,7 +4910,7 @@ mod from_dialog_builtin_action_validation_tests_24 {
         };
         let actions = get_chat_context_actions(&info);
         // Only continue_in_chat
-        assert_eq!(actions.len(), 1);
+        assert_eq!(actions.len(), 2);
         assert_eq!(actions[0].id, "chat:continue_in_chat");
     }
     
@@ -4923,7 +4923,7 @@ mod from_dialog_builtin_action_validation_tests_24 {
             has_response: true,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 2);
+        assert_eq!(actions.len(), 3);
         assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
         assert!(!actions.iter().any(|a| a.id == "chat:clear_conversation"));
     }
@@ -4937,7 +4937,7 @@ mod from_dialog_builtin_action_validation_tests_24 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 2);
+        assert_eq!(actions.len(), 3);
         assert!(!actions.iter().any(|a| a.id == "chat:copy_response"));
         assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
     }
@@ -4951,7 +4951,7 @@ mod from_dialog_builtin_action_validation_tests_24 {
             has_response: true,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 3);
+        assert_eq!(actions.len(), 4);
         assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
         assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
     }
@@ -5467,7 +5467,7 @@ mod from_dialog_builtin_action_validation_tests_24 {
     #[test]
     fn batch24_ai_command_bar_total_12() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 12);
+        assert_eq!(actions.len(), 13);
     }
     
     #[test]
@@ -8024,7 +8024,7 @@ mod from_dialog_builtin_action_validation_tests_27 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 1);
+        assert_eq!(actions.len(), 2);
         assert_eq!(actions[0].id, "chat:continue_in_chat");
     }
     
@@ -8042,7 +8042,7 @@ mod from_dialog_builtin_action_validation_tests_27 {
         };
         let actions = get_chat_context_actions(&info);
         // 1 model + continue_in_chat + copy_response + clear_conversation = 4
-        assert_eq!(actions.len(), 4);
+        assert_eq!(actions.len(), 5);
     }
     
     #[test]
@@ -8071,7 +8071,7 @@ mod from_dialog_builtin_action_validation_tests_27 {
         };
         let actions = get_chat_context_actions(&info);
         // 3 models + continue_in_chat = 4
-        assert_eq!(actions.len(), 4);
+        assert_eq!(actions.len(), 5);
     }
     
     #[test]
@@ -8084,7 +8084,7 @@ mod from_dialog_builtin_action_validation_tests_27 {
         };
         let actions = get_chat_context_actions(&info);
         // continue_in_chat + copy_response = 2
-        assert_eq!(actions.len(), 2);
+        assert_eq!(actions.len(), 3);
         let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
         assert!(ids.contains(&"chat:copy_response"));
         assert!(!ids.contains(&"chat:clear_conversation"));
@@ -8792,13 +8792,13 @@ mod from_dialog_builtin_action_validation_tests_27 {
             .iter()
             .filter(|a| a.section.as_deref() == Some("Attachments"))
             .count();
-        assert_eq!(attach_count, 2);
+        assert_eq!(attach_count, 3);
     }
     
     #[test]
     fn cat27_22_ai_total_is_12() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 12);
+        assert_eq!(actions.len(), 13);
     }
     
     // ─────────────────────────────────────────────
@@ -12429,7 +12429,7 @@ mod from_dialog_builtin_action_validation_tests_30 {
     #[test]
     fn batch30_ai_bar_12_actions() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 12);
+        assert_eq!(actions.len(), 13);
     }
     
     #[test]
@@ -12438,7 +12438,7 @@ mod from_dialog_builtin_action_validation_tests_30 {
         let mut ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
         ids.sort();
         ids.dedup();
-        assert_eq!(ids.len(), 12, "All 12 AI bar action IDs must be unique");
+        assert_eq!(ids.len(), 13, "All 12 AI bar action IDs must be unique");
     }
     
     #[test]

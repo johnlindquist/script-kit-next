@@ -11,3 +11,6 @@ include!("design_gallery.rs");
 include!("theme_chooser.rs");
 include!("file_search.rs");
 include!("kit_store.rs");
+include!("process_manager.rs");
+include!("ai_presets.rs");
+include!("settings.rs");

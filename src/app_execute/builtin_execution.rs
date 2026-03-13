@@ -1065,37 +1065,201 @@ impl ScriptListApp {
                     }
 
                     AiCommandType::SendScreenAreaToAi => {
-                        // Interactive screen area selection - for now just show a message
-                        // Full implementation would need a selection UI overlay
-                        self.toast_manager.push(
-                            components::toast::Toast::info(
-                                "Screen area selection coming soon. Use 'Send Screen to AI' for now.",
-                                &self.theme,
-                            )
-                            .duration_ms(Some(TOAST_INFO_MS)),
-                        );
+                        // Launch native interactive screen area selection
+                        // Uses macOS screencapture -i which provides crosshair cursor,
+                        // semi-transparent backdrop, drag-to-select, and Escape to cancel
+                        match platform::capture_screen_area() {
+                            Ok(Some(capture)) => {
+                                let base64_data = base64::Engine::encode(
+                                    &base64::engine::general_purpose::STANDARD,
+                                    &capture.png_data,
+                                );
+                                let message = format!(
+                                    "[Screen area captured: {}x{} pixels]\n\nPlease analyze this selected screen area.",
+                                    capture.width, capture.height
+                                );
+                                tracing::info!(
+                                    action = "send_screen_area_to_ai",
+                                    width = capture.width,
+                                    height = capture.height,
+                                    file_size = capture.png_data.len(),
+                                    "Screen area captured, sending to AI"
+                                );
+                                if let Err(e) = ai::open_ai_window(cx) {
+                                    tracing::error!(message = %&ai_open_failure_message(&e));
+                                    self.show_error_toast(ai_open_failure_message(&e), cx);
+                                } else {
+                                    ai::set_ai_input_with_image(cx, &message, &base64_data, false);
+                                }
+                            }
+                            Ok(None) => {
+                                // User cancelled selection (pressed Escape) — no feedback needed
+                                tracing::info!(action = "send_screen_area_cancelled", "Screen area selection cancelled by user");
+                            }
+                            Err(e) => {
+                                tracing::error!(action = "send_screen_area_failed", error = %e, "Failed to capture screen area");
+                                self.show_error_toast(format!("Failed to capture screen area: {}", e), cx);
+                            }
+                        }
                         cx.notify();
                     }
 
-                    AiCommandType::CreateAiPreset
-                    | AiCommandType::ImportAiPresets
-                    | AiCommandType::SearchAiPresets => {
-                        // Preset management - open AI window with a future preset UI
-                        match ai::open_ai_window(cx) {
-                            Ok(()) => {
-                                self.toast_manager.push(
-                                    components::toast::Toast::info(
-                                        "AI Presets feature coming soon!",
-                                        &self.theme,
-                                    )
-                                    .duration_ms(Some(TOAST_INFO_MS)),
-                                );
+                    AiCommandType::CreateAiPreset => {
+                        tracing::info!(action = "create_ai_preset", "Opening create AI preset form");
+                        self.current_view = AppView::CreateAiPresetView {
+                            name: String::new(),
+                            system_prompt: String::new(),
+                            model: String::new(),
+                            active_field: 0,
+                        };
+                        self.pending_focus = Some(FocusTarget::AppRoot);
+                        cx.notify();
+                    }
+
+                    AiCommandType::ImportAiPresets => {
+                        tracing::info!(action = "import_ai_presets", "Opening file picker for AI preset import");
+                        let rx = cx.prompt_for_paths(gpui::PathPromptOptions {
+                            files: true,
+                            directories: false,
+                            multiple: false,
+                            prompt: Some("Select AI presets JSON file".into()),
+                            allowed_extensions: vec!["json".into()],
+                        });
+
+                        cx.spawn(async move |this, cx| {
+                            match rx.await {
+                                Ok(Ok(Some(paths))) => {
+                                    if let Some(path) = paths.first() {
+                                        // Validate file contents before importing
+                                        let import_result = cx.background_executor().spawn({
+                                            let path = path.clone();
+                                            async move {
+                                                let contents = std::fs::read_to_string(&path)
+                                                    .map_err(|e| format!("Failed to read file: {}", e))?;
+                                                ai::presets::validate_presets_json(&contents)
+                                                    .map_err(|e| format!("Invalid preset file: {}", e))?;
+                                                ai::presets::import_presets_from_file(&path)
+                                                    .map_err(|e| format!("Import failed: {}", e))
+                                            }
+                                        }).await;
+
+                                        let _ = this.update(cx, |this, cx| {
+                                            match import_result {
+                                                Ok(total) => {
+                                                    tracing::info!(
+                                                        total = total,
+                                                        action = "import_presets_success",
+                                                        "Imported AI presets via file picker"
+                                                    );
+                                                    this.show_hud(
+                                                        format!("Imported presets ({} total)", total),
+                                                        Some(HUD_SHORT_MS),
+                                                        cx,
+                                                    );
+                                                    ai::reload_ai_presets(cx);
+                                                }
+                                                Err(e) => {
+                                                    tracing::error!(
+                                                        error = %e,
+                                                        action = "import_presets_failed",
+                                                        "Failed to import presets"
+                                                    );
+                                                    this.show_error_toast(
+                                                        format!("Failed to import presets: {}", e),
+                                                        cx,
+                                                    );
+                                                }
+                                            }
+                                            cx.notify();
+                                        });
+                                    }
+                                }
+                                Ok(Ok(None)) => {
+                                    tracing::info!(action = "import_presets_cancelled", "User cancelled import file picker");
+                                }
+                                Ok(Err(e)) => {
+                                    tracing::warn!(error = %e, "Import file picker returned error");
+                                }
+                                Err(_) => {
+                                    tracing::warn!("Import file picker channel closed unexpectedly");
+                                }
                             }
-                            Err(e) => {
-                                tracing::error!(message = %&ai_open_failure_message(&e));
-                                self.show_error_toast(ai_open_failure_message(&e), cx);
+                        }).detach();
+                    }
+
+                    AiCommandType::ExportAiPresets => {
+                        tracing::info!(action = "export_ai_presets", "Opening save dialog for AI preset export");
+                        let default_dir = ai::presets::get_presets_path()
+                            .parent()
+                            .map(|p| p.to_path_buf())
+                            .unwrap_or_else(crate::setup::get_kit_path);
+
+                        let rx = cx.prompt_for_new_path(
+                            &default_dir,
+                            Some("ai-presets-export.json"),
+                        );
+
+                        cx.spawn(async move |this, cx| {
+                            match rx.await {
+                                Ok(Ok(Some(path))) => {
+                                    let export_result = cx.background_executor().spawn({
+                                        let path = path.clone();
+                                        async move {
+                                            ai::presets::export_presets_to_file(&path)
+                                                .map_err(|e| format!("Export failed: {}", e))
+                                        }
+                                    }).await;
+
+                                    let _ = this.update(cx, |this, cx| {
+                                        match export_result {
+                                            Ok(count) => {
+                                                tracing::info!(
+                                                    count = count,
+                                                    path = %path.display(),
+                                                    action = "export_presets_success",
+                                                    "Exported AI presets via file picker"
+                                                );
+                                                this.show_hud(
+                                                    format!("Exported {} presets", count),
+                                                    Some(HUD_SHORT_MS),
+                                                    cx,
+                                                );
+                                            }
+                                            Err(e) => {
+                                                tracing::error!(
+                                                    error = %e,
+                                                    action = "export_presets_failed",
+                                                    "Failed to export presets"
+                                                );
+                                                this.show_error_toast(
+                                                    format!("Failed to export presets: {}", e),
+                                                    cx,
+                                                );
+                                            }
+                                        }
+                                        cx.notify();
+                                    });
+                                }
+                                Ok(Ok(None)) => {
+                                    tracing::info!(action = "export_presets_cancelled", "User cancelled export save dialog");
+                                }
+                                Ok(Err(e)) => {
+                                    tracing::warn!(error = %e, "Export save dialog returned error");
+                                }
+                                Err(_) => {
+                                    tracing::warn!("Export save dialog channel closed unexpectedly");
+                                }
                             }
-                        }
+                        }).detach();
+                    }
+
+                    AiCommandType::SearchAiPresets => {
+                        tracing::info!(action = "search_ai_presets", "Opening AI presets search");
+                        self.current_view = AppView::SearchAiPresetsView {
+                            filter: String::new(),
+                            selected_index: 0,
+                        };
+                        self.pending_focus = Some(FocusTarget::MainFilter);
                         cx.notify();
                     }
                 }
@@ -1300,36 +1464,34 @@ impl ScriptListApp {
                         self.open_quick_terminal(cx);
                     }
                     UtilityCommandType::ProcessManager => {
-                        let process_count = crate::process_manager::PROCESS_MANAGER.active_count();
-                        let report =
-                            crate::process_manager::PROCESS_MANAGER.format_active_process_report(8);
+                        let processes =
+                            crate::process_manager::PROCESS_MANAGER.get_active_processes_sorted();
+                        let process_count = processes.len();
 
-                        tracing::info!(message = %&format!(
-                                "correlation_id=process-manager-inspect active_process_count={}",
-                                process_count
-                            ),
+                        tracing::info!(
+                            correlation_id = "process-manager-open",
+                            active_process_count = process_count,
+                            "process_manager.open_view"
                         );
 
-                        // Always copy details so users can inspect full paths quickly.
-                        let clipboard_item = gpui::ClipboardItem::new_string(report.clone());
-                        cx.write_to_clipboard(clipboard_item);
-
-                        if process_count == 0 {
-                            self.show_hud(
-                                "No running scripts. Process report copied.".to_string(),
-                                Some(HUD_2200_MS),
-                                cx,
-                            );
-                        } else {
-                            self.show_hud(
-                                format!(
-                                    "{} running script process(es). Details copied.",
-                                    process_count
-                                ),
-                                Some(HUD_MEDIUM_MS),
-                                cx,
-                            );
-                        }
+                        self.cached_processes = processes;
+                        self.filter_text = String::new();
+                        self.pending_filter_sync = true;
+                        self.pending_placeholder =
+                            Some("Search running scripts...".to_string());
+                        self.current_view = AppView::ProcessManagerView {
+                            filter: String::new(),
+                            selected_index: 0,
+                        };
+                        self.hovered_index = None;
+                        self.opened_from_main_menu = true;
+                        resize_to_view_sync(
+                            crate::window_resize::ViewType::ScriptList,
+                            0,
+                        );
+                        self.pending_focus = Some(FocusTarget::MainFilter);
+                        self.focused_input = FocusedInput::MainFilter;
+                        self.start_process_manager_refresh(cx);
                     }
                     UtilityCommandType::StopAllProcesses => {
                         let process_count = crate::process_manager::PROCESS_MANAGER.active_count();
@@ -1487,6 +1649,24 @@ impl ScriptListApp {
                 // Mark as opened from main menu - ESC will return to main menu
                 self.opened_from_main_menu = true;
                 self.open_file_search(String::new(), cx);
+            }
+
+            // =========================================================================
+            // Settings Hub
+            // =========================================================================
+            builtins::BuiltInFeature::Settings => {
+                tracing::info!(
+                    correlation_id = "settings-hub",
+                    "settings.open"
+                );
+                self.opened_from_main_menu = true;
+                self.current_view = AppView::SettingsView {
+                    selected_index: 0,
+                };
+                self.hovered_index = None;
+                resize_to_view_sync(ViewType::ScriptList, 0);
+                self.pending_focus = Some(FocusTarget::AppRoot);
+                cx.notify();
             }
         }
 

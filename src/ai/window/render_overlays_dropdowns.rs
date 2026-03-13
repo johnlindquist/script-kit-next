@@ -203,8 +203,8 @@ impl AiApp {
             .enumerate()
             .map(|(idx, preset)| {
                 let is_selected = current_section == 1 && idx == current_index;
-                let preset_id = preset.id;
-                let name = preset.name.to_string();
+                let preset_id = preset.id.clone();
+                let name = preset.name.clone();
                 let icon = preset.icon;
 
                 // Find the original preset index for create_chat_with_preset

@@ -62,6 +62,8 @@ pub struct ChatPrompt {
     pub(super) on_show_actions: Option<ChatShowActionsCallback>,
     // Callback for running a saved generated script via parent app pipeline
     pub(super) on_run_script: Option<RunScriptCallback>,
+    // Callback for when a generated script has been saved (show CreationFeedback)
+    pub(super) on_script_saved: Option<ScriptSavedCallback>,
     // Stable UUID for Claude Code CLI session continuity within this prompt's lifetime.
     // Generated once at construction so all messages share the same session.
     pub(super) cli_session_id: String,
@@ -137,6 +139,7 @@ impl ChatPrompt {
             on_claude_code: None,
             on_show_actions: None,
             on_run_script: None,
+            on_script_saved: None,
             cli_session_id: uuid::Uuid::new_v4().to_string(),
             pending_image: None,
             pending_image_render: None,
@@ -155,6 +158,15 @@ impl ChatPrompt {
         callback: impl Fn(std::path::PathBuf, &mut Context<Self>) + Send + Sync + 'static,
     ) -> Self {
         self.on_run_script = Some(Arc::new(callback));
+        self
+    }
+
+    /// Set the callback for when a generated script has been saved to disk.
+    pub fn with_script_saved_callback(
+        mut self,
+        callback: impl Fn(std::path::PathBuf, &mut Context<Self>) + Send + Sync + 'static,
+    ) -> Self {
+        self.on_script_saved = Some(Arc::new(callback));
         self
     }
 
@@ -523,5 +535,10 @@ impl ChatPrompt {
             self.is_streaming(),
             self.latest_script_generation_draft().is_some(),
         )
+    }
+
+    /// Whether the conversation has at least one assistant turn (non-user message).
+    pub fn has_assistant_turn(&self) -> bool {
+        self.messages.iter().any(|m| !m.is_user())
     }
 }

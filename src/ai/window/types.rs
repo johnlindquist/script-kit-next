@@ -150,21 +150,24 @@ pub(super) fn should_persist_stale_completion(
     !suppressed_sessions.remove(&session_key)
 }
 
-/// A preset configuration for starting new chats
-#[derive(Clone)]
+/// A preset configuration for starting new chats.
+///
+/// Uses owned `String` fields so presets can be loaded from disk (user-created)
+/// or constructed from static defaults.
+#[derive(Clone, Debug)]
 pub(super) struct AiPreset {
     /// Unique identifier
-    pub(super) id: &'static str,
+    pub(super) id: String,
     /// Display name
-    pub(super) name: &'static str,
+    pub(super) name: String,
     /// Description shown in dropdown
-    pub(super) description: &'static str,
+    pub(super) description: String,
     /// System prompt to use
-    pub(super) system_prompt: &'static str,
+    pub(super) system_prompt: String,
     /// Icon name
     pub(super) icon: LocalIconName,
     /// Preferred model ID (if any)
-    pub(super) preferred_model: Option<&'static str>,
+    pub(super) preferred_model: Option<String>,
 }
 
 /// A recently used model+provider configuration (for "Last Used Settings" in dropdown)
@@ -191,46 +194,94 @@ impl AiPreset {
     pub(super) fn default_presets() -> Vec<AiPreset> {
         vec![
             AiPreset {
-                id: "general",
-                name: "General Assistant",
-                description: "Helpful AI assistant for any task",
-                system_prompt: "You are a helpful AI assistant.",
+                id: "general".to_string(),
+                name: "General Assistant".to_string(),
+                description: "Helpful AI assistant for any task".to_string(),
+                system_prompt: "You are a helpful AI assistant.".to_string(),
                 icon: LocalIconName::Star,
                 preferred_model: None,
             },
             AiPreset {
-                id: "coder",
-                name: "Code Assistant",
-                description: "Expert programmer and debugger",
-                system_prompt: "You are an expert programmer. Write clean, efficient, well-documented code. Explain your reasoning.",
+                id: "coder".to_string(),
+                name: "Code Assistant".to_string(),
+                description: "Expert programmer and debugger".to_string(),
+                system_prompt: "You are an expert programmer. Write clean, efficient, well-documented code. Explain your reasoning.".to_string(),
                 icon: LocalIconName::Code,
                 preferred_model: None,
             },
             AiPreset {
-                id: "writer",
-                name: "Writing Assistant",
-                description: "Help with writing and editing",
-                system_prompt: "You are a skilled writer and editor. Help improve writing clarity, grammar, and style.",
+                id: "writer".to_string(),
+                name: "Writing Assistant".to_string(),
+                description: "Help with writing and editing".to_string(),
+                system_prompt: "You are a skilled writer and editor. Help improve writing clarity, grammar, and style.".to_string(),
                 icon: LocalIconName::FileCode,
                 preferred_model: None,
             },
             AiPreset {
-                id: "researcher",
-                name: "Research Assistant",
-                description: "Deep analysis and research",
-                system_prompt: "You are a thorough researcher. Analyze topics deeply, cite sources when possible, and provide comprehensive answers.",
+                id: "researcher".to_string(),
+                name: "Research Assistant".to_string(),
+                description: "Deep analysis and research".to_string(),
+                system_prompt: "You are a thorough researcher. Analyze topics deeply, cite sources when possible, and provide comprehensive answers.".to_string(),
                 icon: LocalIconName::MagnifyingGlass,
                 preferred_model: None,
             },
             AiPreset {
-                id: "creative",
-                name: "Creative Partner",
-                description: "Brainstorming and creative ideas",
-                system_prompt: "You are a creative partner. Help brainstorm ideas, think outside the box, and explore possibilities.",
+                id: "creative".to_string(),
+                name: "Creative Partner".to_string(),
+                description: "Brainstorming and creative ideas".to_string(),
+                system_prompt: "You are a creative partner. Help brainstorm ideas, think outside the box, and explore possibilities.".to_string(),
                 icon: LocalIconName::BoltFilled,
                 preferred_model: None,
             },
         ]
+    }
+
+    /// Load all presets: defaults merged with user-saved presets from disk.
+    ///
+    /// User presets with the same ID as a default preset will replace the default.
+    pub(super) fn load_all_presets() -> Vec<AiPreset> {
+        let mut presets = Self::default_presets();
+
+        match crate::ai::presets::load_presets() {
+            Ok(saved) => {
+                for saved_preset in saved {
+                    let ai_preset = Self::from_saved(saved_preset);
+                    if let Some(pos) = presets.iter().position(|p| p.id == ai_preset.id) {
+                        presets[pos] = ai_preset;
+                    } else {
+                        presets.push(ai_preset);
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to load saved presets, using defaults only");
+            }
+        }
+
+        presets
+    }
+
+    /// Convert a saved preset from disk into an in-memory AiPreset.
+    fn from_saved(saved: crate::ai::presets::SavedAiPreset) -> AiPreset {
+        let icon = match saved.icon.as_str() {
+            "code" => LocalIconName::Code,
+            "file-code" | "filecode" => LocalIconName::FileCode,
+            "magnifying-glass" | "search" => LocalIconName::MagnifyingGlass,
+            "bolt" | "bolt-filled" => LocalIconName::BoltFilled,
+            "terminal" => LocalIconName::Terminal,
+            "pencil" => LocalIconName::Pencil,
+            "settings" => LocalIconName::Settings,
+            _ => LocalIconName::Star,
+        };
+
+        AiPreset {
+            id: saved.id,
+            name: saved.name,
+            description: saved.description,
+            system_prompt: saved.system_prompt,
+            icon,
+            preferred_model: saved.preferred_model,
+        }
     }
 }
 
@@ -415,6 +466,10 @@ pub(super) enum AiCommand {
     InitializeWithPendingChat,
     /// Show the command bar overlay (Cmd+K menu)
     ShowCommandBar,
+    /// Apply a preset by ID (opens a new chat with the preset's system prompt and model)
+    ApplyPreset { preset_id: String },
+    /// Reload presets from disk (after create/import)
+    ReloadPresets,
     /// Simulate a key press (for testing)
     SimulateKey {
         key: String,
@@ -438,6 +493,76 @@ pub(super) fn take_ai_commands() -> Vec<AiCommand> {
         .ok()
         .map(|mut cmds| std::mem::take(&mut *cmds))
         .unwrap_or_default()
+}
+
+// === SDK State Bridge ===
+// These globals allow SDK handlers (which run outside the UI thread) to read
+// the current AI window state without needing an Entity<AiApp> reference.
+// AiApp updates these at every state transition; SDK handlers read them.
+
+/// Snapshot of the AI window's streaming state, published by AiApp for SDK handler consumption.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct AiStreamingSnapshot {
+    pub(crate) is_streaming: bool,
+    pub(crate) chat_id: Option<String>,
+    pub(crate) partial_content: Option<String>,
+}
+
+/// Currently active (selected) chat ID in the AI window.
+static AI_ACTIVE_CHAT_ID: std::sync::OnceLock<std::sync::Mutex<Option<String>>> =
+    std::sync::OnceLock::new();
+
+/// Current streaming state snapshot.
+static AI_STREAMING_SNAPSHOT: std::sync::OnceLock<std::sync::Mutex<AiStreamingSnapshot>> =
+    std::sync::OnceLock::new();
+
+fn active_chat_id_slot() -> &'static std::sync::Mutex<Option<String>> {
+    AI_ACTIVE_CHAT_ID.get_or_init(|| std::sync::Mutex::new(None))
+}
+
+fn streaming_snapshot_slot() -> &'static std::sync::Mutex<AiStreamingSnapshot> {
+    AI_STREAMING_SNAPSHOT.get_or_init(|| std::sync::Mutex::new(AiStreamingSnapshot::default()))
+}
+
+/// Update the active chat ID (called by AiApp on chat selection).
+pub(super) fn publish_active_chat_id(chat_id: Option<&ChatId>) {
+    if let Ok(mut slot) = active_chat_id_slot().lock() {
+        *slot = chat_id.map(|id| id.as_str());
+    }
+}
+
+/// Update the streaming state snapshot (called by AiApp on streaming transitions).
+pub(super) fn publish_streaming_state(snapshot: AiStreamingSnapshot) {
+    if let Ok(mut slot) = streaming_snapshot_slot().lock() {
+        *slot = snapshot;
+    }
+}
+
+/// Read the current active chat ID (called by SDK handlers).
+pub(crate) fn get_active_chat_id() -> Option<String> {
+    active_chat_id_slot()
+        .lock()
+        .ok()
+        .and_then(|slot| slot.clone())
+}
+
+/// Read the current streaming state (called by SDK handlers).
+pub(crate) fn get_streaming_snapshot() -> AiStreamingSnapshot {
+    streaming_snapshot_slot()
+        .lock()
+        .ok()
+        .map(|slot| slot.clone())
+        .unwrap_or_default()
+}
+
+/// Clear all SDK-visible state (called when AI window closes).
+pub(crate) fn clear_sdk_state() {
+    if let Ok(mut slot) = active_chat_id_slot().lock() {
+        *slot = None;
+    }
+    if let Ok(mut slot) = streaming_snapshot_slot().lock() {
+        *slot = AiStreamingSnapshot::default();
+    }
 }
 
 // NOTE: AI_APP_ENTITY was removed to prevent memory leaks.

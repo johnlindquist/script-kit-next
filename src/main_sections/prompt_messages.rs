@@ -170,6 +170,18 @@ enum PromptMessage {
         severity: ErrorSeverity,
         script_path: String,
     },
+    /// Compact single-line prompt (mini variant of arg)
+    ShowMini {
+        id: String,
+        placeholder: String,
+        choices: Vec<Choice>,
+    },
+    /// Ultra-compact inline prompt (micro variant of arg)
+    ShowMicro {
+        id: String,
+        placeholder: String,
+        choices: Vec<Choice>,
+    },
     /// Unhandled message type from script - shows warning toast
     UnhandledMessage {
         message_type: String,

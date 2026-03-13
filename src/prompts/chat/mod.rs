@@ -63,7 +63,8 @@ use self::types::{
     build_conversation_turns, default_conversation_starters, next_chat_scroll_follow_state,
     next_reveal_boundary, resolve_chat_input_key_action, resolve_setup_card_key,
     should_ignore_stream_reveal_update, should_show_script_generation_actions, ChatInputKeyAction,
-    ChatScrollDirection, RunScriptCallback, ScriptGenerationAction, SetupCardAction,
+    ChatScrollDirection, RunScriptCallback, ScriptGenerationAction, ScriptSavedCallback,
+    SetupCardAction,
 };
 
 pub use prompt::ChatPrompt;

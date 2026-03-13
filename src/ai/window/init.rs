@@ -154,6 +154,9 @@ impl AiApp {
             }
         }
 
+        // Publish initial active chat ID for SDK handlers
+        publish_active_chat_id(selected_chat_id.as_ref());
+
         info!(chat_count = chats.len(), "AI app initialized");
 
         // Pre-compute box shadows from theme (avoid reloading on every render)
@@ -230,7 +233,7 @@ impl AiApp {
             ),
             // Presets state
             showing_presets_dropdown: false,
-            presets: AiPreset::default_presets(),
+            presets: AiPreset::load_all_presets(),
             presets_selected_index: 0,
             // New chat dropdown state (Raycast-style)
             showing_new_chat_dropdown: false,

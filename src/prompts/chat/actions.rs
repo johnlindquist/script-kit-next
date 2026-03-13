@@ -83,8 +83,8 @@ impl ChatPrompt {
     pub fn handle_continue_in_chat(&mut self, cx: &mut Context<Self>) {
         logging::log("CHAT", "Continue in Chat - opening AI window");
 
-        // Collect conversation history from messages
-        let messages: Vec<(MessageRole, String)> = self
+        // Collect conversation history from messages, including image attachments
+        let messages: Vec<ai::PendingChatMessage> = self
             .messages
             .iter()
             .map(|m| {
@@ -93,21 +93,47 @@ impl ChatPrompt {
                 } else {
                     MessageRole::Assistant
                 };
-                (role, m.get_content().to_string())
+                ai::PendingChatMessage {
+                    role,
+                    content: m.get_content().to_string(),
+                    image_base64: m.image.clone(),
+                }
             })
             .collect();
 
-        logging::log(
-            "CHAT",
-            &format!("Transferring {} messages to AI window", messages.len()),
+        let message_count = messages.len();
+        let image_count = messages.iter().filter(|m| m.image_base64.is_some()).count();
+        tracing::info!(
+            action = "continue_in_chat",
+            message_count = message_count,
+            image_count = image_count,
+            "Transferring conversation to AI window"
         );
 
         // Open AI window with the chat history
         if let Err(e) = ai::open_ai_window_with_chat(cx, messages) {
-            logging::log("CHAT", &format!("Failed to open AI window: {}", e));
+            tracing::error!(error = %e, "Failed to open AI window for continue-in-chat");
+            return;
         }
 
-        // Close this prompt by calling the escape callback
+        // Save conversation before clearing
+        if self.save_history {
+            self.save_to_database();
+        }
+
+        // Reset the inline prompt to empty state
+        self.messages.clear();
+        self.streaming_message_id = None;
+        self.user_has_scrolled_up = false;
+        self.input.clear();
+        self.pending_image = None;
+        self.pending_image_render = None;
+        self.image_render_cache.clear();
+        self.mark_conversation_turns_dirty();
+        self.ensure_conversation_turns_cache();
+        cx.notify();
+
+        // Dismiss the main prompt window via escape callback
         if let Some(ref callback) = self.on_escape {
             callback(self.id.clone());
         }
@@ -213,6 +239,11 @@ impl ChatPrompt {
                 script_path.display()
             ),
         );
+
+        // Notify parent to show CreationFeedback panel
+        if let Some(ref callback) = self.on_script_saved {
+            callback(script_path, cx);
+        }
     }
 
     // ============================================

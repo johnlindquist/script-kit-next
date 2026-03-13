@@ -78,6 +78,18 @@ enum AppView {
         id: String,
         entity: Entity<prompts::ChatPrompt>,
     },
+    /// Compact single-line arg prompt (mini variant)
+    MiniPrompt {
+        id: String,
+        placeholder: String,
+        choices: Vec<Choice>,
+    },
+    /// Ultra-compact inline arg prompt (micro variant)
+    MicroPrompt {
+        id: String,
+        placeholder: String,
+        choices: Vec<Choice>,
+    },
     /// Showing clipboard history
     /// P0 FIX: View state only - data comes from clipboard_history module cache
     ClipboardHistoryView {
@@ -151,6 +163,31 @@ enum AppView {
     InstalledKitsView {
         selected_index: usize,
         kits: Vec<script_kit_gpui::kit_store::InstalledKit>,
+    },
+    /// Showing process manager (running background scripts)
+    /// Data comes from cached_processes field populated on open
+    ProcessManagerView {
+        filter: String,
+        selected_index: usize,
+    },
+    /// Showing searchable list of saved AI presets
+    /// Selecting a preset opens AI chat with its system prompt and model
+    SearchAiPresetsView {
+        filter: String,
+        selected_index: usize,
+    },
+    /// Showing create AI preset form
+    /// Name + system prompt + model fields
+    CreateAiPresetView {
+        name: String,
+        system_prompt: String,
+        model: String,
+        active_field: usize,
+    },
+    /// Showing settings hub with configuration panels
+    /// Lists categories: API Keys, Theme, Window Positions, Feature Toggles, Hotkeys
+    SettingsView {
+        selected_index: usize,
     },
 }
 

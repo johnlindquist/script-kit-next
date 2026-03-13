@@ -1,13 +1,11 @@
 use anyhow::{Context, Result};
-use std::fs::{self, OpenOptions};
-use std::io::{ErrorKind, Write};
-use std::path::{Path, PathBuf};
+use std::fs;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::config::ModelInfo;
 use super::providers::{AiProvider, ProviderMessage, ProviderRegistry};
 
-const AI_SCRIPT_OUTPUT_DIR: &str = "~/.kenv/scripts";
 const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
 const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
 const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
@@ -294,10 +292,17 @@ pub fn generate_script_from_prompt(
         );
     }
 
-    let path = write_generated_script(&slug, &finalized).with_context(|| {
+    let path = crate::script_creation::create_new_script(&slug).with_context(|| {
         format!(
-            "Failed writing AI-generated script (state=write_failed, slug={})",
+            "Failed creating AI-generated script (state=create_failed, slug={})",
             slug
+        )
+    })?;
+
+    fs::write(&path, &finalized).with_context(|| {
+        format!(
+            "Failed writing AI-generated script content (state=write_failed, path={})",
+            path.display()
         )
     })?;
 
@@ -382,10 +387,6 @@ fn select_generation_model(
         })?;
 
     Ok((selected_model, provider))
-}
-
-fn generated_scripts_dir() -> PathBuf {
-    PathBuf::from(shellexpand::tilde(AI_SCRIPT_OUTPUT_DIR).as_ref())
 }
 
 fn build_script_generation_messages(normalized_prompt: &str) -> Vec<ProviderMessage> {
@@ -600,48 +601,6 @@ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> Str
     output
 }
 
-fn write_generated_script(slug: &str, script_content: &str) -> Result<PathBuf> {
-    write_generated_script_in_dir(&generated_scripts_dir(), slug, script_content)
-}
-
-fn write_generated_script_in_dir(
-    output_dir: &Path,
-    slug: &str,
-    script_content: &str,
-) -> Result<PathBuf> {
-    fs::create_dir_all(output_dir)
-        .with_context(|| format!("Failed to create output dir: {}", output_dir.display()))?;
-
-    for suffix in 0usize.. {
-        let candidate = if suffix == 0 {
-            slug.to_string()
-        } else {
-            format!("{slug}-{suffix}")
-        };
-        let path = output_dir.join(format!("{}.ts", candidate));
-        match OpenOptions::new().write(true).create_new(true).open(&path) {
-            Ok(mut file) => {
-                file.write_all(script_content.as_bytes()).with_context(|| {
-                    format!("Failed writing generated script to {}", path.display())
-                })?;
-                return Ok(path);
-            }
-            Err(error) if error.kind() == ErrorKind::AlreadyExists => continue,
-            Err(error) => {
-                return Err(error).with_context(|| {
-                    format!(
-                        "Failed creating generated script file {} (slug={})",
-                        path.display(),
-                        slug
-                    )
-                });
-            }
-        }
-    }
-
-    unreachable!("suffix loop should eventually create a unique script filename")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -786,16 +745,6 @@ await div("ready");
         assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("ai("));
         assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("clipboard"));
         assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("home("));
-    }
-
-    #[test]
-    fn test_write_generated_script_in_dir_appends_numeric_suffix_for_collisions() {
-        let temp_dir = tempdir().unwrap();
-        let first = write_generated_script_in_dir(temp_dir.path(), "my-script", "a").unwrap();
-        let second = write_generated_script_in_dir(temp_dir.path(), "my-script", "b").unwrap();
-
-        assert_eq!(first.file_name().unwrap(), "my-script.ts");
-        assert_eq!(second.file_name().unwrap(), "my-script-1.ts");
     }
 
     #[test]

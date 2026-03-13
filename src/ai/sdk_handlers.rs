@@ -10,6 +10,7 @@ use crate::protocol::{AiChatInfo, AiMessageInfo, Message};
 
 use super::model::{Chat, ChatId, Message as AiMessage, MessageRole};
 use super::storage;
+use super::window::{get_active_chat_id, get_streaming_snapshot};
 
 /// Convert a Chat from storage to AiChatInfo for protocol
 fn chat_to_info(chat: &Chat, message_count: usize) -> AiChatInfo {
@@ -40,10 +41,18 @@ fn message_to_info(msg: &AiMessage) -> AiMessageInfo {
 /// Handle AiIsOpen request - check if AI window is open
 pub fn handle_ai_is_open(request_id: String) -> Message {
     let is_open = super::is_ai_window_open();
-    // TODO: Get active chat ID from window state
-    let active_chat_id = None;
+    let active_chat_id = if is_open {
+        get_active_chat_id()
+    } else {
+        None
+    };
 
-    debug!(request_id = %request_id, is_open = is_open, "AiIsOpen handled");
+    info!(
+        request_id = %request_id,
+        is_open = is_open,
+        active_chat_id = ?active_chat_id,
+        "ai_sdk.is_open"
+    );
 
     Message::AiIsOpenResult {
         request_id,
@@ -54,13 +63,30 @@ pub fn handle_ai_is_open(request_id: String) -> Message {
 
 /// Handle AiGetActiveChat request - get info about active chat
 pub fn handle_ai_get_active_chat(request_id: String) -> Message {
-    // TODO: Get active chat ID from window state
-    // For now, return the most recently updated chat
-    let chat = match storage::get_all_chats() {
-        Ok(chats) => chats.into_iter().next(),
-        Err(e) => {
-            error!(error = %e, "Failed to get chats for AiGetActiveChat");
-            None
+    // Read the actual active chat ID from window state
+    let active_id = get_active_chat_id().and_then(|id_str| ChatId::parse(&id_str));
+
+    let chat = match active_id {
+        Some(id) => match storage::get_chat(&id) {
+            Ok(Some(c)) => Some(c),
+            Ok(None) => {
+                debug!(chat_id = %id, "Active chat not found in storage");
+                None
+            }
+            Err(e) => {
+                error!(error = %e, chat_id = %id, "Failed to get active chat from storage");
+                None
+            }
+        },
+        None => {
+            // Fallback: return the most recently updated chat
+            match storage::get_all_chats() {
+                Ok(chats) => chats.into_iter().next(),
+                Err(e) => {
+                    error!(error = %e, "Failed to get chats for AiGetActiveChat fallback");
+                    None
+                }
+            }
         }
     };
 
@@ -71,7 +97,12 @@ pub fn handle_ai_get_active_chat(request_id: String) -> Message {
         chat_to_info(&c, msg_count)
     });
 
-    debug!(request_id = %request_id, has_chat = chat_info.is_some(), "AiGetActiveChat handled");
+    info!(
+        request_id = %request_id,
+        has_chat = chat_info.is_some(),
+        from_window_state = active_id.is_some(),
+        "ai_sdk.get_active_chat"
+    );
 
     Message::AiActiveChatResult {
         request_id,
@@ -120,11 +151,11 @@ pub fn handle_ai_list_chats(
         })
         .collect();
 
-    debug!(
+    info!(
         request_id = %request_id,
         count = chat_infos.len(),
         total = total_count,
-        "AiListChats handled"
+        "ai_sdk.list_chats"
     );
 
     Message::AiChatListResult {
@@ -155,11 +186,24 @@ pub fn handle_ai_get_conversation(
             }
         },
         None => {
-            // Try to get most recent chat
-            match storage::get_all_chats() {
-                Ok(chats) => match chats.into_iter().next() {
-                    Some(c) => c.id,
-                    None => {
+            // Try the active chat from window state first, then fall back to most recent
+            let active = get_active_chat_id().and_then(|id_str| ChatId::parse(&id_str));
+            match active {
+                Some(id) => id,
+                None => match storage::get_all_chats() {
+                    Ok(chats) => match chats.into_iter().next() {
+                        Some(c) => c.id,
+                        None => {
+                            return Message::AiConversationResult {
+                                request_id,
+                                chat_id: String::new(),
+                                messages: vec![],
+                                has_more: false,
+                            };
+                        }
+                    },
+                    Err(e) => {
+                        error!(error = %e, "Failed to get chats for conversation");
                         return Message::AiConversationResult {
                             request_id,
                             chat_id: String::new(),
@@ -168,15 +212,6 @@ pub fn handle_ai_get_conversation(
                         };
                     }
                 },
-                Err(e) => {
-                    error!(error = %e, "Failed to get chats for conversation");
-                    return Message::AiConversationResult {
-                        request_id,
-                        chat_id: String::new(),
-                        messages: vec![],
-                        has_more: false,
-                    };
-                }
             }
         }
     };
@@ -199,11 +234,11 @@ pub fn handle_ai_get_conversation(
         }
     };
 
-    debug!(
+    info!(
         request_id = %request_id,
         chat_id = %target_chat_id,
         message_count = message_infos.len(),
-        "AiGetConversation handled"
+        "ai_sdk.get_conversation"
     );
 
     Message::AiConversationResult {
@@ -261,14 +296,34 @@ pub fn handle_ai_focus(request_id: String) -> Option<Message> {
 }
 
 /// Handle AiGetStreamingStatus request
-pub fn handle_ai_get_streaming_status(request_id: String, _chat_id: Option<String>) -> Message {
-    // TODO: Get streaming status from window state
-    // For now, return not streaming
+pub fn handle_ai_get_streaming_status(request_id: String, query_chat_id: Option<String>) -> Message {
+    let snapshot = get_streaming_snapshot();
+
+    // If a specific chat_id was requested, only report streaming for that chat
+    let is_relevant = match (&query_chat_id, &snapshot.chat_id) {
+        (Some(query), Some(active)) => query == active,
+        (None, _) => true, // No filter, report global status
+        (Some(_), None) => false, // Querying specific chat but nothing is streaming
+    };
+
+    let (is_streaming, chat_id, partial_content) = if is_relevant && snapshot.is_streaming {
+        (true, snapshot.chat_id, snapshot.partial_content)
+    } else {
+        (false, None, None)
+    };
+
+    info!(
+        request_id = %request_id,
+        is_streaming = is_streaming,
+        chat_id = ?chat_id,
+        "ai_sdk.get_streaming_status"
+    );
+
     Message::AiStreamingStatusResult {
         request_id,
-        is_streaming: false,
-        chat_id: None,
-        partial_content: None,
+        is_streaming,
+        chat_id,
+        partial_content,
     }
 }
 

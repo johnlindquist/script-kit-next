@@ -210,6 +210,43 @@
                                     }
                                     cx.stop_propagation();
                                 }
+                                AppView::ProcessManagerView {
+                                    selected_index,
+                                    filter: _,
+                                } => {
+                                    let filtered_len = this.cached_processes.len();
+                                    if is_up && *selected_index > 0 {
+                                        *selected_index -= 1;
+                                        this.process_list_scroll_handle.scroll_to_item(
+                                            *selected_index,
+                                            gpui::ScrollStrategy::Nearest,
+                                        );
+                                        cx.notify();
+                                    } else if is_down && *selected_index + 1 < filtered_len {
+                                        *selected_index += 1;
+                                        this.process_list_scroll_handle.scroll_to_item(
+                                            *selected_index,
+                                            gpui::ScrollStrategy::Nearest,
+                                        );
+                                        cx.notify();
+                                    }
+                                    cx.stop_propagation();
+                                }
+                                AppView::SearchAiPresetsView {
+                                    selected_index,
+                                    filter: _,
+                                } => {
+                                    // Simple up/down navigation for presets list
+                                    // (count is computed at render time, use a reasonable max)
+                                    if is_up && *selected_index > 0 {
+                                        *selected_index -= 1;
+                                        cx.notify();
+                                    } else if is_down {
+                                        *selected_index += 1;
+                                        cx.notify();
+                                    }
+                                    cx.stop_propagation();
+                                }
                                 AppView::ScriptList => {
                                     // CRITICAL: If actions popup is open, route to actions dialog instead
                                     if this.show_actions_popup {

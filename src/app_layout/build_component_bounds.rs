@@ -41,6 +41,8 @@ impl ScriptListApp {
             AppView::DropPrompt { .. } => "DropPrompt",
             AppView::TemplatePrompt { .. } => "TemplatePrompt",
             AppView::ChatPrompt { .. } => "ChatPrompt",
+            AppView::MiniPrompt { .. } => "MiniPrompt",
+            AppView::MicroPrompt { .. } => "MicroPrompt",
             AppView::ClipboardHistoryView { .. } => "ClipboardHistory",
             AppView::AppLauncherView { .. } => "AppLauncher",
             AppView::WindowSwitcherView { .. } => "WindowSwitcher",
@@ -56,6 +58,10 @@ impl ScriptListApp {
             AppView::NamingPrompt { .. } => "NamingPrompt",
             AppView::BrowseKitsView { .. } => "BrowseKits",
             AppView::InstalledKitsView { .. } => "InstalledKits",
+            AppView::ProcessManagerView { .. } => "ProcessManager",
+            AppView::SearchAiPresetsView { .. } => "SearchAiPresets",
+            AppView::CreateAiPresetView { .. } => "CreateAiPreset",
+            AppView::SettingsView { .. } => "Settings",
         };
 
         // Header bounds (includes padding + input + divider) - common to all views

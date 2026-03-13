@@ -236,6 +236,178 @@ impl AiApp {
         )
     }
 
+    /// Open a native file picker dialog and add selected files as pending attachments.
+    pub(super) fn open_file_picker(&mut self, cx: &mut Context<Self>) {
+        info!(action = "open_file_picker", "Opening native file picker for attachments");
+
+        let rx = cx.prompt_for_paths(gpui::PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: true,
+            prompt: Some("Select files to attach".into()),
+            allowed_extensions: Vec::new(),
+        });
+
+        cx.spawn(async move |this, cx| {
+            match rx.await {
+                Ok(Ok(Some(paths))) => {
+                    let count = paths.len();
+                    let path_strings: Vec<String> = paths
+                        .into_iter()
+                        .map(|p| p.to_string_lossy().to_string())
+                        .collect();
+                    this.update(cx, |this, cx| {
+                        for path in &path_strings {
+                            this.add_attachment(path.clone(), cx);
+                        }
+                        info!(
+                            action = "file_picker_completed",
+                            files_added = count,
+                            "Files attached via file picker"
+                        );
+                    })
+                    .ok();
+                }
+                Ok(Ok(None)) => {
+                    info!(action = "file_picker_cancelled", "User cancelled file picker");
+                }
+                Ok(Err(e)) => {
+                    tracing::warn!(error = %e, "File picker returned error");
+                }
+                Err(_) => {
+                    tracing::warn!("File picker channel closed unexpectedly");
+                }
+            }
+        })
+        .detach();
+    }
+
+    /// Open a native file picker filtered to image types and set selected image as pending.
+    ///
+    /// Selected images are read from disk, base64-encoded, cached, and set as the
+    /// pending image attachment. Only the last selected image is kept (single pending image).
+    pub(super) fn open_image_picker(&mut self, cx: &mut Context<Self>) {
+        info!(action = "open_image_picker", "Opening native image file picker");
+
+        let rx = cx.prompt_for_paths(gpui::PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some("Select an image to attach".into()),
+            allowed_extensions: vec![
+                "png".to_string(),
+                "jpg".to_string(),
+                "jpeg".to_string(),
+                "gif".to_string(),
+                "webp".to_string(),
+                "bmp".to_string(),
+            ],
+        });
+
+        cx.spawn(async move |this, cx| {
+            match rx.await {
+                Ok(Ok(Some(paths))) => {
+                    if let Some(path) = paths.first() {
+                        let path = path.clone();
+                        // Read the file on the background executor to avoid blocking UI
+                        let file_data = match std::fs::read(&path) {
+                            Ok(data) => data,
+                            Err(e) => {
+                                tracing::warn!(
+                                    error = %e,
+                                    path = %path.display(),
+                                    "Failed to read selected image file"
+                                );
+                                return;
+                            }
+                        };
+
+                        use base64::Engine;
+                        let base64_data =
+                            base64::engine::general_purpose::STANDARD.encode(&file_data);
+
+                        this.update(cx, |this, cx| {
+                            this.cache_image_from_base64(&base64_data);
+                            this.pending_image = Some(base64_data);
+                            info!(
+                                action = "image_picker_completed",
+                                path = %path.display(),
+                                size_kb = file_data.len() / 1024,
+                                "Image attached via image picker"
+                            );
+                            cx.notify();
+                        })
+                        .ok();
+                    }
+                }
+                Ok(Ok(None)) => {
+                    info!(action = "image_picker_cancelled", "User cancelled image picker");
+                }
+                Ok(Err(e)) => {
+                    tracing::warn!(error = %e, "Image picker returned error");
+                }
+                Err(_) => {
+                    tracing::warn!("Image picker channel closed unexpectedly");
+                }
+            }
+        })
+        .detach();
+    }
+
+    /// Launch interactive screen area capture and attach the result as a pending image.
+    ///
+    /// Runs macOS `screencapture -i` on a background thread which shows its own native
+    /// fullscreen overlay. On completion, the captured image is base64 encoded and set
+    /// as the pending image attachment. Escape cancels the capture.
+    pub(super) fn capture_screen_area_attachment(&mut self, cx: &mut Context<Self>) {
+        info!(action = "capture_screen_area_start", "Starting screen area capture for AI attachment");
+
+        // Run capture on background executor (screencapture -i blocks waiting for user)
+        cx.spawn(async move |this, cx| {
+            let capture_result = cx
+                .background_executor()
+                .spawn(async { crate::platform::capture_screen_area() })
+                .await;
+
+            match capture_result {
+                Ok(Some(capture)) => {
+                    use base64::Engine;
+                    let base64_data =
+                        base64::engine::general_purpose::STANDARD.encode(&capture.png_data);
+                    let size_kb = capture.png_data.len() / 1024;
+
+                    this.update(cx, |this, cx| {
+                        this.cache_image_from_base64(&base64_data);
+                        this.pending_image = Some(base64_data);
+                        info!(
+                            action = "capture_screen_area_attached",
+                            width = capture.width,
+                            height = capture.height,
+                            size_kb = size_kb,
+                            "Screen area captured and attached to AI chat"
+                        );
+                        cx.notify();
+                    })
+                    .ok();
+                }
+                Ok(None) => {
+                    info!(
+                        action = "capture_screen_area_cancelled",
+                        "User cancelled screen area capture"
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        action = "capture_screen_area_error",
+                        error = %e,
+                        "Screen area capture failed"
+                    );
+                }
+            }
+        })
+        .detach();
+    }
+
     /// Focus the main chat input
     /// Called when the window is opened to allow immediate typing
     pub fn focus_input(&self, window: &mut Window, cx: &mut Context<Self>) {

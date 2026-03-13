@@ -12,6 +12,8 @@ impl ScriptListApp {
                 | AppView::DesignGalleryView { .. }
                 | AppView::ThemeChooserView { .. }
                 | AppView::FileSearchView { .. }
+                | AppView::ProcessManagerView { .. }
+                | AppView::SearchAiPresetsView { .. }
         )
     }
 

@@ -44,6 +44,15 @@ impl ScriptListApp {
                     Some((ViewType::ArgPromptWithChoices, filtered.len()))
                 }
             }
+            AppView::MiniPrompt { choices, .. } => {
+                let filtered = self.get_filtered_arg_choices(choices);
+                if filtered.is_empty() && choices.is_empty() {
+                    Some((ViewType::ArgPromptNoChoices, 0))
+                } else {
+                    Some((ViewType::ArgPromptWithChoices, filtered.len().min(5)))
+                }
+            }
+            AppView::MicroPrompt { .. } => Some((ViewType::ArgPromptNoChoices, 0)),
             AppView::DivPrompt { .. } => Some((ViewType::DivPrompt, 0)),
             AppView::FormPrompt { .. } => Some((ViewType::DivPrompt, 0)), // Use DivPrompt size for forms
             AppView::EditorPrompt { .. } => Some((ViewType::EditorPrompt, 0)),
@@ -128,6 +137,18 @@ impl ScriptListApp {
                 };
                 Some((ViewType::ScriptList, filtered_count))
             }
+            AppView::ProcessManagerView { filter, .. } => {
+                let filtered_count = if filter.is_empty() {
+                    self.cached_processes.len()
+                } else {
+                    let filter_lower = filter.to_lowercase();
+                    self.cached_processes
+                        .iter()
+                        .filter(|p| p.script_path.to_lowercase().contains(&filter_lower))
+                        .count()
+                };
+                Some((ViewType::ScriptList, filtered_count))
+            }
             AppView::ScratchPadView { .. } => Some((ViewType::EditorPrompt, 0)),
             AppView::QuickTerminalView { .. } => Some((ViewType::TermPrompt, 0)),
             AppView::WebcamView { .. } => Some((ViewType::DivPrompt, 0)),
@@ -168,6 +189,18 @@ impl ScriptListApp {
             AppView::InstalledKitsView { kits, .. } => {
                 Some((ViewType::ScriptList, kits.len()))
             }
+            AppView::SearchAiPresetsView { .. } => {
+                // Presets list - defaults (5) + user presets
+                let count = crate::ai::presets::load_presets()
+                    .map(|p| 5 + p.len())
+                    .unwrap_or(5);
+                Some((ViewType::ScriptList, count))
+            }
+            AppView::CreateAiPresetView { .. } => {
+                // Fixed-size form with 3 fields
+                Some((ViewType::ArgPromptNoChoices, 0))
+            }
+            AppView::SettingsView { .. } => Some((ViewType::ScriptList, 0)),
         }
     }
 
@@ -205,6 +238,14 @@ impl ScriptListApp {
     pub(crate) fn set_prompt_input(&mut self, text: String, cx: &mut Context<Self>) {
         match &mut self.current_view {
             AppView::ArgPrompt { .. } => {
+                self.arg_input.set_text(text);
+                self.arg_selected_index = 0;
+                self.arg_list_scroll_handle
+                    .scroll_to_item(0, ScrollStrategy::Top);
+                self.update_window_size();
+                cx.notify();
+            }
+            AppView::MiniPrompt { .. } | AppView::MicroPrompt { .. } => {
                 self.arg_input.set_text(text);
                 self.arg_selected_index = 0;
                 self.arg_list_scroll_handle

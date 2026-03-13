@@ -760,7 +760,7 @@ fn chat_zero_models() {
     };
     let actions = get_chat_context_actions(&info);
     // Should have only "continue_in_chat" (no copy_response, no clear)
-    assert_eq!(actions.len(), 1);
+    assert_eq!(actions.len(), 2);
     assert_eq!(actions[0].id, "chat:continue_in_chat");
 }
 
@@ -968,11 +968,12 @@ fn ai_command_bar_all_twelve_ids() {
         "chat:export_markdown",
         "chat:branch_from_last",
         "chat:toggle_shortcuts_help",
+        "chat:capture_screen_area",
     ];
     for id in &expected {
         assert!(ids.contains(id), "Missing AI action: {}", id);
     }
-    assert_eq!(actions.len(), 12);
+    assert_eq!(actions.len(), 13);
 }
 
 #[test]

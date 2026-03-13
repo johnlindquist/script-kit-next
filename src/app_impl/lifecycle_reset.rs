@@ -212,6 +212,12 @@ impl ScriptListApp {
             AppView::WindowSwitcherView { filter, .. } if !filter.is_empty() => {
                 Some("WindowSwitcher filter")
             }
+            AppView::ProcessManagerView { filter, .. } if !filter.is_empty() => {
+                Some("ProcessManager filter")
+            }
+            AppView::SearchAiPresetsView { filter, .. } if !filter.is_empty() => {
+                Some("SearchAiPresets filter")
+            }
             AppView::DesignGalleryView { filter, .. } if !filter.is_empty() => {
                 Some("DesignGallery filter")
             }
@@ -267,6 +273,20 @@ impl ScriptListApp {
                 Self::clear_builtin_query_state(filter, selected_index);
                 self.window_list_scroll_handle
                     .scroll_to_item(0, ScrollStrategy::Top);
+            }
+            AppView::ProcessManagerView {
+                filter,
+                selected_index,
+            } => {
+                Self::clear_builtin_query_state(filter, selected_index);
+                self.process_list_scroll_handle
+                    .scroll_to_item(0, ScrollStrategy::Top);
+            }
+            AppView::SearchAiPresetsView {
+                filter,
+                selected_index,
+            } => {
+                Self::clear_builtin_query_state(filter, selected_index);
             }
             AppView::DesignGalleryView {
                 filter,
@@ -351,6 +371,8 @@ impl ScriptListApp {
                 "KEY",
                 "ESC - returning to main menu (opened from main menu)",
             );
+            // Stop process manager refresh if it was running
+            self.stop_process_manager_refresh();
             // Return to main menu
             self.current_view = AppView::ScriptList;
             // Reset the flag since we're now in main menu

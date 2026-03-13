@@ -418,7 +418,7 @@ mod from_dialog_builtin_action_validation_tests {
     
     #[test]
     fn ai_command_bar_action_count_is_exactly_twelve() {
-        assert_eq!(get_ai_command_bar_actions().len(), 12);
+        assert_eq!(get_ai_command_bar_actions().len(), 13);
     }
     
     // =========================================================================
@@ -2034,8 +2034,8 @@ mod from_dialog_builtin_action_validation_tests_2 {
         let actions = get_chat_context_actions(&info);
         assert_eq!(
             actions.len(),
-            1,
-            "Empty chat should have only continue_in_chat"
+            2,
+            "Empty chat should have continue_in_chat and capture_screen_area"
         );
         assert_eq!(actions[0].id, "chat:continue_in_chat");
     }
@@ -3796,8 +3796,8 @@ mod from_dialog_builtin_action_validation_tests_3 {
             .filter(|a| a.section.as_deref() == Some("Attachments"))
             .count();
         assert_eq!(
-            attachments_count, 2,
-            "Attachments section should have 2 actions"
+            attachments_count, 3,
+            "Attachments section should have 3 actions"
         );
     }
     
@@ -5614,11 +5614,11 @@ mod from_dialog_builtin_action_validation_tests_3 {
     }
     
     #[test]
-    fn ai_command_bar_has_exactly_12_actions() {
+    fn ai_command_bar_has_exactly_13_actions() {
         let count = get_ai_command_bar_actions().len();
         assert_eq!(
-            count, 12,
-            "AI command bar should have exactly 12 actions, got {}",
+            count, 13,
+            "AI command bar should have exactly 13 actions, got {}",
             count
         );
     }
@@ -7060,7 +7060,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert!(ids.contains(&"chat:continue_in_chat"));
         assert!(!ids.contains(&"chat:copy_response"));
         assert!(!ids.contains(&"chat:clear_conversation"));
-        assert_eq!(actions.len(), 1);
+        assert_eq!(actions.len(), 2);
     }
     
     #[test]
@@ -8436,7 +8436,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 .iter()
                 .filter(|a| a.section.as_deref() == Some("Attachments"))
                 .count();
-            assert_eq!(attach_count, 2);
+            assert_eq!(attach_count, 3);
         }
     
         #[test]
@@ -8452,7 +8452,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
         #[test]
         fn ai_command_bar_total_is_12() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 12);
+            assert_eq!(actions.len(), 13);
         }
     
         #[test]
@@ -9337,7 +9337,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             };
             let actions = get_chat_context_actions(&info);
             // Only continue_in_chat (no models, no copy, no clear)
-            assert_eq!(actions.len(), 1);
+            assert_eq!(actions.len(), 2);
             assert_eq!(actions[0].id, "chat:continue_in_chat");
         }
     
@@ -9362,7 +9362,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             };
             let actions = get_chat_context_actions(&info);
             // 2 models + continue_in_chat + copy_response + clear_conversation = 5
-            assert_eq!(actions.len(), 5);
+            assert_eq!(actions.len(), 6);
         }
     
         #[test]
@@ -10531,7 +10531,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             };
             let actions = get_chat_context_actions(&info);
             // 20 models + continue_in_chat = 21
-            assert_eq!(actions.len(), 21);
+            assert_eq!(actions.len(), 22);
             for action in actions.iter().take(20) {
                 assert!(
                     action.id.starts_with("chat:select_model_"),
@@ -10605,7 +10605,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 1);
+            assert_eq!(actions.len(), 2);
             assert_eq!(actions[0].id, "chat:continue_in_chat");
         }
     
@@ -10626,7 +10626,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert!(ids.contains(&"chat:continue_in_chat"));
             assert!(ids.contains(&"chat:copy_response"));
             assert!(ids.contains(&"chat:clear_conversation"));
-            assert_eq!(actions.len(), 4); // 1 model + 3 actions
+            assert_eq!(actions.len(), 5); // 1 model + 3 actions
         }
     
         #[test]
@@ -11904,7 +11904,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
         #[test]
         fn ai_command_bar_has_exactly_12_actions() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 12);
+            assert_eq!(actions.len(), 13);
         }
     
         #[test]
@@ -11943,7 +11943,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 .iter()
                 .filter(|a| a.section.as_deref() == Some("Attachments"))
                 .collect();
-            assert_eq!(att_actions.len(), 2);
+            assert_eq!(att_actions.len(), 3);
         }
     
         #[test]
@@ -13545,7 +13545,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
         #[test]
         fn ai_command_bar_exactly_12_actions() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 12);
+            assert_eq!(actions.len(), 13);
         }
     
         #[test]
@@ -17613,7 +17613,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
         #[test]
         fn ai_command_bar_has_exactly_12_actions() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 12, "AI command bar should have 12 actions");
+            assert_eq!(actions.len(), 13, "AI command bar should have 12 actions");
         }
     
         #[test]
@@ -20337,7 +20337,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 1);
+            assert_eq!(actions.len(), 2);
             assert_eq!(actions[0].id, "chat:continue_in_chat");
         }
     

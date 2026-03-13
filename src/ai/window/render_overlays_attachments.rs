@@ -19,6 +19,12 @@ impl AiApp {
                 LocalIconName::Copy,
                 "⌘V",
             ),
+            (
+                "screen_area",
+                "Capture Screen Area",
+                LocalIconName::MagnifyingGlass,
+                "Select region",
+            ),
         ];
 
         let option_items: Vec<_> = options
@@ -44,13 +50,16 @@ impl AiApp {
                         this.hide_attachments_picker(cx);
                         match id_str {
                             "file" => {
-                                info!("File picker not implemented yet");
+                                this.open_file_picker(cx);
                             }
                             "image" => {
-                                info!("Image picker not implemented yet");
+                                this.open_image_picker(cx);
                             }
                             "clipboard" => {
                                 this.paste_image_from_clipboard(cx);
+                            }
+                            "screen_area" => {
+                                this.capture_screen_area_attachment(cx);
                             }
                             _ => {}
                         }

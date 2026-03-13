@@ -1449,6 +1449,9 @@ pub struct PathPromptOptions {
     pub multiple: bool,
     /// The prompt to show to a user when selecting a path
     pub prompt: Option<SharedString>,
+    /// Optional list of allowed file extensions (e.g., `["png", "jpg"]`).
+    /// When non-empty, the file dialog will only show files matching these extensions.
+    pub allowed_extensions: Vec<String>,
 }
 
 /// What kind of prompt styling to show

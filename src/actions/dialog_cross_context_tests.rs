@@ -671,7 +671,7 @@ fn ai_command_bar_attachments_section_has_two_actions() {
         .iter()
         .filter(|a| a.section.as_deref() == Some("Attachments"))
         .count();
-    assert_eq!(attach_count, 2);
+    assert_eq!(attach_count, 3);
 }
 
 #[test]

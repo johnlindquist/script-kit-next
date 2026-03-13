@@ -29,4 +29,5 @@ include!("path_actions.rs");
 include!("ai_commands.rs");
 include!("osascript.rs");
 include!("cursor.rs");
+include!("screen_capture_overlay.rs");
 include!("tests.rs");

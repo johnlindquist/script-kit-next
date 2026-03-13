@@ -577,7 +577,7 @@ mod from_dialog_builtin_action_validation_tests_11 {
     #[test]
     fn cat13_ai_command_bar_has_12_actions() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 12);
+        assert_eq!(actions.len(), 13);
     }
     
     #[test]
@@ -1019,7 +1019,7 @@ mod from_dialog_builtin_action_validation_tests_11 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 1);
+        assert_eq!(actions.len(), 2);
         assert_eq!(actions[0].id, "chat:continue_in_chat");
     }
     
@@ -2201,7 +2201,7 @@ mod from_dialog_builtin_action_validation_tests_12 {
                 .iter()
                 .filter(|a| a.section.as_deref() == Some("Attachments"))
                 .count();
-            assert_eq!(count, 2, "Attachments section should have 2 actions");
+            assert_eq!(count, 3, "Attachments section should have 2 actions");
         }
     
         #[test]
@@ -2236,7 +2236,7 @@ mod from_dialog_builtin_action_validation_tests_12 {
     
         #[test]
         fn cat06_ai_total_12_actions() {
-            assert_eq!(get_ai_command_bar_actions().len(), 12);
+            assert_eq!(get_ai_command_bar_actions().len(), 13);
         }
     
     
@@ -5990,7 +5990,7 @@ mod from_dialog_builtin_action_validation_tests_14 {
                 .iter()
                 .filter(|a| a.section.as_deref() == Some("Attachments"))
                 .collect();
-            assert_eq!(section_actions.len(), 2);
+            assert_eq!(section_actions.len(), 3);
         }
     
         #[test]
@@ -6253,7 +6253,7 @@ mod from_dialog_builtin_action_validation_tests_14 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 1);
+            assert_eq!(actions.len(), 2);
             assert_eq!(actions[0].id, "chat:continue_in_chat");
         }
     
@@ -6295,7 +6295,7 @@ mod from_dialog_builtin_action_validation_tests_14 {
             };
             let actions = get_chat_context_actions(&info);
             // 1 model + continue + copy_response + clear = 4
-            assert_eq!(actions.len(), 4);
+            assert_eq!(actions.len(), 5);
         }
     
         #[test]
@@ -8087,7 +8087,7 @@ mod from_dialog_builtin_action_validation_tests_15 {
             };
             let actions = get_chat_context_actions(&info);
             // Only continue_in_chat
-            assert_eq!(actions.len(), 1);
+            assert_eq!(actions.len(), 2);
             assert_eq!(actions[0].id, "chat:continue_in_chat");
         }
     
@@ -8101,7 +8101,7 @@ mod from_dialog_builtin_action_validation_tests_15 {
             };
             let actions = get_chat_context_actions(&info);
             // continue_in_chat + copy_response + clear_conversation = 3
-            assert_eq!(actions.len(), 3);
+            assert_eq!(actions.len(), 4);
         }
     
         #[test]
@@ -8440,7 +8440,7 @@ mod from_dialog_builtin_action_validation_tests_15 {
                 .filter(|a| a.section.as_deref() == Some("Attachments"))
                 .map(|a| a.id.as_str())
                 .collect();
-            assert_eq!(att_ids, vec!["chat:add_attachment", "chat:paste_image"]);
+            assert_eq!(att_ids, vec!["chat:add_attachment", "chat:paste_image", "chat:capture_screen_area"]);
         }
     
         #[test]
@@ -9401,8 +9401,8 @@ mod from_dialog_builtin_action_validation_tests_15 {
         // =========================================================================
     
         #[test]
-        fn cat24_ai_total_12() {
-            assert_eq!(get_ai_command_bar_actions().len(), 12);
+        fn cat24_ai_total_13() {
+            assert_eq!(get_ai_command_bar_actions().len(), 13);
         }
     
         #[test]
@@ -13801,7 +13801,7 @@ mod from_dialog_builtin_action_validation_tests_18 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 1);
+            assert_eq!(actions.len(), 2);
             assert_eq!(actions[0].id, "chat:continue_in_chat");
         }
     
@@ -13814,7 +13814,7 @@ mod from_dialog_builtin_action_validation_tests_18 {
                 has_response: true,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 3);
+            assert_eq!(actions.len(), 4);
             assert!(actions.iter().any(|a| a.id == "chat:continue_in_chat"));
             assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
             assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
@@ -13829,7 +13829,7 @@ mod from_dialog_builtin_action_validation_tests_18 {
                 has_response: true,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 2);
+            assert_eq!(actions.len(), 3);
             assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
             assert!(!actions.iter().any(|a| a.id == "chat:clear_conversation"));
         }
@@ -13843,7 +13843,7 @@ mod from_dialog_builtin_action_validation_tests_18 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 2);
+            assert_eq!(actions.len(), 3);
             assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
             assert!(!actions.iter().any(|a| a.id == "chat:copy_response"));
         }
@@ -15020,7 +15020,7 @@ mod from_dialog_builtin_action_validation_tests_18 {
                 .iter()
                 .filter(|a| a.section.as_ref() == Some(&"Attachments".to_string()))
                 .count();
-            assert_eq!(count, 2);
+            assert_eq!(count, 3);
         }
     
         #[test]
@@ -15056,7 +15056,7 @@ mod from_dialog_builtin_action_validation_tests_18 {
         #[test]
         fn cat27_total_ai_actions_is_12() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 12);
+            assert_eq!(actions.len(), 13);
         }
     
         // =========================================================================
@@ -15603,7 +15603,7 @@ mod from_dialog_builtin_action_validation_tests_19 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 1); // only continue_in_chat
+            assert_eq!(actions.len(), 2); // only continue_in_chat
             assert_eq!(actions[0].id, "chat:continue_in_chat");
         }
     
@@ -15616,7 +15616,7 @@ mod from_dialog_builtin_action_validation_tests_19 {
                 has_response: true,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 3);
+            assert_eq!(actions.len(), 4);
         }
     
         #[test]
@@ -15639,7 +15639,7 @@ mod from_dialog_builtin_action_validation_tests_19 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 3); // 2 models + continue_in_chat
+            assert_eq!(actions.len(), 4); // 2 models + continue_in_chat
         }
     
         #[test]
@@ -15662,7 +15662,7 @@ mod from_dialog_builtin_action_validation_tests_19 {
                 has_response: true,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 5); // 2 models + continue + copy + clear
+            assert_eq!(actions.len(), 6); // 2 models + continue + copy + clear
         }
     
         // =========================================================================
@@ -16040,7 +16040,7 @@ mod from_dialog_builtin_action_validation_tests_19 {
                 .filter(|a| a.section.as_deref() == Some("Attachments"))
                 .map(|a| a.id.as_str())
                 .collect();
-            assert_eq!(attachment_ids, vec!["chat:add_attachment", "chat:paste_image"]);
+            assert_eq!(attachment_ids, vec!["chat:add_attachment", "chat:paste_image", "chat:capture_screen_area"]);
         }
     
         #[test]
