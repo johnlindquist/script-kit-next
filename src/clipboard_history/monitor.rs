@@ -228,6 +228,12 @@ fn capture_clipboard_content(
     last_text_hash: &mut Option<u64>,
     last_image_state: &mut Option<LastImageState>,
 ) {
+    // Skip capture when a programmatic write (e.g. paste-sequential) is in progress.
+    if super::clipboard::SUPPRESS_CLIPBOARD_CAPTURE.load(std::sync::atomic::Ordering::SeqCst) {
+        debug!("clipboard_capture_suppressed_by_flag");
+        return;
+    }
+
     let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
     if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
         debug!(
@@ -579,5 +585,41 @@ mod tests {
 
         let without_blob = Some(LastImageState::without_blob_key(42));
         assert_eq!(cached_blob_key_for_hash(&without_blob, 42), None);
+    }
+
+    #[test]
+    fn test_capture_clipboard_content_returns_early_when_suppressed() {
+        use crate::clipboard_history::clipboard::SUPPRESS_CLIPBOARD_CAPTURE;
+        use std::sync::atomic::Ordering;
+
+        // Set the suppression flag before calling capture
+        SUPPRESS_CLIPBOARD_CAPTURE.store(true, Ordering::SeqCst);
+
+        // Create a clipboard and tracking state
+        let clipboard_result = Clipboard::new();
+        if clipboard_result.is_err() {
+            // CI environments may not have clipboard access; skip gracefully
+            SUPPRESS_CLIPBOARD_CAPTURE.store(false, Ordering::SeqCst);
+            return;
+        }
+        let mut clipboard = clipboard_result.expect("clipboard created above");
+        let mut last_text_hash: Option<u64> = None;
+        let mut last_image_state: Option<LastImageState> = None;
+
+        // Call capture — it should return immediately without modifying state
+        capture_clipboard_content(&mut clipboard, &mut last_text_hash, &mut last_image_state);
+
+        // Verify tracking state was NOT modified (early return before any reads)
+        assert_eq!(
+            last_text_hash, None,
+            "last_text_hash must remain None when capture is suppressed"
+        );
+        assert_eq!(
+            last_image_state, None,
+            "last_image_state must remain None when capture is suppressed"
+        );
+
+        // Clean up
+        SUPPRESS_CLIPBOARD_CAPTURE.store(false, Ordering::SeqCst);
     }
 }

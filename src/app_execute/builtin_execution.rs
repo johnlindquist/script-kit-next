@@ -429,21 +429,66 @@ impl ScriptListApp {
                 cx.notify();
             }
             builtins::BuiltInFeature::PasteSequentially => {
-                tracing::info!(message = %"Opening Paste Sequentially");
-                let prompt = prompts::PasteSequentialPrompt::new(
-                    "builtin-paste-sequentially".to_string(),
-                    self.focus_handle.clone(),
-                    Arc::clone(&self.theme),
-                );
-                let entity = cx.new(|_| prompt);
-
-                self.current_view = AppView::PasteSequentiallyView { entity };
-                self.hovered_index = None;
-                self.opened_from_main_menu = true;
-                self.pending_focus = Some(FocusTarget::AppRoot);
-                self.focused_input = FocusedInput::None;
-                resize_to_view_sync(ViewType::DivPrompt, 0);
-                cx.notify();
+                tracing::info!(action = "paste_sequential", event = "trigger", "Paste Sequentially triggered");
+                match clipboard_history::advance_paste_sequence(&mut self.paste_sequential_state) {
+                    clipboard_history::PasteSequentialOutcome::Pasted(entry_id) => {
+                        tracing::info!(
+                            action = "paste_sequential",
+                            event = "paste_entry",
+                            entry_id = %entry_id,
+                            "Enqueuing sequential paste via serialized worker"
+                        );
+                        match clipboard_history::enqueue_sequential_paste(entry_id) {
+                            Ok(()) => {
+                                // Commit the index advance only after successful enqueue.
+                                clipboard_history::commit_paste_sequence(
+                                    &mut self.paste_sequential_state,
+                                );
+                                self.hide_main_and_reset(cx);
+                            }
+                            Err(clipboard_history::EnqueuePasteError::WorkerDisconnected) => {
+                                tracing::error!(
+                                    action = "paste_sequential",
+                                    event = "enqueue_failed",
+                                    error_code = "worker_disconnected",
+                                    "Paste worker is not running"
+                                );
+                                self.toast_manager.push(
+                                    components::toast::Toast::error(
+                                        "Paste worker crashed — restart Script Kit",
+                                        &self.theme,
+                                    )
+                                    .duration_ms(Some(TOAST_CRITICAL_MS)),
+                                );
+                                cx.notify();
+                            }
+                        }
+                    }
+                    clipboard_history::PasteSequentialOutcome::Exhausted => {
+                        tracing::info!(
+                            action = "paste_sequential",
+                            event = "sequence_exhausted",
+                            "Sequential paste exhausted all entries"
+                        );
+                        self.show_hud(
+                            "Sequence complete".to_string(),
+                            Some(HUD_SHORT_MS),
+                            cx,
+                        );
+                    }
+                    clipboard_history::PasteSequentialOutcome::Empty => {
+                        tracing::info!(
+                            action = "paste_sequential",
+                            event = "history_empty",
+                            "No clipboard history available for sequential paste"
+                        );
+                        self.show_hud(
+                            "No clipboard history".to_string(),
+                            Some(HUD_SHORT_MS),
+                            cx,
+                        );
+                    }
+                }
             }
             builtins::BuiltInFeature::Favorites => {
                 tracing::info!(message = %"Opening Favorites");

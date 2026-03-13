@@ -162,14 +162,6 @@ impl ScriptListApp {
         self.render_simple_prompt_shell(entity, Self::other_prompt_shell_handle_key_default, cx)
     }
 
-    fn render_paste_sequential_prompt(
-        &mut self,
-        entity: Entity<prompts::PasteSequentialPrompt>,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        self.render_simple_prompt_shell(entity, Self::other_prompt_shell_handle_key_default, cx)
-    }
-
     fn render_chat_prompt(
         &mut self,
         entity: Entity<prompts::ChatPrompt>,

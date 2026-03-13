@@ -140,7 +140,12 @@ impl NotesApp {
     }
 
     /// Delete the currently selected note (soft delete)
-    pub(super) fn delete_selected_note(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn delete_selected_note(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        info!(selected_note_id = ?self.selected_note_id, notes_count = self.notes.len(), "delete_selected_note called");
         if let Some(id) = self.selected_note_id {
             if let Some(idx) = self.notes.iter().position(|n| n.id == id) {
                 let mut note = self.notes.remove(idx);
@@ -154,8 +159,16 @@ impl NotesApp {
                 self.deleted_notes.insert(0, note);
             }
 
-            // Select next note
-            self.selected_note_id = self.notes.first().map(|n| n.id);
+            // Select next note and update editor
+            if let Some(next_note) = self.notes.first() {
+                let next_id = next_note.id;
+                self.select_note(next_id, window, cx);
+            } else {
+                self.selected_note_id = None;
+                self.editor_state.update(cx, |state, cx| {
+                    state.set_value("", window, cx);
+                });
+            }
 
             self.show_action_feedback("Deleted · ⌘⇧T trash", false);
             cx.notify();

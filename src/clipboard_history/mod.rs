@@ -33,6 +33,7 @@ mod macos_paste;
 mod monitor;
 pub mod ocr;
 mod open_with;
+pub mod paste_sequential;
 mod quick_look;
 mod temp_file;
 mod types;
@@ -99,6 +100,14 @@ pub use ocr::{enqueue_ocr, start_ocr_worker, stop_ocr_worker};
 
 // Clipboard operations
 pub use clipboard::copy_entry_to_clipboard;
+#[allow(unused_imports)]
+pub use clipboard::ClipboardWriteError;
+
+// Sequential paste state machine
+pub use paste_sequential::{
+    advance_paste_sequence, commit_paste_sequence, enqueue_sequential_paste, EnqueuePasteError,
+    PasteSequentialOutcome, PasteSequentialState,
+};
 
 // Test-only exports
 #[cfg(test)]

@@ -17,7 +17,11 @@ impl NotesApp {
                     | NotesAction::CopyDeeplink
                     | NotesAction::CreateQuicklink
                     | NotesAction::Export
-                    | NotesAction::Format => can_edit,
+                    | NotesAction::Format
+                    | NotesAction::DeleteNote => can_edit,
+                    NotesAction::RestoreNote | NotesAction::PermanentlyDeleteNote => {
+                        has_selection && is_trash
+                    }
                     NotesAction::MoveListItemUp | NotesAction::MoveListItemDown => false,
                     NotesAction::EnableAutoSizing => !self.auto_sizing_enabled,
                     NotesAction::Cancel => true,
@@ -210,6 +214,9 @@ impl NotesApp {
             NotesAction::CopyDeeplink => self.copy_note_deeplink(cx),
             NotesAction::CreateQuicklink => self.create_note_quicklink(cx),
             NotesAction::Export => self.export_note(ExportFormat::Html, cx),
+            NotesAction::DeleteNote => self.delete_selected_note(window, cx),
+            NotesAction::RestoreNote => self.restore_note(window, cx),
+            NotesAction::PermanentlyDeleteNote => self.permanently_delete_note(cx),
             NotesAction::MoveListItemUp | NotesAction::MoveListItemDown => {}
             NotesAction::Format => {
                 self.show_format_toolbar = !self.show_format_toolbar;
@@ -234,7 +241,7 @@ impl NotesApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        debug!(action_id, "Executing notes action from CommandBar");
+        info!(action_id, "Executing notes action from CommandBar");
 
         // Map action ID strings to NotesAction enum
         let action = match action_id {
@@ -247,6 +254,9 @@ impl NotesApp {
             "copy_deeplink" => Some(NotesAction::CopyDeeplink),
             "create_quicklink" => Some(NotesAction::CreateQuicklink),
             "export" => Some(NotesAction::Export),
+            "delete_note" => Some(NotesAction::DeleteNote),
+            "restore_note" => Some(NotesAction::RestoreNote),
+            "permanently_delete_note" => Some(NotesAction::PermanentlyDeleteNote),
             "enable_auto_sizing" => Some(NotesAction::EnableAutoSizing),
             _ => {
                 tracing::warn!(action_id, "Unknown action ID from CommandBar");
@@ -391,13 +401,21 @@ impl NotesApp {
                 cx.notify();
             }
             NoteAction::Delete => {
-                let current_id = self.selected_note_id;
-                self.selected_note_id = Some(id);
-                self.delete_selected_note(cx);
-                // Restore selection if different note was deleted
-                if current_id != Some(id) {
-                    self.selected_note_id = current_id;
+                // Soft-delete from browse panel (doesn't switch editor)
+                if let Some(idx) = self.notes.iter().position(|n| n.id == id) {
+                    let mut note = self.notes.remove(idx);
+                    note.soft_delete();
+                    if let Err(e) = storage::save_note(&note) {
+                        tracing::error!(error = %e, "Failed to delete note");
+                    }
+                    self.deleted_notes.insert(0, note);
                 }
+                // If we deleted the currently-selected note, move selection
+                if self.selected_note_id == Some(id) {
+                    self.selected_note_id = self.notes.first().map(|n| n.id);
+                }
+                self.show_action_feedback("Deleted · ⌘⇧T trash", false);
+                cx.notify();
             }
         }
         // Update browse panel's note list

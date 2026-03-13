@@ -56,6 +56,9 @@ pub(super) fn count_section_headers(actions: &[Action], filtered_indices: &[usiz
 /// Global singleton for the actions window handle
 static ACTIONS_WINDOW: OnceLock<Mutex<Option<WindowHandle<Root>>>> = OnceLock::new();
 
+/// Track the position mode of the current actions window for resize behavior
+static ACTIONS_WINDOW_POSITION: OnceLock<Mutex<WindowPosition>> = OnceLock::new();
+
 const ACTIONS_WINDOW_PAGE_JUMP: usize = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -868,10 +871,14 @@ pub fn open_actions_window(
         }
     }
 
-    // Store the handle globally
+    // Store the handle and position globally
     let window_storage = ACTIONS_WINDOW.get_or_init(|| Mutex::new(None));
     if let Ok(mut guard) = window_storage.lock() {
         *guard = Some(handle);
+    }
+    let pos_storage = ACTIONS_WINDOW_POSITION.get_or_init(|| Mutex::new(WindowPosition::default()));
+    if let Ok(mut guard) = pos_storage.lock() {
+        *guard = position;
     }
 
     crate::logging::log("ACTIONS", "Actions popup window opened with vibrancy");
@@ -940,6 +947,16 @@ pub fn get_actions_window_handle() -> Option<WindowHandle<Root>> {
         }
     }
     None
+}
+
+/// Get the current actions window position mode
+fn get_actions_window_position() -> WindowPosition {
+    if let Some(pos_storage) = ACTIONS_WINDOW_POSITION.get() {
+        if let Ok(guard) = pos_storage.lock() {
+            return *guard;
+        }
+    }
+    WindowPosition::default()
 }
 
 /// Notify the actions window to re-render (call after updating dialog entity)
@@ -1050,9 +1067,21 @@ pub fn resize_actions_window_direct(
                         let _primary: cocoa::base::id = msg_send![screens, objectAtIndex: 0u64];
                     }
 
-                    // Keep bottom fixed by keeping origin.y the same
+                    // Pin the correct edge based on window position:
+                    // - BottomRight: keep bottom fixed (origin.y stays the same)
+                    // - TopCenter/TopRight: keep top fixed (adjust origin.y)
+                    let new_origin_y = match get_actions_window_position() {
+                        WindowPosition::BottomRight => frame.origin.y,
+                        WindowPosition::TopRight | WindowPosition::TopCenter => {
+                            // In macOS coords, top = origin.y + height
+                            // Keep top fixed: new_origin_y = old_top - new_height
+                            let old_top = frame.origin.y + frame.size.height;
+                            old_top - new_height_f32 as f64
+                        }
+                    };
+
                     let new_frame = NSRect::new(
-                        NSPoint::new(frame.origin.x, frame.origin.y),
+                        NSPoint::new(frame.origin.x, new_origin_y),
                         NSSize::new(frame.size.width, new_height_f32 as f64),
                     );
 
@@ -1066,7 +1095,7 @@ pub fn resize_actions_window_direct(
                     crate::logging::log(
                         "ACTIONS",
                         &format!(
-                            "Resized actions window (bottom pinned, instant): height {:.0} -> {:.0}",
+                            "Resized actions window (top pinned): height {:.0} -> {:.0}",
                             current_height_f32, new_height_f32
                         ),
                     );
@@ -1183,12 +1212,21 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
                                     msg_send![screens, objectAtIndex: 0u64];
                             }
 
-                            // In macOS coords (bottom-left origin):
-                            // - frame.origin.y is the BOTTOM of the window
-                            // - To keep bottom fixed, we keep origin.y the same
-                            // - Only change the height
+                            // Pin the correct edge based on window position:
+                            // - BottomRight: keep bottom fixed (origin.y stays the same)
+                            // - TopCenter/TopRight: keep top fixed (adjust origin.y)
+                            let new_origin_y = match get_actions_window_position() {
+                                WindowPosition::BottomRight => frame.origin.y,
+                                WindowPosition::TopRight | WindowPosition::TopCenter => {
+                                    // In macOS coords, top = origin.y + height
+                                    // Keep top fixed: new_origin_y = old_top - new_height
+                                    let old_top = frame.origin.y + frame.size.height;
+                                    old_top - new_height_f32 as f64
+                                }
+                            };
+
                             let new_frame = NSRect::new(
-                                NSPoint::new(frame.origin.x, frame.origin.y),
+                                NSPoint::new(frame.origin.x, new_origin_y),
                                 NSSize::new(frame.size.width, new_height_f32 as f64),
                             );
 
@@ -1202,7 +1240,7 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
                             crate::logging::log(
                                 "ACTIONS",
                                 &format!(
-                                    "Resized actions window (bottom pinned, instant): height {:.0} -> {:.0}",
+                                    "Resized actions window (top pinned): height {:.0} -> {:.0}",
                                     current_height_f32, new_height_f32
                                 ),
                             );

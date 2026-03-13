@@ -2295,9 +2295,9 @@ mod from_dialog_builtin_action_validation_tests_33 {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        assert_eq!(actions.len(), 10);
+        assert_eq!(actions.len(), 11);
     }
-    
+
     #[test]
     fn notes_cmd_bar_auto_sizing_enabled_has_9_actions() {
         let info = NotesInfo {
@@ -2306,7 +2306,7 @@ mod from_dialog_builtin_action_validation_tests_33 {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        assert_eq!(actions.len(), 9);
+        assert_eq!(actions.len(), 10);
     }
     
     // =====================================================================
@@ -6655,12 +6655,12 @@ mod from_dialog_builtin_action_validation_tests_36 {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // new_note + duplicate + browse_notes + find_in_note + format + copy_note_as + copy_deeplink + create_quicklink + export + enable_auto_sizing = 10
-        assert_eq!(actions.len(), 10);
+        // new_note + duplicate + delete + browse_notes + find_in_note + format + copy_note_as + copy_deeplink + create_quicklink + export + enable_auto_sizing = 11
+        assert_eq!(actions.len(), 11);
     }
-    
+
     // --- merged from part_03.rs ---
-    
+
     #[test]
     fn notes_full_selection_has_duplicate() {
         let info = NotesInfo {
@@ -14384,10 +14384,10 @@ mod from_dialog_builtin_action_validation_tests_44 {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // new_note + duplicate + browse + find + format + copy_note_as + copy_deeplink + create_quicklink + export + enable_auto_sizing = 10
-        assert_eq!(actions.len(), 10);
+        // new_note + duplicate + delete + browse + find + format + copy_note_as + copy_deeplink + create_quicklink + export + enable_auto_sizing = 11
+        assert_eq!(actions.len(), 11);
     }
-    
+
     #[test]
     fn notes_no_selection_count() {
         let info = NotesInfo {
@@ -14420,8 +14420,8 @@ mod from_dialog_builtin_action_validation_tests_44 {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // 10 minus enable_auto_sizing = 9
-        assert_eq!(actions.len(), 9);
+        // 11 minus enable_auto_sizing = 10
+        assert_eq!(actions.len(), 10);
     }
     
     // =========== 22. Chat context: no models produces only continue_in_chat ===========
