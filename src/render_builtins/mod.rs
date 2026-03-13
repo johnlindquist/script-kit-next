@@ -10,3 +10,4 @@ include!("window_actions.rs");
 include!("design_gallery.rs");
 include!("theme_chooser.rs");
 include!("file_search.rs");
+include!("kit_store.rs");

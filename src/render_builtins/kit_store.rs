@@ -10,6 +10,18 @@ const KIT_STORE_GITHUB_USER_AGENT: &str = "script-kit-gpui-kit-store-view";
 const KIT_STORE_GITHUB_TOPICS: [&str; 2] = ["scriptkit-kit", "script-kit"];
 const KIT_STORE_ROW_HEIGHT: f32 = 72.0;
 
+/// A kit repository discovered from GitHub search results.
+#[derive(Debug, Clone, Default)]
+struct KitStoreSearchResult {
+    name: String,
+    full_name: String,
+    description: String,
+    stars: u64,
+    #[allow(dead_code)] // Reserved for "Open in Browser" action
+    html_url: String,
+    clone_url: String,
+}
+
 #[derive(Debug, Default, Deserialize)]
 struct KitStoreGithubSearchResponse {
     #[serde(default)]
@@ -277,102 +289,137 @@ impl ScriptListApp {
     }
 
     fn kit_store_install_selected_result(&mut self, selected: &KitStoreSearchResult, cx: &mut Context<Self>) {
-        match Self::kit_store_install(selected) {
-            Ok(installed) => {
-                self.toast_manager.push(
-                    components::toast::Toast::success(
-                        format!("Installed kit '{}'", installed.name),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(TOAST_SUCCESS_MS)),
-                );
-                cx.notify();
-            }
-            Err(error) => {
-                self.toast_manager.push(
-                    components::toast::Toast::error(
-                        format!("Failed to install kit: {}", error),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(TOAST_ERROR_MS)),
-                );
-                cx.notify();
-            }
-        }
+        let selected = selected.clone();
+
+        self.toast_manager.push(
+            components::toast::Toast::info(
+                format!("Installing '{}'...", selected.name),
+                &self.theme,
+            )
+            .duration_ms(Some(TOAST_INFO_MS)),
+        );
+        cx.notify();
+
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async move { Self::kit_store_install(&selected) })
+                .await;
+            let _ = this.update(cx, |this, cx| match result {
+                Ok(installed) => {
+                    tracing::info!(
+                        kit_name = %installed.name,
+                        "Kit installed successfully"
+                    );
+                    this.toast_manager.push(
+                        components::toast::Toast::success(
+                            format!("Installed kit '{}'", installed.name),
+                            &this.theme,
+                        )
+                        .duration_ms(Some(TOAST_SUCCESS_MS)),
+                    );
+                    cx.notify();
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        error = %error,
+                        "Kit install failed"
+                    );
+                    this.toast_manager.push(
+                        components::toast::Toast::error(
+                            format!("Failed to install kit: {}", error),
+                            &this.theme,
+                        )
+                        .duration_ms(Some(TOAST_ERROR_MS)),
+                    );
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
     }
 
     fn kit_store_update_selected_kit(&mut self, kit: &script_kit_gpui::kit_store::InstalledKit, cx: &mut Context<Self>) {
-        match Self::kit_store_update(kit) {
-            Ok(()) => {
-                self.toast_manager.push(
-                    components::toast::Toast::success(
-                        format!("Updated kit '{}'", kit.name),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(TOAST_SUCCESS_MS)),
-                );
-                self.kit_store_refresh_installed_view(cx);
-            }
-            Err(error) => {
-                self.toast_manager.push(
-                    components::toast::Toast::error(
-                        format!("Failed to update '{}': {}", kit.name, error),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(TOAST_ERROR_MS)),
-                );
-                cx.notify();
-            }
-        }
+        let kit = kit.clone();
+        let kit_name = kit.name.clone();
+
+        self.toast_manager.push(
+            components::toast::Toast::info(
+                format!("Updating '{}'...", kit_name),
+                &self.theme,
+            )
+            .duration_ms(Some(TOAST_INFO_MS)),
+        );
+        cx.notify();
+
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async move { Self::kit_store_update(&kit) })
+                .await;
+            let _ = this.update(cx, |this, cx| match result {
+                Ok(()) => {
+                    tracing::info!(kit_name = %kit_name, "Kit updated successfully");
+                    this.toast_manager.push(
+                        components::toast::Toast::success(
+                            format!("Updated kit '{}'", kit_name),
+                            &this.theme,
+                        )
+                        .duration_ms(Some(TOAST_SUCCESS_MS)),
+                    );
+                    this.kit_store_refresh_installed_view(cx);
+                }
+                Err(error) => {
+                    tracing::warn!(kit_name = %kit_name, error = %error, "Kit update failed");
+                    this.toast_manager.push(
+                        components::toast::Toast::error(
+                            format!("Failed to update '{}': {}", kit_name, error),
+                            &this.theme,
+                        )
+                        .duration_ms(Some(TOAST_ERROR_MS)),
+                    );
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
     }
 
     fn kit_store_remove_selected_kit(&mut self, kit: &script_kit_gpui::kit_store::InstalledKit, cx: &mut Context<Self>) {
-        match Self::kit_store_remove(kit) {
-            Ok(()) => {
-                self.toast_manager.push(
-                    components::toast::Toast::success(
-                        format!("Removed kit '{}'", kit.name),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(TOAST_SUCCESS_MS)),
-                );
-                self.kit_store_refresh_installed_view(cx);
-            }
-            Err(error) => {
-                self.toast_manager.push(
-                    components::toast::Toast::error(
-                        format!("Failed to remove '{}': {}", kit.name, error),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(TOAST_ERROR_MS)),
-                );
-                cx.notify();
-            }
-        }
-    }
+        let kit = kit.clone();
+        let kit_name = kit.name.clone();
 
-    fn kit_store_update_all(&mut self) -> (usize, usize) {
-        let kits = Self::kit_store_list_installed();
-        let mut updated = 0;
-        let mut failed = 0;
-
-        for kit in &kits {
-            match Self::kit_store_update(kit) {
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async move { Self::kit_store_remove(&kit) })
+                .await;
+            let _ = this.update(cx, |this, cx| match result {
                 Ok(()) => {
-                    updated += 1;
+                    tracing::info!(kit_name = %kit_name, "Kit removed successfully");
+                    this.toast_manager.push(
+                        components::toast::Toast::success(
+                            format!("Removed kit '{}'", kit_name),
+                            &this.theme,
+                        )
+                        .duration_ms(Some(TOAST_SUCCESS_MS)),
+                    );
+                    this.kit_store_refresh_installed_view(cx);
                 }
                 Err(error) => {
-                    failed += 1;
-                    tracing::warn!(
-                        "Kit Store update-all failed for '{}': {}",
-                        kit.name,
-                        error
+                    tracing::warn!(kit_name = %kit_name, error = %error, "Kit remove failed");
+                    this.toast_manager.push(
+                        components::toast::Toast::error(
+                            format!("Failed to remove '{}': {}", kit_name, error),
+                            &this.theme,
+                        )
+                        .duration_ms(Some(TOAST_ERROR_MS)),
                     );
+                    cx.notify();
                 }
-            }
-        }
-
-        (updated, failed)
+            });
+        })
+        .detach();
     }
 
     fn render_browse_kits(
@@ -480,18 +527,44 @@ impl ScriptListApp {
                 }
 
                 if let Some(next_query) = next_query {
-                    let next_results = Self::kit_store_search_results(&next_query);
+                    // Update query immediately for responsive UI, fetch results async
                     if let AppView::BrowseKitsView {
                         query,
                         selected_index,
-                        results,
+                        ..
                     } = &mut this.current_view
                     {
-                        *query = next_query;
+                        *query = next_query.clone();
                         *selected_index = 0;
-                        *results = next_results;
                         cx.notify();
                     }
+
+                    let query_for_fetch = next_query.clone();
+                    let query_for_guard = next_query;
+                    cx.spawn(async move |this, cx| {
+                        let results = cx
+                            .background_executor()
+                            .spawn(async move {
+                                Self::kit_store_search_results(&query_for_fetch)
+                            })
+                            .await;
+                        let _ = this.update(cx, |this, cx| {
+                            // Guard: only apply if query still matches (stale check)
+                            if let AppView::BrowseKitsView {
+                                query,
+                                selected_index,
+                                results: view_results,
+                            } = &mut this.current_view
+                            {
+                                if *query == query_for_guard {
+                                    *view_results = results;
+                                    *selected_index = 0;
+                                    cx.notify();
+                                }
+                            }
+                        });
+                    })
+                    .detach();
                 } else if install_selected {
                     let selected = if let AppView::BrowseKitsView {
                         selected_index,
@@ -629,6 +702,7 @@ impl ScriptListApp {
                                     )
                                     .child(
                                         div()
+                                            .id(ElementId::NamedInteger("kit-store-install-btn".into(), ix as u64))
                                             .px(px(10.0))
                                             .py(px(6.0))
                                             .rounded(px(6.0))
@@ -637,17 +711,6 @@ impl ScriptListApp {
                                             .font_weight(FontWeight::MEDIUM)
                                             .text_color(rgb(text_primary))
                                             .cursor_pointer()
-                                            .tooltip(|window, cx| {
-                                                gpui_component::tooltip::Tooltip::new(
-                                                    "Install selected kit",
-                                                )
-                                                .key_binding(
-                                                    gpui::Keystroke::parse("enter")
-                                                        .ok()
-                                                        .map(gpui_component::kbd::Kbd::new),
-                                                )
-                                                .build(window, cx)
-                                            })
                                             .on_click(move |_event, _window, cx| {
                                                 if let Some(entity) = install_btn_entity.upgrade() {
                                                     let result_for_install =
@@ -985,6 +1048,7 @@ impl ScriptListApp {
                                             .gap(px(8.0))
                                             .child(
                                                 div()
+                                                    .id(ElementId::NamedInteger("kit-store-update-btn".into(), ix as u64))
                                                     .px(px(10.0))
                                                     .py(px(6.0))
                                                     .rounded(px(6.0))
@@ -993,17 +1057,6 @@ impl ScriptListApp {
                                                     .font_weight(FontWeight::MEDIUM)
                                                     .text_color(rgb(text_primary))
                                                     .cursor_pointer()
-                                                    .tooltip(|window, cx| {
-                                                        gpui_component::tooltip::Tooltip::new(
-                                                            "Update selected kit",
-                                                        )
-                                                        .key_binding(
-                                                            gpui::Keystroke::parse("enter")
-                                                                .ok()
-                                                                .map(gpui_component::kbd::Kbd::new),
-                                                        )
-                                                        .build(window, cx)
-                                                    })
                                                     .on_click(move |_event, _window, cx| {
                                                         if let Some(entity) = update_btn_entity.upgrade() {
                                                             let kit_for_update = kit_for_update.clone();
@@ -1019,6 +1072,7 @@ impl ScriptListApp {
                                             )
                                             .child(
                                                 div()
+                                                    .id(ElementId::NamedInteger("kit-store-remove-btn".into(), ix as u64))
                                                     .px(px(10.0))
                                                     .py(px(6.0))
                                                     .rounded(px(6.0))
@@ -1027,17 +1081,6 @@ impl ScriptListApp {
                                                     .font_weight(FontWeight::MEDIUM)
                                                     .text_color(rgb(text_primary))
                                                     .cursor_pointer()
-                                                    .tooltip(|window, cx| {
-                                                        gpui_component::tooltip::Tooltip::new(
-                                                            "Remove selected kit",
-                                                        )
-                                                        .key_binding(
-                                                            gpui::Keystroke::parse("backspace")
-                                                                .ok()
-                                                                .map(gpui_component::kbd::Kbd::new),
-                                                        )
-                                                        .build(window, cx)
-                                                    })
                                                     .on_click(move |_event, _window, cx| {
                                                         if let Some(entity) = remove_btn_entity.upgrade() {
                                                             let kit_for_remove = kit_for_remove.clone();
