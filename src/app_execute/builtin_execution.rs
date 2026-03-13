@@ -1,8 +1,21 @@
 /// Small async yield (in ms) before opening the AI window to let pending GPUI operations complete.
 const AI_WINDOW_ASYNC_YIELD_MS: u64 = 1;
+/// Delay between hiding the main window and starting a synchronous screenshot capture.
+const AI_CAPTURE_HIDE_SETTLE_MS: u64 = 100;
 
 fn ai_open_failure_message(error: impl std::fmt::Display) -> String {
     format!("Failed to open AI: {}", error)
+}
+
+fn ai_capture_hide_settle_duration() -> std::time::Duration {
+    std::time::Duration::from_millis(AI_CAPTURE_HIDE_SETTLE_MS)
+}
+
+fn ai_command_uses_hide_then_capture_flow(cmd_type: &builtins::AiCommandType) -> bool {
+    matches!(
+        cmd_type,
+        builtins::AiCommandType::SendScreenToAi | builtins::AiCommandType::SendFocusedWindowToAi
+    )
 }
 
 fn favorites_loaded_message(count: usize) -> String {
@@ -107,6 +120,196 @@ fn quicklink_picker_label(quicklink: &script_kit_gpui::quicklinks::Quicklink) ->
 }
 
 impl ScriptListApp {
+    fn spawn_send_screen_to_ai_after_hide(&mut self, cx: &mut Context<Self>) {
+        tracing::info!(
+            action = "send_screen_to_ai_scheduled",
+            hide_settle_ms = AI_CAPTURE_HIDE_SETTLE_MS,
+            "Scheduling screen capture for AI after hiding main window"
+        );
+
+        cx.spawn(async move |this, cx| {
+            platform::hide_main_window_for_capture();
+            cx.background_executor()
+                .timer(ai_capture_hide_settle_duration())
+                .await;
+
+            let capture_result = cx
+                .background_executor()
+                .spawn(async { platform::capture_screen_screenshot() })
+                .await;
+
+            match capture_result {
+                Ok((png_data, width, height)) => {
+                    let size_bytes = png_data.len();
+                    if size_bytes > crate::prompts::chat::MAX_IMAGE_BYTES {
+                        tracing::warn!(
+                            action = "send_screen_to_ai_rejected",
+                            size_bytes,
+                            max_bytes = crate::prompts::chat::MAX_IMAGE_BYTES,
+                            "Rejecting screen capture larger than 10 MB"
+                        );
+                        this.update(cx, |this, cx| {
+                            this.show_error_toast(
+                                "Screen capture exceeds 10 MB limit".to_string(),
+                                cx,
+                            );
+                        })
+                        .ok();
+                        return;
+                    }
+
+                    let base64_data = base64::Engine::encode(
+                        &base64::engine::general_purpose::STANDARD,
+                        &png_data,
+                    );
+                    let message = format!(
+                        "[Screenshot captured: {}x{} pixels]\n\nPlease analyze this screenshot.",
+                        width, height
+                    );
+
+                    tracing::info!(
+                        action = "send_screen_to_ai_captured",
+                        width,
+                        height,
+                        size_bytes,
+                        "Screen captured for AI"
+                    );
+
+                    this.update(cx, |this, cx| {
+                        if let Err(error) = ai::open_ai_window(cx) {
+                            let message = ai_open_failure_message(&error);
+                            tracing::error!(
+                                action = "send_screen_to_ai_open_failed",
+                                error = %error,
+                                "Failed to open AI window after screen capture"
+                            );
+                            this.show_error_toast(message, cx);
+                        } else {
+                            ai::set_ai_input_with_image(cx, &message, &base64_data, false);
+                        }
+                    })
+                    .ok();
+                }
+                Err(error) => {
+                    tracing::error!(
+                        action = "send_screen_to_ai_capture_failed",
+                        error = %error,
+                        "Failed to capture screen for AI"
+                    );
+                    let message = format!("Failed to capture screen: {}", error);
+                    this.update(cx, |this, cx| {
+                        this.show_error_toast(message, cx);
+                    })
+                    .ok();
+                }
+            }
+        })
+        .detach();
+    }
+
+    fn spawn_send_focused_window_to_ai_after_hide(&mut self, cx: &mut Context<Self>) {
+        tracing::info!(
+            action = "send_focused_window_to_ai_scheduled",
+            hide_settle_ms = AI_CAPTURE_HIDE_SETTLE_MS,
+            "Scheduling focused window capture for AI after hiding main window"
+        );
+
+        cx.spawn(async move |this, cx| {
+            platform::hide_main_window_for_capture();
+            cx.background_executor()
+                .timer(ai_capture_hide_settle_duration())
+                .await;
+
+            let capture_result = cx
+                .background_executor()
+                .spawn(async { platform::capture_focused_window_screenshot() })
+                .await;
+
+            match capture_result {
+                Ok(capture) => {
+                    let size_bytes = capture.png_data.len();
+                    if size_bytes > crate::prompts::chat::MAX_IMAGE_BYTES {
+                        tracing::warn!(
+                            action = "send_focused_window_to_ai_rejected",
+                            size_bytes,
+                            max_bytes = crate::prompts::chat::MAX_IMAGE_BYTES,
+                            "Rejecting window capture larger than 10 MB"
+                        );
+                        this.update(cx, |this, cx| {
+                            this.show_error_toast(
+                                "Window capture exceeds 10 MB limit".to_string(),
+                                cx,
+                            );
+                        })
+                        .ok();
+                        return;
+                    }
+
+                    let fallback_warning = capture.used_fallback.then(|| {
+                        format!(
+                            "No focused window found — captured '{}'",
+                            capture.window_title
+                        )
+                    });
+                    let base64_data = base64::Engine::encode(
+                        &base64::engine::general_purpose::STANDARD,
+                        &capture.png_data,
+                    );
+                    let message = format!(
+                        "[Window: {} - {}x{} pixels]\n\nPlease analyze this window screenshot.",
+                        capture.window_title, capture.width, capture.height
+                    );
+
+                    tracing::info!(
+                        action = "send_focused_window_to_ai_captured",
+                        window_title = %capture.window_title,
+                        width = capture.width,
+                        height = capture.height,
+                        size_bytes,
+                        used_fallback = capture.used_fallback,
+                        "Focused window captured for AI"
+                    );
+
+                    this.update(cx, |this, cx| {
+                        if let Some(warning_message) = fallback_warning {
+                            this.toast_manager.push(
+                                components::toast::Toast::warning(warning_message, &this.theme)
+                                    .duration_ms(Some(TOAST_WARNING_MS)),
+                            );
+                            cx.notify();
+                        }
+
+                        if let Err(error) = ai::open_ai_window(cx) {
+                            let message = ai_open_failure_message(&error);
+                            tracing::error!(
+                                action = "send_focused_window_to_ai_open_failed",
+                                error = %error,
+                                "Failed to open AI window after focused window capture"
+                            );
+                            this.show_error_toast(message, cx);
+                        } else {
+                            ai::set_ai_input_with_image(cx, &message, &base64_data, false);
+                        }
+                    })
+                    .ok();
+                }
+                Err(error) => {
+                    tracing::error!(
+                        action = "send_focused_window_to_ai_capture_failed",
+                        error = %error,
+                        "Failed to capture focused window for AI"
+                    );
+                    let message = format!("Failed to capture window: {}", error);
+                    this.update(cx, |this, cx| {
+                        this.show_error_toast(message, cx);
+                    })
+                    .ok();
+                }
+            }
+        })
+        .detach();
+    }
+
     fn system_action_feedback_message(
         &self,
         action_type: &builtins::SystemActionType,
@@ -179,11 +382,8 @@ impl ScriptListApp {
                         "system_action_dispatch"
                     );
                     self.toast_manager.push(
-                        components::toast::Toast::success(
-                            "Confirmation test passed!",
-                            &self.theme,
-                        )
-                        .duration_ms(Some(TOAST_SUCCESS_MS)),
+                        components::toast::Toast::success("Confirmation test passed!", &self.theme)
+                            .duration_ms(Some(TOAST_SUCCESS_MS)),
                     );
                     cx.notify();
                     return; // Don't hide window for test
@@ -203,9 +403,7 @@ impl ScriptListApp {
                 }
 
                 // System utilities
-                SystemActionType::ToggleDoNotDisturb => {
-                    system_actions::toggle_do_not_disturb()
-                }
+                SystemActionType::ToggleDoNotDisturb => system_actions::toggle_do_not_disturb(),
                 SystemActionType::StartScreenSaver => system_actions::start_screen_saver(),
 
                 // System Preferences
@@ -213,16 +411,10 @@ impl ScriptListApp {
                     system_actions::open_system_preferences_main()
                 }
                 SystemActionType::OpenPrivacySettings => system_actions::open_privacy_settings(),
-                SystemActionType::OpenDisplaySettings => {
-                    system_actions::open_display_settings()
-                }
+                SystemActionType::OpenDisplaySettings => system_actions::open_display_settings(),
                 SystemActionType::OpenSoundSettings => system_actions::open_sound_settings(),
-                SystemActionType::OpenNetworkSettings => {
-                    system_actions::open_network_settings()
-                }
-                SystemActionType::OpenKeyboardSettings => {
-                    system_actions::open_keyboard_settings()
-                }
+                SystemActionType::OpenNetworkSettings => system_actions::open_network_settings(),
+                SystemActionType::OpenKeyboardSettings => system_actions::open_keyboard_settings(),
                 SystemActionType::OpenBluetoothSettings => {
                     system_actions::open_bluetooth_settings()
                 }
@@ -429,7 +621,11 @@ impl ScriptListApp {
                 cx.notify();
             }
             builtins::BuiltInFeature::PasteSequentially => {
-                tracing::info!(action = "paste_sequential", event = "trigger", "Paste Sequentially triggered");
+                tracing::info!(
+                    action = "paste_sequential",
+                    event = "trigger",
+                    "Paste Sequentially triggered"
+                );
                 match clipboard_history::advance_paste_sequence(&mut self.paste_sequential_state) {
                     clipboard_history::PasteSequentialOutcome::Pasted(entry_id) => {
                         tracing::info!(
@@ -470,11 +666,7 @@ impl ScriptListApp {
                             event = "sequence_exhausted",
                             "Sequential paste exhausted all entries"
                         );
-                        self.show_hud(
-                            "Sequence complete".to_string(),
-                            Some(HUD_SHORT_MS),
-                            cx,
-                        );
+                        self.show_hud("Sequence complete".to_string(), Some(HUD_SHORT_MS), cx);
                     }
                     clipboard_history::PasteSequentialOutcome::Empty => {
                         tracing::info!(
@@ -482,11 +674,7 @@ impl ScriptListApp {
                             event = "history_empty",
                             "No clipboard history available for sequential paste"
                         );
-                        self.show_hud(
-                            "No clipboard history".to_string(),
-                            Some(HUD_SHORT_MS),
-                            cx,
-                        );
+                        self.show_hud("No clipboard history".to_string(), Some(HUD_SHORT_MS), cx);
                     }
                 }
             }
@@ -527,10 +715,7 @@ impl ScriptListApp {
                     }
                     Err(error) => {
                         tracing::error!(message = %&format!("Failed to load favorites: {}", error));
-                        self.show_error_toast(
-                            format!("Failed to load favorites: {}", error),
-                            cx,
-                        );
+                        self.show_error_toast(format!("Failed to load favorites: {}", error), cx);
                     }
                 }
                 cx.notify();
@@ -742,10 +927,7 @@ impl ScriptListApp {
                                                 ),
                                             );
                                             self.show_error_toast(
-                                                format!(
-                                                    "Failed to get quicklink query: {}",
-                                                    error
-                                                ),
+                                                format!("Failed to get quicklink query: {}", error),
                                                 cx,
                                             );
                                             return;
@@ -779,7 +961,10 @@ impl ScriptListApp {
                                                 selected_quicklink.id, expanded_url, error
                                             ),
                                         );
-                                        self.show_error_toast(format!("Failed to open quicklink: {}", error), cx);
+                                        self.show_error_toast(
+                                            format!("Failed to open quicklink: {}", error),
+                                            cx,
+                                        );
                                     }
                                 }
                             } else {
@@ -788,7 +973,10 @@ impl ScriptListApp {
                                         selected_label
                                     ),
                                 );
-                                self.show_error_toast("Selected quicklink could not be resolved.", cx);
+                                self.show_error_toast(
+                                    "Selected quicklink could not be resolved.",
+                                    cx,
+                                );
                             }
                         }
                         Ok(None) => {
@@ -800,7 +988,10 @@ impl ScriptListApp {
                                     error
                                 ),
                             );
-                            self.show_error_toast(format!("Failed to open Quicklinks: {}", error), cx);
+                            self.show_error_toast(
+                                format!("Failed to open Quicklinks: {}", error),
+                                cx,
+                            );
                         }
                     }
                 }
@@ -888,11 +1079,20 @@ impl ScriptListApp {
                 use builtins::AiCommandType;
 
                 let is_generate_script = matches!(cmd_type, AiCommandType::GenerateScript);
+                let uses_hide_then_capture_flow = ai_command_uses_hide_then_capture_flow(&cmd_type);
                 if !is_generate_script {
                     // Most AI commands open a separate AI window.
                     script_kit_gpui::set_main_window_visible(false);
                     self.reset_to_script_list(cx);
-                    platform::defer_hide_main_window(cx);
+                    if uses_hide_then_capture_flow {
+                        tracing::debug!(
+                            action = ?cmd_type,
+                            hide_settle_ms = AI_CAPTURE_HIDE_SETTLE_MS,
+                            "Deferring main window hide to async capture flow"
+                        );
+                    } else {
+                        platform::defer_hide_main_window(cx);
+                    }
                 }
 
                 match cmd_type {
@@ -915,7 +1115,10 @@ impl ScriptListApp {
                                             e
                                         ),
                                     );
-                                    self.show_error_toast(format!("AI history cleared, but failed to open AI: {}", e), cx);
+                                    self.show_error_toast(
+                                        format!("AI history cleared, but failed to open AI: {}", e),
+                                        cx,
+                                    );
                                 } else {
                                     self.show_hud(
                                         "Cleared AI conversations".to_string(),
@@ -927,7 +1130,10 @@ impl ScriptListApp {
                             Err(e) => {
                                 tracing::error!(message = %&format!("Failed to clear AI conversations: {}", e),
                                 );
-                                self.show_error_toast(format!("Failed to clear AI conversations: {}", e), cx);
+                                self.show_error_toast(
+                                    format!("Failed to clear AI conversations: {}", e),
+                                    cx,
+                                );
                             }
                         }
                     }
@@ -938,125 +1144,11 @@ impl ScriptListApp {
                     }
 
                     AiCommandType::SendScreenToAi => {
-                        // Capture entire screen and send to AI
-                        match platform::capture_screen_screenshot() {
-                            Ok((png_data, width, height)) => {
-                                if png_data.len() > crate::prompts::chat::MAX_IMAGE_BYTES {
-                                    tracing::warn!(
-                                        size_bytes = png_data.len(),
-                                        max_bytes = crate::prompts::chat::MAX_IMAGE_BYTES,
-                                        "Rejecting screen capture larger than 10 MB"
-                                    );
-                                    self.show_error_toast(
-                                        "Screen capture exceeds 10 MB limit".to_string(),
-                                        cx,
-                                    );
-                                } else {
-                                    let base64_data = base64::Engine::encode(
-                                        &base64::engine::general_purpose::STANDARD,
-                                        &png_data,
-                                    );
-                                    let message = format!(
-                                        "[Screenshot captured: {}x{} pixels]\n\nPlease analyze this screenshot.",
-                                        width, height
-                                    );
-                                    tracing::info!(message = %&format!(
-                                            "Screen captured: {}x{}, {} bytes",
-                                            width,
-                                            height,
-                                            png_data.len()
-                                        ),
-                                    );
-                                    if let Err(e) = ai::open_ai_window(cx) {
-                                        tracing::error!(message = %&ai_open_failure_message(&e));
-                                        self.show_error_toast(ai_open_failure_message(&e), cx);
-                                    } else {
-                                        // Set input with the screenshot context
-                                        ai::set_ai_input_with_image(
-                                            cx,
-                                            &message,
-                                            &base64_data,
-                                            false,
-                                        );
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                tracing::error!(message = %&format!("Failed to capture screen: {}", e));
-                                self.show_error_toast(format!("Failed to capture screen: {}", e), cx);
-                            }
-                        }
+                        self.spawn_send_screen_to_ai_after_hide(cx);
                     }
 
                     AiCommandType::SendFocusedWindowToAi => {
-                        // Capture the focused window (not our window) and send to AI
-                        match platform::capture_focused_window_screenshot() {
-                            Ok(capture) => {
-                                if capture.png_data.len()
-                                    > crate::prompts::chat::MAX_IMAGE_BYTES
-                                {
-                                    tracing::warn!(
-                                        size_bytes = capture.png_data.len(),
-                                        max_bytes = crate::prompts::chat::MAX_IMAGE_BYTES,
-                                        "Rejecting window capture larger than 10 MB"
-                                    );
-                                    self.show_error_toast(
-                                        "Window capture exceeds 10 MB limit".to_string(),
-                                        cx,
-                                    );
-                                } else {
-                                    // Warn user if we fell back to a non-focused window
-                                    if capture.used_fallback {
-                                        self.toast_manager.push(
-                                            components::toast::Toast::warning(
-                                                format!(
-                                                    "No focused window found — captured '{}'",
-                                                    capture.window_title
-                                                ),
-                                                &self.theme,
-                                            )
-                                            .duration_ms(Some(TOAST_WARNING_MS)),
-                                        );
-                                        cx.notify();
-                                    }
-
-                                    let base64_data = base64::Engine::encode(
-                                        &base64::engine::general_purpose::STANDARD,
-                                        &capture.png_data,
-                                    );
-                                    let message = format!(
-                                        "[Window: {} - {}x{} pixels]\n\nPlease analyze this window screenshot.",
-                                        capture.window_title, capture.width, capture.height
-                                    );
-                                    tracing::info!(
-                                        window_title = %capture.window_title,
-                                        width = capture.width,
-                                        height = capture.height,
-                                        size_bytes = capture.png_data.len(),
-                                        used_fallback = capture.used_fallback,
-                                        "Window captured for AI"
-                                    );
-                                    if let Err(e) = ai::open_ai_window(cx) {
-                                        tracing::error!(message = %&ai_open_failure_message(&e));
-                                        self.show_error_toast(ai_open_failure_message(&e), cx);
-                                    } else {
-                                        ai::set_ai_input_with_image(
-                                            cx,
-                                            &message,
-                                            &base64_data,
-                                            false,
-                                        );
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                tracing::error!(message = %&format!("Failed to capture window: {}", e));
-                                self.show_error_toast(
-                                    format!("Failed to capture window: {}", e),
-                                    cx,
-                                );
-                            }
-                        }
+                        self.spawn_send_focused_window_to_ai_after_hide(cx);
                     }
 
                     AiCommandType::SendSelectedTextToAi => {
@@ -1090,7 +1182,10 @@ impl ScriptListApp {
                             Err(e) => {
                                 tracing::error!(message = %&format!("Failed to get selected text: {}", e),
                                 );
-                                self.show_error_toast(format!("Failed to get selected text: {}", e), cx);
+                                self.show_error_toast(
+                                    format!("Failed to get selected text: {}", e),
+                                    cx,
+                                );
                             }
                         }
                     }
@@ -1113,7 +1208,10 @@ impl ScriptListApp {
                             }
                             Err(e) => {
                                 tracing::error!(message = %&format!("Failed to get browser URL: {}", e));
-                                self.show_error_toast(format!("Failed to get browser URL: {}", e), cx);
+                                self.show_error_toast(
+                                    format!("Failed to get browser URL: {}", e),
+                                    cx,
+                                );
                             }
                         }
                     }
@@ -1148,18 +1246,27 @@ impl ScriptListApp {
                             }
                             Ok(None) => {
                                 // User cancelled selection (pressed Escape) — no feedback needed
-                                tracing::info!(action = "send_screen_area_cancelled", "Screen area selection cancelled by user");
+                                tracing::info!(
+                                    action = "send_screen_area_cancelled",
+                                    "Screen area selection cancelled by user"
+                                );
                             }
                             Err(e) => {
                                 tracing::error!(action = "send_screen_area_failed", error = %e, "Failed to capture screen area");
-                                self.show_error_toast(format!("Failed to capture screen area: {}", e), cx);
+                                self.show_error_toast(
+                                    format!("Failed to capture screen area: {}", e),
+                                    cx,
+                                );
                             }
                         }
                         cx.notify();
                     }
 
                     AiCommandType::CreateAiPreset => {
-                        tracing::info!(action = "create_ai_preset", "Opening create AI preset form");
+                        tracing::info!(
+                            action = "create_ai_preset",
+                            "Opening create AI preset form"
+                        );
                         self.current_view = AppView::CreateAiPresetView {
                             name: String::new(),
                             system_prompt: String::new(),
@@ -1171,7 +1278,10 @@ impl ScriptListApp {
                     }
 
                     AiCommandType::ImportAiPresets => {
-                        tracing::info!(action = "import_ai_presets", "Opening file picker for AI preset import");
+                        tracing::info!(
+                            action = "import_ai_presets",
+                            "Opening file picker for AI preset import"
+                        );
                         let rx = cx.prompt_for_paths(gpui::PathPromptOptions {
                             files: true,
                             directories: false,
@@ -1185,17 +1295,26 @@ impl ScriptListApp {
                                 Ok(Ok(Some(paths))) => {
                                     if let Some(path) = paths.first() {
                                         // Validate file contents before importing
-                                        let import_result = cx.background_executor().spawn({
-                                            let path = path.clone();
-                                            async move {
-                                                let contents = std::fs::read_to_string(&path)
-                                                    .map_err(|e| format!("Failed to read file: {}", e))?;
-                                                ai::presets::validate_presets_json(&contents)
-                                                    .map_err(|e| format!("Invalid preset file: {}", e))?;
-                                                ai::presets::import_presets_from_file(&path)
-                                                    .map_err(|e| format!("Import failed: {}", e))
-                                            }
-                                        }).await;
+                                        let import_result = cx
+                                            .background_executor()
+                                            .spawn({
+                                                let path = path.clone();
+                                                async move {
+                                                    let contents = std::fs::read_to_string(&path)
+                                                        .map_err(|e| {
+                                                        format!("Failed to read file: {}", e)
+                                                    })?;
+                                                    ai::presets::validate_presets_json(&contents)
+                                                        .map_err(|e| {
+                                                        format!("Invalid preset file: {}", e)
+                                                    })?;
+                                                    ai::presets::import_presets_from_file(&path)
+                                                        .map_err(|e| {
+                                                            format!("Import failed: {}", e)
+                                                        })
+                                                }
+                                            })
+                                            .await;
 
                                         let _ = this.update(cx, |this, cx| {
                                             match import_result {
@@ -1206,7 +1325,10 @@ impl ScriptListApp {
                                                         "Imported AI presets via file picker"
                                                     );
                                                     this.show_hud(
-                                                        format!("Imported presets ({} total)", total),
+                                                        format!(
+                                                            "Imported presets ({} total)",
+                                                            total
+                                                        ),
                                                         Some(HUD_SHORT_MS),
                                                         cx,
                                                     );
@@ -1229,82 +1351,94 @@ impl ScriptListApp {
                                     }
                                 }
                                 Ok(Ok(None)) => {
-                                    tracing::info!(action = "import_presets_cancelled", "User cancelled import file picker");
+                                    tracing::info!(
+                                        action = "import_presets_cancelled",
+                                        "User cancelled import file picker"
+                                    );
                                 }
                                 Ok(Err(e)) => {
                                     tracing::warn!(error = %e, "Import file picker returned error");
                                 }
                                 Err(_) => {
-                                    tracing::warn!("Import file picker channel closed unexpectedly");
+                                    tracing::warn!(
+                                        "Import file picker channel closed unexpectedly"
+                                    );
                                 }
                             }
-                        }).detach();
+                        })
+                        .detach();
                     }
 
                     AiCommandType::ExportAiPresets => {
-                        tracing::info!(action = "export_ai_presets", "Opening save dialog for AI preset export");
+                        tracing::info!(
+                            action = "export_ai_presets",
+                            "Opening save dialog for AI preset export"
+                        );
                         let default_dir = ai::presets::get_presets_path()
                             .parent()
                             .map(|p| p.to_path_buf())
                             .unwrap_or_else(crate::setup::get_kit_path);
 
-                        let rx = cx.prompt_for_new_path(
-                            &default_dir,
-                            Some("ai-presets-export.json"),
-                        );
+                        let rx =
+                            cx.prompt_for_new_path(&default_dir, Some("ai-presets-export.json"));
 
-                        cx.spawn(async move |this, cx| {
-                            match rx.await {
-                                Ok(Ok(Some(path))) => {
-                                    let export_result = cx.background_executor().spawn({
+                        cx.spawn(async move |this, cx| match rx.await {
+                            Ok(Ok(Some(path))) => {
+                                let export_result = cx
+                                    .background_executor()
+                                    .spawn({
                                         let path = path.clone();
                                         async move {
                                             ai::presets::export_presets_to_file(&path)
                                                 .map_err(|e| format!("Export failed: {}", e))
                                         }
-                                    }).await;
+                                    })
+                                    .await;
 
-                                    let _ = this.update(cx, |this, cx| {
-                                        match export_result {
-                                            Ok(count) => {
-                                                tracing::info!(
-                                                    count = count,
-                                                    path = %path.display(),
-                                                    action = "export_presets_success",
-                                                    "Exported AI presets via file picker"
-                                                );
-                                                this.show_hud(
-                                                    format!("Exported {} presets", count),
-                                                    Some(HUD_SHORT_MS),
-                                                    cx,
-                                                );
-                                            }
-                                            Err(e) => {
-                                                tracing::error!(
-                                                    error = %e,
-                                                    action = "export_presets_failed",
-                                                    "Failed to export presets"
-                                                );
-                                                this.show_error_toast(
-                                                    format!("Failed to export presets: {}", e),
-                                                    cx,
-                                                );
-                                            }
+                                let _ = this.update(cx, |this, cx| {
+                                    match export_result {
+                                        Ok(count) => {
+                                            tracing::info!(
+                                                count = count,
+                                                path = %path.display(),
+                                                action = "export_presets_success",
+                                                "Exported AI presets via file picker"
+                                            );
+                                            this.show_hud(
+                                                format!("Exported {} presets", count),
+                                                Some(HUD_SHORT_MS),
+                                                cx,
+                                            );
                                         }
-                                        cx.notify();
-                                    });
-                                }
-                                Ok(Ok(None)) => {
-                                    tracing::info!(action = "export_presets_cancelled", "User cancelled export save dialog");
-                                }
-                                Ok(Err(e)) => {
-                                    tracing::warn!(error = %e, "Export save dialog returned error");
-                                }
-                                Err(_) => {
-                                    tracing::warn!("Export save dialog channel closed unexpectedly");
-                                }
+                                        Err(e) => {
+                                            tracing::error!(
+                                                error = %e,
+                                                action = "export_presets_failed",
+                                                "Failed to export presets"
+                                            );
+                                            this.show_error_toast(
+                                                format!("Failed to export presets: {}", e),
+                                                cx,
+                                            );
+                                        }
+                                    }
+                                    cx.notify();
+                                });
                             }
-                        }).detach();
+                            Ok(Ok(None)) => {
+                                tracing::info!(
+                                    action = "export_presets_cancelled",
+                                    "User cancelled export save dialog"
+                                );
+                            }
+                            Ok(Err(e)) => {
+                                tracing::warn!(error = %e, "Export save dialog returned error");
+                            }
+                            Err(_) => {
+                                tracing::warn!("Export save dialog channel closed unexpectedly");
+                            }
+                        })
+                        .detach();
                     }
 
                     AiCommandType::SearchAiPresets => {
@@ -1347,7 +1481,11 @@ impl ScriptListApp {
                     PermissionCommandType::CheckPermissions => {
                         let status = permissions_wizard::check_all_permissions();
                         if status.all_granted() {
-                            self.show_hud("All permissions granted!".to_string(), Some(HUD_SHORT_MS), cx);
+                            self.show_hud(
+                                "All permissions granted!".to_string(),
+                                Some(HUD_SHORT_MS),
+                                cx,
+                            );
                         } else {
                             let missing: Vec<_> = status
                                 .missing_permissions()
@@ -1367,7 +1505,11 @@ impl ScriptListApp {
                     PermissionCommandType::RequestAccessibility => {
                         let granted = permissions_wizard::request_accessibility_permission();
                         if granted {
-                            self.show_hud("Accessibility permission granted!".to_string(), Some(HUD_SHORT_MS), cx);
+                            self.show_hud(
+                                "Accessibility permission granted!".to_string(),
+                                Some(HUD_SHORT_MS),
+                                cx,
+                            );
                         } else {
                             self.toast_manager.push(
                                 components::toast::Toast::warning(
@@ -1414,7 +1556,11 @@ impl ScriptListApp {
                             // Reset the main input and window to clean state
                             self.reset_to_script_list(cx);
                             resize_to_view_sync(ViewType::ScriptList, 0);
-                            self.show_hud("Suggested items cleared".to_string(), Some(HUD_SHORT_MS), cx);
+                            self.show_hud(
+                                "Suggested items cleared".to_string(),
+                                Some(HUD_SHORT_MS),
+                                cx,
+                            );
                         }
                         // Note: cx.notify() is called by reset_to_script_list, but we still need it for error case
                         cx.notify();
@@ -1442,7 +1588,11 @@ impl ScriptListApp {
                         tracing::info!(message = %"Reset all window positions to defaults");
 
                         // Show toast confirmation
-                        self.show_hud("Window positions reset - takes effect next open".to_string(), Some(HUD_SHORT_MS), cx);
+                        self.show_hud(
+                            "Window positions reset - takes effect next open".to_string(),
+                            Some(HUD_SHORT_MS),
+                            cx,
+                        );
 
                         // Close and reset window - this hides the window which is required
                         // for the reset to take effect (as the toast message states)
@@ -1531,18 +1681,14 @@ impl ScriptListApp {
                         self.cached_processes = processes;
                         self.filter_text = String::new();
                         self.pending_filter_sync = true;
-                        self.pending_placeholder =
-                            Some("Search running scripts...".to_string());
+                        self.pending_placeholder = Some("Search running scripts...".to_string());
                         self.current_view = AppView::ProcessManagerView {
                             filter: String::new(),
                             selected_index: 0,
                         };
                         self.hovered_index = None;
                         self.opened_from_main_menu = true;
-                        resize_to_view_sync(
-                            crate::window_resize::ViewType::ScriptList,
-                            0,
-                        );
+                        resize_to_view_sync(crate::window_resize::ViewType::ScriptList, 0);
                         self.pending_focus = Some(FocusTarget::MainFilter);
                         self.focused_input = FocusedInput::MainFilter;
                         self.start_process_manager_refresh(cx);
@@ -1618,10 +1764,7 @@ impl ScriptListApp {
                     }
                     KitStoreCommandType::InstalledKits => {
                         let kits = Self::kit_store_list_installed();
-                        tracing::info!(
-                            installed_count = kits.len(),
-                            "Loaded installed kits"
-                        );
+                        tracing::info!(installed_count = kits.len(), "Loaded installed kits");
                         self.current_view = AppView::InstalledKitsView {
                             selected_index: 0,
                             kits,
@@ -1635,8 +1778,9 @@ impl ScriptListApp {
                                 .background_executor()
                                 .spawn(async {
                                     // Run update-all on background thread
-                                    let kits = script_kit_gpui::kit_store::storage::list_installed_kits()
-                                        .unwrap_or_default();
+                                    let kits =
+                                        script_kit_gpui::kit_store::storage::list_installed_kits()
+                                            .unwrap_or_default();
                                     let mut updated = 0usize;
                                     let mut failed = 0usize;
                                     for kit in &kits {
@@ -1667,17 +1811,12 @@ impl ScriptListApp {
                                 let message = if failed == 0 {
                                     format!("Updated {} kit(s) successfully", updated)
                                 } else {
-                                    format!(
-                                        "Updated {} kit(s), {} failed",
-                                        updated, failed
-                                    )
+                                    format!("Updated {} kit(s), {} failed", updated, failed)
                                 };
                                 if failed > 0 {
                                     this.toast_manager.push(
-                                        components::toast::Toast::error(
-                                            message, &this.theme,
-                                        )
-                                        .duration_ms(Some(TOAST_ERROR_MS)),
+                                        components::toast::Toast::error(message, &this.theme)
+                                            .duration_ms(Some(TOAST_ERROR_MS)),
                                     );
                                 } else {
                                     this.show_hud(message, Some(HUD_MEDIUM_MS), cx);
@@ -1709,14 +1848,9 @@ impl ScriptListApp {
             // Settings Hub
             // =========================================================================
             builtins::BuiltInFeature::Settings => {
-                tracing::info!(
-                    correlation_id = "settings-hub",
-                    "settings.open"
-                );
+                tracing::info!(correlation_id = "settings-hub", "settings.open");
                 self.opened_from_main_menu = true;
-                self.current_view = AppView::SettingsView {
-                    selected_index: 0,
-                };
+                self.current_view = AppView::SettingsView { selected_index: 0 };
                 self.hovered_index = None;
                 resize_to_view_sync(ViewType::ScriptList, 0);
                 self.pending_focus = Some(FocusTarget::AppRoot);
@@ -1739,9 +1873,11 @@ impl ScriptListApp {
 #[cfg(test)]
 mod builtin_execution_ai_feedback_tests {
     use super::{
+        ai_capture_hide_settle_duration, ai_command_uses_hide_then_capture_flow,
         ai_open_failure_message, created_file_path_for_feedback, emoji_picker_label,
-        favorites_loaded_message, quicklink_picker_label,
+        favorites_loaded_message, quicklink_picker_label, AI_CAPTURE_HIDE_SETTLE_MS,
     };
+    use crate::builtins::AiCommandType;
     use script_kit_gpui::emoji::{Emoji, EmojiCategory};
     use script_kit_gpui::quicklinks::Quicklink;
     use std::path::PathBuf;
@@ -1762,6 +1898,30 @@ mod builtin_execution_ai_feedback_tests {
     #[test]
     fn test_favorites_loaded_message_uses_plural_for_many() {
         assert_eq!(favorites_loaded_message(3), "Loaded 3 favorites");
+    }
+
+    #[test]
+    fn test_ai_capture_commands_use_hide_then_capture_flow_only_for_sync_screenshots() {
+        assert!(ai_command_uses_hide_then_capture_flow(
+            &AiCommandType::SendScreenToAi
+        ));
+        assert!(ai_command_uses_hide_then_capture_flow(
+            &AiCommandType::SendFocusedWindowToAi
+        ));
+        assert!(!ai_command_uses_hide_then_capture_flow(
+            &AiCommandType::SendScreenAreaToAi
+        ));
+        assert!(!ai_command_uses_hide_then_capture_flow(
+            &AiCommandType::SendSelectedTextToAi
+        ));
+    }
+
+    #[test]
+    fn test_ai_capture_hide_settle_duration_matches_constant() {
+        assert_eq!(
+            ai_capture_hide_settle_duration(),
+            std::time::Duration::from_millis(AI_CAPTURE_HIDE_SETTLE_MS)
+        );
     }
 
     #[test]

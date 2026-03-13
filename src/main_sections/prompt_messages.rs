@@ -207,9 +207,48 @@ enum PromptMessage {
         text: String,
         duration_ms: Option<u64>,
     },
+    /// Display a system notification
+    Notify {
+        title: Option<String>,
+        body: Option<String>,
+    },
+    /// Play the system feedback sound
+    Beep,
+    /// Speak text via system TTS
+    Say {
+        text: String,
+        voice: Option<String>,
+    },
+    /// Update the script status indicator/log
+    SetStatus {
+        status: String,
+        message: Option<String>,
+    },
     /// Set SDK actions for the ActionsDialog
     SetActions {
         actions: Vec<protocol::ProtocolAction>,
+    },
+    /// Placeholder stub until fields() lands in GPUI
+    FieldsComingSoon {
+        id: String,
+        field_count: usize,
+    },
+    /// Placeholder stub until hotkey() lands in GPUI
+    HotkeyComingSoon {
+        id: String,
+        placeholder: Option<String>,
+    },
+    /// Placeholder stub until widget() lands in GPUI
+    WidgetComingSoon {
+        id: String,
+    },
+    /// Placeholder stub until webcam() lands in GPUI
+    WebcamComingSoon {
+        id: String,
+    },
+    /// Placeholder stub until mic() lands in GPUI
+    MicComingSoon {
+        id: String,
     },
     /// Show the debug grid overlay
     ShowGrid {
