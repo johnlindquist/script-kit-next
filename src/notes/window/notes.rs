@@ -140,11 +140,7 @@ impl NotesApp {
     }
 
     /// Delete the currently selected note (soft delete)
-    pub(super) fn delete_selected_note(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn delete_selected_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         info!(selected_note_id = ?self.selected_note_id, notes_count = self.notes.len(), "delete_selected_note called");
         if let Some(id) = self.selected_note_id {
             if let Some(idx) = self.notes.iter().position(|n| n.id == id) {

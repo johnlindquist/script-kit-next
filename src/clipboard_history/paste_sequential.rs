@@ -18,8 +18,7 @@ use tracing::info;
 
 use super::cache::get_cached_entries;
 use super::clipboard::{
-    write_entry_to_system_clipboard, ClipboardWriteError, SuppressGuard,
-    SUPPRESS_CLIPBOARD_CAPTURE,
+    write_entry_to_system_clipboard, ClipboardWriteError, SuppressGuard, SUPPRESS_CLIPBOARD_CAPTURE,
 };
 #[cfg(test)]
 use super::types::ClipboardEntryMeta;
@@ -58,7 +57,11 @@ impl PasteSequentialState {
     fn new_from_cache() -> Option<Self> {
         let entries = get_cached_entries(SNAPSHOT_LIMIT);
         if entries.is_empty() {
-            info!(action = "paste_sequential", event = "snapshot_empty", "No clipboard entries to sequence");
+            info!(
+                action = "paste_sequential",
+                event = "snapshot_empty",
+                "No clipboard entries to sequence"
+            );
             return None;
         }
         let ids: Vec<String> = entries.into_iter().map(|e| e.id).collect();
@@ -151,9 +154,7 @@ impl PasteSequentialState {
 ///
 /// Call [`commit_paste_sequence`] after a successful clipboard write to advance the index.
 /// If the write fails, the index is NOT burned — retrying produces the same entry.
-pub fn advance_paste_sequence(
-    state: &mut Option<PasteSequentialState>,
-) -> PasteSequentialOutcome {
+pub fn advance_paste_sequence(state: &mut Option<PasteSequentialState>) -> PasteSequentialOutcome {
     let now = Instant::now();
 
     // Check for timeout → reset
