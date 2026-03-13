@@ -325,6 +325,7 @@ impl ScriptListApp {
             apps,
             // P0 FIX: Cached data for builtin views (avoids cloning per frame)
             cached_clipboard_entries: Vec::new(),
+            paste_sequential_state: None,
             focused_clipboard_entry_id: None,
             cached_windows: Vec::new(),
             cached_file_results: Vec::new(),

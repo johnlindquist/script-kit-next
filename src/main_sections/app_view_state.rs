@@ -84,10 +84,6 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
-    /// Showing paste sequential prompt
-    PasteSequentiallyView {
-        entity: Entity<prompts::PasteSequentialPrompt>,
-    },
     /// Showing app launcher
     /// P0 FIX: View state only - data comes from ScriptListApp.apps or app_launcher module
     AppLauncherView {

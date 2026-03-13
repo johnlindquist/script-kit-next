@@ -98,6 +98,18 @@ pub fn get_notes_command_bar_actions(info: &NotesInfo) -> Vec<Action> {
                 .with_icon(IconName::Copy)
                 .with_section("Notes"),
             );
+
+            actions.push(
+                Action::new(
+                    "delete_note",
+                    "Delete Note",
+                    Some("Moves the current note to Trash".to_string()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_shortcut("⌘⌫")
+                .with_icon(IconName::Trash)
+                .with_section("Notes"),
+            );
         }
     }
 

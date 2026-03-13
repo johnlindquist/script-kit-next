@@ -440,24 +440,7 @@ impl NotesApp {
                 }
                 key if is_key_backspace(key) || is_key_delete(key) => {
                     if self.selected_note_id.is_some() {
-                        self.delete_selected_note(cx);
-                        if let Some(id) = self.selected_note_id {
-                            let content = self
-                                .notes
-                                .iter()
-                                .find(|n| n.id == id)
-                                .map(|n| n.content.clone())
-                                .unwrap_or_default();
-                            let content_len = content.len();
-                            self.editor_state.update(cx, |state, cx| {
-                                state.set_value(&content, window, cx);
-                                state.set_selection(content_len, content_len, window, cx);
-                            });
-                        } else {
-                            self.editor_state.update(cx, |state, cx| {
-                                state.set_value("", window, cx);
-                            });
-                        }
+                        self.delete_selected_note(window, cx);
                         cx.stop_propagation();
                     }
                 }

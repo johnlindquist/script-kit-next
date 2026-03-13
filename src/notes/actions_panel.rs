@@ -75,6 +75,12 @@ pub enum NotesAction {
     MoveListItemDown,
     /// Open formatting commands
     Format,
+    /// Delete the current note (soft delete / move to trash)
+    DeleteNote,
+    /// Restore a note from trash
+    RestoreNote,
+    /// Permanently delete a note from trash
+    PermanentlyDeleteNote,
     /// Enable auto-sizing (window grows/shrinks with content)
     EnableAutoSizing,
     /// Panel was cancelled (Escape pressed)
@@ -96,6 +102,7 @@ impl NotesAction {
             NotesAction::MoveListItemUp,
             NotesAction::MoveListItemDown,
             NotesAction::Format,
+            NotesAction::DeleteNote,
         ]
     }
 
@@ -113,6 +120,9 @@ impl NotesAction {
             NotesAction::MoveListItemUp => "Move List Item Up",
             NotesAction::MoveListItemDown => "Move List Item Down",
             NotesAction::Format => "Format...",
+            NotesAction::DeleteNote => "Delete Note",
+            NotesAction::RestoreNote => "Restore Note",
+            NotesAction::PermanentlyDeleteNote => "Delete Permanently",
             NotesAction::EnableAutoSizing => "Enable Auto-Sizing",
             NotesAction::Cancel => "Cancel",
         }
@@ -132,6 +142,9 @@ impl NotesAction {
             NotesAction::MoveListItemUp => "↑",
             NotesAction::MoveListItemDown => "↓",
             NotesAction::Format => "T",
+            NotesAction::DeleteNote => "⌫",
+            NotesAction::RestoreNote => "Z",
+            NotesAction::PermanentlyDeleteNote => "",
             NotesAction::EnableAutoSizing => "A",
             NotesAction::Cancel => "Esc",
         }
@@ -151,6 +164,9 @@ impl NotesAction {
         const CTRL_CMD_DOWN: [&str; 3] = ["⌃", "⌘", "↓"];
         const SHIFT_CMD_T: [&str; 3] = ["⇧", "⌘", "T"];
         const CMD_A: [&str; 2] = ["⌘", "A"];
+        const CMD_BACKSPACE: [&str; 2] = ["⌘", "⌫"];
+        const CMD_Z: [&str; 2] = ["⌘", "Z"];
+        const EMPTY: [&str; 0] = [];
         const ESC: [&str; 1] = ["Esc"];
 
         match self {
@@ -165,6 +181,9 @@ impl NotesAction {
             NotesAction::MoveListItemUp => &CTRL_CMD_UP,
             NotesAction::MoveListItemDown => &CTRL_CMD_DOWN,
             NotesAction::Format => &SHIFT_CMD_T,
+            NotesAction::DeleteNote => &CMD_BACKSPACE,
+            NotesAction::RestoreNote => &CMD_Z,
+            NotesAction::PermanentlyDeleteNote => &EMPTY,
             NotesAction::EnableAutoSizing => &CMD_A,
             NotesAction::Cancel => &ESC,
         }
@@ -193,6 +212,9 @@ impl NotesAction {
             NotesAction::MoveListItemUp => IconName::ArrowUp,
             NotesAction::MoveListItemDown => IconName::ArrowDown,
             NotesAction::Format => IconName::Code,
+            NotesAction::DeleteNote => IconName::Trash,
+            NotesAction::RestoreNote => IconName::Refresh,
+            NotesAction::PermanentlyDeleteNote => IconName::Trash,
             NotesAction::EnableAutoSizing => IconName::ArrowRight,
             NotesAction::Cancel => IconName::Close,
         }
@@ -212,6 +234,9 @@ impl NotesAction {
             NotesAction::MoveListItemUp => "move_list_item_up",
             NotesAction::MoveListItemDown => "move_list_item_down",
             NotesAction::Format => "format",
+            NotesAction::DeleteNote => "delete_note",
+            NotesAction::RestoreNote => "restore_note",
+            NotesAction::PermanentlyDeleteNote => "permanently_delete_note",
             NotesAction::EnableAutoSizing => "enable_auto_sizing",
             NotesAction::Cancel => "cancel",
         }
@@ -241,6 +266,9 @@ impl NotesActionSection {
             | NotesAction::Export => NotesActionSection::Actions,
             NotesAction::MoveListItemUp | NotesAction::MoveListItemDown => NotesActionSection::Move,
             NotesAction::Format => NotesActionSection::Format,
+            NotesAction::DeleteNote
+            | NotesAction::RestoreNote
+            | NotesAction::PermanentlyDeleteNote => NotesActionSection::Actions,
             NotesAction::EnableAutoSizing | NotesAction::Cancel => NotesActionSection::Utility,
         }
     }
@@ -1437,7 +1465,7 @@ mod tests {
     #[test]
     fn test_notes_action_all() {
         let all = NotesAction::all();
-        assert_eq!(all.len(), 11);
+        assert_eq!(all.len(), 12);
         assert!(all.contains(&NotesAction::NewNote));
         assert!(all.contains(&NotesAction::DuplicateNote));
         assert!(all.contains(&NotesAction::BrowseNotes));
@@ -1449,6 +1477,7 @@ mod tests {
         assert!(all.contains(&NotesAction::MoveListItemUp));
         assert!(all.contains(&NotesAction::MoveListItemDown));
         assert!(all.contains(&NotesAction::Format));
+        assert!(all.contains(&NotesAction::DeleteNote));
     }
 
     #[test]

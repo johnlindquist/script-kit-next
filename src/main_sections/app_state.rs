@@ -8,6 +8,9 @@ struct ScriptListApp {
     apps: Vec<app_launcher::AppInfo>,
     /// P0 FIX: Cached clipboard entries for ClipboardHistoryView (avoids cloning per frame)
     cached_clipboard_entries: Vec<clipboard_history::ClipboardEntryMeta>,
+    /// Sequential paste state machine (Raycast-style paste-one-at-a-time)
+    #[allow(dead_code)]
+    paste_sequential_state: Option<clipboard_history::PasteSequentialState>,
     /// Focused clipboard entry ID for action handling in ClipboardHistoryView
     #[allow(dead_code)]
     focused_clipboard_entry_id: Option<String>,

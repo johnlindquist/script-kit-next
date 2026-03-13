@@ -223,9 +223,6 @@ impl RenderOnce for Button {
         let focus_ring_color = rgba((colors.focus_ring << 8) | 0xA0);
         // 0x20 = 12.5% opacity for subtle background tint
         let focus_tint = rgba((colors.focus_tint << 8) | 0x20);
-        // 0x40 = 25% opacity for unfocused border
-        let unfocused_border = rgba((colors.border << 8) | 0x40);
-
         let (text_color, bg_color) = match variant {
             ButtonVariant::Primary => {
                 // Primary: filled background with accent color
@@ -317,13 +314,15 @@ impl RenderOnce for Button {
             button = button.child(div().text_xs().opacity(0.7).child("…"));
         }
 
-        // Apply focus ring styling
+        // Apply border styling - consistent 2px border to prevent layout shift
         if show_focus_indicator {
             button = button
                 .border(px(FOCUS_BORDER_WIDTH))
                 .border_color(focus_ring_color);
         } else {
-            button = button.border_1().border_color(unfocused_border);
+            button = button
+                .border(px(FOCUS_BORDER_WIDTH))
+                .border_color(gpui::transparent_black());
         }
 
         // Apply hover styles unless disabled

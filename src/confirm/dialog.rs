@@ -177,44 +177,30 @@ impl Render for ConfirmDialog {
         let on_cancel = self.on_choice.clone();
         let on_confirm = self.on_choice.clone();
 
-        // Cancel button using Button component with Ghost variant
-        // Wrapped in a flex container for sizing
-        let cancel_button = div()
-            .flex_1()
-            .h(px(44.0))
-            .flex()
-            .items_center()
-            .justify_center()
-            .child(
-                Button::new(self.cancel_text.clone(), button_colors)
-                    .variant(ButtonVariant::Ghost)
-                    .focused(is_cancel_focused)
-                    .on_click(Box::new(move |_event, _window, cx| {
-                        logging::log("CONFIRM", "User cancelled (button click)");
-                        (on_cancel)(false);
-                        // Close the confirm window after calling the callback
-                        close_confirm_window(cx);
-                    })),
-            );
+        // Shared button style: both buttons fill equal width with consistent height
+        // Cancel button - Ghost variant (subtle)
+        let cancel_button = div().flex_1().child(
+            Button::new(self.cancel_text.clone(), button_colors)
+                .variant(ButtonVariant::Ghost)
+                .focused(is_cancel_focused)
+                .on_click(Box::new(move |_event, _window, cx| {
+                    logging::log("CONFIRM", "User cancelled (button click)");
+                    (on_cancel)(false);
+                    close_confirm_window(cx);
+                })),
+        );
 
-        // Confirm button using Button component with Primary variant
-        let confirm_button = div()
-            .flex_1()
-            .h(px(44.0))
-            .flex()
-            .items_center()
-            .justify_center()
-            .child(
-                Button::new(self.confirm_text.clone(), button_colors)
-                    .variant(ButtonVariant::Primary)
-                    .focused(is_confirm_focused)
-                    .on_click(Box::new(move |_event, _window, cx| {
-                        logging::log("CONFIRM", "User confirmed (button click)");
-                        (on_confirm)(true);
-                        // Close the confirm window after calling the callback
-                        close_confirm_window(cx);
-                    })),
-            );
+        // Confirm button - Primary variant (prominent)
+        let confirm_button = div().flex_1().child(
+            Button::new(self.confirm_text.clone(), button_colors)
+                .variant(ButtonVariant::Primary)
+                .focused(is_confirm_focused)
+                .on_click(Box::new(move |_event, _window, cx| {
+                    logging::log("CONFIRM", "User confirmed (button click)");
+                    (on_confirm)(true);
+                    close_confirm_window(cx);
+                })),
+        );
 
         // Button row
         let button_row = div()
