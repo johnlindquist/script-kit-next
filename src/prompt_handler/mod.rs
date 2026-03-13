@@ -1102,6 +1102,33 @@ impl ScriptListApp {
                         -1,
                         None,
                     ),
+                    AppView::BrowseKitsView {
+                        query,
+                        selected_index,
+                        results,
+                    } => (
+                        "browseKits".to_string(),
+                        None,
+                        None,
+                        query.clone(),
+                        results.len(),
+                        results.len(),
+                        *selected_index as i32,
+                        None,
+                    ),
+                    AppView::InstalledKitsView {
+                        selected_index,
+                        kits,
+                    } => (
+                        "installedKits".to_string(),
+                        None,
+                        None,
+                        String::new(),
+                        kits.len(),
+                        kits.len(),
+                        *selected_index as i32,
+                        None,
+                    ),
                 };
 
                 // Focus state: we use focused_input as a proxy since we don't have Window access here.

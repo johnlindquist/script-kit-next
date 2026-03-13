@@ -141,6 +141,17 @@ enum AppView {
     /// Showing creation feedback with file path and quick actions after script/extension creation.
     /// Requires explicit dismiss (Enter/Escape/button) — non-dismissable by click-outside.
     CreationFeedback { path: std::path::PathBuf },
+    /// Browsing the Kit Store (GitHub search for installable kits)
+    BrowseKitsView {
+        query: String,
+        selected_index: usize,
+        results: Vec<KitStoreSearchResult>,
+    },
+    /// Managing locally installed kits (update/remove)
+    InstalledKitsView {
+        selected_index: usize,
+        kits: Vec<script_kit_gpui::kit_store::InstalledKit>,
+    },
 }
 
 /// Wrapper to hold a script session that can be shared across async boundaries

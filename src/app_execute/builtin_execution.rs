@@ -1362,24 +1362,116 @@ impl ScriptListApp {
             // Kit Store Commands
             // =========================================================================
             builtins::BuiltInFeature::KitStoreCommand(cmd_type) => {
-                tracing::info!(message = %&format!("Executing kit store command: {:?}", cmd_type),
-                );
-
                 use builtins::KitStoreCommandType;
-
-                let message = match cmd_type {
-                    KitStoreCommandType::BrowseKits => "Kit Store browsing is coming soon.",
-                    KitStoreCommandType::InstalledKits => {
-                        "Installed kit management is coming soon."
-                    }
-                    KitStoreCommandType::UpdateAllKits => "Kit update flow is coming soon.",
-                };
-
-                self.toast_manager.push(
-                    components::toast::Toast::info(message, &self.theme)
-                        .duration_ms(Some(TOAST_INFO_MS)),
+                tracing::info!(
+                    kit_store_command = ?cmd_type,
+                    "Executing kit store command"
                 );
-                cx.notify();
+
+                self.opened_from_main_menu = true;
+
+                match cmd_type {
+                    KitStoreCommandType::BrowseKits => {
+                        // Start with empty query — initial results fetched async
+                        self.current_view = AppView::BrowseKitsView {
+                            query: String::new(),
+                            selected_index: 0,
+                            results: Vec::new(),
+                        };
+                        self.pending_focus = Some(FocusTarget::AppRoot);
+                        cx.notify();
+
+                        // Fetch initial results on background executor
+                        cx.spawn(async move |this, cx| {
+                            let results = cx
+                                .background_executor()
+                                .spawn(async { Self::kit_store_search_results("") })
+                                .await;
+                            let _ = this.update(cx, |this, cx| {
+                                if let AppView::BrowseKitsView {
+                                    results: view_results,
+                                    ..
+                                } = &mut this.current_view
+                                {
+                                    *view_results = results;
+                                    cx.notify();
+                                }
+                            });
+                        })
+                        .detach();
+                    }
+                    KitStoreCommandType::InstalledKits => {
+                        let kits = Self::kit_store_list_installed();
+                        tracing::info!(
+                            installed_count = kits.len(),
+                            "Loaded installed kits"
+                        );
+                        self.current_view = AppView::InstalledKitsView {
+                            selected_index: 0,
+                            kits,
+                        };
+                        self.pending_focus = Some(FocusTarget::AppRoot);
+                        cx.notify();
+                    }
+                    KitStoreCommandType::UpdateAllKits => {
+                        cx.spawn(async move |this, cx| {
+                            let (updated, failed) = cx
+                                .background_executor()
+                                .spawn(async {
+                                    // Run update-all on background thread
+                                    let kits = script_kit_gpui::kit_store::storage::list_installed_kits()
+                                        .unwrap_or_default();
+                                    let mut updated = 0usize;
+                                    let mut failed = 0usize;
+                                    for kit in &kits {
+                                        let pull_output = std::process::Command::new("git")
+                                            .arg("-C")
+                                            .arg(&kit.path)
+                                            .arg("pull")
+                                            .arg("--ff-only")
+                                            .output();
+                                        match pull_output {
+                                            Ok(output) if output.status.success() => {
+                                                updated += 1;
+                                            }
+                                            _ => {
+                                                failed += 1;
+                                                tracing::warn!(
+                                                    kit_name = %kit.name,
+                                                    "Kit update-all failed for kit"
+                                                );
+                                            }
+                                        }
+                                    }
+                                    (updated, failed)
+                                })
+                                .await;
+
+                            let _ = this.update(cx, |this, cx| {
+                                let message = if failed == 0 {
+                                    format!("Updated {} kit(s) successfully", updated)
+                                } else {
+                                    format!(
+                                        "Updated {} kit(s), {} failed",
+                                        updated, failed
+                                    )
+                                };
+                                if failed > 0 {
+                                    this.toast_manager.push(
+                                        components::toast::Toast::error(
+                                            message, &this.theme,
+                                        )
+                                        .duration_ms(Some(TOAST_ERROR_MS)),
+                                    );
+                                } else {
+                                    this.show_hud(message, Some(HUD_MEDIUM_MS), cx);
+                                }
+                                cx.notify();
+                            });
+                        })
+                        .detach();
+                    }
+                }
             }
 
             // =========================================================================

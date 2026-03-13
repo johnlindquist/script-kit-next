@@ -54,6 +54,8 @@ impl ScriptListApp {
             AppView::WebcamView { .. } => "Webcam",
             AppView::CreationFeedback { .. } => "CreationFeedback",
             AppView::NamingPrompt { .. } => "NamingPrompt",
+            AppView::BrowseKitsView { .. } => "BrowseKits",
+            AppView::InstalledKitsView { .. } => "InstalledKits",
         };
 
         // Header bounds (includes padding + input + divider) - common to all views

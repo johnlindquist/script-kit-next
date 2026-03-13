@@ -271,6 +271,19 @@ impl Render for ScriptListApp {
             AppView::CreationFeedback { ref path } => {
                 self.render_creation_feedback(path.clone(), cx)
             }
+            AppView::BrowseKitsView {
+                ref query,
+                selected_index,
+                results,
+            } => self
+                .render_browse_kits(query, selected_index, results, cx)
+                .into_any_element(),
+            AppView::InstalledKitsView {
+                selected_index,
+                kits,
+            } => self
+                .render_installed_kits(selected_index, kits, cx)
+                .into_any_element(),
         };
 
         // Wrap content in a container that can have the debug grid overlay

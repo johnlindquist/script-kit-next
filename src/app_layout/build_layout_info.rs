@@ -35,6 +35,8 @@ impl ScriptListApp {
             AppView::WebcamView { .. } => "webcam",
             AppView::CreationFeedback { .. } => "creationFeedback",
             AppView::NamingPrompt { .. } => "namingPrompt",
+            AppView::BrowseKitsView { .. } => "browseKits",
+            AppView::InstalledKitsView { .. } => "installedKits",
         };
 
         let mut components = Vec::new();

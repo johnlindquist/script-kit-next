@@ -165,6 +165,8 @@ impl ScriptListApp {
             AppView::ThemeChooserView { .. } => "ThemeChooserView",
             AppView::CreationFeedback { .. } => "CreationFeedback",
             AppView::NamingPrompt { .. } => "NamingPrompt",
+            AppView::BrowseKitsView { .. } => "BrowseKitsView",
+            AppView::InstalledKitsView { .. } => "InstalledKitsView",
         };
 
         let old_focused_input = self.focused_input;

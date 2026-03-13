@@ -162,6 +162,12 @@ impl ScriptListApp {
             }
             AppView::CreationFeedback { .. } => Some((ViewType::ArgPromptNoChoices, 0)),
             AppView::NamingPrompt { .. } => Some((ViewType::ArgPromptNoChoices, 0)),
+            AppView::BrowseKitsView { results, .. } => {
+                Some((ViewType::ScriptList, results.len()))
+            }
+            AppView::InstalledKitsView { kits, .. } => {
+                Some((ViewType::ScriptList, kits.len()))
+            }
         }
     }
 
