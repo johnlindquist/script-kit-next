@@ -397,8 +397,8 @@ impl Render for ScriptListApp {
             self.filter_perf_start = None;
         }
 
-        // Get vibrancy background - tints the blur effect with theme color
-        let vibrancy_bg = crate::ui_foundation::get_window_vibrancy_background();
+        // Get vibrancy background - None when vibrancy enabled (let Root handle blur)
+        let vibrancy_bg = crate::ui_foundation::get_vibrancy_background(&self.theme);
 
         // Capture mouse_cursor_hidden for use in div builder
         let mouse_cursor_hidden = self.mouse_cursor_hidden;
@@ -424,9 +424,8 @@ impl Render for ScriptListApp {
             .on_mouse_move(cx.listener(|this, _: &MouseMoveEvent, _window, cx| {
                 this.show_mouse_cursor(cx);
             }))
-            // CRITICAL: Apply vibrancy background like POC does
-            // This tints the blur effect with the theme color
-            .bg(vibrancy_bg)
+            // Apply background only when vibrancy is disabled; otherwise let Root blur through
+            .when_some(vibrancy_bg, |d, bg| d.bg(bg))
             // Visual styling from vibrancy POC - rounded corners, subtle border, clip content
             .rounded(px(12.))
             .border_1()

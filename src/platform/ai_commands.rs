@@ -59,15 +59,26 @@ pub fn capture_screen_screenshot(
     Ok((png_data, final_width, final_height))
 }
 
+/// Result of a focused window capture, including whether a fallback was used.
+pub struct FocusedWindowCapture {
+    pub png_data: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+    pub window_title: String,
+    /// True if no focused window was found and we fell back to the first available window.
+    pub used_fallback: bool,
+}
+
 /// Capture a screenshot of the currently focused window (not our app).
 ///
 /// This function finds the frontmost window that is NOT Script Kit and captures it.
+/// If no focused window is found, it falls back to the first available window and
+/// sets `used_fallback = true` so the caller can warn the user.
 ///
 /// # Returns
-/// A tuple of (png_data, width, height, window_title) on success.
-#[allow(clippy::type_complexity)]
+/// A `FocusedWindowCapture` on success.
 pub fn capture_focused_window_screenshot(
-) -> Result<(Vec<u8>, u32, u32, String), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<FocusedWindowCapture, Box<dyn std::error::Error + Send + Sync>> {
     use image::codecs::png::PngEncoder;
     use image::ImageEncoder;
     use xcap::Window;
@@ -76,6 +87,7 @@ pub fn capture_focused_window_screenshot(
 
     // Find the focused window that is NOT our app
     let mut target_window = None;
+    let mut found_focused = false;
     for window in windows {
         let app_name = window.app_name().unwrap_or_else(|_| String::new());
         let is_minimized = window.is_minimized().unwrap_or(true);
@@ -94,6 +106,7 @@ pub fn capture_focused_window_screenshot(
         if !is_our_app && !is_minimized && is_reasonable_size {
             if is_focused {
                 target_window = Some(window);
+                found_focused = true;
                 break;
             }
             // Keep the first reasonable non-our-app window as fallback
@@ -103,15 +116,25 @@ pub fn capture_focused_window_screenshot(
         }
     }
 
+    let used_fallback = target_window.is_some() && !found_focused;
+
     let window = target_window.ok_or("No suitable window found to capture")?;
     let title = window.title().unwrap_or_else(|_| "Unknown".to_string());
     let app_name = window.app_name().unwrap_or_else(|_| "Unknown".to_string());
 
-    tracing::debug!(
-        app_name = %app_name,
-        title = %title,
-        "Capturing focused window screenshot"
-    );
+    if used_fallback {
+        tracing::warn!(
+            app_name = %app_name,
+            title = %title,
+            "No focused window found, falling back to first available window"
+        );
+    } else {
+        tracing::debug!(
+            app_name = %app_name,
+            title = %title,
+            "Capturing focused window screenshot"
+        );
+    }
 
     let image = window.capture_image()?;
     let original_width = image.width();
@@ -146,10 +169,17 @@ pub fn capture_focused_window_screenshot(
         height = height,
         file_size = png_data.len(),
         title = %display_title,
+        used_fallback = used_fallback,
         "Focused window screenshot captured"
     );
 
-    Ok((png_data, width, height, display_title))
+    Ok(FocusedWindowCapture {
+        png_data,
+        width,
+        height,
+        window_title: display_title,
+        used_fallback,
+    })
 }
 
 /// Get the URL of the currently focused browser tab.

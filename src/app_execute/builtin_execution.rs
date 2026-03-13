@@ -941,27 +941,44 @@ impl ScriptListApp {
                         // Capture entire screen and send to AI
                         match platform::capture_screen_screenshot() {
                             Ok((png_data, width, height)) => {
-                                let base64_data = base64::Engine::encode(
-                                    &base64::engine::general_purpose::STANDARD,
-                                    &png_data,
-                                );
-                                let message = format!(
-                                    "[Screenshot captured: {}x{} pixels]\n\nPlease analyze this screenshot.",
-                                    width, height
-                                );
-                                tracing::info!(message = %&format!(
-                                        "Screen captured: {}x{}, {} bytes",
-                                        width,
-                                        height,
-                                        png_data.len()
-                                    ),
-                                );
-                                if let Err(e) = ai::open_ai_window(cx) {
-                                    tracing::error!(message = %&ai_open_failure_message(&e));
-                                    self.show_error_toast(ai_open_failure_message(&e), cx);
+                                if png_data.len() > crate::prompts::chat::MAX_IMAGE_BYTES {
+                                    tracing::warn!(
+                                        size_bytes = png_data.len(),
+                                        max_bytes = crate::prompts::chat::MAX_IMAGE_BYTES,
+                                        "Rejecting screen capture larger than 10 MB"
+                                    );
+                                    self.show_error_toast(
+                                        "Screen capture exceeds 10 MB limit".to_string(),
+                                        cx,
+                                    );
                                 } else {
-                                    // Set input with the screenshot context
-                                    ai::set_ai_input_with_image(cx, &message, &base64_data, false);
+                                    let base64_data = base64::Engine::encode(
+                                        &base64::engine::general_purpose::STANDARD,
+                                        &png_data,
+                                    );
+                                    let message = format!(
+                                        "[Screenshot captured: {}x{} pixels]\n\nPlease analyze this screenshot.",
+                                        width, height
+                                    );
+                                    tracing::info!(message = %&format!(
+                                            "Screen captured: {}x{}, {} bytes",
+                                            width,
+                                            height,
+                                            png_data.len()
+                                        ),
+                                    );
+                                    if let Err(e) = ai::open_ai_window(cx) {
+                                        tracing::error!(message = %&ai_open_failure_message(&e));
+                                        self.show_error_toast(ai_open_failure_message(&e), cx);
+                                    } else {
+                                        // Set input with the screenshot context
+                                        ai::set_ai_input_with_image(
+                                            cx,
+                                            &message,
+                                            &base64_data,
+                                            false,
+                                        );
+                                    }
                                 }
                             }
                             Err(e) => {
@@ -974,33 +991,70 @@ impl ScriptListApp {
                     AiCommandType::SendFocusedWindowToAi => {
                         // Capture the focused window (not our window) and send to AI
                         match platform::capture_focused_window_screenshot() {
-                            Ok((png_data, width, height, window_title)) => {
-                                let base64_data = base64::Engine::encode(
-                                    &base64::engine::general_purpose::STANDARD,
-                                    &png_data,
-                                );
-                                let message = format!(
-                                    "[Window: {} - {}x{} pixels]\n\nPlease analyze this window screenshot.",
-                                    window_title, width, height
-                                );
-                                tracing::info!(message = %&format!(
-                                        "Window '{}' captured: {}x{}, {} bytes",
-                                        window_title,
-                                        width,
-                                        height,
-                                        png_data.len()
-                                    ),
-                                );
-                                if let Err(e) = ai::open_ai_window(cx) {
-                                    tracing::error!(message = %&ai_open_failure_message(&e));
-                                    self.show_error_toast(ai_open_failure_message(&e), cx);
+                            Ok(capture) => {
+                                if capture.png_data.len()
+                                    > crate::prompts::chat::MAX_IMAGE_BYTES
+                                {
+                                    tracing::warn!(
+                                        size_bytes = capture.png_data.len(),
+                                        max_bytes = crate::prompts::chat::MAX_IMAGE_BYTES,
+                                        "Rejecting window capture larger than 10 MB"
+                                    );
+                                    self.show_error_toast(
+                                        "Window capture exceeds 10 MB limit".to_string(),
+                                        cx,
+                                    );
                                 } else {
-                                    ai::set_ai_input_with_image(cx, &message, &base64_data, false);
+                                    // Warn user if we fell back to a non-focused window
+                                    if capture.used_fallback {
+                                        self.toast_manager.push(
+                                            components::toast::Toast::warning(
+                                                format!(
+                                                    "No focused window found — captured '{}'",
+                                                    capture.window_title
+                                                ),
+                                                &self.theme,
+                                            )
+                                            .duration_ms(Some(TOAST_WARNING_MS)),
+                                        );
+                                        cx.notify();
+                                    }
+
+                                    let base64_data = base64::Engine::encode(
+                                        &base64::engine::general_purpose::STANDARD,
+                                        &capture.png_data,
+                                    );
+                                    let message = format!(
+                                        "[Window: {} - {}x{} pixels]\n\nPlease analyze this window screenshot.",
+                                        capture.window_title, capture.width, capture.height
+                                    );
+                                    tracing::info!(
+                                        window_title = %capture.window_title,
+                                        width = capture.width,
+                                        height = capture.height,
+                                        size_bytes = capture.png_data.len(),
+                                        used_fallback = capture.used_fallback,
+                                        "Window captured for AI"
+                                    );
+                                    if let Err(e) = ai::open_ai_window(cx) {
+                                        tracing::error!(message = %&ai_open_failure_message(&e));
+                                        self.show_error_toast(ai_open_failure_message(&e), cx);
+                                    } else {
+                                        ai::set_ai_input_with_image(
+                                            cx,
+                                            &message,
+                                            &base64_data,
+                                            false,
+                                        );
+                                    }
                                 }
                             }
                             Err(e) => {
                                 tracing::error!(message = %&format!("Failed to capture window: {}", e));
-                                self.show_error_toast(format!("Failed to capture window: {}", e), cx);
+                                self.show_error_toast(
+                                    format!("Failed to capture window: {}", e),
+                                    cx,
+                                );
                             }
                         }
                     }

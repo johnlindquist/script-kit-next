@@ -998,9 +998,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "builtin-create-ai-preset",
                 "Create AI Preset",
                 "Create a reusable AI preset with name, system prompt, and model",
-                vec![
-                    "create", "ai", "preset", "template", "save", "new",
-                ],
+                vec!["create", "ai", "preset", "template", "save", "new"],
                 BuiltInFeature::AiCommand(AiCommandType::CreateAiPreset),
                 "🧪",
             ));
@@ -1009,9 +1007,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "builtin-import-ai-presets",
                 "Import AI Presets",
                 "Import AI presets from a JSON file via file picker",
-                vec![
-                    "import", "ai", "preset", "template", "file", "load",
-                ],
+                vec!["import", "ai", "preset", "template", "file", "load"],
                 BuiltInFeature::AiCommand(AiCommandType::ImportAiPresets),
                 "📥",
             ));
@@ -1031,9 +1027,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "builtin-search-ai-presets",
                 "Search AI Presets",
                 "Search and browse saved AI presets to start a new chat",
-                vec![
-                    "search", "ai", "preset", "template", "browse", "find",
-                ],
+                vec!["search", "ai", "preset", "template", "browse", "find"],
                 BuiltInFeature::AiCommand(AiCommandType::SearchAiPresets),
                 "🔎",
             ));

@@ -93,9 +93,7 @@ impl AiApp {
             let mut message = Message::new(chat_id, msg.role, msg.content);
             // Attach image if present (transferred from inline ChatPrompt)
             if let Some(image_data) = msg.image_base64 {
-                message
-                    .images
-                    .push(ImageAttachment::png(image_data));
+                message.images.push(ImageAttachment::png(image_data));
             }
             if let Err(e) = storage::save_message(&message) {
                 tracing::error!(error = %e, "Failed to save message in transferred conversation");
@@ -297,6 +295,144 @@ impl AiApp {
         if let Some(id) = self.selected_chat_id {
             self.delete_chat_by_id(id, cx);
         }
+    }
+
+    /// Handle an SDK-initiated aiStartChat command.
+    ///
+    /// Creates a new chat with the pre-generated ChatId, saves the user message
+    /// (with optional image), and optionally triggers AI streaming.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn handle_start_chat(
+        &mut self,
+        chat_id: ChatId,
+        message: String,
+        image: Option<String>,
+        system_prompt: Option<String>,
+        model_id: Option<String>,
+        submit: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // Resolve model and provider — prefer the requested model_id, fall back to selected model
+        let (resolved_model_id, resolved_provider) = if let Some(ref req_model_id) = model_id {
+            // Try to find the requested model in available models for its provider
+            if let Some(model) = self.available_models.iter().find(|m| m.id == *req_model_id) {
+                (model.id.clone(), model.provider.clone())
+            } else {
+                // Model not found in available models — use the ID as-is with "anthropic" default
+                (req_model_id.clone(), "anthropic".to_string())
+            }
+        } else {
+            self.selected_model
+                .as_ref()
+                .map(|m| (m.id.clone(), m.provider.clone()))
+                .unwrap_or_else(|| {
+                    (
+                        "claude-3-5-sonnet-20241022".to_string(),
+                        "anthropic".to_string(),
+                    )
+                })
+        };
+
+        // Create the chat with the pre-generated ChatId
+        let mut chat = Chat::new(&resolved_model_id, &resolved_provider);
+        chat.id = chat_id;
+        chat.source = ChatSource::Script;
+
+        // Set title from message content
+        let has_image = image.is_some();
+        let title = if message.trim().is_empty() && has_image {
+            "Image attachment".to_string()
+        } else {
+            Chat::generate_title_from_content(&message)
+        };
+        chat.set_title(&title);
+
+        // Apply system prompt if provided
+        if let Some(ref prompt) = system_prompt {
+            // Save system prompt as the first message
+            let sys_msg = Message::new(chat_id, MessageRole::System, prompt.clone());
+            if let Err(e) = storage::save_message(&sys_msg) {
+                tracing::error!(error = %e, chat_id = %chat_id, "Failed to save system prompt");
+            }
+        }
+
+        // Save chat to storage
+        if let Err(e) = storage::create_chat(&chat) {
+            tracing::error!(error = %e, chat_id = %chat_id, "Failed to create chat for aiStartChat");
+            return;
+        }
+
+        // Create and save the user message with optional image
+        let mut user_message = Message::user(chat_id, &message);
+        if let Some(ref img_base64) = image {
+            user_message
+                .images
+                .push(crate::ai::model::ImageAttachment::png(img_base64.clone()));
+        }
+
+        if let Err(e) = storage::save_message(&user_message) {
+            tracing::error!(error = %e, chat_id = %chat_id, "Failed to save user message for aiStartChat");
+            return;
+        }
+
+        // Update in-memory state
+        self.chats.insert(0, chat);
+        self.selected_chat_id = Some(chat_id);
+        publish_active_chat_id(Some(&chat_id));
+
+        // Load messages for display (includes system prompt if any)
+        match storage::get_chat_messages(&chat_id) {
+            Ok(messages) => {
+                self.cache_message_images(&messages);
+                self.current_messages = messages;
+            }
+            Err(e) => {
+                tracing::error!(error = %e, chat_id = %chat_id, "Failed to load messages after aiStartChat");
+                self.current_messages = vec![user_message];
+            }
+        }
+
+        // Update preview and count caches
+        let preview_source = if message.trim().is_empty() && has_image {
+            "Image attachment"
+        } else {
+            message.as_str()
+        };
+        let preview: String = preview_source.chars().take(60).collect();
+        let preview = if preview.len() < preview_source.len() {
+            format!("{}...", preview.trim())
+        } else {
+            preview
+        };
+        self.message_previews.insert(chat_id, preview);
+        self.message_counts
+            .insert(chat_id, self.current_messages.len());
+
+        // Force scroll to bottom
+        self.force_scroll_to_bottom();
+
+        // Clear input and update placeholder
+        self.input_state.update(cx, |state, cx| {
+            state.set_value("", window, cx);
+            state.set_selection(0, 0, window, cx);
+        });
+        self.update_input_placeholder(window, cx);
+
+        info!(
+            chat_id = %chat_id,
+            submit = submit,
+            has_image = has_image,
+            has_system_prompt = system_prompt.is_some(),
+            message_len = message.len(),
+            "ai_sdk.start_chat created"
+        );
+
+        if submit {
+            self.start_streaming_response(chat_id, cx);
+        }
+
+        cx.notify();
     }
 }
 

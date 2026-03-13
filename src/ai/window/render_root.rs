@@ -136,6 +136,25 @@ impl AiApp {
                 AiCommand::SimulateKey { key, modifiers } => {
                     self.handle_simulated_key(&key, &modifiers, window, cx);
                 }
+                AiCommand::StartChat {
+                    chat_id,
+                    message,
+                    image,
+                    system_prompt,
+                    model_id,
+                    submit,
+                } => {
+                    self.handle_start_chat(
+                        chat_id,
+                        message,
+                        image,
+                        system_prompt,
+                        model_id,
+                        submit,
+                        window,
+                        cx,
+                    );
+                }
             }
         }
     }

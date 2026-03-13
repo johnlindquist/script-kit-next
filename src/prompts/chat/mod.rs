@@ -46,6 +46,10 @@ mod types;
 #[cfg(test)]
 pub(crate) use tests::chat_tests;
 
+/// Maximum image size (10 MB) shared across all image intake paths:
+/// clipboard paste, file drop, screen capture, and image picker.
+pub(crate) const MAX_IMAGE_BYTES: usize = 10 * 1024 * 1024;
+
 pub(super) const CHAT_LAYOUT_PADDING_X: f32 = 12.0;
 pub(super) const CHAT_LAYOUT_SECTION_PADDING_Y: f32 = 8.0;
 pub(super) const CHAT_LAYOUT_MESSAGES_PADDING_Y: f32 = CHAT_LAYOUT_SECTION_PADDING_Y;

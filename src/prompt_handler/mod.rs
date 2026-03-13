@@ -2175,31 +2175,34 @@ impl ScriptListApp {
                     return;
                 }
 
-                // Set the input and optionally submit
-                // If no_response is false (default), we submit to trigger AI response
+                // Pre-generate a real ChatId so the SDK gets an actual persistent ID
+                let chat_id = crate::ai::ChatId::new();
                 let should_submit = !no_response;
 
-                // Set input with image if provided, otherwise just set text
-                if let Some(ref img_base64) = image {
-                    crate::ai::set_ai_input_with_image(cx, &message, img_base64, should_submit);
-                } else {
-                    crate::ai::set_ai_input(cx, &message, should_submit);
-                }
+                // Queue the StartChat command — the AI window will create the chat,
+                // save the user message (with optional image), and optionally stream.
+                crate::ai::start_ai_chat(
+                    cx,
+                    chat_id,
+                    &message,
+                    image.as_deref(),
+                    system_prompt.as_deref(),
+                    model_id.as_deref(),
+                    should_submit,
+                );
 
-                // Generate a chat ID (the AI window will create the actual chat)
-                // For now, use a placeholder - the real chat ID is managed by AiApp
-                let generated_chat_id = format!("chat-{}", uuid::Uuid::new_v4());
-                let title = if message.chars().count() > 30 {
-                    format!("{}...", crate::utils::truncate_str_chars(&message, 30))
+                // Build title from message content
+                let title = if message.trim().is_empty() && image.is_some() {
+                    "Image attachment".to_string()
                 } else {
-                    message.clone()
+                    crate::ai::Chat::generate_title_from_content(&message)
                 };
 
-                // Send AiChatCreated response back to SDK
+                // Send AiChatCreated response with the real chat ID
                 if let Some(ref sender) = self.response_sender {
                     let response = Message::AiChatCreated {
                         request_id: request_id.clone(),
-                        chat_id: generated_chat_id,
+                        chat_id: chat_id.as_str(),
                         title,
                         model_id: model_id
                             .unwrap_or_else(|| "claude-3-5-sonnet-20241022".to_string()),
@@ -2211,6 +2214,7 @@ impl ScriptListApp {
                             tracing::info!(
                                 category = "AI",
                                 request_id = %request_id,
+                                chat_id = %chat_id,
                                 "AiChatCreated response sent"
                             );
                         }
