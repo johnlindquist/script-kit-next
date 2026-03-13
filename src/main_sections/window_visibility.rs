@@ -151,9 +151,14 @@ fn show_main_window_helper(
 
                     if !needs_reset_before_show {
                         view.ensure_selection_at_first_item(ctx);
-                        view.focused_input = FocusedInput::MainFilter;
-                        view.pending_focus = Some(FocusTarget::MainFilter);
                     }
+
+                    // Always re-apply focus state after the window becomes visible.
+                    // reset_to_script_list sets these too, but that runs BEFORE the
+                    // window is shown — the render loop needs pending_focus set AFTER
+                    // the window is key to actually move focus to the input element.
+                    view.focused_input = FocusedInput::MainFilter;
+                    view.pending_focus = Some(FocusTarget::MainFilter);
 
                     // Always ensure window size matches current view using deferred resize.
                     let _ = window.update(ctx, |_root, win, win_cx| {

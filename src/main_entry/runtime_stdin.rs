@@ -116,6 +116,10 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 let focus_handle = view.focus_handle(ctx);
                                 window.focus(&focus_handle, ctx);
 
+                                // Ensure render-loop focus state is set so the input autofocuses
+                                view.focused_input = FocusedInput::MainFilter;
+                                view.pending_focus = Some(FocusTarget::MainFilter);
+
                                 // Send RunScript message to be handled
                                 view.handle_prompt_message(PromptMessage::RunScript { path: path.clone() }, ctx);
                             }
@@ -189,6 +193,10 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
 
                                 let focus_handle = view.focus_handle(ctx);
                                 window.focus(&focus_handle, ctx);
+
+                                // Ensure render-loop focus state is set so the input autofocuses
+                                view.focused_input = FocusedInput::MainFilter;
+                                view.pending_focus = Some(FocusTarget::MainFilter);
                             }
                             ExternalCommand::Hide { ref request_id } => {
                                 let rid = request_id.as_deref().unwrap_or("-");
