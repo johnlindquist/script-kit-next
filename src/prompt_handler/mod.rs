@@ -51,6 +51,15 @@ fn normalize_notify_fields(
     }
 }
 
+fn resolve_ai_start_chat_provider(
+    registry: &crate::ai::ProviderRegistry,
+    model_id: &str,
+) -> Option<String> {
+    registry
+        .find_provider_for_model(model_id)
+        .map(|provider| provider.provider_id().to_string())
+}
+
 fn build_macos_beep_command_spec() -> FeedbackCommandSpec {
     FeedbackCommandSpec {
         program: "afplay",
@@ -2476,6 +2485,11 @@ impl ScriptListApp {
                 // Pre-generate a real ChatId so the SDK gets an actual persistent ID
                 let chat_id = crate::ai::ChatId::new();
                 let should_submit = !no_response;
+                let provider = model_id.as_deref().and_then(|selected_model_id| {
+                    let registry =
+                        crate::ai::ProviderRegistry::from_environment_with_config(Some(&self.config));
+                    resolve_ai_start_chat_provider(&registry, selected_model_id)
+                });
 
                 // Queue the StartChat command — the AI window will create the chat,
                 // save the user message (with optional image), and optionally stream.
@@ -2486,6 +2500,8 @@ impl ScriptListApp {
                     image.as_deref(),
                     system_prompt.as_deref(),
                     model_id.as_deref(),
+                    provider.as_deref(),
+                    None,
                     should_submit,
                 );
 
@@ -2504,7 +2520,7 @@ impl ScriptListApp {
                         title,
                         model_id: model_id
                             .unwrap_or_else(|| "claude-3-5-sonnet-20241022".to_string()),
-                        provider: "anthropic".to_string(),
+                        provider: provider.unwrap_or_else(|| "anthropic".to_string()),
                         streaming_started: should_submit,
                     };
                     match sender.try_send(response) {
@@ -2612,8 +2628,10 @@ mod prompt_handler_message_tests {
     use super::{
         build_macos_notify_command_spec, build_macos_say_command_spec,
         classify_prompt_message_route, escape_windows_cmd_open_target, normalize_notify_fields,
-        prompt_coming_soon_warning, unhandled_message_warning, PromptMessageRoute,
+        prompt_coming_soon_warning, resolve_ai_start_chat_provider, unhandled_message_warning,
+        PromptMessageRoute,
     };
+    use crate::ai::providers::OpenAiProvider;
     use crate::PromptMessage;
 
     #[test]
@@ -2721,5 +2739,27 @@ mod prompt_handler_message_tests {
     fn test_escape_windows_cmd_open_target_escapes_shell_metacharacters() {
         let escaped = escape_windows_cmd_open_target(r#"https://example.com/?x=1&y=2|3"#);
         assert_eq!(escaped, r#"https://example.com/?x=1^&y=2^|3"#);
+    }
+
+    #[test]
+    fn test_resolve_ai_start_chat_provider_returns_registered_provider_for_model() {
+        let mut registry = crate::ai::ProviderRegistry::new();
+        registry.register(std::sync::Arc::new(OpenAiProvider::new("test-key")));
+
+        assert_eq!(
+            resolve_ai_start_chat_provider(&registry, "gpt-4o"),
+            Some("openai".to_string())
+        );
+    }
+
+    #[test]
+    fn test_resolve_ai_start_chat_provider_returns_none_for_unknown_model() {
+        let mut registry = crate::ai::ProviderRegistry::new();
+        registry.register(std::sync::Arc::new(OpenAiProvider::new("test-key")));
+
+        assert_eq!(
+            resolve_ai_start_chat_provider(&registry, "claude-3-5-sonnet-20241022"),
+            None
+        );
     }
 }
