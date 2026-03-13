@@ -41,11 +41,7 @@ fn message_to_info(msg: &AiMessage) -> AiMessageInfo {
 /// Handle AiIsOpen request - check if AI window is open
 pub fn handle_ai_is_open(request_id: String) -> Message {
     let is_open = super::is_ai_window_open();
-    let active_chat_id = if is_open {
-        get_active_chat_id()
-    } else {
-        None
-    };
+    let active_chat_id = if is_open { get_active_chat_id() } else { None };
 
     info!(
         request_id = %request_id,
@@ -296,13 +292,16 @@ pub fn handle_ai_focus(request_id: String) -> Option<Message> {
 }
 
 /// Handle AiGetStreamingStatus request
-pub fn handle_ai_get_streaming_status(request_id: String, query_chat_id: Option<String>) -> Message {
+pub fn handle_ai_get_streaming_status(
+    request_id: String,
+    query_chat_id: Option<String>,
+) -> Message {
     let snapshot = get_streaming_snapshot();
 
     // If a specific chat_id was requested, only report streaming for that chat
     let is_relevant = match (&query_chat_id, &snapshot.chat_id) {
         (Some(query), Some(active)) => query == active,
-        (None, _) => true, // No filter, report global status
+        (None, _) => true,        // No filter, report global status
         (Some(_), None) => false, // Querying specific chat but nothing is streaming
     };
 

@@ -98,11 +98,7 @@ impl ChatPrompt {
             )
         } else {
             // No assistant turn yet — show actions toggle as primary
-            (
-                ChatFooterButtonAction::ToggleActionsPanel,
-                "Actions",
-                "⌘K",
-            )
+            (ChatFooterButtonAction::ToggleActionsPanel, "Actions", "⌘K")
         };
 
         let footer_config = PromptFooterConfig::new()

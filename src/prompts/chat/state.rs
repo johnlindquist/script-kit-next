@@ -1,7 +1,5 @@
 use super::*;
 
-const MAX_DROPPED_IMAGE_BYTES: usize = 10 * 1024 * 1024;
-
 fn normalize_to_png_bytes(raw_bytes: &[u8]) -> anyhow::Result<Vec<u8>> {
     use anyhow::Context as _;
 
@@ -360,11 +358,19 @@ impl ChatPrompt {
                             let base64_data =
                                 encoded.strip_prefix("png:").unwrap_or(&encoded).to_string();
 
-                            // Decode to RenderImage for preview
+                            // Decode to check raw size and build preview
                             use base64::Engine;
                             if let Ok(png_bytes) =
                                 base64::engine::general_purpose::STANDARD.decode(&base64_data)
                             {
+                                if png_bytes.len() > MAX_IMAGE_BYTES {
+                                    tracing::warn!(
+                                        size_bytes = png_bytes.len(),
+                                        max_bytes = MAX_IMAGE_BYTES,
+                                        "Rejecting pasted image larger than 10 MB in ChatPrompt"
+                                    );
+                                    return false;
+                                }
                                 if let Ok(render_img) =
                                     crate::list_item::decode_png_to_render_image_with_bgra_conversion(
                                         &png_bytes,
@@ -420,11 +426,11 @@ impl ChatPrompt {
             let data = std::fs::read(path)
                 .with_context(|| format!("Failed to read dropped image: {}", path.display()))?;
 
-            if data.len() > MAX_DROPPED_IMAGE_BYTES {
+            if data.len() > MAX_IMAGE_BYTES {
                 tracing::warn!(
                     path = %path.display(),
                     size_bytes = data.len(),
-                    max_bytes = MAX_DROPPED_IMAGE_BYTES,
+                    max_bytes = MAX_IMAGE_BYTES,
                     "Skipping dropped image larger than 10MB"
                 );
                 return Ok(());
@@ -472,7 +478,10 @@ impl ChatPrompt {
     /// image is base64-encoded and set as the pending image attachment. Escape cancels
     /// the capture silently.
     pub fn capture_screen_area_attachment(&mut self, cx: &mut Context<Self>) {
-        tracing::info!(action = "capture_screen_area_start", "Starting screen area capture for ChatPrompt attachment");
+        tracing::info!(
+            action = "capture_screen_area_start",
+            "Starting screen area capture for ChatPrompt attachment"
+        );
 
         cx.spawn(async move |this, cx| {
             let capture_result = cx
@@ -482,6 +491,15 @@ impl ChatPrompt {
 
             match capture_result {
                 Ok(Some(capture)) => {
+                    if capture.png_data.len() > MAX_IMAGE_BYTES {
+                        tracing::warn!(
+                            size_bytes = capture.png_data.len(),
+                            max_bytes = MAX_IMAGE_BYTES,
+                            "Rejecting screen capture larger than 10 MB in ChatPrompt"
+                        );
+                        return;
+                    }
+
                     use base64::Engine;
                     let base64_data =
                         base64::engine::general_purpose::STANDARD.encode(&capture.png_data);

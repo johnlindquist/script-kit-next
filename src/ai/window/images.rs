@@ -12,6 +12,8 @@ impl AiApp {
     ///
     /// Returns true if an image was pasted (caller should not process text).
     pub(super) fn handle_paste_for_image(&mut self, cx: &mut Context<Self>) -> bool {
+        use crate::prompts::chat::MAX_IMAGE_BYTES;
+
         // Use arboard to read clipboard since it handles images
         match arboard::Clipboard::new() {
             Ok(mut clipboard) => {
@@ -23,6 +25,26 @@ impl AiApp {
                             // Strip the "png:" prefix since we store raw base64
                             let base64_data =
                                 encoded.strip_prefix("png:").unwrap_or(&encoded).to_string();
+
+                            // Check raw PNG size via base64 decode
+                            use base64::Engine;
+                            if let Ok(png_bytes) =
+                                base64::engine::general_purpose::STANDARD.decode(&base64_data)
+                            {
+                                if png_bytes.len() > MAX_IMAGE_BYTES {
+                                    tracing::warn!(
+                                        size_bytes = png_bytes.len(),
+                                        max_bytes = MAX_IMAGE_BYTES,
+                                        "Rejecting pasted image larger than 10 MB in AI window"
+                                    );
+                                    self.streaming_error = Some(
+                                        "Pasted image exceeds 10 MB limit. Try a smaller image."
+                                            .to_string(),
+                                    );
+                                    cx.notify();
+                                    return false;
+                                }
+                            }
 
                             let size_kb = base64_data.len() / 1024;
                             info!(
@@ -143,6 +165,19 @@ impl AiApp {
         // Read and encode the file as base64
         match std::fs::read(path) {
             Ok(data) => {
+                use crate::prompts::chat::MAX_IMAGE_BYTES;
+                if data.len() > MAX_IMAGE_BYTES {
+                    tracing::warn!(
+                        path = ?path,
+                        size_bytes = data.len(),
+                        max_bytes = MAX_IMAGE_BYTES,
+                        "Rejecting dropped image larger than 10 MB in AI window"
+                    );
+                    self.streaming_error =
+                        Some("Dropped image exceeds 10 MB limit. Try a smaller image.".to_string());
+                    cx.notify();
+                    return;
+                }
                 use base64::Engine;
                 let base64_data = base64::engine::general_purpose::STANDARD.encode(&data);
                 self.cache_image_from_base64(&base64_data);
@@ -238,7 +273,10 @@ impl AiApp {
 
     /// Open a native file picker dialog and add selected files as pending attachments.
     pub(super) fn open_file_picker(&mut self, cx: &mut Context<Self>) {
-        info!(action = "open_file_picker", "Opening native file picker for attachments");
+        info!(
+            action = "open_file_picker",
+            "Opening native file picker for attachments"
+        );
 
         let rx = cx.prompt_for_paths(gpui::PathPromptOptions {
             files: true,
@@ -248,35 +286,36 @@ impl AiApp {
             allowed_extensions: Vec::new(),
         });
 
-        cx.spawn(async move |this, cx| {
-            match rx.await {
-                Ok(Ok(Some(paths))) => {
-                    let count = paths.len();
-                    let path_strings: Vec<String> = paths
-                        .into_iter()
-                        .map(|p| p.to_string_lossy().to_string())
-                        .collect();
-                    this.update(cx, |this, cx| {
-                        for path in &path_strings {
-                            this.add_attachment(path.clone(), cx);
-                        }
-                        info!(
-                            action = "file_picker_completed",
-                            files_added = count,
-                            "Files attached via file picker"
-                        );
-                    })
-                    .ok();
-                }
-                Ok(Ok(None)) => {
-                    info!(action = "file_picker_cancelled", "User cancelled file picker");
-                }
-                Ok(Err(e)) => {
-                    tracing::warn!(error = %e, "File picker returned error");
-                }
-                Err(_) => {
-                    tracing::warn!("File picker channel closed unexpectedly");
-                }
+        cx.spawn(async move |this, cx| match rx.await {
+            Ok(Ok(Some(paths))) => {
+                let count = paths.len();
+                let path_strings: Vec<String> = paths
+                    .into_iter()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .collect();
+                this.update(cx, |this, cx| {
+                    for path in &path_strings {
+                        this.add_attachment(path.clone(), cx);
+                    }
+                    info!(
+                        action = "file_picker_completed",
+                        files_added = count,
+                        "Files attached via file picker"
+                    );
+                })
+                .ok();
+            }
+            Ok(Ok(None)) => {
+                info!(
+                    action = "file_picker_cancelled",
+                    "User cancelled file picker"
+                );
+            }
+            Ok(Err(e)) => {
+                tracing::warn!(error = %e, "File picker returned error");
+            }
+            Err(_) => {
+                tracing::warn!("File picker channel closed unexpectedly");
             }
         })
         .detach();
@@ -287,7 +326,10 @@ impl AiApp {
     /// Selected images are read from disk, base64-encoded, cached, and set as the
     /// pending image attachment. Only the last selected image is kept (single pending image).
     pub(super) fn open_image_picker(&mut self, cx: &mut Context<Self>) {
-        info!(action = "open_image_picker", "Opening native image file picker");
+        info!(
+            action = "open_image_picker",
+            "Opening native image file picker"
+        );
 
         let rx = cx.prompt_for_paths(gpui::PathPromptOptions {
             files: true,
@@ -322,6 +364,25 @@ impl AiApp {
                             }
                         };
 
+                        use crate::prompts::chat::MAX_IMAGE_BYTES;
+                        if file_data.len() > MAX_IMAGE_BYTES {
+                            tracing::warn!(
+                                path = %path.display(),
+                                size_bytes = file_data.len(),
+                                max_bytes = MAX_IMAGE_BYTES,
+                                "Rejecting image picker file larger than 10 MB in AI window"
+                            );
+                            this.update(cx, |this, cx| {
+                                this.streaming_error = Some(
+                                    "Selected image exceeds 10 MB limit. Try a smaller image."
+                                        .to_string(),
+                                );
+                                cx.notify();
+                            })
+                            .ok();
+                            return;
+                        }
+
                         use base64::Engine;
                         let base64_data =
                             base64::engine::general_purpose::STANDARD.encode(&file_data);
@@ -341,7 +402,10 @@ impl AiApp {
                     }
                 }
                 Ok(Ok(None)) => {
-                    info!(action = "image_picker_cancelled", "User cancelled image picker");
+                    info!(
+                        action = "image_picker_cancelled",
+                        "User cancelled image picker"
+                    );
                 }
                 Ok(Err(e)) => {
                     tracing::warn!(error = %e, "Image picker returned error");
@@ -360,7 +424,10 @@ impl AiApp {
     /// fullscreen overlay. On completion, the captured image is base64 encoded and set
     /// as the pending image attachment. Escape cancels the capture.
     pub(super) fn capture_screen_area_attachment(&mut self, cx: &mut Context<Self>) {
-        info!(action = "capture_screen_area_start", "Starting screen area capture for AI attachment");
+        info!(
+            action = "capture_screen_area_start",
+            "Starting screen area capture for AI attachment"
+        );
 
         // Run capture on background executor (screencapture -i blocks waiting for user)
         cx.spawn(async move |this, cx| {
@@ -371,6 +438,24 @@ impl AiApp {
 
             match capture_result {
                 Ok(Some(capture)) => {
+                    use crate::prompts::chat::MAX_IMAGE_BYTES;
+                    if capture.png_data.len() > MAX_IMAGE_BYTES {
+                        tracing::warn!(
+                            size_bytes = capture.png_data.len(),
+                            max_bytes = MAX_IMAGE_BYTES,
+                            "Rejecting screen capture larger than 10 MB in AI window"
+                        );
+                        this.update(cx, |this, cx| {
+                            this.streaming_error = Some(
+                                "Screen capture exceeds 10 MB limit. Try capturing a smaller area."
+                                    .to_string(),
+                            );
+                            cx.notify();
+                        })
+                        .ok();
+                        return;
+                    }
+
                     use base64::Engine;
                     let base64_data =
                         base64::engine::general_purpose::STANDARD.encode(&capture.png_data);

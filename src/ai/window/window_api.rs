@@ -258,10 +258,7 @@ pub(super) fn get_pending_chat() -> &'static std::sync::Mutex<Option<Vec<Pending
 ///
 /// Use this for "Continue in Chat" functionality to transfer a conversation
 /// from the chat prompt to the AI window.
-pub fn open_ai_window_with_chat(
-    cx: &mut App,
-    messages: Vec<PendingChatMessage>,
-) -> Result<()> {
+pub fn open_ai_window_with_chat(cx: &mut App, messages: Vec<PendingChatMessage>) -> Result<()> {
     use crate::logging;
 
     logging::log(
@@ -426,9 +423,10 @@ pub fn set_ai_input(cx: &mut App, text: &str, submit: bool) {
 /// Set the main input text with an attached image in the AI window and optionally submit.
 /// The image should be base64 encoded PNG data.
 /// Used by AI commands like "Send Screen to AI Chat".
+///
+/// Guards against window-close races: if the window handle becomes invalid between
+/// the open check and the notify, a warning is logged and the command is not silently lost.
 pub fn set_ai_input_with_image(cx: &mut App, text: &str, image_base64: &str, submit: bool) {
-    use crate::logging;
-
     let handle = {
         let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
         slot.lock().ok().and_then(|g| *g)
@@ -451,7 +449,72 @@ pub fn set_ai_input_with_image(cx: &mut App, text: &str, image_base64: &str, sub
         .unwrap_or(false);
 
     if !command_queued {
-        logging::log("AI", "Cannot set input with image - AI window not open");
+        tracing::warn!(
+            action = "set_ai_input_with_image",
+            "Cannot set input with image — AI window not open"
+        );
+        return;
+    }
+
+    if let Some(handle) = handle {
+        // Validate the window handle is still valid before notifying.
+        // If the window closed between the is_some() check above and now,
+        // handle.update() will return Err and the queued command would be orphaned.
+        let notify_result = handle.update(cx, |_root, _window, cx| {
+            cx.notify();
+        });
+        if notify_result.is_err() {
+            tracing::warn!(
+                action = "set_ai_input_with_image",
+                "AI window closed between queue and notify — command may be lost"
+            );
+        }
+    }
+}
+
+/// Start a new AI chat with a user message.
+///
+/// Creates a chat with a pre-generated ChatId so the caller can return it immediately.
+/// If `submit` is true, the AI will stream a response. If false (noResponse), only the
+/// user message is created.
+pub fn start_ai_chat(
+    cx: &mut App,
+    chat_id: ChatId,
+    message: &str,
+    image: Option<&str>,
+    system_prompt: Option<&str>,
+    model_id: Option<&str>,
+    submit: bool,
+) {
+    let handle = {
+        let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
+    };
+    let window_is_open = handle.is_some();
+    let command_queued = get_pending_commands()
+        .lock()
+        .ok()
+        .map(|mut commands| {
+            ai_window_queue_command_if_open(
+                &mut commands,
+                window_is_open,
+                AiCommand::StartChat {
+                    chat_id,
+                    message: message.to_string(),
+                    image: image.map(|s| s.to_string()),
+                    system_prompt: system_prompt.map(|s| s.to_string()),
+                    model_id: model_id.map(|s| s.to_string()),
+                    submit,
+                },
+            )
+        })
+        .unwrap_or(false);
+
+    if !command_queued {
+        tracing::warn!(
+            chat_id = %chat_id,
+            "Cannot start AI chat - AI window not open"
+        );
         return;
     }
 
@@ -460,6 +523,13 @@ pub fn set_ai_input_with_image(cx: &mut App, text: &str, image_base64: &str, sub
             cx.notify();
         });
     }
+
+    info!(
+        chat_id = %chat_id,
+        submit = submit,
+        has_image = image.is_some(),
+        "ai_sdk.start_chat queued"
+    );
 }
 
 /// Add a file attachment to the AI window.

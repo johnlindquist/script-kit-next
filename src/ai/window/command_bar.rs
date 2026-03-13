@@ -481,11 +481,20 @@ impl AiApp {
     /// Delegates to `handle_paste_for_image` which reads clipboard via arboard,
     /// encodes any image as base64 PNG, and sets it as the pending image attachment.
     pub(super) fn paste_image_from_clipboard(&mut self, cx: &mut Context<Self>) {
-        info!(action = "paste_image_from_clipboard", "Checking clipboard for image data");
+        info!(
+            action = "paste_image_from_clipboard",
+            "Checking clipboard for image data"
+        );
         if self.handle_paste_for_image(cx) {
-            info!(action = "paste_image_from_clipboard_success", "Image pasted from clipboard");
+            info!(
+                action = "paste_image_from_clipboard_success",
+                "Image pasted from clipboard"
+            );
         } else {
-            info!(action = "paste_image_from_clipboard_none", "No image found in clipboard");
+            info!(
+                action = "paste_image_from_clipboard_none",
+                "No image found in clipboard"
+            );
         }
     }
 }
