@@ -477,6 +477,7 @@ pub fn set_ai_input_with_image(cx: &mut App, text: &str, image_base64: &str, sub
 /// Creates a chat with a pre-generated ChatId so the caller can return it immediately.
 /// If `submit` is true, the AI will stream a response. If false (noResponse), only the
 /// user message is created.
+#[allow(clippy::too_many_arguments)]
 pub fn start_ai_chat(
     cx: &mut App,
     chat_id: ChatId,
@@ -484,8 +485,10 @@ pub fn start_ai_chat(
     image: Option<&str>,
     system_prompt: Option<&str>,
     model_id: Option<&str>,
+    provider: Option<&str>,
+    on_created: Option<std::sync::Arc<dyn Fn(String, String) + Send + Sync + 'static>>,
     submit: bool,
-) {
+) -> bool {
     let handle = {
         let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
         slot.lock().ok().and_then(|g| *g)
@@ -504,6 +507,8 @@ pub fn start_ai_chat(
                     image: image.map(|s| s.to_string()),
                     system_prompt: system_prompt.map(|s| s.to_string()),
                     model_id: model_id.map(|s| s.to_string()),
+                    provider: provider.map(|s| s.to_string()),
+                    on_created,
                     submit,
                 },
             )
@@ -515,7 +520,7 @@ pub fn start_ai_chat(
             chat_id = %chat_id,
             "Cannot start AI chat - AI window not open"
         );
-        return;
+        return false;
     }
 
     if let Some(handle) = handle {
@@ -530,6 +535,8 @@ pub fn start_ai_chat(
         has_image = image.is_some(),
         "ai_sdk.start_chat queued"
     );
+
+    true
 }
 
 /// Add a file attachment to the AI window.

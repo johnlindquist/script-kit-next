@@ -1,5 +1,6 @@
 use super::types::*;
 use super::*;
+use crate::theme::opacity::{OPACITY_DISABLED, OPACITY_SUGGESTION_HOVER};
 
 impl AiApp {
     pub(super) fn setup_export_command() -> String {
@@ -19,8 +20,8 @@ impl AiApp {
         // Fixed height container to prevent layout shift when typing
         // Style the container and use appearance(false) on Input to remove its default white background
         // Use vibrancy-compatible background: white with low alpha (similar to selected items)
-        let search_bg = cx.theme().muted.opacity(0.4);
-        let border_color = cx.theme().border.opacity(0.35);
+        let search_bg = cx.theme().muted.opacity(OPACITY_DISABLED);
+        let border_color = cx.theme().border.opacity(OPACITY_SUGGESTION_HOVER);
 
         div()
             .id("search-container")
@@ -50,6 +51,7 @@ impl AiApp {
     /// Toggle sidebar visibility
     pub(super) fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
         self.sidebar_collapsed = !self.sidebar_collapsed;
+        tracing::info!(collapsed = self.sidebar_collapsed, "sidebar_toggled");
         cx.notify();
     }
 

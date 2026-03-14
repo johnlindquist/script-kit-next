@@ -26,13 +26,7 @@ impl AiApp {
             .read(cx)
             .focus_handle(cx)
             .is_focused(window);
-        crate::logging::log(
-            "AI",
-            &format!(
-                "show_command_bar: main_focus={} input_focus={} (input should be false for arrow keys to work)",
-                main_focused, input_focused
-            ),
-        );
+        tracing::debug!(target: "ai", main_focused, input_focused, "show_command_bar focus state (input should be false for arrow keys)");
 
         cx.notify();
     }
@@ -247,7 +241,7 @@ impl AiApp {
             "copy_last_code" => self.copy_last_code_block(cx),
             "submit" => self.submit_message(window, cx),
             "new_chat" => {
-                self.create_chat(window, cx);
+                self.new_conversation(window, cx);
             }
             "delete_chat" => {
                 self.delete_selected_chat(cx);
@@ -281,19 +275,11 @@ impl AiApp {
         let has_cmd = modifiers.contains(&KeyModifier::Cmd);
         let key_lower = key.to_lowercase();
 
-        crate::logging::log(
-            "AI",
-            &format!(
-                "SimulateKey: key='{}' modifiers={:?} command_bar_open={}",
-                key_lower,
-                modifiers,
-                self.command_bar.is_open()
-            ),
-        );
+        tracing::debug!(target: "ai", key = %key_lower, ?modifiers, command_bar_open = self.command_bar.is_open(), "SimulateKey received");
 
         // Handle Cmd+K to toggle command bar
         if has_cmd && key_lower == "k" {
-            crate::logging::log("AI", "SimulateKey: Cmd+K - toggling command bar");
+            tracing::debug!(target: "ai", "SimulateKey: Cmd+K - toggling command bar");
             if self.command_bar.is_open() {
                 self.hide_command_bar(cx);
             } else {
@@ -307,33 +293,30 @@ impl AiApp {
         if self.command_bar.is_open() {
             match key_lower.as_str() {
                 k if is_key_up(k) => {
-                    crate::logging::log("AI", "SimulateKey: Up in command bar");
+                    tracing::debug!(target: "ai", "SimulateKey: Up in command bar");
                     self.command_bar_select_prev(cx);
                 }
                 k if is_key_down(k) => {
-                    crate::logging::log("AI", "SimulateKey: Down in command bar");
+                    tracing::debug!(target: "ai", "SimulateKey: Down in command bar");
                     self.command_bar_select_next(cx);
                 }
                 k if is_key_enter(k) => {
-                    crate::logging::log("AI", "SimulateKey: Enter in command bar");
+                    tracing::debug!(target: "ai", "SimulateKey: Enter in command bar");
                     self.execute_command_bar_action(window, cx);
                 }
                 k if is_key_escape(k) => {
-                    crate::logging::log("AI", "SimulateKey: Escape - closing command bar");
+                    tracing::debug!(target: "ai", "SimulateKey: Escape - closing command bar");
                     self.hide_command_bar(cx);
                 }
                 k if is_key_backspace(k) || is_key_delete(k) => {
-                    crate::logging::log("AI", "SimulateKey: Backspace in command bar");
+                    tracing::debug!(target: "ai", "SimulateKey: Backspace in command bar");
                     self.command_bar_handle_backspace(cx);
                 }
                 _ => {
                     // Handle printable characters for search
                     if let Some(ch) = key_lower.chars().next() {
                         if ch.is_alphanumeric() || ch.is_whitespace() || ch == '-' || ch == '_' {
-                            crate::logging::log(
-                                "AI",
-                                &format!("SimulateKey: Typing '{}' in command bar search", ch),
-                            );
+                            tracing::debug!(target: "ai", char = %ch, "SimulateKey: Typing in command bar search");
                             self.command_bar_handle_char(ch, cx);
                         }
                     }
@@ -357,13 +340,7 @@ impl AiApp {
         // Handle setup mode navigation (when no providers configured)
         let in_setup_mode = self.available_models.is_empty() && !self.showing_api_key_input;
         if in_setup_mode {
-            crate::logging::log(
-                "AI",
-                &format!(
-                    "SimulateKey in setup mode: key='{}' focus_index={}",
-                    key_lower, self.setup_button_focus_index
-                ),
-            );
+            tracing::debug!(target: "ai", key = %key_lower, focus_index = self.setup_button_focus_index, "SimulateKey in setup mode");
             let has_shift = modifiers.contains(&KeyModifier::Shift);
             match key_lower.as_str() {
                 k if is_key_tab(k) => {
@@ -408,10 +385,7 @@ impl AiApp {
                 }
             }
             _ => {
-                crate::logging::log(
-                    "AI",
-                    &format!("SimulateKey: Unhandled key '{}' in AI window", key_lower),
-                );
+                tracing::debug!(target: "ai", key = %key_lower, "SimulateKey: Unhandled key in AI window");
             }
         }
     }

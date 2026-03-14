@@ -244,6 +244,10 @@ fn create_agent() -> ureq::Agent {
 ///
 /// * `reader` - A BufRead implementation (typically from response body)
 /// * `on_data` - Callback invoked for each complete data payload; returns true to continue, false to stop
+// Maximum size for a single SSE event data buffer (16 MB).
+// Prevents unbounded memory growth from malicious or misbehaving servers.
+const SSE_MAX_EVENT_SIZE: usize = 16 * 1024 * 1024;
+
 fn stream_sse_lines<R: BufRead>(
     reader: R,
     mut on_data: impl FnMut(&str) -> Result<bool>,
@@ -276,6 +280,12 @@ fn stream_sse_lines<R: BufRead>(
 
         // Collect data lines
         if let Some(d) = line.strip_prefix("data: ") {
+            if data_buf.len().saturating_add(d.len()) > SSE_MAX_EVENT_SIZE {
+                anyhow::bail!(
+                    "SSE event exceeded maximum size of {} bytes",
+                    SSE_MAX_EVENT_SIZE
+                );
+            }
             if !data_buf.is_empty() {
                 data_buf.push('\n');
             }
@@ -932,17 +942,104 @@ impl AiProvider for AnthropicProvider {
     }
 }
 
-/// Google (Gemini) provider implementation.
+/// Google (Gemini) provider implementation with real API calls.
+///
+/// Uses the Gemini `streamGenerateContent` endpoint for streaming and
+/// `generateContent` for non-streaming requests via the `generativelanguage.googleapis.com` API.
 pub struct GoogleProvider {
     config: ProviderConfig,
+    agent: ureq::Agent,
 }
+
+/// Google Gemini API constants
+const GOOGLE_API_BASE: &str = "https://generativelanguage.googleapis.com/v1beta/models";
 
 impl GoogleProvider {
     /// Create a new Google provider with the given API key.
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
-            config: ProviderConfig::new("google", "Google", api_key),
+            config: ProviderConfig::new("google", "Google Gemini", api_key),
+            agent: create_agent(),
         }
+    }
+
+    /// Build the non-streaming API URL for a given model.
+    fn api_url(&self, model_id: &str) -> String {
+        format!("{}/{}:generateContent", GOOGLE_API_BASE, model_id)
+    }
+
+    /// Build the streaming API URL for a given model.
+    fn stream_api_url(&self, model_id: &str) -> String {
+        format!(
+            "{}/{}:streamGenerateContent?alt=sse",
+            GOOGLE_API_BASE, model_id
+        )
+    }
+
+    /// Build the request body for Gemini API.
+    ///
+    /// Gemini uses a different message format from OpenAI:
+    /// ```json
+    /// {
+    ///   "contents": [
+    ///     {"role": "user", "parts": [{"text": "Hello"}]},
+    ///     {"role": "model", "parts": [{"text": "Hi there!"}]}
+    ///   ],
+    ///   "systemInstruction": {"parts": [{"text": "You are helpful."}]}
+    /// }
+    /// ```
+    fn build_request_body(&self, messages: &[ProviderMessage]) -> serde_json::Value {
+        // Extract system message
+        let system_msg = messages
+            .iter()
+            .find(|m| m.role == "system")
+            .map(|m| m.content.clone());
+
+        // Convert messages to Gemini format (skip system messages)
+        let contents: Vec<serde_json::Value> = messages
+            .iter()
+            .filter(|m| m.role != "system")
+            .map(|m| {
+                let role = if m.role == "assistant" {
+                    "model"
+                } else {
+                    "user"
+                };
+
+                let mut parts: Vec<serde_json::Value> = Vec::new();
+
+                // Add images as inline_data parts
+                for img in &m.images {
+                    parts.push(serde_json::json!({
+                        "inline_data": {
+                            "mime_type": img.media_type,
+                            "data": img.data
+                        }
+                    }));
+                }
+
+                // Add text part
+                if !m.content.is_empty() {
+                    parts.push(serde_json::json!({"text": m.content}));
+                }
+
+                serde_json::json!({
+                    "role": role,
+                    "parts": parts
+                })
+            })
+            .collect();
+
+        let mut body = serde_json::json!({"contents": contents});
+
+        // Add system instruction if present
+        if let Some(system) = system_msg {
+            body["systemInstruction"] = serde_json::json!({
+                "parts": [{"text": system}]
+            });
+        }
+
+        body
     }
 }
 
@@ -960,19 +1057,54 @@ impl AiProvider for GoogleProvider {
     }
 
     fn send_message(&self, messages: &[ProviderMessage], model_id: &str) -> Result<String> {
-        let last_user_msg = messages
-            .iter()
-            .rev()
-            .find(|m| m.role == "user")
-            .map(|m| m.content.as_str())
-            .unwrap_or("(no message)");
+        let body = self.build_request_body(messages);
+        let url = self.api_url(model_id);
 
-        Ok(format!(
-            "[Mock Google Response]\nModel: {}\nProvider: {}\n\nI received your message: \"{}\"",
-            model_id,
-            self.display_name(),
-            last_user_msg
-        ))
+        tracing::debug!(
+            model = model_id,
+            message_count = messages.len(),
+            "Sending non-streaming request to Google Gemini"
+        );
+
+        let response = send_json_with_retry("Google Gemini", "send_message", || {
+            self.agent
+                .post(&url)
+                .header("Content-Type", "application/json")
+                .header("x-goog-api-key", self.config.api_key())
+                .send_json(&body)
+        })
+        .context("Network error connecting to Google Gemini")?;
+
+        let response = handle_http_response(response, "Google Gemini")?;
+
+        let response_json: serde_json::Value = response
+            .into_body()
+            .read_json()
+            .context("Failed to parse Google Gemini response")?;
+
+        // Extract text from: {"candidates": [{"content": {"parts": [{"text": "..."}]}}]}
+        let content = response_json
+            .get("candidates")
+            .and_then(|c| c.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|candidate| candidate.get("content"))
+            .and_then(|content| content.get("parts"))
+            .and_then(|parts| parts.as_array())
+            .map(|parts| {
+                parts
+                    .iter()
+                    .filter_map(|p| p.get("text").and_then(|t| t.as_str()))
+                    .collect::<Vec<_>>()
+                    .join("")
+            })
+            .unwrap_or_default();
+
+        tracing::debug!(
+            content_len = content.len(),
+            "Received non-streaming response from Google Gemini"
+        );
+
+        Ok(content)
     }
 
     fn stream_message(
@@ -982,29 +1114,122 @@ impl AiProvider for GoogleProvider {
         on_chunk: StreamCallback,
         _session_id: Option<&str>,
     ) -> Result<()> {
-        let response = self.send_message(messages, model_id)?;
+        let body = self.build_request_body(messages);
+        let url = self.stream_api_url(model_id);
 
-        for word in response.split_whitespace() {
-            if !on_chunk(format!("{} ", word)) {
-                break;
+        tracing::debug!(
+            model = model_id,
+            message_count = messages.len(),
+            "Starting streaming request to Google Gemini"
+        );
+
+        let response = send_json_with_retry("Google Gemini", "stream_message", || {
+            self.agent
+                .post(&url)
+                .header("Content-Type", "application/json")
+                .header("Accept", "text/event-stream")
+                .header("x-goog-api-key", self.config.api_key())
+                .send_json(&body)
+        })
+        .context("Network error connecting to Google Gemini")?;
+
+        let response = handle_http_response(response, "Google Gemini")?;
+
+        let reader = BufReader::new(response.into_body().into_reader());
+
+        stream_sse_lines(reader, |data| {
+            // Gemini streaming format (SSE with alt=sse):
+            // {"candidates": [{"content": {"parts": [{"text": "..."}]}}]}
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(data) {
+                if let Some(text) = parsed
+                    .get("candidates")
+                    .and_then(|c| c.as_array())
+                    .and_then(|arr| arr.first())
+                    .and_then(|candidate| candidate.get("content"))
+                    .and_then(|content| content.get("parts"))
+                    .and_then(|parts| parts.as_array())
+                    .and_then(|parts| parts.first())
+                    .and_then(|part| part.get("text"))
+                    .and_then(|t| t.as_str())
+                {
+                    if !on_chunk(text.to_string()) {
+                        return Ok(false);
+                    }
+                }
             }
-        }
+            Ok(true)
+        })?;
+
+        tracing::debug!("Completed streaming response from Google Gemini");
 
         Ok(())
     }
 }
 
-/// Groq provider implementation.
+/// Groq provider implementation with real API calls.
+///
+/// Groq uses an OpenAI-compatible API at `api.groq.com/openai/v1`, so the
+/// request/response format is identical to the OpenAI provider.
 pub struct GroqProvider {
     config: ProviderConfig,
+    agent: ureq::Agent,
 }
+
+/// Groq API constants
+const GROQ_API_URL: &str = "https://api.groq.com/openai/v1/chat/completions";
 
 impl GroqProvider {
     /// Create a new Groq provider with the given API key.
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
             config: ProviderConfig::new("groq", "Groq", api_key),
+            agent: create_agent(),
         }
+    }
+
+    /// Build the request body for Groq API (OpenAI-compatible format).
+    fn build_request_body(
+        &self,
+        messages: &[ProviderMessage],
+        model_id: &str,
+        stream: bool,
+    ) -> serde_json::Value {
+        let api_messages: Vec<serde_json::Value> = messages
+            .iter()
+            .map(|m| {
+                if m.has_images() {
+                    let mut content_blocks: Vec<serde_json::Value> = Vec::new();
+                    for img in &m.images {
+                        let data_url = format!("data:{};base64,{}", img.media_type, img.data);
+                        content_blocks.push(serde_json::json!({
+                            "type": "image_url",
+                            "image_url": {"url": data_url}
+                        }));
+                    }
+                    if !m.content.is_empty() {
+                        content_blocks.push(serde_json::json!({
+                            "type": "text",
+                            "text": m.content
+                        }));
+                    }
+                    serde_json::json!({
+                        "role": m.role,
+                        "content": content_blocks
+                    })
+                } else {
+                    serde_json::json!({
+                        "role": m.role,
+                        "content": m.content
+                    })
+                }
+            })
+            .collect();
+
+        serde_json::json!({
+            "model": model_id,
+            "stream": stream,
+            "messages": api_messages
+        })
     }
 }
 
@@ -1022,19 +1247,50 @@ impl AiProvider for GroqProvider {
     }
 
     fn send_message(&self, messages: &[ProviderMessage], model_id: &str) -> Result<String> {
-        let last_user_msg = messages
-            .iter()
-            .rev()
-            .find(|m| m.role == "user")
-            .map(|m| m.content.as_str())
-            .unwrap_or("(no message)");
+        let body = self.build_request_body(messages, model_id, false);
 
-        Ok(format!(
-            "[Mock Groq Response]\nModel: {}\nProvider: {}\n\nI received your message: \"{}\"",
-            model_id,
-            self.display_name(),
-            last_user_msg
-        ))
+        tracing::debug!(
+            model = model_id,
+            message_count = messages.len(),
+            "Sending non-streaming request to Groq"
+        );
+
+        let response = send_json_with_retry("Groq", "send_message", || {
+            self.agent
+                .post(GROQ_API_URL)
+                .header("Content-Type", "application/json")
+                .header(
+                    "Authorization",
+                    &format!("Bearer {}", self.config.api_key()),
+                )
+                .send_json(&body)
+        })
+        .context("Network error connecting to Groq")?;
+
+        let response = handle_http_response(response, "Groq")?;
+
+        let response_json: serde_json::Value = response
+            .into_body()
+            .read_json()
+            .context("Failed to parse Groq response")?;
+
+        // OpenAI-compatible format: {"choices": [{"message": {"content": "..."}}]}
+        let content = response_json
+            .get("choices")
+            .and_then(|c| c.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|choice| choice.get("message"))
+            .and_then(|msg| msg.get("content"))
+            .and_then(|c| c.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        tracing::debug!(
+            content_len = content.len(),
+            "Received non-streaming response from Groq"
+        );
+
+        Ok(content)
     }
 
     fn stream_message(
@@ -1044,13 +1300,52 @@ impl AiProvider for GroqProvider {
         on_chunk: StreamCallback,
         _session_id: Option<&str>,
     ) -> Result<()> {
-        let response = self.send_message(messages, model_id)?;
+        let body = self.build_request_body(messages, model_id, true);
 
-        for word in response.split_whitespace() {
-            if !on_chunk(format!("{} ", word)) {
-                break;
+        tracing::debug!(
+            model = model_id,
+            message_count = messages.len(),
+            "Starting streaming request to Groq"
+        );
+
+        let response = send_json_with_retry("Groq", "stream_message", || {
+            self.agent
+                .post(GROQ_API_URL)
+                .header("Content-Type", "application/json")
+                .header(
+                    "Authorization",
+                    &format!("Bearer {}", self.config.api_key()),
+                )
+                .header("Accept", "text/event-stream")
+                .send_json(&body)
+        })
+        .context("Network error connecting to Groq")?;
+
+        let response = handle_http_response(response, "Groq")?;
+
+        let reader = BufReader::new(response.into_body().into_reader());
+
+        stream_sse_lines(reader, |data| {
+            // OpenAI-compatible streaming format:
+            // {"choices": [{"delta": {"content": "..."}}]}
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(data) {
+                if let Some(content) = parsed
+                    .get("choices")
+                    .and_then(|c| c.as_array())
+                    .and_then(|arr| arr.first())
+                    .and_then(|choice| choice.get("delta"))
+                    .and_then(|delta| delta.get("content"))
+                    .and_then(|c| c.as_str())
+                {
+                    if !on_chunk(content.to_string()) {
+                        return Ok(false);
+                    }
+                }
             }
-        }
+            Ok(true)
+        })?;
+
+        tracing::debug!("Completed streaming response from Groq");
 
         Ok(())
     }
@@ -2850,73 +3145,51 @@ mod tests {
         assert_eq!(unicode_parsed["message"]["content"], "Hello 世界 🌍");
     }
 
-    /// Test that mock providers (Google/Groq) have (Mock) suffix in display names
-    /// This ensures users know when they're using placeholder implementations
+    /// Test that all providers have real implementations (no mock labeling)
     #[test]
-    fn test_mock_provider_labeling_in_models() {
-        // Enable mock providers for this test
-        std::env::set_var("SHOW_MOCK_PROVIDERS", "1");
-
-        // Google provider
+    fn test_provider_models_are_real() {
+        // Google provider has real models
         let google_provider = GoogleProvider::new("test-key");
         let google_models = google_provider.available_models();
-        if !google_models.is_empty() {
-            for model in &google_models {
-                assert!(
-                    model.display_name.contains("(Mock)"),
-                    "Google model '{}' should have (Mock) suffix, but display_name is '{}'",
-                    model.id,
-                    model.display_name
-                );
-                assert!(
-                    model.is_mock_provider(),
-                    "Google model '{}' should report is_mock_provider() = true",
-                    model.id
-                );
-            }
-        }
-
-        // Groq provider
-        let groq_provider = GroqProvider::new("test-key");
-        let groq_models = groq_provider.available_models();
-        if !groq_models.is_empty() {
-            for model in &groq_models {
-                assert!(
-                    model.display_name.contains("(Mock)"),
-                    "Groq model '{}' should have (Mock) suffix, but display_name is '{}'",
-                    model.id,
-                    model.display_name
-                );
-                assert!(
-                    model.is_mock_provider(),
-                    "Groq model '{}' should report is_mock_provider() = true",
-                    model.id
-                );
-            }
-        }
-
-        // Non-mock providers should NOT have (Mock) suffix
-        let openai_provider = OpenAiProvider::new("test-key");
-        for model in openai_provider.available_models() {
+        assert!(
+            !google_models.is_empty(),
+            "Google provider should return models"
+        );
+        for model in &google_models {
             assert!(
                 !model.display_name.contains("(Mock)"),
-                "OpenAI model '{}' should NOT have (Mock) suffix",
+                "Google model '{}' should NOT have (Mock) suffix",
                 model.id
             );
+            assert!(!model.is_mock_provider());
+        }
+
+        // Groq provider has real models
+        let groq_provider = GroqProvider::new("test-key");
+        let groq_models = groq_provider.available_models();
+        assert!(
+            !groq_models.is_empty(),
+            "Groq provider should return models"
+        );
+        for model in &groq_models {
+            assert!(
+                !model.display_name.contains("(Mock)"),
+                "Groq model '{}' should NOT have (Mock) suffix",
+                model.id
+            );
+            assert!(!model.is_mock_provider());
+        }
+
+        // OpenAI and Anthropic also real
+        let openai_provider = OpenAiProvider::new("test-key");
+        for model in openai_provider.available_models() {
             assert!(!model.is_mock_provider());
         }
 
         let anthropic_provider = AnthropicProvider::new("test-key");
         for model in anthropic_provider.available_models() {
-            assert!(
-                !model.display_name.contains("(Mock)"),
-                "Anthropic model '{}' should NOT have (Mock) suffix",
-                model.id
-            );
             assert!(!model.is_mock_provider());
         }
-
-        std::env::remove_var("SHOW_MOCK_PROVIDERS");
     }
 
     /// Test real Claude Code CLI execution (requires `claude` CLI installed)

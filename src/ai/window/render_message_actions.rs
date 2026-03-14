@@ -1,16 +1,18 @@
 use super::*;
 use crate::theme::opacity::{
-    OPACITY_BORDER, OPACITY_HOVER, OPACITY_ICON_MUTED, OPACITY_SELECTED, OPACITY_STRONG,
-    OPACITY_TEXT_MUTED,
+    OPACITY_HOVER, OPACITY_ICON_MUTED, OPACITY_SELECTED, OPACITY_STRONG, OPACITY_TEXT_MUTED,
 };
+use gpui::{Div, Stateful, Svg};
 
-fn ai_message_actions_can_copy_chat_transcript(message_count: usize, is_streaming: bool) -> bool {
-    message_count > 0 && !is_streaming
-}
+/// Shortcut hint opacity: dimmer than muted text
+const SHORTCUT_OPACITY: f32 = OPACITY_TEXT_MUTED * 0.6;
 
 impl AiApp {
     pub(super) fn render_message_actions(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let muted_fg = cx.theme().muted_foreground;
+        let success = cx.theme().success;
+        let muted_bg = cx.theme().muted;
+        let mouse_mode = self.input_mode == InputMode::Mouse;
 
         // Show "Generated in Xs · ~N words" for 8 seconds after streaming completes
         let completion_label: Option<String> =
@@ -25,7 +27,6 @@ impl AiApp {
                                 format!("{}s", secs)
                             }
                         };
-                        // Count words in the last assistant message
                         let word_count = self
                             .current_messages
                             .last()
@@ -53,196 +54,206 @@ impl AiApp {
                 }
             });
 
+        // Copy button state
+        let last_assistant_id = self
+            .current_messages
+            .last()
+            .filter(|m| m.role == MessageRole::Assistant)
+            .map(|m| m.id.clone());
+        let is_copied = last_assistant_id
+            .as_ref()
+            .map(|id| self.is_message_copied(id))
+            .unwrap_or(false);
+
+        // Export button state
+        let is_exported = self.is_showing_export_feedback();
+
         div()
             .id("message-actions")
             .flex()
-            .items_center()
-            .gap(S2)
+            .flex_col()
+            .gap(S1)
             .pl(MSG_PX)
             .mt(S1)
             .mb(S2)
+            // Row 1: Regenerate, Copy ⌘⇧C, Export .md ⌘⇧E
             .child(
                 div()
-                    .id("regenerate-btn")
                     .flex()
+                    .flex_wrap()
                     .items_center()
-                    .gap(S1)
-                    .px(S2)
-                    .py(S1)
-                    .rounded(R_SM)
-                    .cursor_pointer()
-                    .text_xs()
-                    .text_color(muted_fg.opacity(OPACITY_TEXT_MUTED))
-                    .hover(|s| {
-                        s.bg(cx.theme().muted.opacity(OPACITY_HOVER))
-                            .text_color(muted_fg)
-                    })
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.regenerate_response(window, cx);
-                    }))
+                    .gap(S2)
+                    // Regenerate
                     .child(
-                        svg()
-                            .external_path(LocalIconName::Refresh.external_path())
-                            .size(ICON_XS)
-                            .text_color(muted_fg.opacity(OPACITY_ICON_MUTED)),
+                        action_btn_base("regenerate-btn", muted_fg, muted_bg, mouse_mode)
+                            .child(action_icon(
+                                LocalIconName::Refresh,
+                                muted_fg.opacity(OPACITY_ICON_MUTED),
+                            ))
+                            .child("Regenerate")
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                tracing::info!(
+                                    action = "regenerate",
+                                    "action_strip_button_clicked"
+                                );
+                                this.regenerate_response(window, cx);
+                            })),
                     )
-                    .child("Regenerate"),
-            )
-            // Copy response button
-            .child({
-                let last_assistant_id = self
-                    .current_messages
-                    .last()
-                    .filter(|m| m.role == MessageRole::Assistant)
-                    .map(|m| m.id.clone());
-                let is_copied = last_assistant_id
-                    .as_ref()
-                    .map(|id| self.is_message_copied(id))
-                    .unwrap_or(false);
-                let (icon, label, icon_color) = if is_copied {
-                    (
-                        LocalIconName::Check,
-                        "Copied!",
-                        cx.theme().success.opacity(OPACITY_STRONG),
-                    )
-                } else {
-                    (
-                        LocalIconName::Copy,
-                        "Copy",
-                        muted_fg.opacity(OPACITY_SELECTED),
-                    )
-                };
-                div()
-                    .id("copy-response-btn")
-                    .flex()
-                    .items_center()
-                    .gap(S1)
-                    .px(S2)
-                    .py(S1)
-                    .rounded(R_SM)
-                    .cursor_pointer()
-                    .text_xs()
-                    .text_color(if is_copied {
-                        cx.theme().success.opacity(OPACITY_STRONG)
-                    } else {
-                        muted_fg.opacity(OPACITY_TEXT_MUTED)
-                    })
-                    .hover(|s| {
-                        s.bg(cx.theme().muted.opacity(OPACITY_HOVER))
-                            .text_color(muted_fg)
-                    })
-                    .on_click(cx.listener(|this, _, _window, cx| {
-                        this.copy_last_assistant_response(cx);
-                    }))
-                    .child(
-                        svg()
-                            .external_path(icon.external_path())
-                            .size(ICON_XS)
-                            .text_color(icon_color),
-                    )
-                    .child(label)
-            })
-            // Copy full chat transcript button
-            .child({
-                let can_copy_chat = ai_message_actions_can_copy_chat_transcript(
-                    self.current_messages.len(),
-                    self.is_streaming,
-                );
-                let is_copied = self.is_showing_chat_transcript_copied_feedback();
-                let (icon, label, icon_color) = if is_copied {
-                    (
-                        LocalIconName::Check,
-                        "Copied!",
-                        cx.theme().success.opacity(OPACITY_STRONG),
-                    )
-                } else {
-                    (
-                        LocalIconName::Copy,
-                        "Copy chat",
-                        if can_copy_chat {
-                            muted_fg.opacity(OPACITY_SELECTED)
-                        } else {
-                            muted_fg.opacity(OPACITY_HOVER)
-                        },
-                    )
-                };
-
-                div()
-                    .id("copy-chat-btn")
-                    .flex()
-                    .items_center()
-                    .gap(S1)
-                    .px(S2)
-                    .py(S1)
-                    .rounded(R_SM)
-                    .when(can_copy_chat, |d| {
-                        d.cursor_pointer()
-                            .hover(|s| {
-                                s.bg(cx.theme().muted.opacity(OPACITY_HOVER))
-                                    .text_color(muted_fg)
-                            })
+                    // Copy ⌘⇧C
+                    .child(if is_copied {
+                        action_btn_base("copy-response-btn", muted_fg, muted_bg, mouse_mode)
+                            .text_color(success.opacity(OPACITY_STRONG))
+                            .child(action_icon(
+                                LocalIconName::Check,
+                                success.opacity(OPACITY_STRONG),
+                            ))
+                            .child("Copied!")
+                            .child(shortcut_hint("\u{2318}\u{21e7}C", muted_fg))
                             .on_click(cx.listener(|this, _, _window, cx| {
-                                this.copy_chat_transcript(cx);
+                                this.copy_last_assistant_response(cx);
+                            }))
+                    } else {
+                        action_btn_base("copy-response-btn", muted_fg, muted_bg, mouse_mode)
+                            .child(action_icon(
+                                LocalIconName::Copy,
+                                muted_fg.opacity(OPACITY_SELECTED),
+                            ))
+                            .child("Copy")
+                            .child(shortcut_hint("\u{2318}\u{21e7}C", muted_fg))
+                            .on_click(cx.listener(|this, _, _window, cx| {
+                                tracing::info!(
+                                    action = "copy_response",
+                                    "action_strip_button_clicked"
+                                );
+                                this.copy_last_assistant_response(cx);
                             }))
                     })
-                    .text_xs()
-                    .text_color(if is_copied {
-                        cx.theme().success.opacity(OPACITY_STRONG)
-                    } else if can_copy_chat {
-                        muted_fg.opacity(OPACITY_TEXT_MUTED)
+                    // Export .md ⌘⇧E
+                    .child(if is_exported {
+                        action_btn_base("export-btn", muted_fg, muted_bg, mouse_mode)
+                            .text_color(success.opacity(OPACITY_STRONG))
+                            .child(action_icon(
+                                LocalIconName::Check,
+                                success.opacity(OPACITY_STRONG),
+                            ))
+                            .child("Exported!")
+                            .child(shortcut_hint("\u{2318}\u{21e7}E", muted_fg))
+                            .on_click(cx.listener(|this, _, _window, cx| {
+                                this.export_chat_to_clipboard(cx);
+                            }))
                     } else {
-                        muted_fg.opacity(OPACITY_BORDER)
-                    })
+                        action_btn_base("export-btn", muted_fg, muted_bg, mouse_mode)
+                            .child(action_icon(
+                                LocalIconName::ArrowDown,
+                                muted_fg.opacity(OPACITY_ICON_MUTED),
+                            ))
+                            .child("Export .md")
+                            .child(shortcut_hint("\u{2318}\u{21e7}E", muted_fg))
+                            .on_click(cx.listener(|this, _, _window, cx| {
+                                tracing::info!(action = "export_md", "action_strip_button_clicked");
+                                this.export_chat_to_clipboard(cx);
+                            }))
+                    }),
+            )
+            // Row 2: New Chat ⌘N, Search Chats ⌘⇧F, Generated-in label
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap(S2)
+                    // New Chat ⌘N
                     .child(
-                        svg()
-                            .external_path(icon.external_path())
-                            .size(ICON_XS)
-                            .text_color(icon_color),
+                        action_btn_base("new-chat-btn", muted_fg, muted_bg, mouse_mode)
+                            .child(action_icon(
+                                LocalIconName::Plus,
+                                muted_fg.opacity(OPACITY_ICON_MUTED),
+                            ))
+                            .child("New Chat")
+                            .child(shortcut_hint("\u{2318}N", muted_fg))
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                tracing::info!(action = "new_chat", "action_strip_button_clicked");
+                                this.new_conversation(window, cx);
+                            })),
                     )
-                    .child(label)
-            })
-            // "Generated in Xs" completion feedback (fades after 5 seconds)
-            .when_some(completion_label, |el, label| {
-                el.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(S1)
-                        .text_xs()
-                        .text_color(cx.theme().success.opacity(OPACITY_STRONG))
-                        .child(
-                            svg()
-                                .external_path(LocalIconName::Check.external_path())
-                                .size(ICON_XS)
-                                .text_color(cx.theme().success.opacity(OPACITY_SELECTED)),
+                    // Search Chats ⌘⇧F
+                    .child(
+                        action_btn_base("search-chats-btn", muted_fg, muted_bg, mouse_mode)
+                            .child(action_icon(
+                                LocalIconName::MagnifyingGlass,
+                                muted_fg.opacity(OPACITY_ICON_MUTED),
+                            ))
+                            .child("Search Chats")
+                            .child(shortcut_hint("\u{2318}\u{21e7}F", muted_fg))
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                tracing::info!(
+                                    action = "search_chats",
+                                    "action_strip_button_clicked"
+                                );
+                                if this.sidebar_collapsed {
+                                    this.sidebar_collapsed = false;
+                                }
+                                this.focus_search(window, cx);
+                                cx.notify();
+                            })),
+                    )
+                    // Spacer pushes generated-in label to the end
+                    .child(div().flex_1())
+                    // Generated-in label (right-aligned)
+                    .when_some(completion_label, |el, label| {
+                        el.child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(S1)
+                                .text_xs()
+                                .text_color(success.opacity(OPACITY_STRONG))
+                                .child(action_icon(
+                                    LocalIconName::Check,
+                                    success.opacity(OPACITY_SELECTED),
+                                ))
+                                .child(format!("Generated in {}", label)),
                         )
-                        .child(format!("Generated in {}", label)),
-                )
-            })
+                    }),
+            )
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::ai_message_actions_can_copy_chat_transcript;
+/// Base styled div for action strip buttons.
+fn action_btn_base(
+    id: &'static str,
+    muted_fg: gpui::Hsla,
+    muted_bg: gpui::Hsla,
+    mouse_mode: bool,
+) -> Stateful<Div> {
+    div()
+        .id(id)
+        .flex()
+        .items_center()
+        .gap(S1)
+        .px(S2)
+        .py(S1)
+        .rounded(R_SM)
+        .cursor_pointer()
+        .text_xs()
+        .text_color(muted_fg.opacity(OPACITY_TEXT_MUTED))
+        .when(mouse_mode, |d| {
+            d.hover(|s| s.bg(muted_bg.opacity(OPACITY_HOVER)).text_color(muted_fg))
+        })
+}
 
-    #[test]
-    fn test_ai_message_actions_can_copy_chat_transcript_requires_messages() {
-        assert!(
-            !ai_message_actions_can_copy_chat_transcript(0, false),
-            "Copy chat should stay disabled when there are no messages"
-        );
-        assert!(
-            ai_message_actions_can_copy_chat_transcript(1, false),
-            "Copy chat should be enabled with at least one message and no stream"
-        );
-    }
+/// Small SVG icon for action buttons.
+fn action_icon(icon: LocalIconName, color: gpui::Hsla) -> Svg {
+    svg()
+        .external_path(icon.external_path())
+        .size(ICON_XS)
+        .text_color(color)
+}
 
-    #[test]
-    fn test_ai_message_actions_can_copy_chat_transcript_disables_during_streaming() {
-        assert!(
-            !ai_message_actions_can_copy_chat_transcript(3, true),
-            "Copy chat should stay disabled while streaming"
-        );
-    }
+/// Muted shortcut hint text (e.g. "⌘⇧C").
+fn shortcut_hint(text: &'static str, muted_fg: gpui::Hsla) -> Div {
+    div()
+        .text_xs()
+        .text_color(muted_fg.opacity(SHORTCUT_OPACITY))
+        .child(text)
 }

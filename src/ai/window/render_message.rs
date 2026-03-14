@@ -1,7 +1,7 @@
 use super::*;
 use crate::theme::opacity::{
-    OPACITY_MESSAGE_ASSISTANT_BACKGROUND, OPACITY_MESSAGE_USER_BACKGROUND, OPACITY_MUTED,
-    OPACITY_SELECTED, OPACITY_STRONG, OPACITY_SUBTLE,
+    OPACITY_HIDDEN, OPACITY_MESSAGE_ASSISTANT_BACKGROUND, OPACITY_MESSAGE_USER_BACKGROUND,
+    OPACITY_MUTED, OPACITY_SELECTED, OPACITY_STRONG, OPACITY_SUBTLE,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,7 +26,7 @@ pub(super) fn message_bubble_cue(role: MessageRole) -> MessageBubbleCue {
         },
         MessageRole::Assistant => MessageBubbleCue {
             background_tone: MessageCueTone::Muted,
-            background_opacity: 0.0,
+            background_opacity: OPACITY_MESSAGE_ASSISTANT_BACKGROUND,
             italic: false,
         },
         MessageRole::System => MessageBubbleCue {
@@ -148,7 +148,7 @@ impl AiApp {
                                 .flex()
                                 .items_center()
                                 .gap(S1)
-                                .opacity(0.0)
+                                .opacity(OPACITY_HIDDEN)
                                 .group_hover("message", |s| s.opacity(1.0))
                                 // Edit button for user messages
                                 .when(is_user, |el| {
@@ -241,7 +241,7 @@ impl AiApp {
                 div()
                     .w_full()
                     .px(MSG_PX)
-                    .py(S3)
+                    .py(MSG_PY)
                     .rounded(MSG_RADIUS)
                     .bg(bubble_bg)
                     .when(cue.italic, |d| d.italic())
@@ -264,8 +264,8 @@ impl AiApp {
                                                 img(move |_window: &mut Window, _cx: &mut App| {
                                                     Some(Ok(render_img.clone()))
                                                 })
-                                                .w(px(120.))
-                                                .h(px(120.))
+                                                .w(IMG_THUMBNAIL_SIZE)
+                                                .h(IMG_THUMBNAIL_SIZE)
                                                 .object_fit(gpui::ObjectFit::Cover),
                                             )
                                     }),
@@ -286,7 +286,8 @@ impl AiApp {
                         } else {
                             Self::message_body_content(&message.content)
                         };
-                        let should_show_toggle = message.content.len() > 800;
+                        let should_show_toggle =
+                            message.content.len() > MSG_COLLAPSE_CHAR_THRESHOLD;
                         let toggle_msg_id = msg_id.clone();
                         let total_words = message.content.split_whitespace().count();
                         let hidden_words = if is_collapsed {
@@ -373,9 +374,11 @@ mod tests {
         let system_cue = message_bubble_cue(MessageRole::System);
 
         assert!(user_cue.background_opacity > 0.0);
-        // Assistant messages have no background (transparent)
-        assert!((assistant_cue.background_opacity - 0.0).abs() < f32::EPSILON);
+        // Assistant messages have a subtle background tint
+        assert!(assistant_cue.background_opacity > 0.0);
         assert!(system_cue.background_opacity > 0.0);
+        // User bubble should be more prominent than assistant
+        assert!(user_cue.background_opacity > assistant_cue.background_opacity);
         assert!(!assistant_cue.italic);
         assert!(system_cue.italic);
     }

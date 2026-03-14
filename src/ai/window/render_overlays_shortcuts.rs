@@ -1,4 +1,5 @@
 use super::*;
+use crate::theme::opacity::{OPACITY_HOVER, OPACITY_MESSAGE_ASSISTANT_BACKGROUND};
 
 impl AiApp {
     pub(super) fn render_command_bar_overlay(&self, _cx: &mut Context<Self>) -> impl IntoElement {
@@ -84,7 +85,7 @@ impl AiApp {
                                     .px(S2)
                                     .py(S1)
                                     .rounded(R_SM)
-                                    .bg(cx.theme().muted.opacity(0.3))
+                                    .bg(cx.theme().muted.opacity(OPACITY_HOVER))
                                     .text_xs()
                                     .text_color(muted)
                                     .child("\u{2318} /"),
@@ -107,7 +108,7 @@ impl AiApp {
                                     .px(S2)
                                     .py(S1)
                                     .rounded(R_SM)
-                                    .bg(accent.opacity(0.1))
+                                    .bg(accent.opacity(OPACITY_MESSAGE_ASSISTANT_BACKGROUND))
                                     .text_xs()
                                     .font_weight(gpui::FontWeight::MEDIUM)
                                     .text_color(accent)

@@ -89,59 +89,37 @@ impl AiApp {
         should_persist_stale_completion(&mut self.suppressed_orphan_sessions, session_key)
     }
 
-    /// Handle search query changes - filters chats in real-time as user types
+    /// Debounce delay for search input (milliseconds).
+    /// Delays the DB query so rapid keystrokes don't fire a query per character.
+    pub(crate) const SEARCH_DEBOUNCE_MS: u64 = 150;
+
+    /// Handle search query changes - filters chats asynchronously as user types.
+    ///
+    /// Uses a 150ms debounce: each keystroke cancels the previous timer and starts
+    /// a new one. Empty queries bypass the debounce for instant feedback.
+    /// A generation counter discards stale results when the user types faster
+    /// than the search completes.
     pub(super) fn on_search_change(&mut self, cx: &mut Context<Self>) {
         let query = self.search_state.read(cx).value().to_string();
         self.search_query = query.clone();
+        self.search_generation += 1;
+        let generation = self.search_generation;
 
-        debug!(query = %query, "Search query changed");
+        info!(
+            query = %query,
+            generation = generation,
+            "search_query_changed"
+        );
 
-        // If search is not empty, filter chats
-        if !query.trim().is_empty() {
-            let search_query = query.trim();
-            let mut used_fallback = false;
+        // Empty query: synchronous clear, no debounce, instant UX
+        if query.trim().is_empty() {
+            // Cancel any pending debounce task
+            self.search_debounce_task = None;
 
-            self.chats = match storage::search_chats(search_query) {
-                Ok(chats) => chats,
-                Err(error) => {
-                    used_fallback = true;
-                    tracing::warn!(
-                        error = %error,
-                        query = %search_query,
-                        "Storage-backed chat search failed, falling back to title filter"
-                    );
-                    let query_lower = search_query.to_lowercase();
-                    storage::get_all_chats()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .filter(|chat| chat.title.to_lowercase().contains(&query_lower))
-                        .collect()
-                }
-            };
-
-            debug!(
-                results = self.chats.len(),
-                used_fallback = used_fallback,
-                "Search filtered chats"
-            );
-
-            // Always select first result when filtering
-            if !self.chats.is_empty() {
-                let first_id = self.chats[0].id;
-                if self.selected_chat_id != Some(first_id) {
-                    self.selected_chat_id = Some(first_id);
-                    // Load messages for the selected chat
-                    self.current_messages =
-                        storage::get_chat_messages(&first_id).unwrap_or_default();
-                    self.cache_message_images(&self.current_messages.clone());
-                }
-            } else {
-                self.selected_chat_id = None;
-                self.current_messages = Vec::new();
-            }
-        } else {
-            // Reload all chats when search is cleared
             self.chats = storage::get_all_chats().unwrap_or_default();
+            self.search_snippets.clear();
+            self.search_matched_title.clear();
+
             // Keep current selection if it still exists, otherwise select first
             if let Some(id) = self.selected_chat_id {
                 if !self.chats.iter().any(|c| c.id == id) {
@@ -153,8 +131,105 @@ impl AiApp {
                     }
                 }
             }
+
+            info!(generation = generation, "search_cleared_synchronous");
+
+            cx.notify();
+            return;
         }
 
-        cx.notify();
+        let search_query = query.trim().to_string();
+
+        // Debounce: cancel previous task (by replacing it) and start a new timer.
+        // Dropping the old Task cancels it via GPUI's task cancellation.
+        let debounce_task = cx.spawn(async move |this, cx| {
+            // Wait for the debounce interval
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(Self::SEARCH_DEBOUNCE_MS))
+                .await;
+
+            info!(
+                generation = generation,
+                query = %search_query,
+                debounce_ms = Self::SEARCH_DEBOUNCE_MS,
+                "search_debounce_fired"
+            );
+
+            // Run the actual DB search on background executor
+            let query_for_search = search_query.clone();
+            let results: anyhow::Result<Vec<storage::ChatSearchResult>> = cx
+                .background_executor()
+                .spawn(async move { storage::search_chats_with_snippets(&query_for_search) })
+                .await;
+
+            this.update(cx, |this, cx| {
+                // Clear the debounce task handle now that we're executing
+                this.search_debounce_task = None;
+
+                // Discard stale results: only apply if generation still matches
+                if this.search_generation != generation {
+                    info!(
+                        expected_generation = generation,
+                        current_generation = this.search_generation,
+                        "search_results_discarded_stale"
+                    );
+                    return;
+                }
+
+                match results {
+                    Ok(search_results) => {
+                        info!(
+                            generation = generation,
+                            count = search_results.len(),
+                            "search_results_applied"
+                        );
+
+                        // Extract snippets and chats
+                        this.search_snippets.clear();
+                        this.search_matched_title.clear();
+                        let mut chats = Vec::with_capacity(search_results.len());
+
+                        for result in search_results {
+                            let chat_id = result.chat.id;
+                            if let Some(snippet) = result.match_snippet {
+                                this.search_snippets.insert(chat_id, snippet);
+                            }
+                            this.search_matched_title
+                                .insert(chat_id, result.matched_title);
+                            chats.push(result.chat);
+                        }
+
+                        this.chats = chats;
+
+                        // Select first result
+                        if !this.chats.is_empty() {
+                            let first_id = this.chats[0].id;
+                            if this.selected_chat_id != Some(first_id) {
+                                this.selected_chat_id = Some(first_id);
+                                this.current_messages =
+                                    storage::get_chat_messages(&first_id).unwrap_or_default();
+                                this.cache_message_images(&this.current_messages.clone());
+                            }
+                        } else {
+                            this.selected_chat_id = None;
+                            this.current_messages = Vec::new();
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            error = %e,
+                            generation = generation,
+                            "search_failed"
+                        );
+                    }
+                }
+
+                cx.notify();
+            })
+            .ok();
+        });
+
+        // Store the task — this drops (cancels) any previously pending debounce
+        self.search_debounce_task = Some(debounce_task);
     }
 }

@@ -182,23 +182,18 @@ impl ModelInfo {
         }
     }
 
-    /// Check if this model is from a mock provider (Google or Groq).
-    /// These providers have placeholder implementations that return fake responses.
+    /// Check if this model is from a mock/placeholder provider.
+    ///
+    /// Currently all providers have real API implementations, so this always returns false.
+    /// Kept for backwards compatibility in case future providers are added as stubs.
     pub fn is_mock_provider(&self) -> bool {
-        matches!(self.provider.as_str(), "google" | "groq")
+        false
     }
 
     /// Log a warning if this is a mock provider model.
-    /// Call this when a model is selected to inform users about mock status.
+    /// Currently a no-op since all providers have real implementations.
     pub fn warn_if_mock(&self) {
-        if self.is_mock_provider() {
-            tracing::warn!(
-                provider = %self.provider,
-                model_id = %self.id,
-                "Selected mock provider {}, responses are not real",
-                self.provider
-            );
-        }
+        // No-op: all providers are real
     }
 }
 
@@ -248,17 +243,14 @@ fn read_env_nonempty(name: &str) -> Option<String> {
 fn read_key_env_or_keyring(name: &str) -> Option<String> {
     // First check environment variable
     if let Some(value) = read_env_nonempty(name) {
-        crate::logging::log(
-            "CONFIG",
-            &format!("Found API key in environment variable: {}", name),
-        );
+        tracing::info!(target: "ai::config", key_name = %name, source = "env", "Found API key");
         return Some(value);
     }
 
     // Fall back to keyring
     let keyring_result = get_secret(name);
     if keyring_result.is_some() {
-        crate::logging::log("CONFIG", &format!("Found API key in keyring for: {}", name));
+        tracing::info!(target: "ai::config", key_name = %name, source = "keyring", "Found API key");
     }
     keyring_result
 }
@@ -382,30 +374,32 @@ pub mod default_models {
     }
 
     /// Get default Google (Gemini) models.
-    /// NOTE: These are mock implementations - real API integration not yet complete.
     pub fn google() -> Vec<ModelInfo> {
-        // Only include mock providers if SHOW_MOCK_PROVIDERS=1 is set
-        if !should_show_mock_providers() {
-            return vec![];
-        }
         vec![
             ModelInfo::new(
-                "gemini-2.0-flash-exp",
-                "Gemini 2.0 Flash (Mock)",
+                "gemini-2.0-flash",
+                "Gemini 2.0 Flash",
+                "google",
+                true,
+                1_000_000,
+            ),
+            ModelInfo::new(
+                "gemini-2.0-flash-lite",
+                "Gemini 2.0 Flash Lite",
                 "google",
                 true,
                 1_000_000,
             ),
             ModelInfo::new(
                 "gemini-1.5-pro",
-                "Gemini 1.5 Pro (Mock)",
+                "Gemini 1.5 Pro",
                 "google",
                 true,
                 2_000_000,
             ),
             ModelInfo::new(
                 "gemini-1.5-flash",
-                "Gemini 1.5 Flash (Mock)",
+                "Gemini 1.5 Flash",
                 "google",
                 true,
                 1_000_000,
@@ -414,87 +408,30 @@ pub mod default_models {
     }
 
     /// Get default Groq models.
-    /// NOTE: These are mock implementations - real API integration not yet complete.
     pub fn groq() -> Vec<ModelInfo> {
-        // Only include mock providers if SHOW_MOCK_PROVIDERS=1 is set
-        if !should_show_mock_providers() {
-            return vec![];
-        }
         vec![
             ModelInfo::new(
                 "llama-3.3-70b-versatile",
-                "Llama 3.3 70B (Mock)",
+                "Llama 3.3 70B Versatile",
                 "groq",
                 true,
                 128_000,
             ),
             ModelInfo::new(
                 "llama-3.1-8b-instant",
-                "Llama 3.1 8B Instant (Mock)",
+                "Llama 3.1 8B Instant",
                 "groq",
                 true,
                 128_000,
             ),
-            ModelInfo::new(
-                "mixtral-8x7b-32768",
-                "Mixtral 8x7B (Mock)",
-                "groq",
-                true,
-                32_768,
-            ),
+            ModelInfo::new("mixtral-8x7b-32768", "Mixtral 8x7B", "groq", true, 32_768),
         ]
-    }
-
-    /// Check if mock providers should be shown in the UI.
-    /// Returns true if SHOW_MOCK_PROVIDERS=1 is set in the environment.
-    fn should_show_mock_providers() -> bool {
-        std::env::var("SHOW_MOCK_PROVIDERS")
-            .map(|v: String| v == "1" || v.to_lowercase() == "true")
-            .unwrap_or(false)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Mutex, OnceLock};
-
-    static SHOW_MOCK_PROVIDERS_TEST_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-
-    struct ShowMockProvidersEnvRestore {
-        previous_value: Option<String>,
-    }
-
-    impl Drop for ShowMockProvidersEnvRestore {
-        fn drop(&mut self) {
-            match &self.previous_value {
-                Some(value) => std::env::set_var("SHOW_MOCK_PROVIDERS", value),
-                None => std::env::remove_var("SHOW_MOCK_PROVIDERS"),
-            }
-        }
-    }
-
-    fn with_show_mock_providers_env_for_test<T>(
-        value: Option<&str>,
-        test_fn: impl FnOnce() -> T,
-    ) -> T {
-        let lock = SHOW_MOCK_PROVIDERS_TEST_LOCK.get_or_init(|| Mutex::new(()));
-        let _guard = lock
-            .lock()
-            .expect("SHOW_MOCK_PROVIDERS_TEST_LOCK should not be poisoned");
-        let restore = ShowMockProvidersEnvRestore {
-            previous_value: std::env::var("SHOW_MOCK_PROVIDERS").ok(),
-        };
-
-        match value {
-            Some(v) => std::env::set_var("SHOW_MOCK_PROVIDERS", v),
-            None => std::env::remove_var("SHOW_MOCK_PROVIDERS"),
-        }
-
-        let result = test_fn();
-        drop(restore);
-        result
-    }
 
     #[test]
     fn test_provider_config_creation() {
@@ -670,27 +607,27 @@ mod tests {
     }
 
     #[test]
-    fn test_is_mock_provider_google() {
+    fn test_is_not_mock_provider_google() {
         let model = ModelInfo::new(
-            "gemini-1.5-pro",
-            "Gemini 1.5 Pro (Mock)",
+            "gemini-2.0-flash",
+            "Gemini 2.0 Flash",
             "google",
             true,
-            2_000_000,
+            1_000_000,
         );
-        assert!(model.is_mock_provider());
+        assert!(!model.is_mock_provider());
     }
 
     #[test]
-    fn test_is_mock_provider_groq() {
+    fn test_is_not_mock_provider_groq() {
         let model = ModelInfo::new(
-            "llama-3.3-70b",
-            "Llama 3.3 70B (Mock)",
+            "llama-3.3-70b-versatile",
+            "Llama 3.3 70B Versatile",
             "groq",
             true,
             128_000,
         );
-        assert!(model.is_mock_provider());
+        assert!(!model.is_mock_provider());
     }
 
     #[test]
@@ -712,53 +649,24 @@ mod tests {
     }
 
     #[test]
-    fn test_mock_providers_hidden_by_default() {
-        // Without SHOW_MOCK_PROVIDERS enabled, google() and groq() should return empty.
-        with_show_mock_providers_env_for_test(None, || {
-            let google_models = default_models::google();
-            let groq_models = default_models::groq();
-            assert!(
-                google_models.is_empty(),
-                "Google models should be hidden by default"
-            );
-            assert!(
-                groq_models.is_empty(),
-                "Groq models should be hidden by default"
-            );
-        });
+    fn test_google_models_always_available() {
+        let google_models = default_models::google();
+        assert!(
+            !google_models.is_empty(),
+            "Google models should always be available"
+        );
+        assert!(google_models.iter().any(|m| m.id == "gemini-2.0-flash"));
     }
 
     #[test]
-    fn test_mock_providers_shown_when_enabled() {
-        // With SHOW_MOCK_PROVIDERS=1, google() and groq() should return models.
-        with_show_mock_providers_env_for_test(Some("1"), || {
-            let google_models = default_models::google();
-            let groq_models = default_models::groq();
-
-            assert!(
-                !google_models.is_empty(),
-                "Google models should be shown when SHOW_MOCK_PROVIDERS=1"
-            );
-            assert!(
-                !groq_models.is_empty(),
-                "Groq models should be shown when SHOW_MOCK_PROVIDERS=1"
-            );
-
-            // Verify display names have (Mock) suffix
-            for model in &google_models {
-                assert!(
-                    model.display_name.contains("(Mock)"),
-                    "Google model '{}' should have (Mock) suffix",
-                    model.display_name
-                );
-            }
-            for model in &groq_models {
-                assert!(
-                    model.display_name.contains("(Mock)"),
-                    "Groq model '{}' should have (Mock) suffix",
-                    model.display_name
-                );
-            }
-        });
+    fn test_groq_models_always_available() {
+        let groq_models = default_models::groq();
+        assert!(
+            !groq_models.is_empty(),
+            "Groq models should always be available"
+        );
+        assert!(groq_models
+            .iter()
+            .any(|m| m.id == "llama-3.3-70b-versatile"));
     }
 }

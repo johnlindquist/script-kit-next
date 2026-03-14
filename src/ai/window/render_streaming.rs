@@ -1,8 +1,31 @@
+use std::time::Duration;
+
 use super::*;
 use crate::theme::opacity::{
-    OPACITY_MESSAGE_ASSISTANT_BACKGROUND, OPACITY_MUTED, OPACITY_NEAR_FULL, OPACITY_SELECTED,
-    OPACITY_STRONG,
+    OPACITY_DANGER_BG, OPACITY_HOVER, OPACITY_MESSAGE_ASSISTANT_BACKGROUND, OPACITY_MUTED,
+    OPACITY_NEAR_FULL, OPACITY_SELECTED, OPACITY_STRONG,
 };
+
+/// Compute opacity for a thinking dot based on animation delta and dot index.
+///
+/// Three dots cycle through bright/dim states on a 1200ms loop.
+/// Each dot occupies a 1/3 window where it ramps up then fades down,
+/// creating a sequential pulse effect.
+fn thinking_dot_opacity(delta: f32, dot_index: usize) -> f32 {
+    // delta is 0..1 over the full 1200ms period
+    // Each dot "owns" a 1/3 slice of the cycle
+    let phase_offset = dot_index as f32 / 3.0;
+    let local = (delta - phase_offset + 1.0) % 1.0; // 0..1 relative to this dot's start
+
+    if local < 1.0 / 3.0 {
+        // This dot's active window: ramp up then down
+        let t = local * 3.0; // normalize to 0..1
+        let brightness = 1.0 - (t * 2.0 - 1.0).abs(); // triangle wave: 0→1→0
+        OPACITY_MUTED + brightness * (OPACITY_NEAR_FULL - OPACITY_MUTED)
+    } else {
+        OPACITY_MUTED
+    }
+}
 
 fn ai_should_render_streaming_cursor(
     is_streaming: bool,
@@ -19,10 +42,7 @@ fn ai_should_render_streaming_cursor(
 impl AiApp {
     pub(super) fn render_streaming_content(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = theme::PromptColors::from_theme(&crate::theme::get_cached_theme());
-        let streaming_bg = cx
-            .theme()
-            .muted
-            .opacity(OPACITY_MESSAGE_ASSISTANT_BACKGROUND);
+        // No background for assistant streaming content (transparent, matching message style)
         let show_streaming_cursor = ai_should_render_streaming_cursor(
             self.is_streaming,
             self.streaming_chat_id,
@@ -63,7 +83,12 @@ impl AiApp {
                         .text_color(cx.theme().muted_foreground)
                         .child(thinking_label),
                 )
-                .child(
+                .child({
+                    // Pulsing dots: each dot cycles bright→dim on a 1200ms loop
+                    // with a 1/3-period offset so they light up in sequence.
+                    let accent = cx.theme().accent;
+                    let dot_duration = Duration::from_millis(ANIM_CYCLE_MS);
+
                     div()
                         .flex()
                         .items_center()
@@ -72,21 +97,46 @@ impl AiApp {
                             div()
                                 .size(S1)
                                 .rounded_full()
-                                .bg(cx.theme().accent.opacity(OPACITY_NEAR_FULL)),
+                                .bg(accent.opacity(OPACITY_NEAR_FULL))
+                                .with_animation(
+                                    "thinking-dot-0",
+                                    Animation::new(dot_duration).repeat(),
+                                    move |el, delta| {
+                                        // Phase 0: bright at delta 0..0.33
+                                        let opacity = thinking_dot_opacity(delta, 0);
+                                        el.bg(accent.opacity(opacity))
+                                    },
+                                ),
                         )
                         .child(
                             div()
                                 .size(S1)
                                 .rounded_full()
-                                .bg(cx.theme().accent.opacity(OPACITY_SELECTED)),
+                                .bg(accent.opacity(OPACITY_MUTED))
+                                .with_animation(
+                                    "thinking-dot-1",
+                                    Animation::new(dot_duration).repeat(),
+                                    move |el, delta| {
+                                        let opacity = thinking_dot_opacity(delta, 1);
+                                        el.bg(accent.opacity(opacity))
+                                    },
+                                ),
                         )
                         .child(
                             div()
                                 .size(S1)
                                 .rounded_full()
-                                .bg(cx.theme().accent.opacity(OPACITY_MUTED)),
-                        ),
-                )
+                                .bg(accent.opacity(OPACITY_MUTED))
+                                .with_animation(
+                                    "thinking-dot-2",
+                                    Animation::new(dot_duration).repeat(),
+                                    move |el, delta| {
+                                        let opacity = thinking_dot_opacity(delta, 2);
+                                        el.bg(accent.opacity(opacity))
+                                    },
+                                ),
+                        )
+                })
                 .when(show_elapsed, |d| {
                     d.child(
                         div()
@@ -107,14 +157,27 @@ impl AiApp {
                 .overflow_x_hidden()
                 .child(render_markdown(&self.streaming_content, &colors))
                 .when(show_streaming_cursor, |d| {
+                    let accent = cx.theme().accent;
+                    let pulse_duration = Duration::from_millis(ANIM_CYCLE_MS);
                     d.child(
                         div()
                             .absolute()
                             .right(S2)
                             .bottom(S2)
                             .text_sm()
-                            .text_color(cx.theme().accent)
-                            .child("▌"),
+                            .text_color(accent)
+                            .child("▌")
+                            .with_animation(
+                                "streaming-cursor-pulse",
+                                Animation::new(pulse_duration).repeat(),
+                                move |el, delta| {
+                                    // Sine wave: delta 0..1 maps to 0..2π
+                                    let sine = (delta * std::f32::consts::PI * 2.0).sin();
+                                    // Map sine (-1..1) to opacity (0.4..1.0)
+                                    let opacity = CURSOR_OPACITY_BASE + CURSOR_OPACITY_AMP * sine;
+                                    el.text_color(accent.opacity(opacity))
+                                },
+                            ),
                     )
                 })
                 .into_any_element()
@@ -133,120 +196,44 @@ impl AiApp {
                     .map(|m| SharedString::from(m.display_name.clone()));
 
                 // Role label matching render_message style
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .mb(S2)
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(S2)
-                            .child(
-                                svg()
-                                    .external_path(LocalIconName::MessageCircle.external_path())
-                                    .size(ICON_SM)
-                                    .text_color(
-                                        cx.theme().muted_foreground.opacity(OPACITY_STRONG),
-                                    ),
-                            )
-                            .child(
+                div().flex().items_center().justify_between().mb(S2).child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(S2)
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_weight(gpui::FontWeight::MEDIUM)
+                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_STRONG))
+                                .child("Assistant"),
+                        )
+                        .when_some(model_label, |d, label| {
+                            d.child(
                                 div()
-                                    .text_sm()
-                                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                                    .text_color(
-                                        cx.theme().muted_foreground.opacity(OPACITY_NEAR_FULL),
-                                    )
-                                    .child("Assistant"),
-                            )
-                            .child(
-                                div()
-                                    .size(DOT_SIZE)
-                                    .rounded_full()
-                                    .bg(cx.theme().muted_foreground.opacity(OPACITY_MUTED)),
-                            )
-                            .when_some(model_label, |d, label| {
-                                d.child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(
-                                            cx.theme().muted_foreground.opacity(OPACITY_SELECTED),
-                                        )
-                                        .child(label),
-                                )
-                            })
-                            .when(show_elapsed, |d| {
-                                d.child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(
-                                            cx.theme().muted_foreground.opacity(OPACITY_SELECTED),
-                                        )
-                                        .child(elapsed_label),
-                                )
-                            })
-                            // Words/sec indicator during active streaming
-                            .when(!self.streaming_content.is_empty(), |d| {
-                                let word_count = self.streaming_content.split_whitespace().count();
-                                let wps = self
-                                    .streaming_started_at
-                                    .map(|started| {
-                                        let secs = started.elapsed().as_secs_f64();
-                                        if secs > 0.5 {
-                                            format!("~{:.0} words/s", word_count as f64 / secs)
-                                        } else {
-                                            String::new()
-                                        }
-                                    })
-                                    .unwrap_or_default();
-                                if wps.is_empty() {
-                                    d
-                                } else {
-                                    d.child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(
-                                                cx.theme().muted_foreground.opacity(OPACITY_MUTED),
-                                            )
-                                            .child(wps),
-                                    )
-                                }
-                            }),
-                    )
-                    // Escape hint to stop streaming
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(S1)
-                            .child(
-                                div()
-                                    .px(S1)
-                                    .py(S1)
-                                    .rounded(S1)
-                                    .bg(cx.theme().muted.opacity(OPACITY_MUTED))
                                     .text_xs()
                                     .text_color(
                                         cx.theme().muted_foreground.opacity(OPACITY_SELECTED),
                                     )
-                                    .child("Esc"),
+                                    .child(label),
                             )
-                            .child(
+                        })
+                        .when(show_elapsed, |d| {
+                            d.child(
                                 div()
                                     .text_xs()
                                     .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
-                                    .child("to stop"),
-                            ),
-                    )
+                                    .child(elapsed_label),
+                            )
+                        }),
+                )
             })
             .child(
                 div()
                     .w_full()
                     .px(MSG_PX)
-                    .py(S3)
+                    .py(MSG_PY)
                     .rounded(MSG_RADIUS)
-                    .bg(streaming_bg)
                     .child(content_element),
             )
     }
@@ -314,7 +301,7 @@ impl AiApp {
             .px(S4)
             .py(S2)
             .rounded(R_MD)
-            .bg(danger.opacity(0.1))
+            .bg(danger.opacity(OPACITY_MESSAGE_ASSISTANT_BACKGROUND))
             .child(
                 div()
                     .flex()
@@ -336,11 +323,11 @@ impl AiApp {
                             .px(S3)
                             .py(S1)
                             .rounded(R_MD)
-                            .bg(danger.opacity(0.2))
+                            .bg(danger.opacity(OPACITY_DANGER_BG))
                             .text_sm()
                             .text_color(danger)
                             .cursor_pointer()
-                            .hover(|s| s.bg(danger.opacity(0.3)))
+                            .hover(|s| s.bg(danger.opacity(OPACITY_HOVER)))
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.retry_after_error(window, cx);
                             }))
@@ -357,7 +344,7 @@ impl AiApp {
                 el.child(
                     div()
                         .text_xs()
-                        .text_color(cx.theme().muted_foreground.opacity(0.7))
+                        .text_color(cx.theme().muted_foreground.opacity(OPACITY_STRONG))
                         .pl(S6)
                         .child(hint),
                 )
@@ -374,7 +361,7 @@ impl AiApp {
             .gap(S2)
             .px(S4)
             .py(S1)
-            .bg(accent.opacity(0.1))
+            .bg(accent.opacity(OPACITY_MESSAGE_ASSISTANT_BACKGROUND))
             .rounded_t_md()
             .child(
                 svg()
@@ -445,5 +432,66 @@ mod tests {
             Some(ChatId::new()),
             "hello"
         ));
+    }
+
+    #[test]
+    fn test_thinking_dot_opacity_each_dot_peaks_in_its_phase() {
+        // At delta=0.0, dot 0 should start its bright phase
+        let d0_start = thinking_dot_opacity(0.0, 0);
+        assert!(
+            d0_start >= OPACITY_MUTED,
+            "dot 0 at start should be at least OPACITY_MUTED, got {d0_start}"
+        );
+
+        // At delta≈0.17 (middle of dot 0's 1/3 window), dot 0 should be near peak
+        let d0_peak = thinking_dot_opacity(0.165, 0);
+        assert!(
+            d0_peak > OPACITY_SELECTED,
+            "dot 0 near peak should be bright, got {d0_peak}"
+        );
+
+        // At delta≈0.5 (middle of dot 1's window), dot 1 should be bright
+        let d1_peak = thinking_dot_opacity(0.5, 1);
+        assert!(
+            d1_peak > OPACITY_SELECTED,
+            "dot 1 near peak should be bright, got {d1_peak}"
+        );
+
+        // At delta≈0.83 (middle of dot 2's window), dot 2 should be bright
+        let d2_peak = thinking_dot_opacity(0.83, 2);
+        assert!(
+            d2_peak > OPACITY_SELECTED,
+            "dot 2 near peak should be bright, got {d2_peak}"
+        );
+    }
+
+    #[test]
+    fn test_thinking_dot_opacity_stays_within_bounds() {
+        for dot in 0..3 {
+            for i in 0..100 {
+                let delta = i as f32 / 100.0;
+                let opacity = thinking_dot_opacity(delta, dot);
+                assert!(
+                    (OPACITY_MUTED..=OPACITY_NEAR_FULL).contains(&opacity),
+                    "dot {dot} at delta {delta}: opacity {opacity} out of range"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_thinking_dot_opacity_only_one_dot_bright_at_a_time() {
+        // At any given delta, at most one dot should be above OPACITY_MUTED
+        let threshold = OPACITY_MUTED + 0.01;
+        for i in 0..100 {
+            let delta = i as f32 / 100.0;
+            let bright_count = (0..3)
+                .filter(|&dot| thinking_dot_opacity(delta, dot) > threshold)
+                .count();
+            assert!(
+                bright_count <= 1,
+                "at delta {delta}, {bright_count} dots are bright (expected at most 1)"
+            );
+        }
     }
 }

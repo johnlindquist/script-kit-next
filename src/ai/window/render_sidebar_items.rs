@@ -1,5 +1,66 @@
 use super::types::*;
 use super::*;
+use crate::theme::opacity::{
+    OPACITY_ACCENT_MEDIUM, OPACITY_DANGER_HOVER, OPACITY_HIDDEN, OPACITY_MESSAGE_USER_BACKGROUND,
+    OPACITY_NEAR_FULL, OPACITY_PREVIEW_TEXT, OPACITY_SELECTED, OPACITY_SUBTLE,
+};
+
+/// Build a `StyledText` element with case-insensitive substring highlights.
+///
+/// Every occurrence of `query` (case-insensitive) in `text` is rendered with
+/// `highlight_color`; the rest of the text keeps `base_color`.
+/// When `bold_matches` is true, matched spans also get semibold weight.
+/// Returns `None` when `query` is empty — caller should fall back to plain text.
+fn build_highlighted_text(
+    text: &str,
+    query: &str,
+    base_color: gpui::Hsla,
+    highlight_color: gpui::Hsla,
+    bold_matches: bool,
+) -> Option<StyledText> {
+    if query.is_empty() || text.is_empty() {
+        return None;
+    }
+
+    let text_lower = text.to_lowercase();
+    let query_lower = query.to_lowercase();
+
+    let mut highlights: Vec<(std::ops::Range<usize>, HighlightStyle)> = Vec::new();
+    let highlight_style = HighlightStyle {
+        color: Some(highlight_color),
+        font_weight: if bold_matches {
+            Some(gpui::FontWeight::SEMIBOLD)
+        } else {
+            None
+        },
+        ..Default::default()
+    };
+
+    // Find all case-insensitive occurrences (byte offsets, safe because lowercasing
+    // preserves byte length for ASCII; for non-ASCII we search on the lowered copy
+    // then map back via char boundaries).
+    let mut search_start = 0;
+    while let Some(match_start) = text_lower[search_start..].find(&query_lower) {
+        let abs_start = search_start + match_start;
+        let abs_end = abs_start + query_lower.len();
+        highlights.push((abs_start..abs_end, highlight_style));
+        search_start = abs_end;
+    }
+
+    if highlights.is_empty() {
+        return None;
+    }
+
+    // Apply base color to the entire string, then overlay highlights
+    let base_style = HighlightStyle {
+        color: Some(base_color),
+        ..Default::default()
+    };
+    let mut all_highlights = vec![(0..text.len(), base_style)];
+    all_highlights.extend(highlights);
+
+    Some(StyledText::new(text.to_string()).with_highlights(all_highlights))
+}
 
 fn ai_sidebar_row_hover_enabled(input_mode: InputMode, is_selected: bool) -> bool {
     !is_selected && input_mode == InputMode::Mouse
@@ -22,7 +83,7 @@ impl AiApp {
             .w_full()
             .text_xs()
             .font_weight(gpui::FontWeight::SEMIBOLD)
-            .text_color(cx.theme().muted_foreground.opacity(0.6))
+            .text_color(cx.theme().muted_foreground.opacity(OPACITY_ACCENT_MEDIUM))
             .px(SIDEBAR_INSET_X)
             .mt(S4)
             .mb(S2)
@@ -45,17 +106,37 @@ impl AiApp {
             chat.title.clone().into()
         };
 
-        let preview = self.message_previews.get(&chat_id).cloned();
-        let msg_count = self.message_counts.get(&chat_id).copied().unwrap_or(0);
-        let preview_snippet: SharedString = preview
-            .as_deref()
-            .map(|preview_text| {
-                let (_preview_role, preview_snippet) =
-                    self.build_sidebar_preview_identity(chat_id, msg_count, preview_text);
-                preview_snippet
-            })
-            .unwrap_or_else(|| "No messages yet".to_string())
-            .into();
+        // When search is active, show the match snippet instead of the regular preview
+        let has_search_snippet =
+            !self.search_query.is_empty() && self.search_snippets.contains_key(&chat_id);
+        let matched_title_only = !self.search_query.is_empty()
+            && self
+                .search_matched_title
+                .get(&chat_id)
+                .copied()
+                .unwrap_or(false)
+            && !has_search_snippet;
+
+        let preview_snippet: SharedString = if has_search_snippet {
+            // Show the matching message content snippet
+            self.search_snippets
+                .get(&chat_id)
+                .cloned()
+                .unwrap_or_default()
+                .into()
+        } else {
+            let preview = self.message_previews.get(&chat_id).cloned();
+            let msg_count = self.message_counts.get(&chat_id).copied().unwrap_or(0);
+            preview
+                .as_deref()
+                .map(|preview_text| {
+                    let (_preview_role, preview_snippet) =
+                        self.build_sidebar_preview_identity(chat_id, msg_count, preview_text);
+                    preview_snippet
+                })
+                .unwrap_or_else(|| "No messages yet".to_string())
+                .into()
+        };
 
         let selected_bg = cx.theme().list_active;
         let hover_bg = cx.theme().list_hover;
@@ -65,7 +146,7 @@ impl AiApp {
         } else {
             cx.theme().sidebar_foreground
         };
-        let preview_color = cx.theme().muted_foreground.opacity(0.75);
+        let preview_color = cx.theme().muted_foreground.opacity(OPACITY_PREVIEW_TEXT);
 
         let muted_fg = cx.theme().muted_foreground;
         let is_renaming = self.renaming_chat_id == Some(chat_id);
@@ -110,6 +191,19 @@ impl AiApp {
                         )
                     })
                     .when(!is_renaming, |el| {
+                        let title_str: &str = &title;
+                        let highlighted_title = if !self.search_query.is_empty() {
+                            let accent = cx.theme().accent_foreground;
+                            build_highlighted_text(
+                                title_str,
+                                &self.search_query,
+                                title_color,
+                                accent,
+                                false,
+                            )
+                        } else {
+                            None
+                        };
                         el.child(
                             div()
                                 .flex_1()
@@ -119,7 +213,10 @@ impl AiApp {
                                 .text_color(title_color)
                                 .overflow_hidden()
                                 .text_ellipsis()
-                                .child(title),
+                                .map(|d| match highlighted_title {
+                                    Some(styled) => d.child(styled),
+                                    None => d.child(title),
+                                }),
                         )
                     })
                     // Delete button - visible on hover only.
@@ -138,11 +235,13 @@ impl AiApp {
                                 .rounded(R_SM)
                                 .flex_shrink_0()
                                 .cursor_pointer()
-                                .bg(cx.theme().danger.opacity(0.15))
+                                .bg(cx.theme().danger.opacity(OPACITY_SUBTLE))
                                 .text_xs()
                                 .text_color(cx.theme().danger)
                                 .when(is_mouse_mode, |d| {
-                                    d.hover(|s| s.bg(cx.theme().danger.opacity(0.25)))
+                                    d.hover(|s| {
+                                        s.bg(cx.theme().danger.opacity(OPACITY_DANGER_HOVER))
+                                    })
                                 })
                                 .on_mouse_down(
                                     gpui::MouseButton::Left,
@@ -162,10 +261,14 @@ impl AiApp {
                                 .rounded(R_SM)
                                 .flex_shrink_0()
                                 .cursor_pointer()
-                                .opacity(0.)
+                                .opacity(OPACITY_HIDDEN)
                                 .when(is_mouse_mode, |d| {
-                                    d.group_hover("chat-item", |s| s.opacity(1.0))
-                                        .hover(|s| s.bg(cx.theme().danger.opacity(0.19)))
+                                    d.group_hover("chat-item", |s| s.opacity(1.0)).hover(|s| {
+                                        s.bg(cx
+                                            .theme()
+                                            .danger
+                                            .opacity(OPACITY_MESSAGE_USER_BACKGROUND))
+                                    })
                                 })
                                 .on_mouse_down(
                                     gpui::MouseButton::Left,
@@ -178,20 +281,76 @@ impl AiApp {
                                     svg()
                                         .external_path(LocalIconName::Trash.external_path())
                                         .size(S3)
-                                        .text_color(muted_fg.opacity(0.5)),
+                                        .text_color(muted_fg.opacity(OPACITY_SELECTED)),
                                 )
                         }
                     }),
             )
             .child(
                 div()
+                    .flex()
+                    .items_center()
+                    .gap(S1)
                     .w_full()
-                    .text_xs()
-                    .text_color(preview_color)
-                    .overflow_hidden()
-                    .whitespace_nowrap()
-                    .text_ellipsis()
-                    .child(preview_snippet),
+                    // Show search match indicator when snippet comes from message content
+                    .when(has_search_snippet, |d| {
+                        debug!(
+                            name = "SIDEBAR_SEARCH_ICON_SIZE",
+                            value = %SIDEBAR_SEARCH_ICON_SIZE,
+                            "sidebar search match icon"
+                        );
+                        d.child(
+                            svg()
+                                .external_path(LocalIconName::MagnifyingGlass.external_path())
+                                .size(SIDEBAR_SEARCH_ICON_SIZE)
+                                .text_color(
+                                    cx.theme().accent_foreground.opacity(OPACITY_ACCENT_MEDIUM),
+                                )
+                                .flex_shrink_0(),
+                        )
+                    })
+                    // Show title match indicator when only the title matched
+                    .when(matched_title_only, |d| {
+                        d.child(
+                            div()
+                                .text_color(cx.theme().accent_foreground.opacity(OPACITY_SELECTED))
+                                .text_xs()
+                                .flex_shrink_0()
+                                .child("title"),
+                        )
+                    })
+                    .child({
+                        let snippet_str: &str = &preview_snippet;
+                        let snippet_base_color = if has_search_snippet {
+                            cx.theme().muted_foreground.opacity(OPACITY_PREVIEW_TEXT)
+                        } else {
+                            preview_color
+                        };
+                        let highlighted_snippet = if !self.search_query.is_empty() {
+                            let accent = cx.theme().accent_foreground;
+                            build_highlighted_text(
+                                snippet_str,
+                                &self.search_query,
+                                snippet_base_color,
+                                accent,
+                                true,
+                            )
+                        } else {
+                            None
+                        };
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_xs()
+                            .text_color(snippet_base_color)
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .text_ellipsis()
+                            .map(|d| match highlighted_snippet {
+                                Some(styled) => d.child(styled),
+                                None => d.child(preview_snippet),
+                            })
+                    }),
             )
     }
 
@@ -434,5 +593,53 @@ mod tests {
     fn test_ai_sidebar_delete_hover_enabled_only_in_mouse_mode() {
         assert!(ai_sidebar_delete_hover_enabled(InputMode::Mouse));
         assert!(!ai_sidebar_delete_hover_enabled(InputMode::Keyboard));
+    }
+
+    #[test]
+    fn test_build_highlighted_text_returns_none_for_empty_query() {
+        let base = gpui::hsla(0., 0., 0.5, 1.);
+        let accent = gpui::hsla(0., 1., 0.5, 1.);
+        assert!(build_highlighted_text("Hello world", "", base, accent, false).is_none());
+    }
+
+    #[test]
+    fn test_build_highlighted_text_returns_none_for_empty_text() {
+        let base = gpui::hsla(0., 0., 0.5, 1.);
+        let accent = gpui::hsla(0., 1., 0.5, 1.);
+        assert!(build_highlighted_text("", "hello", base, accent, false).is_none());
+    }
+
+    #[test]
+    fn test_build_highlighted_text_returns_none_when_no_match() {
+        let base = gpui::hsla(0., 0., 0.5, 1.);
+        let accent = gpui::hsla(0., 1., 0.5, 1.);
+        assert!(build_highlighted_text("Hello world", "xyz", base, accent, false).is_none());
+    }
+
+    #[test]
+    fn test_build_highlighted_text_returns_some_for_case_insensitive_match() {
+        let base = gpui::hsla(0., 0., 0.5, 1.);
+        let accent = gpui::hsla(0., 1., 0.5, 1.);
+        // "hello" should match "Hello" case-insensitively
+        let result = build_highlighted_text("Hello World", "hello", base, accent, false);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_build_highlighted_text_handles_multiple_occurrences() {
+        let base = gpui::hsla(0., 0., 0.5, 1.);
+        let accent = gpui::hsla(0., 1., 0.5, 1.);
+        // "lo" appears twice in "Hello Lollipop"
+        let result = build_highlighted_text("Hello Lollipop", "lo", base, accent, true);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_build_highlighted_text_handles_query_at_start_and_end() {
+        let base = gpui::hsla(0., 0., 0.5, 1.);
+        let accent = gpui::hsla(0., 1., 0.5, 1.);
+        assert!(build_highlighted_text("abc", "abc", base, accent, false).is_some());
+        assert!(build_highlighted_text("xyzabc", "abc", base, accent, false).is_some());
+        assert!(build_highlighted_text("abcxyz", "abc", base, accent, false).is_some());
     }
 }

@@ -256,14 +256,14 @@ pub fn generate_script_from_prompt(
     }
 
     let (selected_model, provider) = select_generation_model(&registry)?;
-    crate::logging::log(
-        "AI",
-        &format!(
-            "correlation_id=ai-script-generation state=provider_ready model_id={} provider_id={} prompt_len={}",
-            selected_model.id,
-            selected_model.provider,
-            normalized_prompt.len()
-        ),
+    tracing::info!(
+        target: "ai",
+        correlation_id = "ai-script-generation",
+        state = "provider_ready",
+        model_id = %selected_model.id,
+        provider_id = %selected_model.provider,
+        prompt_len = normalized_prompt.len(),
+        "Script generation provider ready"
     );
 
     let messages = build_script_generation_messages(normalized_prompt);
@@ -306,13 +306,13 @@ pub fn generate_script_from_prompt(
         )
     })?;
 
-    crate::logging::log(
-        "AI",
-        &format!(
-            "correlation_id=ai-script-generation state=script_written path={} slug={}",
-            path.display(),
-            slug
-        ),
+    tracing::info!(
+        target: "ai",
+        correlation_id = "ai-script-generation",
+        state = "script_written",
+        path = %path.display(),
+        slug = %slug,
+        "AI-generated script written"
     );
 
     Ok(GeneratedScriptOutput {

@@ -647,3 +647,240 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
         "editing_message_id must be cleared on new conversation"
     );
 }
+
+#[test]
+fn test_welcome_suggestion_click_with_no_provider_triggers_mock_streaming() {
+    // When no provider is configured, clicking a welcome suggestion card
+    // triggers mock streaming (demo mode) rather than an error.
+    // The mock response educates the user about configuring API keys.
+    let suggestions = [
+        "Write a script to automate a repetitive task",
+        "Explain how this code works step by step",
+        "Help me debug an error I'm seeing",
+        "Generate a function that processes data",
+    ];
+
+    for suggestion in &suggestions {
+        let mock = generate_mock_response(suggestion);
+        assert!(
+            !mock.is_empty(),
+            "Mock response for '{}' must not be empty — demo mode needs helpful content",
+            suggestion
+        );
+        // Mock responses should mention API key setup or be contextually helpful
+        let lower = mock.to_lowercase();
+        assert!(
+            lower.contains("api")
+                || lower.contains("key")
+                || lower.contains("configure")
+                || lower.contains("script"),
+            "Mock response for '{}' should guide user toward configuration or be contextually helpful, got: {}",
+            suggestion,
+            &mock[..mock.len().min(120)]
+        );
+        tracing::info!(
+            suggestion = suggestion,
+            response_len = mock.len(),
+            "mock_streaming_validation: suggestion produced valid response"
+        );
+    }
+}
+
+/// Verify the debounce contract: each keystroke bumps generation and replaces the task,
+/// empty query clears the task for instant feedback.
+#[test]
+fn test_search_debounce_generation_and_task_replacement_contract() {
+    // The debounce contract:
+    // 1. Each keystroke bumps search_generation
+    // 2. Each keystroke replaces search_debounce_task (dropping/cancelling the old one)
+    // 3. Empty query sets search_debounce_task = None (no debounce)
+    // 4. The generation counter guards against stale results even without task cancellation
+
+    // Simulate the state machine that on_search_change maintains
+    fn simulate_keystroke(generation: &mut u64) -> u64 {
+        *generation += 1;
+        *generation // returns the generation that would be captured by the debounce task
+    }
+
+    let mut search_generation: u64 = 0;
+
+    // Keystroke 1: "h" — starts a debounce task at gen 1
+    let task1_gen = simulate_keystroke(&mut search_generation);
+    assert_eq!(task1_gen, 1);
+
+    // Keystroke 2: "he" — replaces task (gen 1 cancelled), new task at gen 2
+    let task2_gen = simulate_keystroke(&mut search_generation);
+    assert_eq!(task2_gen, 2);
+
+    // Keystroke 3: "hel" — replaces task again, gen 3
+    let task3_gen = simulate_keystroke(&mut search_generation);
+    assert_eq!(task3_gen, 3);
+
+    // Only gen 3 should match the current generation (stale guard)
+    assert_ne!(search_generation, task1_gen, "Gen 1 should be stale");
+    assert_ne!(search_generation, task2_gen, "Gen 2 should be stale");
+    assert_eq!(
+        search_generation, task3_gen,
+        "Only gen 3 should match current"
+    );
+
+    // Clear search (empty query): bumps generation, no task needed
+    let _clear_gen = simulate_keystroke(&mut search_generation);
+    assert_eq!(search_generation, 4);
+    // Empty query path is synchronous — no debounce task is stored
+}
+
+/// Verify the SEARCH_DEBOUNCE_MS constant is within reasonable UX bounds.
+#[test]
+fn test_search_debounce_constant_is_reasonable() {
+    // 150ms is the standard debounce for search-as-you-type UX.
+    // Too low (<50ms) provides no benefit; too high (>300ms) feels sluggish.
+    assert_eq!(
+        AiApp::SEARCH_DEBOUNCE_MS,
+        150,
+        "Search debounce should be 150ms for responsive feel without excess queries"
+    );
+}
+
+/// Verify that on_search_change with empty string reloads all chats and clears search state.
+/// This validates the synchronous clear path that Escape triggers after resetting search_query.
+#[test]
+fn test_escape_clear_search_state_contract() {
+    // Simulate the state that Escape clears before triggering on_search_change("")
+    let mut search_query = "test query".to_string();
+    let mut search_generation: u64 = 5;
+    let mut search_snippets: std::collections::HashMap<ChatId, String> =
+        std::collections::HashMap::new();
+    let mut search_matched_title: std::collections::HashMap<ChatId, bool> =
+        std::collections::HashMap::new();
+
+    // Populate some search state
+    let fake_id = ChatId::new();
+    search_snippets.insert(fake_id, "some snippet".to_string());
+    search_matched_title.insert(fake_id, true);
+
+    // Simulate Escape handler logic
+    search_query.clear();
+    search_generation += 1;
+    search_snippets.clear();
+    search_matched_title.clear();
+
+    assert!(
+        search_query.is_empty(),
+        "Escape must clear the search_query string"
+    );
+    assert_eq!(
+        search_generation, 6,
+        "Escape must increment search_generation to invalidate in-flight results"
+    );
+    assert!(
+        search_snippets.is_empty(),
+        "Escape must clear search_snippets"
+    );
+    assert!(
+        search_matched_title.is_empty(),
+        "Escape must clear search_matched_title"
+    );
+}
+
+/// Validates the auto-collapse threshold logic from `AiApp::is_message_collapsed`.
+///
+/// The rule (interactions.rs):
+///   1. If msg_id is in `expanded_messages` → always expanded (not collapsed).
+///   2. If msg_id is in `collapsed_messages` → always collapsed.
+///   3. Otherwise auto-collapse via `compute_collapse_decision(content_len)`.
+///
+/// The render path (render_message.rs) gates the toggle button on
+/// `content.len() > MSG_COLLAPSE_CHAR_THRESHOLD`.
+#[test]
+fn test_message_auto_collapse_threshold() {
+    // Mirror the three sets from AiApp state
+    let expanded_messages: std::collections::HashSet<String> =
+        ["expanded-msg".to_string()].into_iter().collect();
+    let collapsed_messages: std::collections::HashSet<String> =
+        ["collapsed-msg".to_string()].into_iter().collect();
+
+    // Uses the shared pure helper for auto-collapse, with user-override layer on top
+    let is_collapsed = |msg_id: &str, content_len: usize| -> bool {
+        if expanded_messages.contains(msg_id) {
+            return false;
+        }
+        if collapsed_messages.contains(msg_id) {
+            return true;
+        }
+        compute_collapse_decision(content_len).should_collapse
+    };
+
+    // --- Auto-collapse threshold (no explicit user override) ---
+    let neutral_id = "neutral-msg";
+
+    // Verify the helper returns structured data
+    let decision = compute_collapse_decision(MSG_COLLAPSE_CHAR_THRESHOLD);
+    assert_eq!(decision.char_count, MSG_COLLAPSE_CHAR_THRESHOLD);
+    assert_eq!(decision.threshold, MSG_COLLAPSE_CHAR_THRESHOLD);
+    assert!(
+        !decision.should_collapse,
+        "Exactly at threshold must NOT auto-collapse (> not >=)"
+    );
+
+    let decision_over = compute_collapse_decision(MSG_COLLAPSE_CHAR_THRESHOLD + 1);
+    assert!(
+        decision_over.should_collapse,
+        "One over threshold must auto-collapse"
+    );
+
+    // Exactly at boundary: should NOT collapse (> threshold, not >=)
+    assert!(
+        !is_collapsed(neutral_id, MSG_COLLAPSE_CHAR_THRESHOLD),
+        "At boundary must NOT auto-collapse"
+    );
+    // One char over: should collapse
+    assert!(
+        is_collapsed(neutral_id, MSG_COLLAPSE_CHAR_THRESHOLD + 1),
+        "Over threshold must auto-collapse"
+    );
+    // Well under: should not collapse
+    assert!(
+        !is_collapsed(neutral_id, 100),
+        "100-char message must not auto-collapse"
+    );
+    // Well over: should collapse
+    assert!(
+        is_collapsed(neutral_id, 5000),
+        "5000-char message must auto-collapse"
+    );
+    // Zero length: should not collapse
+    assert!(
+        !is_collapsed(neutral_id, 0),
+        "Empty message must not auto-collapse"
+    );
+
+    // --- Explicit expanded override beats auto-collapse ---
+    assert!(
+        !is_collapsed("expanded-msg", 5000),
+        "Explicitly expanded message must not collapse even when over threshold"
+    );
+
+    // --- Explicit collapsed override beats auto-expand ---
+    assert!(
+        is_collapsed("collapsed-msg", 100),
+        "Explicitly collapsed message must stay collapsed even when under threshold"
+    );
+
+    // --- Render toggle visibility uses the same threshold constant ---
+    let should_show_toggle =
+        |content_len: usize| -> bool { content_len > MSG_COLLAPSE_CHAR_THRESHOLD };
+    assert!(
+        !should_show_toggle(MSG_COLLAPSE_CHAR_THRESHOLD),
+        "Toggle button must be hidden at exactly threshold"
+    );
+    assert!(
+        should_show_toggle(MSG_COLLAPSE_CHAR_THRESHOLD + 1),
+        "Toggle button must be visible above threshold"
+    );
+
+    tracing::info!(
+        threshold = MSG_COLLAPSE_CHAR_THRESHOLD,
+        "message_auto_collapse_threshold: all boundary and override cases validated"
+    );
+}

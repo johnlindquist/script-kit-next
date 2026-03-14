@@ -176,6 +176,9 @@ impl AiApp {
             input_state,
             search_state,
             search_query: String::new(),
+            search_generation: 0,
+            search_snippets: std::collections::HashMap::new(),
+            search_matched_title: std::collections::HashMap::new(),
             sidebar_collapsed: false,
             provider_registry,
             available_models,
@@ -270,6 +273,7 @@ impl AiApp {
             expanded_messages: std::collections::HashSet::new(),
             export_copied_at: None,
             chat_transcript_copied_at: None,
+            search_debounce_task: None,
         }
     }
 

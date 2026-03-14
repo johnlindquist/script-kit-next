@@ -116,10 +116,7 @@ impl AiApp {
         if let Some(ref image_base64) = pending_image {
             // Calculate approximate image size for logging
             let image_size_kb = image_base64.len() / 1024;
-            crate::logging::log(
-                "AI",
-                &format!("Message includes attached image (~{}KB)", image_size_kb),
-            );
+            tracing::info!(target: "ai", image_size_kb = image_size_kb, "Message includes attached image");
         }
 
         // Update chat title if this is the first message

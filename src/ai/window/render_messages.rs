@@ -1,4 +1,5 @@
 use super::*;
+use crate::theme::opacity::OPACITY_NEAR_FULL;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct MessageGroupingState {
@@ -122,7 +123,7 @@ impl AiApp {
         })
         .with_sizing_behavior(ListSizingBehavior::Infer)
         .size_full()
-        .px(PANEL_INSET_X)
+        .px(MSG_PX)
         .py(S4);
 
         // Track user scroll: show pill when user scrolls up (during streaming or with many messages)
@@ -181,7 +182,7 @@ impl AiApp {
                                 .px(S3)
                                 .py(S1)
                                 .rounded_full()
-                                .bg(cx.theme().accent.opacity(0.85))
+                                .bg(cx.theme().accent.opacity(OPACITY_NEAR_FULL))
                                 .text_color(cx.theme().accent_foreground)
                                 .cursor_pointer()
                                 .shadow_md()

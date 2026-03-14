@@ -200,7 +200,8 @@ impl AiApp {
     }
 
     /// Whether a message should be shown collapsed (auto-collapse long messages).
-    /// Messages over 800 chars are auto-collapsed unless the user expanded them.
+    /// Messages over `MSG_COLLAPSE_CHAR_THRESHOLD` chars are auto-collapsed
+    /// unless the user explicitly expanded them.
     pub(super) fn is_message_collapsed(&self, msg_id: &str, content_len: usize) -> bool {
         if self.expanded_messages.contains(msg_id) {
             return false;
@@ -208,8 +209,7 @@ impl AiApp {
         if self.collapsed_messages.contains(msg_id) {
             return true;
         }
-        // Auto-collapse messages longer than 800 chars
-        content_len > 800
+        compute_collapse_decision(content_len).should_collapse
     }
 
     /// Build the visible message body when no collapse is applied.

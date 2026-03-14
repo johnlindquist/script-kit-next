@@ -136,7 +136,7 @@ impl AiApp {
                                 )
                                 .child(
                                     div()
-                                        .text_size(px(10.))
+                                        .text_xs()
                                         .text_color(
                                             cx.theme().muted_foreground.opacity(OPACITY_TEXT_MUTED),
                                         )
