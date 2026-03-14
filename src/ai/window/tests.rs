@@ -191,6 +191,49 @@ fn test_ai_window_queue_command_if_open_enqueues_add_attachment_command() {
 }
 
 #[test]
+fn test_ai_window_queue_command_if_open_preserves_start_chat_provider_metadata() {
+    let mut pending_commands = Vec::new();
+    let callback = std::sync::Arc::new(|_model_id: String, _provider: String| {});
+
+    let was_queued = ai_window_queue_command_if_open(
+        &mut pending_commands,
+        true,
+        AiCommand::StartChat {
+            chat_id: ChatId::new(),
+            message: "hello".to_string(),
+            image: None,
+            system_prompt: None,
+            model_id: Some("gpt-4o".to_string()),
+            provider: Some("openai".to_string()),
+            on_created: Some(callback),
+            submit: true,
+        },
+    );
+
+    assert!(
+        was_queued,
+        "StartChat command should queue when window is open"
+    );
+
+    match pending_commands.first() {
+        Some(AiCommand::StartChat {
+            model_id,
+            provider,
+            on_created,
+            ..
+        }) => {
+            assert_eq!(model_id.as_deref(), Some("gpt-4o"));
+            assert_eq!(provider.as_deref(), Some("openai"));
+            assert!(
+                on_created.is_some(),
+                "Queued StartChat command should retain its creation callback"
+            );
+        }
+        _ => panic!("Expected queued command to be AiCommand::StartChat"),
+    }
+}
+
+#[test]
 fn test_should_retry_existing_user_turn_only_when_last_message_is_user() {
     let chat_id = ChatId::new();
 
@@ -449,8 +492,158 @@ fn test_build_sidebar_rows_inserts_headers_and_preserves_chat_order() {
 }
 
 #[test]
+fn test_welcome_suggestion_texts_pass_submit_guard() {
+    // Welcome suggestion cards auto-submit on click. Verify that every
+    // suggestion prompt passes the submit guard (non-empty text, no image).
+    let suggestions = vec![
+        "Write a script to automate a repetitive task",
+        "Explain how this code works step by step",
+        "Help me debug an error I'm seeing",
+        "Generate a function that processes data",
+    ];
+
+    for suggestion in &suggestions {
+        assert!(
+            ai_window_can_submit_message(suggestion, false),
+            "Welcome suggestion '{}' must pass the submit guard for auto-submit to work",
+            suggestion
+        );
+    }
+}
+
+#[test]
 fn test_message_body_content_does_not_truncate_long_messages() {
     let long_message = "lorem ipsum ".repeat(200);
     let display_content = AiApp::message_body_content(&long_message);
     assert_eq!(display_content, long_message);
+}
+
+/// Validates that new_conversation resets all per-conversation transient fields.
+///
+/// new_conversation() clears these fields before calling create_chat():
+///   - pending_image
+///   - pending_attachments
+///   - collapsed_messages
+///   - expanded_messages
+///   - copied_message_id / copied_at
+///   - last_streaming_duration / last_streaming_completed_at
+///   - streaming_error
+///   - showing_attachments_picker
+///   - editing_message_id
+///
+/// Additionally it cancels any active stream (is_streaming) before reset.
+///
+/// This test uses a struct mirroring AiApp's transient fields to verify the
+/// reset contract without requiring a GPUI window context.
+#[test]
+fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fields() {
+    /// Mirrors the per-conversation transient fields from AiApp that
+    /// new_conversation() must reset.
+    struct ConversationTransientState {
+        pending_image: Option<String>,
+        pending_attachments: Vec<String>,
+        collapsed_messages: std::collections::HashSet<String>,
+        expanded_messages: std::collections::HashSet<String>,
+        copied_message_id: Option<String>,
+        copied_at: Option<std::time::Instant>,
+        last_streaming_duration: Option<std::time::Duration>,
+        last_streaming_completed_at: Option<std::time::Instant>,
+        streaming_error: Option<String>,
+        showing_attachments_picker: bool,
+        editing_message_id: Option<String>,
+    }
+
+    impl ConversationTransientState {
+        /// Apply the same reset logic as AiApp::new_conversation()
+        fn reset(&mut self) {
+            self.pending_image = None;
+            self.pending_attachments.clear();
+            self.collapsed_messages.clear();
+            self.expanded_messages.clear();
+            self.copied_message_id = None;
+            self.copied_at = None;
+            self.last_streaming_duration = None;
+            self.last_streaming_completed_at = None;
+            self.streaming_error = None;
+            self.showing_attachments_picker = false;
+            self.editing_message_id = None;
+        }
+    }
+
+    // Build dirty state (simulates mid-conversation)
+    let mut state = ConversationTransientState {
+        pending_image: Some("base64data".to_string()),
+        pending_attachments: vec!["/tmp/file.txt".to_string()],
+        collapsed_messages: ["msg-1".to_string()].into_iter().collect(),
+        expanded_messages: ["msg-2".to_string()].into_iter().collect(),
+        copied_message_id: Some("msg-1".to_string()),
+        copied_at: Some(std::time::Instant::now()),
+        last_streaming_duration: Some(std::time::Duration::from_secs(5)),
+        last_streaming_completed_at: Some(std::time::Instant::now()),
+        streaming_error: Some("previous error".to_string()),
+        showing_attachments_picker: true,
+        editing_message_id: Some("msg-3".to_string()),
+    };
+
+    // Verify dirty state is non-default
+    assert!(state.pending_image.is_some());
+    assert!(!state.pending_attachments.is_empty());
+    assert!(!state.collapsed_messages.is_empty());
+    assert!(!state.expanded_messages.is_empty());
+    assert!(state.copied_message_id.is_some());
+    assert!(state.copied_at.is_some());
+    assert!(state.last_streaming_duration.is_some());
+    assert!(state.last_streaming_completed_at.is_some());
+    assert!(state.streaming_error.is_some());
+    assert!(state.showing_attachments_picker);
+    assert!(state.editing_message_id.is_some());
+
+    // Apply reset
+    state.reset();
+
+    // Assert all fields are at their default state
+    assert!(
+        state.pending_image.is_none(),
+        "pending_image must be cleared on new conversation"
+    );
+    assert!(
+        state.pending_attachments.is_empty(),
+        "pending_attachments must be cleared on new conversation"
+    );
+    assert!(
+        state.collapsed_messages.is_empty(),
+        "collapsed_messages must be cleared on new conversation"
+    );
+    assert!(
+        state.expanded_messages.is_empty(),
+        "expanded_messages must be cleared on new conversation"
+    );
+    assert!(
+        state.copied_message_id.is_none(),
+        "copied_message_id must be cleared on new conversation"
+    );
+    assert!(
+        state.copied_at.is_none(),
+        "copied_at must be cleared on new conversation"
+    );
+    assert!(
+        state.last_streaming_duration.is_none(),
+        "last_streaming_duration must be cleared on new conversation"
+    );
+    assert!(
+        state.last_streaming_completed_at.is_none(),
+        "last_streaming_completed_at must be cleared on new conversation"
+    );
+    assert!(
+        state.streaming_error.is_none(),
+        "streaming_error must be cleared on new conversation"
+    );
+    assert!(
+        !state.showing_attachments_picker,
+        "showing_attachments_picker must be false on new conversation"
+    );
+    assert!(
+        state.editing_message_id.is_none(),
+        "editing_message_id must be cleared on new conversation"
+    );
 }

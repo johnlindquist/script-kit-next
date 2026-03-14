@@ -1,4 +1,7 @@
 use super::*;
+use crate::theme::opacity::{
+    OPACITY_ACCENT_MEDIUM, OPACITY_DANGER_BG, OPACITY_STRONG, OPACITY_SUGGESTION_HOVER,
+};
 
 impl AiApp {
     pub(super) fn render_welcome(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -7,8 +10,8 @@ impl AiApp {
             return self.render_setup_card(cx).into_any_element();
         }
 
-        let suggestion_bg = cx.theme().muted.opacity(0.20);
-        let suggestion_hover_bg = cx.theme().muted.opacity(0.35);
+        let suggestion_bg = cx.theme().muted.opacity(OPACITY_DANGER_BG);
+        let suggestion_hover_bg = cx.theme().muted.opacity(OPACITY_SUGGESTION_HOVER);
 
         let suggestions: Vec<(&str, &str, LocalIconName)> = vec![
             (
@@ -70,7 +73,7 @@ impl AiApp {
                             .into();
                         div()
                             .text_sm()
-                            .text_color(cx.theme().muted_foreground.opacity(0.7))
+                            .text_color(cx.theme().muted_foreground.opacity(OPACITY_STRONG))
                             .child(subtitle)
                     }),
             )
@@ -99,16 +102,22 @@ impl AiApp {
                                 .cursor_pointer()
                                 .hover(move |s| s.bg(suggestion_hover_bg))
                                 .on_click(cx.listener(move |this, _, window, cx| {
+                                    info!(
+                                        suggestion_text = %prompt_text,
+                                        "Welcome suggestion card clicked — auto-submitting"
+                                    );
                                     this.input_state.update(cx, |state, cx| {
                                         state.set_value(prompt_text.to_string(), window, cx);
                                     });
-                                    this.focus_input(window, cx);
+                                    this.submit_message(window, cx);
                                 }))
                                 .child(
                                     svg()
                                         .external_path(icon.external_path())
                                         .size(ICON_MD)
-                                        .text_color(cx.theme().accent.opacity(0.6))
+                                        .text_color(
+                                            cx.theme().accent.opacity(OPACITY_ACCENT_MEDIUM),
+                                        )
                                         .flex_shrink_0(),
                                 )
                                 .child(
@@ -127,55 +136,15 @@ impl AiApp {
                                             div()
                                                 .text_xs()
                                                 .text_color(
-                                                    cx.theme().muted_foreground.opacity(0.6),
+                                                    cx.theme()
+                                                        .muted_foreground
+                                                        .opacity(OPACITY_ACCENT_MEDIUM),
                                                 )
                                                 .child(desc_s),
                                         ),
                                 )
                         },
                     )),
-            )
-            // Keyboard shortcut hints
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .gap(S3)
-                    .mt(S1)
-                    .children(
-                        [
-                            ("\u{2318} Enter", "Send"),
-                            ("\u{2318} N", "New Chat"),
-                            ("\u{2318} K", "Actions"),
-                            ("Esc", "Stop"),
-                        ]
-                        .into_iter()
-                        .map(|(key, label)| {
-                            let key_s: SharedString = key.into();
-                            let label_s: SharedString = label.into();
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(S1)
-                                .child(
-                                    div()
-                                        .px(S2)
-                                        .py(S1)
-                                        .rounded(R_SM)
-                                        .bg(cx.theme().muted.opacity(0.3))
-                                        .text_xs()
-                                        .text_color(cx.theme().muted_foreground.opacity(0.55))
-                                        .child(key_s),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(cx.theme().muted_foreground.opacity(0.4))
-                                        .child(label_s),
-                                )
-                        }),
-                    ),
             )
             .into_any_element()
     }
