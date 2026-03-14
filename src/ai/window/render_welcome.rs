@@ -1,6 +1,7 @@
 use super::*;
 use crate::theme::opacity::{
-    OPACITY_ACCENT_MEDIUM, OPACITY_DANGER_BG, OPACITY_STRONG, OPACITY_SUGGESTION_HOVER,
+    OPACITY_ACCENT_MEDIUM, OPACITY_CARD_BG, OPACITY_STRONG, OPACITY_SUGGESTION_HOVER,
+    OPACITY_TEXT_MUTED,
 };
 
 impl AiApp {
@@ -10,31 +11,20 @@ impl AiApp {
             return self.render_setup_card(cx).into_any_element();
         }
 
-        let suggestion_bg = cx.theme().muted.opacity(OPACITY_DANGER_BG);
+        let suggestion_bg = cx.theme().muted.opacity(OPACITY_CARD_BG);
         let suggestion_hover_bg = cx.theme().muted.opacity(OPACITY_SUGGESTION_HOVER);
 
-        let suggestions: Vec<(&str, &str, LocalIconName)> = vec![
-            (
-                "Write a script",
-                "to automate a repetitive task",
-                LocalIconName::Terminal,
-            ),
-            (
-                "Explain how",
-                "this code works step by step",
-                LocalIconName::Code,
-            ),
-            (
-                "Help me debug",
-                "an error I'm seeing",
-                LocalIconName::Warning,
-            ),
-            (
-                "Generate a function",
-                "that processes data",
-                LocalIconName::BoltFilled,
-            ),
+        let icons = [
+            LocalIconName::Terminal,
+            LocalIconName::Code,
+            LocalIconName::Warning,
+            LocalIconName::BoltFilled,
         ];
+        let suggestions: Vec<(&str, &str, LocalIconName)> = WELCOME_SUGGESTIONS
+            .iter()
+            .zip(icons)
+            .map(|((title, desc), icon)| (*title, *desc, icon))
+            .collect();
 
         div()
             .flex()
@@ -124,6 +114,7 @@ impl AiApp {
                                     div()
                                         .flex()
                                         .flex_col()
+                                        .flex_1()
                                         .gap(S1)
                                         .child(
                                             div()
@@ -142,6 +133,14 @@ impl AiApp {
                                                 )
                                                 .child(desc_s),
                                         ),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(10.))
+                                        .text_color(
+                                            cx.theme().muted_foreground.opacity(OPACITY_TEXT_MUTED),
+                                        )
+                                        .child(SharedString::from(format!("\u{2318}{}", i + 1))),
                                 )
                         },
                     )),

@@ -24,10 +24,6 @@ pub(super) const S8: Pixels = px(40.);
 pub(super) const S9: Pixels = px(48.);
 
 // -- Border radii --
-pub(super) const RADIUS_XS: Pixels = px(3.);
-pub(super) const RADIUS_SM: Pixels = px(4.);
-pub(super) const RADIUS_MD: Pixels = px(6.);
-pub(super) const RADIUS_LG: Pixels = px(10.);
 pub(super) const R_SM: Pixels = px(8.);
 pub(super) const R_MD: Pixels = px(10.);
 pub(super) const R_LG: Pixels = px(12.);
@@ -42,17 +38,26 @@ pub(super) const ICON_MD: Pixels = px(16.);
 pub(super) const SIDEBAR_W: Pixels = px(240.);
 pub(super) const TITLEBAR_H: Pixels = px(48.);
 pub(super) const SIDEBAR_ROW_H: Pixels = px(52.);
-pub(super) const COMPOSER_H: Pixels = px(36.);
+pub(super) const COMPOSER_H: Pixels = px(40.);
 pub(super) const SEARCH_H: Pixels = px(36.);
 pub(super) const SIDEBAR_INSET_X: Pixels = S3;
 pub(super) const PANEL_INSET_X: Pixels = S4;
 
 // -- Message bubble tokens --
-pub(super) const MSG_PX: Pixels = SP_9;
+pub(super) const MSG_PX: Pixels = S4;
 pub(super) const MSG_PY: Pixels = SP_7;
-pub(super) const MSG_RADIUS: Pixels = px(10.);
-pub(super) const MSG_GAP: Pixels = SP_9;
-pub(super) const MSG_GAP_CONTINUATION: Pixels = SP_3;
+pub(super) const MSG_RADIUS: Pixels = R_XL;
+pub(super) const MSG_GAP: Pixels = S6;
+pub(super) const MSG_GAP_CONTINUATION: Pixels = S2;
+
+/// Welcome screen suggestion card definitions.
+/// Shared between render_welcome (UI) and render_keydown (Cmd+1-4 shortcuts).
+pub(super) const WELCOME_SUGGESTIONS: [(&str, &str); 4] = [
+    ("Write a script", "to automate a repetitive task"),
+    ("Explain how", "this code works step by step"),
+    ("Help me debug", "an error I'm seeing"),
+    ("Generate a function", "that processes data"),
+];
 
 #[cfg(test)]
 mod message_spacing_tests {
@@ -60,10 +65,10 @@ mod message_spacing_tests {
 
     #[test]
     fn test_message_spacing_constants_preserve_transition_separation_when_using_scale_tokens() {
-        assert_eq!(MSG_PX, SP_9);
+        assert_eq!(MSG_PX, S4);
         assert_eq!(MSG_PY, SP_7);
-        assert_eq!(MSG_GAP, SP_9);
-        assert_eq!(MSG_GAP_CONTINUATION, SP_3);
+        assert_eq!(MSG_GAP, S6);
+        assert_eq!(MSG_GAP_CONTINUATION, S2);
         assert!(MSG_GAP / MSG_GAP_CONTINUATION > 1.0);
     }
 }
@@ -91,13 +96,23 @@ mod layout_token_tests {
         assert_eq!(R_XL, px(16.));
 
         assert_eq!(SIDEBAR_ROW_H, px(52.));
-        assert_eq!(COMPOSER_H, px(36.));
+        assert_eq!(COMPOSER_H, px(40.));
         assert_eq!(SEARCH_H, px(36.));
         assert_eq!(SIDEBAR_INSET_X, S3);
         assert_eq!(PANEL_INSET_X, S4);
         assert_eq!(TITLEBAR_H, px(48.));
     }
 }
+
+// -- Image thumbnails --
+pub(super) const IMG_THUMBNAIL_SIZE: Pixels = px(120.);
+
+// -- Animation constants --
+pub(super) const ANIM_CYCLE_MS: u64 = 1200;
+
+// -- Streaming cursor opacity range: base + amplitude * sin(t) --
+pub(super) const CURSOR_OPACITY_BASE: f32 = 0.7;
+pub(super) const CURSOR_OPACITY_AMP: f32 = 0.3;
 
 // -- Dot separator --
 pub(super) const DOT_SIZE: Pixels = px(3.);
@@ -444,6 +459,12 @@ pub(super) static AI_PENDING_COMMANDS: std::sync::OnceLock<std::sync::Mutex<Vec<
     std::sync::OnceLock::new();
 
 /// Commands that can be sent to the AI window (for testing)
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct StartChatResolvedMetadata {
+    pub(crate) model_id: String,
+    pub(crate) provider: String,
+}
+
 #[derive(Clone)]
 #[allow(clippy::enum_variant_names)]
 pub(super) enum AiCommand {
@@ -485,6 +506,8 @@ pub(super) enum AiCommand {
         image: Option<String>,
         system_prompt: Option<String>,
         model_id: Option<String>,
+        provider: Option<String>,
+        on_created: Option<std::sync::Arc<dyn Fn(String, String) + Send + Sync + 'static>>,
         /// If true, trigger AI streaming response after creating the user message.
         submit: bool,
     },
