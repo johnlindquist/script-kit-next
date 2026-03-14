@@ -174,6 +174,39 @@ impl AiApp {
             return;
         }
 
+        // Cmd+1-4: submit welcome suggestion cards (only when welcome screen is visible)
+        if modifiers.platform
+            && !modifiers.shift
+            && !modifiers.alt
+            && !modifiers.control
+            && self.current_messages.is_empty()
+            && !self.is_streaming
+            && !self.available_models.is_empty()
+        {
+            let idx = match key {
+                "1" => Some(0),
+                "2" => Some(1),
+                "3" => Some(2),
+                "4" => Some(3),
+                _ => None,
+            };
+            if let Some(i) = idx {
+                let (title, desc) = WELCOME_SUGGESTIONS[i];
+                let prompt = format!("{} {}", title, desc);
+                info!(
+                    shortcut = i + 1,
+                    prompt = %prompt,
+                    "welcome_suggestion_shortcut"
+                );
+                self.input_state.update(cx, |state, cx| {
+                    state.set_value(&prompt, window, cx);
+                });
+                self.submit_message(window, cx);
+                cx.stop_propagation();
+                return;
+            }
+        }
+
         // platform modifier = Cmd on macOS, Ctrl on Windows/Linux
         if modifiers.platform {
             match key {
@@ -193,7 +226,7 @@ impl AiApp {
                         self.hide_all_dropdowns(cx);
                         self.show_presets_dropdown(window, cx);
                     } else {
-                        self.create_chat(window, cx);
+                        self.new_conversation(window, cx);
                     }
                 }
                 // Cmd+Shift+F to focus search (expand sidebar if collapsed)
@@ -276,6 +309,28 @@ impl AiApp {
         // Escape closes shortcuts overlay
         if is_key_escape(key) && self.showing_shortcuts_overlay {
             self.showing_shortcuts_overlay = false;
+            cx.notify();
+            cx.stop_propagation();
+            return;
+        }
+
+        // Escape clears active search before falling through to close/stop handlers
+        if is_key_escape(key) && !self.search_query.is_empty() {
+            info!(
+                previous_query = %self.search_query,
+                "escape_clear_search"
+            );
+            self.search_query.clear();
+            self.search_generation += 1;
+            self.search_snippets.clear();
+            self.search_matched_title.clear();
+            self.chats = crate::ai::storage::get_all_chats().unwrap_or_default();
+            // Clear the search input text
+            self.search_state.update(cx, |state, cx| {
+                state.set_value("", window, cx);
+            });
+            // Return focus to chat input
+            self.focus_input(window, cx);
             cx.notify();
             cx.stop_propagation();
             return;
