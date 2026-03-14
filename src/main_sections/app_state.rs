@@ -175,8 +175,6 @@ struct ScriptListApp {
     cached_fallbacks: Vec<crate::fallbacks::FallbackItem>,
     // Theme before chooser was opened (for cancel/restore)
     theme_before_chooser: Option<std::sync::Arc<theme::Theme>>,
-    // P0-2: Debounce hover notify calls (16ms window to reduce 50% unnecessary re-renders)
-    last_hover_notify: std::time::Instant,
     // Render log deduplication: only log when meaningful state changes (not cursor blink)
     last_render_log_filter: String,
     last_render_log_selection: usize,

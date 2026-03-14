@@ -207,18 +207,6 @@ enum PromptMessage {
         text: String,
         duration_ms: Option<u64>,
     },
-    /// Display a system notification
-    Notify {
-        title: Option<String>,
-        body: Option<String>,
-    },
-    /// Play the system feedback sound
-    Beep,
-    /// Speak text via system TTS
-    Say {
-        text: String,
-        voice: Option<String>,
-    },
     /// Update the script status indicator/log
     SetStatus {
         status: String,

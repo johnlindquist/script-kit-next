@@ -196,10 +196,6 @@ impl RenderOnce for UnifiedListItem {
             );
         }
 
-        if !state.is_selected && !state.is_disabled {
-            inner = inner.hover(move |s| s.bg(hover_bg));
-        }
-
         let accent_color = rgb(colors.accent);
         let mut container = div()
             .w_full()
@@ -208,6 +204,10 @@ impl RenderOnce for UnifiedListItem {
             .flex_row()
             .items_center()
             .id(self.id);
+
+        if !state.is_selected && !state.is_disabled {
+            container = container.hover(move |s| s.bg(hover_bg));
+        }
 
         if self.show_accent_bar {
             container = container

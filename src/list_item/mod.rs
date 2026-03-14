@@ -1268,7 +1268,9 @@ impl RenderOnce for ListItem {
         // without waiting for state updates via cx.notify().
         //
         // For selected items, we don't apply hover styles (they already have full focus styling).
+        let inner_content_id = ElementId::NamedInteger("list-item-inner".into(), item_index as u64);
         let mut inner_content = div()
+            .id(inner_content_id)
             .w_full()
             .h_full()
             .px(px(ITEM_PADDING_X))

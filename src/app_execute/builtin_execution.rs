@@ -1,7 +1,7 @@
 /// Small async yield (in ms) before opening the AI window to let pending GPUI operations complete.
 const AI_WINDOW_ASYNC_YIELD_MS: u64 = 1;
 /// Delay between hiding the main window and starting a synchronous screenshot capture.
-const AI_CAPTURE_HIDE_SETTLE_MS: u64 = 100;
+const AI_CAPTURE_HIDE_SETTLE_MS: u64 = 150;
 
 fn ai_open_failure_message(error: impl std::fmt::Display) -> String {
     format!("Failed to open AI: {}", error)
@@ -18,6 +18,7 @@ fn ai_command_uses_hide_then_capture_flow(cmd_type: &builtins::AiCommandType) ->
     )
 }
 
+#[cfg(test)]
 fn favorites_loaded_message(count: usize) -> String {
     if count == 1 {
         "Loaded 1 favorite".to_string()
@@ -39,6 +40,7 @@ fn created_file_path_for_feedback(path: &std::path::Path) -> std::path::PathBuf 
 }
 
 #[cfg(target_os = "macos")]
+#[allow(dead_code)] // Retained for potential future AppleScript-based pickers
 fn applescript_list_literal(values: &[String]) -> String {
     let escaped_values = values
         .iter()
@@ -49,6 +51,7 @@ fn applescript_list_literal(values: &[String]) -> String {
 }
 
 #[cfg(target_os = "macos")]
+#[allow(dead_code)] // Retained for potential future AppleScript-based pickers
 fn choose_from_list(
     prompt: &str,
     ok_button: &str,
@@ -80,6 +83,7 @@ return item 1 of selectedItem"#,
 }
 
 #[cfg(target_os = "macos")]
+#[allow(dead_code)] // Retained for potential future AppleScript-based pickers
 fn prompt_for_text(
     prompt: &str,
     default_value: &str,
@@ -111,6 +115,7 @@ fn emoji_picker_label(emoji: &script_kit_gpui::emoji::Emoji) -> String {
     format!("{}  {}", emoji.emoji, emoji.name)
 }
 
+#[allow(dead_code)] // Used in tests
 fn quicklink_picker_label(quicklink: &script_kit_gpui::quicklinks::Quicklink) -> String {
     format!(
         "{}  {}",
@@ -124,11 +129,12 @@ impl ScriptListApp {
         tracing::info!(
             action = "send_screen_to_ai_scheduled",
             hide_settle_ms = AI_CAPTURE_HIDE_SETTLE_MS,
-            "Scheduling screen capture for AI after hiding main window"
+            "Deferring main window hide and scheduling screen capture for AI"
         );
 
+        platform::defer_hide_main_window(cx);
+
         cx.spawn(async move |this, cx| {
-            platform::hide_main_window_for_capture();
             cx.background_executor()
                 .timer(ai_capture_hide_settle_duration())
                 .await;
@@ -211,11 +217,12 @@ impl ScriptListApp {
         tracing::info!(
             action = "send_focused_window_to_ai_scheduled",
             hide_settle_ms = AI_CAPTURE_HIDE_SETTLE_MS,
-            "Scheduling focused window capture for AI after hiding main window"
+            "Deferring main window hide and scheduling focused window capture for AI"
         );
 
+        platform::defer_hide_main_window(cx);
+
         cx.spawn(async move |this, cx| {
-            platform::hide_main_window_for_capture();
             cx.background_executor()
                 .timer(ai_capture_hide_settle_duration())
                 .await;
@@ -679,45 +686,14 @@ impl ScriptListApp {
                 }
             }
             builtins::BuiltInFeature::Favorites => {
-                tracing::info!(message = %"Opening Favorites");
-
-                match crate::favorites::load_favorites() {
-                    Ok(favorites) => {
-                        if favorites.script_ids.is_empty() {
-                            // Clear stale favorites filter to prevent state leak
-                            self.active_favorites = None;
-                            self.invalidate_filter_cache();
-                            self.invalidate_grouped_cache();
-                            self.sync_list_state();
-
-                            self.toast_manager.push(
-                                components::toast::Toast::info(
-                                    "No favorites yet. Use Add to Favorites from an item action menu.",
-                                    &self.theme,
-                                )
-                                .duration_ms(Some(TOAST_INFO_MS)),
-                            );
-                        } else {
-                            // Store loaded favorites so the script list can filter by them
-                            self.active_favorites = Some(favorites.script_ids.clone());
-                            self.invalidate_filter_cache();
-                            self.invalidate_grouped_cache();
-                            self.sync_list_state();
-
-                            self.toast_manager.push(
-                                components::toast::Toast::success(
-                                    favorites_loaded_message(favorites.script_ids.len()),
-                                    &self.theme,
-                                )
-                                .duration_ms(Some(TOAST_SUCCESS_MS)),
-                            );
-                        }
-                    }
-                    Err(error) => {
-                        tracing::error!(message = %&format!("Failed to load favorites: {}", error));
-                        self.show_error_toast(format!("Failed to load favorites: {}", error), cx);
-                    }
-                }
+                tracing::info!(action = "open_favorites_view", "Opening Favorites browse view");
+                self.filter_text.clear();
+                self.pending_filter_sync = true;
+                self.current_view = AppView::FavoritesBrowseView {
+                    filter: String::new(),
+                    selected_index: 0,
+                };
+                self.pending_focus = Some(FocusTarget::MainFilter);
                 cx.notify();
             }
             builtins::BuiltInFeature::AppLauncher => {
@@ -873,134 +849,15 @@ impl ScriptListApp {
                 cx.notify();
             }
             builtins::BuiltInFeature::Quicklinks => {
-                tracing::info!(message = %"correlation_id=builtin-quicklinks-start action=show-quicklinks-list",
-                );
-
-                #[cfg(target_os = "macos")]
-                {
-                    let quicklinks = script_kit_gpui::quicklinks::load_quicklinks();
-                    if quicklinks.is_empty() {
-                        self.toast_manager.push(
-                            components::toast::Toast::info(
-                                "No quicklinks found. Add quicklinks to ~/.scriptkit/quicklinks.json",
-                                &self.theme,
-                            )
-                            .duration_ms(Some(TOAST_INFO_MS)),
-                        );
-                        cx.notify();
-                        return;
-                    }
-
-                    let quicklink_labels: Vec<String> =
-                        quicklinks.iter().map(quicklink_picker_label).collect();
-                    let default_query = self.filter_text.trim().to_string();
-
-                    match choose_from_list("Select a quicklink to open", "Open", &quicklink_labels)
-                    {
-                        Ok(Some(selected_label)) => {
-                            if let Some(index) = quicklink_labels
-                                .iter()
-                                .position(|label| label == &selected_label)
-                            {
-                                let selected_quicklink = &quicklinks[index];
-                                let query = if script_kit_gpui::quicklinks::has_query_placeholder(
-                                    &selected_quicklink.url_template,
-                                ) {
-                                    match prompt_for_text(
-                                        "Enter quicklink query",
-                                        &default_query,
-                                        "Open",
-                                    ) {
-                                        Ok(Some(value)) => value,
-                                        Ok(None) => {
-                                            tracing::info!(message = %&format!(
-                                                    "correlation_id=builtin-quicklinks-cancelled id={}",
-                                                    selected_quicklink.id
-                                                ),
-                                            );
-                                            return;
-                                        }
-                                        Err(error) => {
-                                            tracing::error!(message = %&format!(
-                                                    "correlation_id=builtin-quicklinks-query-error id={} attempted=prompt-query error={}",
-                                                    selected_quicklink.id, error
-                                                ),
-                                            );
-                                            self.show_error_toast(
-                                                format!("Failed to get quicklink query: {}", error),
-                                                cx,
-                                            );
-                                            return;
-                                        }
-                                    }
-                                } else {
-                                    String::new()
-                                };
-
-                                let expanded_url = script_kit_gpui::quicklinks::expand_url(
-                                    &selected_quicklink.url_template,
-                                    query.trim(),
-                                );
-                                match open::that(&expanded_url) {
-                                    Ok(_) => {
-                                        tracing::info!(message = %&format!(
-                                                "correlation_id=builtin-quicklinks-opened id={} url={}",
-                                                selected_quicklink.id, expanded_url
-                                            ),
-                                        );
-                                        self.show_hud(
-                                            format!("Opened {}", selected_quicklink.name),
-                                            Some(HUD_SHORT_MS),
-                                            cx,
-                                        );
-                                        self.close_and_reset_window(cx);
-                                    }
-                                    Err(error) => {
-                                        tracing::error!(message = %&format!(
-                                                "correlation_id=builtin-quicklinks-open-failed id={} url={} error={}",
-                                                selected_quicklink.id, expanded_url, error
-                                            ),
-                                        );
-                                        self.show_error_toast(
-                                            format!("Failed to open quicklink: {}", error),
-                                            cx,
-                                        );
-                                    }
-                                }
-                            } else {
-                                tracing::error!(message = %&format!(
-                                        "correlation_id=builtin-quicklinks-missing-selection selected_label=\"{}\"",
-                                        selected_label
-                                    ),
-                                );
-                                self.show_error_toast(
-                                    "Selected quicklink could not be resolved.",
-                                    cx,
-                                );
-                            }
-                        }
-                        Ok(None) => {
-                            tracing::info!(message = %"correlation_id=builtin-quicklinks-cancelled");
-                        }
-                        Err(error) => {
-                            tracing::error!(message = %&format!(
-                                    "correlation_id=builtin-quicklinks-list-error attempted=list-quicklinks error={}",
-                                    error
-                                ),
-                            );
-                            self.show_error_toast(
-                                format!("Failed to open Quicklinks: {}", error),
-                                cx,
-                            );
-                        }
-                    }
-                }
-                #[cfg(not(target_os = "macos"))]
-                {
-                    tracing::warn!(message = %"correlation_id=builtin-quicklinks-unsupported platform=non-macos",
-                    );
-                    self.show_unsupported_platform_toast("Quicklinks", cx);
-                }
+                tracing::info!(action = "show_quicklinks_browse", "Opening quicklinks browse view");
+                self.filter_text.clear();
+                self.pending_filter_sync = true;
+                self.current_view = AppView::QuicklinksBrowseView {
+                    filter: String::new(),
+                    selected_index: 0,
+                };
+                self.pending_focus = Some(FocusTarget::MainFilter);
+                cx.notify();
             }
             builtins::BuiltInFeature::MenuBarAction(action) => {
                 tracing::info!(message = %&format!(
@@ -1079,7 +936,7 @@ impl ScriptListApp {
                 use builtins::AiCommandType;
 
                 let is_generate_script = matches!(cmd_type, AiCommandType::GenerateScript);
-                let uses_hide_then_capture_flow = ai_command_uses_hide_then_capture_flow(&cmd_type);
+                let uses_hide_then_capture_flow = ai_command_uses_hide_then_capture_flow(cmd_type);
                 if !is_generate_script {
                     // Most AI commands open a separate AI window.
                     script_kit_gpui::set_main_window_visible(false);
@@ -1873,9 +1730,10 @@ impl ScriptListApp {
 #[cfg(test)]
 mod builtin_execution_ai_feedback_tests {
     use super::{
-        ai_capture_hide_settle_duration, ai_command_uses_hide_then_capture_flow,
-        ai_open_failure_message, created_file_path_for_feedback, emoji_picker_label,
-        favorites_loaded_message, quicklink_picker_label, AI_CAPTURE_HIDE_SETTLE_MS,
+        AI_CAPTURE_HIDE_SETTLE_MS, ai_capture_hide_settle_duration,
+        ai_command_uses_hide_then_capture_flow, ai_open_failure_message,
+        created_file_path_for_feedback, emoji_picker_label, favorites_loaded_message,
+        quicklink_picker_label,
     };
     use crate::builtins::AiCommandType;
     use script_kit_gpui::emoji::{Emoji, EmojiCategory};
@@ -1921,6 +1779,15 @@ mod builtin_execution_ai_feedback_tests {
         assert_eq!(
             ai_capture_hide_settle_duration(),
             std::time::Duration::from_millis(AI_CAPTURE_HIDE_SETTLE_MS)
+        );
+    }
+
+    #[test]
+    fn test_ai_capture_hide_settle_duration_waits_150ms() {
+        assert_eq!(AI_CAPTURE_HIDE_SETTLE_MS, 150);
+        assert_eq!(
+            ai_capture_hide_settle_duration(),
+            std::time::Duration::from_millis(150)
         );
     }
 

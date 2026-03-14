@@ -328,6 +328,7 @@ impl PromptHeader {
             // "Ask AI" text button - ghost/transparent style
             .child(
                 div()
+                    .id("ask-ai-btn")
                     .min_h(px(BUTTON_GHOST_HEIGHT))
                     .px(px(BUTTON_GHOST_PADDING_X))
                     .py(px(BUTTON_GHOST_PADDING_Y))
@@ -348,6 +349,7 @@ impl PromptHeader {
             // "Tab" badge button - ghost/transparent style with border
             .child(
                 div()
+                    .id("tab-badge-btn")
                     .flex_shrink_0()
                     .min_h(px(BUTTON_GHOST_HEIGHT))
                     .px(px(BUTTON_GHOST_PADDING_X))

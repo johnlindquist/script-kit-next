@@ -134,6 +134,184 @@ fn take_active_script_session(
         .take()
         .ok_or_else(|| format_missing_interactive_session_error(script_name, script_path))
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ExecuteScriptFeedbackCommandSpec {
+    program: &'static str,
+    args: Vec<String>,
+}
+
+fn execute_script_normalize_optional_text(value: Option<String>) -> Option<String> {
+    value.and_then(|value| {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
+}
+
+fn execute_script_normalize_notify_fields(
+    title: Option<String>,
+    body: Option<String>,
+) -> Option<(String, String)> {
+    let normalized_title = execute_script_normalize_optional_text(title);
+    let normalized_body = execute_script_normalize_optional_text(body);
+
+    match (normalized_title, normalized_body) {
+        (Some(title), Some(body)) => Some((title, body)),
+        (Some(title), None) => Some((title.clone(), title)),
+        (None, Some(body)) => Some(("Script Kit".to_string(), body)),
+        (None, None) => None,
+    }
+}
+
+fn execute_script_escape_applescript_string(value: &str) -> String {
+    format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
+}
+
+fn execute_script_build_beep_command_spec() -> ExecuteScriptFeedbackCommandSpec {
+    ExecuteScriptFeedbackCommandSpec {
+        program: "afplay",
+        args: vec!["/System/Library/Sounds/Tink.aiff".to_string()],
+    }
+}
+
+fn execute_script_build_notify_command_spec(
+    title: Option<String>,
+    body: Option<String>,
+) -> Option<ExecuteScriptFeedbackCommandSpec> {
+    let (title, body) = execute_script_normalize_notify_fields(title, body)?;
+    let script = format!(
+        "display notification {} with title {}",
+        execute_script_escape_applescript_string(&body),
+        execute_script_escape_applescript_string(&title)
+    );
+
+    Some(ExecuteScriptFeedbackCommandSpec {
+        program: "osascript",
+        args: vec!["-e".to_string(), script],
+    })
+}
+
+fn execute_script_build_say_command_spec(
+    text: String,
+    voice: Option<String>,
+) -> Option<ExecuteScriptFeedbackCommandSpec> {
+    let text = execute_script_normalize_optional_text(Some(text))?;
+    let voice = execute_script_normalize_optional_text(voice);
+
+    let mut args = Vec::new();
+    if let Some(voice) = voice {
+        args.push("-v".to_string());
+        args.push(voice);
+    }
+    args.push(text);
+
+    Some(ExecuteScriptFeedbackCommandSpec {
+        program: "say",
+        args,
+    })
+}
+
+fn execute_script_spawn_feedback_command(
+    effect: &'static str,
+    spec: ExecuteScriptFeedbackCommandSpec,
+) -> std::io::Result<()> {
+    tracing::info!(
+        category = "EXEC",
+        effect = %effect,
+        program = spec.program,
+        args = ?spec.args,
+        "Dispatching protocol feedback command"
+    );
+
+    let mut command = std::process::Command::new(spec.program);
+    command
+        .args(&spec.args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+
+    let child = command.spawn()?;
+    drop(child);
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn execute_script_dispatch_beep_command() -> std::io::Result<()> {
+    execute_script_spawn_feedback_command("beep", execute_script_build_beep_command_spec())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn execute_script_dispatch_beep_command() -> std::io::Result<()> {
+    tracing::info!(
+        category = "EXEC",
+        effect = "beep",
+        platform = std::env::consts::OS,
+        "Skipping beep protocol feedback command on unsupported platform"
+    );
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn execute_script_dispatch_notify_command(
+    title: Option<String>,
+    body: Option<String>,
+) -> std::io::Result<()> {
+    let Some(spec) = execute_script_build_notify_command_spec(title, body) else {
+        tracing::info!(
+            category = "EXEC",
+            effect = "notify",
+            "Skipping notify protocol feedback command because title and body were empty"
+        );
+        return Ok(());
+    };
+
+    execute_script_spawn_feedback_command("notify", spec)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn execute_script_dispatch_notify_command(
+    title: Option<String>,
+    body: Option<String>,
+) -> std::io::Result<()> {
+    let _ = (title, body);
+    tracing::info!(
+        category = "EXEC",
+        effect = "notify",
+        platform = std::env::consts::OS,
+        "Skipping notify protocol feedback command on unsupported platform"
+    );
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn execute_script_dispatch_say_command(text: String, voice: Option<String>) -> std::io::Result<()> {
+    let Some(spec) = execute_script_build_say_command_spec(text, voice) else {
+        tracing::info!(
+            category = "EXEC",
+            effect = "say",
+            "Skipping say protocol feedback command because text was empty"
+        );
+        return Ok(());
+    };
+
+    execute_script_spawn_feedback_command("say", spec)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn execute_script_dispatch_say_command(text: String, voice: Option<String>) -> std::io::Result<()> {
+    let _ = (text, voice);
+    tracing::info!(
+        category = "EXEC",
+        effect = "say",
+        platform = std::env::consts::OS,
+        "Skipping say protocol feedback command on unsupported platform"
+    );
+    Ok(())
+}
 // --- merged from part_001.rs ---
 impl ScriptListApp {
     fn execute_interactive(&mut self, script: &scripts::Script, cx: &mut Context<Self>) {
@@ -1523,11 +1701,77 @@ impl ScriptListApp {
                                             Some(PromptMessage::ShowHud { text, duration_ms })
                                         }
                                         Message::Notify { title, body } => {
-                                            Some(PromptMessage::Notify { title, body })
+                                            tracing::info!(
+                                                category = "EXEC",
+                                                effect = "notify",
+                                                has_title = title
+                                                    .as_ref()
+                                                    .map(|value| !value.trim().is_empty())
+                                                    .unwrap_or(false),
+                                                has_body = body
+                                                    .as_ref()
+                                                    .map(|value| !value.trim().is_empty())
+                                                    .unwrap_or(false),
+                                                "Received notify protocol message"
+                                            );
+                                            if let Err(error) =
+                                                execute_script_dispatch_notify_command(title, body)
+                                            {
+                                                tracing::warn!(
+                                                    category = "EXEC",
+                                                    effect = "notify",
+                                                    attempted = "osascript -e 'display notification ... with title ...'",
+                                                    error = %error,
+                                                    state = "spawn_failed",
+                                                    "Failed to dispatch notify protocol feedback command"
+                                                );
+                                            }
+                                            None
                                         }
-                                        Message::Beep {} => Some(PromptMessage::Beep),
+                                        Message::Beep {} => {
+                                            tracing::info!(
+                                                category = "EXEC",
+                                                effect = "beep",
+                                                "Received beep protocol message"
+                                            );
+                                            if let Err(error) =
+                                                execute_script_dispatch_beep_command()
+                                            {
+                                                tracing::warn!(
+                                                    category = "EXEC",
+                                                    effect = "beep",
+                                                    attempted = "afplay /System/Library/Sounds/Tink.aiff",
+                                                    error = %error,
+                                                    state = "spawn_failed",
+                                                    "Failed to dispatch beep protocol feedback command"
+                                                );
+                                            }
+                                            None
+                                        }
                                         Message::Say { text, voice } => {
-                                            Some(PromptMessage::Say { text, voice })
+                                            tracing::info!(
+                                                category = "EXEC",
+                                                effect = "say",
+                                                has_voice = voice
+                                                    .as_ref()
+                                                    .map(|value| !value.trim().is_empty())
+                                                    .unwrap_or(false),
+                                                text_len = text.chars().count(),
+                                                "Received say protocol message"
+                                            );
+                                            if let Err(error) =
+                                                execute_script_dispatch_say_command(text, voice)
+                                            {
+                                                tracing::warn!(
+                                                    category = "EXEC",
+                                                    effect = "say",
+                                                    attempted = "say [-v voice] <text>",
+                                                    error = %error,
+                                                    state = "spawn_failed",
+                                                    "Failed to dispatch say protocol feedback command"
+                                                );
+                                            }
+                                            None
                                         }
                                         Message::SetStatus { status, message } => {
                                             Some(PromptMessage::SetStatus { status, message })
@@ -1873,5 +2117,79 @@ mod execute_script_session_tests {
             "a".repeat(CLIPBOARD_HISTORY_PREVIEW_CHAR_LIMIT - 1)
         );
         assert_eq!(truncated, expected);
+    }
+
+    #[test]
+    fn test_execute_script_build_macos_beep_command_spec_uses_tink_sound() {
+        let spec = execute_script_build_beep_command_spec();
+
+        assert_eq!(spec.program, "afplay");
+        assert_eq!(
+            spec.args,
+            vec!["/System/Library/Sounds/Tink.aiff".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_execute_script_build_notify_command_spec_escapes_applescript_literals() {
+        let spec = execute_script_build_notify_command_spec(
+            Some(r#"Build "Done""#.to_string()),
+            Some(r#"Line 1 \ Line 2"#.to_string()),
+        )
+        .expect("notify command should be built when title or body is present");
+
+        assert_eq!(spec.program, "osascript");
+        assert_eq!(
+            spec.args,
+            vec![
+                "-e".to_string(),
+                "display notification \"Line 1 \\\\ Line 2\" with title \"Build \\\"Done\\\"\""
+                    .to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_execute_script_build_notify_command_spec_defaults_missing_fields() {
+        let title_only_spec =
+            execute_script_build_notify_command_spec(Some("Build Finished".to_string()), None)
+                .expect("notify command should reuse the title as the body when body is missing");
+        assert_eq!(
+            title_only_spec.args,
+            vec![
+                "-e".to_string(),
+                "display notification \"Build Finished\" with title \"Build Finished\"".to_string(),
+            ]
+        );
+
+        let body_only_spec =
+            execute_script_build_notify_command_spec(None, Some("All green".to_string()))
+                .expect("notify command should default the title when body is present");
+        assert_eq!(
+            body_only_spec.args,
+            vec![
+                "-e".to_string(),
+                "display notification \"All green\" with title \"Script Kit\"".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_execute_script_build_say_command_spec_includes_voice_when_present() {
+        let spec = execute_script_build_say_command_spec(
+            "Hello from Script Kit".to_string(),
+            Some("Samantha".to_string()),
+        )
+        .expect("say command should be built for non-empty text");
+
+        assert_eq!(spec.program, "say");
+        assert_eq!(
+            spec.args,
+            vec![
+                "-v".to_string(),
+                "Samantha".to_string(),
+                "Hello from Script Kit".to_string(),
+            ]
+        );
     }
 }

@@ -14,3 +14,5 @@ include!("kit_store.rs");
 include!("process_manager.rs");
 include!("ai_presets.rs");
 include!("settings.rs");
+include!("quicklinks.rs");
+include!("favorites.rs");

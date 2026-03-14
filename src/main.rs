@@ -301,6 +301,8 @@ include!("render_prompts/term.rs");
 include!("render_prompts/editor.rs");
 include!("render_prompts/path.rs");
 include!("render_prompts/other.rs");
+include!("render_prompts/mini.rs");
+include!("render_prompts/micro.rs");
 
 // Script list render method
 include!("render_script_list/mod.rs");
