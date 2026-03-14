@@ -1,7 +1,7 @@
 use super::*;
 use crate::theme::opacity::{
-    OPACITY_MESSAGE_ASSISTANT_BACKGROUND, OPACITY_MESSAGE_BORDER, OPACITY_MESSAGE_USER_BACKGROUND,
-    OPACITY_MUTED, OPACITY_NEAR_FULL, OPACITY_SELECTED, OPACITY_STRONG, OPACITY_SUBTLE,
+    OPACITY_MESSAGE_ASSISTANT_BACKGROUND, OPACITY_MESSAGE_USER_BACKGROUND, OPACITY_MUTED,
+    OPACITY_SELECTED, OPACITY_STRONG, OPACITY_SUBTLE,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,32 +14,24 @@ pub(super) enum MessageCueTone {
 pub(super) struct MessageBubbleCue {
     pub(super) background_tone: MessageCueTone,
     pub(super) background_opacity: f32,
-    pub(super) border_tone: MessageCueTone,
-    pub(super) border_opacity: f32,
     pub(super) italic: bool,
 }
 
 pub(super) fn message_bubble_cue(role: MessageRole) -> MessageBubbleCue {
     match role {
         MessageRole::User => MessageBubbleCue {
-            background_tone: MessageCueTone::Accent,
+            background_tone: MessageCueTone::Muted,
             background_opacity: OPACITY_MESSAGE_USER_BACKGROUND,
-            border_tone: MessageCueTone::Accent,
-            border_opacity: OPACITY_MESSAGE_BORDER,
             italic: false,
         },
         MessageRole::Assistant => MessageBubbleCue {
             background_tone: MessageCueTone::Muted,
-            background_opacity: OPACITY_MESSAGE_ASSISTANT_BACKGROUND,
-            border_tone: MessageCueTone::Muted,
-            border_opacity: OPACITY_MUTED,
+            background_opacity: 0.0,
             italic: false,
         },
         MessageRole::System => MessageBubbleCue {
             background_tone: MessageCueTone::Muted,
             background_opacity: OPACITY_MESSAGE_ASSISTANT_BACKGROUND,
-            border_tone: MessageCueTone::Muted,
-            border_opacity: OPACITY_SELECTED,
             italic: true,
         },
     }
@@ -61,10 +53,6 @@ impl AiApp {
         let bubble_bg = match cue.background_tone {
             MessageCueTone::Accent => cx.theme().accent.opacity(cue.background_opacity),
             MessageCueTone::Muted => cx.theme().muted.opacity(cue.background_opacity),
-        };
-        let bubble_border_color = match cue.border_tone {
-            MessageCueTone::Accent => cx.theme().accent.opacity(cue.border_opacity),
-            MessageCueTone::Muted => cx.theme().muted_foreground.opacity(cue.border_opacity),
         };
 
         // Collect cached thumbnails for this message's images
@@ -102,13 +90,6 @@ impl AiApp {
             .to_string()
             .into();
 
-        let role_icon = if is_user {
-            LocalIconName::Terminal
-        } else if is_system {
-            LocalIconName::Settings
-        } else {
-            LocalIconName::MessageCircle
-        };
         let role_label = if is_user {
             "You"
         } else if is_system {
@@ -132,38 +113,20 @@ impl AiApp {
                         .flex()
                         .items_center()
                         .justify_between()
-                        .mb(S2)
+                        .mb(S1)
                         .child(
                             div()
                                 .flex()
                                 .items_center()
                                 .gap(S2)
                                 .child(
-                                    svg()
-                                        .external_path(role_icon.external_path())
-                                        .size(ICON_SM)
-                                        .text_color(if is_user {
-                                            cx.theme().accent
-                                        } else {
-                                            cx.theme().muted_foreground.opacity(OPACITY_STRONG)
-                                        }),
-                                )
-                                .child(
                                     div()
-                                        .text_sm()
-                                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                                        .text_color(if is_user {
-                                            cx.theme().foreground
-                                        } else {
-                                            cx.theme().muted_foreground.opacity(OPACITY_NEAR_FULL)
-                                        })
+                                        .text_xs()
+                                        .font_weight(gpui::FontWeight::MEDIUM)
+                                        .text_color(
+                                            cx.theme().muted_foreground.opacity(OPACITY_STRONG),
+                                        )
                                         .child(role_label),
-                                )
-                                .child(
-                                    div()
-                                        .size(DOT_SIZE)
-                                        .rounded_full()
-                                        .bg(cx.theme().muted_foreground.opacity(OPACITY_MUTED)),
                                 )
                                 .child({
                                     let tooltip_text = full_timestamp.clone();
@@ -171,7 +134,7 @@ impl AiApp {
                                         .id(SharedString::from(format!("ts-{}", msg_id)))
                                         .text_xs()
                                         .text_color(
-                                            cx.theme().muted_foreground.opacity(OPACITY_SELECTED),
+                                            cx.theme().muted_foreground.opacity(OPACITY_MUTED),
                                         )
                                         .tooltip(move |window, cx| {
                                             Tooltip::new(tooltip_text.clone()).build(window, cx)
@@ -179,71 +142,74 @@ impl AiApp {
                                         .child(timestamp)
                                 }),
                         )
-                        // Edit button for user messages (hover-revealed)
-                        .when(is_user, |el| {
-                            el.child(
-                                div()
-                                    .id(SharedString::from(format!("edit-{}", msg_id_for_edit)))
-                                    .flex()
-                                    .items_center()
-                                    .px(S2)
-                                    .py(S1)
-                                    .rounded(R_SM)
-                                    .cursor_pointer()
-                                    .opacity(0.0)
-                                    .group_hover("message", |s| s.opacity(0.6))
-                                    .hover(|s| {
-                                        s.bg(cx.theme().muted.opacity(OPACITY_SELECTED))
-                                            .opacity(1.0)
-                                    })
-                                    .on_click(cx.listener(move |this, _, window, cx| {
-                                        this.start_editing_message(
-                                            msg_id_for_edit.clone(),
-                                            content_for_edit.clone(),
-                                            window,
-                                            cx,
-                                        );
-                                    }))
-                                    .child(
-                                        svg()
-                                            .external_path(LocalIconName::Pencil.external_path())
-                                            .size(ICON_XS)
-                                            .text_color(cx.theme().muted_foreground.opacity(0.6)),
-                                    ),
-                            )
-                        })
-                        // Copy button - shows checkmark when recently copied, hidden until hover
+                        // Hover-revealed action buttons
                         .child(
                             div()
-                                .id(SharedString::from(format!("copy-{}", msg_id)))
                                 .flex()
                                 .items_center()
                                 .gap(S1)
-                                .px(S2)
-                                .py(S1)
-                                .rounded(R_SM)
-                                .cursor_pointer()
-                                .when(!is_copied, |d| {
-                                    d.opacity(0.0).group_hover("message", |s| s.opacity(0.6))
-                                })
-                                .hover(|s| {
-                                    s.bg(cx.theme().muted.opacity(OPACITY_SELECTED))
-                                        .opacity(1.0)
-                                })
-                                .on_click(cx.listener(move |this, _, _window, cx| {
-                                    this.copy_message(
-                                        msg_id_for_click.clone(),
-                                        content_for_copy.clone(),
-                                        cx,
-                                    );
-                                }))
-                                .when(is_copied, |d| {
-                                    d.child(
+                                .opacity(0.0)
+                                .group_hover("message", |s| s.opacity(1.0))
+                                // Edit button for user messages
+                                .when(is_user, |el| {
+                                    el.child(
                                         div()
+                                            .id(SharedString::from(format!(
+                                                "edit-{}",
+                                                msg_id_for_edit
+                                            )))
                                             .flex()
                                             .items_center()
-                                            .gap(S1)
+                                            .px(S1)
+                                            .py(S1)
+                                            .rounded(R_SM)
+                                            .cursor_pointer()
+                                            .hover(|s| {
+                                                s.bg(cx.theme().muted.opacity(OPACITY_SELECTED))
+                                            })
+                                            .on_click(cx.listener(move |this, _, window, cx| {
+                                                this.start_editing_message(
+                                                    msg_id_for_edit.clone(),
+                                                    content_for_edit.clone(),
+                                                    window,
+                                                    cx,
+                                                );
+                                            }))
                                             .child(
+                                                svg()
+                                                    .external_path(
+                                                        LocalIconName::Pencil.external_path(),
+                                                    )
+                                                    .size(ICON_XS)
+                                                    .text_color(
+                                                        cx.theme()
+                                                            .muted_foreground
+                                                            .opacity(OPACITY_MUTED),
+                                                    ),
+                                            ),
+                                    )
+                                })
+                                // Copy button
+                                .child(
+                                    div()
+                                        .id(SharedString::from(format!("copy-{}", msg_id)))
+                                        .flex()
+                                        .items_center()
+                                        .gap(S1)
+                                        .px(S1)
+                                        .py(S1)
+                                        .rounded(R_SM)
+                                        .cursor_pointer()
+                                        .hover(|s| s.bg(cx.theme().muted.opacity(OPACITY_SELECTED)))
+                                        .on_click(cx.listener(move |this, _, _window, cx| {
+                                            this.copy_message(
+                                                msg_id_for_click.clone(),
+                                                content_for_copy.clone(),
+                                                cx,
+                                            );
+                                        }))
+                                        .when(is_copied, |d| {
+                                            d.child(
                                                 svg()
                                                     .external_path(
                                                         LocalIconName::Check.external_path(),
@@ -251,39 +217,33 @@ impl AiApp {
                                                     .size(ICON_XS)
                                                     .text_color(cx.theme().success),
                                             )
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .text_color(cx.theme().success)
-                                                    .child("Copied"),
-                                            ),
-                                    )
-                                })
-                                .when(!is_copied, |d| {
-                                    d.child(
-                                        svg()
-                                            .external_path(LocalIconName::Copy.external_path())
-                                            .size(ICON_XS)
-                                            .text_color(
-                                                cx.theme()
-                                                    .muted_foreground
-                                                    .opacity(OPACITY_SELECTED),
-                                            ),
-                                    )
-                                }),
+                                        })
+                                        .when(!is_copied, |d| {
+                                            d.child(
+                                                svg()
+                                                    .external_path(
+                                                        LocalIconName::Copy.external_path(),
+                                                    )
+                                                    .size(ICON_XS)
+                                                    .text_color(
+                                                        cx.theme()
+                                                            .muted_foreground
+                                                            .opacity(OPACITY_MUTED),
+                                                    ),
+                                            )
+                                        }),
+                                ),
                         ),
                 )
             })
             .child(
-                // Message content - differentiated backgrounds
+                // Message content
                 div()
                     .w_full()
                     .px(MSG_PX)
                     .py(S3)
                     .rounded(MSG_RADIUS)
                     .bg(bubble_bg)
-                    .border_l_2()
-                    .border_color(bubble_border_color)
                     .when(cue.italic, |d| d.italic())
                     .when(has_images, |el| {
                         el.child(
@@ -407,14 +367,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_message_bubble_cue_assigns_persistent_border_to_each_role() {
+    fn test_message_bubble_cue_assigns_background_to_each_role() {
         let user_cue = message_bubble_cue(MessageRole::User);
         let assistant_cue = message_bubble_cue(MessageRole::Assistant);
         let system_cue = message_bubble_cue(MessageRole::System);
 
-        assert!(user_cue.border_opacity > 0.0);
-        assert!(assistant_cue.border_opacity > 0.0);
-        assert!(system_cue.border_opacity > 0.0);
+        assert!(user_cue.background_opacity > 0.0);
+        // Assistant messages have no background (transparent)
+        assert!((assistant_cue.background_opacity - 0.0).abs() < f32::EPSILON);
+        assert!(system_cue.background_opacity > 0.0);
         assert!(!assistant_cue.italic);
         assert!(system_cue.italic);
     }

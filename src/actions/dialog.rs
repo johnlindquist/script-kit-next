@@ -41,6 +41,15 @@ use super::types::{
 };
 use crate::prompts::PathInfo;
 
+/// Tracks whether the last user input was mouse or keyboard.
+/// Used to suppress hover highlighting during keyboard navigation.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum InputMode {
+    #[default]
+    Mouse,
+    Keyboard,
+}
+
 /// Helper function to combine a hex color with an alpha value
 /// Delegates to DesignColors::hex_with_alpha for DRY
 #[inline]
@@ -308,6 +317,10 @@ pub struct ActionsDialog {
     /// Callback for when the dialog is closed (escape pressed, window dismissed)
     /// Used to notify the main app to restore focus
     pub on_close: Option<CloseCallback>,
+    /// Explicit hover tracking index (visual row index in grouped_items)
+    pub hovered_index: Option<usize>,
+    /// Tracks whether last input was mouse or keyboard to suppress dual-highlight
+    pub(crate) input_mode: InputMode,
 }
 
 #[cfg(test)]
@@ -415,6 +428,8 @@ impl ActionsDialog {
             config,
             skip_track_focus: false,
             on_close: None,
+            hovered_index: None,
+            input_mode: InputMode::default(),
         }
     }
 
@@ -1242,6 +1257,9 @@ impl ActionsDialog {
     /// (not downward) to find the previous selectable item. This ensures
     /// navigation past section headers works correctly.
     pub fn move_up(&mut self, cx: &mut Context<Self>) {
+        self.input_mode = InputMode::Keyboard;
+        self.hovered_index = None;
+
         if self.selected_index == 0 {
             return;
         }
@@ -1264,6 +1282,9 @@ impl ActionsDialog {
 
     /// Move selection down, skipping section headers
     pub fn move_down(&mut self, cx: &mut Context<Self>) {
+        self.input_mode = InputMode::Keyboard;
+        self.hovered_index = None;
+
         if self.selected_index < self.grouped_items.len().saturating_sub(1) {
             let new_index = self.selected_index + 1;
             // Skip section headers - search forward
@@ -1655,8 +1676,10 @@ impl Render for ActionsDialog {
 
             let variable_height_list = list(self.list_state.clone(), move |ix, _window, cx| {
                 // Access entity state inside the closure
-                entity.update(cx, |this, _cx| {
+                entity.update(cx, |this, cx| {
                     let current_selected = this.selected_index;
+                    let current_hovered = this.hovered_index;
+                    let current_input_mode = this.input_mode;
 
                     if let Some(grouped_item) = grouped_items_clone.get(ix) {
                         match grouped_item {
@@ -1698,6 +1721,9 @@ impl Render for ActionsDialog {
                                 if let Some(&action_idx) = this.filtered_actions.get(*filter_idx) {
                                     if let Some(action) = this.actions.get(action_idx) {
                                         let is_selected = ix == current_selected;
+                                        // Only show hover effect when in Mouse mode to prevent dual-highlight
+                                        let is_hovered = current_hovered == Some(ix)
+                                            && current_input_mode == InputMode::Mouse;
                                         let filter_ix = *filter_idx;
                                         let show_section_separator = matches!(
                                             this.config.section_style,
@@ -1873,6 +1899,36 @@ impl Render for ActionsDialog {
                                             shortcut_color = destructive_text;
                                         }
 
+                                        // Create hover handler matching render_script_list pattern
+                                        let hover_handler = cx.listener(
+                                            move |this: &mut ActionsDialog,
+                                                  hovered: &bool,
+                                                  _window,
+                                                  cx| {
+                                                if *hovered {
+                                                    this.input_mode = InputMode::Mouse;
+                                                    if this.hovered_index != Some(ix) {
+                                                        tracing::trace!(
+                                                            target: "actions_dialog",
+                                                            ix,
+                                                            prev = ?this.hovered_index,
+                                                            "hover_enter"
+                                                        );
+                                                        this.hovered_index = Some(ix);
+                                                        cx.notify();
+                                                    }
+                                                } else if this.hovered_index == Some(ix) {
+                                                    tracing::trace!(
+                                                        target: "actions_dialog",
+                                                        ix,
+                                                        "hover_leave"
+                                                    );
+                                                    this.hovered_index = None;
+                                                    cx.notify();
+                                                }
+                                            },
+                                        );
+
                                         // Inner row with pill-style selection
                                         let on_select = this.on_select.clone();
                                         let action_id_for_click = action.id.clone();
@@ -1895,15 +1951,14 @@ impl Render for ActionsDialog {
                                                 } else {
                                                     selected_bg
                                                 }
-                                            } else {
-                                                gpui::transparent_black().into()
-                                            })
-                                            .hover(move |s| {
-                                                s.bg(if is_destructive {
+                                            } else if is_hovered {
+                                                if is_destructive {
                                                     destructive_hover_bg
                                                 } else {
                                                     hover_bg
-                                                })
+                                                }
+                                            } else {
+                                                gpui::transparent_black().into()
                                             })
                                             .cursor_pointer();
 
@@ -2017,6 +2072,7 @@ impl Render for ActionsDialog {
                                             .when(show_section_separator, |d| {
                                                 d.border_t_1().border_color(section_separator_color)
                                             })
+                                            .on_hover(hover_handler)
                                             .on_mouse_down(
                                                 gpui::MouseButton::Left,
                                                 move |_, _, _| {
