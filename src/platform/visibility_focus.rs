@@ -16,9 +16,9 @@ use cocoa::foundation::NSRect;
 /// borrowed` panic that aborts the process.
 ///
 /// **Always use [`defer_hide_main_window`] instead** when inside any GPUI
-/// borrow context. The only valid direct callers are the deferred wrapper,
-/// [`hide_main_window_for_capture`], and code that is provably outside any
-/// GPUI borrow (e.g. a raw `dispatch_async` block).
+/// borrow context. The only valid direct callers are the deferred wrapper and
+/// code that is provably outside any GPUI borrow (e.g. a raw `dispatch_async`
+/// block).
 ///
 /// # macOS Behavior
 ///
@@ -74,21 +74,6 @@ pub fn defer_hide_main_window(cx: &mut gpui::App) {
         hide_main_window();
     })
     .detach();
-}
-
-/// Hide the main window immediately for capture flows that already deferred to
-/// a fresh async tick.
-///
-/// This helper exists for screenshot commands that must guarantee the main
-/// window is hidden before a synchronous capture API runs. Callers must only
-/// use it from a `cx.spawn()` task or other code that is already outside the
-/// original GPUI borrow context.
-pub(crate) fn hide_main_window_for_capture() {
-    tracing::debug!(
-        action = "hide_main_window_for_capture",
-        "Hiding main window immediately for capture flow"
-    );
-    hide_main_window();
 }
 
 /// Show the main window WITHOUT activating the application.

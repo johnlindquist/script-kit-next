@@ -8,12 +8,14 @@ pub struct Favorites {
     pub script_ids: Vec<String>,
 }
 
+#[allow(dead_code)] // Used via lib.rs path (script_kit_gpui::favorites)
 fn favorites_file_path() -> PathBuf {
     dirs::home_dir()
         .map(|home| home.join(".scriptkit").join("favorites.json"))
         .unwrap_or_else(|| PathBuf::from(".scriptkit").join("favorites.json"))
 }
 
+#[allow(dead_code)] // Used via lib.rs path
 fn load_favorites_from_path(path: &Path) -> Result<Favorites> {
     if !path.exists() {
         return Ok(Favorites::default());
@@ -26,7 +28,7 @@ fn load_favorites_from_path(path: &Path) -> Result<Favorites> {
         .with_context(|| format!("failed to parse favorites JSON at {}", path.display()))
 }
 
-#[cfg(test)]
+#[allow(dead_code)] // Used via lib.rs path
 fn save_favorites_to_path(path: &Path, favorites: &Favorites) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).with_context(|| {
@@ -45,7 +47,7 @@ fn save_favorites_to_path(path: &Path, favorites: &Favorites) -> Result<()> {
     Ok(())
 }
 
-#[cfg(test)]
+#[allow(dead_code)] // Used via lib.rs path
 fn toggle_favorite_in_path(path: &Path, id: &str) -> Result<Favorites> {
     let mut favorites = load_favorites_from_path(path)?;
 
@@ -63,17 +65,73 @@ fn toggle_favorite_in_path(path: &Path, id: &str) -> Result<Favorites> {
     Ok(favorites)
 }
 
+#[allow(dead_code)] // Used via lib.rs path
 fn is_favorite_in_path(path: &Path, id: &str) -> Result<bool> {
     let favorites = load_favorites_from_path(path)?;
     Ok(favorites.script_ids.iter().any(|script_id| script_id == id))
 }
 
+#[allow(dead_code)] // Used via lib.rs path (script_kit_gpui::favorites)
 pub fn load_favorites() -> Result<Favorites> {
     load_favorites_from_path(&favorites_file_path())
 }
 
 pub fn is_favorite(id: &str) -> bool {
     is_favorite_in_path(&favorites_file_path(), id).unwrap_or(false)
+}
+
+/// Toggle a script's favorite status (add if absent, remove if present).
+/// Returns the updated favorites list.
+#[allow(dead_code)] // Used via lib.rs path
+pub fn toggle_favorite(id: &str) -> Result<Favorites> {
+    toggle_favorite_in_path(&favorites_file_path(), id)
+}
+
+/// Save the full favorites list atomically (used for reorder operations).
+#[allow(dead_code)] // Used via lib.rs path
+pub fn save_favorites(favorites: &Favorites) -> Result<()> {
+    save_favorites_to_path(&favorites_file_path(), favorites)
+}
+
+/// Remove a script from favorites by ID. No-op if not present.
+/// Returns the updated favorites list.
+#[allow(dead_code)] // Used via lib.rs path
+pub fn remove_favorite(id: &str) -> Result<Favorites> {
+    let path = favorites_file_path();
+    let mut favorites = load_favorites_from_path(&path)?;
+    favorites.script_ids.retain(|s| s != id);
+    save_favorites_to_path(&path, &favorites)?;
+    Ok(favorites)
+}
+
+/// Move a favorite one position earlier in the list. No-op if already first or not found.
+/// Returns the updated favorites list.
+#[allow(dead_code)] // Used via lib.rs path
+pub fn move_favorite_up(id: &str) -> Result<Favorites> {
+    let path = favorites_file_path();
+    let mut favorites = load_favorites_from_path(&path)?;
+    if let Some(pos) = favorites.script_ids.iter().position(|s| s == id) {
+        if pos > 0 {
+            favorites.script_ids.swap(pos, pos - 1);
+            save_favorites_to_path(&path, &favorites)?;
+        }
+    }
+    Ok(favorites)
+}
+
+/// Move a favorite one position later in the list. No-op if already last or not found.
+/// Returns the updated favorites list.
+#[allow(dead_code)] // Used via lib.rs path
+pub fn move_favorite_down(id: &str) -> Result<Favorites> {
+    let path = favorites_file_path();
+    let mut favorites = load_favorites_from_path(&path)?;
+    if let Some(pos) = favorites.script_ids.iter().position(|s| s == id) {
+        if pos + 1 < favorites.script_ids.len() {
+            favorites.script_ids.swap(pos, pos + 1);
+            save_favorites_to_path(&path, &favorites)?;
+        }
+    }
+    Ok(favorites)
 }
 
 #[cfg(test)]

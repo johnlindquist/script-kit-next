@@ -406,28 +406,14 @@ impl ScriptListApp {
                                               hovered: &bool,
                                               _window,
                                               cx| {
-                                            let now = std::time::Instant::now();
-                                            const HOVER_DEBOUNCE_MS: u64 = 16;
-
                                             if *hovered {
-                                                // Mouse entered - switch to Mouse mode and set hovered_index
-                                                // This re-enables hover effects after keyboard navigation
                                                 this.input_mode = InputMode::Mouse;
-
-                                                if this.hovered_index != Some(ix)
-                                                    && now
-                                                        .duration_since(this.last_hover_notify)
-                                                        .as_millis()
-                                                        >= HOVER_DEBOUNCE_MS as u128
-                                                {
+                                                if this.hovered_index != Some(ix) {
                                                     this.hovered_index = Some(ix);
-                                                    this.last_hover_notify = now;
                                                     cx.notify();
                                                 }
                                             } else if this.hovered_index == Some(ix) {
-                                                // Mouse left - clear hovered_index if it was this item
                                                 this.hovered_index = None;
-                                                this.last_hover_notify = now;
                                                 cx.notify();
                                             }
                                         },

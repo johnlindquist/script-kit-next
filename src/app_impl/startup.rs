@@ -421,8 +421,6 @@ impl ScriptListApp {
             fallback_selected_index: 0,
             cached_fallbacks: Vec::new(),
             theme_before_chooser: None,
-            // P0-2: Initialize hover debounce timer
-            last_hover_notify: std::time::Instant::now(),
             // Render log deduplication: track last logged state to skip cursor-blink spam
             last_render_log_filter: String::new(),
             last_render_log_selection: usize::MAX, // Use MAX to ensure first render logs

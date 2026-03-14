@@ -56,6 +56,15 @@ pub fn has_query_placeholder(url_template: &str) -> bool {
     url_template.contains(QUERY_PLACEHOLDER)
 }
 
+/// Validate that a URL template is a plausible quicklink target.
+/// Accepts http://, https://, or any string containing {query}.
+pub fn is_valid_url_template(url: &str) -> bool {
+    let url_lower = url.to_lowercase();
+    url_lower.starts_with("http://")
+        || url_lower.starts_with("https://")
+        || url.contains(QUERY_PLACEHOLDER)
+}
+
 pub fn update_quicklink(id: &str, name: &str, url_template: &str) -> bool {
     update_quicklink_from_path(id, name, url_template, &quicklinks_path())
 }
@@ -107,7 +116,8 @@ fn update_quicklink_from_path(id: &str, name: &str, url_template: &str, path: &P
 mod tests {
     use super::{
         create_quicklink, delete_quicklink_from_path, expand_url, has_query_placeholder,
-        load_quicklinks_from_path, save_quicklinks_to_path, update_quicklink_from_path, Quicklink,
+        is_valid_url_template, load_quicklinks_from_path, save_quicklinks_to_path,
+        update_quicklink_from_path, Quicklink,
     };
 
     #[test]
@@ -263,5 +273,30 @@ mod tests {
         assert!(!updated);
         let loaded = load_quicklinks_from_path(&path);
         assert_eq!(loaded, links);
+    }
+
+    #[test]
+    fn test_is_valid_url_template_accepts_https() {
+        assert!(is_valid_url_template("https://example.com"));
+    }
+
+    #[test]
+    fn test_is_valid_url_template_accepts_http() {
+        assert!(is_valid_url_template("http://example.com"));
+    }
+
+    #[test]
+    fn test_is_valid_url_template_accepts_query_placeholder() {
+        assert!(is_valid_url_template("myapp://search?q={query}"));
+    }
+
+    #[test]
+    fn test_is_valid_url_template_rejects_bare_string() {
+        assert!(!is_valid_url_template("not a url"));
+    }
+
+    #[test]
+    fn test_is_valid_url_template_case_insensitive() {
+        assert!(is_valid_url_template("HTTPS://EXAMPLE.COM"));
     }
 }

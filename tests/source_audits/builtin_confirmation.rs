@@ -378,7 +378,7 @@ fn confirmation_path_handles_accept_cancel_and_error() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn favorites_builtin_sets_active_favorites_when_non_empty() {
+fn favorites_builtin_opens_browse_view() {
     let content = read("src/app_execute/builtin_execution.rs");
 
     let favorites_branch = content
@@ -386,15 +386,15 @@ fn favorites_builtin_sets_active_favorites_when_non_empty() {
         .expect("Expected BuiltInFeature::Favorites branch in builtin_execution.rs");
     let block = &content[favorites_branch..content.len().min(favorites_branch + 2200)];
 
-    // Must set active_favorites to Some when favorites are loaded
+    // Must transition to FavoritesBrowseView
     assert!(
-        block.contains("self.active_favorites = Some(favorites.script_ids.clone())"),
-        "Favorites builtin must set active_favorites = Some(script_ids) when non-empty"
+        block.contains("AppView::FavoritesBrowseView"),
+        "Favorites builtin must open FavoritesBrowseView"
     );
 }
 
 #[test]
-fn favorites_builtin_clears_active_favorites_when_empty() {
+fn favorites_builtin_clears_filter_on_open() {
     let content = read("src/app_execute/builtin_execution.rs");
 
     let favorites_branch = content
@@ -402,15 +402,15 @@ fn favorites_builtin_clears_active_favorites_when_empty() {
         .expect("Expected BuiltInFeature::Favorites branch");
     let block = &content[favorites_branch..content.len().min(favorites_branch + 2200)];
 
-    // Must clear active_favorites when favorites list is empty
+    // Must clear filter text before opening the view
     assert!(
-        block.contains("self.active_favorites = None"),
-        "Favorites builtin must clear active_favorites = None when empty"
+        block.contains("self.filter_text.clear()"),
+        "Favorites builtin must clear filter text on open"
     );
 }
 
 #[test]
-fn favorites_builtin_invalidates_caches_after_setting() {
+fn favorites_builtin_notifies_on_view_change() {
     let content = read("src/app_execute/builtin_execution.rs");
 
     let favorites_branch = content
@@ -418,37 +418,26 @@ fn favorites_builtin_invalidates_caches_after_setting() {
         .expect("Expected BuiltInFeature::Favorites branch");
     let block = &content[favorites_branch..content.len().min(favorites_branch + 2200)];
 
-    // Cache invalidation must follow setting active_favorites
+    // Must call cx.notify() after view transition
     assert!(
-        block.contains("self.invalidate_filter_cache()"),
-        "Favorites builtin must invalidate filter cache after setting favorites"
-    );
-    assert!(
-        block.contains("self.invalidate_grouped_cache()"),
-        "Favorites builtin must invalidate grouped cache after setting favorites"
-    );
-    assert!(
-        block.contains("self.sync_list_state()"),
-        "Favorites builtin must sync list state after setting favorites"
+        block.contains("cx.notify()"),
+        "Favorites builtin must call cx.notify() after changing view"
     );
 }
 
 #[test]
-fn favorites_load_error_shows_error_toast() {
-    let content = read("src/app_execute/builtin_execution.rs");
+fn favorites_render_module_handles_errors() {
+    let content = read("src/render_builtins/favorites.rs");
 
-    let favorites_branch = content
-        .find("BuiltInFeature::Favorites")
-        .expect("Expected BuiltInFeature::Favorites branch");
-    let block = &content[favorites_branch..content.len().min(favorites_branch + 2200)];
-
+    // Must handle remove errors gracefully
     assert!(
-        block.contains("Err(error)") || block.contains("Err(e)"),
-        "Favorites builtin must handle load_favorites error"
+        content.contains("show_error_toast"),
+        "Favorites render must show error toast on failure"
     );
+    // Must handle not-found case
     assert!(
-        block.contains("show_error_toast("),
-        "Favorites error path must show error toast"
+        content.contains("favorite_not_found"),
+        "Favorites render must handle script not found"
     );
 }
 

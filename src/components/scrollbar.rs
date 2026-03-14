@@ -263,6 +263,7 @@ impl RenderOnce for Scrollbar {
         let thumb = if let (Some(height), Some(top)) = (thumb_height_px, thumb_top_px) {
             // Precise pixel positioning
             div()
+                .id("scrollbar-thumb")
                 .absolute()
                 .top(px(top))
                 .left_0()
@@ -299,6 +300,7 @@ impl RenderOnce for Scrollbar {
                 )
                 .child(
                     div()
+                        .id("scrollbar-thumb-flex")
                         .flex_grow()
                         .flex_shrink_0()
                         .min_h(px(MIN_THUMB_HEIGHT))

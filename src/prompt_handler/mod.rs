@@ -13,44 +13,6 @@ fn prompt_coming_soon_warning(prompt_name: &str) -> String {
     format!("{prompt_name} prompt coming soon.")
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct FeedbackCommandSpec {
-    program: &'static str,
-    args: Vec<String>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum FeedbackDispatchState {
-    Spawned,
-    Skipped,
-}
-
-fn normalize_trimmed_optional_text(value: Option<String>) -> Option<String> {
-    value.and_then(|value| {
-        let trimmed = value.trim();
-        if trimmed.is_empty() {
-            None
-        } else {
-            Some(trimmed.to_string())
-        }
-    })
-}
-
-fn normalize_notify_fields(
-    title: Option<String>,
-    body: Option<String>,
-) -> Option<(String, String)> {
-    let normalized_title = normalize_trimmed_optional_text(title);
-    let normalized_body = normalize_trimmed_optional_text(body);
-
-    match (normalized_title, normalized_body) {
-        (Some(title), Some(body)) => Some((title, body)),
-        (Some(title), None) => Some((title.clone(), title)),
-        (None, Some(body)) => Some(("Script Kit".to_string(), body)),
-        (None, None) => None,
-    }
-}
-
 fn resolve_ai_start_chat_provider(
     registry: &crate::ai::ProviderRegistry,
     model_id: &str,
@@ -58,151 +20,6 @@ fn resolve_ai_start_chat_provider(
     registry
         .find_provider_for_model(model_id)
         .map(|provider| provider.provider_id().to_string())
-}
-
-fn build_macos_beep_command_spec() -> FeedbackCommandSpec {
-    FeedbackCommandSpec {
-        program: "afplay",
-        args: vec!["/System/Library/Sounds/Tink.aiff".to_string()],
-    }
-}
-
-fn build_macos_notify_command_spec(title: String, body: String) -> FeedbackCommandSpec {
-    FeedbackCommandSpec {
-        program: "osascript",
-        args: vec![
-            "-e".to_string(),
-            "on run argv".to_string(),
-            "-e".to_string(),
-            "display notification (item 1 of argv) with title (item 2 of argv)".to_string(),
-            "-e".to_string(),
-            "end run".to_string(),
-            body,
-            title,
-        ],
-    }
-}
-
-fn build_macos_say_command_spec(
-    text: String,
-    voice: Option<String>,
-) -> Option<FeedbackCommandSpec> {
-    let text = normalize_trimmed_optional_text(Some(text))?;
-    let voice = normalize_trimmed_optional_text(voice);
-
-    let mut args = Vec::new();
-    if let Some(voice) = voice {
-        args.push("-v".to_string());
-        args.push(voice);
-    }
-    args.push(text);
-
-    Some(FeedbackCommandSpec {
-        program: "say",
-        args,
-    })
-}
-
-fn spawn_feedback_command(spec: FeedbackCommandSpec) -> std::io::Result<FeedbackDispatchState> {
-    let mut command = std::process::Command::new(spec.program);
-    command
-        .args(spec.args)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
-
-    let child = command.spawn()?;
-    drop(child);
-    Ok(FeedbackDispatchState::Spawned)
-}
-
-#[cfg(target_os = "macos")]
-fn dispatch_beep_command() -> std::io::Result<FeedbackDispatchState> {
-    spawn_feedback_command(build_macos_beep_command_spec())
-}
-
-#[cfg(not(target_os = "macos"))]
-fn dispatch_beep_command() -> std::io::Result<FeedbackDispatchState> {
-    Ok(FeedbackDispatchState::Skipped)
-}
-
-#[cfg(target_os = "macos")]
-fn dispatch_notify_command(
-    title: Option<String>,
-    body: Option<String>,
-) -> std::io::Result<FeedbackDispatchState> {
-    let Some((title, body)) = normalize_notify_fields(title, body) else {
-        return Ok(FeedbackDispatchState::Skipped);
-    };
-
-    spawn_feedback_command(build_macos_notify_command_spec(title, body))
-}
-
-#[cfg(not(target_os = "macos"))]
-fn dispatch_notify_command(
-    title: Option<String>,
-    body: Option<String>,
-) -> std::io::Result<FeedbackDispatchState> {
-    let _ = (title, body);
-    Ok(FeedbackDispatchState::Skipped)
-}
-
-#[cfg(target_os = "macos")]
-fn dispatch_say_command(
-    text: String,
-    voice: Option<String>,
-) -> std::io::Result<FeedbackDispatchState> {
-    let Some(spec) = build_macos_say_command_spec(text, voice) else {
-        return Ok(FeedbackDispatchState::Skipped);
-    };
-
-    spawn_feedback_command(spec)
-}
-
-#[cfg(not(target_os = "macos"))]
-fn dispatch_say_command(
-    text: String,
-    voice: Option<String>,
-) -> std::io::Result<FeedbackDispatchState> {
-    let _ = (text, voice);
-    Ok(FeedbackDispatchState::Skipped)
-}
-
-fn log_feedback_dispatch_result(
-    effect: &str,
-    attempted: &str,
-    result: std::io::Result<FeedbackDispatchState>,
-) {
-    match result {
-        Ok(FeedbackDispatchState::Spawned) => {
-            tracing::info!(
-                category = "FEEDBACK",
-                effect = %effect,
-                attempted = %attempted,
-                state = "spawned",
-                "Dispatched script feedback command"
-            );
-        }
-        Ok(FeedbackDispatchState::Skipped) => {
-            tracing::info!(
-                category = "FEEDBACK",
-                effect = %effect,
-                attempted = %attempted,
-                state = "skipped",
-                "Skipped script feedback command"
-            );
-        }
-        Err(error) => {
-            tracing::warn!(
-                category = "FEEDBACK",
-                effect = %effect,
-                attempted = %attempted,
-                state = "spawn_failed",
-                error = %error,
-                "Failed to dispatch script feedback command"
-            );
-        }
-    }
 }
 
 #[cfg(any(test, target_os = "windows"))]
@@ -1498,6 +1315,42 @@ impl ScriptListApp {
                         *selected_index as i32,
                         None,
                     ),
+                    AppView::FavoritesBrowseView {
+                        filter,
+                        selected_index,
+                    } => (
+                        "favorites".to_string(),
+                        None,
+                        None,
+                        filter.clone(),
+                        0,
+                        0,
+                        *selected_index as i32,
+                        None,
+                    ),
+                    AppView::QuicklinksBrowseView {
+                        filter,
+                        selected_index,
+                    } => (
+                        "quicklinks".to_string(),
+                        None,
+                        None,
+                        filter.clone(),
+                        0,
+                        0,
+                        *selected_index as i32,
+                        None,
+                    ),
+                    AppView::QuicklinksEditView { .. } => (
+                        "quicklinksEdit".to_string(),
+                        None,
+                        None,
+                        String::new(),
+                        0,
+                        0,
+                        0,
+                        None,
+                    ),
                 };
 
                 // Focus state: we use focused_input as a proxy since we don't have Window access here.
@@ -2315,50 +2168,6 @@ impl ScriptListApp {
             PromptMessage::ShowHud { text, duration_ms } => {
                 self.show_hud(text, duration_ms, cx);
             }
-            PromptMessage::Notify { title, body } => {
-                let attempted = "osascript display notification";
-                tracing::info!(
-                    category = "FEEDBACK",
-                    effect = "notify",
-                    has_title = title
-                        .as_ref()
-                        .map(|value| !value.trim().is_empty())
-                        .unwrap_or(false),
-                    has_body = body
-                        .as_ref()
-                        .map(|value| !value.trim().is_empty())
-                        .unwrap_or(false),
-                    "Received notify() protocol message"
-                );
-                log_feedback_dispatch_result(
-                    "notify",
-                    attempted,
-                    dispatch_notify_command(title, body),
-                );
-            }
-            PromptMessage::Beep => {
-                let attempted = "afplay /System/Library/Sounds/Tink.aiff";
-                tracing::info!(
-                    category = "FEEDBACK",
-                    effect = "beep",
-                    "Received beep() protocol message"
-                );
-                log_feedback_dispatch_result("beep", attempted, dispatch_beep_command());
-            }
-            PromptMessage::Say { text, voice } => {
-                let attempted = "say [-v voice] <text>";
-                tracing::info!(
-                    category = "FEEDBACK",
-                    effect = "say",
-                    has_voice = voice
-                        .as_ref()
-                        .map(|value| !value.trim().is_empty())
-                        .unwrap_or(false),
-                    text_len = text.chars().count(),
-                    "Received say() protocol message"
-                );
-                log_feedback_dispatch_result("say", attempted, dispatch_say_command(text, voice));
-            }
             PromptMessage::SetStatus { status, message } => {
                 tracing::info!(
                     category = "STATUS",
@@ -2626,8 +2435,7 @@ impl ScriptListApp {
 #[cfg(test)]
 mod prompt_handler_message_tests {
     use super::{
-        build_macos_notify_command_spec, build_macos_say_command_spec,
-        classify_prompt_message_route, escape_windows_cmd_open_target, normalize_notify_fields,
+        classify_prompt_message_route, escape_windows_cmd_open_target,
         prompt_coming_soon_warning, resolve_ai_start_chat_provider, unhandled_message_warning,
         PromptMessageRoute,
     };
@@ -2676,53 +2484,6 @@ mod prompt_handler_message_tests {
         assert_eq!(
             prompt_coming_soon_warning("fields()"),
             "fields() prompt coming soon."
-        );
-    }
-
-    #[test]
-    fn test_normalize_notify_fields_uses_title_for_missing_body() {
-        assert_eq!(
-            normalize_notify_fields(Some("Build Finished".to_string()), None),
-            Some(("Build Finished".to_string(), "Build Finished".to_string()))
-        );
-    }
-
-    #[test]
-    fn test_build_macos_notify_command_spec_uses_argv_to_avoid_applescript_escaping() {
-        let spec = build_macos_notify_command_spec("Script Kit".to_string(), "Done".to_string());
-
-        assert_eq!(spec.program, "osascript");
-        assert_eq!(
-            spec.args,
-            vec![
-                "-e".to_string(),
-                "on run argv".to_string(),
-                "-e".to_string(),
-                "display notification (item 1 of argv) with title (item 2 of argv)".to_string(),
-                "-e".to_string(),
-                "end run".to_string(),
-                "Done".to_string(),
-                "Script Kit".to_string(),
-            ]
-        );
-    }
-
-    #[test]
-    fn test_build_macos_say_command_spec_includes_voice_when_present() {
-        let spec = build_macos_say_command_spec(
-            "Hello from Script Kit".to_string(),
-            Some("Samantha".to_string()),
-        )
-        .expect("say command should be built for non-empty text");
-
-        assert_eq!(spec.program, "say");
-        assert_eq!(
-            spec.args,
-            vec![
-                "-v".to_string(),
-                "Samantha".to_string(),
-                "Hello from Script Kit".to_string(),
-            ]
         );
     }
 

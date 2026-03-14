@@ -158,6 +158,7 @@ impl Render for ScriptListApp {
                 | AppView::ThemeChooserView { .. }
                 | AppView::ProcessManagerView { .. }
                 | AppView::SearchAiPresetsView { .. }
+                | AppView::QuicklinksBrowseView { .. }
         ) {
             self.sync_filter_input_if_needed(window, cx);
         }
@@ -219,14 +220,14 @@ impl Render for ScriptListApp {
                 placeholder,
                 choices,
             } => self
-                .render_arg_prompt(id, placeholder, choices, None, cx)
+                .render_mini_prompt(id, placeholder, choices, cx)
                 .into_any_element(),
             AppView::MicroPrompt {
                 id,
                 placeholder,
                 choices,
             } => self
-                .render_arg_prompt(id, placeholder, choices, None, cx)
+                .render_micro_prompt(id, placeholder, choices, cx)
                 .into_any_element(),
             // P0 FIX: View state only - data comes from self.cached_clipboard_entries
             AppView::ClipboardHistoryView {
@@ -323,6 +324,26 @@ impl Render for ScriptListApp {
             AppView::SettingsView { selected_index } => {
                 self.render_settings(selected_index, cx)
             }
+            AppView::FavoritesBrowseView {
+                filter,
+                selected_index,
+            } => self
+                .render_favorites_browse(filter, selected_index, cx)
+                .into_any_element(),
+            AppView::QuicklinksBrowseView {
+                filter,
+                selected_index,
+            } => self
+                .render_quicklinks_browse(filter, selected_index, cx)
+                .into_any_element(),
+            AppView::QuicklinksEditView {
+                editing_id,
+                name,
+                url_template,
+                active_field,
+            } => self
+                .render_quicklinks_edit(editing_id, name, url_template, active_field, cx)
+                .into_any_element(),
         };
 
         // Wrap content in a container that can have the debug grid overlay

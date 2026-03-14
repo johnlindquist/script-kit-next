@@ -173,6 +173,9 @@ impl ScriptListApp {
             AppView::SearchAiPresetsView { .. } => "SearchAiPresetsView",
             AppView::CreateAiPresetView { .. } => "CreateAiPresetView",
             AppView::SettingsView { .. } => "SettingsView",
+            AppView::FavoritesBrowseView { .. } => "FavoritesBrowseView",
+            AppView::QuicklinksBrowseView { .. } => "QuicklinksBrowseView",
+            AppView::QuicklinksEditView { .. } => "QuicklinksEditView",
         };
 
         let old_focused_input = self.focused_input;

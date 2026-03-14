@@ -30,8 +30,8 @@ use crate::designs::icon_variations::IconName;
 use crate::protocol::ProtocolAction;
 use gpui::{
     div, point, prelude::*, px, rgba, svg, uniform_list, AnyElement, App, BoxShadow, Context,
-    FocusHandle, Focusable, Hsla, KeyDownEvent, MouseButton, Render, ScrollStrategy, SharedString,
-    UniformListScrollHandle, Window,
+    ElementId, FocusHandle, Focusable, Hsla, KeyDownEvent, MouseButton, Render, ScrollStrategy,
+    SharedString, UniformListScrollHandle, Window,
 };
 use gpui_component::theme::{ActiveTheme, Theme};
 use std::sync::Arc;
@@ -1270,6 +1270,10 @@ impl Render for NotesActionsPanel {
                                         // Inner row with rounded background
                                         .child(
                                             div()
+                                                .id(ElementId::NamedInteger(
+                                                    "notes-action-inner".into(),
+                                                    idx as u64,
+                                                ))
                                                 .w_full()
                                                 .h(px(ACTION_ITEM_HEIGHT - ACTION_ROW_INNER_PAD))
                                                 .flex()
