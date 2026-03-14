@@ -1878,6 +1878,10 @@ impl Render for ActionsDialog {
                                         let action_id_for_click = action.id.clone();
 
                                         let inner_row = div()
+                                            .id(ElementId::NamedInteger(
+                                                "action-inner-row".into(),
+                                                ix as u64,
+                                            ))
                                             .w_full()
                                             .flex_1()
                                             .flex()
