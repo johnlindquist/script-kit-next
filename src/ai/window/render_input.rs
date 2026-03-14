@@ -51,11 +51,28 @@ impl AiApp {
             .into_any_element();
         }
 
-        // Get current model display name
+        // Get current model display name, with provider suffix when available
         let model_label: SharedString = self
             .selected_model
             .as_ref()
-            .map(|m| m.display_name.clone())
+            .map(|m| {
+                let provider_name = self
+                    .provider_registry
+                    .get_provider(&m.provider)
+                    .map(|p| p.display_name().to_string());
+                if let Some(ref name) = provider_name {
+                    if !name.is_empty() {
+                        tracing::info!(
+                            model_id = %m.id,
+                            provider = %m.provider,
+                            provider_display = %name,
+                            "model_picker_label: showing provider in label"
+                        );
+                        return format!("{} · {}", m.display_name, name);
+                    }
+                }
+                m.display_name.clone()
+            })
             .unwrap_or_else(|| "Select Model".to_string())
             .into();
 

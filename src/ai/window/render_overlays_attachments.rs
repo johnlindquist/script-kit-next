@@ -1,4 +1,5 @@
 use super::*;
+use crate::theme::opacity::{OPACITY_DANGER_BG, OPACITY_SELECTED};
 
 impl AiApp {
     pub(super) fn render_attachments_picker(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -45,7 +46,7 @@ impl AiApp {
                     .items_center()
                     .gap(S3)
                     .cursor_pointer()
-                    .hover(|el| el.bg(accent.opacity(0.5)))
+                    .hover(|el| el.bg(accent.opacity(OPACITY_SELECTED)))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.hide_attachments_picker(cx);
                         match id_str {
@@ -98,7 +99,7 @@ impl AiApp {
                     .flex()
                     .items_center()
                     .gap(S2)
-                    .bg(accent.opacity(0.2))
+                    .bg(accent.opacity(OPACITY_DANGER_BG))
                     // File icon
                     .child(
                         svg()
@@ -146,7 +147,7 @@ impl AiApp {
             .flex()
             .items_end()
             .justify_start()
-            .pb(px(80.))
+            .pb(ATTACHMENTS_PICKER_BOTTOM_INSET)
             .pl(S4)
             .on_click(cx.listener(|this, _, _, cx| {
                 this.hide_attachments_picker(cx);

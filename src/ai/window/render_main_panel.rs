@@ -1,7 +1,6 @@
 use super::*;
 use crate::theme::opacity::{
     OPACITY_ACCENT_MEDIUM, OPACITY_BORDER, OPACITY_DISABLED, OPACITY_HOVER, OPACITY_SELECTED,
-    OPACITY_STRONG, OPACITY_SUCCESS,
 };
 
 fn ai_main_panel_can_submit(input_value: &str, has_pending_image: bool) -> bool {
@@ -22,17 +21,7 @@ impl AiApp {
         let action_button_colors =
             crate::components::ButtonColors::from_theme(&crate::theme::get_cached_theme());
         let entity = cx.entity();
-        let input_char_count = self.input_state.read(cx).value().len();
-        let input_is_long = input_char_count > 2000;
-        let input_is_very_long = input_char_count > 4000;
         let is_mouse_mode = self.input_mode == InputMode::Mouse;
-        let composer_border_color = if input_is_very_long {
-            cx.theme().danger.opacity(OPACITY_ACCENT_MEDIUM)
-        } else if input_is_long {
-            cx.theme().warning.opacity(OPACITY_SELECTED)
-        } else {
-            cx.theme().accent
-        };
 
         let input_area = div()
             .id("ai-input-area")
@@ -42,7 +31,7 @@ impl AiApp {
             // NO .bg() - let vibrancy show through from root
             .border_t_1()
             .border_color(cx.theme().border.opacity(OPACITY_DISABLED))
-            .px(PANEL_INSET_X)
+            .px(MSG_PX)
             .py(S4)
             .gap(S3)
             // Handle image file drops
@@ -67,7 +56,7 @@ impl AiApp {
                     .gap(S2)
                     .rounded(R_LG)
                     .border_1()
-                    .border_color(composer_border_color.opacity(OPACITY_SELECTED))
+                    .border_color(cx.theme().border.opacity(OPACITY_SELECTED))
                     .bg(cx.theme().muted.opacity(OPACITY_DISABLED))
                     // Plus button on the left - opens attachments picker
                     .child(
@@ -122,7 +111,7 @@ impl AiApp {
                     )
                     .child(self.render_input_with_cursor(cx)),
             )
-            // Bottom row: Model picker left, actions right
+            // Bottom row: Model picker left, submit right
             .child(
                 div()
                     .flex()
@@ -130,68 +119,34 @@ impl AiApp {
                     .justify_between()
                     .w_full()
                     .overflow_hidden()
-                    // Left side: Model picker + char count
+                    // Left side: Model picker
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .overflow_hidden()
+                            .child(self.render_model_picker(cx)),
+                    )
+                    // Right side: Submit/Stop + Actions
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .gap(S2)
-                            .overflow_hidden()
-                            .child(self.render_model_picker(cx))
-                            // Word count (only shown when input has content)
-                            .child({
-                                let input_val = self.input_state.read(cx).value().to_string();
-                                let word_count = input_val.split_whitespace().count();
-                                let show_export = self.is_showing_export_feedback();
-                                if show_export {
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap(S1)
-                                        .text_xs()
-                                        .text_color(cx.theme().success.opacity(OPACITY_SUCCESS))
-                                        .child(
-                                            svg()
-                                                .external_path(LocalIconName::Check.external_path())
-                                                .size(ICON_XS)
-                                                .text_color(
-                                                    cx.theme()
-                                                        .success
-                                                        .opacity(OPACITY_ACCENT_MEDIUM),
-                                                ),
-                                        )
-                                        .child("Exported!")
-                                        .into_any_element()
-                                } else if word_count > 0 {
-                                    let label = if word_count == 1 {
-                                        "1 word".to_string()
-                                    } else {
-                                        format!("{} words", word_count)
-                                    };
-                                    let word_color = if input_is_very_long {
-                                        cx.theme().danger.opacity(OPACITY_STRONG)
-                                    } else if input_is_long {
-                                        cx.theme().warning.opacity(OPACITY_ACCENT_MEDIUM)
-                                    } else {
-                                        cx.theme().muted_foreground.opacity(OPACITY_DISABLED)
-                                    };
-                                    div()
-                                        .text_xs()
-                                        .text_color(word_color)
-                                        .child(label)
-                                        .into_any_element()
-                                } else {
-                                    div().into_any_element()
-                                }
-                            }),
-                    )
-                    // Right side: Submit and Actions as text labels
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(S1)
                             .flex_shrink_0()
+                            // Actions ⌘K
+                            .child({
+                                let actions_entity = entity.clone();
+                                crate::components::Button::new("Actions", action_button_colors)
+                                    .id("ai-actions-btn")
+                                    .variant(crate::components::ButtonVariant::Ghost)
+                                    .shortcut("⌘K")
+                                    .on_click(Box::new(move |_, window, cx| {
+                                        actions_entity.update(cx, |this, cx| {
+                                            this.show_command_bar(window, cx);
+                                        });
+                                    }))
+                            })
                             // Submit or Stop button
                             .child(if self.is_streaming {
                                 let stop_entity = entity.clone();
@@ -224,26 +179,6 @@ impl AiApp {
                                         }))
                                         .into_any_element()
                                 }
-                            })
-                            // Divider
-                            .child(
-                                div()
-                                    .h(S4)
-                                    .border_l_1()
-                                    .border_color(cx.theme().border.opacity(OPACITY_ACCENT_MEDIUM)),
-                            )
-                            // Actions ⌘K - opens command bar with AI-specific actions
-                            .child({
-                                let actions_entity = entity.clone();
-                                crate::components::Button::new("Actions", action_button_colors)
-                                    .id("ai-actions-btn")
-                                    .variant(crate::components::ButtonVariant::Ghost)
-                                    .shortcut("⌘K")
-                                    .on_click(Box::new(move |_, window, cx| {
-                                        actions_entity.update(cx, |this, cx| {
-                                            this.show_command_bar(window, cx);
-                                        });
-                                    }))
                             }),
                     ),
             );

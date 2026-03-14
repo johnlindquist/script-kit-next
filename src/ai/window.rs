@@ -6,11 +6,11 @@
 use anyhow::Result;
 use chrono::{Datelike, NaiveDate, Utc};
 use gpui::{
-    div, hsla, img, list, point, prelude::*, px, rgba, size, svg, App, BoxShadow, Context,
-    CursorStyle, Entity, ExternalPaths, FocusHandle, Focusable, IntoElement, KeyDownEvent,
-    ListAlignment, ListOffset, ListSizingBehavior, ListState, MouseMoveEvent, ParentElement,
-    Render, RenderImage, ScrollWheelEvent, SharedString, Styled, Subscription, Window,
-    WindowBounds, WindowOptions,
+    div, hsla, img, list, point, prelude::*, px, rgba, size, svg, Animation, AnimationExt, App,
+    BoxShadow, Context, CursorStyle, Entity, ExternalPaths, FocusHandle, Focusable, HighlightStyle,
+    IntoElement, KeyDownEvent, ListAlignment, ListOffset, ListSizingBehavior, ListState,
+    MouseMoveEvent, ParentElement, Render, RenderImage, ScrollWheelEvent, SharedString, Styled,
+    StyledText, Subscription, Window, WindowBounds, WindowOptions,
 };
 
 use crate::designs::icon_variations::IconName as LocalIconName;

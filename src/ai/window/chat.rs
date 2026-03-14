@@ -7,6 +7,47 @@ impl AiApp {
         model.id == chat.model_id && model.provider == chat.provider
     }
 
+    pub(crate) fn resolve_start_chat_metadata(
+        available_models: &[ModelInfo],
+        selected_model: Option<&ModelInfo>,
+        requested_model_id: Option<&str>,
+        requested_provider: Option<&str>,
+    ) -> StartChatResolvedMetadata {
+        if let Some(requested_model_id) = requested_model_id {
+            let matched_model = requested_provider
+                .and_then(|requested_provider| {
+                    available_models.iter().find(|model| {
+                        model.id == requested_model_id && model.provider == requested_provider
+                    })
+                })
+                .or_else(|| {
+                    available_models
+                        .iter()
+                        .find(|model| model.id == requested_model_id)
+                });
+
+            return matched_model
+                .map(|model| StartChatResolvedMetadata {
+                    model_id: model.id.clone(),
+                    provider: model.provider.clone(),
+                })
+                .unwrap_or_else(|| StartChatResolvedMetadata {
+                    model_id: requested_model_id.to_string(),
+                    provider: requested_provider.unwrap_or("anthropic").to_string(),
+                });
+        }
+
+        selected_model
+            .map(|model| StartChatResolvedMetadata {
+                model_id: model.id.clone(),
+                provider: model.provider.clone(),
+            })
+            .unwrap_or_else(|| StartChatResolvedMetadata {
+                model_id: "claude-3-5-sonnet-20241022".to_string(),
+                provider: "anthropic".to_string(),
+            })
+    }
+
     pub(super) fn provider_unavailable_error_message(model_id: &str, provider: &str) -> String {
         format!(
             "Model '{model_id}' uses provider '{provider}', but that provider is unavailable. Configure the '{provider}' API key or pick a different model."
@@ -48,15 +89,12 @@ impl AiApp {
         let messages = match pending_messages {
             Some(msgs) if !msgs.is_empty() => msgs,
             _ => {
-                crate::logging::log("AI", "No pending messages to initialize chat with");
+                tracing::debug!(target: "ai", "No pending messages to initialize chat with");
                 return;
             }
         };
 
-        crate::logging::log(
-            "AI",
-            &format!("Initializing chat with {} messages", messages.len()),
-        );
+        tracing::info!(target: "ai", message_count = messages.len(), "Initializing chat with pending messages");
 
         // Get model and provider from selected model, or use defaults
         let (model_id, provider) = self
@@ -131,6 +169,52 @@ impl AiApp {
         );
 
         cx.notify();
+    }
+
+    /// Start a new conversation, fully resetting all per-conversation transient state.
+    ///
+    /// If a response is actively streaming, it is cancelled before reset.
+    /// The previous conversation (if any) is preserved in the sidebar history.
+    pub(super) fn new_conversation(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<ChatId> {
+        // Cancel any active stream before switching
+        if self.is_streaming {
+            info!(
+                streaming_chat_id = ?self.streaming_chat_id,
+                "Cancelling active stream for new conversation"
+            );
+            self.stop_streaming(cx);
+        }
+
+        // Clear per-conversation transient state that select_chat does not cover
+        let had_image = self.pending_image.is_some();
+        let attachment_count = self.pending_attachments.len();
+        self.pending_image = None;
+        self.pending_attachments.clear();
+        if had_image || attachment_count > 0 {
+            tracing::info!(
+                had_pending_image = had_image,
+                pending_attachments = attachment_count,
+                "chat_switch_cleared_attachments"
+            );
+        }
+        self.collapsed_messages.clear();
+        self.expanded_messages.clear();
+        self.copied_message_id = None;
+        self.copied_at = None;
+        self.last_streaming_duration = None;
+        self.last_streaming_completed_at = None;
+        self.streaming_error = None;
+        self.showing_attachments_picker = false;
+        self.editing_message_id = None;
+
+        let chat_id = self.create_chat(window, cx);
+
+        info!(chat_id = ?chat_id, "New conversation started with full state reset");
+        chat_id
     }
 
     /// Create a new chat
@@ -309,30 +393,24 @@ impl AiApp {
         image: Option<String>,
         system_prompt: Option<String>,
         model_id: Option<String>,
+        provider: Option<String>,
+        on_created: Option<std::sync::Arc<dyn Fn(String, String) + Send + Sync + 'static>>,
         submit: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        // Resolve model and provider — prefer the requested model_id, fall back to selected model
-        let (resolved_model_id, resolved_provider) = if let Some(ref req_model_id) = model_id {
-            // Try to find the requested model in available models for its provider
-            if let Some(model) = self.available_models.iter().find(|m| m.id == *req_model_id) {
-                (model.id.clone(), model.provider.clone())
-            } else {
-                // Model not found in available models — use the ID as-is with "anthropic" default
-                (req_model_id.clone(), "anthropic".to_string())
-            }
-        } else {
-            self.selected_model
-                .as_ref()
-                .map(|m| (m.id.clone(), m.provider.clone()))
-                .unwrap_or_else(|| {
-                    (
-                        "claude-3-5-sonnet-20241022".to_string(),
-                        "anthropic".to_string(),
-                    )
-                })
-        };
+        let resolved = Self::resolve_start_chat_metadata(
+            &self.available_models,
+            self.selected_model.as_ref(),
+            model_id.as_deref(),
+            provider.as_deref(),
+        );
+        let resolved_model_id = resolved.model_id.clone();
+        let resolved_provider = resolved.provider.clone();
+
+        if let Some(on_created) = on_created {
+            on_created(resolved_model_id.clone(), resolved_provider.clone());
+        }
 
         // Create the chat with the pre-generated ChatId
         let mut chat = Chat::new(&resolved_model_id, &resolved_provider);
@@ -469,6 +547,72 @@ mod tests {
         assert!(
             message.contains("anthropic"),
             "Provider unavailability message should include provider name"
+        );
+    }
+
+    #[test]
+    fn test_resolve_start_chat_metadata_prefers_requested_provider_match() {
+        let available_models = vec![
+            ModelInfo::new("shared-model", "Shared", "openai", true, 128_000),
+            ModelInfo::new("shared-model", "Shared", "anthropic", true, 128_000),
+        ];
+        let resolved = AiApp::resolve_start_chat_metadata(
+            &available_models,
+            None,
+            Some("shared-model"),
+            Some("anthropic"),
+        );
+
+        assert_eq!(
+            resolved,
+            StartChatResolvedMetadata {
+                model_id: "shared-model".to_string(),
+                provider: "anthropic".to_string(),
+            },
+            "Requested provider should disambiguate shared model IDs"
+        );
+    }
+
+    #[test]
+    fn test_resolve_start_chat_metadata_uses_selected_model_when_request_missing() {
+        let available_models = vec![ModelInfo::new("gpt-4o", "GPT-4o", "openai", true, 128_000)];
+        let selected_model = available_models.first();
+        let resolved =
+            AiApp::resolve_start_chat_metadata(&available_models, selected_model, None, None);
+
+        assert_eq!(
+            resolved,
+            StartChatResolvedMetadata {
+                model_id: "gpt-4o".to_string(),
+                provider: "openai".to_string(),
+            },
+            "Missing aiStartChat model_id should fall back to the active selected model"
+        );
+    }
+
+    #[test]
+    fn test_resolve_start_chat_metadata_preserves_requested_provider_on_lookup_miss() {
+        let available_models = vec![ModelInfo::new(
+            "claude-3-5-sonnet-20241022",
+            "Claude 3.5 Sonnet",
+            "anthropic",
+            true,
+            200_000,
+        )];
+        let resolved = AiApp::resolve_start_chat_metadata(
+            &available_models,
+            None,
+            Some("custom-model"),
+            Some("openai"),
+        );
+
+        assert_eq!(
+            resolved,
+            StartChatResolvedMetadata {
+                model_id: "custom-model".to_string(),
+                provider: "openai".to_string(),
+            },
+            "Explicit provider fallback should survive when the model is not in available_models"
         );
     }
 }

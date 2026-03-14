@@ -1,7 +1,20 @@
+use super::types::*;
 use super::*;
+use crate::theme::opacity::{
+    OPACITY_ACCENT_MEDIUM, OPACITY_ACTIVE, OPACITY_HOVER, OPACITY_PROMINENT, OPACITY_SELECTED,
+    OPACITY_STRONG, OPACITY_SUBTLE,
+};
 
 impl AiApp {
     pub(super) fn render_setup_card(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        debug!(
+            setup_icon_size = %SETUP_ICON_CONTAINER_SIZE,
+            description_max_w = %SETUP_DESCRIPTION_MAX_W,
+            feedback_max_w = %SETUP_FEEDBACK_MAX_W,
+            api_key_max_w = %SETUP_API_KEY_MAX_W,
+            "render_setup_card layout constants"
+        );
+
         // If showing API key input mode, render that instead
         if self.showing_api_key_input {
             return self.render_api_key_input(cx).into_any_element();
@@ -31,14 +44,14 @@ impl AiApp {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .size(px(80.))
+                    .size(SETUP_ICON_CONTAINER_SIZE)
                     .rounded(R_XL)
-                    .bg(cx.theme().muted.opacity(0.2))
+                    .bg(cx.theme().muted.opacity(OPACITY_SUBTLE))
                     .child(
                         svg()
                             .external_path(LocalIconName::Settings.external_path())
                             .size(S8)
-                            .text_color(cx.theme().muted_foreground.opacity(0.5)),
+                            .text_color(cx.theme().muted_foreground.opacity(OPACITY_SELECTED)),
                     ),
             )
             // Title
@@ -55,7 +68,7 @@ impl AiApp {
                     .text_sm()
                     .text_color(cx.theme().muted_foreground)
                     .text_center()
-                    .max_w(px(380.))
+                    .max_w(SETUP_DESCRIPTION_MAX_W)
                     .child("Set up an AI provider to use the Ask AI feature."),
             )
             // Configure Vercel AI Gateway button
@@ -72,11 +85,11 @@ impl AiApp {
                     .bg(button_bg)
                     .cursor_pointer()
                     .border_1()
-                    .border_color(button_bg.opacity(0.8))
+                    .border_color(button_bg.opacity(OPACITY_PROMINENT))
                     .when(configure_button_focused, |s| {
                         s.border_2().border_color(focus_color)
                     })
-                    .hover(|s| s.bg(button_bg.opacity(0.9)))
+                    .hover(|s| s.bg(button_bg.opacity(OPACITY_ACTIVE)))
                     .on_click(cx.listener(|this, _, window, cx| {
                         info!("Vercel button clicked in AI window");
                         this.show_api_key_input(window, cx);
@@ -99,7 +112,7 @@ impl AiApp {
             .child(
                 div()
                     .text_xs()
-                    .text_color(cx.theme().muted_foreground.opacity(0.6))
+                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_ACCENT_MEDIUM))
                     .child("or"),
             )
             // Connect to Claude Code button
@@ -113,14 +126,14 @@ impl AiApp {
                     .px(S5)
                     .py(S2)
                     .rounded(R_LG)
-                    .bg(cx.theme().muted.opacity(0.3))
+                    .bg(cx.theme().muted.opacity(OPACITY_HOVER))
                     .cursor_pointer()
                     .border_1()
                     .border_color(cx.theme().border)
                     .when(claude_button_focused, |s| {
                         s.border_2().border_color(focus_color)
                     })
-                    .hover(|s| s.bg(cx.theme().muted.opacity(0.5)))
+                    .hover(|s| s.bg(cx.theme().muted.opacity(OPACITY_SELECTED)))
                     .on_click(cx.listener(|this, _event, window, cx| {
                         info!("Claude Code button clicked in AI window");
                         this.enable_claude_code(window, cx);
@@ -150,15 +163,15 @@ impl AiApp {
                         .py(S2)
                         .mt(S2)
                         .rounded(R_MD)
-                        .bg(cx.theme().accent.opacity(0.15))
+                        .bg(cx.theme().accent.opacity(OPACITY_SUBTLE))
                         .border_1()
-                        .border_color(cx.theme().accent.opacity(0.3))
+                        .border_color(cx.theme().accent.opacity(OPACITY_HOVER))
                         .child(
                             div()
                                 .text_xs()
                                 .text_color(cx.theme().accent)
                                 .text_center()
-                                .max_w(px(340.))
+                                .max_w(SETUP_FEEDBACK_MAX_W)
                                 .child(feedback),
                         ),
                 )
@@ -174,7 +187,7 @@ impl AiApp {
                     .child(
                         div()
                             .text_xs()
-                            .text_color(cx.theme().muted_foreground.opacity(0.7))
+                            .text_color(cx.theme().muted_foreground.opacity(OPACITY_STRONG))
                             .child("Requires Claude Code CLI installed"),
                     )
                     .child(
@@ -246,7 +259,7 @@ impl AiApp {
                             .size(S6)
                             .rounded(R_MD)
                             .cursor_pointer()
-                            .hover(|s| s.bg(cx.theme().muted.opacity(0.3)))
+                            .hover(|s| s.bg(cx.theme().muted.opacity(OPACITY_HOVER)))
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.hide_api_key_input(window, cx);
                             }))
@@ -271,16 +284,16 @@ impl AiApp {
                     .text_sm()
                     .text_color(cx.theme().muted_foreground)
                     .text_center()
-                    .max_w(px(400.))
+                    .max_w(SETUP_API_KEY_MAX_W)
                     .child("Get your API key from Vercel AI Gateway and paste it below."),
             )
             // Input field
             .child(
                 div()
-                    .w(px(400.))
+                    .w(SETUP_API_KEY_MAX_W)
                     .rounded(R_LG)
                     .border_1()
-                    .border_color(input_border_color.opacity(0.6))
+                    .border_color(input_border_color.opacity(OPACITY_ACCENT_MEDIUM))
                     .overflow_hidden()
                     .child(
                         Input::new(&self.api_key_input_state)

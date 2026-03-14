@@ -1,5 +1,9 @@
 use super::types::*;
 use super::*;
+use crate::theme::opacity::{
+    OPACITY_ACCENT_MEDIUM, OPACITY_DANGER_BG, OPACITY_DISABLED, OPACITY_HOVER, OPACITY_SELECTED,
+    OPACITY_STRONG,
+};
 
 impl AiApp {
     pub(super) fn sidebar_list_splice_plan(
@@ -18,7 +22,7 @@ impl AiApp {
     pub(super) fn render_sidebar_toggle(&self, cx: &mut Context<Self>) -> impl IntoElement {
         // Use opacity to indicate state - dimmed when collapsed
         let icon_color = if self.sidebar_collapsed {
-            cx.theme().muted_foreground.opacity(0.5)
+            cx.theme().muted_foreground.opacity(OPACITY_SELECTED)
         } else {
             cx.theme().muted_foreground
         };
@@ -31,7 +35,7 @@ impl AiApp {
             .size(px(24.))
             .rounded_md()
             .cursor_pointer()
-            .hover(|s| s.bg(cx.theme().muted.opacity(0.3)))
+            .hover(|s| s.bg(cx.theme().muted.opacity(OPACITY_HOVER)))
             .tooltip(|window, cx| {
                 Tooltip::new("Toggle sidebar")
                     .key_binding(gpui::Keystroke::parse("cmd-b").ok().map(Kbd::new))
@@ -138,7 +142,7 @@ impl AiApp {
                                             .xsmall()
                                             .icon(IconName::Plus)
                                             .on_click(cx.listener(|this, _, window, cx| {
-                                                this.create_chat(window, cx);
+                                                this.new_conversation(window, cx);
                                             })),
                                     ),
                             )
@@ -150,9 +154,11 @@ impl AiApp {
                                     .items_center()
                                     .justify_center()
                                     .size(SP_9)
-                                    .rounded(RADIUS_SM)
+                                    .rounded(R_SM)
                                     .cursor_pointer()
-                                    .hover(|el| el.bg(cx.theme().sidebar_accent.opacity(0.5)))
+                                    .hover(|el| {
+                                        el.bg(cx.theme().sidebar_accent.opacity(OPACITY_SELECTED))
+                                    })
                                     .tooltip(|window, cx| {
                                         Tooltip::new("New chat with preset")
                                             .key_binding(
@@ -171,9 +177,9 @@ impl AiApp {
                                         }
                                     }))
                                     .child(
-                                        Icon::new(IconName::ChevronDown)
-                                            .size(ICON_XS)
-                                            .text_color(cx.theme().sidebar_foreground.opacity(0.7)),
+                                        Icon::new(IconName::ChevronDown).size(ICON_XS).text_color(
+                                            cx.theme().sidebar_foreground.opacity(OPACITY_STRONG),
+                                        ),
                                     ),
                             ),
                     )
@@ -186,7 +192,9 @@ impl AiApp {
                             d.child(
                                 div()
                                     .text_xs()
-                                    .text_color(cx.theme().muted_foreground.opacity(0.6))
+                                    .text_color(
+                                        cx.theme().muted_foreground.opacity(OPACITY_ACCENT_MEDIUM),
+                                    )
                                     .px_1()
                                     .child(format!(
                                         "{} {}",
@@ -222,19 +230,28 @@ impl AiApp {
                                 svg()
                                     .external_path(LocalIconName::MagnifyingGlass.external_path())
                                     .size(px(24.))
-                                    .text_color(cx.theme().muted_foreground.opacity(0.3)),
+                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_HOVER)),
                             )
                             .child(
                                 div()
                                     .text_sm()
-                                    .text_color(cx.theme().muted_foreground.opacity(0.5))
+                                    .text_color(
+                                        cx.theme().muted_foreground.opacity(OPACITY_SELECTED),
+                                    )
                                     .child("No chats found"),
                             )
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(cx.theme().muted_foreground.opacity(0.3))
+                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_HOVER))
                                     .child(format!("No results for \"{}\"", self.search_query)),
+                            )
+                            .child(
+                                div()
+                                    .mt(S2)
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_HOVER))
+                                    .child("Press Esc to clear search"),
                             )
                             .into_any_element()
                     } else if self.chats.is_empty() && self.search_query.is_empty() {
@@ -251,33 +268,45 @@ impl AiApp {
                                 svg()
                                     .external_path(LocalIconName::MessageCircle.external_path())
                                     .size(px(28.))
-                                    .text_color(cx.theme().muted_foreground.opacity(0.2)),
+                                    .text_color(
+                                        cx.theme().muted_foreground.opacity(OPACITY_DANGER_BG),
+                                    ),
                             )
                             .child(
                                 div()
                                     .text_sm()
-                                    .text_color(cx.theme().muted_foreground.opacity(0.5))
+                                    .text_color(
+                                        cx.theme().muted_foreground.opacity(OPACITY_SELECTED),
+                                    )
                                     .child("No conversations yet"),
                             )
                             .child(
                                 div()
                                     .flex()
                                     .items_center()
-                                    .gap(px(4.))
+                                    .gap(S1)
                                     .child(
                                         div()
-                                            .px(px(5.))
-                                            .py(px(1.))
-                                            .rounded(px(3.))
-                                            .bg(cx.theme().muted.opacity(0.4))
+                                            .px(S2)
+                                            .py(S1)
+                                            .rounded(R_SM)
+                                            .bg(cx.theme().muted.opacity(OPACITY_DISABLED))
                                             .text_xs()
-                                            .text_color(cx.theme().muted_foreground.opacity(0.5))
+                                            .text_color(
+                                                cx.theme()
+                                                    .muted_foreground
+                                                    .opacity(OPACITY_SELECTED),
+                                            )
                                             .child("\u{2318}N"),
                                     )
                                     .child(
                                         div()
                                             .text_xs()
-                                            .text_color(cx.theme().muted_foreground.opacity(0.4))
+                                            .text_color(
+                                                cx.theme()
+                                                    .muted_foreground
+                                                    .opacity(OPACITY_DISABLED),
+                                            )
                                             .child("to start a new chat"),
                                     ),
                             )

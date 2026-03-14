@@ -1,4 +1,5 @@
 use super::*;
+use crate::theme::opacity::{OPACITY_HOVER, OPACITY_SELECTED};
 
 impl AiApp {
     pub(super) fn on_input_change(&mut self, _cx: &mut Context<Self>) {
@@ -200,7 +201,7 @@ impl AiApp {
             .and_then(|b64| self.get_cached_image(b64));
         let has_thumbnail = cached_thumbnail.is_some();
 
-        div().flex().items_center().gap_2().px_3().py_1().child(
+        div().flex().items_center().gap_2().px_3().py_2().child(
             div()
                 .id("pending-image-preview")
                 .flex()
@@ -209,23 +210,23 @@ impl AiApp {
                 .px_2()
                 .py_1()
                 .rounded_md()
-                .bg(cx.theme().muted.opacity(0.3))
+                .bg(cx.theme().muted.opacity(OPACITY_HOVER))
                 .border_1()
-                .border_color(cx.theme().accent.opacity(0.5))
+                .border_color(cx.theme().accent.opacity(OPACITY_SELECTED))
                 // Thumbnail or fallback icon
                 .when_some(cached_thumbnail, |el, render_img| {
                     el.child(
                         div()
-                            .size(px(36.))
-                            .rounded(px(4.))
+                            .size(IMG_PENDING_THUMB_SIZE)
+                            .rounded(IMG_PENDING_THUMB_RADIUS)
                             .overflow_hidden()
                             .flex_shrink_0()
                             .child(
                                 img(move |_window: &mut Window, _cx: &mut App| {
                                     Some(Ok(render_img.clone()))
                                 })
-                                .w(px(36.))
-                                .h(px(36.))
+                                .w(IMG_PENDING_THUMB_SIZE)
+                                .h(IMG_PENDING_THUMB_SIZE)
                                 .object_fit(gpui::ObjectFit::Cover),
                             ),
                     )
@@ -251,10 +252,10 @@ impl AiApp {
                         .flex()
                         .items_center()
                         .justify_center()
-                        .size(px(16.))
+                        .size(px(24.))
                         .rounded_full()
                         .cursor_pointer()
-                        .hover(|s| s.bg(cx.theme().danger.opacity(0.3)))
+                        .hover(|s| s.bg(cx.theme().danger.opacity(OPACITY_HOVER)))
                         .on_mouse_down(
                             gpui::MouseButton::Left,
                             cx.listener(|this, _, _, cx| {
@@ -264,7 +265,7 @@ impl AiApp {
                         .child(
                             svg()
                                 .external_path(LocalIconName::Close.external_path())
-                                .size(px(10.))
+                                .size(px(14.))
                                 .text_color(cx.theme().muted_foreground),
                         ),
                 ),

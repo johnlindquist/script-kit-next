@@ -39,7 +39,7 @@ impl AiApp {
             self.hide_presets_dropdown(cx);
 
             // Create new chat with system prompt
-            let chat_id = self.create_chat(window, cx);
+            let chat_id = self.new_conversation(window, cx);
             if let Some(chat_id) = chat_id {
                 // Add system message from preset
                 if !preset.system_prompt.is_empty() {
@@ -72,16 +72,18 @@ impl AiApp {
     // === New Chat Dropdown Methods (Raycast-style) ===
 
     /// Show the new chat dropdown (Raycast-style with search, last used, presets, models)
-    pub(super) fn show_new_chat_dropdown(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn show_new_chat_dropdown(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.hide_all_dropdowns(cx);
         self.new_chat_dropdown_filter.clear();
         self.new_chat_dropdown_section = 0;
         self.new_chat_dropdown_index = 0;
         self.showing_new_chat_dropdown = true;
 
-        // Clear the search input - InputState::set_value takes window and cx
-        // For now just clear the filter; the input will be cleared on next type
-        // Actually we just set needs_focus_input flag since we can't easily clear
+        // Clear the input entity so the search field starts empty
+        self.new_chat_dropdown_input.update(cx, |input, cx| {
+            input.set_value("", window, cx);
+        });
+        tracing::info!("new_chat_dropdown_shown");
 
         cx.notify();
     }
@@ -281,8 +283,8 @@ impl AiApp {
         // Update last used settings
         self.update_last_used_settings(model_id, provider);
 
-        // Create the chat
-        self.create_chat(window, cx);
+        // Create the chat with full state reset
+        self.new_conversation(window, cx);
     }
 
     // === Attachments Picker Methods ===
@@ -307,17 +309,22 @@ impl AiApp {
         }
     }
 
-    /// Remove a file attachment
+    /// Remove a file attachment — the item disappearing from the list is the feedback.
     pub(super) fn remove_attachment(&mut self, index: usize, cx: &mut Context<Self>) {
         if index < self.pending_attachments.len() {
-            self.pending_attachments.remove(index);
+            let removed = self.pending_attachments.remove(index);
+            tracing::info!(index = index, path = %removed, remaining = self.pending_attachments.len(), "attachment_removed");
             cx.notify();
         }
     }
 
     /// Clear all attachments
     pub(super) fn clear_attachments(&mut self, cx: &mut Context<Self>) {
+        let count = self.pending_attachments.len();
         self.pending_attachments.clear();
+        if count > 0 {
+            tracing::info!(cleared_count = count, "attachments_cleared");
+        }
         cx.notify();
     }
 

@@ -43,12 +43,52 @@ pub(super) const SEARCH_H: Pixels = px(36.);
 pub(super) const SIDEBAR_INSET_X: Pixels = S3;
 pub(super) const PANEL_INSET_X: Pixels = S4;
 
+// -- Setup card constants --
+pub(super) const SETUP_ICON_CONTAINER_SIZE: Pixels = px(80.);
+pub(super) const SETUP_DESCRIPTION_MAX_W: Pixels = px(380.);
+pub(super) const SETUP_FEEDBACK_MAX_W: Pixels = px(340.);
+pub(super) const SETUP_API_KEY_MAX_W: Pixels = px(400.);
+
+// -- Sidebar search icon --
+pub(super) const SIDEBAR_SEARCH_ICON_SIZE: Pixels = px(10.);
+
 // -- Message bubble tokens --
-pub(super) const MSG_PX: Pixels = S4;
-pub(super) const MSG_PY: Pixels = SP_7;
+pub(super) const MSG_PX: Pixels = S3;
+pub(super) const MSG_PY: Pixels = S2;
 pub(super) const MSG_RADIUS: Pixels = R_XL;
 pub(super) const MSG_GAP: Pixels = S6;
 pub(super) const MSG_GAP_CONTINUATION: Pixels = S2;
+
+/// Auto-collapse messages longer than this many characters.
+/// Used by both the collapse decision logic and the toggle-button visibility gate.
+pub(super) const MSG_COLLAPSE_CHAR_THRESHOLD: usize = 800;
+
+/// Result of the pure collapse-decision computation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct CollapseDecision {
+    pub(super) char_count: usize,
+    pub(super) threshold: usize,
+    pub(super) should_collapse: bool,
+}
+
+/// Pure function: decide whether a message should auto-collapse based on length.
+///
+/// This does NOT consider explicit user overrides (expanded/collapsed sets);
+/// callers must check those first.
+pub(super) fn compute_collapse_decision(char_count: usize) -> CollapseDecision {
+    let should_collapse = char_count > MSG_COLLAPSE_CHAR_THRESHOLD;
+    tracing::debug!(
+        char_count,
+        threshold = MSG_COLLAPSE_CHAR_THRESHOLD,
+        should_collapse,
+        "ai_message_collapse_decision"
+    );
+    CollapseDecision {
+        char_count,
+        threshold: MSG_COLLAPSE_CHAR_THRESHOLD,
+        should_collapse,
+    }
+}
 
 /// Welcome screen suggestion card definitions.
 /// Shared between render_welcome (UI) and render_keydown (Cmd+1-4 shortcuts).
@@ -65,8 +105,8 @@ mod message_spacing_tests {
 
     #[test]
     fn test_message_spacing_constants_preserve_transition_separation_when_using_scale_tokens() {
-        assert_eq!(MSG_PX, S4);
-        assert_eq!(MSG_PY, SP_7);
+        assert_eq!(MSG_PX, S3);
+        assert_eq!(MSG_PY, S2);
         assert_eq!(MSG_GAP, S6);
         assert_eq!(MSG_GAP_CONTINUATION, S2);
         assert!(MSG_GAP / MSG_GAP_CONTINUATION > 1.0);
@@ -101,11 +141,26 @@ mod layout_token_tests {
         assert_eq!(SIDEBAR_INSET_X, S3);
         assert_eq!(PANEL_INSET_X, S4);
         assert_eq!(TITLEBAR_H, px(48.));
+
+        assert_eq!(SETUP_ICON_CONTAINER_SIZE, px(80.));
+        assert_eq!(SETUP_DESCRIPTION_MAX_W, px(380.));
+        assert_eq!(SETUP_FEEDBACK_MAX_W, px(340.));
+        assert_eq!(SETUP_API_KEY_MAX_W, px(400.));
+        assert_eq!(SIDEBAR_SEARCH_ICON_SIZE, px(10.));
     }
 }
 
 // -- Image thumbnails --
 pub(super) const IMG_THUMBNAIL_SIZE: Pixels = px(120.);
+pub(super) const IMG_PENDING_THUMB_SIZE: Pixels = px(36.);
+pub(super) const IMG_PENDING_THUMB_RADIUS: Pixels = SP_2; // 4px
+
+// -- Titlebar layout --
+pub(super) const TITLEBAR_TRAFFIC_LIGHT_ZONE_W: Pixels = px(80.);
+pub(super) const TITLEBAR_LEFT_PADDING: Pixels = px(64.);
+
+// -- Overlay layout --
+pub(super) const ATTACHMENTS_PICKER_BOTTOM_INSET: Pixels = px(80.);
 
 // -- Animation constants --
 pub(super) const ANIM_CYCLE_MS: u64 = 1200;

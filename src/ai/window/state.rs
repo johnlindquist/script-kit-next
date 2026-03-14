@@ -32,6 +32,16 @@ pub struct AiApp {
     /// Current search query
     pub(super) search_query: String,
 
+    /// Generation counter for search (guards against stale async results)
+    pub(super) search_generation: u64,
+
+    /// Search result match snippets (ChatId -> snippet text)
+    /// Populated when search returns ChatSearchResult with match context.
+    pub(super) search_snippets: std::collections::HashMap<ChatId, String>,
+
+    /// Whether the search match was in the title (ChatId -> matched_title)
+    pub(super) search_matched_title: std::collections::HashMap<ChatId, bool>,
+
     /// Whether the sidebar is collapsed
     pub(super) sidebar_collapsed: bool,
 
@@ -234,6 +244,11 @@ pub struct AiApp {
 
     /// Feedback timestamp for "Copied!" transcript action state
     pub(super) chat_transcript_copied_at: Option<std::time::Instant>,
+
+    /// Debounce task for search input — cancelled and replaced on each keystroke.
+    /// When the user types, we delay the DB query by 150ms; if another keystroke
+    /// arrives before the timer fires, the old task is dropped (cancelled).
+    pub(super) search_debounce_task: Option<gpui::Task<()>>,
 }
 
 #[cfg(test)]

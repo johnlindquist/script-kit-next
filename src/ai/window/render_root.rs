@@ -1,4 +1,5 @@
 use super::*;
+use crate::theme::opacity::OPACITY_SELECTED;
 
 impl AiApp {
     pub(super) fn process_render_focus_requests(
@@ -11,7 +12,7 @@ impl AiApp {
         if self.needs_command_bar_focus {
             self.needs_command_bar_focus = false;
             self.focus_handle.focus(window, cx);
-            crate::logging::log("AI", "Applied command bar focus in render");
+            tracing::debug!(target: "ai", "Applied command bar focus in render");
         }
         // Process focus request flag (set by open_ai_window when bringing existing window to front).
         else if !self.command_bar.is_open()
@@ -23,10 +24,7 @@ impl AiApp {
             let in_setup_mode = self.available_models.is_empty() && !self.showing_api_key_input;
             if in_setup_mode {
                 self.focus_handle.focus(window, cx);
-                crate::logging::log(
-                    "AI",
-                    "Applied setup mode focus in render (main focus handle)",
-                );
+                tracing::debug!(target: "ai", "Applied setup mode focus in render (main focus handle)");
             } else {
                 self.focus_input(window, cx);
             }
@@ -45,7 +43,7 @@ impl AiApp {
                         state.set_value(query.clone(), window, cx);
                     });
                     self.on_search_change(cx);
-                    crate::logging::log("AI", &format!("Search filter set to: {}", query));
+                    tracing::info!(target: "ai", query = %query, "Search filter set");
                 }
                 AiCommand::SetInput { text, submit } => {
                     // Sanitize newlines - single-line Input can't handle them
@@ -57,10 +55,10 @@ impl AiApp {
                         let text_len = state.text().len();
                         state.set_selection(text_len, text_len, window, cx);
                     });
-                    crate::logging::log("AI", &format!("Input set to: {}", sanitized_text));
+                    tracing::info!(target: "ai", input_len = sanitized_text.len(), "Input set");
                     if submit {
                         self.submit_message(window, cx);
-                        crate::logging::log("AI", "Message submitted - streaming started");
+                        tracing::info!(target: "ai", "Message submitted - streaming started");
                     }
                 }
                 AiCommand::SetInputWithImage {
@@ -80,32 +78,22 @@ impl AiApp {
                     // Store the pending image to be included with the next message
                     self.cache_image_from_base64(&image_base64);
                     self.pending_image = Some(image_base64.clone());
-                    crate::logging::log(
-                        "AI",
-                        &format!(
-                            "Input set with image: {} chars text, {} chars base64",
-                            text.len(),
-                            image_base64.len()
-                        ),
-                    );
+                    tracing::info!(target: "ai", text_len = text.len(), image_base64_len = image_base64.len(), "Input set with image");
                     if submit {
                         self.submit_message(window, cx);
-                        crate::logging::log(
-                            "AI",
-                            "Message with image submitted - streaming started",
-                        );
+                        tracing::info!(target: "ai", "Message with image submitted - streaming started");
                     }
                 }
                 AiCommand::AddAttachment { path } => {
                     self.add_attachment(path.clone(), cx);
-                    crate::logging::log("AI", &format!("Added attachment: {}", path));
+                    tracing::info!(target: "ai", path = %path, "Added attachment");
                 }
                 AiCommand::InitializeWithPendingChat => {
                     self.initialize_with_pending_chat(window, cx);
                 }
                 AiCommand::ShowCommandBar => {
                     self.show_command_bar(window, cx);
-                    crate::logging::log("AI", "Command bar shown via stdin command");
+                    tracing::info!(target: "ai", "Command bar shown via stdin command");
                 }
                 AiCommand::ApplyPreset { preset_id } => {
                     if let Some(idx) = self.presets.iter().position(|p| p.id == preset_id) {
@@ -142,6 +130,8 @@ impl AiApp {
                     image,
                     system_prompt,
                     model_id,
+                    provider,
+                    on_created,
                     submit,
                 } => {
                     self.handle_start_chat(
@@ -150,6 +140,8 @@ impl AiApp {
                         image,
                         system_prompt,
                         model_id,
+                        provider,
+                        on_created,
                         submit,
                         window,
                         cx,
@@ -221,74 +213,33 @@ impl Render for AiApp {
                     .border_color(cx.theme().border)
                     .child(
                         div()
-                            .flex_1()
+                            .w(TITLEBAR_TRAFFIC_LIGHT_ZONE_W)
                             .h_full()
                             .flex()
                             .items_center()
                             // left padding clears macOS traffic lights (~56px) + tight gap
-                            .pl(px(64.))
+                            .pl(TITLEBAR_LEFT_PADDING)
                             .child(self.render_sidebar_toggle(cx)),
                     )
                     .child(
                         div()
                             .id("ai-centered-title")
-                            .h_full()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .px(S2)
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(gpui::FontWeight::MEDIUM)
-                                    .text_color(cx.theme().muted_foreground.opacity(0.7))
-                                    .child(title_text),
-                            ),
-                    )
-                    .child(
-                        div()
                             .flex_1()
                             .h_full()
                             .flex()
                             .items_center()
-                            .justify_end()
-                            .gap(S2)
-                            .px(S4)
-                            // Plus icon for new chat (using SVG for reliable rendering)
+                            .justify_center()
                             .child(
                                 div()
-                                    .id("ai-new-chat-icon-global")
-                                    .cursor_pointer()
-                                    .hover(|s| s.opacity(1.0))
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.create_chat(window, cx);
-                                    }))
-                                    .child(
-                                        svg()
-                                            .external_path(LocalIconName::Plus.external_path())
-                                            .size(px(16.))
-                                            .text_color(cx.theme().muted_foreground.opacity(0.7)),
-                                    ),
-                            )
-                            // Dropdown chevron icon (using SVG for reliable rendering)
-                            .child(
-                                div()
-                                    .id("ai-menu-icon-global")
-                                    .cursor_pointer()
-                                    .hover(|s| s.opacity(1.0))
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.toggle_new_chat_command_bar(window, cx);
-                                    }))
-                                    .child(
-                                        svg()
-                                            .external_path(
-                                                LocalIconName::ChevronDown.external_path(),
-                                            )
-                                            .size(px(16.))
-                                            .text_color(cx.theme().muted_foreground.opacity(0.7)),
-                                    ),
+                                    .text_sm()
+                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .text_color(
+                                        cx.theme().muted_foreground.opacity(OPACITY_SELECTED),
+                                    )
+                                    .child(title_text),
                             ),
-                    ),
+                    )
+                    .child(div().w(TITLEBAR_TRAFFIC_LIGHT_ZONE_W)),
             )
             .child(
                 div()

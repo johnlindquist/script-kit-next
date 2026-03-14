@@ -436,13 +436,32 @@ pub fn delete_chat_permanently(chat_id: &ChatId) -> Result<()> {
 
 /// Sanitize a query string for FTS5 MATCH.
 /// FTS5 has special characters that can cause parse errors.
-/// This escapes or removes problematic characters.
+/// Supports prefix matching: each word gets a `*` suffix so "hel wor" matches "hello world".
 fn sanitize_fts_query(query: &str) -> String {
-    // FTS5 special characters that need escaping: * " ' ( ) : - ^
-    // For simplicity, we'll wrap the query in double quotes for phrase matching
-    // and escape any internal double quotes.
-    let escaped = query.replace('"', "\"\"");
-    format!("\"{}\"", escaped)
+    // Strip FTS5 special characters that can cause parse errors
+    let cleaned: String = query
+        .chars()
+        .map(|c| match c {
+            '"' | '\'' | '(' | ')' | ':' | '^' | '*' | '-' => ' ',
+            _ => c,
+        })
+        .collect();
+
+    // Split into words, quote each word, and add prefix wildcard
+    let terms: Vec<String> = cleaned
+        .split_whitespace()
+        .filter(|w| !w.is_empty())
+        .map(|word| format!("\"{}\"*", word))
+        .collect();
+
+    if terms.is_empty() {
+        // Fallback: wrap original as phrase (shouldn't happen with non-empty input)
+        let escaped = query.replace('"', "\"\"");
+        return format!("\"{}\"", escaped);
+    }
+
+    // Join with implicit AND (FTS5 default)
+    terms.join(" ")
 }
 
 /// Search chats by title or message content
@@ -519,6 +538,201 @@ pub fn search_chats(query: &str) -> Result<Vec<Chat>> {
             Ok(chats)
         }
     }
+}
+
+/// Result of a full-text search including match context snippets.
+#[derive(Debug, Clone)]
+pub struct ChatSearchResult {
+    pub chat: Chat,
+    /// If the match was in message content (not just title), this holds a snippet
+    /// of the matching message text for display in the sidebar.
+    pub match_snippet: Option<String>,
+    /// Whether the match was found in the title (vs message content only).
+    pub matched_title: bool,
+}
+
+/// Search chats with match context snippets.
+///
+/// Returns `ChatSearchResult` with snippet excerpts showing where the match occurred.
+/// Used by the sidebar to display contextual search results.
+pub fn search_chats_with_snippets(query: &str) -> Result<Vec<ChatSearchResult>> {
+    if query.trim().is_empty() {
+        let chats = get_all_chats()?;
+        return Ok(chats
+            .into_iter()
+            .map(|chat| ChatSearchResult {
+                chat,
+                match_snippet: None,
+                matched_title: false,
+            })
+            .collect());
+    }
+
+    let db = get_db()?;
+    let conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+
+    let sanitized_query = sanitize_fts_query(query);
+    let query_lower = query.trim().to_lowercase();
+
+    // Try FTS search first
+    let fts_result: rusqlite::Result<Vec<ChatSearchResult>> = (|| {
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT DISTINCT c.id, c.title, c.created_at, c.updated_at,
+                   c.deleted_at, c.model_id, c.provider, c.source,
+                   m.content AS match_content
+            FROM chats c
+            LEFT JOIN chats_fts fts ON c.rowid = fts.rowid
+            LEFT JOIN messages m ON c.id = m.chat_id
+            LEFT JOIN messages_fts mfts ON m.rowid = mfts.rowid
+            WHERE c.deleted_at IS NULL
+              AND (fts MATCH ?1 OR mfts MATCH ?1)
+            ORDER BY c.updated_at DESC
+            "#,
+        )?;
+
+        let results = stmt
+            .query_map(params![sanitized_query], |row| {
+                let chat = row_to_chat(row)?;
+                let match_content: Option<String> = row.get(8)?;
+                Ok((chat, match_content))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(deduplicate_search_results(results, &query_lower))
+    })();
+
+    match fts_result {
+        Ok(results) => {
+            info!(
+                query = %query,
+                count = results.len(),
+                method = "fts_snippets",
+                "Chat search with snippets completed"
+            );
+            Ok(results)
+        }
+        Err(e) => {
+            debug!(error = %e, query = %query, "FTS snippet search failed, falling back to LIKE");
+            let like_pattern = format!("%{}%", query);
+            let mut stmt = conn
+                .prepare(
+                    r#"
+                    SELECT DISTINCT c.id, c.title, c.created_at, c.updated_at,
+                           c.deleted_at, c.model_id, c.provider, c.source,
+                           m.content AS match_content
+                    FROM chats c
+                    LEFT JOIN messages m ON c.id = m.chat_id
+                    WHERE c.deleted_at IS NULL
+                      AND (c.title LIKE ?1 OR m.content LIKE ?1)
+                    ORDER BY c.updated_at DESC
+                    "#,
+                )
+                .context("Failed to prepare LIKE snippet search")?;
+
+            let results = stmt
+                .query_map(params![like_pattern], |row| {
+                    let chat = row_to_chat(row)?;
+                    let match_content: Option<String> = row.get(8)?;
+                    Ok((chat, match_content))
+                })
+                .context("Failed to execute LIKE snippet search")?
+                .collect::<Result<Vec<_>, _>>()
+                .context("Failed to collect LIKE snippet results")?;
+
+            let deduplicated = deduplicate_search_results(results, &query_lower);
+            info!(
+                query = %query,
+                count = deduplicated.len(),
+                method = "like_snippets",
+                "Chat search with snippets completed (fallback)"
+            );
+            Ok(deduplicated)
+        }
+    }
+}
+
+/// Deduplicate search results (a chat may match multiple messages) and extract snippets.
+fn deduplicate_search_results(
+    results: Vec<(Chat, Option<String>)>,
+    query_lower: &str,
+) -> Vec<ChatSearchResult> {
+    let mut seen = std::collections::HashMap::<ChatId, ChatSearchResult>::new();
+
+    for (chat, match_content) in results {
+        let chat_id = chat.id;
+        let matched_title = chat.title.to_lowercase().contains(query_lower);
+
+        let snippet = match_content
+            .as_deref()
+            .filter(|content| content.to_lowercase().contains(query_lower))
+            .map(|content| extract_match_snippet(content, query_lower));
+
+        seen.entry(chat_id)
+            .and_modify(|existing| {
+                // Prefer a snippet if we don't have one yet
+                if existing.match_snippet.is_none() && snippet.is_some() {
+                    existing.match_snippet.clone_from(&snippet);
+                }
+                if matched_title {
+                    existing.matched_title = true;
+                }
+            })
+            .or_insert(ChatSearchResult {
+                chat,
+                match_snippet: snippet,
+                matched_title,
+            });
+    }
+
+    // Preserve updated_at DESC order
+    let mut results: Vec<ChatSearchResult> = seen.into_values().collect();
+    results.sort_by(|a, b| b.chat.updated_at.cmp(&a.chat.updated_at));
+    results
+}
+
+/// Extract a short snippet around the first occurrence of the query in content.
+/// Returns up to ~80 chars centered on the match.
+fn extract_match_snippet(content: &str, query_lower: &str) -> String {
+    let content_lower = content.to_lowercase();
+    let Some(match_pos) = content_lower.find(query_lower) else {
+        // Shouldn't happen, but fallback to first 80 chars
+        return content.chars().take(80).collect();
+    };
+
+    let snippet_radius = 40;
+    let start = content[..match_pos]
+        .char_indices()
+        .rev()
+        .nth(snippet_radius)
+        .map(|(i, _)| i)
+        .unwrap_or(0);
+    let end = content[match_pos..]
+        .char_indices()
+        .nth(query_lower.len() + snippet_radius)
+        .map(|(i, _)| match_pos + i)
+        .unwrap_or(content.len());
+
+    let mut snippet = String::new();
+    if start > 0 {
+        snippet.push_str("...");
+    }
+
+    // Clean up the snippet: collapse whitespace and newlines
+    let raw = &content[start..end];
+    let cleaned: String = raw
+        .chars()
+        .map(|c| if c == '\n' || c == '\r' { ' ' } else { c })
+        .collect();
+    snippet.push_str(cleaned.trim());
+
+    if end < content.len() {
+        snippet.push_str("...");
+    }
+
+    snippet
 }
 
 // ============================================================================
@@ -1726,5 +1940,124 @@ mod tests {
         );
 
         delete_chat_permanently(&chat.id).expect("Should cleanup test chat");
+    }
+
+    #[test]
+    fn test_sanitize_fts_query_supports_prefix_matching() {
+        // Single word gets quoted + wildcard
+        let result = sanitize_fts_query("hel");
+        assert_eq!(result, "\"hel\"*");
+
+        // Multiple words each get prefix wildcards
+        let result = sanitize_fts_query("hello wor");
+        assert_eq!(result, "\"hello\"* \"wor\"*");
+
+        // Special chars are stripped
+        let result = sanitize_fts_query("test:query");
+        assert!(result.contains("test"));
+        assert!(result.contains("query"));
+        assert!(!result.contains(':'));
+    }
+
+    #[test]
+    fn test_extract_match_snippet_centers_on_match() {
+        let content =
+            "The quick brown fox jumps over the lazy dog and then keeps running across the meadow";
+        let snippet = extract_match_snippet(content, "fox");
+        assert!(
+            snippet.contains("fox"),
+            "Snippet should contain the match: {}",
+            snippet
+        );
+        assert!(
+            snippet.len() <= 90,
+            "Snippet should be bounded: len={}",
+            snippet.len()
+        );
+    }
+
+    #[test]
+    fn test_extract_match_snippet_adds_ellipsis_when_truncated() {
+        let content = "A".repeat(20) + " MATCH " + &"B".repeat(200);
+        let snippet = extract_match_snippet(&content, "match");
+        assert!(snippet.contains("MATCH"), "Snippet should contain match");
+        assert!(
+            snippet.ends_with("..."),
+            "Should have trailing ellipsis when truncated"
+        );
+    }
+
+    #[test]
+    fn test_search_chats_with_snippets_does_not_error() {
+        init_test_db();
+
+        // Empty search should return all chats
+        let result = search_chats_with_snippets("");
+        assert!(
+            result.is_ok(),
+            "Empty search should not error: {:?}",
+            result.err()
+        );
+
+        // Simple text search should not error
+        let result = search_chats_with_snippets("test");
+        assert!(
+            result.is_ok(),
+            "Text search should not error: {:?}",
+            result.err()
+        );
+
+        // Special characters should fall back gracefully
+        let result = search_chats_with_snippets("test@example.com");
+        assert!(
+            result.is_ok(),
+            "Special char search should not error: {:?}",
+            result.err()
+        );
+    }
+
+    #[test]
+    fn test_search_chats_with_snippets_returns_match_context() {
+        init_test_db();
+
+        // Create a test chat with a message containing a unique keyword
+        let chat = Chat::new("test-model-snippet", "test-provider-snippet");
+        let chat_id = chat.id;
+        create_chat(&chat).expect("Should create chat");
+
+        let unique_keyword = "xyzzyplugh42";
+        save_message(&Message {
+            id: uuid::Uuid::new_v4().to_string(),
+            chat_id,
+            role: MessageRole::User,
+            content: format!("Tell me about {}", unique_keyword),
+            created_at: chrono::Utc::now(),
+            tokens_used: None,
+            images: Vec::new(),
+        })
+        .expect("Should save message");
+
+        let results = search_chats_with_snippets(unique_keyword).expect("Search should succeed");
+
+        // Should find the chat
+        assert!(!results.is_empty(), "Should find chat with unique keyword");
+        let found = results.iter().find(|r| r.chat.id == chat_id);
+        assert!(found.is_some(), "Should find our specific chat");
+
+        let result = found.expect("already checked");
+        // Should have a snippet containing the keyword
+        assert!(
+            result.match_snippet.is_some(),
+            "Should have a match snippet for message content match"
+        );
+        let snippet = result.match_snippet.as_deref().unwrap_or("");
+        assert!(
+            snippet.to_lowercase().contains(unique_keyword),
+            "Snippet should contain the keyword: got '{}'",
+            snippet
+        );
+
+        // Cleanup
+        delete_chat_permanently(&chat_id).expect("Should cleanup");
     }
 }
