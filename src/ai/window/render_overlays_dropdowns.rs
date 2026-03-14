@@ -1,4 +1,5 @@
 use super::*;
+use crate::theme::opacity::{OPACITY_SELECTED, OPACITY_STRONG};
 
 impl AiApp {
     pub(super) fn render_presets_dropdown(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -32,7 +33,9 @@ impl AiApp {
                     .gap(S3)
                     .cursor_pointer()
                     .when(is_selected, |el| el.bg(accent))
-                    .when(!is_selected, |el| el.hover(|el| el.bg(accent.opacity(0.5))))
+                    .when(!is_selected, |el| {
+                        el.hover(|el| el.bg(accent.opacity(OPACITY_SELECTED)))
+                    })
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.presets_selected_index = idx;
                         this.create_chat_with_preset(window, cx);
@@ -60,7 +63,7 @@ impl AiApp {
                                 div()
                                     .text_xs()
                                     .text_color(if is_selected {
-                                        accent_fg.opacity(0.7)
+                                        accent_fg.opacity(OPACITY_STRONG)
                                     } else {
                                         muted_fg
                                     })
@@ -173,7 +176,9 @@ impl AiApp {
                     .justify_between()
                     .cursor_pointer()
                     .when(is_selected, |el| el.bg(accent))
-                    .when(!is_selected, |el| el.hover(|el| el.bg(accent.opacity(0.5))))
+                    .when(!is_selected, |el| {
+                        el.hover(|el| el.bg(accent.opacity(OPACITY_SELECTED)))
+                    })
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.hide_new_chat_dropdown(cx);
                         this.create_chat_with_model(&model_id, &provider, window, cx);
@@ -188,7 +193,7 @@ impl AiApp {
                         div()
                             .text_xs()
                             .text_color(if is_selected {
-                                accent_fg.opacity(0.7)
+                                accent_fg.opacity(OPACITY_STRONG)
                             } else {
                                 muted_fg
                             })
@@ -225,7 +230,9 @@ impl AiApp {
                     .gap(S2)
                     .cursor_pointer()
                     .when(is_selected, |el| el.bg(accent))
-                    .when(!is_selected, |el| el.hover(|el| el.bg(accent.opacity(0.5))))
+                    .when(!is_selected, |el| {
+                        el.hover(|el| el.bg(accent.opacity(OPACITY_SELECTED)))
+                    })
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.presets_selected_index = original_idx;
                         this.hide_new_chat_dropdown(cx);
@@ -279,7 +286,9 @@ impl AiApp {
                     .justify_between()
                     .cursor_pointer()
                     .when(is_selected, |el| el.bg(accent))
-                    .when(!is_selected, |el| el.hover(|el| el.bg(accent.opacity(0.5))))
+                    .when(!is_selected, |el| {
+                        el.hover(|el| el.bg(accent.opacity(OPACITY_SELECTED)))
+                    })
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.hide_new_chat_dropdown(cx);
                         this.create_chat_with_model(&model_id, &provider, window, cx);
@@ -294,7 +303,7 @@ impl AiApp {
                         div()
                             .text_xs()
                             .text_color(if is_selected {
-                                accent_fg.opacity(0.7)
+                                accent_fg.opacity(OPACITY_STRONG)
                             } else {
                                 muted_fg
                             })
