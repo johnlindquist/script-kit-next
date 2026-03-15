@@ -124,6 +124,7 @@ pub fn extract_text_from_rgba(_width: u32, _height: u32, _rgba_data: &[u8]) -> R
 ///
 /// This function spawns a background thread to perform OCR, avoiding blocking
 /// the main thread. The callback is called with the result when OCR completes.
+/// The callback is guaranteed to be called even if the OCR worker panics.
 ///
 /// # Arguments
 /// * `width` - Image width in pixels
@@ -135,10 +136,64 @@ pub fn extract_text_async<F>(width: u32, height: u32, rgba_data: Vec<u8>, callba
 where
     F: FnOnce(Result<String>) + Send + 'static,
 {
+    let request_bytes = rgba_data.len();
+    info!(
+        target: "ocr",
+        event = "ocr_async_started",
+        width,
+        height,
+        request_bytes,
+        "ocr_async_started"
+    );
+
     thread::spawn(move || {
-        let result = extract_text_from_rgba(width, height, &rgba_data);
+        let started_at = std::time::Instant::now();
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            extract_text_from_rgba(width, height, &rgba_data)
+        }))
+        .unwrap_or_else(|panic_payload| {
+            Err(anyhow!(
+                "OCR worker panicked: {}",
+                panic_payload_to_string(panic_payload)
+            ))
+        });
+
+        let elapsed_ms = started_at.elapsed().as_millis() as u64;
+        match &result {
+            Ok(text) => info!(
+                target: "ocr",
+                event = "ocr_async_completed",
+                width,
+                height,
+                request_bytes,
+                elapsed_ms,
+                extracted_chars = text.len(),
+                "ocr_async_completed"
+            ),
+            Err(err) => error!(
+                target: "ocr",
+                event = "ocr_async_failed",
+                width,
+                height,
+                request_bytes,
+                elapsed_ms,
+                error = %err,
+                "ocr_async_failed"
+            ),
+        }
+
         callback(result);
     });
+}
+
+fn panic_payload_to_string(payload: Box<dyn std::any::Any + Send>) -> String {
+    if let Some(message) = payload.downcast_ref::<&str>() {
+        (*message).to_string()
+    } else if let Some(message) = payload.downcast_ref::<String>() {
+        message.clone()
+    } else {
+        "unknown panic payload".to_string()
+    }
 }
 
 /// Internal Vision framework implementation
@@ -408,31 +463,26 @@ mod tests {
 
     #[test]
     fn test_async_extraction_calls_callback() {
-        use std::sync::atomic::{AtomicBool, Ordering};
-        use std::sync::Arc;
+        use std::sync::mpsc;
         use std::time::Duration;
 
-        let callback_called = Arc::new(AtomicBool::new(false));
-        let callback_called_clone = callback_called.clone();
+        let (tx, rx) = mpsc::channel();
 
-        // Small test image (10x1 pixels)
-        let rgba_data: Vec<u8> = vec![255u8; 40];
-
-        extract_text_async(10, 1, rgba_data, move |_result| {
-            callback_called_clone.store(true, Ordering::SeqCst);
+        // Use zero-width image: triggers the "dimensions cannot be zero" error
+        // immediately without touching Vision framework, making the test
+        // deterministic and fast.
+        extract_text_async(0, 1, Vec::new(), move |result| {
+            tx.send(result.map(|_| ()))
+                .expect("callback send should succeed");
         });
 
-        // Wait for callback (with timeout)
-        for _ in 0..100 {
-            if callback_called.load(Ordering::SeqCst) {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(10));
-        }
+        let result = rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("callback should be called for invalid OCR input");
 
         assert!(
-            callback_called.load(Ordering::SeqCst),
-            "Callback should have been called"
+            result.is_err(),
+            "invalid OCR input should still complete through the async callback"
         );
     }
 }
