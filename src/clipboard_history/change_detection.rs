@@ -24,6 +24,8 @@ pub fn get_pasteboard_change_count() -> Option<i64> {
     use cocoa::base::nil;
     use objc::runtime::Object;
 
+    // SAFETY: NSPasteboard.generalPasteboard is a class method returning the shared
+    // pasteboard singleton. The pointer is nil-checked. changeCount returns a value type.
     unsafe {
         let pasteboard: *mut Object = NSPasteboard::generalPasteboard(nil);
         if pasteboard.is_null() {

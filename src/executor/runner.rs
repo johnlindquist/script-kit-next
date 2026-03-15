@@ -29,8 +29,8 @@ mod unix_process {
     /// Returns Ok(()) if signal was sent successfully.
     /// Returns Err with errno description on failure.
     pub fn kill_process_group(pgid: u32, signal: c_int) -> Result<(), &'static str> {
-        // Safety: kill() is a simple syscall with no memory safety concerns
-        // Negative PID targets the process group
+        // SAFETY: kill() is a simple syscall with no memory safety concerns.
+        // Negative PID targets the process group. pgid is a valid u32 from Child::id().
         let rc = unsafe { libc::kill(-(pgid as pid_t), signal) };
         if rc == 0 {
             Ok(())
@@ -53,7 +53,8 @@ mod unix_process {
     /// Note: EPERM (permission denied) also means the process exists but we
     /// don't have permission to signal it - we still count this as "alive".
     pub fn process_group_alive(pgid: u32) -> bool {
-        // Safety: kill() with signal 0 is safe - it only checks existence
+        // SAFETY: kill() with signal 0 is safe — it only checks process group existence
+        // without sending an actual signal. pgid is a valid u32 from Child::id().
         let rc = unsafe { libc::kill(-(pgid as pid_t), 0) };
         if rc == 0 {
             true

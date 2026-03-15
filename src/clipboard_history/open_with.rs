@@ -42,6 +42,9 @@ mod macos {
             return Vec::new();
         };
 
+        // SAFETY: file_url is a valid CFURL created above. LSCopyApplicationURLsForURL
+        // returns a CFArray that we wrap with create-rule (transfers ownership).
+        // The null error pointer opts out of error reporting.
         unsafe {
             let array_ref = LSCopyApplicationURLsForURL(
                 file_url.as_concrete_TypeRef(),

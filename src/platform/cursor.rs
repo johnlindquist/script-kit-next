@@ -78,8 +78,10 @@ mod macos_ws {
     fn load_set_window_tags_fn() -> Option<SetWindowTagsFn> {
         static FN: OnceLock<Option<SetWindowTagsFn>> = OnceLock::new();
 
+        // SAFETY: dlsym returns a valid function pointer or null for the given
+        // symbol name. Non-null pointers are transmuted to the known FFI signature
+        // of CGSSetWindowTags/SLSSetWindowTags. OnceLock ensures single init.
         *FN.get_or_init(|| unsafe {
-            // Try the legacy CoreGraphics Services symbol first, then the SkyLight one.
             for name in [b"CGSSetWindowTags\0", b"SLSSetWindowTags\0"] {
                 let ptr = dlsym(RTLD_DEFAULT, name.as_ptr() as *const c_char);
                 if !ptr.is_null() {
@@ -90,12 +92,16 @@ mod macos_ws {
         })
     }
 
+    // SAFETY: Caller must ensure `s` is a valid NUL-terminated CStr.
+    // Returns an autoreleased NSString.
     unsafe fn nsstring_utf8(s: &CStr) -> cocoa::base::id {
         let ns_str: cocoa::base::id =
             objc::msg_send![objc::class!(NSString), stringWithUTF8String: s.as_ptr()];
         ns_str
     }
 
+    // SAFETY: Must be called from the main thread. Uses CGSMainConnectionID and
+    // CGSSetConnectionProperty which require a valid WindowServer connection.
     pub unsafe fn enable_sets_cursor_in_background_for_connection() {
         let connection_id = CGSMainConnectionID();
         if connection_id == 0 {
@@ -139,6 +145,8 @@ mod macos_ws {
         }
     }
 
+    // SAFETY: Must be called from the main thread. Iterates NSApp windows via objc
+    // messaging and applies WindowServer tags. All pointers are nil-checked.
     pub unsafe fn tag_all_app_windows_sets_cursor_in_background() {
         let Some(set_window_tags) = load_set_window_tags_fn() else {
             crate::logging::log(
@@ -240,6 +248,8 @@ fn install_cursor_rects() {
             this: *mut std::ffi::c_void,
             _cmd: objc::runtime::Sel,
         ) {
+            // SAFETY: `this` is a valid NSView pointer provided by the ObjC runtime.
+            // bounds, arrowCursor, and addCursorRect:cursor: are standard AppKit methods.
             unsafe {
                 let this = this as cocoa::base::id;
                 let bounds: cocoa::foundation::NSRect = msg_send![this, bounds];
@@ -298,11 +308,15 @@ pub fn install_cursor_tracking() {
     static CONN_ONCE: Once = Once::new();
 
     // 1) Connection-level permission: do once.
+    // SAFETY: enable_sets_cursor_in_background_for_connection sends ObjC messages
+    // to set the WindowServer connection property. Called once via Once guard.
     CONN_ONCE.call_once(|| unsafe {
         macos_ws::enable_sets_cursor_in_background_for_connection();
     });
 
     // 2) Window-level tag: do every call (new windows may have appeared).
+    // SAFETY: tag_all_app_windows_sets_cursor_in_background iterates NSApp windows
+    // and applies cursor tags via validated function pointer. Nil-checks throughout.
     unsafe {
         macos_ws::tag_all_app_windows_sets_cursor_in_background();
     }

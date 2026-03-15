@@ -2,6 +2,8 @@
 // Actions Popup Window Configuration
 // ============================================================================
 
+// SAFETY: Caller must pass a valid NSWindow pointer on the main thread.
+// The function nil-checks all derived pointers (content view, appearance).
 #[cfg(target_os = "macos")]
 unsafe fn configure_window_vibrancy_common(
     window: id,

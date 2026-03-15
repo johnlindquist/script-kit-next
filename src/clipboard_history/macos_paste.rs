@@ -35,6 +35,9 @@ use tracing::debug;
 /// * `Err` with description on failure
 #[cfg(target_os = "macos")]
 pub fn copy_image_with_file_url(png_bytes: &[u8], file_path: &Path) -> Result<()> {
+    // SAFETY: All ObjC objects (pasteboard, data, image, url) are nil-checked after
+    // creation. NSData is created from a valid slice. NSImage/NSURL are initialized
+    // from the validated data/path. Pasteboard writeObjects uses Foundation's copy semantics.
     unsafe {
         // Get the general pasteboard
         let pasteboard: id = NSPasteboard::generalPasteboard(nil);

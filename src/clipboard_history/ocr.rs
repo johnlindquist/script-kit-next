@@ -289,9 +289,14 @@ extern "C" {}
 /// Run OCR on a blob image path using macOS Vision.
 #[cfg(all(target_os = "macos", feature = "ocr"))]
 pub fn run_vision_ocr(blob_path: &str) -> Result<String> {
+    // SAFETY: run_vision_ocr_inner uses objc messaging to Vision framework classes.
+    // All ObjC objects are nil-checked. The autoreleasepool ensures proper cleanup.
     objc::rc::autoreleasepool(|| unsafe { run_vision_ocr_inner(blob_path) })
 }
 
+// SAFETY: Caller must wrap in an autoreleasepool. Uses objc messaging to create
+// VNImageRequestHandler and VNRecognizeTextRequest. All objects are nil-checked
+// and released on error paths.
 #[cfg(all(target_os = "macos", feature = "ocr"))]
 unsafe fn run_vision_ocr_inner(blob_path: &str) -> Result<String> {
     if !Path::new(blob_path).exists() {
@@ -434,6 +439,8 @@ pub fn run_vision_ocr(blob_path: &str) -> Result<String> {
     bail!("clipboard_ocr_run_vision_unsupported_platform_or_feature")
 }
 
+// SAFETY: Caller must pass a valid NSString pointer or nil. The pointer is
+// nil-checked, and UTF8String returns a pointer to the string's internal buffer.
 #[cfg(all(target_os = "macos", feature = "ocr"))]
 unsafe fn nsstring_to_string(ns_string: id) -> String {
     if ns_string == nil {
@@ -450,6 +457,8 @@ unsafe fn nsstring_to_string(ns_string: id) -> String {
         .into_owned()
 }
 
+// SAFETY: Caller must ensure the returned NSString is used within an autoreleasepool.
+// The CString is valid for the duration of the msg_send! call. Result is nil-checked.
 #[cfg(all(target_os = "macos", feature = "ocr"))]
 unsafe fn nsstring_from_str(value: &str) -> Result<id> {
     let c_string = std::ffi::CString::new(value)
