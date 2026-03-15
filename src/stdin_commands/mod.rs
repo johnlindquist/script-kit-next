@@ -34,6 +34,7 @@
 use crate::logging;
 use crate::protocol::GridDepthOption;
 use crate::setup;
+use itertools::Itertools;
 use std::io::BufRead;
 use std::path::{Component, Path, PathBuf};
 use uuid::Uuid;
@@ -116,7 +117,6 @@ impl std::fmt::Display for CaptureWindowPathPolicyError {
                 let roots = allowed_roots
                     .iter()
                     .map(|root| root.display().to_string())
-                    .collect::<Vec<_>>()
                     .join(", ");
                 write!(
                     f,
@@ -621,12 +621,13 @@ pub fn start_stdin_listener() -> async_channel::Receiver<ExternalCommandEnvelope
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::Context;
     use std::io::Cursor;
     use std::path::Path;
     use tempfile::TempDir;
 
     #[test]
-    fn test_read_stdin_line_bounded_skips_oversized_line_and_recovers() {
+    fn test_read_stdin_line_bounded_skips_oversized_line_and_recovers() -> anyhow::Result<()> {
         let oversized_payload = "x".repeat(20_000);
         let input = format!(
             r#"{{"type":"setFilter","text":"{}"}}
@@ -639,7 +640,7 @@ mod tests {
         let mut byte_buffer = Vec::new();
 
         let first = read_stdin_line_bounded(&mut reader, &mut byte_buffer, MAX_STDIN_COMMAND_BYTES)
-            .expect("Expected bounded line reader to process input");
+            .context("Expected bounded line reader to process input")?;
         match first {
             StdinLineRead::TooLong { raw_len, .. } => {
                 assert!(raw_len > MAX_STDIN_COMMAND_BYTES);
@@ -649,19 +650,21 @@ mod tests {
 
         let second =
             read_stdin_line_bounded(&mut reader, &mut byte_buffer, MAX_STDIN_COMMAND_BYTES)
-                .expect("Expected second line to be readable");
+                .context("Expected second line to be readable")?;
         match second {
             StdinLineRead::Line(line) => {
                 assert_eq!(line.trim_end(), r#"{"type":"show"}"#);
             }
             _ => panic!("Expected second line to be a valid command"),
         }
+
+        Ok(())
     }
 
     #[test]
-    fn test_external_command_run_deserialization() {
+    fn test_external_command_run_deserialization() -> anyhow::Result<()> {
         let json = r#"{"type": "run", "path": "/path/to/script.ts"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
             ExternalCommand::Run { path, request_id } => {
                 assert_eq!(path, "/path/to/script.ts");
@@ -669,12 +672,13 @@ mod tests {
             }
             _ => panic!("Expected Run command"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_external_command_run_with_request_id() {
+    fn test_external_command_run_with_request_id() -> anyhow::Result<()> {
         let json = r#"{"type": "run", "path": "/path/to/script.ts", "requestId": "req-123"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
             ExternalCommand::Run { path, request_id } => {
                 assert_eq!(path, "/path/to/script.ts");
@@ -682,38 +686,42 @@ mod tests {
             }
             _ => panic!("Expected Run command"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_external_command_show_deserialization() {
+    fn test_external_command_show_deserialization() -> anyhow::Result<()> {
         let json = r#"{"type": "show"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
         assert!(matches!(cmd, ExternalCommand::Show { request_id: None }));
+        Ok(())
     }
 
     #[test]
-    fn test_external_command_show_with_request_id() {
+    fn test_external_command_show_with_request_id() -> anyhow::Result<()> {
         let json = r#"{"type": "show", "requestId": "req-456"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
             ExternalCommand::Show { request_id } => {
                 assert_eq!(request_id, Some("req-456".to_string().into()));
             }
             _ => panic!("Expected Show command"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_external_command_hide_deserialization() {
+    fn test_external_command_hide_deserialization() -> anyhow::Result<()> {
         let json = r#"{"type": "hide"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
         assert!(matches!(cmd, ExternalCommand::Hide { request_id: None }));
+        Ok(())
     }
 
     #[test]
-    fn test_external_command_set_filter_deserialization() {
+    fn test_external_command_set_filter_deserialization() -> anyhow::Result<()> {
         let json = r#"{"type": "setFilter", "text": "hello world"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
             ExternalCommand::SetFilter { text, request_id } => {
                 assert_eq!(text, "hello world");
@@ -721,12 +729,13 @@ mod tests {
             }
             _ => panic!("Expected SetFilter command"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_external_command_set_filter_with_request_id() {
+    fn test_external_command_set_filter_with_request_id() -> anyhow::Result<()> {
         let json = r#"{"type": "setFilter", "text": "hello", "requestId": "req-789"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
             ExternalCommand::SetFilter { text, request_id } => {
                 assert_eq!(text, "hello");
@@ -734,22 +743,24 @@ mod tests {
             }
             _ => panic!("Expected SetFilter command"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_external_command_trigger_builtin_deserialization() {
+    fn test_external_command_trigger_builtin_deserialization() -> anyhow::Result<()> {
         let json = r#"{"type": "triggerBuiltin", "name": "clipboardHistory"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
             ExternalCommand::TriggerBuiltin { name } => assert_eq!(name, "clipboardHistory"),
             _ => panic!("Expected TriggerBuiltin command"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_external_command_simulate_key_deserialization() {
+    fn test_external_command_simulate_key_deserialization() -> anyhow::Result<()> {
         let json = r#"{"type": "simulateKey", "key": "enter", "modifiers": ["cmd", "shift"]}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
             ExternalCommand::SimulateKey { key, modifiers } => {
                 assert_eq!(key, "enter");
@@ -757,12 +768,13 @@ mod tests {
             }
             _ => panic!("Expected SimulateKey command"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_external_command_simulate_key_no_modifiers() {
+    fn test_external_command_simulate_key_no_modifiers() -> anyhow::Result<()> {
         let json = r#"{"type": "simulateKey", "key": "escape"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
             ExternalCommand::SimulateKey { key, modifiers } => {
                 assert_eq!(key, "escape");
@@ -770,12 +782,13 @@ mod tests {
             }
             _ => panic!("Expected SimulateKey command"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_external_command_simulate_key_modifier_aliases() {
+    fn test_external_command_simulate_key_modifier_aliases() -> anyhow::Result<()> {
         let json = r#"{"type":"simulateKey","key":"k","modifiers":["meta","option","control"]}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
             ExternalCommand::SimulateKey { modifiers, .. } => {
                 assert_eq!(
@@ -785,6 +798,7 @@ mod tests {
             }
             _ => panic!("Expected SimulateKey command"),
         }
+        Ok(())
     }
 
     #[test]
@@ -852,31 +866,34 @@ mod tests {
     }
 
     #[test]
-    fn test_external_command_open_notes_deserialization() {
+    fn test_external_command_open_notes_deserialization() -> anyhow::Result<()> {
         let json = r#"{"type": "openNotes"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
         assert!(matches!(cmd, ExternalCommand::OpenNotes));
+        Ok(())
     }
 
     #[test]
-    fn test_external_command_open_ai_deserialization() {
+    fn test_external_command_open_ai_deserialization() -> anyhow::Result<()> {
         let json = r#"{"type": "openAi"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
         assert!(matches!(cmd, ExternalCommand::OpenAi));
+        Ok(())
     }
 
     #[test]
-    fn test_external_command_open_ai_with_mock_data_deserialization() {
+    fn test_external_command_open_ai_with_mock_data_deserialization() -> anyhow::Result<()> {
         let json = r#"{"type": "openAiWithMockData"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
         assert!(matches!(cmd, ExternalCommand::OpenAiWithMockData));
+        Ok(())
     }
 
     #[test]
-    fn test_external_command_capture_window_deserialization() {
+    fn test_external_command_capture_window_deserialization() -> anyhow::Result<()> {
         let json =
             r#"{"type": "captureWindow", "title": "Script Kit AI", "path": "/tmp/screenshot.png"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
             ExternalCommand::CaptureWindow { title, path } => {
                 assert_eq!(title, "Script Kit AI");
@@ -884,12 +901,13 @@ mod tests {
             }
             _ => panic!("Expected CaptureWindow command"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_external_command_show_grid_defaults() {
+    fn test_external_command_show_grid_defaults() -> anyhow::Result<()> {
         let json = r#"{"type": "showGrid"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
             ExternalCommand::ShowGrid {
                 grid_size,
@@ -908,12 +926,13 @@ mod tests {
             }
             _ => panic!("Expected ShowGrid command"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_external_command_show_grid_with_options() {
+    fn test_external_command_show_grid_with_options() -> anyhow::Result<()> {
         let json = r#"{"type": "showGrid", "gridSize": 16, "showBounds": true, "showBoxModel": true, "showAlignmentGuides": true, "showDimensions": true, "depth": "all"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
             ExternalCommand::ShowGrid {
                 grid_size,
@@ -935,12 +954,13 @@ mod tests {
             }
             _ => panic!("Expected ShowGrid command"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_external_command_show_grid_with_components() {
+    fn test_external_command_show_grid_with_components() -> anyhow::Result<()> {
         let json = r#"{"type": "showGrid", "depth": ["header", "footer"]}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
             ExternalCommand::ShowGrid { depth, .. } => match depth {
                 GridDepthOption::Components(components) => {
@@ -950,20 +970,22 @@ mod tests {
             },
             _ => panic!("Expected ShowGrid command"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_external_command_hide_grid_deserialization() {
+    fn test_external_command_hide_grid_deserialization() -> anyhow::Result<()> {
         let json = r#"{"type": "hideGrid"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
         assert!(matches!(cmd, ExternalCommand::HideGrid));
+        Ok(())
     }
 
     #[test]
-    fn test_external_command_execute_fallback_deserialization() {
+    fn test_external_command_execute_fallback_deserialization() -> anyhow::Result<()> {
         let json =
             r#"{"type": "executeFallback", "fallbackId": "search-google", "input": "hello world"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
             ExternalCommand::ExecuteFallback { fallback_id, input } => {
                 assert_eq!(fallback_id, "search-google");
@@ -971,12 +993,13 @@ mod tests {
             }
             _ => panic!("Expected ExecuteFallback command"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_external_command_execute_fallback_copy() {
+    fn test_external_command_execute_fallback_copy() -> anyhow::Result<()> {
         let json = r#"{"type": "executeFallback", "fallbackId": "copy-to-clipboard", "input": "test text"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
             ExternalCommand::ExecuteFallback { fallback_id, input } => {
                 assert_eq!(fallback_id, "copy-to-clipboard");
@@ -984,81 +1007,89 @@ mod tests {
             }
             _ => panic!("Expected ExecuteFallback command"),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_validate_capture_window_output_path_allows_dot_test_screenshots() {
-        let temp = TempDir::new().expect("create temp dir");
-        let cwd = std::fs::canonicalize(temp.path()).expect("canonicalize temp dir");
+    fn test_validate_capture_window_output_path_allows_dot_test_screenshots() -> anyhow::Result<()>
+    {
+        let temp = TempDir::new().context("create temp dir")?;
+        let cwd = std::fs::canonicalize(temp.path()).context("canonicalize temp dir")?;
         let kit_root = cwd.join("kit-root");
-        std::fs::create_dir_all(&kit_root).expect("create kit root");
+        std::fs::create_dir_all(&kit_root).context("create kit root")?;
 
         let resolved = validate_capture_window_output_path_with_roots(
             ".test-screenshots/shot.png",
             &cwd,
             &kit_root,
         )
-        .expect("path should be accepted");
+        .context("path should be accepted")?;
 
         assert_eq!(resolved, cwd.join(".test-screenshots/shot.png"));
+        Ok(())
     }
 
     #[test]
-    fn test_validate_capture_window_output_path_rejects_traversal() {
-        let temp = TempDir::new().expect("create temp dir");
+    fn test_validate_capture_window_output_path_rejects_traversal() -> anyhow::Result<()> {
+        let temp = TempDir::new().context("create temp dir")?;
         let cwd = temp.path();
         let kit_root = cwd.join("kit-root");
-        std::fs::create_dir_all(&kit_root).expect("create kit root");
+        std::fs::create_dir_all(&kit_root).context("create kit root")?;
 
         let error = validate_capture_window_output_path_with_roots(
             ".test-screenshots/../escape.png",
             cwd,
             &kit_root,
         )
-        .expect_err("path traversal should be rejected");
+        .err()
+        .context("path traversal should be rejected")?;
 
         assert!(matches!(
             error,
             CaptureWindowPathPolicyError::PathOutsideAllowedRoots { .. }
         ));
+        Ok(())
     }
 
     #[test]
-    fn test_validate_capture_window_output_path_rejects_symlink_parent() {
-        let temp = TempDir::new().expect("create temp dir");
+    fn test_validate_capture_window_output_path_rejects_symlink_parent() -> anyhow::Result<()> {
+        let temp = TempDir::new().context("create temp dir")?;
         let cwd = temp.path();
         let kit_root = cwd.join("kit-root");
-        std::fs::create_dir_all(&kit_root).expect("create kit root");
+        std::fs::create_dir_all(&kit_root).context("create kit root")?;
 
         let screenshots_root = cwd.join(".test-screenshots");
-        std::fs::create_dir_all(&screenshots_root).expect("create screenshots root");
+        std::fs::create_dir_all(&screenshots_root).context("create screenshots root")?;
 
         let outside = cwd.join("outside");
-        std::fs::create_dir_all(&outside).expect("create outside dir");
+        std::fs::create_dir_all(&outside).context("create outside dir")?;
 
         let symlink_path = screenshots_root.join("linked");
-        create_symlink(&outside, &symlink_path);
+        create_symlink(&outside, &symlink_path)?;
 
         let error = validate_capture_window_output_path_with_roots(
             ".test-screenshots/linked/shot.png",
             cwd,
             &kit_root,
         )
-        .expect_err("symlink target should be rejected");
+        .err()
+        .context("symlink target should be rejected")?;
 
         assert!(matches!(
             error,
             CaptureWindowPathPolicyError::SymlinkInPath { .. }
         ));
+        Ok(())
     }
 
     #[test]
-    fn test_validate_capture_window_output_path_allows_scriptkit_screenshots_root() {
-        let temp = TempDir::new().expect("create temp dir");
-        let cwd = std::fs::canonicalize(temp.path()).expect("canonicalize temp dir");
+    fn test_validate_capture_window_output_path_allows_scriptkit_screenshots_root(
+    ) -> anyhow::Result<()> {
+        let temp = TempDir::new().context("create temp dir")?;
+        let cwd = std::fs::canonicalize(temp.path()).context("canonicalize temp dir")?;
         let kit_root = cwd.join("kit-root");
         let screenshots_root = kit_root.join("screenshots");
-        std::fs::create_dir_all(&screenshots_root).expect("create screenshots root");
+        std::fs::create_dir_all(&screenshots_root).context("create screenshots root")?;
 
         let target = screenshots_root.join("shot.png");
         let resolved = validate_capture_window_output_path_with_roots(
@@ -1066,18 +1097,21 @@ mod tests {
             &cwd,
             &kit_root,
         )
-        .expect("path should be accepted");
+        .context("path should be accepted")?;
 
         assert_eq!(resolved, target);
+        Ok(())
     }
 
     #[cfg(unix)]
-    fn create_symlink(target: &Path, link: &Path) {
-        std::os::unix::fs::symlink(target, link).expect("create symlink");
+    fn create_symlink(target: &Path, link: &Path) -> anyhow::Result<()> {
+        std::os::unix::fs::symlink(target, link).context("create symlink")?;
+        Ok(())
     }
 
     #[cfg(windows)]
-    fn create_symlink(target: &Path, link: &Path) {
-        std::os::windows::fs::symlink_dir(target, link).expect("create symlink");
+    fn create_symlink(target: &Path, link: &Path) -> anyhow::Result<()> {
+        std::os::windows::fs::symlink_dir(target, link).context("create symlink")?;
+        Ok(())
     }
 }

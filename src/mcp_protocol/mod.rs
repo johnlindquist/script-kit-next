@@ -78,30 +78,28 @@ pub struct JsonRpcError {
     pub data: Option<Value>,
 }
 /// MCP methods supported by this server
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display, strum::EnumString)]
 pub enum McpMethod {
     /// Initialize the MCP session
+    #[strum(serialize = "initialize")]
     Initialize,
     /// List available tools
+    #[strum(serialize = "tools/list")]
     ToolsList,
     /// Call a specific tool
+    #[strum(serialize = "tools/call")]
     ToolsCall,
     /// List available resources
+    #[strum(serialize = "resources/list")]
     ResourcesList,
     /// Read a specific resource
+    #[strum(serialize = "resources/read")]
     ResourcesRead,
 }
 impl McpMethod {
     /// Parse method string to enum variant
     pub fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "initialize" => Some(Self::Initialize),
-            "tools/list" => Some(Self::ToolsList),
-            "tools/call" => Some(Self::ToolsCall),
-            "resources/list" => Some(Self::ResourcesList),
-            "resources/read" => Some(Self::ResourcesRead),
-            _ => None,
-        }
+        <Self as std::str::FromStr>::from_str(s).ok()
     }
 
     /// Get the method string
@@ -479,6 +477,7 @@ fn handle_resources_read_with_context(
 mod tests {
     // --- merged from tests/part_000.rs ---
     use super::*;
+    use anyhow::Context;
     use std::sync::Arc;
     /// Helper to wrap Vec<Script> into Vec<Arc<Script>> for tests
     fn wrap_scripts(scripts: Vec<Script>) -> Vec<Arc<Script>> {
@@ -493,25 +492,29 @@ mod tests {
     // =======================================================
 
     #[test]
-    fn test_parse_valid_jsonrpc_request() {
+    fn test_parse_valid_jsonrpc_request() -> anyhow::Result<()> {
         let json = r#"{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}"#;
         let result = parse_request(json);
 
         assert!(result.is_ok());
-        let request = result.unwrap();
+        let request = result.map_err(|e| anyhow::anyhow!("parse failed: {:?}", e))?;
         assert_eq!(request.jsonrpc, "2.0");
         assert_eq!(request.id, serde_json::json!(1));
         assert_eq!(request.method, "tools/list");
         assert_eq!(request.params, serde_json::json!({}));
+        Ok(())
     }
     #[test]
-    fn test_parse_invalid_jsonrpc_returns_error() {
+    fn test_parse_invalid_jsonrpc_returns_error() -> anyhow::Result<()> {
         // Test 1: Invalid JSON
         let json = r#"{"jsonrpc":"2.0", invalid}"#;
         let result = parse_request(json);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert_eq!(err.error.as_ref().unwrap().code, error_codes::PARSE_ERROR);
+        assert_eq!(
+            err.error.as_ref().context("missing error field")?.code,
+            error_codes::PARSE_ERROR
+        );
 
         // Test 2: Missing jsonrpc field
         let json = r#"{"id":1,"method":"test"}"#;
@@ -519,7 +522,7 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert_eq!(
-            err.error.as_ref().unwrap().code,
+            err.error.as_ref().context("missing error field")?.code,
             error_codes::INVALID_REQUEST
         );
 
@@ -529,7 +532,7 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert_eq!(
-            err.error.as_ref().unwrap().code,
+            err.error.as_ref().context("missing error field")?.code,
             error_codes::INVALID_REQUEST
         );
 
@@ -539,12 +542,13 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert_eq!(
-            err.error.as_ref().unwrap().code,
+            err.error.as_ref().context("missing error field")?.code,
             error_codes::INVALID_REQUEST
         );
+        Ok(())
     }
     #[test]
-    fn test_method_not_found_error() {
+    fn test_method_not_found_error() -> anyhow::Result<()> {
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             id: serde_json::json!(1),
@@ -556,13 +560,14 @@ mod tests {
 
         assert!(response.error.is_some());
         assert!(response.result.is_none());
-        let err = response.error.unwrap();
+        let err = response.error.context("expected error response")?;
         assert_eq!(err.code, error_codes::METHOD_NOT_FOUND);
         assert!(err.message.contains("Method not found"));
         assert!(err.message.contains("unknown/method"));
+        Ok(())
     }
     #[test]
-    fn test_initialize_returns_capabilities() {
+    fn test_initialize_returns_capabilities() -> anyhow::Result<()> {
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             id: serde_json::json!(1),
@@ -575,11 +580,10 @@ mod tests {
         assert!(response.result.is_some());
         assert!(response.error.is_none());
 
-        let result = response.result.unwrap();
+        let result = response.result.context("expected result")?;
 
         // Check serverInfo
-        assert!(result.get("serverInfo").is_some());
-        let server_info = result.get("serverInfo").unwrap();
+        let server_info = result.get("serverInfo").context("missing serverInfo")?;
         assert_eq!(
             server_info.get("name").and_then(|v| v.as_str()),
             Some("script-kit")
@@ -587,13 +591,13 @@ mod tests {
         assert!(server_info.get("version").is_some());
 
         // Check capabilities
-        assert!(result.get("capabilities").is_some());
-        let caps = result.get("capabilities").unwrap();
+        let caps = result.get("capabilities").context("missing capabilities")?;
         assert!(caps.get("tools").is_some());
         assert!(caps.get("resources").is_some());
+        Ok(())
     }
     #[test]
-    fn test_tools_list_returns_kit_tools() {
+    fn test_tools_list_returns_kit_tools() -> anyhow::Result<()> {
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             id: serde_json::json!(42),
@@ -607,11 +611,11 @@ mod tests {
         assert!(response.error.is_none());
         assert_eq!(response.id, serde_json::json!(42));
 
-        let result = response.result.unwrap();
-        let tools = result.get("tools").and_then(|v| v.as_array());
-        assert!(tools.is_some());
-
-        let tools = tools.unwrap();
+        let result = response.result.context("expected result")?;
+        let tools = result
+            .get("tools")
+            .and_then(|v| v.as_array())
+            .context("missing tools array")?;
         // Should have at least the kit/* tools
         assert!(!tools.is_empty(), "tools/list should return kit tools");
 
@@ -627,9 +631,10 @@ mod tests {
             tool_names.contains(&"kit/state"),
             "Should include kit/state"
         );
+        Ok(())
     }
     #[test]
-    fn test_resources_list_returns_all_resources() {
+    fn test_resources_list_returns_all_resources() -> anyhow::Result<()> {
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             id: serde_json::json!("req-123"),
@@ -643,11 +648,11 @@ mod tests {
         assert!(response.error.is_none());
         assert_eq!(response.id, serde_json::json!("req-123"));
 
-        let result = response.result.unwrap();
-        let resources = result.get("resources").and_then(|v| v.as_array());
-        assert!(resources.is_some());
-
-        let resources = resources.unwrap();
+        let result = response.result.context("expected result")?;
+        let resources = result
+            .get("resources")
+            .and_then(|v| v.as_array())
+            .context("missing resources array")?;
         assert_eq!(resources.len(), 3, "Should have 3 resources");
 
         // Verify expected resources are present
@@ -662,13 +667,14 @@ mod tests {
             uris.contains(&"scriptlets://"),
             "Should include scriptlets://"
         );
+        Ok(())
     }
     // =======================================================
     // Additional tests for completeness
     // =======================================================
 
     #[test]
-    fn test_mcp_method_from_str() {
+    fn test_mcp_method_from_str() -> anyhow::Result<()> {
         assert_eq!(
             McpMethod::from_str("initialize"),
             Some(McpMethod::Initialize)
@@ -690,17 +696,19 @@ mod tests {
             Some(McpMethod::ResourcesRead)
         );
         assert_eq!(McpMethod::from_str("unknown"), None);
+        Ok(())
     }
     #[test]
-    fn test_mcp_method_as_str() {
+    fn test_mcp_method_as_str() -> anyhow::Result<()> {
         assert_eq!(McpMethod::Initialize.as_str(), "initialize");
         assert_eq!(McpMethod::ToolsList.as_str(), "tools/list");
         assert_eq!(McpMethod::ToolsCall.as_str(), "tools/call");
         assert_eq!(McpMethod::ResourcesList.as_str(), "resources/list");
         assert_eq!(McpMethod::ResourcesRead.as_str(), "resources/read");
+        Ok(())
     }
     #[test]
-    fn test_jsonrpc_response_success() {
+    fn test_jsonrpc_response_success() -> anyhow::Result<()> {
         let response =
             JsonRpcResponse::success(serde_json::json!(1), serde_json::json!({"key": "value"}));
 
@@ -708,9 +716,10 @@ mod tests {
         assert_eq!(response.id, serde_json::json!(1));
         assert!(response.result.is_some());
         assert!(response.error.is_none());
+        Ok(())
     }
     #[test]
-    fn test_jsonrpc_response_error() {
+    fn test_jsonrpc_response_error() -> anyhow::Result<()> {
         let response = JsonRpcResponse::error(
             serde_json::json!(1),
             error_codes::METHOD_NOT_FOUND,
@@ -722,12 +731,13 @@ mod tests {
         assert!(response.result.is_none());
         assert!(response.error.is_some());
 
-        let err = response.error.unwrap();
+        let err = response.error.context("expected error")?;
         assert_eq!(err.code, error_codes::METHOD_NOT_FOUND);
         assert_eq!(err.message, "Method not found");
+        Ok(())
     }
     #[test]
-    fn test_tools_call_requires_name_param() {
+    fn test_tools_call_requires_name_param() -> anyhow::Result<()> {
         // Missing name param
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
@@ -739,12 +749,13 @@ mod tests {
         let response = handle_request(request);
         assert!(response.error.is_some());
         assert_eq!(
-            response.error.as_ref().unwrap().code,
+            response.error.as_ref().context("missing error field")?.code,
             error_codes::INVALID_PARAMS
         );
+        Ok(())
     }
     #[test]
-    fn test_resources_read_requires_uri_param() {
+    fn test_resources_read_requires_uri_param() -> anyhow::Result<()> {
         // Missing uri param
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
@@ -756,73 +767,79 @@ mod tests {
         let response = handle_request(request);
         assert!(response.error.is_some());
         assert_eq!(
-            response.error.as_ref().unwrap().code,
+            response.error.as_ref().context("missing error field")?.code,
             error_codes::INVALID_PARAMS
         );
+        Ok(())
     }
     #[test]
-    fn test_parse_request_with_string_id() {
+    fn test_parse_request_with_string_id() -> anyhow::Result<()> {
         let json = r#"{"jsonrpc":"2.0","id":"request-123","method":"initialize","params":{}}"#;
         let result = parse_request(json);
 
         assert!(result.is_ok());
-        let request = result.unwrap();
+        let request = result.map_err(|e| anyhow::anyhow!("parse failed: {:?}", e))?;
         assert_eq!(request.id, serde_json::json!("request-123"));
+        Ok(())
     }
     #[test]
-    fn test_parse_request_with_null_id() {
+    fn test_parse_request_with_null_id() -> anyhow::Result<()> {
         // Notifications have null id (or id is omitted)
         let json = r#"{"jsonrpc":"2.0","id":null,"method":"initialize","params":{}}"#;
         let result = parse_request(json);
 
         assert!(result.is_ok());
-        let request = result.unwrap();
+        let request = result.map_err(|e| anyhow::anyhow!("parse failed: {:?}", e))?;
         assert_eq!(request.id, Value::Null);
+        Ok(())
     }
     #[test]
-    fn test_parse_request_without_params() {
+    fn test_parse_request_without_params() -> anyhow::Result<()> {
         // params is optional
         let json = r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#;
         let result = parse_request(json);
 
         assert!(result.is_ok());
-        let request = result.unwrap();
+        let request = result.map_err(|e| anyhow::anyhow!("parse failed: {:?}", e))?;
         assert_eq!(request.params, serde_json::json!({}));
+        Ok(())
     }
     #[test]
-    fn test_response_serialization() {
+    fn test_response_serialization() -> anyhow::Result<()> {
         let response =
             JsonRpcResponse::success(serde_json::json!(1), serde_json::json!({"tools": []}));
 
-        let json = serde_json::to_string(&response).unwrap();
+        let json = serde_json::to_string(&response)?;
 
         // Should not contain "error" field when it's None
         assert!(!json.contains("error"));
         assert!(json.contains("result"));
         assert!(json.contains("jsonrpc"));
         assert!(json.contains("2.0"));
+        Ok(())
     }
     #[test]
-    fn test_error_response_serialization() {
+    fn test_error_response_serialization() -> anyhow::Result<()> {
         let response = JsonRpcResponse::error(
             serde_json::json!(1),
             error_codes::METHOD_NOT_FOUND,
             "Not found",
         );
 
-        let json = serde_json::to_string(&response).unwrap();
+        let json = serde_json::to_string(&response)?;
 
         // Should not contain "result" field when it's None
         assert!(!json.contains("result"));
         assert!(json.contains("error"));
         assert!(json.contains("-32601"));
+        Ok(())
     }
     // =======================================================
     // Kit Tools Integration Tests
     // =======================================================
 
     #[test]
-    fn test_tools_call_kit_show() {
+    fn test_tools_call_kit_show() -> anyhow::Result<()> {
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             id: serde_json::json!(1),
@@ -839,12 +856,13 @@ mod tests {
         assert!(response.error.is_none(), "kit/show call should succeed");
         assert!(response.result.is_some());
 
-        let result = response.result.unwrap();
+        let result = response.result.context("expected result")?;
         // Should have content array
         assert!(result.get("content").is_some());
+        Ok(())
     }
     #[test]
-    fn test_tools_call_kit_hide() {
+    fn test_tools_call_kit_hide() -> anyhow::Result<()> {
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             id: serde_json::json!(2),
@@ -860,13 +878,14 @@ mod tests {
         assert!(response.error.is_none(), "kit/hide call should succeed");
         assert!(response.result.is_some());
 
-        let result = response.result.unwrap();
+        let result = response.result.context("expected result")?;
         assert!(result.get("content").is_some());
+        Ok(())
     }
 
     // --- merged from tests/part_001.rs ---
     #[test]
-    fn test_tools_call_kit_state() {
+    fn test_tools_call_kit_state() -> anyhow::Result<()> {
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             id: serde_json::json!(3),
@@ -882,29 +901,30 @@ mod tests {
         assert!(response.error.is_none(), "kit/state call should succeed");
         assert!(response.result.is_some());
 
-        let result = response.result.unwrap();
+        let result = response.result.context("expected result")?;
         assert!(result.get("content").is_some());
 
         // Verify the content is valid JSON with state fields
-        let content = result.get("content").and_then(|c| c.as_array());
-        assert!(content.is_some());
-
-        let content = content.unwrap();
+        let content = result
+            .get("content")
+            .and_then(|c| c.as_array())
+            .context("missing content array")?;
         assert!(!content.is_empty());
 
-        let text = content[0].get("text").and_then(|t| t.as_str());
-        assert!(text.is_some());
+        let text = content[0]
+            .get("text")
+            .and_then(|t| t.as_str())
+            .context("missing text field")?;
 
         // Should be parseable as AppState JSON
-        let state: Result<serde_json::Value, _> = serde_json::from_str(text.unwrap());
-        assert!(state.is_ok(), "kit/state should return valid JSON");
-
-        let state = state.unwrap();
+        let state: serde_json::Value =
+            serde_json::from_str(text).context("kit/state should return valid JSON")?;
         assert!(state.get("visible").is_some());
         assert!(state.get("focused").is_some());
+        Ok(())
     }
     #[test]
-    fn test_tools_call_unknown_kit_tool() {
+    fn test_tools_call_unknown_kit_tool() -> anyhow::Result<()> {
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             id: serde_json::json!(4),
@@ -924,12 +944,13 @@ mod tests {
         );
         assert!(response.result.is_some());
 
-        let result = response.result.unwrap();
+        let result = response.result.context("expected result")?;
         // isError should be true for unknown kit tools
         assert_eq!(result.get("isError").and_then(|e| e.as_bool()), Some(true));
+        Ok(())
     }
     #[test]
-    fn test_tools_call_non_kit_tool_not_found() {
+    fn test_tools_call_non_kit_tool_not_found() -> anyhow::Result<()> {
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             id: serde_json::json!(5),
@@ -950,11 +971,12 @@ mod tests {
         );
         assert!(response.result.is_some());
 
-        let result = response.result.unwrap();
+        let result = response.result.context("expected result")?;
         assert_eq!(result.get("isError").and_then(|e| e.as_bool()), Some(true));
+        Ok(())
     }
     #[test]
-    fn test_tools_call_unknown_namespace_returns_error() {
+    fn test_tools_call_unknown_namespace_returns_error() -> anyhow::Result<()> {
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             id: serde_json::json!(5),
@@ -970,9 +992,10 @@ mod tests {
         // Unknown namespace should return method not found error
         assert!(response.error.is_some());
         assert_eq!(
-            response.error.as_ref().unwrap().code,
+            response.error.as_ref().context("missing error field")?.code,
             error_codes::METHOD_NOT_FOUND
         );
+        Ok(())
     }
     // =======================================================
     // Script Tools Integration Tests
@@ -981,6 +1004,7 @@ mod tests {
     mod script_tools_tests {
         use super::*;
         use crate::schema_parser::{FieldDef, FieldType, Schema};
+        use anyhow::Context;
         use std::collections::HashMap;
         use std::path::PathBuf;
 
@@ -1019,7 +1043,7 @@ mod tests {
         }
 
         #[test]
-        fn test_tools_list_includes_script_tools() {
+        fn test_tools_list_includes_script_tools() -> anyhow::Result<()> {
             let scripts = wrap_scripts(vec![
                 test_script_with_schema("Create Note", Some("Creates a new note")),
                 test_script_with_schema("Git Commit", Some("Commits changes")),
@@ -1035,8 +1059,11 @@ mod tests {
             let response = handle_request_with_scripts(request, &scripts);
 
             assert!(response.result.is_some());
-            let result = response.result.unwrap();
-            let tools = result.get("tools").and_then(|v| v.as_array()).unwrap();
+            let result = response.result.context("expected result")?;
+            let tools = result
+                .get("tools")
+                .and_then(|v| v.as_array())
+                .context("missing tools array")?;
 
             // Collect tool names
             let tool_names: Vec<&str> = tools
@@ -1057,10 +1084,11 @@ mod tests {
                 tool_names.contains(&"scripts/git-commit"),
                 "Should include scripts/git-commit"
             );
+            Ok(())
         }
 
         #[test]
-        fn test_tools_list_script_tool_has_correct_schema() {
+        fn test_tools_list_script_tool_has_correct_schema() -> anyhow::Result<()> {
             let scripts = wrap_scripts(vec![test_script_with_schema(
                 "Test Script",
                 Some("Test description"),
@@ -1074,16 +1102,17 @@ mod tests {
             };
 
             let response = handle_request_with_scripts(request, &scripts);
-            let result = response.result.unwrap();
-            let tools = result.get("tools").and_then(|v| v.as_array()).unwrap();
+            let result = response.result.context("expected result")?;
+            let tools = result
+                .get("tools")
+                .and_then(|v| v.as_array())
+                .context("missing tools array")?;
 
             // Find the script tool
-            let script_tool = tools
+            let tool = tools
                 .iter()
-                .find(|t| t.get("name").and_then(|n| n.as_str()) == Some("scripts/test-script"));
-
-            assert!(script_tool.is_some(), "Script tool should be in list");
-            let tool = script_tool.unwrap();
+                .find(|t| t.get("name").and_then(|n| n.as_str()) == Some("scripts/test-script"))
+                .context("script tool should be in list")?;
 
             // Check description
             assert_eq!(
@@ -1092,14 +1121,14 @@ mod tests {
             );
 
             // Check inputSchema
-            let input_schema = tool.get("inputSchema");
-            assert!(input_schema.is_some());
-            assert_eq!(input_schema.unwrap()["type"], "object");
-            assert!(input_schema.unwrap()["properties"]["title"].is_object());
+            let input_schema = tool.get("inputSchema").context("missing inputSchema")?;
+            assert_eq!(input_schema["type"], "object");
+            assert!(input_schema["properties"]["title"].is_object());
+            Ok(())
         }
 
         #[test]
-        fn test_tools_call_script_tool() {
+        fn test_tools_call_script_tool() -> anyhow::Result<()> {
             let scripts = wrap_scripts(vec![test_script_with_schema(
                 "Create Note",
                 Some("Creates notes"),
@@ -1121,13 +1150,14 @@ mod tests {
             assert!(response.error.is_none(), "Script tool call should succeed");
             assert!(response.result.is_some());
 
-            let result = response.result.unwrap();
+            let result = response.result.context("expected result")?;
             // Should have content
             assert!(result.get("content").is_some());
+            Ok(())
         }
 
         #[test]
-        fn test_tools_call_unknown_script_tool() {
+        fn test_tools_call_unknown_script_tool() -> anyhow::Result<()> {
             let scripts = wrap_scripts(vec![test_script_with_schema("Create Note", None)]);
 
             let request = JsonRpcRequest {
@@ -1144,12 +1174,13 @@ mod tests {
 
             // Should succeed but with isError flag
             assert!(response.error.is_none());
-            let result = response.result.unwrap();
+            let result = response.result.context("expected result")?;
             assert_eq!(result.get("isError").and_then(|e| e.as_bool()), Some(true));
+            Ok(())
         }
 
         #[test]
-        fn test_tools_list_empty_scripts() {
+        fn test_tools_list_empty_scripts() -> anyhow::Result<()> {
             let request = JsonRpcRequest {
                 jsonrpc: "2.0".to_string(),
                 id: serde_json::json!(1),
@@ -1160,8 +1191,11 @@ mod tests {
             let response = handle_request_with_scripts(request, &[]);
 
             assert!(response.result.is_some());
-            let result = response.result.unwrap();
-            let tools = result.get("tools").and_then(|v| v.as_array()).unwrap();
+            let result = response.result.context("expected result")?;
+            let tools = result
+                .get("tools")
+                .and_then(|v| v.as_array())
+                .context("missing tools array")?;
 
             // Should still have kit/* tools
             let tool_names: Vec<&str> = tools
@@ -1182,10 +1216,11 @@ mod tests {
                 script_tools.is_empty(),
                 "No script tools when scripts list is empty"
             );
+            Ok(())
         }
 
         #[test]
-        fn test_scripts_without_schema_not_in_tools_list() {
+        fn test_scripts_without_schema_not_in_tools_list() -> anyhow::Result<()> {
             // Script without schema
             let script_no_schema = Script {
                 name: "Simple Script".to_string(),
@@ -1213,8 +1248,11 @@ mod tests {
             };
 
             let response = handle_request_with_scripts(request, &scripts);
-            let result = response.result.unwrap();
-            let tools = result.get("tools").and_then(|v| v.as_array()).unwrap();
+            let result = response.result.context("expected result")?;
+            let tools = result
+                .get("tools")
+                .and_then(|v| v.as_array())
+                .context("missing tools array")?;
 
             let tool_names: Vec<&str> = tools
                 .iter()
@@ -1229,6 +1267,7 @@ mod tests {
                 !tool_names.contains(&"scripts/simple-script"),
                 "Script without schema should not be in tools list"
             );
+            Ok(())
         }
     }
 
@@ -1240,6 +1279,7 @@ mod tests {
     mod resources_integration_tests {
         use super::*;
         use crate::scripts::Scriptlet;
+        use anyhow::Context;
         use std::path::PathBuf;
 
         /// Helper to create a test script
@@ -1278,7 +1318,7 @@ mod tests {
         }
 
         #[test]
-        fn test_resources_read_scripts() {
+        fn test_resources_read_scripts() -> anyhow::Result<()> {
             let scripts = wrap_scripts(vec![
                 test_script("Script One", Some("First script")),
                 test_script("Script Two", None),
@@ -1296,11 +1336,11 @@ mod tests {
             assert!(response.error.is_none(), "Should succeed");
             assert!(response.result.is_some());
 
-            let result = response.result.unwrap();
-            let contents = result.get("contents").and_then(|c| c.as_array());
-            assert!(contents.is_some());
-
-            let contents = contents.unwrap();
+            let result = response.result.context("expected result")?;
+            let contents = result
+                .get("contents")
+                .and_then(|c| c.as_array())
+                .context("missing contents array")?;
             assert_eq!(contents.len(), 1);
 
             let content = &contents[0];
@@ -1310,13 +1350,17 @@ mod tests {
             );
 
             // Parse the text as JSON
-            let text = content.get("text").and_then(|t| t.as_str()).unwrap();
-            let parsed: Vec<serde_json::Value> = serde_json::from_str(text).unwrap();
+            let text = content
+                .get("text")
+                .and_then(|t| t.as_str())
+                .context("missing text field")?;
+            let parsed: Vec<serde_json::Value> = serde_json::from_str(text)?;
             assert_eq!(parsed.len(), 2);
+            Ok(())
         }
 
         #[test]
-        fn test_resources_read_scriptlets() {
+        fn test_resources_read_scriptlets() -> anyhow::Result<()> {
             let scriptlets = wrap_scriptlets(vec![
                 test_scriptlet("Open URL", "open"),
                 test_scriptlet("Paste", "paste"),
@@ -1333,15 +1377,22 @@ mod tests {
 
             assert!(response.error.is_none(), "Should succeed");
 
-            let result = response.result.unwrap();
-            let contents = result.get("contents").and_then(|c| c.as_array()).unwrap();
-            let text = contents[0].get("text").and_then(|t| t.as_str()).unwrap();
-            let parsed: Vec<serde_json::Value> = serde_json::from_str(text).unwrap();
+            let result = response.result.context("expected result")?;
+            let contents = result
+                .get("contents")
+                .and_then(|c| c.as_array())
+                .context("missing contents array")?;
+            let text = contents[0]
+                .get("text")
+                .and_then(|t| t.as_str())
+                .context("missing text field")?;
+            let parsed: Vec<serde_json::Value> = serde_json::from_str(text)?;
             assert_eq!(parsed.len(), 2);
+            Ok(())
         }
 
         #[test]
-        fn test_resources_read_app_state() {
+        fn test_resources_read_app_state() -> anyhow::Result<()> {
             let app_state = mcp_resources::AppStateResource {
                 visible: true,
                 focused: true,
@@ -1362,20 +1413,27 @@ mod tests {
 
             assert!(response.error.is_none(), "Should succeed");
 
-            let result = response.result.unwrap();
-            let contents = result.get("contents").and_then(|c| c.as_array()).unwrap();
-            let text = contents[0].get("text").and_then(|t| t.as_str()).unwrap();
-            let parsed: mcp_resources::AppStateResource = serde_json::from_str(text).unwrap();
+            let result = response.result.context("expected result")?;
+            let contents = result
+                .get("contents")
+                .and_then(|c| c.as_array())
+                .context("missing contents array")?;
+            let text = contents[0]
+                .get("text")
+                .and_then(|t| t.as_str())
+                .context("missing text field")?;
+            let parsed: mcp_resources::AppStateResource = serde_json::from_str(text)?;
 
             assert!(parsed.visible);
             assert!(parsed.focused);
             assert_eq!(parsed.script_count, 5);
             assert_eq!(parsed.scriptlet_count, 3);
             assert_eq!(parsed.filter_text, Some("test".to_string()));
+            Ok(())
         }
 
         #[test]
-        fn test_resources_read_unknown_uri() {
+        fn test_resources_read_unknown_uri() -> anyhow::Result<()> {
             let request = JsonRpcRequest {
                 jsonrpc: "2.0".to_string(),
                 id: serde_json::json!(4),
@@ -1389,20 +1447,14 @@ mod tests {
                 response.error.is_some(),
                 "Unknown resource should return error"
             );
-            assert_eq!(
-                response.error.as_ref().unwrap().code,
-                error_codes::METHOD_NOT_FOUND
-            );
-            assert!(response
-                .error
-                .as_ref()
-                .unwrap()
-                .message
-                .contains("Resource not found"));
+            let err = response.error.as_ref().context("missing error field")?;
+            assert_eq!(err.code, error_codes::METHOD_NOT_FOUND);
+            assert!(err.message.contains("Resource not found"));
+            Ok(())
         }
 
         #[test]
-        fn test_resources_read_with_full_context() {
+        fn test_resources_read_with_full_context() -> anyhow::Result<()> {
             let scripts = wrap_scripts(vec![test_script("Test Script", None)]);
             let scriptlets = wrap_scriptlets(vec![test_scriptlet("Test Snippet", "bash")]);
             let app_state = mcp_resources::AppStateResource {
@@ -1429,6 +1481,7 @@ mod tests {
                 assert!(response.error.is_none(), "Should succeed for {}", uri);
                 assert!(response.result.is_some());
             }
+            Ok(())
         }
     }
 }
