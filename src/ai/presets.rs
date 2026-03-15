@@ -4,9 +4,10 @@
 //! Presets include a name, system prompt, and optional preferred model.
 
 use anyhow::{bail, Context, Result};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use tracing::info;
+use tracing::{info, warn};
 
 /// A user-created AI preset stored on disk.
 ///
@@ -93,7 +94,9 @@ pub fn save_presets(presets: &[SavedAiPreset]) -> Result<()> {
 
     std::fs::rename(&tmp_path, &path).with_context(|| {
         // Clean up temp file on rename failure
-        let _ = std::fs::remove_file(&tmp_path);
+        if let Err(e) = std::fs::remove_file(&tmp_path) {
+            warn!(path = %tmp_path.display(), error = %e, "Failed to clean up temp presets file");
+        }
         format!("Failed to rename temp file to: {}", path.display())
     })?;
 
@@ -198,7 +201,9 @@ pub fn export_presets_to_file(path: &std::path::Path) -> Result<usize> {
 
     std::fs::rename(&tmp_path, path).with_context(|| {
         // Clean up temp file on rename failure
-        let _ = std::fs::remove_file(&tmp_path);
+        if let Err(e) = std::fs::remove_file(&tmp_path) {
+            warn!(path = %tmp_path.display(), error = %e, "Failed to clean up temp export file");
+        }
         format!("Failed to rename temp file to: {}", path.display())
     })?;
 
@@ -254,7 +259,6 @@ fn slug_from_name(name: &str) -> String {
         .collect::<String>()
         .split('-')
         .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
         .join("-")
 }
 
