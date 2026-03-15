@@ -1,11 +1,12 @@
 use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{LazyLock, Mutex};
 
 use super::cf::*;
 use super::ffi::*;
 
-/// Global window cache using OnceLock (std alternative to lazy_static)
-pub(super) static WINDOW_CACHE: OnceLock<Mutex<HashMap<u32, usize>>> = OnceLock::new();
+/// Global window cache using LazyLock (std alternative to lazy_static)
+pub(super) static WINDOW_CACHE: LazyLock<Mutex<HashMap<u32, usize>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// An owned cached window reference retained while in use.
 pub(super) struct OwnedCachedWindowRef {
@@ -24,9 +25,9 @@ impl Drop for OwnedCachedWindowRef {
     }
 }
 
-/// Get or initialize the window cache
+/// Get the window cache.
 pub(super) fn get_cache() -> &'static Mutex<HashMap<u32, usize>> {
-    WINDOW_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+    &WINDOW_CACHE
 }
 
 pub(super) fn cache_window(id: u32, window_ref: AXUIElementRef) {
@@ -73,6 +74,9 @@ mod tests {
             fn CFGetRetainCount(cf: CFTypeRef) -> isize;
         }
 
+        // SAFETY: CFGetRetainCount only reads retain-count metadata from a live
+        // Core Foundation object. The tests pass objects created earlier in the
+        // same scope and keep them alive across this call, so `cf` is valid here.
         unsafe { CFGetRetainCount(cf) }
     }
 
