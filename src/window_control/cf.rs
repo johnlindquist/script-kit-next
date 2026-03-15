@@ -9,6 +9,8 @@ use super::ffi::{
 pub(super) fn try_create_cf_string(s: &str) -> Result<CFStringRef> {
     let c_str = std::ffi::CString::new(s)
         .with_context(|| format!("CFString input contains interior NUL: {:?}", s))?;
+    // SAFETY: c_str is a valid NUL-terminated CString created above; passing null
+    // allocator uses the default CF allocator. The returned CFStringRef is owned by us.
     let cf_string = unsafe {
         CFStringCreateWithCString(std::ptr::null(), c_str.as_ptr(), kCFStringEncodingUTF8)
     };
@@ -24,6 +26,9 @@ pub(super) fn cf_string_to_string(cf_string: CFStringRef) -> Option<String> {
         return None;
     }
 
+    // SAFETY: cf_string was null-checked above. CFStringGetLength/CFStringGetCString are
+    // standard CF calls on a valid CFStringRef. The buffer is large enough for UTF-8
+    // expansion (length * 4 + 1). CStr::from_ptr reads from our NUL-terminated buffer.
     unsafe {
         let length = CFStringGetLength(cf_string);
         if length <= 0 {
@@ -51,6 +56,7 @@ pub(super) fn cf_string_to_string(cf_string: CFStringRef) -> Option<String> {
 /// Release a CoreFoundation object
 pub(super) fn cf_release(cf: CFTypeRef) {
     if !cf.is_null() {
+        // SAFETY: cf was null-checked above and is a valid CF object with at least one retain.
         unsafe {
             CFRelease(cf);
         }
@@ -61,6 +67,7 @@ pub(super) fn cf_release(cf: CFTypeRef) {
 /// Returns the same pointer for convenience
 pub(super) fn cf_retain(cf: CFTypeRef) -> CFTypeRef {
     if !cf.is_null() {
+        // SAFETY: cf was null-checked above and is a valid CF object.
         unsafe { CFRetain(cf) }
     } else {
         cf

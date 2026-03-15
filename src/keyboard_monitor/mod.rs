@@ -104,9 +104,10 @@ impl DebouncedLogState {
     }
 }
 /// Global debounced log state
-static DEBOUNCED_LOG: std::sync::OnceLock<DebouncedLogState> = std::sync::OnceLock::new();
+static DEBOUNCED_LOG: std::sync::LazyLock<DebouncedLogState> =
+    std::sync::LazyLock::new(DebouncedLogState::new);
 fn debounced_log_state() -> &'static DebouncedLogState {
-    DEBOUNCED_LOG.get_or_init(DebouncedLogState::new)
+    &DEBOUNCED_LOG
 }
 /// Errors that can occur when using the keyboard monitor
 #[derive(Error, Debug)]
@@ -404,6 +405,8 @@ impl KeyboardMonitor {
         };
 
         // Add source to run loop and enable the tap
+        // SAFETY: run_loop_source was just created from a valid event tap.
+        // kCFRunLoopCommonModes is a valid Core Foundation constant.
         unsafe {
             current_run_loop.add_source(&run_loop_source, kCFRunLoopCommonModes);
         }
@@ -416,6 +419,7 @@ impl KeyboardMonitor {
             // Run for a short interval, then check if we should stop
             // Note: Must use kCFRunLoopDefaultMode (not kCFRunLoopCommonModes) for run_in_mode
             let result = CFRunLoop::run_in_mode(
+                // SAFETY: kCFRunLoopDefaultMode is a valid static Core Foundation string constant.
                 unsafe { kCFRunLoopDefaultMode },
                 Duration::from_millis(100),
                 true,
@@ -451,6 +455,8 @@ impl KeyboardMonitor {
 
         if let Ok(guard) = mach_port_ref.lock() {
             if let Some(port) = guard.0 {
+                // SAFETY: `port` is a valid CFMachPort obtained from CGEventTapCreate.
+                // CGEventTapEnable is safe to call with a valid port and boolean.
                 unsafe {
                     CGEventTapEnable(port, true);
                 }
@@ -521,9 +527,11 @@ impl KeyboardMonitor {
         let mut buffer: [u16; BUFFER_SIZE] = [0; BUFFER_SIZE];
         let mut actual_len: libc::c_ulong = 0;
 
+        // SAFETY: `event` is a valid CGEvent reference. `buffer` is a stack-allocated
+        // array of sufficient size (BUFFER_SIZE=32). `actual_len` receives the number of
+        // UTF-16 code units written, bounded by BUFFER_SIZE.
         unsafe {
             use foreign_types::ForeignType;
-            // Get raw pointer to the CGEvent for FFI call
             let event_ptr = event.as_ptr();
             CGEventKeyboardGetUnicodeString(
                 event_ptr,
@@ -545,8 +553,9 @@ impl Drop for KeyboardMonitor {
         self.stop();
     }
 }
-// KeyboardMonitor is Send because it uses Arc for shared state
-// and the callback is required to be Send
+// SAFETY: KeyboardMonitor is Send because all its fields are Send: running (Arc<AtomicBool>),
+// thread_handle (Option<JoinHandle>), callback (Arc<KeyEventCallback> where KeyEventCallback: Send),
+// and run_loop (Arc<Mutex<Option<CFRunLoop>>>). The event tap runs on a dedicated thread.
 unsafe impl Send for KeyboardMonitor {}
 #[cfg(test)]
 mod tests {

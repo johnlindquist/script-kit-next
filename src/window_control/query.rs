@@ -65,6 +65,9 @@ pub fn list_windows() -> Result<Vec<WindowInfo>> {
     let mut windows = Vec::new();
 
     // Get list of running applications using objc
+    // SAFETY: All objc msg_send! calls target well-known AppKit/Foundation classes
+    // (NSWorkspace, NSRunningApplication). Pointers are null-checked before use.
+    // AX element refs are properly retained/released via cf_retain/cf_release.
     unsafe {
         use objc::runtime::{Class, Object};
         use objc::{msg_send, sel, sel_impl};
@@ -184,6 +187,8 @@ pub fn list_windows() -> Result<Vec<WindowInfo>> {
 /// Returns error if no menu bar owner is found or if the PID is invalid.
 #[instrument]
 pub fn get_menu_bar_owner_pid() -> Result<i32> {
+    // SAFETY: Standard objc messaging to NSWorkspace singleton. All returned
+    // pointers are null-checked. CStr::from_ptr reads from a valid NSString UTF8String.
     unsafe {
         use objc::runtime::{Class, Object};
         use objc::{msg_send, sel, sel_impl};
@@ -245,6 +250,9 @@ pub fn get_menu_bar_owner_pid() -> Result<i32> {
 pub fn get_frontmost_window_of_previous_app() -> Result<Option<WindowInfo>> {
     let target_pid = get_menu_bar_owner_pid()?;
 
+    // SAFETY: AXUIElementCreateApplication is called with a valid PID. All AX attribute
+    // queries use safe wrappers. CF objects are retained when borrowed from arrays
+    // (CFArrayGetValueAtIndex) and released when no longer needed.
     unsafe {
         // Create AX element for the target application
         let ax_app = AXUIElementCreateApplication(target_pid);
@@ -334,6 +342,8 @@ pub fn get_frontmost_window_of_previous_app() -> Result<Option<WindowInfo>> {
 
 /// Get the localized app name for a given PID.
 fn get_app_name_for_pid(pid: i32) -> String {
+    // SAFETY: Standard objc messaging to NSWorkspace/NSRunningApplication.
+    // All pointers are null-checked before dereferencing.
     unsafe {
         use objc::runtime::{Class, Object};
         use objc::{msg_send, sel, sel_impl};

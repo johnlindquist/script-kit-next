@@ -8,6 +8,8 @@ use super::types::*;
 pub(super) fn get_all_display_bounds() -> Result<Vec<Bounds>> {
     let mut displays = Vec::new();
 
+    // SAFETY: objc messaging to NSScreen class methods. All returned pointers are
+    // null-checked. CGRect is a plain C struct returned by value from msg_send!.
     unsafe {
         use objc::runtime::{Class, Object};
         use objc::{msg_send, sel, sel_impl};
@@ -57,6 +59,9 @@ pub(super) fn get_all_display_bounds() -> Result<Vec<Bounds>> {
 /// - Notch area (on newer MacBooks)
 pub(super) fn get_visible_display_bounds(x: i32, y: i32) -> Bounds {
     // Use NSScreen to get accurate visible frame
+    // SAFETY: objc messaging to NSScreen class methods. All screen pointers are
+    // null-checked. CGRect values are plain C structs returned by value. Coordinate
+    // conversion uses only arithmetic on validated screen geometry.
     unsafe {
         use objc::runtime::{Class, Object};
         use objc::{msg_send, sel, sel_impl};

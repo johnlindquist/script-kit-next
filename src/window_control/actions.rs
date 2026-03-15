@@ -129,6 +129,8 @@ pub fn minimize_window(window_id: u32) -> Result<()> {
     // or set the AXMinimized attribute to true
 
     // Try setting AXMinimized directly with a boolean value
+    // SAFETY: kCFBooleanTrue is a well-known CoreFoundation constant. window.as_ptr()
+    // returns a valid AXUIElementRef from the cache. minimize_attr is a valid CFStringRef.
     unsafe {
         #[link(name = "CoreFoundation", kind = "framework")]
         extern "C" {
@@ -234,6 +236,8 @@ pub fn focus_window(window_id: u32) -> Result<()> {
     // Also activate the owning application
     let pid = (window_id >> 16) as i32;
 
+    // SAFETY: Standard objc messaging to NSWorkspace/NSRunningApplication.
+    // We iterate running apps to find the one matching our PID, then activate it.
     unsafe {
         use objc::runtime::{Class, Object};
         use objc::{msg_send, sel, sel_impl};
