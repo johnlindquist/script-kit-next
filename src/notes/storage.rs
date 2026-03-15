@@ -24,31 +24,8 @@ fn get_notes_db_path() -> PathBuf {
     kit_dir.join("db").join("notes.sqlite")
 }
 
-/// Initialize the notes database
-///
-/// This function is idempotent - it's safe to call multiple times.
-/// If the database is already initialized, it returns Ok(()) immediately.
-pub fn init_notes_db() -> Result<()> {
-    // Check if already initialized - this is the common case after first init
-    if NOTES_DB.get().is_some() {
-        debug!("Notes database already initialized, skipping");
-        return Ok(());
-    }
-
-    let db_path = get_notes_db_path();
-
-    // Ensure directory exists
-    if let Some(parent) = db_path.parent() {
-        std::fs::create_dir_all(parent).context("Failed to create notes db directory")?;
-    }
-
-    let conn = Connection::open(&db_path).context("Failed to open notes database")?;
-
-    // Enable WAL mode for better write performance
-    conn.execute_batch("PRAGMA journal_mode=WAL;")
-        .context("Failed to enable WAL mode")?;
-
-    // Create tables
+/// Ensure the notes tables and virtual search table exist.
+fn ensure_notes_schema(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         r#"
         CREATE TABLE IF NOT EXISTS notes (
@@ -66,7 +43,6 @@ pub fn init_notes_db() -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_notes_deleted_at ON notes(deleted_at);
         CREATE INDEX IF NOT EXISTS idx_notes_is_pinned ON notes(is_pinned);
 
-        -- Full-text search support
         CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
             title,
             content,
@@ -77,28 +53,28 @@ pub fn init_notes_db() -> Result<()> {
     )
     .context("Failed to create notes tables")?;
 
-    // Drop old triggers if they exist (they fire on ALL updates)
-    // and recreate them to only fire on title/content changes
+    ensure_notes_fts_triggers(conn)?;
+    Ok(())
+}
+
+/// Recreate the FTS triggers so migrations are applied even on an existing DB connection.
+fn ensure_notes_fts_triggers(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         r#"
         DROP TRIGGER IF EXISTS notes_ai;
         DROP TRIGGER IF EXISTS notes_ad;
         DROP TRIGGER IF EXISTS notes_au;
 
-        -- Trigger for INSERT: always sync to FTS
         CREATE TRIGGER notes_ai AFTER INSERT ON notes BEGIN
             INSERT INTO notes_fts(rowid, title, content)
             VALUES (NEW.rowid, NEW.title, NEW.content);
         END;
 
-        -- Trigger for DELETE: always sync to FTS
         CREATE TRIGGER notes_ad AFTER DELETE ON notes BEGIN
             INSERT INTO notes_fts(notes_fts, rowid, title, content)
             VALUES('delete', OLD.rowid, OLD.title, OLD.content);
         END;
 
-        -- Trigger for UPDATE: only sync when title or content actually changes
-        -- This prevents FTS churn when UPDATE sets same title/content values
         CREATE TRIGGER notes_au AFTER UPDATE ON notes
         WHEN OLD.title <> NEW.title OR OLD.content <> NEW.content
         BEGIN
@@ -111,13 +87,68 @@ pub fn init_notes_db() -> Result<()> {
     )
     .context("Failed to create FTS triggers")?;
 
+    Ok(())
+}
+
+/// Initialize the notes database
+///
+/// This function is idempotent - it's safe to call multiple times.
+/// If the database is already initialized, it verifies schema and triggers
+/// are up-to-date on the existing connection.
+pub fn init_notes_db() -> Result<()> {
+    if let Some(db) = NOTES_DB.get() {
+        let conn = db
+            .lock()
+            .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+
+        ensure_notes_schema(&conn)?;
+        debug!("Notes database already initialized, schema verified");
+        return Ok(());
+    }
+
+    let db_path = get_notes_db_path();
+
+    if let Some(parent) = db_path.parent() {
+        std::fs::create_dir_all(parent).context("Failed to create notes db directory")?;
+    }
+
+    let conn = Connection::open(&db_path).context("Failed to open notes database")?;
+
+    conn.execute_batch("PRAGMA journal_mode=WAL;")
+        .context("Failed to enable WAL mode")?;
+
+    ensure_notes_schema(&conn)?;
+
+    rebuild_notes_search_index_with_conn(&conn).context("Failed to backfill notes FTS index")?;
+
     info!(db_path = %db_path.display(), "Notes database initialized");
 
-    // Use get_or_init pattern to handle race condition where another thread
-    // might have initialized the DB between our check and set
     let _ = NOTES_DB.get_or_init(|| Arc::new(Mutex::new(conn)));
 
     Ok(())
+}
+
+/// Rebuild the FTS index so that pre-existing notes rows become searchable.
+///
+/// Uses the FTS5 `'rebuild'` command which drops and repopulates the index
+/// from the content table. Safe to call repeatedly (idempotent).
+fn rebuild_notes_search_index_with_conn(conn: &Connection) -> Result<()> {
+    conn.execute("INSERT INTO notes_fts(notes_fts) VALUES('rebuild')", [])
+        .context("Failed to rebuild notes FTS index")?;
+    info!("Rebuilt notes FTS index");
+    Ok(())
+}
+
+/// Rebuild the full-text search index for notes.
+///
+/// Public wrapper that acquires the DB lock. Call this when you suspect the
+/// FTS index is out of sync with the notes table (e.g. after a migration).
+pub fn rebuild_notes_search_index() -> Result<()> {
+    let db = get_db()?;
+    let conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    rebuild_notes_search_index_with_conn(&conn)
 }
 
 /// Get a reference to the notes database connection
@@ -503,6 +534,48 @@ mod tests {
     }
 
     #[test]
+    fn test_init_notes_db_recreates_triggers_for_existing_connection() {
+        let _ = init_notes_db();
+
+        let db = get_db().expect("notes db should be initialized");
+        let conn = db.lock().expect("notes db lock should succeed");
+
+        // Install a legacy unguarded trigger to simulate stale schema
+        conn.execute_batch(
+            r#"
+            DROP TRIGGER IF EXISTS notes_au;
+            CREATE TRIGGER notes_au AFTER UPDATE ON notes BEGIN
+                INSERT INTO notes_fts(notes_fts, rowid, title, content)
+                VALUES('delete', OLD.rowid, OLD.title, OLD.content);
+                INSERT INTO notes_fts(rowid, title, content)
+                VALUES (NEW.rowid, NEW.title, NEW.content);
+            END;
+            "#,
+        )
+        .expect("should install legacy notes_au trigger");
+        drop(conn);
+
+        // Re-init should verify schema and recreate triggers
+        init_notes_db().expect("re-init should verify schema and recreate triggers");
+
+        let db = get_db().expect("notes db should still be initialized");
+        let conn = db.lock().expect("notes db lock should still succeed");
+
+        let trigger_sql: String = conn
+            .query_row(
+                "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'notes_au'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("notes_au trigger should exist after re-init");
+
+        assert!(
+            trigger_sql.contains("WHEN OLD.title <> NEW.title OR OLD.content <> NEW.content"),
+            "re-init should restore the guarded notes_au trigger: {trigger_sql}"
+        );
+    }
+
+    #[test]
     fn test_search_notes_limits_fts_results_to_200() {
         let _ = init_notes_db();
         let token = unique_test_token("search_limit");
@@ -582,6 +655,91 @@ mod tests {
         assert!(
             active_result.is_some(),
             "active note should not be removed by batch delete"
+        );
+    }
+
+    #[test]
+    fn test_rebuild_notes_search_index_recovers_desynced_rows() {
+        let _ = init_notes_db();
+        let token = unique_test_token("fts_rebuild");
+        let now = Utc::now();
+
+        let note = Note {
+            id: NoteId::new(),
+            title: format!("{token} title"),
+            content: format!("{token} content"),
+            created_at: now,
+            updated_at: now,
+            deleted_at: None,
+            is_pinned: false,
+            sort_order: 0,
+        };
+
+        save_note(&note).expect("failed to save note for fts rebuild test");
+
+        // Manually remove the FTS row to simulate a desynced index
+        let db = get_db().expect("notes db should be initialized");
+        let conn = db.lock().expect("notes db lock should succeed");
+
+        conn.execute(
+            r#"
+            INSERT INTO notes_fts(notes_fts, rowid, title, content)
+            VALUES(
+                'delete',
+                (SELECT rowid FROM notes WHERE id = ?1),
+                ?2,
+                ?3
+            )
+            "#,
+            params![note.id.as_str(), note.title.clone(), note.content.clone()],
+        )
+        .expect("failed to desync notes_fts row");
+        drop(conn);
+
+        // The note should NOT be searchable while desynced
+        let missing = search_notes(&token).expect("search before rebuild should succeed");
+        assert!(
+            missing.iter().all(|candidate| candidate.id != note.id),
+            "desynced note should not be searchable before rebuild"
+        );
+
+        // Rebuild should restore the index
+        rebuild_notes_search_index().expect("fts rebuild should succeed");
+
+        let rebuilt = search_notes(&token).expect("search after rebuild should succeed");
+        delete_note_permanently(note.id).expect("cleanup failed for fts rebuild test");
+
+        assert!(
+            rebuilt.iter().any(|candidate| candidate.id == note.id),
+            "fts rebuild should restore existing rows into notes_fts"
+        );
+    }
+
+    #[test]
+    fn test_search_notes_returns_matching_note_for_special_character_content() {
+        let _ = init_notes_db();
+        let token = unique_test_token("search_special_match");
+        let query = format!("{token}@example.com");
+        let now = Utc::now();
+
+        let note = Note {
+            id: NoteId::new(),
+            title: format!("Contact {query}"),
+            content: format!("Reach me at {query}"),
+            created_at: now,
+            updated_at: now,
+            deleted_at: None,
+            is_pinned: false,
+            sort_order: 0,
+        };
+
+        save_note(&note).expect("failed to save note for special character search test");
+        let results = search_notes(&query).expect("search should succeed");
+        delete_note_permanently(note.id).expect("cleanup failed for special character search test");
+
+        assert!(
+            results.iter().any(|candidate| candidate.id == note.id),
+            "search should return the note that contains the special-character query"
         );
     }
 }

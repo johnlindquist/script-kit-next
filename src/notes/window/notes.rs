@@ -1,32 +1,140 @@
 use super::*;
 
 impl NotesApp {
-    pub(super) fn on_search_change(&mut self, cx: &mut Context<Self>) {
-        let query = self.search_state.read(cx).value().to_string();
-        self.search_query = query.clone();
-
-        // If search is not empty, use FTS search
-        if !query.trim().is_empty() {
-            match storage::search_notes(&query) {
-                Ok(results) => {
-                    self.notes = results;
-                    // Update selection if current note not in results
-                    if let Some(id) = self.selected_note_id {
-                        if !self.notes.iter().any(|n| n.id == id) {
-                            self.selected_note_id = self.notes.first().map(|n| n.id);
-                        }
-                    }
-                }
-                Err(e) => {
-                    tracing::error!(error = %e, "Search failed");
-                }
-            }
-        } else {
-            // Reload all notes when search is cleared
-            self.notes = storage::get_all_notes().unwrap_or_default();
+    /// Fetch notes matching a search query, or all notes if the query is blank.
+    ///
+    /// Returns `(notes, used_full_list)` where `used_full_list` is true when
+    /// the query was empty and we reloaded the entire note set.
+    pub(super) fn refresh_notes_for_search_query(
+        &self,
+        query: &str,
+    ) -> anyhow::Result<(Vec<Note>, bool)> {
+        if query.trim().is_empty() {
+            return storage::get_all_notes()
+                .map(|notes| (notes, true))
+                .map_err(|error| {
+                    anyhow::anyhow!(
+                        "Failed to reload all notes while clearing the notes search: {error}"
+                    )
+                });
         }
 
+        storage::search_notes(query)
+            .map(|notes| (notes, false))
+            .map_err(|error| {
+                anyhow::anyhow!("Failed to search notes for query {:?}: {error}", query)
+            })
+    }
+
+    pub(super) fn on_search_change(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let query = self.search_state.read(cx).value().to_string();
+        let search_was_focused = self
+            .search_state
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window);
+        let selection_before = self.selected_note_id.map(|id| id.as_str().to_string());
+
+        self.search_query = query.clone();
+
+        tracing::info!(
+            event = "notes_search_refresh_started",
+            query = %query,
+            notes_before = self.notes.len(),
+            has_unsaved_changes = self.has_unsaved_changes,
+            search_was_focused,
+            selection_before = %selection_before.as_deref().unwrap_or("none"),
+            "notes_search_refresh_started"
+        );
+
+        // Save before replacing self.notes so dirty edits are not lost
+        if self.has_unsaved_changes && !self.save_current_note() {
+            tracing::warn!(
+                event = "notes_search_refresh_blocked",
+                query = %query,
+                reason = "save_current_note_failed",
+                "notes_search_refresh_blocked"
+            );
+            return;
+        }
+
+        let (refreshed_notes, used_full_list) = match self.refresh_notes_for_search_query(&query) {
+            Ok(result) => result,
+            Err(error) => {
+                tracing::error!(
+                    event = "notes_search_refresh_failed",
+                    query = %query,
+                    error = %error,
+                    "notes_search_refresh_failed"
+                );
+                return;
+            }
+        };
+
+        self.notes = refreshed_notes;
+
+        let selection_is_visible = self
+            .selected_note_id
+            .is_some_and(|id| self.notes.iter().any(|note| note.id == id));
+
+        let mut restored_search_focus = false;
+
+        if !selection_is_visible {
+            self.sync_search_selection(window, cx);
+
+            // Restore search focus after sync_search_selection (which calls select_note → editor focus)
+            if search_was_focused {
+                self.search_state.update(cx, |state, cx| {
+                    state.focus(window, cx);
+                });
+                restored_search_focus = true;
+            }
+
+            let selection_after = self.selected_note_id.map(|id| id.as_str().to_string());
+
+            tracing::info!(
+                event = "notes_search_refresh_completed",
+                query = %query,
+                used_full_list,
+                result_count = self.notes.len(),
+                selection_before = %selection_before.as_deref().unwrap_or("none"),
+                selection_after = %selection_after.as_deref().unwrap_or("none"),
+                selection_changed = selection_before != selection_after,
+                restored_search_focus,
+                "notes_search_refresh_completed"
+            );
+            return;
+        }
+
+        let selection_after = self.selected_note_id.map(|id| id.as_str().to_string());
+
+        tracing::info!(
+            event = "notes_search_refresh_completed",
+            query = %query,
+            used_full_list,
+            result_count = self.notes.len(),
+            selection_before = %selection_before.as_deref().unwrap_or("none"),
+            selection_after = %selection_after.as_deref().unwrap_or("none"),
+            selection_changed = selection_before != selection_after,
+            restored_search_focus,
+            "notes_search_refresh_completed"
+        );
+
         cx.notify();
+    }
+
+    /// Sync selection to first search result after filtering changes the visible note list.
+    pub(super) fn sync_search_selection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(first) = self.notes.first() {
+            let id = first.id;
+            self.select_note(id, window, cx);
+        } else {
+            self.selected_note_id = None;
+            self.editor_state.update(cx, |state, cx| {
+                state.set_value("", window, cx);
+            });
+            cx.notify();
+        }
     }
 
     /// Create a new note
@@ -139,35 +247,149 @@ impl NotesApp {
         cx.notify();
     }
 
-    /// Delete the currently selected note (soft delete)
+    /// Request deletion of the currently selected note with a confirmation dialog.
+    ///
+    /// Opens a confirmation modal; the actual soft-delete happens only after
+    /// the user confirms. Uses `crate::confirm::open_confirm_window` with a
+    /// `WeakEntity` + `update_in` callback to avoid dangling entity references.
+    pub(super) fn request_delete_selected_note(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(note_id) = self.selected_note_id else {
+            tracing::debug!(
+                event = "notes_delete_confirmation_skipped",
+                reason = "no_selected_note",
+                "notes_delete_confirmation_skipped"
+            );
+            return;
+        };
+
+        let note_list = if self.view_mode == NotesViewMode::Trash {
+            &self.deleted_notes
+        } else {
+            &self.notes
+        };
+
+        let note_title = note_list
+            .iter()
+            .find(|n| n.id == note_id)
+            .map(|n| n.title.clone())
+            .unwrap_or_default();
+
+        tracing::info!(
+            event = "notes_delete_confirmation_requested",
+            note_id = %note_id.as_str(),
+            note_title = %note_title,
+            is_trash_view = (self.view_mode == NotesViewMode::Trash),
+            "notes_delete_confirmation_requested"
+        );
+
+        let message = if note_title.is_empty() {
+            "Delete this note?".to_string()
+        } else {
+            format!("Delete \"{}\"?", note_title)
+        };
+
+        let main_bounds = window.bounds();
+
+        let (tx, rx) = async_channel::bounded::<bool>(1);
+        let on_choice: crate::confirm::ConfirmCallback = Arc::new(move |confirmed| {
+            let _ = tx.try_send(confirmed);
+        });
+
+        if let Err(e) = crate::confirm::open_confirm_window(
+            cx,
+            main_bounds,
+            None,
+            message,
+            Some("Delete".to_string()),
+            Some("Cancel".to_string()),
+            on_choice,
+        ) {
+            tracing::error!(
+                event = "notes_delete_confirmation_open_failed",
+                note_id = %note_id.as_str(),
+                error = %e,
+                "notes_delete_confirmation_open_failed"
+            );
+            return;
+        }
+
+        tracing::info!(
+            event = "notes_delete_confirmation_opened",
+            note_id = %note_id.as_str(),
+            "notes_delete_confirmation_opened"
+        );
+
+        cx.spawn_in(window, async move |this, cx| {
+            if let Ok(confirmed) = rx.recv().await {
+                if confirmed {
+                    tracing::info!(
+                        event = "notes_delete_confirmed",
+                        note_id = %note_id.as_str(),
+                        "notes_delete_confirmed"
+                    );
+                    let _ = this.update_in(cx, |this, window, cx| {
+                        this.delete_note_by_id(note_id, window, cx);
+                    });
+                } else {
+                    tracing::info!(
+                        event = "notes_delete_cancelled",
+                        note_id = %note_id.as_str(),
+                        "notes_delete_cancelled"
+                    );
+                }
+            }
+        })
+        .detach();
+    }
+
+    /// Delete a specific note by ID (soft delete).
+    ///
+    /// This is the actual deletion logic, called after confirmation.
+    pub(super) fn delete_note_by_id(
+        &mut self,
+        note_id: NoteId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        info!(note_id = %note_id, notes_count = self.notes.len(), "delete_note_by_id called");
+        if let Some(idx) = self.notes.iter().position(|n| n.id == note_id) {
+            let mut note = self.notes.remove(idx);
+            note.soft_delete();
+
+            if let Err(e) = storage::save_note(&note) {
+                tracing::error!(error = %e, "Failed to delete note");
+            }
+
+            // Move to deleted notes
+            self.deleted_notes.insert(0, note);
+        }
+
+        // Select next note and update editor
+        if let Some(next_note) = self.notes.first() {
+            let next_id = next_note.id;
+            self.select_note(next_id, window, cx);
+        } else {
+            self.selected_note_id = None;
+            self.editor_state.update(cx, |state, cx| {
+                state.set_value("", window, cx);
+            });
+        }
+
+        self.show_action_feedback("Deleted · ⌘⇧T trash", false);
+        cx.notify();
+    }
+
+    /// Delete the currently selected note (soft delete) — direct path without confirmation.
+    ///
+    /// Kept for backwards compatibility with browse-panel inline delete.
     pub(super) fn delete_selected_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         info!(selected_note_id = ?self.selected_note_id, notes_count = self.notes.len(), "delete_selected_note called");
         if let Some(id) = self.selected_note_id {
-            if let Some(idx) = self.notes.iter().position(|n| n.id == id) {
-                let mut note = self.notes.remove(idx);
-                note.soft_delete();
-
-                if let Err(e) = storage::save_note(&note) {
-                    tracing::error!(error = %e, "Failed to delete note");
-                }
-
-                // Move to deleted notes
-                self.deleted_notes.insert(0, note);
-            }
-
-            // Select next note and update editor
-            if let Some(next_note) = self.notes.first() {
-                let next_id = next_note.id;
-                self.select_note(next_id, window, cx);
-            } else {
-                self.selected_note_id = None;
-                self.editor_state.update(cx, |state, cx| {
-                    state.set_value("", window, cx);
-                });
-            }
-
-            self.show_action_feedback("Deleted · ⌘⇧T trash", false);
-            cx.notify();
+            self.delete_note_by_id(id, window, cx);
         }
     }
 
@@ -280,5 +502,75 @@ impl NotesApp {
                 });
             info!(format = ?format, "Note exported to clipboard");
         }
+    }
+}
+
+#[cfg(test)]
+mod notes_search_and_delete_regression_tests {
+    use std::fs;
+
+    fn extract_section<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
+        source
+            .split(start)
+            .nth(1)
+            .and_then(|section| section.split(end).next())
+            .expect("expected section to exist")
+    }
+
+    fn normalize_ws(source: &str) -> String {
+        source.split_whitespace().collect::<Vec<_>>().join(" ")
+    }
+
+    #[test]
+    fn test_on_search_change_saves_before_filtering_and_restores_search_focus() {
+        let source = fs::read_to_string("src/notes/window/notes.rs")
+            .expect("Failed to read src/notes/window/notes.rs");
+        let normalized = normalize_ws(&source);
+
+        let save_idx = normalized
+            .find("self.save_current_note()")
+            .expect("on_search_change should save the current note before filtering");
+        let replace_idx = normalized
+            .find("self.notes = refreshed_notes;")
+            .expect("on_search_change should replace notes with refreshed results");
+        let focus_capture_idx = normalized
+            .find("let search_was_focused = self")
+            .expect("on_search_change should capture whether the search input was focused");
+        let focus_restore_idx = normalized
+            .find("self.search_state.update(cx, |state, cx| { state.focus(window, cx); });")
+            .expect(
+                "on_search_change should restore search focus after search-driven selection sync",
+            );
+
+        assert!(
+            save_idx < replace_idx,
+            "on_search_change must save the edited note before replacing self.notes"
+        );
+        assert!(
+            focus_capture_idx < focus_restore_idx,
+            "on_search_change should capture focus state before refresh and restore it afterward"
+        );
+    }
+
+    #[test]
+    fn test_request_delete_selected_note_uses_confirm_modal() {
+        let source = fs::read_to_string("src/notes/window/notes.rs")
+            .expect("Failed to read src/notes/window/notes.rs");
+
+        let delete_request = extract_section(
+            &source,
+            "pub(super) fn request_delete_selected_note",
+            "/// Delete a specific note by ID (soft delete).",
+        );
+
+        assert!(
+            delete_request.contains("crate::confirm::open_confirm_window"),
+            "request_delete_selected_note should open the shared confirmation modal"
+        );
+        assert!(
+            delete_request.contains("this.update_in(cx, |this, window, cx| {")
+                && delete_request.contains("this.delete_note_by_id(note_id, window, cx);"),
+            "confirmed deletes should still route through delete_note_by_id"
+        );
     }
 }
