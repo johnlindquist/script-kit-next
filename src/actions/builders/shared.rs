@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 /// Convert a script name to a deeplink-safe format (lowercase, hyphenated)
 ///
 /// Examples:
@@ -13,7 +15,6 @@ pub fn to_deeplink_name(name: &str) -> String {
         .collect::<String>()
         .split('-')
         .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
         .join("-");
 
     if normalized.is_empty() {

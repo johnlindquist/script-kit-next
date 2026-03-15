@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use regex::Regex;
 use std::sync::OnceLock;
 use tracing::debug;
@@ -270,11 +271,7 @@ fn words_for_formatted_number(formatted: &str) -> String {
             .collect();
 
         if !decimal_digits.is_empty() {
-            let decimal_words = decimal_digits
-                .chars()
-                .map(digit_word)
-                .collect::<Vec<_>>()
-                .join(" ");
+            let decimal_words = decimal_digits.chars().map(digit_word).join(" ");
             words.push_str(" Point ");
             words.push_str(&decimal_words);
         }
@@ -412,7 +409,6 @@ fn words_for_integer_part(integer_text: &str) -> String {
             .chars()
             .filter(|ch| ch.is_ascii_digit())
             .map(digit_word)
-            .collect::<Vec<_>>()
             .join(" "),
     }
 }
@@ -439,12 +435,7 @@ fn number_to_words(value: u64) -> String {
         let chunk = (remaining % 1000) as u16;
         if chunk > 0 {
             if scale_index >= SCALES.len() {
-                return value
-                    .to_string()
-                    .chars()
-                    .map(digit_word)
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                return value.to_string().chars().map(digit_word).join(" ");
             }
 
             let mut chunk_words = number_below_1000_to_words(chunk);

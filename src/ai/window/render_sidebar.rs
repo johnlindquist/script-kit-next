@@ -6,6 +6,24 @@ use crate::theme::opacity::{
 };
 
 impl AiApp {
+    pub(super) fn render_shortcut_hint_chip(
+        &self,
+        keys: &'static str,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        div()
+            .flex_shrink_0()
+            .px(S1)
+            .py(px(2.))
+            .rounded(R_SM)
+            .border_1()
+            .border_color(cx.theme().border.opacity(OPACITY_DISABLED))
+            .bg(cx.theme().muted.opacity(OPACITY_HOVER))
+            .text_xs()
+            .text_color(cx.theme().muted_foreground.opacity(OPACITY_SELECTED))
+            .child(keys)
+    }
+
     pub(super) fn sidebar_list_splice_plan(
         old_count: usize,
         item_count: usize,
@@ -31,28 +49,36 @@ impl AiApp {
             .id("sidebar-toggle")
             .flex()
             .items_center()
-            .justify_center()
-            .size(px(24.))
-            .rounded_md()
-            .cursor_pointer()
-            .hover(|s| s.bg(cx.theme().muted.opacity(OPACITY_HOVER)))
-            .tooltip(|window, cx| {
-                Tooltip::new("Toggle sidebar")
-                    .key_binding(gpui::Keystroke::parse("cmd-b").ok().map(Kbd::new))
-                    .build(window, cx)
-            })
-            .on_mouse_down(
-                gpui::MouseButton::Left,
-                cx.listener(|this, _, _, cx| {
-                    this.toggle_sidebar(cx);
-                }),
-            )
+            .gap(S1)
             .child(
-                svg()
-                    .external_path(LocalIconName::Sidebar.external_path())
-                    .size(px(16.))
-                    .text_color(icon_color),
+                div()
+                    .id("sidebar-toggle-icon")
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .size(px(24.))
+                    .rounded_md()
+                    .cursor_pointer()
+                    .hover(|s| s.bg(cx.theme().muted.opacity(OPACITY_HOVER)))
+                    .tooltip(|window, cx| {
+                        Tooltip::new("Toggle sidebar")
+                            .key_binding(gpui::Keystroke::parse("cmd-b").ok().map(Kbd::new))
+                            .build(window, cx)
+                    })
+                    .on_mouse_down(
+                        gpui::MouseButton::Left,
+                        cx.listener(|this, _, _, cx| {
+                            this.toggle_sidebar(cx);
+                        }),
+                    )
+                    .child(
+                        svg()
+                            .external_path(LocalIconName::Sidebar.external_path())
+                            .size(px(16.))
+                            .text_color(icon_color),
+                    ),
             )
+            .child(self.render_shortcut_hint_chip("\u{2318}B", cx))
     }
 
     pub(super) fn sync_sidebar_list_item_count(&mut self, item_count: usize) {
@@ -128,6 +154,9 @@ impl AiApp {
                             .child(
                                 div()
                                     .id("new-chat-tooltip-trigger")
+                                    .flex()
+                                    .items_center()
+                                    .gap(S1)
                                     .hover(|el| el)
                                     .tooltip(|window, cx| {
                                         Tooltip::new("New chat")
@@ -144,7 +173,8 @@ impl AiApp {
                                             .on_click(cx.listener(|this, _, window, cx| {
                                                 this.new_conversation(window, cx);
                                             })),
-                                    ),
+                                    )
+                                    .child(self.render_shortcut_hint_chip("\u{2318}N", cx)),
                             )
                             // Presets dropdown trigger - use svg directly for better tooltip control
                             .child(
@@ -183,7 +213,14 @@ impl AiApp {
                                     ),
                             ),
                     )
-                    .child(self.render_search(cx))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(S2)
+                            .child(div().flex_1().child(self.render_search(cx)))
+                            .child(self.render_shortcut_hint_chip("\u{2318}\u{21e7}F", cx)),
+                    )
                     // Search result count (shown when there's an active search query with results)
                     .when(
                         !self.search_query.is_empty() && !self.chats.is_empty(),

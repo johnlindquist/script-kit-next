@@ -75,7 +75,7 @@ use objc::{msg_send, sel, sel_impl};
 #[cfg(target_os = "macos")]
 use std::collections::HashMap;
 #[cfg(target_os = "macos")]
-use std::sync::{Mutex, OnceLock};
+use std::sync::{LazyLock, Mutex};
 // Re-export the canonical WindowRole from window_state
 // This ensures a single source of truth for window roles across the codebase
 pub use crate::window_state::WindowRole;
@@ -180,11 +180,12 @@ impl WindowManager {
 }
 /// Global singleton for the window manager
 #[cfg(target_os = "macos")]
-static WINDOW_MANAGER: OnceLock<Mutex<WindowManager>> = OnceLock::new();
+static WINDOW_MANAGER: LazyLock<Mutex<WindowManager>> =
+    LazyLock::new(|| Mutex::new(WindowManager::new()));
 /// Get or initialize the global WindowManager
 #[cfg(target_os = "macos")]
 fn get_manager() -> &'static Mutex<WindowManager> {
-    WINDOW_MANAGER.get_or_init(|| Mutex::new(WindowManager::new()))
+    &WINDOW_MANAGER
 }
 #[cfg(target_os = "macos")]
 #[cfg(not(test))]
@@ -523,18 +524,15 @@ mod tests {
     #[cfg(target_os = "macos")]
     mod macos_tests {
         use super::super::*;
+        use std::sync::LazyLock;
         use std::sync::Mutex;
-        use std::sync::OnceLock;
 
         /// Tests that touch the global window registry must run serially
         /// to avoid races on the shared singleton.
-        static REGISTRY_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        static REGISTRY_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
         fn with_registry_lock<F: FnOnce()>(f: F) {
-            let lock = REGISTRY_LOCK
-                .get_or_init(|| Mutex::new(()))
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
+            let lock = REGISTRY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
             f();
             drop(lock);
         }

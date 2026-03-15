@@ -33,7 +33,7 @@
 //! ```
 
 use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{LazyLock, Mutex};
 
 use gpui::{App, WindowHandle};
 use gpui_component::Root;
@@ -57,11 +57,12 @@ impl WindowRegistry {
 }
 
 /// Global singleton for the window registry
-static REGISTRY: OnceLock<Mutex<WindowRegistry>> = OnceLock::new();
+static REGISTRY: LazyLock<Mutex<WindowRegistry>> =
+    LazyLock::new(|| Mutex::new(WindowRegistry::new()));
 
 /// Get or initialize the global registry
 fn registry() -> &'static Mutex<WindowRegistry> {
-    REGISTRY.get_or_init(|| Mutex::new(WindowRegistry::new()))
+    &REGISTRY
 }
 
 /// Register a window with a specific role.

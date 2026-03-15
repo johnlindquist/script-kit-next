@@ -1,5 +1,6 @@
 //! Helpers for discovering locally installed kit directories.
 
+use itertools::Itertools;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -31,13 +32,11 @@ fn discover_installed_kits_at(kits_root: &Path) -> Vec<PathBuf> {
         Err(_) => return Vec::new(),
     };
 
-    let mut kits = entries
+    entries
         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
         .filter(|path| path.is_dir())
-        .collect::<Vec<_>>();
-
-    kits.sort();
-    kits
+        .sorted()
+        .collect()
 }
 
 #[cfg(test)]

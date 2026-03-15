@@ -230,7 +230,11 @@ impl ScriptListApp {
                                     error = %e,
                                     "Async action failed: remove_script"
                                 );
-                                this.show_error_toast(format!("Failed to remove: {}", e), cx);
+                                this.show_error_toast_with_code(
+                                    format!("Failed to remove: {}", e),
+                                    Some(crate::action_helpers::ERROR_TRASH_FAILED),
+                                    cx,
+                                );
                             }
                         });
                 })

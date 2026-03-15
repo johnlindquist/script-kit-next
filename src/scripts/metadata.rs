@@ -227,6 +227,7 @@ pub fn extract_schedule_metadata_from_file(path: &PathBuf) -> ScheduleMetadata {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use itertools::Itertools;
     use std::fs;
     use std::io::Write;
     use std::path::PathBuf;
@@ -253,7 +254,6 @@ mod tests {
     fn test_extract_schedule_metadata_from_file_reads_only_first_30_lines() {
         let mut content = (1..=30)
             .map(|index| format!("// Note: line {index}"))
-            .collect::<Vec<_>>()
             .join("\n");
         content.push_str("\n// Cron: */5 * * * *\n");
 

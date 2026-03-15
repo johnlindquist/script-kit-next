@@ -46,7 +46,6 @@ impl ScriptListApp {
                 let preview: String = content
                     .lines()
                     .take(max_lines)
-                    .collect::<Vec<_>>()
                     .join("\n");
                 logging::log(
                     "UI",
@@ -845,7 +844,6 @@ impl ScriptListApp {
                                 .lines()
                                 .take(15)
                                 .map(|line| truncate_preview_line_for_display(line, MAX_LINE_LENGTH))
-                                .collect::<Vec<_>>()
                                 .join("\n");
 
                             let lang = match scriptlet.tool.as_str() {

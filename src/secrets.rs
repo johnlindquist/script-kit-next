@@ -32,7 +32,7 @@ use std::fs;
 use std::io::{Read, Write};
 use std::iter;
 use std::path::PathBuf;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{LazyLock, Mutex};
 
 use crate::logging;
 
@@ -65,11 +65,12 @@ impl From<SecretEntry> for SecretInfo {
 
 /// In-memory cache of decrypted secrets with metadata.
 /// Avoids repeated scrypt decryption which takes ~1.3s per call.
-static SECRETS_CACHE: OnceLock<Mutex<Option<HashMap<String, SecretEntry>>>> = OnceLock::new();
+static SECRETS_CACHE: LazyLock<Mutex<Option<HashMap<String, SecretEntry>>>> =
+    LazyLock::new(|| Mutex::new(None));
 
-/// Get the secrets cache mutex, initializing it if needed.
+/// Get the secrets cache mutex.
 fn secrets_cache() -> &'static Mutex<Option<HashMap<String, SecretEntry>>> {
-    SECRETS_CACHE.get_or_init(|| Mutex::new(None))
+    &SECRETS_CACHE
 }
 
 /// Get cached secrets, loading from disk if not yet cached.

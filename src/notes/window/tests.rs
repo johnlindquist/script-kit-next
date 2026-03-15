@@ -235,3 +235,57 @@ fn test_notes_actions_panel_uses_shared_disabled_opacity_constant() {
         "Actions panel should not define a duplicate disabled opacity constant"
     );
 }
+
+#[test]
+fn test_notes_keyboard_delete_shortcut_routes_through_confirmation_helper() {
+    const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
+    assert!(
+        KEYBOARD_SOURCE.contains("pub(super) fn handle_platform_delete_shortcut")
+            && KEYBOARD_SOURCE.contains("self.request_delete_selected_note(window, cx);"),
+        "Notes keyboard delete shortcut should route through the confirmation helper"
+    );
+    assert!(
+        KEYBOARD_SOURCE.contains("notes_delete_shortcut_requesting_confirmation"),
+        "Delete shortcut helper should emit a structured confirmation-request log"
+    );
+}
+
+#[test]
+fn test_notes_keyboard_delete_shortcut_logs_ignored_trash_view() {
+    const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
+    assert!(
+        KEYBOARD_SOURCE.contains("reason = \"trash_view_requires_dedicated_delete_flow\""),
+        "Delete shortcut helper should log why it ignored delete in trash view"
+    );
+}
+
+#[test]
+fn test_on_search_change_uses_reload_helper_instead_of_silently_swallowing_errors() {
+    const NOTES_SOURCE: &str = include_str!("notes.rs");
+    assert!(
+        NOTES_SOURCE.contains("pub(super) fn refresh_notes_for_search_query")
+            && NOTES_SOURCE.contains("Failed to reload all notes while clearing the notes search"),
+        "Notes search should use a dedicated helper with actionable reload errors"
+    );
+    assert!(
+        !NOTES_SOURCE.contains("storage::get_all_notes().unwrap_or_default()"),
+        "Notes search should not silently swallow errors when clearing the search query"
+    );
+    assert!(
+        NOTES_SOURCE.contains("notes_search_refresh_started")
+            && NOTES_SOURCE.contains("notes_search_refresh_completed")
+            && NOTES_SOURCE.contains("notes_search_refresh_failed"),
+        "Notes search refresh should emit structured logs for start, completion, and failure"
+    );
+}
+
+#[test]
+fn test_request_delete_selected_note_emits_structured_confirmation_logs() {
+    const NOTES_SOURCE: &str = include_str!("notes.rs");
+    assert!(
+        NOTES_SOURCE.contains("notes_delete_confirmation_requested")
+            && NOTES_SOURCE.contains("notes_delete_confirmation_opened")
+            && NOTES_SOURCE.contains("notes_delete_cancelled"),
+        "Delete confirmation flow should emit structured request/open/cancel logs"
+    );
+}

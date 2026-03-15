@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{LazyLock, Mutex};
 
 use syntect::easy::HighlightLines;
 use syntect::highlighting::{Style, Theme, ThemeSet};
@@ -51,14 +51,41 @@ pub struct HighlightedCodeBlock {
     pub lines: Vec<CodeLine>,
 }
 
-static SYNTAX_SET: OnceLock<SyntaxSet> = OnceLock::new();
-static DARK_THEME: OnceLock<Theme> = OnceLock::new();
-static LIGHT_THEME: OnceLock<Theme> = OnceLock::new();
+static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_newlines);
+static DARK_THEME: LazyLock<Theme> = LazyLock::new(|| {
+    let themes = ThemeSet::load_defaults();
+    themes
+        .themes
+        .get("base16-ocean.dark")
+        .cloned()
+        .unwrap_or_else(|| match themes.themes.values().next().cloned() {
+            Some(theme) => theme,
+            None => {
+                warn!("Failed to find dark theme in defaults, using fallback");
+                Theme::default()
+            }
+        })
+});
+static LIGHT_THEME: LazyLock<Theme> = LazyLock::new(|| {
+    let themes = ThemeSet::load_defaults();
+    themes
+        .themes
+        .get("base16-ocean.light")
+        .cloned()
+        .unwrap_or_else(|| match themes.themes.values().next().cloned() {
+            Some(theme) => theme,
+            None => {
+                warn!("Failed to find light theme in defaults, using fallback");
+                Theme::default()
+            }
+        })
+});
 
 /// Global cache for syntax highlighting results.
 /// Keyed by hash of (code, language, is_dark) to avoid re-running syntect
 /// on every render frame during scrolling.
-static HIGHLIGHT_CACHE: OnceLock<Mutex<HashMap<u64, Vec<CodeLine>>>> = OnceLock::new();
+static HIGHLIGHT_CACHE: LazyLock<Mutex<HashMap<u64, Vec<CodeLine>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 fn highlight_cache_key(code: &str, language: Option<&str>, is_dark: bool) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -69,41 +96,15 @@ fn highlight_cache_key(code: &str, language: Option<&str>, is_dark: bool) -> u64
 }
 
 fn syntax_set() -> &'static SyntaxSet {
-    SYNTAX_SET.get_or_init(SyntaxSet::load_defaults_newlines)
+    &SYNTAX_SET
 }
 
 fn dark_theme() -> &'static Theme {
-    DARK_THEME.get_or_init(|| {
-        let themes = ThemeSet::load_defaults();
-        themes
-            .themes
-            .get("base16-ocean.dark")
-            .cloned()
-            .unwrap_or_else(|| match themes.themes.values().next().cloned() {
-                Some(theme) => theme,
-                None => {
-                    warn!("Failed to find dark theme in defaults, using fallback");
-                    Theme::default()
-                }
-            })
-    })
+    &DARK_THEME
 }
 
 fn light_theme() -> &'static Theme {
-    LIGHT_THEME.get_or_init(|| {
-        let themes = ThemeSet::load_defaults();
-        themes
-            .themes
-            .get("base16-ocean.light")
-            .cloned()
-            .unwrap_or_else(|| match themes.themes.values().next().cloned() {
-                Some(theme) => theme,
-                None => {
-                    warn!("Failed to find light theme in defaults, using fallback");
-                    Theme::default()
-                }
-            })
-    })
+    &LIGHT_THEME
 }
 
 fn theme_for_mode(is_dark: bool) -> &'static Theme {
@@ -205,7 +206,7 @@ pub fn highlight_code_lines(code: &str, language: Option<&str>, is_dark: bool) -
 
     // Check cache to avoid expensive syntect highlighting on every render frame
     let key = highlight_cache_key(code, language, is_dark);
-    let cache = HIGHLIGHT_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let cache = &*HIGHLIGHT_CACHE;
     if let Ok(guard) = cache.lock() {
         if let Some(cached) = guard.get(&key) {
             return cached.clone();
@@ -302,6 +303,7 @@ pub fn highlight_fenced_code_blocks(markdown: &str, is_dark: bool) -> Vec<Highli
 #[cfg(test)]
 mod tests {
     use super::*;
+    use itertools::Itertools;
 
     #[test]
     fn test_detect_fenced_code_blocks() {
@@ -346,7 +348,6 @@ console.log("ok");
                     .map(|s| s.text.as_str())
                     .collect::<String>()
             })
-            .collect::<Vec<_>>()
             .join("\n");
         assert_eq!(reconstructed, code);
     }

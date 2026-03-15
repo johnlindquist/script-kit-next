@@ -14,6 +14,7 @@
 // --- merged from part_000.rs ---
 use crate::metadata_parser::TypedMetadata;
 use crate::schema_parser::Schema;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -396,7 +397,6 @@ fn slugify(name: &str) -> String {
         .collect::<String>()
         .split('-')
         .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
         .join("-")
 }
 /// Extract named input placeholders from command content

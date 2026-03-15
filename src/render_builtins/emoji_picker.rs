@@ -65,7 +65,7 @@ impl ScriptListApp {
         let mut rows: Vec<EmojiGridRow> = Vec::new();
         {
             let mut flat_offset = 0;
-            for category in crate::emoji::ALL_CATEGORIES.iter().copied() {
+            for category in crate::emoji::all_categories() {
                 let category_count = ordered_emojis[flat_offset..]
                     .iter()
                     .take_while(|e| e.category == category)

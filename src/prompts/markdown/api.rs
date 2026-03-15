@@ -20,7 +20,7 @@ pub fn render_markdown_with_scope(
 ) -> gpui::Div {
     // Check cache for parsed blocks
     let key = markdown_cache_key(text, colors.is_dark);
-    let cache = MARKDOWN_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let cache = &*MARKDOWN_CACHE;
     let render_scope_hash = scope
         .map(|s| stable_markdown_scope_hash(Some(s)))
         .unwrap_or_else(|| inferred_markdown_scope_hash(text));

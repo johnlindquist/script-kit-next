@@ -20,79 +20,8 @@
 pub fn scan_applications() -> Vec<AppInfo> {
     let _span = info_span!("scan_applications").entered();
 
-    // Initialize the cache if needed
-    let cache = APP_CACHE.get_or_init(|| {
-        set_loading_state(AppLoadingState::LoadingFromCache);
-
-        let start = Instant::now();
-
-        // Load from SQLite cache with icons decoded synchronously
-        let cached_apps = load_apps_from_db();
-        let cache_load_ms = start.elapsed().as_millis();
-
-        if !cached_apps.is_empty() {
-            info!(
-                app_count = cached_apps.len(),
-                cache_load_ms, "Cache load complete (icons decoded synchronously)"
-            );
-
-            // Create Arc and spawn background thread to scan for new/changed apps
-            let cache_arc = Arc::new(Mutex::new(cached_apps));
-            let cache_for_thread = Arc::clone(&cache_arc);
-
-            std::thread::spawn(move || {
-                let _span = info_span!("background_app_scan").entered();
-                set_loading_state(AppLoadingState::ScanningDirectories);
-
-                let scan_start = Instant::now();
-                let fresh_apps = scan_all_directories_with_db_update();
-                let scan_duration = scan_start.elapsed().as_millis();
-                let app_count = fresh_apps.len();
-
-                // Update the in-memory cache (this Arc is shared with APP_CACHE)
-                if let Ok(mut guard) = cache_for_thread.lock() {
-                    *guard = fresh_apps;
-                }
-
-                let (db_count, db_size) = get_apps_db_stats();
-                info!(
-                    app_count,
-                    duration_ms = scan_duration,
-                    db_apps = db_count,
-                    db_icon_size_kb = db_size / 1024,
-                    "Background app scan complete"
-                );
-
-                set_loading_state(AppLoadingState::Ready);
-            });
-
-            // Return the same Arc that the background thread will update
-            return cache_arc;
-        }
-
-        // No SQLite cache - do a full synchronous scan
-        info!("No SQLite cache found, performing full scan");
-        set_loading_state(AppLoadingState::ScanningDirectories);
-
-        let apps = scan_all_directories_with_db_update();
-        let duration_ms = start.elapsed().as_millis();
-
-        let (db_count, db_size) = get_apps_db_stats();
-        info!(
-            app_count = apps.len(),
-            duration_ms = duration_ms,
-            db_apps = db_count,
-            db_icon_size_kb = db_size / 1024,
-            "Scanned applications (no cache)"
-        );
-
-        set_loading_state(AppLoadingState::Ready);
-
-        Arc::new(Mutex::new(apps))
-    });
-
     // Return a clone of the cached apps
-    cache.lock().map(|g| g.clone()).unwrap_or_default()
+    APP_CACHE.lock().map(|g| g.clone()).unwrap_or_default()
 }
 
 /// Force a fresh scan of applications (bypasses cache)

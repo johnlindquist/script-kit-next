@@ -658,6 +658,117 @@ pub(crate) fn clear_sdk_state() {
     }
 }
 
+// === Keyboard Shortcut Registry ===
+// Single source of truth for all AI window keyboard shortcuts.
+// Used by both the Cmd+/ overlay and visible hint chips in the sidebar.
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct AiShortcutItem {
+    pub(super) keys: &'static str,
+    pub(super) description: &'static str,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct AiShortcutSection {
+    pub(super) title: &'static str,
+    pub(super) items: &'static [AiShortcutItem],
+}
+
+pub(super) const AI_SHORTCUTS_NAVIGATION: &[AiShortcutItem] = &[
+    AiShortcutItem {
+        keys: "\u{2318}B",
+        description: "Toggle sidebar",
+    },
+    AiShortcutItem {
+        keys: "\u{2318}\u{21e7}F",
+        description: "Focus search",
+    },
+    AiShortcutItem {
+        keys: "\u{2318}[",
+        description: "Previous chat",
+    },
+    AiShortcutItem {
+        keys: "\u{2318}]",
+        description: "Next chat",
+    },
+];
+
+pub(super) const AI_SHORTCUTS_CHAT: &[AiShortcutItem] = &[
+    AiShortcutItem {
+        keys: "\u{2318}N",
+        description: "New chat",
+    },
+    AiShortcutItem {
+        keys: "\u{2318}\u{21e7}N",
+        description: "New chat with preset",
+    },
+    AiShortcutItem {
+        keys: "\u{2318}\u{21e7}\u{232B}",
+        description: "Delete chat",
+    },
+];
+
+pub(super) const AI_SHORTCUTS_INPUT: &[AiShortcutItem] = &[
+    AiShortcutItem {
+        keys: "Enter",
+        description: "Send message",
+    },
+    AiShortcutItem {
+        keys: "Shift+Enter",
+        description: "Insert newline",
+    },
+    AiShortcutItem {
+        keys: "\u{2318}L",
+        description: "Focus input",
+    },
+    AiShortcutItem {
+        keys: "\u{2191}",
+        description: "Edit last message (empty input)",
+    },
+    AiShortcutItem {
+        keys: "Esc",
+        description: "Stop streaming / close",
+    },
+];
+
+pub(super) const AI_SHORTCUTS_ACTIONS: &[AiShortcutItem] = &[
+    AiShortcutItem {
+        keys: "\u{2318}K",
+        description: "Open actions",
+    },
+    AiShortcutItem {
+        keys: "\u{2318}\u{21e7}C",
+        description: "Copy last response",
+    },
+    AiShortcutItem {
+        keys: "\u{2318}\u{21e7}E",
+        description: "Export chat as markdown",
+    },
+    AiShortcutItem {
+        keys: "\u{2318}/",
+        description: "Toggle shortcuts overlay",
+    },
+];
+
+pub(super) const AI_SHORTCUT_SECTIONS: &[AiShortcutSection] = &[
+    AiShortcutSection {
+        title: "Navigation",
+        items: AI_SHORTCUTS_NAVIGATION,
+    },
+    AiShortcutSection {
+        title: "Chat",
+        items: AI_SHORTCUTS_CHAT,
+    },
+    AiShortcutSection {
+        title: "Input",
+        items: AI_SHORTCUTS_INPUT,
+    },
+    AiShortcutSection {
+        title: "Actions",
+        items: AI_SHORTCUTS_ACTIONS,
+    },
+];
+
 // NOTE: AI_APP_ENTITY was removed to prevent memory leaks.
 // The entity was being kept alive by this global reference and by theme watcher tasks,
 // causing the AiApp to never be dropped even after the window closed.

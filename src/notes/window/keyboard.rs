@@ -15,6 +15,60 @@ fn is_key_right_bracket(key: &str) -> bool {
 }
 
 impl NotesApp {
+    /// Handle Cmd+Backspace / Cmd+Delete shortcut to delete the selected note.
+    ///
+    /// Returns `true` if the shortcut was handled (caller should stop propagation).
+    pub(super) fn handle_platform_delete_shortcut(
+        &mut self,
+        key: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !is_key_backspace(key) && !is_key_delete(key) {
+            return false;
+        }
+
+        let is_trash_view = self.view_mode == NotesViewMode::Trash;
+
+        tracing::info!(
+            event = "notes_delete_shortcut_received",
+            key = %key,
+            has_selection = self.selected_note_id.is_some(),
+            is_trash_view,
+            "notes_delete_shortcut_received"
+        );
+
+        if is_trash_view {
+            tracing::warn!(
+                event = "notes_delete_shortcut_ignored",
+                key = %key,
+                reason = "trash_view_requires_dedicated_delete_flow",
+                "notes_delete_shortcut_ignored"
+            );
+            return false;
+        }
+
+        let Some(note_id) = self.selected_note_id else {
+            tracing::debug!(
+                event = "notes_delete_shortcut_ignored",
+                key = %key,
+                reason = "no_selected_note",
+                "notes_delete_shortcut_ignored"
+            );
+            return false;
+        };
+
+        tracing::info!(
+            event = "notes_delete_shortcut_requesting_confirmation",
+            key = %key,
+            note_id = %note_id.as_str(),
+            "notes_delete_shortcut_requesting_confirmation"
+        );
+
+        self.request_delete_selected_note(window, cx);
+        true
+    }
+
     pub(super) fn handle_key_down(
         &mut self,
         event: &KeyDownEvent,
@@ -438,9 +492,8 @@ impl NotesApp {
                     self.navigate_forward(window, cx);
                     cx.stop_propagation();
                 }
-                key if is_key_backspace(key) || is_key_delete(key) => {
-                    if self.selected_note_id.is_some() {
-                        self.delete_selected_note(window, cx);
+                key if (is_key_backspace(key) || is_key_delete(key)) && modifiers.shift => {
+                    if self.handle_platform_delete_shortcut(key, window, cx) {
                         cx.stop_propagation();
                     }
                 }

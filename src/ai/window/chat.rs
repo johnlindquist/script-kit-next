@@ -491,10 +491,7 @@ impl AiApp {
         self.force_scroll_to_bottom();
 
         // Clear input and update placeholder
-        self.input_state.update(cx, |state, cx| {
-            state.set_value("", window, cx);
-            state.set_selection(0, 0, window, cx);
-        });
+        self.clear_composer(window, cx);
         self.update_input_placeholder(window, cx);
 
         info!(

@@ -45,7 +45,6 @@ fn applescript_list_literal(values: &[String]) -> String {
     let escaped_values = values
         .iter()
         .map(|value| format!("\"{}\"", crate::utils::escape_applescript_string(value)))
-        .collect::<Vec<_>>()
         .join(", ");
     format!("{{{}}}", escaped_values)
 }
@@ -335,17 +334,92 @@ impl ScriptListApp {
     /// Maps a `SystemActionType` to its implementation, handles special cases
     /// (TestConfirmation, QuitScriptKit), and routes the result through
     /// `handle_system_action_result`.
+    /// Structured outcome logger for builtin execution paths.
+    ///
+    /// Emits a single log line with all fields needed for machine consumption
+    /// and human debugging: builtin_id, trace_id, surface, handler, status,
+    /// error_code, and duration_ms.
+    fn log_builtin_outcome(
+        builtin_id: &str,
+        dctx: &crate::action_helpers::DispatchContext,
+        handler: &str,
+        outcome: &crate::action_helpers::DispatchOutcome,
+        start: &std::time::Instant,
+    ) {
+        let duration_ms = start.elapsed().as_millis() as u64;
+        let trace_id = outcome
+            .trace_id
+            .as_deref()
+            .unwrap_or(dctx.trace_id.as_str());
+
+        match outcome.status {
+            crate::action_helpers::ActionOutcomeStatus::Error => {
+                tracing::error!(
+                    category = "BUILTIN",
+                    builtin_id = %builtin_id,
+                    trace_id = %trace_id,
+                    surface = %dctx.surface,
+                    handler,
+                    status = %outcome.status,
+                    error_code = outcome.error_code,
+                    duration_ms,
+                    detail = ?outcome.detail,
+                    "Builtin execution finished"
+                );
+            }
+            _ => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    builtin_id = %builtin_id,
+                    trace_id = %trace_id,
+                    surface = %dctx.surface,
+                    handler,
+                    status = %outcome.status,
+                    error_code = outcome.error_code,
+                    duration_ms,
+                    detail = ?outcome.detail,
+                    "Builtin execution finished"
+                );
+            }
+        }
+    }
+
+    /// Build a success outcome carrying the dispatch context's trace_id.
+    fn builtin_success(
+        dctx: &crate::action_helpers::DispatchContext,
+        detail: impl Into<String>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        crate::action_helpers::DispatchOutcome::success()
+            .with_trace_id(dctx.trace_id.clone())
+            .with_detail(detail)
+    }
+
+    /// Build an error outcome carrying the dispatch context's trace_id.
+    fn builtin_error(
+        dctx: &crate::action_helpers::DispatchContext,
+        code: &'static str,
+        message: impl Into<String>,
+        detail: impl Into<String>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        crate::action_helpers::DispatchOutcome::error(code, message)
+            .with_trace_id(dctx.trace_id.clone())
+            .with_detail(detail)
+    }
+
     fn dispatch_system_action(
         &mut self,
         action_type: &builtins::SystemActionType,
-        trace_id: &str,
+        dctx: &crate::action_helpers::DispatchContext,
         cx: &mut Context<Self>,
-    ) {
+    ) -> crate::action_helpers::DispatchOutcome {
         let start = std::time::Instant::now();
 
         tracing::info!(
+            category = "BUILTIN",
+            builtin_id = %dctx.action_id,
+            trace_id = %dctx.trace_id,
+            surface = %dctx.surface,
             action_type = ?action_type,
-            trace_id = %trace_id,
             status = "dispatched",
             "system_action_dispatch"
         );
@@ -381,32 +455,18 @@ impl ScriptListApp {
                 // Dev/test actions
                 #[cfg(debug_assertions)]
                 SystemActionType::TestConfirmation => {
-                    tracing::info!(
-                        action_type = ?action_type,
-                        trace_id = %trace_id,
-                        status = "success",
-                        duration_ms = start.elapsed().as_millis() as u64,
-                        "system_action_dispatch"
-                    );
                     self.toast_manager.push(
                         components::toast::Toast::success("Confirmation test passed!", &self.theme)
                             .duration_ms(Some(TOAST_SUCCESS_MS)),
                     );
                     cx.notify();
-                    return; // Don't hide window for test
+                    return Self::builtin_success(dctx, "system_action_test_confirmation");
                 }
 
                 // App control
                 SystemActionType::QuitScriptKit => {
-                    tracing::info!(
-                        action_type = ?action_type,
-                        trace_id = %trace_id,
-                        status = "success",
-                        duration_ms = start.elapsed().as_millis() as u64,
-                        "system_action_dispatch"
-                    );
                     cx.quit();
-                    return;
+                    return Self::builtin_success(dctx, "quit_script_kit");
                 }
 
                 // System utilities
@@ -430,39 +490,47 @@ impl ScriptListApp {
                 }
             };
 
-            self.handle_system_action_result(result, action_type, trace_id, start.elapsed(), cx);
+            self.handle_system_action_result(
+                result,
+                action_type,
+                dctx,
+                start.elapsed(),
+                cx,
+            )
         }
 
         #[cfg(not(target_os = "macos"))]
         {
             let _ = action_type;
-            let elapsed = start.elapsed();
-            tracing::warn!(
-                trace_id = %trace_id,
-                status = "error",
-                error_code = crate::action_helpers::ERROR_UNSUPPORTED_PLATFORM,
-                duration_ms = elapsed.as_millis() as u64,
-                "system_action_dispatch"
-            );
             self.show_unsupported_platform_toast("System actions", cx);
+            Self::builtin_error(
+                dctx,
+                crate::action_helpers::ERROR_UNSUPPORTED_PLATFORM,
+                "System actions are not supported on this platform",
+                "system_action_unsupported_platform",
+            )
         }
     }
 
     /// Shared result handler for system actions — shows HUD on success, Toast on error.
+    /// Returns a `DispatchOutcome` for structured logging at the call boundary.
     fn handle_system_action_result(
         &mut self,
         result: Result<(), String>,
         action_type: &builtins::SystemActionType,
-        trace_id: &str,
+        dctx: &crate::action_helpers::DispatchContext,
         elapsed: std::time::Duration,
         cx: &mut Context<Self>,
-    ) {
+    ) -> crate::action_helpers::DispatchOutcome {
         let duration_ms = elapsed.as_millis() as u64;
         match result {
             Ok(()) => {
                 tracing::info!(
+                    category = "BUILTIN",
+                    builtin_id = %dctx.action_id,
+                    trace_id = %dctx.trace_id,
+                    surface = %dctx.surface,
                     action_type = ?action_type,
-                    trace_id = %trace_id,
                     status = "success",
                     duration_ms,
                     "system_action_dispatch"
@@ -474,18 +542,28 @@ impl ScriptListApp {
                 } else {
                     self.close_and_reset_window(cx);
                 }
+                Self::builtin_success(dctx, format!("system_action::{action_type:?}"))
             }
-            Err(e) => {
+            Err(error) => {
                 tracing::error!(
+                    category = "BUILTIN",
+                    builtin_id = %dctx.action_id,
+                    trace_id = %dctx.trace_id,
+                    surface = %dctx.surface,
                     action_type = ?action_type,
-                    trace_id = %trace_id,
                     status = "error",
                     error_code = crate::action_helpers::ERROR_LAUNCH_FAILED,
                     duration_ms,
-                    error = %e,
+                    error = %error,
                     "system_action_dispatch"
                 );
-                self.show_error_toast(format!("System action failed: {}", e), cx);
+                self.show_error_toast(format!("System action failed: {}", error), cx);
+                Self::builtin_error(
+                    dctx,
+                    crate::action_helpers::ERROR_LAUNCH_FAILED,
+                    format!("System action failed: {}", error),
+                    format!("system_action::{action_type:?}; error={error}"),
+                )
             }
         }
     }
@@ -500,14 +578,15 @@ impl ScriptListApp {
         query_override: Option<&str>,
         cx: &mut Context<Self>,
     ) {
-        let trace_id = uuid::Uuid::new_v4().to_string();
         let start = std::time::Instant::now();
+        let dctx = crate::action_helpers::DispatchContext::for_builtin(&entry.id);
 
         tracing::info!(
             category = "BUILTIN",
-            trace_id = %trace_id,
             builtin_id = %entry.id,
             builtin_name = %entry.name,
+            trace_id = %dctx.trace_id,
+            surface = %dctx.surface,
             "Builtin execution started"
         );
 
@@ -517,43 +596,47 @@ impl ScriptListApp {
 
         // Check if this command requires confirmation - open modal if so
         if self.config.requires_confirmation(&entry.id) {
-            tracing::info!(message = %&format!("Opening confirmation modal for: {}", entry.id),
-            );
-
-            // Clone what we need for the spawned task
+            let confirmation_start = std::time::Instant::now();
             let entry_id = entry.id.clone();
             let entry_name = entry.name.clone();
             let query_owned = query_override.map(|s| s.to_string());
-            let trace_id_owned = trace_id.clone();
+            let dctx_owned = dctx.clone();
 
             // Spawn a task to show confirmation modal via confirm_with_modal helper
             cx.spawn(async move |this, cx| {
                 let message = format!("Are you sure you want to {}?", entry_name);
-                match confirm_with_modal(cx, message, "Yes", "Cancel", &trace_id_owned).await {
+                match confirm_with_modal(cx, message, "Yes", "Cancel", &dctx_owned.trace_id).await
+                {
                     Ok(true) => {
                         let _ = this.update(cx, |this, cx| {
                             this.handle_builtin_confirmation(
                                 entry_id,
                                 true,
                                 query_owned,
-                                &trace_id_owned,
+                                &dctx_owned,
                                 cx,
                             );
                         });
                     }
                     Ok(false) => {
-                        tracing::info!(
-                            builtin_id = %entry_id,
-                            trace_id = %trace_id_owned,
-                            status = "cancelled",
-                            "Builtin confirmation cancelled by user"
-                        );
+                        let outcome = crate::action_helpers::DispatchOutcome::cancelled()
+                            .with_trace_id(dctx_owned.trace_id.clone())
+                            .with_detail("builtin_confirmation_cancelled");
+                        let _ = this.update(cx, |_, _| {
+                            Self::log_builtin_outcome(
+                                &entry_id,
+                                &dctx_owned,
+                                "confirmation_gate",
+                                &outcome,
+                                &confirmation_start,
+                            );
+                        });
                     }
                     Err(e) => {
                         let _ = this.update(cx, |this, cx| {
                             tracing::error!(
                                 builtin_id = %entry_id,
-                                trace_id = %trace_id_owned,
+                                trace_id = %dctx_owned.trace_id,
                                 error = %e,
                                 "failed to open confirmation modal"
                             );
@@ -561,6 +644,19 @@ impl ScriptListApp {
                                 "Failed to open confirmation dialog",
                                 Some(crate::action_helpers::ERROR_MODAL_FAILED),
                                 cx,
+                            );
+                            let outcome = Self::builtin_error(
+                                &dctx_owned,
+                                crate::action_helpers::ERROR_MODAL_FAILED,
+                                "Failed to open confirmation dialog",
+                                format!("confirmation_modal_error={e}"),
+                            );
+                            Self::log_builtin_outcome(
+                                &entry_id,
+                                &dctx_owned,
+                                "confirmation_gate",
+                                &outcome,
+                                &confirmation_start,
                             );
                         });
                     }
@@ -570,7 +666,7 @@ impl ScriptListApp {
 
             tracing::info!(
                 category = "BUILTIN",
-                trace_id = %trace_id,
+                trace_id = %dctx.trace_id,
                 builtin_id = %entry.id,
                 status = "awaiting_confirmation",
                 duration_ms = start.elapsed().as_millis() as u64,
@@ -579,58 +675,84 @@ impl ScriptListApp {
             return; // Wait for modal callback
         }
 
-        self.execute_builtin_inner(entry, query_override, &trace_id, start, cx);
+        // All builtins now return DispatchOutcome — system actions are handled
+        // inside execute_builtin_inner as well.
+        let outcome = self.execute_builtin_inner(entry, query_override, &dctx, cx);
+
+        Self::log_builtin_outcome(&entry.id, &dctx, "builtin_execution", &outcome, &start);
+    }
+
+    /// Open a filterable main-window builtin view with a consistent UX contract.
+    ///
+    /// Every filterable builtin should go through this helper so that focus,
+    /// placeholder, filter reset, hover clearing, resize, and opened-from-menu
+    /// state are always set the same way.
+    fn open_builtin_filterable_view(
+        &mut self,
+        view: AppView,
+        placeholder: &str,
+        cx: &mut Context<Self>,
+    ) {
+        self.filter_text.clear();
+        self.pending_filter_sync = true;
+        self.pending_placeholder = Some(placeholder.to_string());
+        self.current_view = view;
+        self.hovered_index = None;
+        self.opened_from_main_menu = true;
+        resize_to_view_sync(ViewType::ScriptList, 0);
+        self.pending_focus = Some(FocusTarget::MainFilter);
+        self.focused_input = FocusedInput::MainFilter;
+        cx.notify();
     }
 
     /// Inner builtin executor — runs the actual action logic.
     /// Called from both the normal path (after confirmation check) and the
     /// confirmed path (after modal approval), ensuring a single implementation.
+    ///
+    /// Returns a `DispatchOutcome` so callers can log the real result instead
+    /// of a synthetic success.
     fn execute_builtin_inner(
         &mut self,
         entry: &builtins::BuiltInEntry,
         query_override: Option<&str>,
-        trace_id: &str,
-        start: std::time::Instant,
+        dctx: &crate::action_helpers::DispatchContext,
         cx: &mut Context<Self>,
-    ) {
+    ) -> crate::action_helpers::DispatchOutcome {
         match &entry.feature {
             builtins::BuiltInFeature::ClipboardHistory => {
-                tracing::info!(message = %"Opening Clipboard History");
-                // P0 FIX: Store data in self, view holds only state
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "Opening Clipboard History"
+                );
                 self.cached_clipboard_entries = clipboard_history::get_cached_entries(100);
                 self.focused_clipboard_entry_id = self
                     .cached_clipboard_entries
                     .first()
                     .map(|entry| entry.id.clone());
-                tracing::info!(message = %&format!(
-                        "Loaded {} clipboard entries (cached)",
-                        self.cached_clipboard_entries.len()
-                    ),
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    count = self.cached_clipboard_entries.len(),
+                    "Loaded clipboard entries"
                 );
-                // Clear the shared input for fresh search (sync on next render)
-                self.filter_text = String::new();
-                self.pending_filter_sync = true;
-                self.pending_placeholder = Some("Search clipboard history...".to_string());
-                // Initial selected_index should be 0 (first entry)
-                // Note: clipboard history uses a flat list without section headers
-                self.current_view = AppView::ClipboardHistoryView {
-                    filter: String::new(),
-                    selected_index: 0,
-                };
-                self.hovered_index = None;
-                // Mark as opened from main menu - ESC will return to main menu
-                self.opened_from_main_menu = true;
-                // Use standard height for clipboard history view
-                resize_to_view_sync(ViewType::ScriptList, 0);
-                // Focus the main filter input so cursor blinks and typing works
-                self.pending_focus = Some(FocusTarget::MainFilter);
-                self.focused_input = FocusedInput::MainFilter;
-                cx.notify();
+
+                self.open_builtin_filterable_view(
+                    AppView::ClipboardHistoryView {
+                        filter: String::new(),
+                        selected_index: 0,
+                    },
+                    "Search clipboard history...",
+                    cx,
+                );
+
+                Self::builtin_success(dctx, "open_clipboard_history")
             }
             builtins::BuiltInFeature::PasteSequentially => {
                 tracing::info!(
                     action = "paste_sequential",
                     event = "trigger",
+                    trace_id = %dctx.trace_id,
                     "Paste Sequentially triggered"
                 );
                 match clipboard_history::advance_paste_sequence(&mut self.paste_sequential_state) {
@@ -639,21 +761,23 @@ impl ScriptListApp {
                             action = "paste_sequential",
                             event = "paste_entry",
                             entry_id = %entry_id,
+                            trace_id = %dctx.trace_id,
                             "Enqueuing sequential paste via serialized worker"
                         );
                         match clipboard_history::enqueue_sequential_paste(entry_id) {
                             Ok(()) => {
-                                // Commit the index advance only after successful enqueue.
                                 clipboard_history::commit_paste_sequence(
                                     &mut self.paste_sequential_state,
                                 );
                                 self.hide_main_and_reset(cx);
+                                Self::builtin_success(dctx, "paste_sequential")
                             }
                             Err(clipboard_history::EnqueuePasteError::WorkerDisconnected) => {
                                 tracing::error!(
                                     action = "paste_sequential",
                                     event = "enqueue_failed",
                                     error_code = "worker_disconnected",
+                                    trace_id = %dctx.trace_id,
                                     "Paste worker is not running"
                                 );
                                 self.toast_manager.push(
@@ -664,6 +788,12 @@ impl ScriptListApp {
                                     .duration_ms(Some(TOAST_CRITICAL_MS)),
                                 );
                                 cx.notify();
+                                Self::builtin_error(
+                                    dctx,
+                                    crate::action_helpers::ERROR_ACTION_FAILED,
+                                    "Paste worker crashed",
+                                    "paste_sequential_worker_disconnected",
+                                )
                             }
                         }
                     }
@@ -671,141 +801,173 @@ impl ScriptListApp {
                         tracing::info!(
                             action = "paste_sequential",
                             event = "sequence_exhausted",
+                            trace_id = %dctx.trace_id,
                             "Sequential paste exhausted all entries"
                         );
                         self.show_hud("Sequence complete".to_string(), Some(HUD_SHORT_MS), cx);
+                        Self::builtin_success(dctx, "paste_sequential_exhausted")
                     }
                     clipboard_history::PasteSequentialOutcome::Empty => {
                         tracing::info!(
                             action = "paste_sequential",
                             event = "history_empty",
+                            trace_id = %dctx.trace_id,
                             "No clipboard history available for sequential paste"
                         );
                         self.show_hud("No clipboard history".to_string(), Some(HUD_SHORT_MS), cx);
+                        Self::builtin_success(dctx, "paste_sequential_empty")
                     }
                 }
             }
             builtins::BuiltInFeature::Favorites => {
-                tracing::info!(action = "open_favorites_view", "Opening Favorites browse view");
-                self.filter_text.clear();
-                self.pending_filter_sync = true;
-                self.current_view = AppView::FavoritesBrowseView {
-                    filter: String::new(),
-                    selected_index: 0,
-                };
-                self.pending_focus = Some(FocusTarget::MainFilter);
-                cx.notify();
+                tracing::info!(
+                    category = "BUILTIN",
+                    action = "open_favorites_view",
+                    trace_id = %dctx.trace_id,
+                    "Opening Favorites browse view"
+                );
+
+                self.open_builtin_filterable_view(
+                    AppView::FavoritesBrowseView {
+                        filter: String::new(),
+                        selected_index: 0,
+                    },
+                    "Search favorites...",
+                    cx,
+                );
+
+                Self::builtin_success(dctx, "open_favorites_view")
             }
             builtins::BuiltInFeature::AppLauncher => {
-                tracing::info!(message = %"Opening App Launcher");
-                // P0 FIX: Use self.apps which is already cached
-                // Refresh apps list when opening launcher
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "Opening App Launcher"
+                );
                 self.apps = app_launcher::scan_applications().clone();
-                tracing::info!(message = %&format!("Loaded {} applications", self.apps.len()));
-                // Invalidate caches since apps changed
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    count = self.apps.len(),
+                    "Loaded applications"
+                );
                 self.invalidate_filter_cache();
                 self.invalidate_grouped_cache();
-                // Sync list state so when user returns to ScriptList, the count is correct
                 self.sync_list_state();
-                // Clear the shared input for fresh search (sync on next render)
-                self.filter_text = String::new();
-                self.pending_filter_sync = true;
-                self.pending_placeholder = Some("Search applications...".to_string());
-                self.current_view = AppView::AppLauncherView {
-                    filter: String::new(),
-                    selected_index: 0,
-                };
-                self.hovered_index = None;
-                // Mark as opened from main menu - ESC will return to main menu
-                self.opened_from_main_menu = true;
-                // Use standard height for app launcher view
-                resize_to_view_sync(ViewType::ScriptList, 0);
-                // Focus the main filter input so cursor blinks and typing works
-                self.pending_focus = Some(FocusTarget::MainFilter);
-                self.focused_input = FocusedInput::MainFilter;
-                cx.notify();
+
+                self.open_builtin_filterable_view(
+                    AppView::AppLauncherView {
+                        filter: String::new(),
+                        selected_index: 0,
+                    },
+                    "Search applications...",
+                    cx,
+                );
+
+                Self::builtin_success(dctx, "open_app_launcher")
             }
             builtins::BuiltInFeature::App(app_name) => {
-                tracing::info!(message = %&format!("Launching app: {}", app_name));
-                // Find and launch the specific application
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    app = %app_name,
+                    "Launching app"
+                );
                 let apps = app_launcher::scan_applications();
                 if let Some(app) = apps.iter().find(|a| a.name == *app_name) {
                     if let Err(e) = app_launcher::launch_application(app) {
-                        tracing::error!(message = %&format!("Failed to launch {}: {}", app_name, e));
-                        self.show_error_toast(format!("Failed to launch {}: {}", app_name, e), cx);
+                        let message = format!("Failed to launch {}: {}", app_name, e);
+                        self.show_error_toast(message.clone(), cx);
+                        Self::builtin_error(
+                            dctx,
+                            crate::action_helpers::ERROR_LAUNCH_FAILED,
+                            message,
+                            format!("launch_app::{app_name}"),
+                        )
                     } else {
-                        tracing::info!(message = %&format!("Launched app: {}", app_name));
                         self.close_and_reset_window(cx);
+                        Self::builtin_success(dctx, format!("launch_app::{app_name}"))
                     }
                 } else {
-                    tracing::error!(message = %&format!("App not found: {}", app_name));
-                    self.show_error_toast(format!("App not found: {}", app_name), cx);
+                    let message = format!("App not found: {}", app_name);
+                    self.show_error_toast(message.clone(), cx);
+                    Self::builtin_error(
+                        dctx,
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        message,
+                        format!("launch_app_not_found::{app_name}"),
+                    )
                 }
             }
             builtins::BuiltInFeature::WindowSwitcher => {
-                tracing::info!(message = %"Opening Window Switcher");
-                // P0 FIX: Store data in self, view holds only state
-                // Load windows when view is opened (windows change frequently)
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "Opening Window Switcher"
+                );
                 match window_control::list_windows() {
                     Ok(windows) => {
-                        tracing::info!(message = %&format!("Loaded {} windows", windows.len()));
+                        tracing::info!(
+                            category = "BUILTIN",
+                            trace_id = %dctx.trace_id,
+                            count = windows.len(),
+                            "Loaded windows"
+                        );
                         self.cached_windows = windows;
-                        // Clear the shared input for fresh search (sync on next render)
-                        self.filter_text = String::new();
-                        self.pending_filter_sync = true;
-                        self.pending_placeholder = Some("Search windows...".to_string());
-                        self.current_view = AppView::WindowSwitcherView {
-                            filter: String::new(),
-                            selected_index: 0,
-                        };
-                        self.hovered_index = None;
-                        // Mark as opened from main menu - ESC will return to main menu
-                        self.opened_from_main_menu = true;
-                        // Use standard height for window switcher view
-                        resize_to_view_sync(ViewType::ScriptList, 0);
-                        // Focus the main filter input so cursor blinks and typing works
-                        self.pending_focus = Some(FocusTarget::MainFilter);
-                        self.focused_input = FocusedInput::MainFilter;
+
+                        self.open_builtin_filterable_view(
+                            AppView::WindowSwitcherView {
+                                filter: String::new(),
+                                selected_index: 0,
+                            },
+                            "Search windows...",
+                            cx,
+                        );
+
+                        Self::builtin_success(dctx, "open_window_switcher")
                     }
                     Err(e) => {
-                        tracing::error!(message = %&format!("Failed to list windows: {}", e));
-                        self.show_error_toast(format!("Failed to list windows: {}", e), cx);
+                        let message = format!("Failed to list windows: {}", e);
+                        self.show_error_toast(message.clone(), cx);
+                        cx.notify();
+                        Self::builtin_error(
+                            dctx,
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            message,
+                            "open_window_switcher_failed",
+                        )
                     }
                 }
-                cx.notify();
             }
             builtins::BuiltInFeature::DesignGallery => {
-                tracing::info!(message = %"Opening Design Gallery");
-                // Clear the shared input for fresh search (sync on next render)
-                self.filter_text = String::new();
-                self.pending_filter_sync = true;
-                self.pending_placeholder = Some("Search designs...".to_string());
-                self.current_view = AppView::DesignGalleryView {
-                    filter: String::new(),
-                    selected_index: 0,
-                };
-                self.hovered_index = None;
-                // Mark as opened from main menu - ESC will return to main menu
-                self.opened_from_main_menu = true;
-                // Use standard height for design gallery view
-                resize_to_view_sync(ViewType::ScriptList, 0);
-                // Focus the main filter input so cursor blinks and typing works
-                self.pending_focus = Some(FocusTarget::MainFilter);
-                self.focused_input = FocusedInput::MainFilter;
-                cx.notify();
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "Opening Design Gallery"
+                );
+
+                self.open_builtin_filterable_view(
+                    AppView::DesignGalleryView {
+                        filter: String::new(),
+                        selected_index: 0,
+                    },
+                    "Search designs...",
+                    cx,
+                );
+
+                Self::builtin_success(dctx, "open_design_gallery")
             }
             builtins::BuiltInFeature::AiChat => {
-                tracing::info!(message = %"Opening AI Chat window");
-                // Reset state and hide main window first
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "Opening AI Chat window"
+                );
                 script_kit_gpui::set_main_window_visible(false);
                 self.reset_to_script_list(cx);
                 platform::defer_hide_main_window(cx);
 
-                // Defer AI window creation to avoid RefCell borrow conflicts
-                // The reset_to_script_list calls cx.notify() which schedules a render,
-                // opening a new window immediately can cause GPUI RefCell conflicts
                 cx.spawn(async move |this, cx| {
-                    // Small yield to let any pending GPUI operations complete
                     cx.background_executor()
                         .timer(std::time::Duration::from_millis(AI_WINDOW_ASYNC_YIELD_MS))
                         .await;
@@ -820,53 +982,78 @@ impl ScriptListApp {
                     });
                 })
                 .detach();
+
+                // Async — outcome tracked in spawned task
+                Self::builtin_success(dctx, "open_ai_chat_dispatched")
             }
             builtins::BuiltInFeature::Notes => {
-                tracing::info!(message = %"Opening Notes window");
-                // Reset state, hide main window, and open Notes window
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "Opening Notes window"
+                );
                 script_kit_gpui::set_main_window_visible(false);
                 self.reset_to_script_list(cx);
                 platform::defer_hide_main_window(cx);
                 if let Err(e) = notes::open_notes_window(cx) {
-                    tracing::error!(message = %&format!("Failed to open Notes window: {}", e));
-                    self.show_error_toast(format!("Failed to open Notes: {}", e), cx);
+                    let message = format!("Failed to open Notes: {}", e);
+                    self.show_error_toast(message.clone(), cx);
+                    Self::builtin_error(
+                        dctx,
+                        crate::action_helpers::ERROR_LAUNCH_FAILED,
+                        message,
+                        "open_notes_failed",
+                    )
+                } else {
+                    Self::builtin_success(dctx, "open_notes")
                 }
             }
             builtins::BuiltInFeature::EmojiPicker => {
-                tracing::info!(message = %"correlation_id=builtin-emoji-picker-start action=show-emoji-grid",
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "Opening Emoji Picker"
                 );
-                self.filter_text = String::new();
-                self.pending_filter_sync = true;
-                self.pending_placeholder = Some("Search Emoji & Symbols...".to_string());
-                self.current_view = AppView::EmojiPickerView {
-                    filter: String::new(),
-                    selected_index: 0,
-                    selected_category: None,
-                };
-                self.hovered_index = None;
-                self.opened_from_main_menu = true;
-                self.pending_focus = Some(FocusTarget::MainFilter);
-                cx.notify();
+                // EmojiPicker has an extra selected_category field, so use the
+                // shared helper for the common state and then set the view.
+                self.open_builtin_filterable_view(
+                    AppView::EmojiPickerView {
+                        filter: String::new(),
+                        selected_index: 0,
+                        selected_category: None,
+                    },
+                    "Search Emoji & Symbols...",
+                    cx,
+                );
+
+                Self::builtin_success(dctx, "open_emoji_picker")
             }
             builtins::BuiltInFeature::Quicklinks => {
-                tracing::info!(action = "show_quicklinks_browse", "Opening quicklinks browse view");
-                self.filter_text.clear();
-                self.pending_filter_sync = true;
-                self.current_view = AppView::QuicklinksBrowseView {
-                    filter: String::new(),
-                    selected_index: 0,
-                };
-                self.pending_focus = Some(FocusTarget::MainFilter);
-                cx.notify();
+                tracing::info!(
+                    category = "BUILTIN",
+                    action = "show_quicklinks_browse",
+                    trace_id = %dctx.trace_id,
+                    "Opening quicklinks browse view"
+                );
+
+                self.open_builtin_filterable_view(
+                    AppView::QuicklinksBrowseView {
+                        filter: String::new(),
+                        selected_index: 0,
+                    },
+                    "Search quicklinks...",
+                    cx,
+                );
+
+                Self::builtin_success(dctx, "open_quicklinks")
             }
             builtins::BuiltInFeature::MenuBarAction(action) => {
-                tracing::info!(message = %&format!(
-                        "Executing menu bar action: {} -> {}",
-                        action.bundle_id,
-                        action.menu_path.join(" → ")
-                    ),
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    bundle_id = %action.bundle_id,
+                    "Executing menu bar action"
                 );
-                // Execute menu action via accessibility API
                 #[cfg(target_os = "macos")]
                 {
                     match script_kit_gpui::menu_executor::execute_menu_action(
@@ -874,19 +1061,30 @@ impl ScriptListApp {
                         &action.menu_path,
                     ) {
                         Ok(()) => {
-                            tracing::info!(message = %"Menu action executed successfully");
                             self.close_and_reset_window(cx);
+                            Self::builtin_success(dctx, "menu_bar_action")
                         }
                         Err(e) => {
-                            tracing::error!(message = %&format!("Menu action failed: {}", e));
-                            self.show_error_toast(format!("Menu action failed: {}", e), cx);
+                            let message = format!("Menu action failed: {}", e);
+                            self.show_error_toast(message.clone(), cx);
+                            Self::builtin_error(
+                                dctx,
+                                crate::action_helpers::ERROR_ACTION_FAILED,
+                                message,
+                                "menu_bar_action_failed",
+                            )
                         }
                     }
                 }
                 #[cfg(not(target_os = "macos"))]
                 {
-                    tracing::warn!(message = %"Menu bar actions only supported on macOS");
                     self.show_unsupported_platform_toast("Menu bar actions", cx);
+                    Self::builtin_error(
+                        dctx,
+                        crate::action_helpers::ERROR_UNSUPPORTED_PLATFORM,
+                        "Menu bar actions only supported on macOS",
+                        "menu_bar_action_unsupported",
+                    )
                 }
             }
 
@@ -894,8 +1092,13 @@ impl ScriptListApp {
             // System Actions
             // =========================================================================
             builtins::BuiltInFeature::SystemAction(action_type) => {
-                tracing::info!(message = %&format!("Executing system action: {:?}", action_type));
-                self.dispatch_system_action(action_type, trace_id, cx);
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    action_type = ?action_type,
+                    "Executing system action via inner path"
+                );
+                self.dispatch_system_action(action_type, dctx, cx)
             }
 
             // NOTE: Window Actions removed - now handled by window-management extension
@@ -905,11 +1108,15 @@ impl ScriptListApp {
             // Notes Commands
             // =========================================================================
             builtins::BuiltInFeature::NotesCommand(cmd_type) => {
-                tracing::info!(message = %&format!("Executing notes command: {:?}", cmd_type));
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    notes_command = ?cmd_type,
+                    "Executing notes command"
+                );
 
                 use builtins::NotesCommandType;
 
-                // All notes commands: reset state, hide main window, open notes
                 script_kit_gpui::set_main_window_visible(false);
                 self.reset_to_script_list(cx);
                 platform::defer_hide_main_window(cx);
@@ -922,8 +1129,16 @@ impl ScriptListApp {
                 };
 
                 if let Err(e) = result {
-                    tracing::error!(message = %&format!("Notes command failed: {}", e));
-                    self.show_error_toast(format!("Notes command failed: {}", e), cx);
+                    let message = format!("Notes command failed: {}", e);
+                    self.show_error_toast(message.clone(), cx);
+                    Self::builtin_error(
+                        dctx,
+                        crate::action_helpers::ERROR_LAUNCH_FAILED,
+                        message,
+                        format!("notes_command_failed::{cmd_type:?}"),
+                    )
+                } else {
+                    Self::builtin_success(dctx, format!("notes_command::{cmd_type:?}"))
                 }
             }
 
@@ -931,14 +1146,18 @@ impl ScriptListApp {
             // AI Commands
             // =========================================================================
             builtins::BuiltInFeature::AiCommand(cmd_type) => {
-                tracing::info!(message = %&format!("Executing AI command: {:?}", cmd_type));
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    ai_command = ?cmd_type,
+                    "Executing AI command"
+                );
 
                 use builtins::AiCommandType;
 
                 let is_generate_script = matches!(cmd_type, AiCommandType::GenerateScript);
                 let uses_hide_then_capture_flow = ai_command_uses_hide_then_capture_flow(cmd_type);
                 if !is_generate_script {
-                    // Most AI commands open a separate AI window.
                     script_kit_gpui::set_main_window_visible(false);
                     self.reset_to_script_list(cx);
                     if uses_hide_then_capture_flow {
@@ -954,23 +1173,29 @@ impl ScriptListApp {
 
                 match cmd_type {
                     AiCommandType::OpenAi | AiCommandType::NewConversation => {
-                        // Basic open/new conversation
                         if let Err(e) = ai::open_ai_window(cx) {
-                            tracing::error!(message = %&format!("AI command failed: {}", e));
-                            self.show_error_toast(ai_open_failure_message(&e), cx);
+                            let message = ai_open_failure_message(&e);
+                            self.show_error_toast(message.clone(), cx);
+                            Self::builtin_error(
+                                dctx,
+                                crate::action_helpers::ERROR_LAUNCH_FAILED,
+                                message,
+                                format!("ai_command::{cmd_type:?}"),
+                            )
+                        } else {
+                            Self::builtin_success(dctx, format!("ai_command::{cmd_type:?}"))
                         }
                     }
 
                     AiCommandType::ClearConversation => {
                         match ai::clear_all_chats() {
                             Ok(()) => {
-                                // Force a fresh AI window state so cleared history is reflected immediately.
                                 ai::close_ai_window(cx);
                                 if let Err(e) = ai::open_ai_window(cx) {
-                                    tracing::error!(message = %&format!(
-                                            "AI history cleared but failed to reopen AI window: {}",
-                                            e
-                                        ),
+                                    tracing::error!(
+                                        trace_id = %dctx.trace_id,
+                                        error = %e,
+                                        "AI history cleared but failed to reopen AI window"
                                     );
                                     self.show_error_toast(
                                         format!("AI history cleared, but failed to open AI: {}", e),
@@ -983,14 +1208,17 @@ impl ScriptListApp {
                                         cx,
                                     );
                                 }
+                                Self::builtin_success(dctx, "ai_clear_conversation")
                             }
                             Err(e) => {
-                                tracing::error!(message = %&format!("Failed to clear AI conversations: {}", e),
-                                );
-                                self.show_error_toast(
-                                    format!("Failed to clear AI conversations: {}", e),
-                                    cx,
-                                );
+                                let message = format!("Failed to clear AI conversations: {}", e);
+                                self.show_error_toast(message.clone(), cx);
+                                Self::builtin_error(
+                                    dctx,
+                                    crate::action_helpers::ERROR_ACTION_FAILED,
+                                    message,
+                                    "ai_clear_conversation_failed",
+                                )
                             }
                         }
                     }
@@ -998,35 +1226,39 @@ impl ScriptListApp {
                     AiCommandType::GenerateScript => {
                         let query = query_override.unwrap_or(&self.filter_text).to_string();
                         self.dispatch_ai_script_generation_from_query(query, cx);
+                        Self::builtin_success(dctx, "ai_generate_script_dispatched")
                     }
 
                     AiCommandType::SendScreenToAi => {
                         self.spawn_send_screen_to_ai_after_hide(cx);
+                        Self::builtin_success(dctx, "ai_send_screen_dispatched")
                     }
 
                     AiCommandType::SendFocusedWindowToAi => {
                         self.spawn_send_focused_window_to_ai_after_hide(cx);
+                        Self::builtin_success(dctx, "ai_send_focused_window_dispatched")
                     }
 
                     AiCommandType::SendSelectedTextToAi => {
-                        // Get selected text and send to AI
                         match crate::selected_text::get_selected_text() {
                             Ok(text) if !text.is_empty() => {
                                 let message = format!(
                                     "I've selected the following text:\n\n```\n{}\n```\n\nPlease help me with this.",
                                     text
                                 );
-                                tracing::info!(message = %&format!("Selected text captured: {} chars", text.len()),
+                                tracing::info!(
+                                    trace_id = %dctx.trace_id,
+                                    text_len = text.len(),
+                                    "Selected text captured"
                                 );
                                 if let Err(e) = ai::open_ai_window(cx) {
-                                    tracing::error!(message = %&ai_open_failure_message(&e));
                                     self.show_error_toast(ai_open_failure_message(&e), cx);
                                 } else {
                                     ai::set_ai_input(cx, &message, false);
                                 }
+                                Self::builtin_success(dctx, "ai_send_selected_text")
                             }
                             Ok(_) => {
-                                // No text selected
                                 self.toast_manager.push(
                                     components::toast::Toast::info(
                                         "No text selected. Select some text first.",
@@ -1035,48 +1267,53 @@ impl ScriptListApp {
                                     .duration_ms(Some(TOAST_INFO_MS)),
                                 );
                                 cx.notify();
+                                Self::builtin_success(dctx, "ai_send_selected_text_empty")
                             }
                             Err(e) => {
-                                tracing::error!(message = %&format!("Failed to get selected text: {}", e),
-                                );
-                                self.show_error_toast(
-                                    format!("Failed to get selected text: {}", e),
-                                    cx,
-                                );
+                                let message = format!("Failed to get selected text: {}", e);
+                                self.show_error_toast(message.clone(), cx);
+                                Self::builtin_error(
+                                    dctx,
+                                    crate::action_helpers::ERROR_ACTION_FAILED,
+                                    message,
+                                    "ai_send_selected_text_failed",
+                                )
                             }
                         }
                     }
 
                     AiCommandType::SendBrowserTabToAi => {
-                        // Get browser URL and send to AI
                         match platform::get_focused_browser_tab_url() {
                             Ok(url) => {
                                 let message = format!(
                                     "I'm looking at this webpage:\n\n{}\n\nPlease help me analyze or understand its content.",
                                     url
                                 );
-                                tracing::info!(message = %&format!("Browser URL captured: {}", url));
+                                tracing::info!(
+                                    trace_id = %dctx.trace_id,
+                                    "Browser URL captured"
+                                );
                                 if let Err(e) = ai::open_ai_window(cx) {
-                                    tracing::error!(message = %&ai_open_failure_message(&e));
                                     self.show_error_toast(ai_open_failure_message(&e), cx);
                                 } else {
                                     ai::set_ai_input(cx, &message, false);
                                 }
+                                Self::builtin_success(dctx, "ai_send_browser_tab")
                             }
                             Err(e) => {
-                                tracing::error!(message = %&format!("Failed to get browser URL: {}", e));
-                                self.show_error_toast(
-                                    format!("Failed to get browser URL: {}", e),
-                                    cx,
-                                );
+                                let message = format!("Failed to get browser URL: {}", e);
+                                self.show_error_toast(message.clone(), cx);
+                                Self::builtin_error(
+                                    dctx,
+                                    crate::action_helpers::ERROR_ACTION_FAILED,
+                                    message,
+                                    "ai_send_browser_tab_failed",
+                                )
                             }
                         }
                     }
 
                     AiCommandType::SendScreenAreaToAi => {
-                        // Launch native interactive screen area selection
-                        // Uses macOS screencapture -i which provides crosshair cursor,
-                        // semi-transparent backdrop, drag-to-select, and Escape to cancel
                         match platform::capture_screen_area() {
                             Ok(Some(capture)) => {
                                 let base64_data = base64::Engine::encode(
@@ -1089,39 +1326,49 @@ impl ScriptListApp {
                                 );
                                 tracing::info!(
                                     action = "send_screen_area_to_ai",
+                                    trace_id = %dctx.trace_id,
                                     width = capture.width,
                                     height = capture.height,
                                     file_size = capture.png_data.len(),
                                     "Screen area captured, sending to AI"
                                 );
                                 if let Err(e) = ai::open_ai_window(cx) {
-                                    tracing::error!(message = %&ai_open_failure_message(&e));
                                     self.show_error_toast(ai_open_failure_message(&e), cx);
                                 } else {
                                     ai::set_ai_input_with_image(cx, &message, &base64_data, false);
                                 }
+                                cx.notify();
+                                Self::builtin_success(dctx, "ai_send_screen_area")
                             }
                             Ok(None) => {
-                                // User cancelled selection (pressed Escape) — no feedback needed
                                 tracing::info!(
                                     action = "send_screen_area_cancelled",
+                                    trace_id = %dctx.trace_id,
                                     "Screen area selection cancelled by user"
                                 );
+                                cx.notify();
+                                crate::action_helpers::DispatchOutcome::cancelled()
+                                    .with_trace_id(dctx.trace_id.clone())
+                                    .with_detail("ai_send_screen_area_cancelled")
                             }
                             Err(e) => {
-                                tracing::error!(action = "send_screen_area_failed", error = %e, "Failed to capture screen area");
-                                self.show_error_toast(
-                                    format!("Failed to capture screen area: {}", e),
-                                    cx,
-                                );
+                                let message = format!("Failed to capture screen area: {}", e);
+                                self.show_error_toast(message.clone(), cx);
+                                cx.notify();
+                                Self::builtin_error(
+                                    dctx,
+                                    crate::action_helpers::ERROR_ACTION_FAILED,
+                                    message,
+                                    "ai_send_screen_area_failed",
+                                )
                             }
                         }
-                        cx.notify();
                     }
 
                     AiCommandType::CreateAiPreset => {
                         tracing::info!(
                             action = "create_ai_preset",
+                            trace_id = %dctx.trace_id,
                             "Opening create AI preset form"
                         );
                         self.current_view = AppView::CreateAiPresetView {
@@ -1132,6 +1379,7 @@ impl ScriptListApp {
                         };
                         self.pending_focus = Some(FocusTarget::AppRoot);
                         cx.notify();
+                        Self::builtin_success(dctx, "ai_create_preset")
                     }
 
                     AiCommandType::ImportAiPresets => {
@@ -1224,11 +1472,14 @@ impl ScriptListApp {
                             }
                         })
                         .detach();
+                        // Async — outcome tracked in spawned task
+                        Self::builtin_success(dctx, "ai_import_presets_dispatched")
                     }
 
                     AiCommandType::ExportAiPresets => {
                         tracing::info!(
                             action = "export_ai_presets",
+                            trace_id = %dctx.trace_id,
                             "Opening save dialog for AI preset export"
                         );
                         let default_dir = ai::presets::get_presets_path()
@@ -1296,16 +1547,23 @@ impl ScriptListApp {
                             }
                         })
                         .detach();
+                        // Async — outcome tracked in spawned task
+                        Self::builtin_success(dctx, "ai_export_presets_dispatched")
                     }
 
                     AiCommandType::SearchAiPresets => {
-                        tracing::info!(action = "search_ai_presets", "Opening AI presets search");
+                        tracing::info!(
+                            action = "search_ai_presets",
+                            trace_id = %dctx.trace_id,
+                            "Opening AI presets search"
+                        );
                         self.current_view = AppView::SearchAiPresetsView {
                             filter: String::new(),
                             selected_index: 0,
                         };
                         self.pending_focus = Some(FocusTarget::MainFilter);
                         cx.notify();
+                        Self::builtin_success(dctx, "ai_search_presets")
                     }
                 }
             }
@@ -1314,7 +1572,12 @@ impl ScriptListApp {
             // Script Commands
             // =========================================================================
             builtins::BuiltInFeature::ScriptCommand(cmd_type) => {
-                tracing::info!(message = %&format!("Executing script command: {:?}", cmd_type));
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    script_command = ?cmd_type,
+                    "Executing script command"
+                );
 
                 use builtins::ScriptCommandType;
 
@@ -1323,13 +1586,18 @@ impl ScriptListApp {
                     ScriptCommandType::NewExtension => prompts::NamingTarget::Extension,
                 };
                 self.show_naming_dialog(target, cx);
+                Self::builtin_success(dctx, format!("script_command::{cmd_type:?}"))
             }
 
             // =========================================================================
             // Permission Commands
             // =========================================================================
             builtins::BuiltInFeature::PermissionCommand(cmd_type) => {
-                tracing::info!(message = %&format!("Executing permission command: {:?}", cmd_type),
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    permission_command = ?cmd_type,
+                    "Executing permission command"
                 );
 
                 use builtins::PermissionCommandType;
@@ -1358,6 +1626,7 @@ impl ScriptListApp {
                             );
                         }
                         cx.notify();
+                        Self::builtin_success(dctx, "check_permissions")
                     }
                     PermissionCommandType::RequestAccessibility => {
                         let granted = permissions_wizard::request_accessibility_permission();
@@ -1377,14 +1646,21 @@ impl ScriptListApp {
                             );
                         }
                         cx.notify();
+                        Self::builtin_success(dctx, "request_accessibility")
                     }
                     PermissionCommandType::OpenAccessibilitySettings => {
                         if let Err(e) = permissions_wizard::open_accessibility_settings() {
-                            tracing::error!(message = %&format!("Failed to open accessibility settings: {}", e),
-                            );
-                            self.show_error_toast(format!("Failed to open settings: {}", e), cx);
+                            let message = format!("Failed to open settings: {}", e);
+                            self.show_error_toast(message.clone(), cx);
+                            Self::builtin_error(
+                                dctx,
+                                crate::action_helpers::ERROR_LAUNCH_FAILED,
+                                message,
+                                "open_accessibility_settings_failed",
+                            )
                         } else {
                             self.close_and_reset_window(cx);
+                            Self::builtin_success(dctx, "open_accessibility_settings")
                         }
                     }
                 }
@@ -1394,23 +1670,34 @@ impl ScriptListApp {
             // Frecency/Suggested Commands
             // =========================================================================
             builtins::BuiltInFeature::FrecencyCommand(cmd_type) => {
-                tracing::info!(message = %&format!("Executing frecency command: {:?}", cmd_type),
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    frecency_command = ?cmd_type,
+                    "Executing frecency command"
                 );
 
                 use builtins::FrecencyCommandType;
 
                 match cmd_type {
                     FrecencyCommandType::ClearSuggested => {
-                        // Clear all frecency data
                         self.frecency_store.clear();
                         if let Err(e) = self.frecency_store.save() {
-                            tracing::error!(message = %&format!("Failed to save frecency data: {}", e));
-                            self.show_error_toast(format!("Failed to clear suggested: {}", e), cx);
+                            let message = format!("Failed to clear suggested: {}", e);
+                            self.show_error_toast(message.clone(), cx);
+                            cx.notify();
+                            Self::builtin_error(
+                                dctx,
+                                crate::action_helpers::ERROR_ACTION_FAILED,
+                                message,
+                                "clear_suggested_failed",
+                            )
                         } else {
-                            tracing::info!(message = %"Cleared all suggested items");
-                            // Invalidate the grouped cache so the UI updates
+                            tracing::info!(
+                                trace_id = %dctx.trace_id,
+                                "Cleared all suggested items"
+                            );
                             self.invalidate_grouped_cache();
-                            // Reset the main input and window to clean state
                             self.reset_to_script_list(cx);
                             resize_to_view_sync(ViewType::ScriptList, 0);
                             self.show_hud(
@@ -1418,9 +1705,9 @@ impl ScriptListApp {
                                 Some(HUD_SHORT_MS),
                                 cx,
                             );
+                            cx.notify();
+                            Self::builtin_success(dctx, "clear_suggested")
                         }
-                        // Note: cx.notify() is called by reset_to_script_list, but we still need it for error case
-                        cx.notify();
                     }
                 }
             }
@@ -1429,31 +1716,26 @@ impl ScriptListApp {
             // Settings Commands (Reset Window Positions, etc.)
             // =========================================================================
             builtins::BuiltInFeature::SettingsCommand(cmd_type) => {
-                tracing::info!(message = %&format!("Executing settings command: {:?}", cmd_type),
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    settings_command = ?cmd_type,
+                    "Executing settings command"
                 );
 
                 use builtins::SettingsCommandType;
 
                 match cmd_type {
                     SettingsCommandType::ResetWindowPositions => {
-                        // Suppress position saving to prevent the bounds change callback
-                        // from immediately re-saving after we delete the state file
                         crate::window_state::suppress_save();
-
-                        // Reset all window positions to defaults
                         crate::window_state::reset_all_positions();
-                        tracing::info!(message = %"Reset all window positions to defaults");
-
-                        // Show toast confirmation
                         self.show_hud(
                             "Window positions reset - takes effect next open".to_string(),
                             Some(HUD_SHORT_MS),
                             cx,
                         );
-
-                        // Close and reset window - this hides the window which is required
-                        // for the reset to take effect (as the toast message states)
                         self.close_and_reset_window(cx);
+                        Self::builtin_success(dctx, "reset_window_positions")
                     }
                     SettingsCommandType::ConfigureVercelApiKey => {
                         self.show_api_key_prompt(
@@ -1462,6 +1744,7 @@ impl ScriptListApp {
                             "Vercel AI Gateway",
                             cx,
                         );
+                        Self::builtin_success(dctx, "configure_vercel_api_key")
                     }
                     SettingsCommandType::ConfigureOpenAiApiKey => {
                         self.show_api_key_prompt(
@@ -1470,6 +1753,7 @@ impl ScriptListApp {
                             "OpenAI",
                             cx,
                         );
+                        Self::builtin_success(dctx, "configure_openai_api_key")
                     }
                     SettingsCommandType::ConfigureAnthropicApiKey => {
                         self.show_api_key_prompt(
@@ -1478,28 +1762,22 @@ impl ScriptListApp {
                             "Anthropic",
                             cx,
                         );
+                        Self::builtin_success(dctx, "configure_anthropic_api_key")
                     }
                     SettingsCommandType::ChooseTheme => {
-                        tracing::info!(message = %"Opening Theme Chooser");
-                        // Back up current theme for cancel/restore
                         self.theme_before_chooser = Some(self.theme.clone());
-                        // Clear the shared input for fresh search (sync on next render)
-                        self.filter_text = String::new();
-                        self.pending_filter_sync = true;
-                        self.pending_placeholder = Some("Search themes...".to_string());
-                        // Start at the currently active theme
                         let start_index = theme::presets::find_current_preset_index(&self.theme);
-                        self.current_view = AppView::ThemeChooserView {
-                            filter: String::new(),
-                            selected_index: start_index,
-                        };
-                        self.hovered_index = None;
-                        self.opened_from_main_menu = true;
-                        resize_to_view_sync(ViewType::ScriptList, 0);
-                        // Focus the main filter input so cursor blinks and typing works
-                        self.pending_focus = Some(FocusTarget::MainFilter);
-                        self.focused_input = FocusedInput::MainFilter;
-                        cx.notify();
+
+                        self.open_builtin_filterable_view(
+                            AppView::ThemeChooserView {
+                                filter: String::new(),
+                                selected_index: start_index,
+                            },
+                            "Search themes...",
+                            cx,
+                        );
+
+                        Self::builtin_success(dctx, "choose_theme")
                     }
                 }
             }
@@ -1508,54 +1786,55 @@ impl ScriptListApp {
             // Utility Commands (Scratch Pad, Quick Terminal, Process Manager)
             // =========================================================================
             builtins::BuiltInFeature::UtilityCommand(cmd_type) => {
-                tracing::info!(message = %&format!("Executing utility command: {:?}", cmd_type),
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    utility_command = ?cmd_type,
+                    "Executing utility command"
                 );
 
                 use builtins::UtilityCommandType;
 
                 match cmd_type {
                     UtilityCommandType::ScratchPad => {
-                        // Mark as opened from main menu - ESC will return to main menu
                         self.opened_from_main_menu = true;
                         self.open_scratch_pad(cx);
+                        Self::builtin_success(dctx, "open_scratch_pad")
                     }
                     UtilityCommandType::QuickTerminal => {
-                        // Mark as opened from main menu - ESC will return to main menu
                         self.opened_from_main_menu = true;
                         self.open_quick_terminal(cx);
+                        Self::builtin_success(dctx, "open_quick_terminal")
                     }
                     UtilityCommandType::ProcessManager => {
                         let processes =
                             crate::process_manager::PROCESS_MANAGER.get_active_processes_sorted();
-                        let process_count = processes.len();
-
                         tracing::info!(
-                            correlation_id = "process-manager-open",
-                            active_process_count = process_count,
+                            trace_id = %dctx.trace_id,
+                            active_process_count = processes.len(),
                             "process_manager.open_view"
                         );
 
                         self.cached_processes = processes;
-                        self.filter_text = String::new();
-                        self.pending_filter_sync = true;
-                        self.pending_placeholder = Some("Search running scripts...".to_string());
-                        self.current_view = AppView::ProcessManagerView {
-                            filter: String::new(),
-                            selected_index: 0,
-                        };
-                        self.hovered_index = None;
-                        self.opened_from_main_menu = true;
-                        resize_to_view_sync(crate::window_resize::ViewType::ScriptList, 0);
-                        self.pending_focus = Some(FocusTarget::MainFilter);
-                        self.focused_input = FocusedInput::MainFilter;
+
+                        self.open_builtin_filterable_view(
+                            AppView::ProcessManagerView {
+                                filter: String::new(),
+                                selected_index: 0,
+                            },
+                            "Search running scripts...",
+                            cx,
+                        );
+
                         self.start_process_manager_refresh(cx);
+                        Self::builtin_success(dctx, "open_process_manager")
                     }
                     UtilityCommandType::StopAllProcesses => {
                         let process_count = crate::process_manager::PROCESS_MANAGER.active_count();
-                        tracing::info!(message = %&format!(
-                                "correlation_id=process-manager-stop-all requested_count={}",
-                                process_count
-                            ),
+                        tracing::info!(
+                            trace_id = %dctx.trace_id,
+                            requested_count = process_count,
+                            "process_manager.stop_all"
                         );
 
                         if process_count == 0 {
@@ -1573,6 +1852,7 @@ impl ScriptListApp {
                             );
                             self.close_and_reset_window(cx);
                         }
+                        Self::builtin_success(dctx, "stop_all_processes")
                     }
                 }
             }
@@ -1583,6 +1863,8 @@ impl ScriptListApp {
             builtins::BuiltInFeature::KitStoreCommand(cmd_type) => {
                 use builtins::KitStoreCommandType;
                 tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
                     kit_store_command = ?cmd_type,
                     "Executing kit store command"
                 );
@@ -1591,7 +1873,6 @@ impl ScriptListApp {
 
                 match cmd_type {
                     KitStoreCommandType::BrowseKits => {
-                        // Start with empty query — initial results fetched async
                         self.current_view = AppView::BrowseKitsView {
                             query: String::new(),
                             selected_index: 0,
@@ -1600,7 +1881,6 @@ impl ScriptListApp {
                         self.pending_focus = Some(FocusTarget::AppRoot);
                         cx.notify();
 
-                        // Fetch initial results on background executor
                         cx.spawn(async move |this, cx| {
                             let results = cx
                                 .background_executor()
@@ -1618,23 +1898,28 @@ impl ScriptListApp {
                             });
                         })
                         .detach();
+                        Self::builtin_success(dctx, "browse_kits_dispatched")
                     }
                     KitStoreCommandType::InstalledKits => {
                         let kits = Self::kit_store_list_installed();
-                        tracing::info!(installed_count = kits.len(), "Loaded installed kits");
+                        tracing::info!(
+                            trace_id = %dctx.trace_id,
+                            installed_count = kits.len(),
+                            "Loaded installed kits"
+                        );
                         self.current_view = AppView::InstalledKitsView {
                             selected_index: 0,
                             kits,
                         };
                         self.pending_focus = Some(FocusTarget::AppRoot);
                         cx.notify();
+                        Self::builtin_success(dctx, "installed_kits")
                     }
                     KitStoreCommandType::UpdateAllKits => {
                         cx.spawn(async move |this, cx| {
                             let (updated, failed) = cx
                                 .background_executor()
                                 .spawn(async {
-                                    // Run update-all on background thread
                                     let kits =
                                         script_kit_gpui::kit_store::storage::list_installed_kits()
                                             .unwrap_or_default();
@@ -1682,6 +1967,8 @@ impl ScriptListApp {
                             });
                         })
                         .detach();
+                        // Async — outcome tracked in spawned task
+                        Self::builtin_success(dctx, "update_all_kits_dispatched")
                     }
                 }
             }
@@ -1690,40 +1977,44 @@ impl ScriptListApp {
             // File Search (Directory Navigation)
             // =========================================================================
             builtins::BuiltInFeature::Webcam => {
-                tracing::info!(message = %"Opening Webcam");
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "Opening Webcam"
+                );
                 self.opened_from_main_menu = true;
                 self.open_webcam(cx);
+                Self::builtin_success(dctx, "open_webcam")
             }
             builtins::BuiltInFeature::FileSearch => {
-                tracing::info!(message = %"Opening File Search");
-                // Mark as opened from main menu - ESC will return to main menu
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "Opening File Search"
+                );
                 self.opened_from_main_menu = true;
                 self.open_file_search(String::new(), cx);
+                Self::builtin_success(dctx, "open_file_search")
             }
 
             // =========================================================================
             // Settings Hub
             // =========================================================================
             builtins::BuiltInFeature::Settings => {
-                tracing::info!(correlation_id = "settings-hub", "settings.open");
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "Opening Settings"
+                );
                 self.opened_from_main_menu = true;
                 self.current_view = AppView::SettingsView { selected_index: 0 };
                 self.hovered_index = None;
                 resize_to_view_sync(ViewType::ScriptList, 0);
                 self.pending_focus = Some(FocusTarget::AppRoot);
                 cx.notify();
+                Self::builtin_success(dctx, "open_settings")
             }
         }
-
-        tracing::info!(
-            category = "BUILTIN",
-            trace_id = %trace_id,
-            builtin_id = %entry.id,
-            builtin_name = %entry.name,
-            status = "completed",
-            duration_ms = start.elapsed().as_millis() as u64,
-            "Builtin execution completed"
-        );
     }
 }
 

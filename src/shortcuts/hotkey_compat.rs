@@ -4,6 +4,7 @@
 //! `global_hotkey::hotkey::{Code, Modifiers}` types.
 
 use global_hotkey::hotkey::{Code, Modifiers};
+use itertools::Itertools;
 
 use crate::logging;
 
@@ -16,11 +17,7 @@ use crate::logging;
 ///
 /// Returns None if the shortcut string is invalid.
 pub fn parse_shortcut(shortcut: &str) -> Option<(Modifiers, Code)> {
-    let normalized = shortcut
-        .replace('+', " ")
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
+    let normalized = shortcut.replace('+', " ").split_whitespace().join(" ");
 
     let parts: Vec<&str> = normalized.split_whitespace().collect();
     if parts.is_empty() {

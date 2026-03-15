@@ -3,18 +3,17 @@ use crate::list_item::FONT_MONO;
 
 /// Tracks the last-copied code block ID and the instant it was copied.
 /// Used to show brief "Copied!" feedback on the copy button.
-static LAST_COPIED_CODE_BLOCK: OnceLock<Mutex<(u64, std::time::Instant)>> = OnceLock::new();
+static LAST_COPIED_CODE_BLOCK: LazyLock<Mutex<(u64, std::time::Instant)>> =
+    LazyLock::new(|| Mutex::new((0, std::time::Instant::now())));
 
 fn mark_code_block_copied(block_id: u64) {
-    let state = LAST_COPIED_CODE_BLOCK.get_or_init(|| Mutex::new((0, std::time::Instant::now())));
-    if let Ok(mut guard) = state.lock() {
+    if let Ok(mut guard) = LAST_COPIED_CODE_BLOCK.lock() {
         *guard = (block_id, std::time::Instant::now());
     }
 }
 
 fn is_code_block_recently_copied(block_id: u64) -> bool {
-    let state = LAST_COPIED_CODE_BLOCK.get_or_init(|| Mutex::new((0, std::time::Instant::now())));
-    if let Ok(guard) = state.lock() {
+    if let Ok(guard) = LAST_COPIED_CODE_BLOCK.lock() {
         guard.0 == block_id && guard.1.elapsed().as_secs() < 2
     } else {
         false

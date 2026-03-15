@@ -51,7 +51,11 @@ impl ScriptListApp {
                                                 error = %message,
                                                 "Async action failed: edit_scriptlet"
                                             );
-                                            this.show_error_toast(message, cx);
+                                            this.show_error_toast_with_code(
+                                                message,
+                                                Some(crate::action_helpers::ERROR_LAUNCH_FAILED),
+                                                cx,
+                                            );
                                         }
                                     });
                             })
@@ -119,7 +123,11 @@ impl ScriptListApp {
                                                 error = %message,
                                                 "Async action failed: reveal_scriptlet_in_finder"
                                             );
-                                            this.show_error_toast(message, cx);
+                                            this.show_error_toast_with_code(
+                                                message,
+                                                Some(crate::action_helpers::ERROR_REVEAL_FAILED),
+                                                cx,
+                                            );
                                         }
                                     });
                             })

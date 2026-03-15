@@ -17,8 +17,11 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 /// SSE event types supported by the MCP server
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,
+)]
 #[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase", ascii_case_insensitive)]
 pub enum SseEventType {
     Progress,
     Output,
@@ -33,11 +36,6 @@ impl SseEventType {
             SseEventType::Error => "error",
             SseEventType::Complete => "complete",
         }
-    }
-}
-impl std::fmt::Display for SseEventType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.as_str())
     }
 }
 /// SSE Stream manager for broadcasting events to connected clients

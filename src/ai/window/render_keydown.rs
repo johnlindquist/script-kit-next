@@ -198,9 +198,7 @@ impl AiApp {
                     prompt = %prompt,
                     "welcome_suggestion_shortcut"
                 );
-                self.input_state.update(cx, |state, cx| {
-                    state.set_value(&prompt, window, cx);
-                });
+                self.set_composer_value(&prompt, window, cx);
                 self.submit_message(window, cx);
                 cx.stop_propagation();
                 return;
@@ -346,10 +344,7 @@ impl AiApp {
         // Escape cancels editing mode
         if is_key_escape(key) && self.editing_message_id.is_some() {
             self.editing_message_id = None;
-            self.input_state.update(cx, |state, cx| {
-                state.set_value("", window, cx);
-            });
-            cx.notify();
+            self.clear_composer(window, cx);
             cx.stop_propagation();
             return;
         }

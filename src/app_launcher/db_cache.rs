@@ -61,8 +61,7 @@ fn get_apps_db() -> Result<Arc<Mutex<Connection>>> {
 
 /// Set the current loading state
 fn set_loading_state(state: AppLoadingState) {
-    let mutex = APP_LOADING_STATE.get_or_init(|| Mutex::new(AppLoadingState::LoadingFromCache));
-    if let Ok(mut guard) = mutex.lock() {
+    if let Ok(mut guard) = APP_LOADING_STATE.lock() {
         *guard = state;
     }
 }
@@ -71,8 +70,8 @@ fn set_loading_state(state: AppLoadingState) {
 #[allow(dead_code)]
 pub fn get_app_loading_state() -> AppLoadingState {
     APP_LOADING_STATE
-        .get()
-        .and_then(|m| m.lock().ok())
+        .lock()
+        .ok()
         .map(|g| *g)
         .unwrap_or(AppLoadingState::Ready)
 }
@@ -89,14 +88,10 @@ pub fn is_apps_loading() -> bool {
     get_app_loading_state() != AppLoadingState::Ready
 }
 
-/// Get the in-memory app cache (may be empty if not yet loaded)
+/// Get the in-memory app cache (triggers initialization if not yet loaded)
 #[allow(dead_code)]
 pub fn get_cached_apps() -> Vec<AppInfo> {
-    APP_CACHE
-        .get()
-        .and_then(|arc| arc.lock().ok())
-        .map(|guard| guard.clone())
-        .unwrap_or_default()
+    APP_CACHE.lock().map(|g| g.clone()).unwrap_or_default()
 }
 
 /// Get modification time for a path as Unix timestamp

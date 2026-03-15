@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 /// Map a file extension to a human-readable language/tool name.
 /// Used as a last-resort fallback description for scripts with no other context.
 pub(crate) fn extension_language_label(extension: &str) -> Option<&'static str> {
@@ -73,14 +75,7 @@ pub(crate) fn grouped_view_hint_for_script(script: &crate::scripts::Script) -> O
             .or_else(|| {
                 script.typed_metadata.as_ref().and_then(|meta| {
                     if !meta.tags.is_empty() {
-                        Some(
-                            meta.tags
-                                .iter()
-                                .take(2)
-                                .map(|t| t.as_str())
-                                .collect::<Vec<_>>()
-                                .join(" · "),
-                        )
+                        Some(meta.tags.iter().take(2).map(|t| t.as_str()).join(" · "))
                     } else {
                         None
                     }
@@ -93,14 +88,7 @@ pub(crate) fn grouped_view_hint_for_script(script: &crate::scripts::Script) -> O
             .as_ref()
             .and_then(|meta| {
                 if !meta.tags.is_empty() {
-                    Some(
-                        meta.tags
-                            .iter()
-                            .take(2)
-                            .map(|t| t.as_str())
-                            .collect::<Vec<_>>()
-                            .join(" · "),
-                    )
+                    Some(meta.tags.iter().take(2).map(|t| t.as_str()).join(" · "))
                 } else {
                     None
                 }
@@ -119,14 +107,7 @@ pub(crate) fn grouped_view_hint_for_script(script: &crate::scripts::Script) -> O
             .as_ref()
             .and_then(|meta| {
                 if !meta.tags.is_empty() {
-                    Some(
-                        meta.tags
-                            .iter()
-                            .take(2)
-                            .map(|t| t.as_str())
-                            .collect::<Vec<_>>()
-                            .join(" · "),
-                    )
+                    Some(meta.tags.iter().take(2).map(|t| t.as_str()).join(" · "))
                 } else {
                     None
                 }

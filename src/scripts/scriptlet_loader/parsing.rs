@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use itertools::Itertools;
+
 use crate::scriptlet_metadata::parse_codefence_metadata;
 
 use super::super::types::Scriptlet;
@@ -78,7 +80,6 @@ pub(crate) fn slugify_name(name: &str) -> String {
         .collect::<String>()
         .split('-')
         .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
         .join("-")
 }
 

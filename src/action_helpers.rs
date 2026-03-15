@@ -164,6 +164,9 @@ pub const ERROR_LAUNCH_FAILED: &str = "launch_failed";
 /// Reveal-in-Finder (or equivalent) operation failed.
 pub const ERROR_REVEAL_FAILED: &str = "reveal_failed";
 
+/// Moving a file or script to Trash failed.
+pub const ERROR_TRASH_FAILED: &str = "trash_failed";
+
 /// Confirmation modal could not be opened.
 pub const ERROR_MODAL_FAILED: &str = "modal_failed";
 
@@ -177,21 +180,13 @@ pub const ERROR_CANCELLED: &str = "cancelled";
 pub const ERROR_NO_SENDER: &str = "no_sender";
 
 /// The surface that initiated an action dispatch.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display, strum::EnumString)]
+#[strum(serialize_all = "lowercase", ascii_case_insensitive)]
 pub enum DispatchSurface {
     /// Dispatched from the action dialog / handler chain.
     Action,
     /// Dispatched from builtin execution.
     Builtin,
-}
-
-impl std::fmt::Display for DispatchSurface {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DispatchSurface::Action => f.write_str("action"),
-            DispatchSurface::Builtin => f.write_str("builtin"),
-        }
-    }
 }
 
 /// Context threaded through action dispatch so that every log line —
@@ -232,7 +227,8 @@ impl DispatchContext {
 /// Maps the transport-specific `SdkActionResult` variants into four
 /// coarse-grained buckets that callers can switch on without knowing
 /// channel internals.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display, strum::EnumString)]
+#[strum(serialize_all = "snake_case", ascii_case_insensitive)]
 pub enum ActionOutcomeStatus {
     /// The action completed successfully (message sent).
     Success,
@@ -242,17 +238,6 @@ pub enum ActionOutcomeStatus {
     Cancelled,
     /// The action had nothing to do (no handler, no value).
     NoEffect,
-}
-
-impl std::fmt::Display for ActionOutcomeStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ActionOutcomeStatus::Success => f.write_str("success"),
-            ActionOutcomeStatus::Error => f.write_str("error"),
-            ActionOutcomeStatus::Cancelled => f.write_str("cancelled"),
-            ActionOutcomeStatus::NoEffect => f.write_str("no_effect"),
-        }
-    }
 }
 
 /// Structured outcome from any action dispatch (builtin, SDK, or handler).
@@ -529,18 +514,29 @@ pub const RESERVED_ACTION_IDS: &[&str] = &[
     "reveal_in_finder",
     "copy_path",
     "edit_script",
+    "edit_scriptlet",
+    "reveal_scriptlet_in_finder",
+    "copy_scriptlet_path",
     "copy_deeplink",
+    "remove_script",
+    "delete_script",
+    "reload_scripts",
     "reset_ranking",
-    // Dynamic shortcut actions (context-dependent)
+    // Dynamic shortcut / alias actions
+    "configure_shortcut",
     "add_shortcut",
     "update_shortcut",
     "remove_shortcut",
+    "add_alias",
+    "update_alias",
+    "remove_alias",
     // File search context actions
     "open_file",
     "open_directory",
     "quick_look",
     "open_with",
     "show_info",
+    "attach_to_ai",
     "copy_filename",
     // Path prompt context actions
     "select_file",

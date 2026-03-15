@@ -38,6 +38,7 @@ use crate::logging;
 use crate::theme;
 use crate::ui_foundation::{is_key_backspace, is_key_down, is_key_enter, is_key_escape, is_key_up};
 use gpui::{App, AppContext, Context, Entity, FocusHandle, Window};
+use itertools::Itertools;
 use std::sync::Arc;
 
 const COMMAND_BAR_PAGE_JUMP: usize = 8;
@@ -445,12 +446,7 @@ impl CommandBar {
             &format!(
                 "Creating dialog with {} actions: [{}]",
                 actions.len(),
-                actions
-                    .iter()
-                    .take(5)
-                    .map(|a| a.title.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                actions.iter().take(5).map(|a| a.title.as_str()).join(", ")
             ),
         );
 

@@ -8,7 +8,7 @@ use super::types::{
     AccentColors, AppearanceMode, BackgroundColors, BackgroundOpacity, ColorScheme, DropShadow,
     FontConfig, TerminalColors, TextColors, Theme, UIColors, VibrancySettings,
 };
-use std::{collections::HashMap, sync::OnceLock};
+use std::{collections::HashMap, sync::LazyLock};
 
 /// A theme preset with metadata for the chooser UI
 #[derive(Debug, Clone)]
@@ -221,14 +221,14 @@ impl PresetsCache {
     }
 }
 
-static PRESETS_CACHE: OnceLock<PresetsCache> = OnceLock::new();
+static PRESETS_CACHE: LazyLock<PresetsCache> = LazyLock::new(PresetsCache::new);
 
 fn preset_bg_accent_key(bg_main: u32, accent_selected: u32) -> u64 {
     ((bg_main as u64) << 32) | (accent_selected as u64)
 }
 
 fn presets_cache() -> &'static PresetsCache {
-    PRESETS_CACHE.get_or_init(PresetsCache::new)
+    &PRESETS_CACHE
 }
 
 pub(crate) fn presets_cached() -> &'static [ThemePreset] {

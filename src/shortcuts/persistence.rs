@@ -10,7 +10,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{LazyLock, Mutex};
 
 use tracing::{debug, warn};
 
@@ -19,8 +19,8 @@ use tracing::{debug, warn};
 // ============================================================================
 
 /// Cache for loaded shortcut overrides to avoid file I/O on every render
-static SHORTCUT_OVERRIDES_CACHE: OnceLock<Mutex<Option<HashMap<String, Shortcut>>>> =
-    OnceLock::new();
+static SHORTCUT_OVERRIDES_CACHE: LazyLock<Mutex<Option<HashMap<String, Shortcut>>>> =
+    LazyLock::new(|| Mutex::new(None));
 
 /// Get cached shortcut overrides (for use in render code)
 ///
@@ -28,7 +28,7 @@ static SHORTCUT_OVERRIDES_CACHE: OnceLock<Mutex<Option<HashMap<String, Shortcut>
 /// when shortcuts are saved via `save_shortcut_override()` or
 /// `remove_shortcut_override()`, or manually via `invalidate_shortcut_cache()`.
 pub fn get_cached_shortcut_overrides() -> HashMap<String, Shortcut> {
-    let cache = SHORTCUT_OVERRIDES_CACHE.get_or_init(|| Mutex::new(None));
+    let cache = &*SHORTCUT_OVERRIDES_CACHE;
 
     let mut guard = match cache.lock() {
         Ok(g) => g,
@@ -57,11 +57,9 @@ pub fn get_cached_shortcut_overrides() -> HashMap<String, Shortcut> {
 ///
 /// Call this when the shortcuts file changes externally.
 pub fn invalidate_shortcut_cache() {
-    if let Some(cache) = SHORTCUT_OVERRIDES_CACHE.get() {
-        if let Ok(mut guard) = cache.lock() {
-            *guard = None;
-            debug!("Shortcut overrides cache invalidated");
-        }
+    if let Ok(mut guard) = SHORTCUT_OVERRIDES_CACHE.lock() {
+        *guard = None;
+        debug!("Shortcut overrides cache invalidated");
     }
 }
 

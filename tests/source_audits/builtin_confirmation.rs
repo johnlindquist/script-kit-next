@@ -21,19 +21,19 @@ fn handle_builtin_confirmation_returns_early_on_cancel() {
         "Expected handle_builtin_confirmation to check confirmed flag"
     );
 
-    // Verify the cancel path logs and returns
+    // Verify the cancel path returns early
     let cancel_block_start = content
         .find("if !confirmed {")
         .expect("Expected cancel check");
-    let cancel_block = &content[cancel_block_start..cancel_block_start + 300];
+    let cancel_block = &content[cancel_block_start..cancel_block_start + 400];
 
     assert!(
         cancel_block.contains("return;"),
         "Expected cancel path to return early without executing builtin"
     );
     assert!(
-        cancel_block.contains("confirmation cancelled"),
-        "Expected cancel path to log cancellation"
+        cancel_block.contains("builtin_confirmation_cancelled"),
+        "Expected cancel path to log cancellation via DispatchOutcome"
     );
 }
 
@@ -107,6 +107,54 @@ fn handle_builtin_confirmation_logs_accepted_action_before_execution() {
     );
 }
 
+#[test]
+fn handle_builtin_confirmation_accepts_dispatch_context() {
+    let content = builtin_confirmation_content();
+
+    let fn_start = content
+        .find("fn handle_builtin_confirmation(")
+        .expect("Expected handle_builtin_confirmation");
+    let signature = &content[fn_start..content.len().min(fn_start + 400)];
+
+    assert!(
+        signature.contains("dctx: &crate::action_helpers::DispatchContext"),
+        "handle_builtin_confirmation must accept &DispatchContext instead of &str trace_id"
+    );
+}
+
+#[test]
+fn handle_builtin_confirmation_logs_outcome_on_cancel() {
+    let content = builtin_confirmation_content();
+
+    assert!(
+        content.contains("DispatchOutcome::cancelled()"),
+        "Expected cancel path to create DispatchOutcome::cancelled()"
+    );
+    assert!(
+        content.contains("log_builtin_outcome("),
+        "Expected cancel path to call log_builtin_outcome"
+    );
+}
+
+#[test]
+fn handle_builtin_confirmation_delegates_all_arms_to_execute_builtin_inner() {
+    let content = builtin_confirmation_content();
+
+    // After the refactor, all confirmed builtins (including system actions)
+    // go through execute_builtin_inner which returns DispatchOutcome.
+    assert!(
+        content.contains("self.execute_builtin_inner("),
+        "Expected confirmed builtins to delegate to execute_builtin_inner"
+    );
+
+    // The confirmed path must NOT contain a separate match on SystemAction —
+    // execute_builtin_inner handles that internally.
+    assert!(
+        !content.contains("BuiltInFeature::SystemAction("),
+        "Confirmed path should delegate ALL arms to execute_builtin_inner, not special-case SystemAction"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // execute_builtin_inner — single execution path for all builtins
 // ---------------------------------------------------------------------------
@@ -135,8 +183,8 @@ fn execute_builtin_inner_handles_system_actions() {
         "Expected execute_builtin_inner to match SystemAction variant"
     );
     assert!(
-        fn_body.contains("self.dispatch_system_action(action_type, trace_id, cx)"),
-        "Expected execute_builtin_inner to call dispatch_system_action with trace_id for SystemAction"
+        fn_body.contains("self.dispatch_system_action(action_type,"),
+        "Expected execute_builtin_inner to call dispatch_system_action for SystemAction"
     );
 }
 
@@ -357,7 +405,7 @@ fn confirmation_path_handles_accept_cancel_and_error() {
     let confirm_check = content
         .find("self.config.requires_confirmation(&entry.id)")
         .expect("Expected requires_confirmation gate");
-    let after_check = &content[confirm_check..content.len().min(confirm_check + 2000)];
+    let after_check = &content[confirm_check..content.len().min(confirm_check + 3000)];
 
     assert!(
         after_check.contains("Ok(true)"),
@@ -394,7 +442,7 @@ fn favorites_builtin_opens_browse_view() {
 }
 
 #[test]
-fn favorites_builtin_clears_filter_on_open() {
+fn favorites_builtin_uses_shared_filterable_view_helper() {
     let content = read("src/app_execute/builtin_execution.rs");
 
     let favorites_branch = content
@@ -402,26 +450,32 @@ fn favorites_builtin_clears_filter_on_open() {
         .expect("Expected BuiltInFeature::Favorites branch");
     let block = &content[favorites_branch..content.len().min(favorites_branch + 2200)];
 
-    // Must clear filter text before opening the view
+    // Must use the shared helper which handles filter clearing and cx.notify()
     assert!(
-        block.contains("self.filter_text.clear()"),
-        "Favorites builtin must clear filter text on open"
+        block.contains("self.open_builtin_filterable_view("),
+        "Favorites builtin must use open_builtin_filterable_view shared helper"
     );
 }
 
 #[test]
-fn favorites_builtin_notifies_on_view_change() {
+fn open_builtin_filterable_view_clears_filter_and_notifies() {
     let content = read("src/app_execute/builtin_execution.rs");
 
-    let favorites_branch = content
-        .find("BuiltInFeature::Favorites")
-        .expect("Expected BuiltInFeature::Favorites branch");
-    let block = &content[favorites_branch..content.len().min(favorites_branch + 2200)];
+    let helper_start = content
+        .find("fn open_builtin_filterable_view(")
+        .expect("Expected open_builtin_filterable_view helper");
+    let block = &content[helper_start..content.len().min(helper_start + 800)];
 
-    // Must call cx.notify() after view transition
+    // The shared helper must clear filter text
+    assert!(
+        block.contains("self.filter_text.clear()"),
+        "open_builtin_filterable_view must clear filter text"
+    );
+
+    // The shared helper must call cx.notify()
     assert!(
         block.contains("cx.notify()"),
-        "Favorites builtin must call cx.notify() after changing view"
+        "open_builtin_filterable_view must call cx.notify()"
     );
 }
 

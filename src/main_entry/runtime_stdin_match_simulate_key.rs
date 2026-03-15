@@ -380,7 +380,7 @@
                                         // Scroll to row containing selected emoji
                                         let mut flat_offset: usize = 0;
                                         let mut row_offset: usize = 0;
-                                        for cat in crate::emoji::ALL_CATEGORIES.iter().copied() {
+                                        for cat in crate::emoji::all_categories() {
                                             let cat_count = ordered.iter().filter(|e| e.category == cat).count();
                                             if cat_count == 0 { continue; }
                                             if flat_offset + cat_count > *selected_index {

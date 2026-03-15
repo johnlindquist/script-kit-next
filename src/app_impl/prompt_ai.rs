@@ -1,7 +1,8 @@
 use super::*;
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, strum::Display, strum::EnumString)]
+#[strum(serialize_all = "snake_case", ascii_case_insensitive)]
 pub(crate) enum AiScriptGenerationStage {
     SelectModel,
     ResolveProvider,

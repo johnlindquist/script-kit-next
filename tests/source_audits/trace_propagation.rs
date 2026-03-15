@@ -137,11 +137,11 @@ fn handle_action_sdk_fallback_uses_trace_id_from_dctx() {
 }
 
 // ---------------------------------------------------------------------------
-// dispatch_system_action accepts and logs trace_id
+// dispatch_system_action accepts DispatchContext and logs trace_id
 // ---------------------------------------------------------------------------
 
 #[test]
-fn dispatch_system_action_accepts_trace_id_parameter() {
+fn dispatch_system_action_accepts_dispatch_context() {
     let content = read("src/app_execute/builtin_execution.rs");
 
     let fn_start = content
@@ -150,8 +150,8 @@ fn dispatch_system_action_accepts_trace_id_parameter() {
     let signature = &content[fn_start..content.len().min(fn_start + 300)];
 
     assert!(
-        signature.contains("trace_id: &str"),
-        "dispatch_system_action must accept trace_id as a parameter"
+        signature.contains("dctx: &crate::action_helpers::DispatchContext"),
+        "dispatch_system_action must accept &DispatchContext"
     );
 }
 
@@ -165,7 +165,7 @@ fn dispatch_system_action_logs_trace_id() {
     let fn_body = &content[fn_start..content.len().min(fn_start + 3000)];
 
     assert!(
-        fn_body.contains("trace_id = %trace_id"),
+        fn_body.contains("trace_id ="),
         "dispatch_system_action must log trace_id as a structured field"
     );
 }
@@ -177,7 +177,7 @@ fn dispatch_system_action_emits_dispatched_status() {
     let fn_start = content
         .find("fn dispatch_system_action(")
         .expect("Expected dispatch_system_action function");
-    let fn_body = &content[fn_start..content.len().min(fn_start + 500)];
+    let fn_body = &content[fn_start..content.len().min(fn_start + 800)];
 
     assert!(
         fn_body.contains(r#"status = "dispatched""#),
@@ -186,11 +186,11 @@ fn dispatch_system_action_emits_dispatched_status() {
 }
 
 // ---------------------------------------------------------------------------
-// handle_system_action_result accepts and logs trace_id
+// handle_system_action_result accepts DispatchContext and logs trace_id
 // ---------------------------------------------------------------------------
 
 #[test]
-fn handle_system_action_result_accepts_trace_id_parameter() {
+fn handle_system_action_result_accepts_dispatch_context() {
     let content = read("src/app_execute/builtin_execution.rs");
 
     let fn_start = content
@@ -199,8 +199,8 @@ fn handle_system_action_result_accepts_trace_id_parameter() {
     let signature = &content[fn_start..content.len().min(fn_start + 400)];
 
     assert!(
-        signature.contains("trace_id: &str"),
-        "handle_system_action_result must accept trace_id as a parameter"
+        signature.contains("dctx: &crate::action_helpers::DispatchContext"),
+        "handle_system_action_result must accept &DispatchContext"
     );
 }
 
@@ -211,7 +211,7 @@ fn handle_system_action_result_logs_trace_id_on_success() {
     let fn_start = content
         .find("fn handle_system_action_result(")
         .expect("Expected handle_system_action_result function");
-    let fn_body = &content[fn_start..content.len().min(fn_start + 1500)];
+    let fn_body = &content[fn_start..content.len().min(fn_start + 2500)];
 
     // The success path must include trace_id
     let success_start = fn_body
@@ -221,7 +221,7 @@ fn handle_system_action_result_logs_trace_id_on_success() {
         &fn_body[success_start.saturating_sub(200)..fn_body.len().min(success_start + 200)];
 
     assert!(
-        success_window.contains("trace_id = %trace_id"),
+        success_window.contains("trace_id ="),
         "handle_system_action_result success path must log trace_id"
     );
 }
@@ -233,7 +233,7 @@ fn handle_system_action_result_logs_trace_id_on_error() {
     let fn_start = content
         .find("fn handle_system_action_result(")
         .expect("Expected handle_system_action_result function");
-    let fn_body = &content[fn_start..content.len().min(fn_start + 1500)];
+    let fn_body = &content[fn_start..content.len().min(fn_start + 2500)];
 
     // The error path must include trace_id
     let error_start = fn_body
@@ -243,17 +243,17 @@ fn handle_system_action_result_logs_trace_id_on_error() {
         &fn_body[error_start.saturating_sub(200)..fn_body.len().min(error_start + 200)];
 
     assert!(
-        error_window.contains("trace_id = %trace_id"),
+        error_window.contains("trace_id ="),
         "handle_system_action_result error path must log trace_id"
     );
 }
 
 // ---------------------------------------------------------------------------
-// handle_builtin_confirmation propagates trace_id
+// handle_builtin_confirmation propagates trace_id via DispatchContext
 // ---------------------------------------------------------------------------
 
 #[test]
-fn handle_builtin_confirmation_accepts_trace_id_parameter() {
+fn handle_builtin_confirmation_accepts_dispatch_context() {
     let content = read("src/app_execute/builtin_confirmation.rs");
 
     let fn_start = content
@@ -262,8 +262,8 @@ fn handle_builtin_confirmation_accepts_trace_id_parameter() {
     let signature = &content[fn_start..content.len().min(fn_start + 400)];
 
     assert!(
-        signature.contains("trace_id: &str"),
-        "handle_builtin_confirmation must accept trace_id as a parameter"
+        signature.contains("dctx: &crate::action_helpers::DispatchContext"),
+        "handle_builtin_confirmation must accept &DispatchContext"
     );
 }
 
@@ -271,15 +271,14 @@ fn handle_builtin_confirmation_accepts_trace_id_parameter() {
 fn handle_builtin_confirmation_logs_trace_id_on_cancel() {
     let content = read("src/app_execute/builtin_confirmation.rs");
 
-    let cancel_start = content
-        .find("Builtin confirmation cancelled")
-        .expect("Expected cancel log");
-    let cancel_window =
-        &content[cancel_start.saturating_sub(200)..content.len().min(cancel_start + 50)];
-
+    // Cancel path now uses DispatchOutcome::cancelled() + log_builtin_outcome
     assert!(
-        cancel_window.contains("trace_id = %trace_id"),
-        "handle_builtin_confirmation cancel path must log trace_id"
+        content.contains("DispatchOutcome::cancelled()"),
+        "handle_builtin_confirmation cancel path must create DispatchOutcome::cancelled()"
+    );
+    assert!(
+        content.contains("log_builtin_outcome("),
+        "handle_builtin_confirmation cancel path must log via log_builtin_outcome"
     );
 }
 
@@ -294,7 +293,7 @@ fn handle_builtin_confirmation_logs_trace_id_on_accept() {
         &content[accept_start.saturating_sub(200)..content.len().min(accept_start + 50)];
 
     assert!(
-        accept_window.contains("trace_id = %trace_id"),
+        accept_window.contains("trace_id ="),
         "handle_builtin_confirmation accept path must log trace_id"
     );
 }
@@ -310,44 +309,42 @@ fn handle_builtin_confirmation_does_not_generate_new_trace_id() {
 }
 
 // ---------------------------------------------------------------------------
-// Confirmation spawned task propagates trace_id
+// Confirmation spawned task propagates trace context via dctx
 // ---------------------------------------------------------------------------
 
 #[test]
-fn confirmation_spawn_passes_trace_id_to_handle_builtin_confirmation() {
+fn confirmation_spawn_passes_dctx_to_handle_builtin_confirmation() {
     let content = read("src/app_execute/builtin_execution.rs");
 
     let confirm_check = content
         .find("self.config.requires_confirmation(&entry.id)")
         .expect("Expected requires_confirmation gate");
-    let after_check = &content[confirm_check..content.len().min(confirm_check + 2000)];
+    let after_check = &content[confirm_check..content.len().min(confirm_check + 3000)];
 
-    // The Ok(true) branch must pass trace_id to handle_builtin_confirmation
+    // The Ok(true) branch must pass dctx to handle_builtin_confirmation
     assert!(
-        after_check.contains("&trace_id_owned"),
-        "Confirmation Ok(true) branch must pass trace_id_owned to handle_builtin_confirmation"
+        after_check.contains("&dctx_owned"),
+        "Confirmation Ok(true) branch must pass dctx_owned to handle_builtin_confirmation"
     );
 }
 
 #[test]
-fn confirmation_spawn_logs_trace_id_on_cancel() {
+fn confirmation_spawn_logs_outcome_on_cancel() {
     let content = read("src/app_execute/builtin_execution.rs");
 
     let confirm_check = content
         .find("self.config.requires_confirmation(&entry.id)")
         .expect("Expected requires_confirmation gate");
-    let after_check = &content[confirm_check..content.len().min(confirm_check + 2000)];
+    let after_check = &content[confirm_check..content.len().min(confirm_check + 3000)];
 
-    // The Ok(false) cancel path in the spawn must log trace_id
-    let cancel_start = after_check
-        .find("Builtin confirmation cancelled by user")
-        .expect("Expected cancel log in spawn");
-    let cancel_window =
-        &after_check[cancel_start.saturating_sub(200)..after_check.len().min(cancel_start + 50)];
-
+    // The Ok(false) cancel path in the spawn must use DispatchOutcome::cancelled()
     assert!(
-        cancel_window.contains("trace_id"),
-        "Confirmation spawn cancel path must log trace_id"
+        after_check.contains("DispatchOutcome::cancelled()"),
+        "Confirmation spawn cancel path must create DispatchOutcome::cancelled()"
+    );
+    assert!(
+        after_check.contains("log_builtin_outcome("),
+        "Confirmation spawn cancel path must call log_builtin_outcome"
     );
 }
 
@@ -358,7 +355,7 @@ fn confirmation_spawn_logs_trace_id_on_error() {
     let confirm_check = content
         .find("self.config.requires_confirmation(&entry.id)")
         .expect("Expected requires_confirmation gate");
-    let after_check = &content[confirm_check..content.len().min(confirm_check + 2000)];
+    let after_check = &content[confirm_check..content.len().min(confirm_check + 3000)];
 
     // The Err branch in the spawn must log trace_id
     let error_start = after_check
@@ -424,7 +421,7 @@ fn execute_builtin_with_query_emits_awaiting_confirmation_not_success() {
     let confirm_check = content
         .find("self.config.requires_confirmation(&entry.id)")
         .expect("Expected requires_confirmation gate");
-    let after_check = &content[confirm_check..content.len().min(confirm_check + 3000)];
+    let after_check = &content[confirm_check..content.len().min(confirm_check + 4000)];
 
     // The deferred path must emit awaiting_confirmation, not success
     assert!(

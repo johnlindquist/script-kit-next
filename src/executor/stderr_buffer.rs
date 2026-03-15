@@ -16,6 +16,7 @@
 //! - The stderr reader thread (writes)
 //! - The main reader thread on script exit (reads)
 
+use itertools::Itertools;
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Read};
 use std::sync::{Arc, Mutex};
@@ -102,7 +103,7 @@ impl StderrBuffer {
     /// Get all buffered lines as a single string
     pub fn get_contents(&self) -> String {
         let lines = self.lines.lock().unwrap_or_else(|e| e.into_inner());
-        lines.iter().cloned().collect::<Vec<_>>().join("\n")
+        lines.iter().cloned().join("\n")
     }
 
     /// Get the last N lines (or all if fewer exist)

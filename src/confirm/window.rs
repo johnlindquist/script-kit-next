@@ -66,6 +66,42 @@ fn confirm_key_action(key: &str) -> Option<ConfirmKeyAction> {
     None
 }
 
+/// Close the confirm window from within its own render/key handler context.
+///
+/// Unlike `close_confirm_window(&mut App)`, this variant works when you already
+/// have a `&mut Window` reference (i.e. inside `cx.listener` callbacks).
+fn close_confirm_window_in_place(window: &mut Window) {
+    if let Some(dialog_storage) = CONFIRM_DIALOG.get() {
+        match dialog_storage.lock() {
+            Ok(mut guard) => {
+                *guard = None;
+            }
+            Err(error) => {
+                tracing::error!(
+                    error = %error,
+                    "confirm_window_lock_poisoned_while_clearing_dialog"
+                );
+            }
+        }
+    }
+
+    if let Some(window_storage) = CONFIRM_WINDOW.get() {
+        match window_storage.lock() {
+            Ok(mut guard) => {
+                *guard = None;
+            }
+            Err(error) => {
+                tracing::error!(
+                    error = %error,
+                    "confirm_window_lock_poisoned_while_clearing_handle"
+                );
+            }
+        }
+    }
+
+    window.remove_window();
+}
+
 /// ConfirmWindow wrapper that renders the ConfirmDialog entity
 pub struct ConfirmWindow {
     /// The dialog entity
@@ -103,7 +139,7 @@ impl Render for ConfirmWindow {
 
         // Key handler - same simple pattern as ActionsWindow
         // Direct on_key_down with string matching, no actions/key bindings needed
-        let handle_key = cx.listener(move |this, event: &gpui::KeyDownEvent, _window, cx| {
+        let handle_key = cx.listener(move |this, event: &gpui::KeyDownEvent, window, cx| {
             let key = event.keystroke.key.as_str();
 
             crate::logging::log(
@@ -115,10 +151,14 @@ impl Render for ConfirmWindow {
                 Some(ConfirmKeyAction::Submit) => {
                     crate::logging::log("CONFIRM", "Enter pressed - submitting");
                     this.dialog.update(cx, |d, _cx| d.submit());
+                    close_confirm_window_in_place(window);
+                    cx.stop_propagation();
                 }
                 Some(ConfirmKeyAction::Cancel) => {
                     crate::logging::log("CONFIRM", "Escape pressed - cancelling");
                     this.dialog.update(cx, |d, _cx| d.cancel());
+                    close_confirm_window_in_place(window);
+                    cx.stop_propagation();
                 }
                 Some(ConfirmKeyAction::ToggleFocus) => {
                     this.dialog.update(cx, |d, cx| {
@@ -129,18 +169,21 @@ impl Render for ConfirmWindow {
                         );
                     });
                     cx.notify();
+                    cx.stop_propagation();
                 }
                 Some(ConfirmKeyAction::FocusCancel) => {
                     crate::logging::log("CONFIRM", "Left arrow - focusing cancel");
                     this.dialog.update(cx, |d, cx| d.focus_cancel(cx));
                     cx.notify();
+                    cx.stop_propagation();
                 }
                 Some(ConfirmKeyAction::FocusConfirm) => {
                     crate::logging::log("CONFIRM", "Right arrow - focusing confirm");
                     this.dialog.update(cx, |d, cx| d.focus_confirm(cx));
                     cx.notify();
+                    cx.stop_propagation();
                 }
-                None => {}
+                None => cx.propagate(),
             }
         });
 
@@ -236,7 +279,7 @@ pub fn open_confirm_window(
         window_bounds: Some(WindowBounds::Windowed(bounds)),
         titlebar: None,
         window_background,
-        focus: false, // CRITICAL: Don't take focus - main window keeps it and routes keys to us
+        focus: true, // Confirm is interactive; it must own focus for Return/Escape/clicks
         show: true,
         kind: WindowKind::PopUp,
         display_id,
