@@ -39,6 +39,8 @@ pub(super) const SIDEBAR_W: Pixels = px(240.);
 pub(super) const TITLEBAR_H: Pixels = px(48.);
 pub(super) const SIDEBAR_ROW_H: Pixels = px(52.);
 pub(super) const COMPOSER_H: Pixels = px(40.);
+/// Maximum height the composer input area can grow to (approx 6 lines).
+pub(super) const COMPOSER_MAX_H: Pixels = px(200.);
 pub(super) const SEARCH_H: Pixels = px(36.);
 pub(super) const SIDEBAR_INSET_X: Pixels = S3;
 pub(super) const PANEL_INSET_X: Pixels = S4;
@@ -93,10 +95,10 @@ pub(super) fn compute_collapse_decision(char_count: usize) -> CollapseDecision {
 /// Welcome screen suggestion card definitions.
 /// Shared between render_welcome (UI) and render_keydown (Cmd+1-4 shortcuts).
 pub(super) const WELCOME_SUGGESTIONS: [(&str, &str); 4] = [
-    ("Write a script", "to automate a repetitive task"),
-    ("Explain how", "this code works step by step"),
-    ("Help me debug", "an error I'm seeing"),
-    ("Generate a function", "that processes data"),
+    ("Write a script", "to monitor my clipboard for changes"),
+    ("Create a menu bar shortcut", "that opens my project folder"),
+    ("Help me build", "a quick search for my bookmarks"),
+    ("Generate a scriptlet", "that reformats selected text"),
 ];
 
 #[cfg(test)]
