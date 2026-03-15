@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use itertools::Itertools;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -537,12 +538,11 @@ fn slug_to_title(slug: &str) -> String {
                 None => String::new(),
             }
         })
-        .collect::<Vec<_>>()
         .join(" ")
 }
 
 fn description_from_prompt(prompt: &str) -> String {
-    let normalized = prompt.split_whitespace().collect::<Vec<_>>().join(" ");
+    let normalized = prompt.split_whitespace().join(" ");
     if normalized.is_empty() {
         return "AI-generated Script Kit script".to_string();
     }

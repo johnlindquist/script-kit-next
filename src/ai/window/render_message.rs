@@ -1,7 +1,8 @@
 use super::*;
 use crate::theme::opacity::{
-    OPACITY_HIDDEN, OPACITY_MESSAGE_ASSISTANT_BACKGROUND, OPACITY_MESSAGE_USER_BACKGROUND,
-    OPACITY_MUTED, OPACITY_SELECTED, OPACITY_STRONG, OPACITY_SUBTLE,
+    OPACITY_ACCENT_MEDIUM, OPACITY_HIDDEN, OPACITY_MESSAGE_ASSISTANT_BACKGROUND,
+    OPACITY_MESSAGE_USER_BACKGROUND, OPACITY_MUTED, OPACITY_SELECTED, OPACITY_STRONG,
+    OPACITY_SUBTLE,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -237,13 +238,22 @@ impl AiApp {
                 )
             })
             .child(
-                // Message content
+                // Message content — user messages get an accent left-border for
+                // visual differentiation (like iMessage/Claude.ai), assistant
+                // messages get a subtle muted left-border.
                 div()
                     .w_full()
                     .px(MSG_PX)
                     .py(MSG_PY)
                     .rounded(MSG_RADIUS)
                     .bg(bubble_bg)
+                    .border_l_2()
+                    .when(is_user, |d| {
+                        d.border_color(cx.theme().accent.opacity(OPACITY_ACCENT_MEDIUM))
+                    })
+                    .when(!is_user, |d| {
+                        d.border_color(cx.theme().muted.opacity(OPACITY_SUBTLE))
+                    })
                     .when(cue.italic, |d| d.italic())
                     .when(has_images, |el| {
                         el.child(

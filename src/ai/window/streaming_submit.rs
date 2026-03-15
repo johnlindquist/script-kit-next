@@ -93,6 +93,10 @@ impl AiApp {
             return;
         }
 
+        // Clear previous generation stats so they don't persist across messages
+        self.last_streaming_completed_at = None;
+        self.last_streaming_duration = None;
+
         // If no chat selected, create a new one
         let chat_id = if let Some(id) = self.selected_chat_id {
             id

@@ -39,6 +39,7 @@
 //! ```
 
 use anyhow::{anyhow, Context, Result};
+use itertools::Itertools;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -542,7 +543,6 @@ impl ClaudeSessionManager {
                         s.to_string()
                     }
                 })
-                .collect::<Vec<_>>()
                 .join(" ")
         );
         tracing::info!(
