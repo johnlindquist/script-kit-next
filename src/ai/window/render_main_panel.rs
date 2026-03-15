@@ -1,6 +1,7 @@
 use super::*;
 use crate::theme::opacity::{
     OPACITY_ACCENT_MEDIUM, OPACITY_BORDER, OPACITY_DISABLED, OPACITY_HOVER, OPACITY_SELECTED,
+    OPACITY_TEXT_MUTED,
 };
 
 fn ai_main_panel_can_submit(input_value: &str, has_pending_image: bool) -> bool {
@@ -16,8 +17,13 @@ impl AiApp {
         // Check if we have a pending image to show
         let has_pending_image = self.pending_image.is_some();
         let is_editing = self.editing_message_id.is_some();
-        let input_is_empty =
-            !ai_main_panel_can_submit(&self.input_state.read(cx).value(), has_pending_image);
+        let input_value = self.input_state.read(cx).value().to_string();
+        let input_is_empty = !ai_main_panel_can_submit(&input_value, has_pending_image);
+        let input_word_count = if input_value.trim().is_empty() {
+            0
+        } else {
+            input_value.split_whitespace().count()
+        };
         let action_button_colors =
             crate::components::ButtonColors::from_theme(&crate::theme::get_cached_theme());
         let entity = cx.entity();
@@ -49,10 +55,11 @@ impl AiApp {
                 div()
                     .id("ai-composer")
                     .flex()
-                    .items_center()
+                    .items_start()
                     .w_full()
-                    .h(COMPOSER_H)
+                    .min_h(COMPOSER_H)
                     .px(S3)
+                    .py(S2)
                     .gap(S2)
                     .rounded(R_LG)
                     .border_1()
@@ -119,13 +126,26 @@ impl AiApp {
                     .justify_between()
                     .w_full()
                     .overflow_hidden()
-                    // Left side: Model picker
+                    // Left side: Model picker + word count
                     .child(
                         div()
                             .flex()
                             .items_center()
+                            .gap(S2)
                             .overflow_hidden()
-                            .child(self.render_model_picker(cx)),
+                            .child(self.render_model_picker(cx))
+                            .when(input_word_count > 0, |d| {
+                                let label: SharedString =
+                                    format!("~{} words", input_word_count).into();
+                                d.child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(
+                                            cx.theme().muted_foreground.opacity(OPACITY_TEXT_MUTED),
+                                        )
+                                        .child(label),
+                                )
+                            }),
                     )
                     // Right side: Submit/Stop + Actions
                     .child(

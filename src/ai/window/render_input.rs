@@ -3,13 +3,16 @@ use super::*;
 impl AiApp {
     pub(super) fn render_input_with_cursor(&self, _cx: &mut Context<Self>) -> impl IntoElement {
         // Keep this focused on text alignment; the outer composer surface owns border/radius.
+        // The input uses auto_grow(1,6) so it expands vertically with content.
+        // min_h keeps at least one line visible; max_h caps growth.
         div()
             .flex_1()
-            .h(COMPOSER_H)
+            .min_h(COMPOSER_H)
+            .max_h(COMPOSER_MAX_H)
             .pl(S3)
             .rounded(R_MD)
             .flex()
-            .items_center()
+            .items_start()
             .child(
                 Input::new(&self.input_state)
                     .w_full()

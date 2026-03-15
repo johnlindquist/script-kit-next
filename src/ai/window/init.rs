@@ -64,7 +64,12 @@ impl AiApp {
         );
 
         // Create input states
-        let input_state = cx.new(|cx| InputState::new(window, cx).placeholder("Ask anything..."));
+        let input_state = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("Ask anything...")
+                .auto_grow(1, 6)
+                .submit_on_enter(true)
+        });
 
         let search_state = cx.new(|cx| InputState::new(window, cx).placeholder("Search chats..."));
 
@@ -84,7 +89,12 @@ impl AiApp {
         let input_sub = cx.subscribe_in(&input_state, window, {
             move |this, _, ev: &InputEvent, window, cx| match ev {
                 InputEvent::Change => this.on_input_change(cx),
-                InputEvent::PressEnter { .. } => this.submit_message(window, cx),
+                // Plain Enter → submit; Shift+Enter (secondary) inserted a newline already
+                InputEvent::PressEnter { secondary: false } => this.submit_message(window, cx),
+                InputEvent::PressEnter { secondary: true } => {
+                    // Newline was inserted by the Input component; just notify for resize
+                    cx.notify();
+                }
                 _ => {}
             }
         });
