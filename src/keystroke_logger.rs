@@ -166,13 +166,13 @@ impl KeystrokeLogger {
 }
 
 // Global singleton for the keystroke logger
-use std::sync::OnceLock;
+use std::sync::LazyLock;
 
-static KEYSTROKE_LOGGER: OnceLock<KeystrokeLogger> = OnceLock::new();
+static KEYSTROKE_LOGGER: LazyLock<KeystrokeLogger> = LazyLock::new(KeystrokeLogger::new);
 
 /// Get the global keystroke logger instance
 pub fn keystroke_logger() -> &'static KeystrokeLogger {
-    KEYSTROKE_LOGGER.get_or_init(KeystrokeLogger::new)
+    &KEYSTROKE_LOGGER
 }
 
 #[cfg(test)]

@@ -49,7 +49,8 @@ pub fn is_save_suppressed() -> bool {
 // ============================================================================
 
 /// Identifies which window we're tracking
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumString)]
+#[strum(serialize_all = "lowercase", ascii_case_insensitive)]
 pub enum WindowRole {
     Main,
     Notes,

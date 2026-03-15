@@ -1,4 +1,5 @@
 use super::*;
+use itertools::Itertools;
 
 /// TemplatePrompt - Tab-through template editor
 ///
@@ -189,7 +190,6 @@ impl TemplatePrompt {
                         None => String::new(),
                     }
                 })
-                .collect::<Vec<_>>()
                 .join(" "),
         }
     }

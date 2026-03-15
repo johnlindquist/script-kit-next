@@ -1,4 +1,5 @@
 use super::*;
+use itertools::Itertools;
 
 const SCRIPT_EXT_FRAGMENTS: [(&str, &str); 12] = [
     (".ts", ".ts#"),
@@ -273,7 +274,6 @@ fn normalize_shortcut_label(raw: &str) -> String {
             "right" | "arrowright" => "→".to_string(),
             _ => part.to_ascii_uppercase(),
         })
-        .collect::<Vec<_>>()
         .join("")
 }
 

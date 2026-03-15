@@ -1,7 +1,7 @@
 use super::*;
 
-pub(super) static MARKDOWN_CACHE: OnceLock<Mutex<HashMap<u64, Arc<Vec<ParsedBlock>>>>> =
-    OnceLock::new();
+pub(super) static MARKDOWN_CACHE: LazyLock<Mutex<HashMap<u64, Arc<Vec<ParsedBlock>>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 pub(super) static MARKDOWN_VOLATILE_SCOPE_COUNTER: AtomicU64 = AtomicU64::new(1);
 pub(super) const INFERRED_SCOPE_PREFIX_CHARS: usize = 256;
 

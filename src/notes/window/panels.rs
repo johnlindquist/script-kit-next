@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 use super::*;
 
 impl NotesApp {
@@ -56,12 +58,7 @@ impl NotesApp {
         info!(
             "Notes open_actions_panel: setting {} actions: [{}]",
             actions.len(),
-            actions
-                .iter()
-                .take(5)
-                .map(|a| a.title.as_str())
-                .collect::<Vec<_>>()
-                .join(", ")
+            actions.iter().take(5).map(|a| a.title.as_str()).join(", ")
         );
 
         self.command_bar.set_actions(actions, cx);
@@ -214,7 +211,11 @@ impl NotesApp {
             NotesAction::CopyDeeplink => self.copy_note_deeplink(cx),
             NotesAction::CreateQuicklink => self.create_note_quicklink(cx),
             NotesAction::Export => self.export_note(ExportFormat::Html, cx),
-            NotesAction::DeleteNote => self.delete_selected_note(window, cx),
+            NotesAction::DeleteNote => {
+                self.close_actions_panel(window, cx);
+                self.request_delete_selected_note(window, cx);
+                return;
+            }
             NotesAction::RestoreNote => self.restore_note(window, cx),
             NotesAction::PermanentlyDeleteNote => self.permanently_delete_note(cx),
             NotesAction::MoveListItemUp | NotesAction::MoveListItemDown => {}
@@ -346,10 +347,23 @@ impl NotesApp {
             note_switcher_actions.len(),
         );
 
+        let note_count = self.notes.len();
         self.note_switcher.set_actions(note_switcher_actions, cx);
 
         // Open the note switcher (CommandBar handles window creation internally)
         self.note_switcher.open_centered(window, cx);
+
+        // Set note count as context title header (after open, which creates the dialog)
+        if let Some(dialog) = self.note_switcher.dialog() {
+            let title = format!(
+                "{} note{}",
+                note_count,
+                if note_count == 1 { "" } else { "s" }
+            );
+            dialog.update(cx, |d, _cx| {
+                d.set_context_title(Some(title));
+            });
+        }
 
         // CRITICAL: Focus main focus_handle so keyboard events route to us
         // The ActionsWindow is a visual-only popup - it does NOT take keyboard focus.

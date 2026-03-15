@@ -47,6 +47,9 @@ mod trace_propagation;
 #[path = "source_audits/consistent_structured_fields.rs"]
 mod consistent_structured_fields;
 
+#[path = "source_audits/builtin_dispatch_consistency.rs"]
+mod builtin_dispatch_consistency;
+
 /// Regression guard: fails if the deleted monolithic `handle_action.rs` file
 /// reappears or if any `.rs` file under `src/` or `tests/` references the old
 /// monolith path. This prevents accidental resurrection of the pre-split handler.

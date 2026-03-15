@@ -12,7 +12,7 @@ use global_hotkey::{
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{LazyLock, Mutex, OnceLock};
 use uuid::Uuid;
 // =============================================================================
 // Unified Hotkey Routing System
@@ -147,9 +147,10 @@ impl HotkeyRoutes {
     }
 }
 /// Global routing table - protected by RwLock for fast reads
-static HOTKEY_ROUTES: OnceLock<RwLock<HotkeyRoutes>> = OnceLock::new();
+static HOTKEY_ROUTES: LazyLock<RwLock<HotkeyRoutes>> =
+    LazyLock::new(|| RwLock::new(HotkeyRoutes::new()));
 fn routes() -> &'static RwLock<HotkeyRoutes> {
-    HOTKEY_ROUTES.get_or_init(|| RwLock::new(HotkeyRoutes::new()))
+    &HOTKEY_ROUTES
 }
 /// The main GlobalHotKeyManager - stored globally so update_hotkeys can access it
 static MAIN_MANAGER: OnceLock<Mutex<GlobalHotKeyManager>> = OnceLock::new();
@@ -738,14 +739,16 @@ use std::sync::Arc;
 /// Callback type for hotkey actions - uses Arc<dyn Fn()> for repeated invocation
 pub type HotkeyHandler = Arc<dyn Fn() + Send + Sync>;
 /// Static storage for handlers to be invoked on main thread
-static NOTES_HANDLER: OnceLock<std::sync::Mutex<Option<HotkeyHandler>>> = OnceLock::new();
-static AI_HANDLER: OnceLock<std::sync::Mutex<Option<HotkeyHandler>>> = OnceLock::new();
+static NOTES_HANDLER: LazyLock<std::sync::Mutex<Option<HotkeyHandler>>> =
+    LazyLock::new(|| std::sync::Mutex::new(None));
+static AI_HANDLER: LazyLock<std::sync::Mutex<Option<HotkeyHandler>>> =
+    LazyLock::new(|| std::sync::Mutex::new(None));
 /// Register a handler to be invoked when the Notes hotkey is pressed.
 /// This handler will be executed on the main thread via GCD dispatch_async.
 /// The handler can be called multiple times (it's not consumed).
 #[allow(dead_code)]
 pub fn set_notes_hotkey_handler<F: Fn() + Send + Sync + 'static>(handler: F) {
-    let storage = NOTES_HANDLER.get_or_init(|| std::sync::Mutex::new(None));
+    let storage = &*NOTES_HANDLER;
     *storage.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(handler));
 }
 /// Register a handler to be invoked when the AI hotkey is pressed.
@@ -753,7 +756,7 @@ pub fn set_notes_hotkey_handler<F: Fn() + Send + Sync + 'static>(handler: F) {
 /// The handler can be called multiple times (it's not consumed).
 #[allow(dead_code)]
 pub fn set_ai_hotkey_handler<F: Fn() + Send + Sync + 'static>(handler: F) {
-    let storage = AI_HANDLER.get_or_init(|| std::sync::Mutex::new(None));
+    let storage = &*AI_HANDLER;
     *storage.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(handler));
 }
 fn clone_hotkey_handler_with_poison_recovery(
@@ -803,6 +806,9 @@ mod gcd {
         let raw = Box::into_raw(Box::new(boxed));
 
         extern "C" fn trampoline(context: *mut c_void) {
+            // SAFETY: `context` is a valid pointer created by Box::into_raw in
+            // dispatch_to_main. We take ownership back via Box::from_raw. The
+            // catch_unwind prevents panics from unwinding across the FFI boundary.
             unsafe {
                 let boxed: Box<Box<dyn FnOnce() + Send>> = Box::from_raw(context as *mut _);
                 // CRITICAL: Catch panics to prevent UB from unwinding across FFI boundary
@@ -823,6 +829,9 @@ mod gcd {
             }
         }
 
+        // SAFETY: DISPATCH_MAIN_QUEUE is a valid static GCD queue symbol.
+        // `raw` is a valid pointer from Box::into_raw; ownership transfers to
+        // the trampoline which will reclaim it via Box::from_raw.
         unsafe {
             let main_queue = &DISPATCH_MAIN_QUEUE as *const c_void;
             dispatch_async_f(main_queue, raw as *mut c_void, trampoline);
@@ -857,7 +866,7 @@ pub(crate) struct ScriptHotkeyEvent {
 #[tracing::instrument(skip_all)]
 fn dispatch_notes_hotkey(event: HotkeyEvent) {
     // Check if a direct handler is registered (takes priority over channel)
-    let handler_storage = NOTES_HANDLER.get_or_init(|| std::sync::Mutex::new(None));
+    let handler_storage = &*NOTES_HANDLER;
     let handler = clone_hotkey_handler_with_poison_recovery(handler_storage, "notes");
 
     if let Some(handler) = handler {
@@ -887,7 +896,7 @@ fn dispatch_notes_hotkey(event: HotkeyEvent) {
 #[tracing::instrument(skip_all)]
 fn dispatch_ai_hotkey(event: HotkeyEvent) {
     // Check if a direct handler is registered (takes priority over channel)
-    let handler_storage = AI_HANDLER.get_or_init(|| std::sync::Mutex::new(None));
+    let handler_storage = &*AI_HANDLER;
     let handler = clone_hotkey_handler_with_poison_recovery(handler_storage, "ai");
 
     if let Some(handler) = handler {
@@ -910,73 +919,73 @@ fn dispatch_ai_hotkey(event: HotkeyEvent) {
 }
 // HOTKEY_CHANNEL: Event-driven async_channel for hotkey events (replaces AtomicBool polling)
 #[allow(dead_code)]
-static HOTKEY_CHANNEL: OnceLock<(
+static HOTKEY_CHANNEL: LazyLock<(
     async_channel::Sender<HotkeyEvent>,
     async_channel::Receiver<HotkeyEvent>,
-)> = OnceLock::new();
+)> = LazyLock::new(|| async_channel::bounded(10));
 /// Get the hotkey channel, initializing it on first access.
 #[allow(dead_code)]
 pub(crate) fn hotkey_channel() -> &'static (
     async_channel::Sender<HotkeyEvent>,
     async_channel::Receiver<HotkeyEvent>,
 ) {
-    HOTKEY_CHANNEL.get_or_init(|| async_channel::bounded(10))
+    &HOTKEY_CHANNEL
 }
 // SCRIPT_HOTKEY_CHANNEL: Channel for script shortcut events (sends script path)
 #[allow(dead_code)]
-static SCRIPT_HOTKEY_CHANNEL: OnceLock<(
+static SCRIPT_HOTKEY_CHANNEL: LazyLock<(
     async_channel::Sender<ScriptHotkeyEvent>,
     async_channel::Receiver<ScriptHotkeyEvent>,
-)> = OnceLock::new();
+)> = LazyLock::new(|| async_channel::bounded(10));
 /// Get the script hotkey channel, initializing it on first access.
 #[allow(dead_code)]
 pub(crate) fn script_hotkey_channel() -> &'static (
     async_channel::Sender<ScriptHotkeyEvent>,
     async_channel::Receiver<ScriptHotkeyEvent>,
 ) {
-    SCRIPT_HOTKEY_CHANNEL.get_or_init(|| async_channel::bounded(10))
+    &SCRIPT_HOTKEY_CHANNEL
 }
 // NOTES_HOTKEY_CHANNEL: Channel for notes hotkey events
 #[allow(dead_code)]
-static NOTES_HOTKEY_CHANNEL: OnceLock<(
+static NOTES_HOTKEY_CHANNEL: LazyLock<(
     async_channel::Sender<HotkeyEvent>,
     async_channel::Receiver<HotkeyEvent>,
-)> = OnceLock::new();
+)> = LazyLock::new(|| async_channel::bounded(10));
 /// Get the notes hotkey channel, initializing it on first access.
 #[allow(dead_code)]
 pub(crate) fn notes_hotkey_channel() -> &'static (
     async_channel::Sender<HotkeyEvent>,
     async_channel::Receiver<HotkeyEvent>,
 ) {
-    NOTES_HOTKEY_CHANNEL.get_or_init(|| async_channel::bounded(10))
+    &NOTES_HOTKEY_CHANNEL
 }
 // AI_HOTKEY_CHANNEL: Channel for AI hotkey events
 #[allow(dead_code)]
-static AI_HOTKEY_CHANNEL: OnceLock<(
+static AI_HOTKEY_CHANNEL: LazyLock<(
     async_channel::Sender<HotkeyEvent>,
     async_channel::Receiver<HotkeyEvent>,
-)> = OnceLock::new();
+)> = LazyLock::new(|| async_channel::bounded(10));
 /// Get the AI hotkey channel, initializing it on first access.
 #[allow(dead_code)]
 pub(crate) fn ai_hotkey_channel() -> &'static (
     async_channel::Sender<HotkeyEvent>,
     async_channel::Receiver<HotkeyEvent>,
 ) {
-    AI_HOTKEY_CHANNEL.get_or_init(|| async_channel::bounded(10))
+    &AI_HOTKEY_CHANNEL
 }
 // LOGS_HOTKEY_CHANNEL: Channel for log capture toggle events
 #[allow(dead_code)]
-static LOGS_HOTKEY_CHANNEL: OnceLock<(
+static LOGS_HOTKEY_CHANNEL: LazyLock<(
     async_channel::Sender<HotkeyEvent>,
     async_channel::Receiver<HotkeyEvent>,
-)> = OnceLock::new();
+)> = LazyLock::new(|| async_channel::bounded(10));
 /// Get the logs hotkey channel, initializing it on first access.
 #[allow(dead_code)]
 pub(crate) fn logs_hotkey_channel() -> &'static (
     async_channel::Sender<HotkeyEvent>,
     async_channel::Receiver<HotkeyEvent>,
 ) {
-    LOGS_HOTKEY_CHANNEL.get_or_init(|| async_channel::bounded(10))
+    &LOGS_HOTKEY_CHANNEL
 }
 /// Tracks whether the main hotkey was successfully registered
 /// Used by main.rs to detect if the app has an alternate entry point

@@ -12,7 +12,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{LazyLock, Mutex};
 
 use anyhow::{Context, Result};
 use tracing::debug;
@@ -22,7 +22,8 @@ use tracing::debug;
 // ============================================================================
 
 /// Cache for loaded alias overrides to avoid file I/O on every render
-static ALIAS_OVERRIDES_CACHE: OnceLock<Mutex<Option<HashMap<String, String>>>> = OnceLock::new();
+static ALIAS_OVERRIDES_CACHE: LazyLock<Mutex<Option<HashMap<String, String>>>> =
+    LazyLock::new(|| Mutex::new(None));
 
 /// Get cached alias overrides (for use in render code)
 ///
@@ -30,7 +31,7 @@ static ALIAS_OVERRIDES_CACHE: OnceLock<Mutex<Option<HashMap<String, String>>>> =
 /// when aliases are saved via `save_alias_override()` or
 /// `remove_alias_override()`, or manually via `invalidate_alias_cache()`.
 pub fn get_cached_alias_overrides() -> HashMap<String, String> {
-    let cache = ALIAS_OVERRIDES_CACHE.get_or_init(|| Mutex::new(None));
+    let cache = &*ALIAS_OVERRIDES_CACHE;
 
     let mut guard = match cache.lock() {
         Ok(g) => g,
@@ -53,11 +54,9 @@ pub fn get_cached_alias_overrides() -> HashMap<String, String> {
 ///
 /// Call this when the aliases file changes externally.
 pub fn invalidate_alias_cache() {
-    if let Some(cache) = ALIAS_OVERRIDES_CACHE.get() {
-        if let Ok(mut guard) = cache.lock() {
-            *guard = None;
-            debug!("Alias overrides cache invalidated");
-        }
+    if let Ok(mut guard) = ALIAS_OVERRIDES_CACHE.lock() {
+        *guard = None;
+        debug!("Alias overrides cache invalidated");
     }
 }
 

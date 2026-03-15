@@ -332,6 +332,37 @@ impl AiApp {
         cx.notify();
     }
 
+    // -- Composer helpers --
+
+    /// Canonical setter for the composer input value.
+    /// All programmatic writes to the composer MUST route through this method
+    /// to ensure consistent newline handling (CR+LF → LF) and cursor positioning.
+    pub(super) fn set_composer_value(
+        &mut self,
+        value: impl Into<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let value = value.into().replace("\r\n", "\n");
+        self.input_state.update(cx, |state, cx| {
+            state.set_value(value.clone(), window, cx);
+            let len = state.text().len();
+            state.set_selection(len, len, window, cx);
+        });
+        tracing::debug!(
+            target: "ai",
+            value_len = value.len(),
+            has_newlines = value.contains('\n'),
+            "set_composer_value"
+        );
+        cx.notify();
+    }
+
+    /// Clear the composer input.
+    pub(super) fn clear_composer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.set_composer_value("", window, cx);
+    }
+
     // -- UX enhancement methods --
 
     /// Retry after a streaming error.
@@ -360,9 +391,7 @@ impl AiApp {
                 .find(|m| m.role == MessageRole::User)
             {
                 let content = last_user.content.clone();
-                self.input_state.update(cx, |state, cx| {
-                    state.set_value(content, window, cx);
-                });
+                self.set_composer_value(content, window, cx);
                 self.submit_message(window, cx);
             }
         }
@@ -378,10 +407,7 @@ impl AiApp {
         cx: &mut Context<Self>,
     ) {
         self.editing_message_id = Some(msg_id);
-        self.input_state.update(cx, |state, cx| {
-            state.set_value(content, window, cx);
-        });
-        cx.notify();
+        self.set_composer_value(content, window, cx);
     }
 
     /// Submit the edited message: truncate history from the edit point and re-send.
@@ -452,9 +478,7 @@ impl AiApp {
     pub(super) fn restore_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(chat_id) = self.selected_chat_id {
             let draft = self.chat_drafts.get(&chat_id).cloned().unwrap_or_default();
-            self.input_state.update(cx, |state, cx| {
-                state.set_value(draft, window, cx);
-            });
+            self.set_composer_value(draft, window, cx);
         }
     }
 

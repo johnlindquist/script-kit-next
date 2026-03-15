@@ -317,7 +317,7 @@ impl ScriptListApp {
 
                 // Only take first 15 lines for preview
                 let highlight_start = std::time::Instant::now();
-                let preview: String = content.lines().take(15).collect::<Vec<_>>().join("\n");
+                let preview: String = content.lines().take(15).join("\n");
                 let lines = syntax::highlight_code_lines(&preview, lang, is_dark);
                 let highlight_elapsed = highlight_start.elapsed();
 

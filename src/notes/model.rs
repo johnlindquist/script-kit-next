@@ -3,6 +3,7 @@
 //! Core data structures for the Notes feature.
 
 use chrono::{DateTime, Utc};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -261,7 +262,6 @@ impl Note {
             .skip(1) // Skip title line
             .filter(|line| !line.trim().is_empty())
             .take(3)
-            .collect::<Vec<_>>()
             .join(" ")
             .chars()
             .take(100)

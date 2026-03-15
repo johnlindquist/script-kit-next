@@ -181,11 +181,7 @@ impl AiApp {
         self.touch_and_reorder_chat(chat_id);
 
         // Clear the input (pending image was already taken above)
-        // Explicitly reset cursor to position 0 to fix cursor placement with placeholder
-        self.input_state.update(cx, |state, cx| {
-            state.set_value("", window, cx);
-            state.set_selection(0, 0, window, cx);
-        });
+        self.clear_composer(window, cx);
 
         // Update placeholder to "Reply to..." now that we have messages
         self.update_input_placeholder(window, cx);

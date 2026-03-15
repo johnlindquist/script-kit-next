@@ -19,6 +19,7 @@ use crate::metadata_parser::TypedMetadata;
 use crate::schema_parser::Schema;
 use crate::scriptlet_metadata::parse_codefence_metadata;
 use anyhow::{bail, Context, Result as AnyhowResult};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -516,7 +517,6 @@ fn slugify(name: &str) -> String {
         .collect::<String>()
         .split('-')
         .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
         .join("-")
 }
 /// Extract named input placeholders from scriptlet content

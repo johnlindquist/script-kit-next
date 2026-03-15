@@ -2165,4 +2165,81 @@ mod tests {
             Some("Dark Mode Toggled".to_string())
         );
     }
+
+    // -----------------------------------------------------------------------
+    // Builtin metadata audit — unique IDs/names and minimum metadata
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_builtin_entries_have_unique_ids_and_names() {
+        use std::collections::BTreeMap;
+
+        let config = BuiltInConfig::default();
+        let entries = get_builtin_entries(&config);
+
+        assert!(!entries.is_empty(), "Expected at least one builtin entry");
+
+        let mut id_counts: BTreeMap<&str, usize> = BTreeMap::new();
+        let mut name_counts: BTreeMap<&str, usize> = BTreeMap::new();
+
+        for entry in &entries {
+            *id_counts.entry(&entry.id).or_default() += 1;
+            *name_counts.entry(&entry.name).or_default() += 1;
+        }
+
+        let duplicate_ids: Vec<&str> = id_counts
+            .iter()
+            .filter(|(_, &count)| count > 1)
+            .map(|(&id, _)| id)
+            .collect();
+        let duplicate_names: Vec<&str> = name_counts
+            .iter()
+            .filter(|(_, &count)| count > 1)
+            .map(|(&name, _)| name)
+            .collect();
+
+        assert!(
+            duplicate_ids.is_empty(),
+            "Duplicate builtin ids: {duplicate_ids:?}"
+        );
+        assert!(
+            duplicate_names.is_empty(),
+            "Duplicate builtin names: {duplicate_names:?}"
+        );
+    }
+
+    #[test]
+    fn test_builtin_entries_use_stable_prefix_and_minimum_metadata() {
+        let config = BuiltInConfig::default();
+        let entries = get_builtin_entries(&config);
+
+        let invalid_ids: Vec<&str> = entries
+            .iter()
+            .filter(|entry| !entry.id.starts_with("builtin-"))
+            .map(|entry| entry.id.as_str())
+            .collect();
+        let missing_descriptions: Vec<&str> = entries
+            .iter()
+            .filter(|entry| entry.description.trim().is_empty())
+            .map(|entry| entry.id.as_str())
+            .collect();
+        let sparse_keywords: Vec<String> = entries
+            .iter()
+            .filter(|entry| entry.keywords.len() < 3)
+            .map(|entry| format!("{} ({})", entry.id, entry.keywords.len()))
+            .collect();
+
+        assert!(
+            invalid_ids.is_empty(),
+            "Builtin ids must start with 'builtin-': {invalid_ids:?}"
+        );
+        assert!(
+            missing_descriptions.is_empty(),
+            "Builtin entries missing descriptions: {missing_descriptions:?}"
+        );
+        assert!(
+            sparse_keywords.is_empty(),
+            "Builtin entries need at least 3 keywords: {sparse_keywords:?}"
+        );
+    }
 }

@@ -407,9 +407,10 @@ impl HudManagerState {
     }
 }
 /// Global HUD manager singleton
-static HUD_MANAGER: std::sync::OnceLock<Arc<Mutex<HudManagerState>>> = std::sync::OnceLock::new();
+static HUD_MANAGER: std::sync::LazyLock<Arc<Mutex<HudManagerState>>> =
+    std::sync::LazyLock::new(|| Arc::new(Mutex::new(HudManagerState::new())));
 fn get_hud_manager() -> &'static Arc<Mutex<HudManagerState>> {
-    HUD_MANAGER.get_or_init(|| Arc::new(Mutex::new(HudManagerState::new())))
+    &HUD_MANAGER
 }
 /// Internal helper to show a HUD notification from a HudNotification struct.
 /// This preserves all fields including action_label and action.

@@ -31,6 +31,7 @@ pub mod error;
 pub mod executor;
 pub mod focus_coordinator;
 pub mod form_prompt;
+pub mod formatting;
 pub mod hotkeys;
 pub mod icons;
 pub mod list_item;
@@ -215,6 +216,9 @@ pub mod mcp_resources;
 // Provides JSON command protocol for testing and automation
 pub mod stdin_commands;
 
+// Confirmation dialog - modal confirmation window for destructive actions
+pub mod confirm;
+
 // Notes - Raycast Notes feature parity
 // Separate floating window for note-taking with gpui-component
 pub mod notes;
@@ -295,14 +299,14 @@ pub fn set_script_requested_hide(value: bool) {
 
 /// Channel for requesting the main window to be shown
 /// Used by prompt_handler to signal that the window should come back after script exit
-static SHOW_WINDOW_CHANNEL: std::sync::OnceLock<(
+static SHOW_WINDOW_CHANNEL: std::sync::LazyLock<(
     async_channel::Sender<()>,
     async_channel::Receiver<()>,
-)> = std::sync::OnceLock::new();
+)> = std::sync::LazyLock::new(|| async_channel::bounded(10));
 
 /// Get the show window channel (sender, receiver)
 pub fn show_window_channel() -> &'static (async_channel::Sender<()>, async_channel::Receiver<()>) {
-    SHOW_WINDOW_CHANNEL.get_or_init(|| async_channel::bounded(10))
+    &SHOW_WINDOW_CHANNEL
 }
 
 /// Request showing the main window (called from prompt_handler on ScriptExit)

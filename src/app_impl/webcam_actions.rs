@@ -171,9 +171,10 @@ impl ScriptListApp {
 
         match std::fs::write(&save_path, png_data) {
             Ok(()) => {
-                logging::log(
-                    "ACTIONS",
-                    &format!("Webcam photo saved: {}", save_path.display()),
+                tracing::info!(
+                    category = "ACTIONS",
+                    path = %save_path.display(),
+                    "Webcam photo saved"
                 );
                 cx.notify();
                 self.show_hud(
@@ -198,9 +199,9 @@ impl ScriptListApp {
 
     #[cfg(not(target_os = "macos"))]
     pub(crate) fn capture_webcam_photo(&mut self, cx: &mut Context<Self>) -> bool {
-        logging::log(
-            "ACTIONS",
-            "capture_webcam_photo requested on unsupported platform",
+        tracing::warn!(
+            category = "ACTIONS",
+            "Webcam capture requested on unsupported platform"
         );
         cx.notify();
         self.show_unsupported_platform_toast("Webcam capture", cx);
@@ -228,29 +229,62 @@ impl ScriptListApp {
         ]
     }
 
-    pub(crate) fn execute_webcam_action(&mut self, action_id: &str, cx: &mut Context<Self>) {
+    pub(crate) fn execute_webcam_action(
+        &mut self,
+        action_id: &str,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
         match action_id {
             "capture" => {
-                logging::log("ACTIONS", "execute_webcam_action: capture");
+                tracing::info!(
+                    category = "UI",
+                    action = action_id,
+                    trace_id = %dctx.trace_id,
+                    surface = %dctx.surface,
+                    "Webcam action triggered"
+                );
+
                 if self.capture_webcam_photo(cx) {
                     self.hide_main_and_reset(cx);
+                    crate::action_helpers::DispatchOutcome::success()
+                        .with_trace_id(dctx.trace_id.clone())
+                        .with_detail("webcam_capture")
+                } else {
+                    crate::action_helpers::DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        "Failed to capture photo",
+                    )
+                    .with_trace_id(dctx.trace_id.clone())
+                    .with_detail("webcam_capture_failed")
                 }
             }
             "close" => {
-                logging::log("ACTIONS", "execute_webcam_action: close");
+                tracing::info!(
+                    category = "UI",
+                    action = action_id,
+                    trace_id = %dctx.trace_id,
+                    surface = %dctx.surface,
+                    "Webcam action triggered"
+                );
+
                 cx.notify();
                 self.show_hud("Webcam closed".to_string(), Some(HUD_SHORT_MS), cx);
                 self.hide_main_and_reset(cx);
+
+                crate::action_helpers::DispatchOutcome::success()
+                    .with_trace_id(dctx.trace_id.clone())
+                    .with_detail("webcam_close")
             }
             _ => {
-                logging::log(
-                    "ACTIONS",
-                    &format!(
-                        "execute_webcam_action: unknown id '{}', falling back to SDK action routing",
-                        action_id
-                    ),
+                tracing::info!(
+                    category = "UI",
+                    action = action_id,
+                    trace_id = %dctx.trace_id,
+                    surface = %dctx.surface,
+                    "Webcam action: unknown id, falling back to SDK action routing"
                 );
-                self.trigger_action_by_name(action_id, cx);
+                self.trigger_sdk_action_with_trace(action_id, &dctx.trace_id)
             }
         }
     }

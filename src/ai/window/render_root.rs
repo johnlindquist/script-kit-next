@@ -46,16 +46,8 @@ impl AiApp {
                     tracing::info!(target: "ai", query = %query, "Search filter set");
                 }
                 AiCommand::SetInput { text, submit } => {
-                    // Sanitize newlines - single-line Input can't handle them
-                    // (GPUI's shape_line panics on newlines)
-                    let sanitized_text = text.replace('\n', " ");
-                    self.input_state.update(cx, |state, cx| {
-                        state.set_value(sanitized_text.clone(), window, cx);
-                        // Ensure cursor is at end of text with proper focus for editing
-                        let text_len = state.text().len();
-                        state.set_selection(text_len, text_len, window, cx);
-                    });
-                    tracing::info!(target: "ai", input_len = sanitized_text.len(), "Input set");
+                    self.set_composer_value(&text, window, cx);
+                    tracing::info!(target: "ai", input_len = text.len(), "Input set");
                     if submit {
                         self.submit_message(window, cx);
                         tracing::info!(target: "ai", "Message submitted - streaming started");
@@ -66,15 +58,7 @@ impl AiApp {
                     image_base64,
                     submit,
                 } => {
-                    // Sanitize newlines - single-line Input can't handle them
-                    // (GPUI's shape_line panics on newlines)
-                    let sanitized_text = text.replace('\n', " ");
-                    self.input_state.update(cx, |state, cx| {
-                        state.set_value(sanitized_text.clone(), window, cx);
-                        // Ensure cursor is at end of text with proper focus for editing
-                        let text_len = state.text().len();
-                        state.set_selection(text_len, text_len, window, cx);
-                    });
+                    self.set_composer_value(&text, window, cx);
                     // Store the pending image to be included with the next message
                     self.cache_image_from_base64(&image_base64);
                     self.pending_image = Some(image_base64.clone());

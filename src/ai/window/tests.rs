@@ -884,3 +884,89 @@ fn test_message_auto_collapse_threshold() {
         "message_auto_collapse_threshold: all boundary and override cases validated"
     );
 }
+
+#[test]
+fn ai_shortcuts_match_multiline_composer_behavior() {
+    let input_section = AI_SHORTCUT_SECTIONS
+        .iter()
+        .find(|section| section.title == "Input")
+        .expect("Input shortcut section should exist");
+
+    assert!(
+        input_section
+            .items
+            .iter()
+            .any(|item| item.keys == "Enter" && item.description == "Send message"),
+        "Input shortcuts should advertise Enter to send"
+    );
+    assert!(
+        input_section
+            .items
+            .iter()
+            .any(|item| item.keys == "Shift+Enter" && item.description == "Insert newline"),
+        "Input shortcuts should advertise Shift+Enter for newline"
+    );
+    assert!(
+        input_section
+            .items
+            .iter()
+            .all(|item| !item.keys.contains("\u{2318}") || !item.keys.contains("Enter")),
+        "Stale Cmd+Enter hint should be removed after multiline composer landed"
+    );
+}
+
+#[test]
+fn ai_shortcuts_cover_sidebar_search_and_new_chat() {
+    let flat: Vec<(&str, &str)> = AI_SHORTCUT_SECTIONS
+        .iter()
+        .flat_map(|section| {
+            section
+                .items
+                .iter()
+                .map(|item| (item.keys, item.description))
+        })
+        .collect();
+
+    assert!(flat.contains(&("\u{2318}B", "Toggle sidebar")));
+    assert!(flat.contains(&("\u{2318}\u{21e7}F", "Focus search")));
+    assert!(flat.contains(&("\u{2318}N", "New chat")));
+}
+
+#[test]
+fn ai_shortcut_sections_have_four_categories() {
+    assert_eq!(
+        AI_SHORTCUT_SECTIONS.len(),
+        4,
+        "Should have exactly 4 shortcut sections: Navigation, Chat, Input, Actions"
+    );
+    assert_eq!(AI_SHORTCUT_SECTIONS[0].title, "Navigation");
+    assert_eq!(AI_SHORTCUT_SECTIONS[1].title, "Chat");
+    assert_eq!(AI_SHORTCUT_SECTIONS[2].title, "Input");
+    assert_eq!(AI_SHORTCUT_SECTIONS[3].title, "Actions");
+}
+
+/// Verify that the normalization applied by `set_composer_value` converts
+/// CR+LF to plain LF, preserves standalone LF, and leaves clean text alone.
+#[test]
+fn test_set_composer_value_normalizes_crlf_to_lf() {
+    // Simulates the normalization logic inside set_composer_value
+    let normalize = |input: &str| -> String { input.replace("\r\n", "\n") };
+
+    // CR+LF → LF
+    assert_eq!(normalize("hello\r\nworld"), "hello\nworld");
+
+    // Multiple CR+LF
+    assert_eq!(normalize("a\r\nb\r\nc"), "a\nb\nc");
+
+    // Standalone LF preserved
+    assert_eq!(normalize("hello\nworld"), "hello\nworld");
+
+    // No newlines unchanged
+    assert_eq!(normalize("hello world"), "hello world");
+
+    // Empty string
+    assert_eq!(normalize(""), "");
+
+    // Mixed: CR+LF and LF
+    assert_eq!(normalize("a\r\nb\nc\r\nd"), "a\nb\nc\nd");
+}

@@ -71,7 +71,7 @@ impl NotesApp {
                     .child(shortcut("⌘N", "New note"))
                     .child(shortcut("⌘⇧N", "New from clipboard"))
                     .child(shortcut("⌘D", "Duplicate note"))
-                    .child(shortcut("⌘⌫", "Delete note"))
+                    .child(shortcut("⌘⇧⌫", "Delete note"))
                     .child(shortcut("⌘⇧I", "Toggle pin"))
                     .child(section("Navigation"))
                     .child(shortcut("⌘↑ / ⌘↓", "Previous / next note"))

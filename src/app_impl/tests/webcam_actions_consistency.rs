@@ -55,8 +55,11 @@ mod tests {
             .find("fn execute_webcam_action")
             .expect("execute_webcam_action not found");
         let after_start = &content[start..];
-        let end = after_start
-            .find("// ========================================================================")
+        // Find the next top-level function or end of impl block
+        let end = after_start[1..]
+            .find("\n    pub(crate) fn ")
+            .or_else(|| after_start[1..].find("\n    fn "))
+            .map(|i| i + 1)
             .unwrap_or(after_start.len());
         &content[start..start + end]
     }
@@ -158,6 +161,67 @@ mod tests {
             section.contains("prompt.set_error(err_msg, cx)"),
             "open_webcam should surface startup failures to the webcam prompt error state."
         );
+    }
+
+    #[test]
+    fn webcam_execute_accepts_dispatch_context_and_returns_outcome() {
+        let content = read_app_impl_sources();
+        let section = webcam_execute_section(&content);
+
+        assert!(
+            section.contains("dctx: &crate::action_helpers::DispatchContext"),
+            "execute_webcam_action must accept a DispatchContext parameter."
+        );
+        assert!(
+            section.contains("-> crate::action_helpers::DispatchOutcome"),
+            "execute_webcam_action must return DispatchOutcome."
+        );
+    }
+
+    #[test]
+    fn webcam_execute_uses_tracing_not_legacy_logging() {
+        let content = fs::read_to_string("src/app_impl/webcam_actions.rs")
+            .expect("Failed to read webcam_actions.rs");
+
+        assert!(
+            !content.contains("logging::log("),
+            "webcam_actions.rs should use tracing:: structured logging, not legacy logging::log."
+        );
+    }
+
+    #[test]
+    fn webcam_execute_emits_structured_trace_fields() {
+        let content = read_app_impl_sources();
+        let section = webcam_execute_section(&content);
+
+        assert!(
+            section.contains("trace_id ="),
+            "execute_webcam_action should emit trace_id in structured logs."
+        );
+        assert!(
+            section.contains("surface ="),
+            "execute_webcam_action should emit surface in structured logs."
+        );
+    }
+
+    #[test]
+    fn webcam_callers_use_dispatch_context_and_log_outcome() {
+        let startup = fs::read_to_string("src/app_impl/startup.rs")
+            .expect("Failed to read startup.rs");
+        let startup_new = fs::read_to_string("src/app_impl/startup_new_actions.rs")
+            .expect("Failed to read startup_new_actions.rs");
+
+        for (name, content) in [("startup.rs", &startup), ("startup_new_actions.rs", &startup_new)]
+        {
+            assert!(
+                content.contains("DispatchContext::for_builtin(\"builtin-webcam\")"),
+                "{name} should create a DispatchContext::for_builtin for webcam actions."
+            );
+            assert!(
+                content.contains("log_builtin_outcome(\"builtin-webcam\""),
+                "{name} should log the webcam action outcome via log_builtin_outcome."
+            );
+        }
     }
 
     #[test]

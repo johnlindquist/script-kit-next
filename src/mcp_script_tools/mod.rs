@@ -24,6 +24,7 @@
 // --- merged from part_000.rs ---
 use crate::mcp_kit_tools::ToolDefinition;
 use crate::scripts::Script;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
@@ -62,7 +63,6 @@ fn slugify_name(name: &str) -> String {
         .collect::<String>()
         .split('-')
         .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
         .join("-")
 }
 /// Generate an MCP tool definition from a script

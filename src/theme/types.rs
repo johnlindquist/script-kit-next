@@ -12,15 +12,17 @@ use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::fmt;
 use std::process::Command;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
 use tracing::{debug, error, info, warn};
 
 /// Cache for system appearance detection to avoid spawning subprocesses on every render
-static APPEARANCE_CACHE: OnceLock<Mutex<AppearanceCache>> = OnceLock::new();
+static APPEARANCE_CACHE: LazyLock<Mutex<AppearanceCache>> =
+    LazyLock::new(|| Mutex::new(AppearanceCache::default()));
 
 /// Cache for loaded theme to avoid file I/O on every render
-static THEME_CACHE: OnceLock<Mutex<ThemeCache>> = OnceLock::new();
+static THEME_CACHE: LazyLock<Mutex<ThemeCache>> =
+    LazyLock::new(|| Mutex::new(ThemeCache::default()));
 
 /// How long to cache the system appearance before re-detecting
 const APPEARANCE_CACHE_TTL: Duration = Duration::from_secs(5);
@@ -258,8 +260,20 @@ impl BackgroundOpacity {
 ///
 /// Different materials provide different levels of blur and background interaction.
 /// Maps to NSVisualEffectMaterial values on macOS.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    Default,
+    strum::Display,
+    strum::EnumString,
+)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case", ascii_case_insensitive)]
 pub enum VibrancyMaterial {
     /// Dark, high contrast material (like HUD windows)
     Hud,
@@ -272,18 +286,6 @@ pub enum VibrancyMaterial {
     Sidebar,
     /// Content background blur
     Content,
-}
-
-impl std::fmt::Display for VibrancyMaterial {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Hud => write!(f, "hud"),
-            Self::Popover => write!(f, "popover"),
-            Self::Menu => write!(f, "menu"),
-            Self::Sidebar => write!(f, "sidebar"),
-            Self::Content => write!(f, "content"),
-        }
-    }
 }
 
 /// Vibrancy/blur effect settings for the window background
@@ -1163,7 +1165,7 @@ impl Theme {
 /// Note: On macOS in light mode, the command exits with non-zero status because the
 /// AppleInterfaceStyle key doesn't exist, so we check exit status explicitly.
 pub fn detect_system_appearance() -> bool {
-    let cache = APPEARANCE_CACHE.get_or_init(|| Mutex::new(AppearanceCache::default()));
+    let cache = &*APPEARANCE_CACHE;
 
     let mut cache_guard = match cache.lock() {
         Ok(guard) => guard,
@@ -1190,12 +1192,10 @@ pub fn detect_system_appearance() -> bool {
 /// Call this when the system appearance changes (e.g., from observe_window_appearance)
 /// to force immediate re-detection on the next call to `detect_system_appearance()`.
 pub fn invalidate_appearance_cache() {
-    if let Some(cache) = APPEARANCE_CACHE.get() {
-        if let Ok(mut guard) = cache.lock() {
-            // Set last_check to past the TTL so next call will re-detect
-            guard.last_check = Instant::now() - APPEARANCE_CACHE_TTL - Duration::from_secs(1);
-            debug!("Appearance cache invalidated");
-        }
+    if let Ok(mut guard) = APPEARANCE_CACHE.lock() {
+        // Set last_check to past the TTL so next call will re-detect
+        guard.last_check = Instant::now() - APPEARANCE_CACHE_TTL - Duration::from_secs(1);
+        debug!("Appearance cache invalidated");
     }
 }
 
@@ -1715,7 +1715,7 @@ pub fn load_theme() -> Theme {
 /// - When you need guaranteed fresh theme data
 /// - After explicitly invalidating the cache
 pub fn get_cached_theme() -> Theme {
-    let cache = THEME_CACHE.get_or_init(|| Mutex::new(ThemeCache::default()));
+    let cache = &*THEME_CACHE;
     let cache_guard = cache.lock().unwrap_or_else(|error| {
         warn!(
             operation = "get_cached_theme_lock",
@@ -1735,7 +1735,7 @@ pub fn get_cached_theme() -> Theme {
 pub fn reload_theme_cache() -> Theme {
     let theme = load_theme();
 
-    let cache = THEME_CACHE.get_or_init(|| Mutex::new(ThemeCache::default()));
+    let cache = &*THEME_CACHE;
     let mut guard = cache.lock().unwrap_or_else(|error| {
         warn!(
             operation = "reload_theme_cache_lock",
@@ -1821,12 +1821,12 @@ fn log_theme_config(theme: &Theme) {
 mod tests {
     use super::*;
     use crate::config::{LayoutConfig, ScriptKitUserPreferences, ThemeSelectionPreferences};
-    use std::sync::{Mutex, OnceLock};
+    use std::sync::{LazyLock, Mutex};
 
-    static THEME_CACHE_TEST_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    static THEME_CACHE_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
     fn poison_theme_cache_with(theme: Theme) {
-        let cache = THEME_CACHE.get_or_init(|| Mutex::new(ThemeCache::default()));
+        let cache = &*THEME_CACHE;
         let _ = std::thread::spawn(move || {
             let mut guard = cache.lock().expect("theme cache lock should succeed");
             guard.theme = theme;
@@ -1837,7 +1837,7 @@ mod tests {
     }
 
     fn clear_theme_cache_poison_and_restore() {
-        let cache = THEME_CACHE.get_or_init(|| Mutex::new(ThemeCache::default()));
+        let cache = &*THEME_CACHE;
         cache.clear_poison();
         let mut guard = cache
             .lock()
@@ -1847,7 +1847,6 @@ mod tests {
 
     fn lock_theme_cache_test() -> std::sync::MutexGuard<'static, ()> {
         THEME_CACHE_TEST_LOCK
-            .get_or_init(|| Mutex::new(()))
             .lock()
             .expect("theme cache test lock should succeed")
     }

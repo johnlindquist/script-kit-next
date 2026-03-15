@@ -3,9 +3,11 @@
 //! Contains the main data types: ContentType, TimeGroup, and ClipboardEntry.
 
 use chrono::{Datelike, Local, NaiveDate, TimeZone};
+use itertools::Itertools;
 
 /// Content types for clipboard entries
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display, strum::EnumString)]
+#[strum(serialize_all = "lowercase", ascii_case_insensitive)]
 pub enum ContentType {
     Text,
     Image,
@@ -27,13 +29,7 @@ impl ContentType {
 
     #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
-        match s {
-            "image" => ContentType::Image,
-            "link" => ContentType::Link,
-            "file" => ContentType::File,
-            "color" => ContentType::Color,
-            _ => ContentType::Text,
-        }
+        <Self as std::str::FromStr>::from_str(s).unwrap_or(Self::Text)
     }
 }
 
@@ -229,20 +225,12 @@ pub fn classify_timestamp_with_now<Tz: chrono::TimeZone>(
 pub fn group_entries_by_time(
     entries: Vec<ClipboardEntry>,
 ) -> Vec<(TimeGroup, Vec<ClipboardEntry>)> {
-    use std::collections::HashMap;
-
-    let mut groups: HashMap<TimeGroup, Vec<ClipboardEntry>> = HashMap::new();
-
-    for entry in entries {
-        let group = classify_timestamp(entry.timestamp);
-        groups.entry(group).or_default().push(entry);
-    }
-
-    // Sort groups by their display order
-    let mut result: Vec<(TimeGroup, Vec<ClipboardEntry>)> = groups.into_iter().collect();
-    result.sort_by_key(|(group, _)| group.sort_order());
-
-    result
+    entries
+        .into_iter()
+        .into_group_map_by(|entry| classify_timestamp(entry.timestamp))
+        .into_iter()
+        .sorted_by_key(|(group, _)| group.sort_order())
+        .collect()
 }
 
 #[cfg(test)]

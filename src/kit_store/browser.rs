@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use base64::Engine as _;
+use itertools::Itertools;
 use serde::Deserialize;
 
 const GITHUB_API_BASE_URL: &str = "https://api.github.com";
@@ -147,7 +148,6 @@ fn build_search_url(topic: &str, query: &str) -> String {
 
     let normalized_query = trimmed_query
         .split_whitespace()
-        .collect::<Vec<_>>()
         .join("+");
     format!(
         "{GITHUB_API_BASE_URL}{GITHUB_SEARCH_REPOSITORIES_PATH}?q=topic:{topic}+{normalized_query}&sort=stars&order=desc"

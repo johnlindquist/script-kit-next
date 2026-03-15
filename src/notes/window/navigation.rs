@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 use super::*;
 
 impl NotesApp {
@@ -307,15 +309,9 @@ impl NotesApp {
                     trimmed
                 }
             })
-            .collect::<Vec<_>>()
             .join(" ");
         // Collapse whitespace
-        result
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ")
-            .trim()
-            .to_string()
+        result.split_whitespace().join(" ").trim().to_string()
     }
 
     /// Welcome note content for first-time users.

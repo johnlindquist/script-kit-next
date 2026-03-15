@@ -227,7 +227,6 @@
                                         line.to_string()
                                     }
                                 })
-                                .collect::<Vec<_>>()
                                 .join("\n");
 
                             let lang = match scriptlet.tool.as_str() {

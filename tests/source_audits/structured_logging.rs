@@ -36,7 +36,7 @@ fn handle_system_action_result_logs_action_type_and_status_on_error() {
     let fn_start = content
         .find("fn handle_system_action_result(")
         .expect("Expected handle_system_action_result function");
-    let fn_body = &content[fn_start..content.len().min(fn_start + 1500)];
+    let fn_body = &content[fn_start..content.len().min(fn_start + 2500)];
 
     // Error path must also use structured fields
     assert!(
@@ -73,7 +73,37 @@ fn handle_system_action_result_uses_tracing_not_println() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn execute_builtin_inner_has_completion_log_with_trace_id() {
+fn execute_builtin_inner_returns_dispatch_outcome() {
+    let content = read("src/app_execute/builtin_execution.rs");
+
+    let fn_start = content
+        .find("fn execute_builtin_inner(")
+        .expect("Expected execute_builtin_inner function");
+    let signature = &content[fn_start..content.len().min(fn_start + 500)];
+
+    assert!(
+        signature.contains("-> crate::action_helpers::DispatchOutcome"),
+        "execute_builtin_inner must return DispatchOutcome"
+    );
+}
+
+#[test]
+fn execute_builtin_inner_accepts_dispatch_context() {
+    let content = read("src/app_execute/builtin_execution.rs");
+
+    let fn_start = content
+        .find("fn execute_builtin_inner(")
+        .expect("Expected execute_builtin_inner function");
+    let signature = &content[fn_start..content.len().min(fn_start + 500)];
+
+    assert!(
+        signature.contains("dctx: &crate::action_helpers::DispatchContext"),
+        "execute_builtin_inner must accept &DispatchContext for trace_id correlation"
+    );
+}
+
+#[test]
+fn execute_builtin_inner_uses_trace_id_in_log_lines() {
     let content = read("src/app_execute/builtin_execution.rs");
 
     let fn_start = content
@@ -82,53 +112,30 @@ fn execute_builtin_inner_has_completion_log_with_trace_id() {
     let fn_body = &content[fn_start..];
 
     assert!(
-        fn_body.contains("trace_id = %trace_id"),
-        "execute_builtin_inner must log trace_id as a structured field at completion"
+        fn_body.contains("trace_id = %dctx.trace_id"),
+        "execute_builtin_inner must log trace_id from dctx as a structured field"
     );
 }
 
 #[test]
-fn execute_builtin_inner_has_completion_log_with_duration_ms() {
+fn execute_builtin_with_query_logs_real_outcome() {
     let content = read("src/app_execute/builtin_execution.rs");
 
     let fn_start = content
-        .find("fn execute_builtin_inner(")
-        .expect("Expected execute_builtin_inner function");
-    let fn_body = &content[fn_start..];
+        .find("fn execute_builtin_with_query(")
+        .expect("Expected execute_builtin_with_query function");
+    let fn_body = &content[fn_start..content.len().min(fn_start + 5000)];
 
+    // Must NOT contain the old synthetic success pattern
     assert!(
-        fn_body.contains("duration_ms"),
-        "execute_builtin_inner must log duration_ms as a structured field at completion"
+        !fn_body.contains("Self::builtin_success(&dctx, \"execute_builtin_inner\")"),
+        "execute_builtin_with_query must not log synthetic success for non-system builtins"
     );
-}
 
-#[test]
-fn execute_builtin_inner_completion_log_includes_builtin_id() {
-    let content = read("src/app_execute/builtin_execution.rs");
-
-    let fn_start = content
-        .find("fn execute_builtin_inner(")
-        .expect("Expected execute_builtin_inner function");
-    let fn_body = &content[fn_start..];
-
+    // Must log the real outcome from execute_builtin_inner
     assert!(
-        fn_body.contains("builtin_id ="),
-        "execute_builtin_inner completion log must include builtin_id field"
-    );
-}
-
-#[test]
-fn execute_builtin_inner_accepts_trace_id_parameter() {
-    let content = read("src/app_execute/builtin_execution.rs");
-
-    let fn_start = content
-        .find("fn execute_builtin_inner(")
-        .expect("Expected execute_builtin_inner function");
-    let signature = &content[fn_start..content.len().min(fn_start + 300)];
-
-    assert!(
-        signature.contains("trace_id: &str"),
-        "execute_builtin_inner must accept trace_id as a parameter"
+        fn_body.contains("Self::log_builtin_outcome("),
+        "execute_builtin_with_query must log the real outcome via log_builtin_outcome"
     );
 }
 

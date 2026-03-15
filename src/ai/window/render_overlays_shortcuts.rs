@@ -1,5 +1,29 @@
+use super::types::*;
 use super::*;
-use crate::theme::opacity::{OPACITY_HOVER, OPACITY_MESSAGE_ASSISTANT_BACKGROUND};
+use crate::theme::opacity::{OPACITY_DISABLED, OPACITY_HOVER, OPACITY_SELECTED};
+
+/// Explicit category labels for grouping keyboard shortcuts in the Cmd+/ overlay.
+/// Each variant corresponds 1:1 with an entry in [`AI_SHORTCUT_SECTIONS`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ShortcutCategory {
+    Navigation,
+    Chat,
+    Input,
+    Actions,
+}
+
+impl ShortcutCategory {
+    pub(super) const ALL: [Self; 4] = [Self::Navigation, Self::Chat, Self::Input, Self::Actions];
+
+    pub(super) const fn label(self) -> &'static str {
+        match self {
+            Self::Navigation => "Navigation",
+            Self::Chat => "Chat",
+            Self::Input => "Input",
+            Self::Actions => "Actions",
+        }
+    }
+}
 
 impl AiApp {
     pub(super) fn render_command_bar_overlay(&self, _cx: &mut Context<Self>) -> impl IntoElement {
@@ -9,6 +33,7 @@ impl AiApp {
     }
 
     /// Render the keyboard shortcuts overlay (Cmd+/).
+    /// Reads from AI_SHORTCUT_SECTIONS so the overlay stays in sync with actual keybindings.
     pub(super) fn render_shortcuts_overlay(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let overlay_bg = Self::get_modal_overlay_background();
         let panel_bg = cx.theme().background;
@@ -16,23 +41,6 @@ impl AiApp {
         let fg = cx.theme().foreground;
         let muted = cx.theme().muted_foreground;
         let accent = cx.theme().accent;
-
-        let shortcuts: Vec<(&str, &str)> = vec![
-            ("\u{2318} Enter", "Send message"),
-            ("\u{2318} N", "New chat"),
-            ("\u{2318} Shift N", "New chat with preset"),
-            ("\u{2318} K", "Open actions"),
-            ("\u{2318} L", "Focus input"),
-            ("\u{2318} B", "Toggle sidebar"),
-            ("\u{2318} Shift F", "Search chats"),
-            ("\u{2318} Shift C", "Copy last response"),
-            ("\u{2318} Shift E", "Export chat as markdown"),
-            ("\u{2318} [ / ]", "Previous / next chat"),
-            ("\u{2318} Shift \u{232B}", "Delete chat"),
-            ("\u{2318} /", "Toggle this overlay"),
-            ("Esc", "Stop streaming / close"),
-            ("\u{2191}", "Edit last message (empty input)"),
-        ];
 
         div()
             .id("shortcuts-overlay")
@@ -52,8 +60,8 @@ impl AiApp {
             .child(
                 div()
                     .id("shortcuts-panel")
-                    .w(px(380.))
-                    .max_h(px(480.))
+                    .w(px(420.))
+                    .max_h(px(520.))
                     .rounded(R_LG)
                     .bg(panel_bg)
                     .border_1()
@@ -88,33 +96,74 @@ impl AiApp {
                                     .bg(cx.theme().muted.opacity(OPACITY_HOVER))
                                     .text_xs()
                                     .text_color(muted)
-                                    .child("\u{2318} /"),
+                                    .child("\u{2318}/"),
                             ),
                     )
                     // Divider
                     .child(div().w_full().h(px(1.)).bg(border))
-                    // Shortcuts list
-                    .children(shortcuts.into_iter().map(|(key, desc)| {
-                        let key_s: SharedString = key.into();
-                        let desc_s: SharedString = desc.into();
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .py(S1)
-                            .child(div().text_sm().text_color(fg).child(desc_s))
-                            .child(
+                    // Grouped shortcut sections
+                    .children(
+                        ShortcutCategory::ALL
+                            .into_iter()
+                            .zip(AI_SHORTCUT_SECTIONS.iter())
+                            .map(|(category, section)| {
                                 div()
-                                    .px(S2)
-                                    .py(S1)
-                                    .rounded(R_SM)
-                                    .bg(accent.opacity(OPACITY_MESSAGE_ASSISTANT_BACKGROUND))
-                                    .text_xs()
-                                    .font_weight(gpui::FontWeight::MEDIUM)
-                                    .text_color(accent)
-                                    .child(key_s),
-                            )
-                    })),
+                                    .flex()
+                                    .flex_col()
+                                    .gap(S1)
+                                    .child(
+                                        div()
+                                            .pt(S1)
+                                            .pb(S1)
+                                            .text_xs()
+                                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                                            .text_color(accent.opacity(OPACITY_SELECTED))
+                                            .child(category.label()),
+                                    )
+                                    .children(section.items.iter().map(|item| {
+                                        let key_s: SharedString = item.keys.into();
+                                        let desc_s: SharedString = item.description.into();
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .justify_between()
+                                            .py(S1)
+                                            .gap(S3)
+                                            .child(div().text_sm().text_color(fg).child(desc_s))
+                                            .child(
+                                                div()
+                                                    .px(S2)
+                                                    .py(S1)
+                                                    .rounded(R_SM)
+                                                    .border_1()
+                                                    .border_color(border.opacity(OPACITY_DISABLED))
+                                                    .bg(cx.theme().muted.opacity(OPACITY_HOVER))
+                                                    .text_xs()
+                                                    .text_color(muted)
+                                                    .child(key_s),
+                                            )
+                                    }))
+                            }),
+                    ),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_shortcut_category_labels_match_ai_shortcut_sections() {
+        let category_labels: Vec<&str> = ShortcutCategory::ALL
+            .into_iter()
+            .map(ShortcutCategory::label)
+            .collect();
+        let section_titles: Vec<&str> = AI_SHORTCUT_SECTIONS
+            .iter()
+            .map(|section| section.title)
+            .collect();
+
+        assert_eq!(category_labels, section_titles);
     }
 }

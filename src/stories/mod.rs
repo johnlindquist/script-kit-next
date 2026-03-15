@@ -28,7 +28,7 @@ mod select_prompt_stories;
 mod toast_stories;
 
 use crate::storybook::StoryEntry;
-use std::sync::OnceLock;
+use std::sync::LazyLock;
 
 // Re-export story types
 pub use actions_window_stories::ActionsWindowStory;
@@ -56,39 +56,39 @@ pub use select_prompt_stories::SelectPromptStory;
 pub use toast_stories::ToastStory;
 
 /// Static storage for all stories
-static ALL_STORIES: OnceLock<Vec<StoryEntry>> = OnceLock::new();
+static ALL_STORIES: LazyLock<Vec<StoryEntry>> = LazyLock::new(|| {
+    vec![
+        // Foundation
+        StoryEntry::new(Box::new(DesignTokenStory)),
+        // Components
+        StoryEntry::new(Box::new(ButtonStory)),
+        StoryEntry::new(Box::new(ToastStory)),
+        StoryEntry::new(Box::new(FormFieldStory)),
+        StoryEntry::new(Box::new(ListItemStory)),
+        StoryEntry::new(Box::new(ScrollbarStory)),
+        // Layouts
+        StoryEntry::new(Box::new(HeaderVariationsStory)),
+        StoryEntry::new(Box::new(HeaderDesignVariationsStory)),
+        StoryEntry::new(Box::new(HeaderRaycastVariationsStory)),
+        StoryEntry::new(Box::new(HeaderLogoVariationsStory)),
+        StoryEntry::new(Box::new(HeaderTabSpacingVariationsStory)),
+        StoryEntry::new(Box::new(HeaderButtonVariationsStory)),
+        StoryEntry::new(Box::new(ListItemStateVariationsStory)),
+        StoryEntry::new(Box::new(RunButtonExplorationStory)),
+        StoryEntry::new(Box::new(LogoCenteringStory)),
+        StoryEntry::new(Box::new(FooterLayoutVariationsStory)),
+        StoryEntry::new(Box::new(FooterActionVariationsStory)),
+        StoryEntry::new(Box::new(ActionsWindowStory)),
+        // Prompts
+        StoryEntry::new(Box::new(ArgPromptStory)),
+        StoryEntry::new(Box::new(DropPromptStory)),
+        StoryEntry::new(Box::new(EnvPromptStory)),
+        StoryEntry::new(Box::new(PathPromptStory)),
+        StoryEntry::new(Box::new(SelectPromptStory)),
+    ]
+});
 
 /// Get all registered stories
 pub fn get_all_stories() -> &'static Vec<StoryEntry> {
-    ALL_STORIES.get_or_init(|| {
-        vec![
-            // Foundation
-            StoryEntry::new(Box::new(DesignTokenStory)),
-            // Components
-            StoryEntry::new(Box::new(ButtonStory)),
-            StoryEntry::new(Box::new(ToastStory)),
-            StoryEntry::new(Box::new(FormFieldStory)),
-            StoryEntry::new(Box::new(ListItemStory)),
-            StoryEntry::new(Box::new(ScrollbarStory)),
-            // Layouts
-            StoryEntry::new(Box::new(HeaderVariationsStory)),
-            StoryEntry::new(Box::new(HeaderDesignVariationsStory)),
-            StoryEntry::new(Box::new(HeaderRaycastVariationsStory)),
-            StoryEntry::new(Box::new(HeaderLogoVariationsStory)),
-            StoryEntry::new(Box::new(HeaderTabSpacingVariationsStory)),
-            StoryEntry::new(Box::new(HeaderButtonVariationsStory)),
-            StoryEntry::new(Box::new(ListItemStateVariationsStory)),
-            StoryEntry::new(Box::new(RunButtonExplorationStory)),
-            StoryEntry::new(Box::new(LogoCenteringStory)),
-            StoryEntry::new(Box::new(FooterLayoutVariationsStory)),
-            StoryEntry::new(Box::new(FooterActionVariationsStory)),
-            StoryEntry::new(Box::new(ActionsWindowStory)),
-            // Prompts
-            StoryEntry::new(Box::new(ArgPromptStory)),
-            StoryEntry::new(Box::new(DropPromptStory)),
-            StoryEntry::new(Box::new(EnvPromptStory)),
-            StoryEntry::new(Box::new(PathPromptStory)),
-            StoryEntry::new(Box::new(SelectPromptStory)),
-        ]
-    })
+    &ALL_STORIES
 }

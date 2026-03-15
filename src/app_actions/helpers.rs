@@ -956,4 +956,68 @@ mod app_actions_tests {
             "Expected remove_script to show error toast when modal cannot be opened"
         );
     }
+
+    // -----------------------------------------------------------------------
+    // Async failure paths — coded error toasts
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_edit_scriptlet_async_failure_uses_launch_failed_error_code() {
+        let content = crate::test_utils::read_all_handle_action_sources();
+
+        let start = content
+            .find("\"edit_scriptlet\"")
+            .expect("Expected edit_scriptlet action handler");
+        let end = (start + 3000).min(content.len());
+        let block = &content[start..end];
+
+        assert!(
+            block.contains("this.show_error_toast_with_code("),
+            "Expected edit_scriptlet async failure to use show_error_toast_with_code"
+        );
+        assert!(
+            block.contains("ERROR_LAUNCH_FAILED"),
+            "Expected edit_scriptlet async failure to use ERROR_LAUNCH_FAILED"
+        );
+    }
+
+    #[test]
+    fn test_reveal_scriptlet_async_failure_uses_reveal_failed_error_code() {
+        let content = crate::test_utils::read_all_handle_action_sources();
+
+        let start = content
+            .find("\"reveal_scriptlet_in_finder\"")
+            .expect("Expected reveal_scriptlet_in_finder action handler");
+        let end = (start + 3500).min(content.len());
+        let block = &content[start..end];
+
+        assert!(
+            block.contains("this.show_error_toast_with_code("),
+            "Expected reveal_scriptlet_in_finder async failure to use show_error_toast_with_code"
+        );
+        assert!(
+            block.contains("ERROR_REVEAL_FAILED"),
+            "Expected reveal_scriptlet_in_finder async failure to use ERROR_REVEAL_FAILED"
+        );
+    }
+
+    #[test]
+    fn test_remove_script_async_failure_uses_trash_failed_error_code() {
+        let content = crate::test_utils::read_all_handle_action_sources();
+
+        let start = content
+            .find("\"remove_script\" | \"delete_script\"")
+            .expect("Expected remove_script action handler");
+        let end = (start + 5500).min(content.len());
+        let block = &content[start..end];
+
+        assert!(
+            block.contains("this.show_error_toast_with_code("),
+            "Expected remove_script async failure to use show_error_toast_with_code"
+        );
+        assert!(
+            block.contains("ERROR_TRASH_FAILED"),
+            "Expected remove_script async failure to use ERROR_TRASH_FAILED"
+        );
+    }
 }

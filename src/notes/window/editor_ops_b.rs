@@ -1,4 +1,5 @@
 use super::*;
+use itertools::Itertools;
 
 impl NotesApp {
     pub(super) fn delete_current_line(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -326,7 +327,6 @@ impl NotesApp {
                     }
                 }
             })
-            .collect::<Vec<_>>()
             .join(" ")
     }
 }

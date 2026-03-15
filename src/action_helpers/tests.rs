@@ -385,6 +385,61 @@ fn test_extract_path_for_edit_builtin() {
 // Tests for reserved action IDs
 
 #[test]
+fn reserved_action_ids_include_visible() {
+    use std::collections::BTreeSet;
+
+    let expected: BTreeSet<&str> = [
+        "__cancel__",
+        "add_alias",
+        "add_shortcut",
+        "attach_to_ai",
+        "configure_shortcut",
+        "copy_deeplink",
+        "copy_path",
+        "copy_scriptlet_path",
+        "delete_script",
+        "edit_script",
+        "edit_scriptlet",
+        "open_directory",
+        "open_file",
+        "open_with",
+        "quick_look",
+        "reload_scripts",
+        "remove_alias",
+        "remove_script",
+        "reveal_in_finder",
+        "reveal_scriptlet_in_finder",
+        "show_info",
+        "update_alias",
+        "update_shortcut",
+        "view_logs",
+    ]
+    .into_iter()
+    .collect();
+
+    let actual: BTreeSet<&str> = RESERVED_ACTION_IDS.iter().copied().collect();
+    let missing: Vec<&str> = expected.difference(&actual).copied().collect();
+
+    assert!(
+        missing.is_empty(),
+        "Missing reserved local action ids: {missing:?}"
+    );
+}
+
+#[test]
+fn reserved_action_ids_are_unique() {
+    use std::collections::BTreeSet;
+
+    let unique: BTreeSet<&str> = RESERVED_ACTION_IDS.iter().copied().collect();
+
+    assert_eq!(
+        unique.len(),
+        RESERVED_ACTION_IDS.len(),
+        "Duplicate ids in RESERVED_ACTION_IDS"
+    );
+}
+
+#[test]
 fn test_is_reserved_action_id() {
     assert!(is_reserved_action_id("copy_path"));
     assert!(is_reserved_action_id("edit_script"));
@@ -744,6 +799,7 @@ fn error_code_constants_are_stable_strings() {
     assert_eq!(ERROR_UNSUPPORTED_PLATFORM, "unsupported_platform");
     assert_eq!(ERROR_LAUNCH_FAILED, "launch_failed");
     assert_eq!(ERROR_REVEAL_FAILED, "reveal_failed");
+    assert_eq!(ERROR_TRASH_FAILED, "trash_failed");
     assert_eq!(ERROR_MODAL_FAILED, "modal_failed");
     assert_eq!(ERROR_CANCELLED, "cancelled");
     assert_eq!(ERROR_NO_SENDER, "no_sender");

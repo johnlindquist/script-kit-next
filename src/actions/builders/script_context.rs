@@ -1,6 +1,7 @@
 use super::shared::to_deeplink_name;
 use super::types::{Action, ActionCategory, ScriptInfo};
 use crate::designs::icon_variations::IconName;
+use itertools::Itertools;
 use std::collections::HashSet;
 
 fn has_invalid_script_context_input(script: &ScriptInfo) -> bool {
@@ -21,7 +22,6 @@ fn title_case_words(value: &str) -> String {
                 None => String::new(),
             }
         })
-        .collect::<Vec<_>>()
         .join(" ")
 }
 

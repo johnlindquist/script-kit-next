@@ -23,6 +23,7 @@
 // --- merged from part_000.rs ---
 use crate::config::Config;
 use anyhow::{Context, Result};
+use itertools::Itertools;
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
@@ -185,7 +186,6 @@ fn name_to_title(name: &str) -> String {
                 Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
             }
         })
-        .collect::<Vec<_>>()
         .join(" ")
 }
 /// Generate the script template using the global metadata format.

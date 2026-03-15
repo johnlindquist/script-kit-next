@@ -4,6 +4,33 @@ use crate::theme::opacity::{
     OPACITY_TEXT_MUTED,
 };
 
+/// Script Kit-specific welcome suggestions shown on the AI chat welcome screen.
+/// Each tuple: (title, description, icon).
+fn script_kit_welcome_suggestions() -> [(&'static str, &'static str, LocalIconName); 4] {
+    [
+        (
+            "Monitor clipboard",
+            "Write a script to watch clipboard changes and clean copied text.",
+            LocalIconName::BoltFilled,
+        ),
+        (
+            "Menu bar shortcut",
+            "Create a menu bar shortcut that launches a Script Kit action instantly.",
+            LocalIconName::Code,
+        ),
+        (
+            "Rename downloads",
+            "Build a script that organizes Downloads files using simple rules.",
+            LocalIconName::Terminal,
+        ),
+        (
+            "Quick launcher",
+            "Generate a focused launcher for your most-used Script Kit workflows.",
+            LocalIconName::Warning,
+        ),
+    ]
+}
+
 impl AiApp {
     pub(super) fn render_welcome(&self, cx: &mut Context<Self>) -> impl IntoElement {
         // Show setup card if no providers are configured
@@ -14,17 +41,7 @@ impl AiApp {
         let suggestion_bg = cx.theme().muted.opacity(OPACITY_CARD_BG);
         let suggestion_hover_bg = cx.theme().muted.opacity(OPACITY_SUGGESTION_HOVER);
 
-        let icons = [
-            LocalIconName::Terminal,
-            LocalIconName::Code,
-            LocalIconName::Warning,
-            LocalIconName::BoltFilled,
-        ];
-        let suggestions: Vec<(&str, &str, LocalIconName)> = WELCOME_SUGGESTIONS
-            .iter()
-            .zip(icons)
-            .map(|((title, desc), icon)| (*title, *desc, icon))
-            .collect();
+        let suggestions = script_kit_welcome_suggestions();
 
         div()
             .flex()
@@ -96,9 +113,7 @@ impl AiApp {
                                         suggestion_text = %prompt_text,
                                         "Welcome suggestion card clicked — auto-submitting"
                                     );
-                                    this.input_state.update(cx, |state, cx| {
-                                        state.set_value(prompt_text.to_string(), window, cx);
-                                    });
+                                    this.set_composer_value(prompt_text.to_string(), window, cx);
                                     this.submit_message(window, cx);
                                 }))
                                 .child(
@@ -146,5 +161,29 @@ impl AiApp {
                     )),
             )
             .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::script_kit_welcome_suggestions;
+
+    #[test]
+    fn test_script_kit_welcome_suggestions_reference_clipboard_and_menu_bar() {
+        let combined = script_kit_welcome_suggestions()
+            .into_iter()
+            .flat_map(|(title, desc, _icon)| [title, desc])
+            .collect::<Vec<_>>()
+            .join(" ")
+            .to_lowercase();
+
+        assert!(
+            combined.contains("clipboard"),
+            "suggestions must reference clipboard"
+        );
+        assert!(
+            combined.contains("menu bar"),
+            "suggestions must reference menu bar"
+        );
     }
 }

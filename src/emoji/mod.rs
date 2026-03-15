@@ -6,7 +6,7 @@ pub struct Emoji {
     pub category: EmojiCategory,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumIter)]
 pub enum EmojiCategory {
     SmileysEmotion,
     PeopleBody,
@@ -46,19 +46,13 @@ macro_rules! emoji {
     };
 }
 
+use strum::IntoEnumIterator;
 use EmojiCategory::*;
 
-pub const ALL_CATEGORIES: &[EmojiCategory] = &[
-    SmileysEmotion,
-    PeopleBody,
-    AnimalsNature,
-    FoodDrink,
-    TravelPlaces,
-    Activities,
-    Objects,
-    Symbols,
-    Flags,
-];
+/// Returns an iterator over all emoji categories in declaration order.
+pub fn all_categories() -> impl Iterator<Item = EmojiCategory> {
+    EmojiCategory::iter()
+}
 
 pub const EMOJIS: &[Emoji] = &[
     emoji!(
@@ -1217,9 +1211,7 @@ pub fn emojis_by_category(category: EmojiCategory) -> Vec<&'static Emoji> {
 }
 
 pub fn grouped_emojis() -> Vec<(EmojiCategory, Vec<&'static Emoji>)> {
-    ALL_CATEGORIES
-        .iter()
-        .copied()
+    all_categories()
         .map(|category| (category, emojis_by_category(category)))
         .collect()
 }
@@ -1240,7 +1232,7 @@ pub fn filtered_ordered_emojis(
         filtered.retain(|e| e.category == cat);
     }
     let mut ordered: Vec<Emoji> = Vec::with_capacity(filtered.len());
-    for cat in ALL_CATEGORIES.iter().copied() {
+    for cat in all_categories() {
         ordered.extend(filtered.iter().copied().filter(|e| e.category == cat));
     }
     ordered
@@ -1254,7 +1246,7 @@ pub fn compute_scroll_row(selected_index: usize, ordered: &[Emoji]) -> usize {
     let cols = GRID_COLS;
     let mut flat_offset: usize = 0;
     let mut row_offset: usize = 0;
-    for cat in ALL_CATEGORIES.iter().copied() {
+    for cat in all_categories() {
         let cat_count = ordered.iter().filter(|e| e.category == cat).count();
         if cat_count == 0 {
             continue;
@@ -1313,9 +1305,10 @@ mod tests {
 
     #[test]
     fn test_all_categories_has_expected_display_order() {
+        let categories: Vec<EmojiCategory> = all_categories().collect();
         assert_eq!(
-            ALL_CATEGORIES,
-            &[
+            categories,
+            vec![
                 SmileysEmotion,
                 PeopleBody,
                 AnimalsNature,
@@ -1341,11 +1334,9 @@ mod tests {
     #[test]
     fn test_grouped_emojis_returns_all_categories_in_display_order() {
         let grouped = grouped_emojis();
-        assert_eq!(grouped.len(), ALL_CATEGORIES.len());
+        assert_eq!(grouped.len(), all_categories().count());
 
-        for ((category, emojis), expected_category) in
-            grouped.iter().zip(ALL_CATEGORIES.iter().copied())
-        {
+        for ((category, emojis), expected_category) in grouped.iter().zip(all_categories()) {
             assert_eq!(*category, expected_category);
             assert!(emojis
                 .iter()

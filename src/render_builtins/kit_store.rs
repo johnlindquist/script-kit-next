@@ -52,7 +52,7 @@ impl ScriptListApp {
             .build()
             .new_agent();
 
-        let normalized_query = query.split_whitespace().collect::<Vec<_>>().join("+");
+        let normalized_query = query.split_whitespace().join("+");
         let mut results = Vec::new();
         let mut seen = HashSet::new();
 

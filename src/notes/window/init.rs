@@ -77,9 +77,9 @@ impl NotesApp {
 
         // Subscribe to search changes
         let search_sub = cx.subscribe_in(&search_state, window, {
-            move |this, _, ev: &InputEvent, _window, cx| {
+            move |this, _, ev: &InputEvent, window, cx| {
                 if matches!(ev, InputEvent::Change) {
-                    this.on_search_change(cx);
+                    this.on_search_change(window, cx);
                 }
             }
         });
@@ -218,25 +218,38 @@ impl NotesApp {
         crate::window_state::save_window_from_gpui(crate::window_state::WindowRole::Notes, wb);
     }
 
-    /// Save the current note if it has unsaved changes
-    pub(super) fn save_current_note(&mut self) {
+    /// Save the current note if it has unsaved changes.
+    /// Returns `true` when the note was saved (or was already clean),
+    /// `false` when the save failed or the note was not in the current list.
+    pub(super) fn save_current_note(&mut self) -> bool {
         if !self.has_unsaved_changes {
-            return;
+            return true;
         }
 
-        if let Some(id) = self.selected_note_id {
-            if let Some(note) = self.notes.iter().find(|n| n.id == id) {
-                if let Err(e) = storage::save_note(note) {
-                    tracing::error!(error = %e, "Failed to save note");
-                    return;
-                }
-                debug!(note_id = %id, "Note saved (debounced)");
-            }
+        let Some(id) = self.selected_note_id else {
+            return true;
+        };
+
+        let Some(note) = self.notes.iter().find(|n| n.id == id) else {
+            tracing::warn!(
+                note_id = %id,
+                search_query = %self.search_query,
+                notes_len = self.notes.len(),
+                "Skipping note save because the selected note is not present in the current notes list"
+            );
+            return false;
+        };
+
+        if let Err(e) = storage::save_note(note) {
+            tracing::error!(error = %e, note_id = %id, "Failed to save note");
+            return false;
         }
 
+        debug!(note_id = %id, "Note saved (debounced)");
         self.has_unsaved_changes = false;
         self.last_save_time = Some(Instant::now());
         self.last_save_confirmed = Some(Instant::now());
+        true
     }
 
     /// Check if we should save now (debounce check)
