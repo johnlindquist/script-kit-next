@@ -46,6 +46,10 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter", "time", "tracing-log"] }
 tracing-appender = "0.2"
 chrono = { version = "0.4", features = ["serde"] }
+itertools = "0.14"
+strum = { version = "0.26", features = ["derive"] }
+humantime = "2"
+humansize = "2"
 
 # Terminal integration dependencies (Tier 2 - Alacritty)
 # Versions chosen to match Zed's current known-working configuration (Dec 2025)

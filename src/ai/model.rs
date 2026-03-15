@@ -41,8 +41,11 @@ impl std::fmt::Display for ChatId {
 }
 
 /// Role of a message in a chat conversation
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,
+)]
 #[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase", ascii_case_insensitive)]
 pub enum MessageRole {
     /// Message from the user
     User,
@@ -64,32 +67,25 @@ impl MessageRole {
 
     /// Parse from string (fallible, returns Option)
     pub fn parse(s: &str) -> Option<Self> {
-        match s.to_lowercase().as_str() {
-            "user" => Some(MessageRole::User),
-            "assistant" => Some(MessageRole::Assistant),
-            "system" => Some(MessageRole::System),
-            _ => None,
-        }
-    }
-}
-
-impl std::str::FromStr for MessageRole {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        MessageRole::parse(s).ok_or_else(|| format!("Invalid message role: {}", s))
-    }
-}
-
-impl std::fmt::Display for MessageRole {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.as_str())
+        <Self as std::str::FromStr>::from_str(s).ok()
     }
 }
 
 /// Source of a chat (where it originated from)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    Default,
+    strum::Display,
+    strum::EnumString,
+)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case", ascii_case_insensitive)]
 pub enum ChatSource {
     /// Chat from the AI window
     #[default]
@@ -112,11 +108,7 @@ impl ChatSource {
 
     /// Parse from string
     pub fn parse(s: &str) -> Self {
-        match s {
-            "chat_prompt" => ChatSource::ChatPrompt,
-            "script" => ChatSource::Script,
-            _ => ChatSource::AiWindow,
-        }
+        <Self as std::str::FromStr>::from_str(s).unwrap_or(Self::AiWindow)
     }
 }
 

@@ -14,44 +14,42 @@ impl AiApp {
         let muted_bg = cx.theme().muted;
         let mouse_mode = self.input_mode == InputMode::Mouse;
 
-        // Show "Generated in Xs · ~N words" for 8 seconds after streaming completes
+        // Show "Generated in Xs · ~N words" until the next message is sent.
+        // The label persists so users can reference generation speed context.
+        // It is cleared when last_streaming_completed_at is reset (on next submit).
         let completion_label: Option<String> =
-            self.last_streaming_completed_at.and_then(|completed_at| {
-                if completed_at.elapsed().as_secs() < 8 {
-                    self.last_streaming_duration.map(|dur| {
-                        let time_label = {
-                            let secs = dur.as_secs();
-                            if secs < 1 {
-                                format!("{}ms", dur.as_millis())
-                            } else {
-                                format!("{}s", secs)
-                            }
-                        };
-                        let word_count = self
-                            .current_messages
-                            .last()
-                            .filter(|m| m.role == MessageRole::Assistant)
-                            .map(|m| m.content.split_whitespace().count())
-                            .unwrap_or(0);
-                        if word_count > 0 {
-                            let secs = dur.as_secs_f64();
-                            if secs > 0.5 {
-                                format!(
-                                    "{} \u{00b7} ~{} words \u{00b7} {:.0} words/s",
-                                    time_label,
-                                    word_count,
-                                    word_count as f64 / secs
-                                )
-                            } else {
-                                format!("{} \u{00b7} ~{} words", time_label, word_count)
-                            }
+            self.last_streaming_completed_at.and_then(|_completed_at| {
+                self.last_streaming_duration.map(|dur| {
+                    let time_label = {
+                        let secs = dur.as_secs();
+                        if secs < 1 {
+                            format!("{}ms", dur.as_millis())
                         } else {
-                            time_label
+                            format!("{}s", secs)
                         }
-                    })
-                } else {
-                    None
-                }
+                    };
+                    let word_count = self
+                        .current_messages
+                        .last()
+                        .filter(|m| m.role == MessageRole::Assistant)
+                        .map(|m| m.content.split_whitespace().count())
+                        .unwrap_or(0);
+                    if word_count > 0 {
+                        let secs = dur.as_secs_f64();
+                        if secs > 0.5 {
+                            format!(
+                                "{} \u{00b7} ~{} words \u{00b7} {:.0} words/s",
+                                time_label,
+                                word_count,
+                                word_count as f64 / secs
+                            )
+                        } else {
+                            format!("{} \u{00b7} ~{} words", time_label, word_count)
+                        }
+                    } else {
+                        time_label
+                    }
+                })
             });
 
         // Copy button state

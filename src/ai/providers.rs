@@ -12,6 +12,7 @@
 //!
 
 use anyhow::{anyhow, Context, Result};
+use itertools::Itertools;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::sync::Arc;
@@ -871,7 +872,6 @@ impl AiProvider for AnthropicProvider {
             .map(|arr| {
                 arr.iter()
                     .filter_map(|b| b.get("text").and_then(|t| t.as_str()))
-                    .collect::<Vec<_>>()
                     .join("")
             })
             .unwrap_or_default();
@@ -1094,7 +1094,6 @@ impl AiProvider for GoogleProvider {
                 parts
                     .iter()
                     .filter_map(|p| p.get("text").and_then(|t| t.as_str()))
-                    .collect::<Vec<_>>()
                     .join("")
             })
             .unwrap_or_default();
