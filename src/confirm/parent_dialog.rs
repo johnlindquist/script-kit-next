@@ -337,6 +337,19 @@ mod tests {
     }
 
     #[test]
+    fn prompt_handler_confirm_uses_shared_async_confirm_helper() {
+        let source = fs::read_to_string("src/prompt_handler/mod.rs")
+            .expect("Failed to read src/prompt_handler/mod.rs");
+        let normalized = normalize_ws(&source);
+
+        assert!(
+            normalized.contains("crate::confirm::confirm_with_parent_dialog(")
+                && !normalized.contains("crate::confirm::open_parent_confirm_dialog("),
+            "prompt_handler confirm should delegate to the shared async confirm helper"
+        );
+    }
+
+    #[test]
     fn quit_action_and_builtin_quit_share_shutdown_cleanup() {
         let scripts_source = fs::read_to_string("src/app_actions/handle_action/scripts.rs")
             .expect("Failed to read scripts.rs");
