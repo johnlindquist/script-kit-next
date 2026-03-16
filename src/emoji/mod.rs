@@ -1274,6 +1274,30 @@ pub fn compute_scroll_row(selected_index: usize, ordered: &[Emoji]) -> usize {
     row_offset
 }
 
+/// Return the number of rendered grid rows (headers + cell rows) for a given
+/// filter and optional category. Used by window sizing so the picker is sized
+/// by actual visual rows, not raw emoji count.
+pub fn filtered_grid_row_count(filter: &str, selected_category: Option<EmojiCategory>) -> usize {
+    let ordered = filtered_ordered_emojis(filter, selected_category);
+    let mut row_count = 0;
+    let mut flat_offset = 0;
+
+    for category in all_categories() {
+        let category_count = ordered[flat_offset..]
+            .iter()
+            .take_while(|e| e.category == category)
+            .count();
+        if category_count == 0 {
+            continue;
+        }
+        // 1 header row + ceil(count / GRID_COLS) cell rows
+        row_count += 1 + category_count.div_ceil(GRID_COLS);
+        flat_offset += category_count;
+    }
+
+    row_count
+}
+
 pub fn search_emojis(query: &str) -> Vec<&Emoji> {
     let query = query.trim().to_ascii_lowercase();
     if query.is_empty() {
@@ -1391,6 +1415,25 @@ mod tests {
     fn test_search_emojis_returns_all_when_query_is_empty() {
         let matches = search_emojis("   ");
         assert_eq!(matches.len(), EMOJIS.len());
+    }
+
+    #[test]
+    fn test_filtered_grid_row_count_matches_current_dataset() {
+        // Unfiltered: 9 category headers + cell rows for all 296 emojis
+        let total = filtered_grid_row_count("", None);
+        assert!(total > 0, "unfiltered grid should have rows");
+
+        // "heart" filter should return a smaller count
+        let heart = filtered_grid_row_count("heart", None);
+        assert!(
+            heart < total,
+            "heart filter should have fewer rows than unfiltered"
+        );
+        assert!(heart > 0, "heart filter should have some rows");
+
+        // "pizza" filter should be very small
+        let pizza = filtered_grid_row_count("pizza", None);
+        assert!(pizza > 0 && pizza <= 4, "pizza filter should have 1-4 rows");
     }
 
     #[test]

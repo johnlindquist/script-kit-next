@@ -28,6 +28,13 @@ impl ScriptListApp {
             }
 
             let row = crate::emoji::compute_scroll_row(*selected_index, &ordered_emojis);
+            tracing::debug!(
+                target: "script_kit::emoji_picker",
+                event = "scroll_to_item",
+                reason = "horizontal_nav",
+                row,
+                selected_index = *selected_index,
+            );
             self.emoji_scroll_handle
                 .scroll_to_item(row, gpui::ScrollStrategy::Nearest);
 
@@ -202,6 +209,13 @@ impl ScriptListApp {
                     if navigated {
                         let row =
                             crate::emoji::compute_scroll_row(*selected_index, &ordered_emojis);
+                        tracing::debug!(
+                            target: "script_kit::emoji_picker",
+                            event = "scroll_to_item",
+                            reason = "vertical_nav",
+                            row,
+                            selected_index = *selected_index,
+                        );
                         this.emoji_scroll_handle
                             .scroll_to_item(row, gpui::ScrollStrategy::Nearest);
                         cx.stop_propagation();
@@ -266,17 +280,10 @@ impl ScriptListApp {
             let rows_for_list = rows.clone();
             let emojis_for_list: Arc<Vec<crate::emoji::Emoji>> = Arc::new(ordered_emojis.clone());
             let selected = selected_index;
-            let hovered = self.hovered_index;
-            let current_input_mode = self.input_mode;
             let row_height = crate::emoji::GRID_ROW_HEIGHT;
-            let cell_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x18);
-            let hover_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x2c);
-            let cell_border = rgba((ui_border << 8) | 0x3c);
-            let selected_border = self.theme.colors.accent.selected;
-            let selected_outline = rgba((selected_border << 8) | 0x80);
-            let selected_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x36);
+            let selected_outline = rgba((self.theme.colors.accent.selected << 8) | 0x80);
+            let selected_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x2a);
             let click_entity_handle = cx.entity().downgrade();
-            let hover_entity_handle = cx.entity().downgrade();
 
             uniform_list(
                 "emoji-picker-grid",
@@ -312,7 +319,6 @@ impl ScriptListApp {
                                 .into_any_element(),
                             Some(EmojiGridRow::Cells { start_index, count }) => {
                                 let click_entity_row = click_entity_handle.clone();
-                                let hover_entity_row = hover_entity_handle.clone();
                                 let emojis_for_row: Arc<Vec<crate::emoji::Emoji>> =
                                     Arc::clone(&emojis_for_list);
                                 let row_start_index = *start_index;
@@ -333,10 +339,7 @@ impl ScriptListApp {
                                             None => return div().w(px(tile_size)).h(px(tile_size)).into_any_element(),
                                         };
                                         let is_selected = flat_emoji_index == selected;
-                                        let is_hovered = hovered == Some(flat_emoji_index)
-                                            && current_input_mode == InputMode::Mouse;
                                         let click_entity = click_entity_row.clone();
-                                        let hover_entity = hover_entity_row.clone();
                                         let emoji_value = emoji.emoji.to_string();
                                         let emoji_display = emoji_value.clone();
 
@@ -348,15 +351,6 @@ impl ScriptListApp {
                                             .items_center()
                                             .justify_center()
                                             .cursor_pointer()
-                                            .tooltip(|window, cx| {
-                                                gpui_component::tooltip::Tooltip::new("Copy emoji")
-                                                    .key_binding(
-                                                        gpui::Keystroke::parse("enter")
-                                                            .ok()
-                                                            .map(gpui_component::kbd::Kbd::new),
-                                                    )
-                                                    .build(window, cx)
-                                            })
                                             .on_click(
                                                 move |_event: &gpui::ClickEvent,
                                                       _window: &mut Window,
@@ -379,31 +373,6 @@ impl ScriptListApp {
                                                     }
                                                 },
                                             )
-                                            .on_hover(
-                                                move |is_hov: &bool,
-                                                      _window: &mut Window,
-                                                      cx: &mut gpui::App| {
-                                                    if let Some(app) = hover_entity.upgrade() {
-                                                        app.update(cx, |this, cx| {
-                                                            if *is_hov {
-                                                                this.input_mode = InputMode::Mouse;
-                                                                if this.hovered_index
-                                                                    != Some(flat_emoji_index)
-                                                                {
-                                                                    this.hovered_index =
-                                                                        Some(flat_emoji_index);
-                                                                    cx.notify();
-                                                                }
-                                                            } else if this.hovered_index
-                                                                == Some(flat_emoji_index)
-                                                            {
-                                                                this.hovered_index = None;
-                                                                cx.notify();
-                                                            }
-                                                        });
-                                                    }
-                                                },
-                                            )
                                             .child(
                                                 div()
                                                     .w_full()
@@ -412,16 +381,12 @@ impl ScriptListApp {
                                                     .items_center()
                                                     .justify_center()
                                                     .rounded(px(design_visual.radius_md))
-                                                    .text_size(px(28.0))
-                                                    .border_1()
-                                                    .bg(cell_bg)
-                                                    .border_color(if is_selected {
-                                                        selected_outline
-                                                    } else {
-                                                        cell_border
+                                                    .text_size(px(24.0))
+                                                    .when(is_selected, |d| {
+                                                        d.bg(selected_bg)
+                                                            .border_1()
+                                                            .border_color(selected_outline)
                                                     })
-                                                    .when(is_hovered && !is_selected, |d| d.bg(hover_bg))
-                                                    .when(is_selected, |d| d.bg(selected_bg))
                                                     .child(emoji_display),
                                             )
                                             .into_any_element()
