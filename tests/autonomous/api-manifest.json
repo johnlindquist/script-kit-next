@@ -1,17 +1,17 @@
 {
   "generated_at": "2025-12-27T00:00:00.000Z",
   "total_apis": 63,
-  "tested_apis": 40,
-  "untested_apis": 23,
-  "coverage_percent": 63,
+  "tested_apis": 37,
+  "untested_apis": 26,
+  "coverage_percent": 59,
   "coverage_by_tier": {
     "TIER_1_core": { "tested": 6, "total": 6, "percent": 100 },
-    "TIER_2_forms": { "tested": 4, "total": 4, "percent": 100 },
+    "TIER_2_forms": { "tested": 3, "total": 4, "percent": 75 },
     "TIER_3_system": { "tested": 7, "total": 12, "percent": 58 },
-    "TIER_4A_files": { "tested": 3, "total": 3, "percent": 100 },
+    "TIER_4A_files": { "tested": 2, "total": 3, "percent": 67 },
     "TIER_4B_utility": { "tested": 10, "total": 15, "percent": 67 },
     "TIER_5A_storage": { "tested": 9, "total": 16, "percent": 56 },
-    "TIER_5B_media": { "tested": 5, "total": 7, "percent": 71 }
+    "TIER_5B_media": { "tested": 4, "total": 7, "percent": 57 }
   },
   "test_harness": {
     "command": "bun run scripts/test-harness.ts",
@@ -77,8 +77,8 @@
       "name": "fields",
       "tier": "forms",
       "testFile": "test-form-inputs.ts",
-      "status": "tested",
-      "tests": ["fields-string-array", "fields-structured"]
+      "status": "untested",
+      "reason": "Runtime still routes to FieldsComingSoon toast"
     },
     {
       "name": "form",
@@ -189,8 +189,8 @@
       "name": "hotkey",
       "tier": "files",
       "testFile": "test-file-apis.ts",
-      "status": "tested",
-      "tests": ["hotkey-capture"]
+      "status": "untested",
+      "reason": "Runtime still routes to HotkeyComingSoon toast"
     },
     {
       "name": "drop",
@@ -442,8 +442,8 @@
       "name": "widget",
       "tier": "media",
       "testFile": "test-media-apis.ts",
-      "status": "tested",
-      "tests": ["widget-basic"]
+      "status": "untested",
+      "reason": "Runtime still routes to WidgetComingSoon toast"
     },
     {
       "name": "eyeDropper",
@@ -475,9 +475,9 @@
     }
   ],
   "summary": {
-    "tested": 40,
+    "tested": 37,
     "skipped": 9,
-    "untested": 14,
+    "untested": 17,
     "total": 63,
     "skipped_reasons": {
       "hardware": ["webcam", "mic"],
@@ -486,6 +486,7 @@
       "external_app": ["getSelectedText", "setSelectedText"]
     },
     "untested_reasons": {
+      "coming_soon_stub": ["fields", "hotkey", "widget"],
       "not_yet_implemented": ["clipboard", "menu", "isBin", "memoryMap", "compile"],
       "opens_external": ["browse", "editFile", "inspect"],
       "complex_to_test": ["run", "download", "trash"],
