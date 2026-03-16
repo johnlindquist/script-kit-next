@@ -244,6 +244,11 @@ impl ScriptListApp {
             },
         );
 
+        let tile_size = crate::emoji::GRID_TILE_SIZE;
+        let tile_gap = crate::emoji::GRID_TILE_GAP;
+        const EMOJI_ROW_ID_OFFSET: usize = 10_000;
+        const EMOJI_CELL_ID_OFFSET: usize = 20_000;
+
         let grid_element: AnyElement = if filtered_len == 0 {
             div()
                 .w_full()
@@ -268,10 +273,8 @@ impl ScriptListApp {
             let selected_border = self.theme.colors.accent.selected;
             let selected_outline = rgba((selected_border << 8) | 0x90);
             let selected_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x2a);
-            let idle_border = rgba((ui_border << 8) | 0x18);
             let click_entity_handle = cx.entity().downgrade();
             let hover_entity_handle = cx.entity().downgrade();
-            let grid_cols = cols;
 
             uniform_list(
                 "emoji-picker-grid",
@@ -280,7 +283,7 @@ impl ScriptListApp {
                     visible_range
                         .map(|row_index| match rows_for_list.get(row_index) {
                             Some(EmojiGridRow::Header { title, count }) => div()
-                                .id(row_index)
+                                .id(EMOJI_ROW_ID_OFFSET + row_index)
                                 .w_full()
                                 .h(px(row_height))
                                 .px(px(design_spacing.padding_lg))
@@ -295,10 +298,11 @@ impl ScriptListApp {
                                 )
                                 .child(
                                     div()
+                                        .min_w(px(28.0))
                                         .px(px(design_spacing.padding_xs))
                                         .py(px(2.0))
                                         .rounded(px(design_visual.radius_md))
-                                        .bg(rgba((ui_border << 8) | 0x22))
+                                        .bg(rgba((ui_border << 8) | 0x18))
                                         .text_sm()
                                         .text_color(rgb(text_dimmed))
                                         .child(count.to_string()),
@@ -313,21 +317,18 @@ impl ScriptListApp {
                                 let row_count = *count;
 
                                 div()
-                                    .id(row_index)
+                                    .id(EMOJI_ROW_ID_OFFSET + row_index)
                                     .w_full()
                                     .h(px(row_height))
                                     .flex()
                                     .items_center()
                                     .px(px(design_spacing.padding_lg))
-                                    .gap(px(design_spacing.gap_sm * 1.5))
-                                    .children((0..grid_cols).map(move |col| -> AnyElement {
-                                        if col >= row_count {
-                                            return div().flex_1().h(px(row_height)).into_any_element();
-                                        }
+                                    .gap(px(tile_gap))
+                                    .children((0..row_count).map(move |col| -> AnyElement {
                                         let flat_emoji_index = row_start_index + col;
                                         let emoji = match emojis_for_row.get(flat_emoji_index) {
                                             Some(e) => e,
-                                            None => return div().flex_1().h(px(row_height)).into_any_element(),
+                                            None => return div().w(px(tile_size)).h(px(tile_size)).into_any_element(),
                                         };
                                         let is_selected = flat_emoji_index == selected;
                                         let is_hovered = hovered == Some(flat_emoji_index)
@@ -338,9 +339,9 @@ impl ScriptListApp {
                                         let emoji_display = emoji_value.clone();
 
                                         div()
-                                            .id(flat_emoji_index)
-                                            .flex_1()
-                                            .h(px(row_height))
+                                            .id(EMOJI_CELL_ID_OFFSET + flat_emoji_index)
+                                            .w(px(tile_size))
+                                            .h(px(tile_size))
                                             .flex()
                                             .items_center()
                                             .justify_center()
@@ -408,13 +409,13 @@ impl ScriptListApp {
                                                     .flex()
                                                     .items_center()
                                                     .justify_center()
-                                                    .rounded(px(design_visual.radius_lg))
-                                                    .text_size(px(30.0))
+                                                    .rounded(px(design_visual.radius_md))
+                                                    .text_size(px(28.0))
                                                     .border_1()
                                                     .border_color(if is_selected {
                                                         selected_outline
                                                     } else {
-                                                        idle_border
+                                                        rgba(0x00000000)
                                                     })
                                                     .when(is_hovered || is_selected, |d| {
                                                         d.bg(if is_selected { selected_bg } else { hover_bg })
@@ -423,9 +424,10 @@ impl ScriptListApp {
                                             )
                                             .into_any_element()
                                     }))
+                                    .child(div().flex_1())
                                     .into_any_element()
                             }
-                            None => div().id(row_index).h(px(row_height)).into_any_element(),
+                            None => div().id(EMOJI_ROW_ID_OFFSET + row_index).h(px(row_height)).into_any_element(),
                         })
                         .collect()
                 },

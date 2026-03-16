@@ -120,18 +120,20 @@ fn test_render_emoji_picker_uses_uniform_row_height_and_lighter_cell_chrome() {
         "header and cell rows should be fixed-height rows that satisfy uniform_list"
     );
     assert!(
-        source.contains(".gap(px(design_spacing.gap_sm * 1.5))")
-            && source.contains(".text_size(px(30.0))"),
-        "emoji rows should be roomier and use larger glyphs"
+        source.contains(".gap(px(tile_gap))") && source.contains(".text_size(px(28.0))"),
+        "emoji rows should use tile_gap spacing and compact glyph size"
     );
     assert!(
-        source.contains("let idle_border = rgba((ui_border << 8) | 0x18);")
-            && source.contains(
-                "let hover_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x14);"
-            )
-            && source.contains(
-                "let selected_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x2a);"
-            ),
-        "emoji cells should rely on lighter idle chrome and state-based fills"
+        source.contains("let tile_size = crate::emoji::GRID_TILE_SIZE;")
+            && source.contains("let tile_gap = crate::emoji::GRID_TILE_GAP;"),
+        "emoji cells should use shared tile constants"
+    );
+    assert!(
+        source.contains(
+            "let hover_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x14);"
+        ) && source.contains(
+            "let selected_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x2a);"
+        ),
+        "emoji cells should rely on state-based fills"
     );
 }
