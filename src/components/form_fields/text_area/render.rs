@@ -85,23 +85,41 @@ impl Render for FormTextArea {
                 .child(placeholder)
         };
 
-        // Build the main container - horizontal layout with label beside textarea
+        // Input surface - full-width with consistent styling
+        let input_surface = div()
+            .id(ElementId::Name(format!("textarea-{}", field_name).into()))
+            .track_focus(&self.focus_handle)
+            .on_key_down(handle_key)
+            .on_click(handle_click)
+            .flex()
+            .flex_col()
+            .w_full()
+            .h(rems(height_rems))
+            .px(rems(0.875))
+            .py(rems(0.625))
+            .bg(bg_color)
+            .border_1()
+            .border_color(border_color)
+            .rounded(px(8.))
+            .cursor_text()
+            .overflow_x_hidden()
+            .overflow_y_scrollbar()
+            .child(text_content);
+
+        // Build the main container - stacked vertical layout with label above textarea
         let mut container = div()
             .id(ElementId::Name(
                 format!("form-textarea-{}", field_name).into(),
             ))
             .flex()
-            .flex_row()
-            .items_start() // Align label to top of textarea
-            .gap(rems(0.75))
+            .flex_col()
+            .gap(px(6.))
             .w_full();
 
-        // Add label if present - fixed width for alignment
+        // Add label above textarea if present
         if let Some(label_text) = label {
             container = container.child(
                 div()
-                    .w(rems(7.5))
-                    .pt(rems(0.5)) // Align with textarea padding
                     .text_size(px(colors.label_font_size))
                     .text_color(rgb(colors.label))
                     .font_weight(FontWeight::MEDIUM)
@@ -109,28 +127,6 @@ impl Render for FormTextArea {
             );
         }
 
-        // Add input container - fills remaining space
-        container.child(
-            div()
-                .id(ElementId::Name(format!("textarea-{}", field_name).into()))
-                .track_focus(&self.focus_handle)
-                .on_key_down(handle_key)
-                .on_click(handle_click)
-                .flex()
-                .flex_col()
-                .flex_1()
-                .h(rems(height_rems))
-                .px(rems(0.75))
-                .py(rems(0.5))
-                .bg(bg_color)
-                .border_1()
-                .border_color(border_color)
-                .rounded(px(6.))
-                .cursor_text()
-                .overflow_x_hidden()
-                .overflow_y_scrollbar()
-                // Text content or placeholder
-                .child(text_content),
-        )
+        container.child(input_surface)
     }
 }

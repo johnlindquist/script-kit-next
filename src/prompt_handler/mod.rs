@@ -1328,29 +1328,6 @@ impl ScriptListApp {
                         *selected_index as i32,
                         None,
                     ),
-                    AppView::QuicklinksBrowseView {
-                        filter,
-                        selected_index,
-                    } => (
-                        "quicklinks".to_string(),
-                        None,
-                        None,
-                        filter.clone(),
-                        0,
-                        0,
-                        *selected_index as i32,
-                        None,
-                    ),
-                    AppView::QuicklinksEditView { .. } => (
-                        "quicklinksEdit".to_string(),
-                        None,
-                        None,
-                        String::new(),
-                        0,
-                        0,
-                        0,
-                        None,
-                    ),
                 };
 
                 // Focus state: we use focused_input as a proxy since we don't have Window access here.

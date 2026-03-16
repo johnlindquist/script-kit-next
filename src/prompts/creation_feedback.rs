@@ -22,6 +22,7 @@ pub type CreationFeedbackDismissAction = Box<dyn Fn(&mut Window, &mut App) + 'st
 pub struct CreationFeedbackPanel {
     path: PathBuf,
     theme: Arc<theme::Theme>,
+    design_variant: DesignVariant,
     on_reveal_in_finder: Option<CreationFeedbackPathAction>,
     on_copy_path: Option<CreationFeedbackPathAction>,
     on_open: Option<CreationFeedbackPathAction>,
@@ -37,11 +38,17 @@ impl CreationFeedbackPanel {
         Self {
             path,
             theme,
+            design_variant: DesignVariant::Default,
             on_reveal_in_finder: None,
             on_copy_path: None,
             on_open: None,
             on_dismiss: None,
         }
+    }
+
+    pub fn design_variant(mut self, design_variant: DesignVariant) -> Self {
+        self.design_variant = design_variant;
+        self
     }
 
     pub fn on_reveal_in_finder(mut self, callback: CreationFeedbackPathAction) -> Self {
@@ -75,6 +82,7 @@ impl RenderOnce for CreationFeedbackPanel {
         let CreationFeedbackPanel {
             path,
             theme,
+            design_variant,
             on_reveal_in_finder,
             on_copy_path,
             on_open,
@@ -87,7 +95,7 @@ impl RenderOnce for CreationFeedbackPanel {
         // Translucent to preserve vibrancy from outer shell.
         let path_surface = rgba((theme.colors.accent.selected_subtle << 8) | 0x30);
         let button_colors = ButtonColors::from_theme(&theme);
-        let mono_font = TypographyResolver::new(&theme, DesignVariant::Default)
+        let mono_font = TypographyResolver::new(&theme, design_variant)
             .mono_font()
             .to_string();
 

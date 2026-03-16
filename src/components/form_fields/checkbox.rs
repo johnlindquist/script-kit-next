@@ -139,40 +139,43 @@ impl Render for FormCheckbox {
             );
         }
 
-        // Main container - horizontal layout consistent with other form fields
+        let bg_color = if is_focused {
+            rgba((colors.background_focused << 8) | 0xee)
+        } else {
+            rgba((colors.background << 8) | 0xcc)
+        };
+
+        let focus_handle_for_click = self.focus_handle.clone();
+
+        // Full-width interactive row with checkbox and label
         div()
             .id(ElementId::Name(
                 format!("form-checkbox-{}", field_name).into(),
             ))
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
+            .on_click(cx.listener(move |this, _event: &ClickEvent, window, cx| {
+                focus_handle_for_click.focus(window, cx);
+                this.toggle(cx);
+            }))
             .flex()
             .flex_row()
             .items_center()
             .gap(rems(0.75))
             .w_full()
+            .px(rems(0.875))
+            .py(rems(0.75))
+            .bg(bg_color)
+            .border_1()
+            .border_color(border_color)
+            .rounded(px(8.))
             .cursor_pointer()
-            .on_click(cx.listener(|this, _event: &ClickEvent, _window, cx| {
-                this.toggle(cx);
-            }))
-            // Empty label area for alignment with other fields
-            .child(div().w(rems(7.5)))
-            // Checkbox and label group
+            .child(checkbox_box)
             .child(
                 div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap(rems(0.5))
-                    // Checkbox box
-                    .child(checkbox_box)
-                    // Label
-                    .child(
-                        div()
-                            .text_size(px(colors.label_font_size))
-                            .text_color(rgb(colors.text))
-                            .child(label),
-                    ),
+                    .text_size(px(colors.input_font_size))
+                    .text_color(rgb(colors.text))
+                    .child(label),
             )
     }
 }

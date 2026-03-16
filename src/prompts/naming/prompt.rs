@@ -8,6 +8,7 @@ pub struct NamingPromptConfig {
     pub extension: String,
     pub target: NamingTarget,
     pub target_directory: PathBuf,
+    pub design_variant: DesignVariant,
 }
 
 impl NamingPromptConfig {
@@ -22,6 +23,7 @@ impl NamingPromptConfig {
             extension: normalize_extension(&extension.into()),
             target,
             target_directory,
+            design_variant: DesignVariant::Default,
         }
     }
 
@@ -32,6 +34,11 @@ impl NamingPromptConfig {
 
     pub fn hint(mut self, hint: impl Into<String>) -> Self {
         self.hint = Some(hint.into());
+        self
+    }
+
+    pub fn design_variant(mut self, design_variant: DesignVariant) -> Self {
+        self.design_variant = design_variant;
         self
     }
 }
@@ -77,7 +84,7 @@ impl NamingPrompt {
             focus_handle,
             on_submit,
             theme,
-            design_variant: DesignVariant::Default,
+            design_variant: config.design_variant,
         };
 
         prompt.refresh_derived_state();

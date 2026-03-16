@@ -29,7 +29,6 @@ fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
         builtins::BuiltInFeature::DesignGallery => "Design Gallery".to_string(),
         builtins::BuiltInFeature::AiChat => "AI Assistant".to_string(),
         builtins::BuiltInFeature::Notes => "Notes & Scratchpad".to_string(),
-        builtins::BuiltInFeature::Quicklinks => "Quick Links".to_string(),
         builtins::BuiltInFeature::EmojiPicker => "Emoji Picker".to_string(),
         builtins::BuiltInFeature::MenuBarAction(_) => "Menu Bar Action".to_string(),
         builtins::BuiltInFeature::SystemAction(_) => "System Action".to_string(),

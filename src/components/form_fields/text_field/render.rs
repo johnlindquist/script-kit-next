@@ -128,28 +128,6 @@ impl Render for FormTextField {
             content
         };
 
-        // Build the main container - horizontal layout with label beside input
-        let mut container = div()
-            .id(ElementId::Name(format!("form-field-{}", field_name).into()))
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap(rems(0.75))
-            .w_full();
-
-        // Add label if present - fixed width for alignment
-        if let Some(label_text) = label {
-            container = container.child(
-                div()
-                    .w(rems(7.5))
-                    .text_size(px(colors.label_font_size))
-                    .text_color(rgb(colors.label))
-                    .font_weight(FontWeight::MEDIUM)
-                    .child(label_text),
-            );
-        }
-
-        // Add input container - fills remaining space
         // Handle click to focus this field
         let focus_handle_for_click = self.focus_handle.clone();
         let handle_click = cx.listener(
@@ -157,38 +135,57 @@ impl Render for FormTextField {
                   _event: &ClickEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
-                crate::logging::log("FIELD", "TextField clicked - focusing");
                 focus_handle_for_click.focus(window, cx);
             },
         );
 
-        container.child(
-            div()
-                .id(ElementId::Name(format!("input-{}", field_name).into()))
-                .track_focus(&self.focus_handle)
-                .on_key_down(handle_key)
-                .on_click(handle_click)
-                .flex()
-                .flex_row()
-                .items_center()
-                .flex_1()
-                .h(rems(2.25))
-                .px(rems(0.75))
-                .bg(bg_color)
-                .border_1()
-                .border_color(border_color)
-                .rounded(px(6.))
-                .cursor_text()
-                // Text content or placeholder
-                .child(
-                    div()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .flex_1()
-                        .overflow_hidden()
-                        .child(text_content),
-                ),
-        )
+        // Input surface - full-width with consistent styling
+        let input_surface = div()
+            .id(ElementId::Name(format!("input-{}", field_name).into()))
+            .track_focus(&self.focus_handle)
+            .on_key_down(handle_key)
+            .on_click(handle_click)
+            .flex()
+            .flex_row()
+            .items_center()
+            .w_full()
+            .min_h(rems(2.5))
+            .px(rems(0.875))
+            .py(rems(0.625))
+            .bg(bg_color)
+            .border_1()
+            .border_color(border_color)
+            .rounded(px(8.))
+            .cursor_text()
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .flex_1()
+                    .overflow_hidden()
+                    .child(text_content),
+            );
+
+        // Build the main container - stacked vertical layout with label above input
+        let mut container = div()
+            .id(ElementId::Name(format!("form-field-{}", field_name).into()))
+            .flex()
+            .flex_col()
+            .gap(px(6.))
+            .w_full();
+
+        // Add label above input if present
+        if let Some(label_text) = label {
+            container = container.child(
+                div()
+                    .text_size(px(colors.label_font_size))
+                    .text_color(rgb(colors.label))
+                    .font_weight(FontWeight::MEDIUM)
+                    .child(label_text),
+            );
+        }
+
+        container.child(input_surface)
     }
 }

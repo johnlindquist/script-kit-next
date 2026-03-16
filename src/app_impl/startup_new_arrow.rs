@@ -252,19 +252,6 @@
                                     }
                                     cx.stop_propagation();
                                 }
-                                AppView::QuicklinksBrowseView {
-                                    selected_index,
-                                    filter: _,
-                                } => {
-                                    if is_up && *selected_index > 0 {
-                                        *selected_index -= 1;
-                                        cx.notify();
-                                    } else if is_down {
-                                        *selected_index += 1;
-                                        cx.notify();
-                                    }
-                                    cx.stop_propagation();
-                                }
                                 AppView::ScriptList => {
                                     // CRITICAL: If actions popup is open, route to actions dialog instead
                                     if this.show_actions_popup {

@@ -118,29 +118,13 @@ impl ScriptListApp {
 
         // VIBRANCY: Use foundation helper - returns None when vibrancy enabled (let Root handle bg)
         let vibrancy_bg = get_vibrancy_background(theme);
-
-        // Dynamic height based on field count
-        // Base height (150px) + per-field height (60px per field)
-        // Minimum of calculated height and MAX_HEIGHT (700px)
-        let base_height = 150.0;
-        let field_height = 60.0;
-        let calculated_height = base_height + (field_count as f32 * field_height);
-        let max_height = 700.0; // Same as window_resize::layout::MAX_HEIGHT
-        let content_height = px(calculated_height.min(max_height));
+        let content_height = window_resize::layout::STANDARD_HEIGHT;
 
         // Form fields have their own focus handles and on_key_down handlers.
         // We DO NOT track_focus on the container - the fields handle their own focus.
         // Enter/Escape/Tab are handled by the handle_key listener above.
-        div()
-            .relative() // Needed for absolute positioned actions dialog overlay
-            .flex()
-            .flex_col()
-            .when_some(vibrancy_bg, |d, bg| d.bg(bg)) // VIBRANCY: Only apply bg when vibrancy disabled
-            // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
-            .w_full()
+        crate::components::prompt_shell_container(design_visual.radius_lg, vibrancy_bg)
             .h(content_height)
-            .overflow_hidden()
-            .rounded(px(design_visual.radius_lg))
             .text_color(rgb(design_colors.text_primary))
             .font_family(design_typography.font_family)
             .key_context("form_prompt")

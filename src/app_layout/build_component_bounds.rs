@@ -63,8 +63,6 @@ impl ScriptListApp {
             AppView::CreateAiPresetView { .. } => "CreateAiPreset",
             AppView::SettingsView { .. } => "Settings",
             AppView::FavoritesBrowseView { .. } => "FavoritesBrowse",
-            AppView::QuicklinksBrowseView { .. } => "QuicklinksBrowse",
-            AppView::QuicklinksEditView { .. } => "QuicklinksEdit",
         };
 
         // Header bounds (includes padding + input + divider) - common to all views

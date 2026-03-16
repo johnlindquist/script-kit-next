@@ -298,31 +298,6 @@
                             return;
                         }
 
-                        // Handle keys for Quicklinks views
-                        if matches!(
-                            this.current_view,
-                            AppView::QuicklinksBrowseView { .. }
-                                | AppView::QuicklinksEditView { .. }
-                        ) {
-                            if matches!(this.current_view, AppView::QuicklinksEditView { .. }) {
-                                this.handle_quicklinks_edit_key(key, window, cx);
-                                cx.stop_propagation();
-                            } else {
-                                this.handle_quicklinks_browse_key(key, window, cx);
-                                if crate::ui_foundation::is_key_enter(key)
-                                    || crate::ui_foundation::is_key_escape(key)
-                                    || (key.len() == 1
-                                        && this.filter_text.is_empty()
-                                        && matches!(
-                                            key,
-                                            "n" | "N" | "e" | "E" | "d" | "D"
-                                        ))
-                                {
-                                    cx.stop_propagation();
-                                }
-                            }
-                            return;
-                        }
 
                         // Only handle remaining keys if actions popup is open (FileSearchView)
                         if !this.show_actions_popup {

@@ -195,22 +195,6 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
-    /// Browsing quicklinks with search/filter
-    /// Supports Cmd+K for edit/delete actions, Enter to open, N to create new
-    QuicklinksBrowseView {
-        filter: String,
-        selected_index: usize,
-    },
-    /// Creating or editing a quicklink (name + URL template fields)
-    /// Tab switches fields, Enter saves, Escape cancels
-    #[allow(dead_code)] // Constructed in handle_quicklinks_browse_key
-    QuicklinksEditView {
-        /// None = creating new, Some(id) = editing existing
-        editing_id: Option<String>,
-        name: String,
-        url_template: String,
-        active_field: usize,
-    },
 }
 
 /// Wrapper to hold a script session that can be shared across async boundaries
