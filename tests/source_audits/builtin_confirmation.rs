@@ -221,19 +221,25 @@ fn confirmation_flow_is_gated_by_config_requires_confirmation() {
 }
 
 #[test]
-fn builtin_execution_uses_confirm_with_modal_not_direct_open() {
+fn builtin_execution_uses_confirm_with_parent_dialog_not_direct_open() {
     let execution_content = read("src/app_execute/builtin_execution.rs");
 
-    // Must NOT contain direct open_confirm_window calls — use confirm_with_modal instead
+    // Must NOT contain direct open_confirm_window calls
     assert!(
         !execution_content.contains("open_confirm_window("),
-        "builtin_execution.rs must not call open_confirm_window directly; use confirm_with_modal"
+        "builtin_execution.rs must not call open_confirm_window directly"
     );
 
-    // Must use the shared confirm_with_modal helper
+    // Must call confirm_with_parent_dialog directly
     assert!(
-        execution_content.contains("confirm_with_modal("),
-        "builtin_execution.rs must use confirm_with_modal for confirmation dialogs"
+        execution_content.contains("crate::confirm::confirm_with_parent_dialog("),
+        "builtin_execution.rs must call confirm_with_parent_dialog directly"
+    );
+
+    // Must NOT use the removed confirm_with_modal wrapper
+    assert!(
+        !execution_content.contains("confirm_with_modal("),
+        "builtin_execution.rs must not use the removed confirm_with_modal wrapper"
     );
 }
 
@@ -248,48 +254,34 @@ fn builtin_confirmation_does_not_call_open_confirm_window() {
 }
 
 // ---------------------------------------------------------------------------
-// confirm_with_modal helper — delegates to shared async confirm helper
+// confirm_with_modal removed — callers use confirm_with_parent_dialog directly
 // ---------------------------------------------------------------------------
 
 #[test]
-fn confirm_with_modal_delegates_to_shared_async_helper() {
+fn confirm_with_modal_is_removed_from_helpers() {
     let helpers = read("src/app_actions/helpers.rs");
 
-    let fn_start = helpers
-        .find("async fn confirm_with_modal(")
-        .expect("Expected confirm_with_modal function");
-    let fn_body = &helpers[fn_start..helpers.len().min(fn_start + 500)];
-
-    // Must delegate to the shared confirm_with_parent_dialog helper
     assert!(
-        fn_body.contains("crate::confirm::confirm_with_parent_dialog(cx, options, trace_id).await"),
-        "confirm_with_modal must delegate to crate::confirm::confirm_with_parent_dialog"
-    );
-
-    // Must NOT contain inline channel or window handle logic
-    assert!(
-        !fn_body.contains("async_channel::bounded"),
-        "confirm_with_modal must not contain inline channel logic — delegate to shared helper"
-    );
-    assert!(
-        !fn_body.contains("get_main_window_handle"),
-        "confirm_with_modal must not contain inline window handle logic — delegate to shared helper"
+        !helpers.contains("async fn confirm_with_modal("),
+        "confirm_with_modal wrapper should be removed — callers use confirm_with_parent_dialog directly"
     );
 }
 
 // ---------------------------------------------------------------------------
-// confirm_with_modal call sites — consistent error handling pattern
+// confirm_with_parent_dialog call sites — consistent error handling pattern
 // ---------------------------------------------------------------------------
 
 #[test]
-fn confirm_with_modal_callers_handle_all_three_results() {
+fn confirm_with_parent_dialog_callers_handle_all_three_results() {
     let handle_action = super::read_all_handle_action_sources();
 
     // Every call site should handle Ok(true), Ok(false), and Err
-    let call_sites: Vec<_> = handle_action.match_indices("confirm_with_modal(").collect();
+    let call_sites: Vec<_> = handle_action
+        .match_indices("crate::confirm::confirm_with_parent_dialog(")
+        .collect();
     assert!(
         !call_sites.is_empty(),
-        "Expected at least one confirm_with_modal call site in handle_action/"
+        "Expected at least one confirm_with_parent_dialog call site in handle_action/"
     );
 
     for (pos, _) in &call_sites {
@@ -297,32 +289,34 @@ fn confirm_with_modal_callers_handle_all_three_results() {
 
         assert!(
             block.contains("Ok(true)"),
-            "confirm_with_modal call site must handle Ok(true) (accept) path"
+            "confirm_with_parent_dialog call site must handle Ok(true) (accept) path"
         );
         assert!(
             block.contains("Ok(false)") || block.contains("return"),
-            "confirm_with_modal call site must handle Ok(false) (reject/cancel) path"
+            "confirm_with_parent_dialog call site must handle Ok(false) (reject/cancel) path"
         );
         assert!(
             block.contains("Err(e)") || block.contains("Err(_)"),
-            "confirm_with_modal call site must handle Err (channel closed) path"
+            "confirm_with_parent_dialog call site must handle Err (channel closed) path"
         );
     }
 }
 
 #[test]
-fn confirm_with_modal_error_path_logs_failure() {
+fn confirm_with_parent_dialog_error_path_logs_failure() {
     let handle_action = super::read_all_handle_action_sources();
 
-    // Every Err path from confirm_with_modal should log the error
-    let call_sites: Vec<_> = handle_action.match_indices("confirm_with_modal(").collect();
+    // Every Err path from confirm_with_parent_dialog should log the error
+    let call_sites: Vec<_> = handle_action
+        .match_indices("crate::confirm::confirm_with_parent_dialog(")
+        .collect();
 
     for (pos, _) in &call_sites {
         let block = &handle_action[*pos..handle_action.len().min(*pos + 1200)];
 
         assert!(
             block.contains("failed to open confirmation modal"),
-            "confirm_with_modal Err path should log 'failed to open confirmation modal'"
+            "confirm_with_parent_dialog Err path should log 'failed to open confirmation modal'"
         );
     }
 }
@@ -360,9 +354,9 @@ fn destructive_builtins_are_gated_by_confirmation_defaults() {
 }
 
 #[test]
-fn confirmation_path_spawns_task_with_confirm_with_modal() {
+fn confirmation_path_spawns_task_with_confirm_with_parent_dialog() {
     // The confirmation branch in execute_builtin_with_query must use
-    // cx.spawn + confirm_with_modal — not inline blocking.
+    // cx.spawn + confirm_with_parent_dialog — not inline blocking.
     let content = read("src/app_execute/builtin_execution.rs");
 
     let confirm_check = content
@@ -372,11 +366,11 @@ fn confirmation_path_spawns_task_with_confirm_with_modal() {
 
     assert!(
         after_check.contains("cx.spawn("),
-        "Confirmation path must use cx.spawn for async modal flow"
+        "Confirmation path must use cx.spawn for async dialog flow"
     );
     assert!(
-        after_check.contains("confirm_with_modal("),
-        "Confirmation path must call confirm_with_modal inside the spawned task"
+        after_check.contains("crate::confirm::confirm_with_parent_dialog("),
+        "Confirmation path must call confirm_with_parent_dialog inside the spawned task"
     );
 }
 

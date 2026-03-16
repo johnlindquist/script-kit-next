@@ -16,8 +16,8 @@ fn clipboard_delete_multiple_requires_confirmation_before_delete() {
         "Expected clipboard_delete_multiple to show a count-aware confirmation message"
     );
     assert!(
-        actions.contains("confirm_with_modal("),
-        "Expected clipboard_delete_multiple to use the shared confirm_with_modal helper"
+        actions.contains("crate::confirm::confirm_with_parent_dialog("),
+        "Expected clipboard_delete_multiple to call confirm_with_parent_dialog directly"
     );
 }
 
@@ -35,22 +35,18 @@ fn clipboard_delete_all_requires_confirmation_before_delete() {
         "Expected clipboard_delete_all to show a confirmation warning before deleting all unpinned entries"
     );
     assert!(
-        actions.contains("confirm_with_modal("),
-        "Expected clipboard_delete_all to use the shared confirm_with_modal helper"
+        actions.contains("crate::confirm::confirm_with_parent_dialog("),
+        "Expected clipboard_delete_all to call confirm_with_parent_dialog directly"
     );
 }
 
 #[test]
-fn confirm_with_modal_helper_delegates_to_shared_async_helper() {
-    let helpers = read("src/app_actions/helpers.rs");
+fn clipboard_actions_do_not_use_confirm_with_modal() {
+    let actions = super::read_all_handle_action_sources();
 
     assert!(
-        helpers.contains("async fn confirm_with_modal("),
-        "Expected helpers.rs to define confirm_with_modal async helper"
-    );
-    assert!(
-        helpers.contains("crate::confirm::confirm_with_parent_dialog(cx, options, trace_id).await"),
-        "Expected confirm_with_modal to delegate to confirm_with_parent_dialog"
+        !actions.contains("confirm_with_modal("),
+        "Clipboard actions should call confirm_with_parent_dialog directly, not confirm_with_modal"
     );
 }
 

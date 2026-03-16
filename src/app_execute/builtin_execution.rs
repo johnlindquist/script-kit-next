@@ -678,9 +678,9 @@ impl ScriptListApp {
             let dctx_owned = dctx.clone();
             let confirm_options = Self::builtin_confirmation_options(&entry.id, &entry.name);
 
-            // Spawn a task to show confirmation modal via confirm_with_modal helper
+            // Spawn a task to show confirmation dialog via shared parent dialog helper
             cx.spawn(async move |this, cx| {
-                match confirm_with_modal(cx, confirm_options, &dctx_owned.trace_id).await
+                match crate::confirm::confirm_with_parent_dialog(cx, confirm_options, &dctx_owned.trace_id).await
                 {
                     Ok(true) => {
                         let _ = this.update(cx, |this, cx| {
