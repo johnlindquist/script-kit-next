@@ -364,7 +364,11 @@ pub enum ExternalCommand {
         request_id: Option<ExternalCommandRequestId>,
     },
     /// Trigger a built-in feature by name (for testing)
-    TriggerBuiltin { name: String },
+    TriggerBuiltin {
+        name: String,
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
     /// Simulate a key press (for testing)
     /// key: Key name like "enter", "escape", "up", "down", "k", etc.
     /// modifiers: Optional array of modifiers ["cmd", "shift", "alt", "ctrl"]
@@ -372,6 +376,8 @@ pub enum ExternalCommand {
         key: String,
         #[serde(default)]
         modifiers: Vec<KeyModifier>,
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
     },
     /// Open the Notes window (for testing)
     OpenNotes,
@@ -389,14 +395,25 @@ pub enum ExternalCommand {
         key: String,
         #[serde(default)]
         modifiers: Vec<KeyModifier>,
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
     },
     /// Capture a screenshot of a window by title pattern and save to file (for testing)
     /// title: Title pattern to match (e.g., "Script Kit AI" for the AI window)
     /// path: File path to save the PNG screenshot
-    CaptureWindow { title: String, path: String },
+    CaptureWindow {
+        title: String,
+        path: String,
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
     /// Set the AI window search filter (for testing chat search)
     /// text: Search query to filter chats
-    SetAiSearch { text: String },
+    SetAiSearch {
+        text: String,
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
     /// Set the AI window input text and optionally submit (for testing streaming)
     /// text: Message text to set in the input field
     /// submit: If true, submit the message after setting (triggers streaming)
@@ -404,6 +421,8 @@ pub enum ExternalCommand {
         text: String,
         #[serde(default)]
         submit: bool,
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
     },
     /// Show the debug grid overlay with options (for visual testing)
     ShowGrid {
@@ -419,6 +438,8 @@ pub enum ExternalCommand {
         show_dimensions: bool,
         #[serde(default)]
         depth: GridDepthOption,
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
     },
     /// Hide the debug grid overlay
     HideGrid,
@@ -430,6 +451,8 @@ pub enum ExternalCommand {
         command_id: String,
         #[serde(rename = "commandName")]
         command_name: String,
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
     },
     /// Execute a fallback action (e.g., Search Google, Copy to Clipboard)
     /// This is triggered when a fallback item is selected from the UI
@@ -439,6 +462,8 @@ pub enum ExternalCommand {
         fallback_id: String,
         /// The user's input text to use with the fallback action
         input: String,
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
     },
 }
 impl ExternalCommand {
@@ -447,7 +472,16 @@ impl ExternalCommand {
             Self::Run { request_id, .. }
             | Self::Show { request_id }
             | Self::Hide { request_id }
-            | Self::SetFilter { request_id, .. } => {
+            | Self::SetFilter { request_id, .. }
+            | Self::TriggerBuiltin { request_id, .. }
+            | Self::SimulateKey { request_id, .. }
+            | Self::SimulateAiKey { request_id, .. }
+            | Self::CaptureWindow { request_id, .. }
+            | Self::SetAiSearch { request_id, .. }
+            | Self::SetAiInput { request_id, .. }
+            | Self::ShowGrid { request_id, .. }
+            | Self::ShowShortcutRecorder { request_id, .. }
+            | Self::ExecuteFallback { request_id, .. } => {
                 request_id.as_ref().map(ExternalCommandRequestId::as_str)
             }
             _ => None,
@@ -751,7 +785,7 @@ mod tests {
         let json = r#"{"type": "triggerBuiltin", "name": "clipboardHistory"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
-            ExternalCommand::TriggerBuiltin { name } => assert_eq!(name, "clipboardHistory"),
+            ExternalCommand::TriggerBuiltin { name, .. } => assert_eq!(name, "clipboardHistory"),
             _ => panic!("Expected TriggerBuiltin command"),
         }
         Ok(())
@@ -762,7 +796,7 @@ mod tests {
         let json = r#"{"type": "simulateKey", "key": "enter", "modifiers": ["cmd", "shift"]}"#;
         let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
-            ExternalCommand::SimulateKey { key, modifiers } => {
+            ExternalCommand::SimulateKey { key, modifiers, .. } => {
                 assert_eq!(key, "enter");
                 assert_eq!(modifiers, vec![KeyModifier::Cmd, KeyModifier::Shift]);
             }
@@ -776,7 +810,7 @@ mod tests {
         let json = r#"{"type": "simulateKey", "key": "escape"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
-            ExternalCommand::SimulateKey { key, modifiers } => {
+            ExternalCommand::SimulateKey { key, modifiers, .. } => {
                 assert_eq!(key, "escape");
                 assert!(modifiers.is_empty());
             }
@@ -895,7 +929,7 @@ mod tests {
             r#"{"type": "captureWindow", "title": "Script Kit AI", "path": "/tmp/screenshot.png"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
-            ExternalCommand::CaptureWindow { title, path } => {
+            ExternalCommand::CaptureWindow { title, path, .. } => {
                 assert_eq!(title, "Script Kit AI");
                 assert_eq!(path, "/tmp/screenshot.png");
             }
@@ -916,6 +950,7 @@ mod tests {
                 show_alignment_guides,
                 show_dimensions,
                 depth,
+                ..
             } => {
                 assert_eq!(grid_size, 8); // default
                 assert!(!show_bounds); // default false
@@ -941,6 +976,7 @@ mod tests {
                 show_alignment_guides,
                 show_dimensions,
                 depth,
+                ..
             } => {
                 assert_eq!(grid_size, 16);
                 assert!(show_bounds);
@@ -987,7 +1023,9 @@ mod tests {
             r#"{"type": "executeFallback", "fallbackId": "search-google", "input": "hello world"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
-            ExternalCommand::ExecuteFallback { fallback_id, input } => {
+            ExternalCommand::ExecuteFallback {
+                fallback_id, input, ..
+            } => {
                 assert_eq!(fallback_id, "search-google");
                 assert_eq!(input, "hello world");
             }
@@ -1001,7 +1039,9 @@ mod tests {
         let json = r#"{"type": "executeFallback", "fallbackId": "copy-to-clipboard", "input": "test text"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
-            ExternalCommand::ExecuteFallback { fallback_id, input } => {
+            ExternalCommand::ExecuteFallback {
+                fallback_id, input, ..
+            } => {
                 assert_eq!(fallback_id, "copy-to-clipboard");
                 assert_eq!(input, "test text");
             }

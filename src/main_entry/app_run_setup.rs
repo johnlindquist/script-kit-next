@@ -1544,7 +1544,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 view.set_filter_text_immediate(text.clone(), window, ctx);
                                 let _ = view.get_filtered_results_cached(); // Update cache
                             }
-                            ExternalCommand::TriggerBuiltin { ref name } => {
+                            ExternalCommand::TriggerBuiltin { ref name, .. } => {
                                 logging::log("STDIN", &format!("Triggering built-in: '{}'", name));
                                 // Opened via protocol command - ESC should close window (not return to main menu)
                                 view.opened_from_main_menu = false;
@@ -1601,7 +1601,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 }
                             }
 
-                            ExternalCommand::SimulateKey { ref key, ref modifiers } => {
+                            ExternalCommand::SimulateKey { ref key, ref modifiers, .. } => {
                                 logging::log("STDIN", &format!("Simulating key: '{}' with modifiers: {:?}", key, modifiers));
 
                                 // Parse modifiers
@@ -2020,14 +2020,14 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 logging::log("STDIN", "Showing AI command bar via stdin command");
                                 ai::show_ai_command_bar(ctx);
                             }
-                            ExternalCommand::SimulateAiKey { key, modifiers } => {
+                            ExternalCommand::SimulateAiKey { key, modifiers, .. } => {
                                 logging::log(
                                     "STDIN",
                                     &format!("Simulating AI key: '{}' with modifiers: {:?}", key, modifiers),
                                 );
                                 ai::simulate_ai_key(&key, modifiers);
                             }
-                            ExternalCommand::CaptureWindow { title, path } => {
+                            ExternalCommand::CaptureWindow { title, path, .. } => {
                                 logging::log("STDIN", &format!("Capturing window with title '{}' to '{}'", title, path));
                                 match validate_capture_window_output_path(&path) {
                                     Ok(validated_path) => {
@@ -2098,15 +2098,15 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     }
                                 }
                             }
-                            ExternalCommand::SetAiSearch { text } => {
+                            ExternalCommand::SetAiSearch { text, .. } => {
                                 logging::log("STDIN", &format!("Setting AI search filter to: {}", text));
                                 ai::set_ai_search(ctx, &text);
                             }
-                            ExternalCommand::SetAiInput { text, submit } => {
+                            ExternalCommand::SetAiInput { text, submit, .. } => {
                                 logging::log("STDIN", &format!("Setting AI input to: {} (submit={})", text, submit));
                                 ai::set_ai_input(ctx, &text, submit);
                             }
-                            ExternalCommand::ShowGrid { grid_size, show_bounds, show_box_model, show_alignment_guides, show_dimensions, ref depth } => {
+                            ExternalCommand::ShowGrid { grid_size, show_bounds, show_box_model, show_alignment_guides, show_dimensions, ref depth, .. } => {
                                 logging::log("STDIN", &format!(
                                     "ShowGrid: size={}, bounds={}, box_model={}, guides={}, dimensions={}, depth={:?}",
                                     grid_size, show_bounds, show_box_model, show_alignment_guides, show_dimensions, depth
@@ -2126,11 +2126,11 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 logging::log("STDIN", "HideGrid: hiding debug grid overlay");
                                 view.hide_grid(ctx);
                             }
-                            ExternalCommand::ExecuteFallback { ref fallback_id, ref input } => {
+                            ExternalCommand::ExecuteFallback { ref fallback_id, ref input, .. } => {
                                 logging::log("STDIN", &format!("ExecuteFallback: id='{}', input='{}'", fallback_id, input));
                                 execute_fallback_action(view, fallback_id, input, window, ctx);
                             }
-                            ExternalCommand::ShowShortcutRecorder { ref command_id, ref command_name } => {
+                            ExternalCommand::ShowShortcutRecorder { ref command_id, ref command_name, .. } => {
                                 logging::log("STDIN", &format!("ShowShortcutRecorder: command_id='{}', command_name='{}'", command_id, command_name));
                                 view.show_shortcut_recorder(command_id.clone(), command_name.clone(), ctx);
                             }
