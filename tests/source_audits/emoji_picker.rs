@@ -120,7 +120,7 @@ fn test_render_emoji_picker_uses_uniform_row_height_and_lighter_cell_chrome() {
         "header and cell rows should be fixed-height rows that satisfy uniform_list"
     );
     assert!(
-        source.contains(".gap(px(tile_gap))") && source.contains(".text_size(px(24.0))"),
+        source.contains(".gap(px(tile_gap))") && source.contains(".text_size(px(28.0))"),
         "emoji rows should use tile_gap spacing and compact glyph size"
     );
     assert!(

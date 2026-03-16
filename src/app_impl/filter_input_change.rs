@@ -631,7 +631,7 @@ mod tests {
         let emoji_pos = source
             .find("AppView::EmojiPickerView")
             .expect("EmojiPickerView match arm not found");
-        let emoji_section = &source[emoji_pos..(emoji_pos + 600).min(source.len())];
+        let emoji_section = &source[emoji_pos..(emoji_pos + 1200).min(source.len())];
 
         // Must have an early-return guard that skips cx.notify() when text is unchanged
         assert!(

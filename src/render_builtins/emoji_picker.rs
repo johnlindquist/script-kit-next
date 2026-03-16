@@ -283,6 +283,7 @@ impl ScriptListApp {
             let row_height = crate::emoji::GRID_ROW_HEIGHT;
             let selected_outline = rgba((self.theme.colors.accent.selected << 8) | 0x80);
             let selected_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x2a);
+            let idle_bg = rgba((ui_border << 8) | 0x10);
             let click_entity_handle = cx.entity().downgrade();
 
             uniform_list(
@@ -381,7 +382,8 @@ impl ScriptListApp {
                                                     .items_center()
                                                     .justify_center()
                                                     .rounded(px(design_visual.radius_md))
-                                                    .text_size(px(24.0))
+                                                    .bg(idle_bg)
+                                                    .text_size(px(28.0))
                                                     .when(is_selected, |d| {
                                                         d.bg(selected_bg)
                                                             .border_1()
