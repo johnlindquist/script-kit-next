@@ -255,11 +255,35 @@ impl NotesApp {
         available_width.min(448.0)
     }
 
+    /// Resolve the source width for the Notes delete dialog.
+    ///
+    /// Prefer the viewport width when available, but fall back to bounds
+    /// width for the "open window -> immediate delete shortcut" path where
+    /// viewport size can still be zero before the first stable layout.
+    /// Final fallback 472.0 produces a 448px dialog after padding clamp.
+    pub(crate) fn resolve_notes_delete_dialog_source_width(
+        viewport_width: f32,
+        bounds_width: f32,
+    ) -> f32 {
+        if viewport_width.is_finite() && viewport_width > 0.0 {
+            return viewport_width;
+        }
+
+        if bounds_width.is_finite() && bounds_width > 0.0 {
+            return bounds_width;
+        }
+
+        472.0
+    }
+
     /// Compute dialog width clamped to the Notes window so the dialog
     /// never overflows a narrow popup window.
     fn notes_delete_dialog_width(window: &Window) -> gpui::Pixels {
         let viewport_width: f32 = window.viewport_size().width.into();
-        gpui::px(Self::clamp_notes_delete_dialog_width(viewport_width))
+        let bounds_width: f32 = window.bounds().size.width.into();
+        let source_width =
+            Self::resolve_notes_delete_dialog_source_width(viewport_width, bounds_width);
+        gpui::px(Self::clamp_notes_delete_dialog_width(source_width))
     }
 
     /// Restore keyboard focus to the editor after modal dismissal.
@@ -300,8 +324,11 @@ impl NotesApp {
             .unwrap_or_default();
 
         let viewport_width: f32 = window.viewport_size().width.into();
-        let dialog_width_value = Self::clamp_notes_delete_dialog_width(viewport_width);
-        let dialog_width = gpui::px(dialog_width_value);
+        let bounds_width: f32 = window.bounds().size.width.into();
+        let source_width =
+            Self::resolve_notes_delete_dialog_source_width(viewport_width, bounds_width);
+        let dialog_width = Self::notes_delete_dialog_width(window);
+        let dialog_width_value: f32 = dialog_width.into();
 
         tracing::info!(
             event = "notes_delete_confirmation_requested",
@@ -309,6 +336,8 @@ impl NotesApp {
             note_title = %note_title,
             is_trash_view = (self.view_mode == NotesViewMode::Trash),
             viewport_width,
+            bounds_width,
+            source_width,
             dialog_width = dialog_width_value,
             "notes_delete_confirmation_requested"
         );
