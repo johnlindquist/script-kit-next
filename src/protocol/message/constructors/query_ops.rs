@@ -43,6 +43,18 @@ impl Message {
             data,
             width,
             height,
+            error: None,
+        }
+    }
+
+    /// Create a screenshot error result response
+    pub fn screenshot_error(request_id: String, error: String) -> Self {
+        Message::ScreenshotResult {
+            request_id,
+            data: String::new(),
+            width: 0,
+            height: 0,
+            error: Some(error),
         }
     }
 

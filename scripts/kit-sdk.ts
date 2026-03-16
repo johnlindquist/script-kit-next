@@ -1776,6 +1776,7 @@ interface ScreenshotResultMessage {
   data: string;
   width: number;
   height: number;
+  error?: string;
 }
 
 interface GetLayoutInfoMessage {
@@ -5721,15 +5722,26 @@ globalThis.captureScreenshot = async function captureScreenshot(
     height: 600,
   };
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     addPending(requestId, (msg: ResponseMessage) => {
       // Handle screenshotResult message type
       if (msg.type === 'screenshotResult') {
         const resultMsg = msg as ScreenshotResultMessage;
+
+        if (resultMsg.error) {
+          reject(new Error(resultMsg.error));
+          return;
+        }
+
+        if (!resultMsg.data || resultMsg.width <= 0 || resultMsg.height <= 0) {
+          reject(new Error('Screenshot capture returned an empty PNG payload'));
+          return;
+        }
+
         resolve({
-          data: resultMsg.data ?? '',
-          width: resultMsg.width ?? 0,
-          height: resultMsg.height ?? 0,
+          data: resultMsg.data,
+          width: resultMsg.width,
+          height: resultMsg.height,
         });
         return;
       }
