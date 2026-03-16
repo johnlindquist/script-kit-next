@@ -32,6 +32,24 @@ impl Default for ParentConfirmOptions {
     }
 }
 
+impl ParentConfirmOptions {
+    #[allow(dead_code)]
+    pub(crate) fn destructive(
+        title: impl Into<SharedString>,
+        body: impl Into<SharedString>,
+        confirm_text: impl Into<SharedString>,
+    ) -> Self {
+        Self {
+            title: title.into(),
+            body: body.into(),
+            confirm_text: confirm_text.into(),
+            cancel_text: "Cancel".into(),
+            confirm_variant: ButtonVariant::Danger,
+            width: px(448.),
+        }
+    }
+}
+
 // Used by include!() code in app_actions/handle_action/scripts.rs — clippy
 // cannot trace through include!() and reports a false-positive dead_code lint.
 #[allow(dead_code)]

@@ -600,15 +600,19 @@ impl ScriptListApp {
                 }
 
                 let delete_count = ids_to_delete.len();
-                let message = format!(
-                    "Are you sure you want to delete these {} matching clipboard entries?",
-                    delete_count
+                let confirm_options = crate::confirm::ParentConfirmOptions::destructive(
+                    "Delete Clipboard Entries",
+                    format!(
+                        "Are you sure you want to delete these {} matching clipboard entries?",
+                        delete_count
+                    ),
+                    "Delete",
                 );
                 let trace_id = trace_id.to_string();
                 let start = std::time::Instant::now();
 
                 cx.spawn(async move |this, cx| {
-                    match confirm_with_modal(cx, message, "Yes", "Cancel", &trace_id).await {
+                    match confirm_with_modal(cx, confirm_options, &trace_id).await {
                         Ok(true) => {}
                         Ok(false) => {
                             tracing::info!(
@@ -712,15 +716,19 @@ impl ScriptListApp {
                     return DispatchOutcome::success();
                 }
 
-                let message = format!(
-                    "Are you sure you want to delete all {} unpinned clipboard entries?",
-                    unpinned_count
+                let confirm_options = crate::confirm::ParentConfirmOptions::destructive(
+                    "Delete All Clipboard Entries",
+                    format!(
+                        "Are you sure you want to delete all {} unpinned clipboard entries?",
+                        unpinned_count
+                    ),
+                    "Delete All",
                 );
                 let trace_id = trace_id.to_string();
                 let start = std::time::Instant::now();
 
                 cx.spawn(async move |this, cx| {
-                    match confirm_with_modal(cx, message, "Yes", "Cancel", &trace_id).await {
+                    match confirm_with_modal(cx, confirm_options, &trace_id).await {
                         Ok(true) => {}
                         Ok(false) => {
                             tracing::info!(

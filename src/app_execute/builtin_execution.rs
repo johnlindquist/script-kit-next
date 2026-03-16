@@ -560,6 +560,79 @@ impl ScriptListApp {
         }
     }
 
+    fn quit_script_kit_confirm_options() -> crate::confirm::ParentConfirmOptions {
+        crate::confirm::ParentConfirmOptions::destructive(
+            "Quit Script Kit",
+            "Quit Script Kit and stop all running processes?",
+            "Quit",
+        )
+    }
+
+    fn builtin_confirmation_options(
+        entry_id: &str,
+        entry_name: &str,
+    ) -> crate::confirm::ParentConfirmOptions {
+        match entry_id {
+            "builtin-quit-script-kit" => Self::quit_script_kit_confirm_options(),
+            "builtin-shut-down" => crate::confirm::ParentConfirmOptions::destructive(
+                "Shut Down Mac",
+                "Shut down this Mac now?",
+                "Shut Down",
+            ),
+            "builtin-restart" => crate::confirm::ParentConfirmOptions::destructive(
+                "Restart Mac",
+                "Restart this Mac now?",
+                "Restart",
+            ),
+            "builtin-log-out" => crate::confirm::ParentConfirmOptions::destructive(
+                "Log Out",
+                "Log out of the current macOS session?",
+                "Log Out",
+            ),
+            "builtin-empty-trash" => crate::confirm::ParentConfirmOptions::destructive(
+                "Empty Trash",
+                "Empty Trash now? This cannot be undone.",
+                "Empty Trash",
+            ),
+            "builtin-sleep" => crate::confirm::ParentConfirmOptions {
+                title: "Sleep Mac".into(),
+                body: "Put this Mac to sleep now?".into(),
+                confirm_text: "Sleep".into(),
+                cancel_text: "Cancel".into(),
+                ..Default::default()
+            },
+            "builtin-force-quit" => crate::confirm::ParentConfirmOptions::destructive(
+                "Force Quit Apps",
+                "Open Force Quit Apps?",
+                "Force Quit",
+            ),
+            "builtin-stop-all-processes" => crate::confirm::ParentConfirmOptions::destructive(
+                "Stop All Processes",
+                "Stop all running Script Kit processes?",
+                "Stop All",
+            ),
+            "builtin-clear-suggested" => crate::confirm::ParentConfirmOptions::destructive(
+                "Clear Suggested",
+                "Clear suggested items and reset their ranking data?",
+                "Clear Suggested",
+            ),
+            "builtin-test-confirmation" => crate::confirm::ParentConfirmOptions {
+                title: "Test Confirmation".into(),
+                body: "Open the confirmation test action?".into(),
+                confirm_text: "Run Test".into(),
+                cancel_text: "Cancel".into(),
+                ..Default::default()
+            },
+            _ => crate::confirm::ParentConfirmOptions {
+                title: "Confirm".into(),
+                body: format!("Are you sure you want to {}?", entry_name).into(),
+                confirm_text: "Continue".into(),
+                cancel_text: "Cancel".into(),
+                ..Default::default()
+            },
+        }
+    }
+
     fn execute_builtin(&mut self, entry: &builtins::BuiltInEntry, cx: &mut Context<Self>) {
         self.execute_builtin_with_query(entry, None, cx);
     }
@@ -590,14 +663,13 @@ impl ScriptListApp {
         if self.config.requires_confirmation(&entry.id) {
             let confirmation_start = std::time::Instant::now();
             let entry_id = entry.id.clone();
-            let entry_name = entry.name.clone();
             let query_owned = query_override.map(|s| s.to_string());
             let dctx_owned = dctx.clone();
+            let confirm_options = Self::builtin_confirmation_options(&entry.id, &entry.name);
 
             // Spawn a task to show confirmation modal via confirm_with_modal helper
             cx.spawn(async move |this, cx| {
-                let message = format!("Are you sure you want to {}?", entry_name);
-                match confirm_with_modal(cx, message, "Yes", "Cancel", &dctx_owned.trace_id).await
+                match confirm_with_modal(cx, confirm_options, &dctx_owned.trace_id).await
                 {
                     Ok(true) => {
                         let _ = this.update(cx, |this, cx| {

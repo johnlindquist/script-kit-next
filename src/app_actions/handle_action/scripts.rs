@@ -338,9 +338,30 @@ impl ScriptListApp {
             }
             "quit" => {
                 tracing::info!(category = "UI", "quit action");
-                PROCESS_MANAGER.kill_all_processes();
-                PROCESS_MANAGER.remove_main_pid();
-                cx.quit();
+
+                crate::confirm::open_parent_confirm_dialog(
+                    window,
+                    cx,
+                    Self::quit_script_kit_confirm_options(),
+                    move |_window, cx| {
+                        tracing::info!(
+                            category = "UI",
+                            event = "quit_confirmed",
+                            "quit_confirmed"
+                        );
+                        PROCESS_MANAGER.kill_all_processes();
+                        PROCESS_MANAGER.remove_main_pid();
+                        cx.quit();
+                    },
+                    move |_window, _cx| {
+                        tracing::info!(
+                            category = "UI",
+                            event = "quit_cancelled",
+                            "quit_cancelled"
+                        );
+                    },
+                );
+
                 DispatchOutcome::success()
             }
             "copy_content" => {

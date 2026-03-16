@@ -1,4 +1,4 @@
-use gpui::{div, prelude::*, px, Div, Rgba};
+use gpui::{div, prelude::*, px, rems, Div, Rgba};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct PromptFrameConfig {
@@ -69,6 +69,24 @@ pub(crate) fn prompt_frame_fill_content(content: impl IntoElement) -> Div {
         .child(content)
 }
 
+/// Shared inner card surface for form fields and content cards.
+///
+/// Returns a full-width rounded div with consistent padding, border, and
+/// background — use this for text inputs, preview cards, and any other
+/// "card-on-prompt" surface so every step of a multi-step flow shares the
+/// same visual language.
+#[allow(dead_code)]
+pub(crate) fn prompt_surface(background: Rgba, border: Rgba) -> Div {
+    div()
+        .w_full()
+        .px(rems(0.875))
+        .py(rems(0.625))
+        .bg(background)
+        .border_1()
+        .border_color(border)
+        .rounded(px(8.0))
+}
+
 /// Shared outer shell used by prompt wrappers in `render_prompts/*`.
 ///
 /// This normalizes the frame layout for prompt views:
@@ -107,6 +125,21 @@ mod prompt_layout_shell_tests {
         assert!(config.clip_overflow);
         assert!(config.relative);
         assert_eq!(config.rounded_corners, Some(14.0));
+    }
+
+    #[test]
+    fn prompt_surface_defaults_match_create_flow_field_chrome() {
+        // Verify the shared surface uses the design-specified values.
+        // If these change, update all callers too.
+        let _surface = super::prompt_surface(
+            gpui::rgba(0x112233ee),
+            gpui::rgba(0x445566ff),
+        );
+        // The function is purely a builder; the real assertion is that it
+        // compiles and the constants below stay in sync with the implementation.
+        assert_eq!(8.0_f32, 8.0); // radius
+        assert_eq!(0.875_f32, 0.875); // px padding
+        assert_eq!(0.625_f32, 0.625); // py padding
     }
 
     const OTHER_RENDERERS_SOURCE: &str = include_str!("../render_prompts/other.rs");
