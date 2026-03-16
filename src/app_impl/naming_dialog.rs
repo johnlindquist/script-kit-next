@@ -91,7 +91,7 @@ impl ScriptListApp {
             None => result.filename.clone(),
         };
 
-        let item_type = result.target.as_str();
+        let item_type = result.target.display_name().to_lowercase();
 
         logging::log(
             "NAMING",

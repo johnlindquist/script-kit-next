@@ -457,6 +457,7 @@ impl ScriptListApp {
 
                 // App control
                 SystemActionType::QuitScriptKit => {
+                    Self::prepare_script_kit_shutdown();
                     cx.quit();
                     return Self::builtin_success(dctx, "quit_script_kit");
                 }
@@ -558,6 +559,16 @@ impl ScriptListApp {
                 )
             }
         }
+    }
+
+    fn prepare_script_kit_shutdown() {
+        tracing::info!(
+            category = "UI",
+            event = "prepare_script_kit_shutdown",
+            "prepare_script_kit_shutdown"
+        );
+        PROCESS_MANAGER.kill_all_processes();
+        PROCESS_MANAGER.remove_main_pid();
     }
 
     fn quit_script_kit_confirm_options() -> crate::confirm::ParentConfirmOptions {

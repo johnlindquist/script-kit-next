@@ -19,7 +19,7 @@ impl NamingTarget {
     pub const fn display_name(self) -> &'static str {
         match self {
             Self::Script => "Script",
-            Self::Extension => "Extension",
+            Self::Extension => "Scriptlet Bundle",
         }
     }
 }
