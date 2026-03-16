@@ -251,11 +251,44 @@ fn test_notes_keyboard_delete_shortcut_routes_through_confirmation_helper() {
 }
 
 #[test]
-fn test_notes_keyboard_delete_shortcut_logs_ignored_trash_view() {
+fn test_notes_keyboard_delete_shortcut_works_in_trash_view() {
     const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
+    // The trash-view guard was removed so the delete shortcut routes through
+    // request_delete_selected_note which already handles both modes.
     assert!(
-        KEYBOARD_SOURCE.contains("reason = \"trash_view_requires_dedicated_delete_flow\""),
-        "Delete shortcut helper should log why it ignored delete in trash view"
+        !KEYBOARD_SOURCE.contains("trash_view_requires_dedicated_delete_flow"),
+        "Delete shortcut should not block trash view — request_delete_selected_note handles both modes"
+    );
+}
+
+#[test]
+fn test_delete_dialog_cancel_restores_editor_focus() {
+    const NOTES_SOURCE: &str = include_str!("notes.rs");
+    assert!(
+        NOTES_SOURCE.contains("this.focus_editor(window, cx);"),
+        "Cancelling the delete dialog should restore editor focus"
+    );
+}
+
+#[test]
+fn test_delete_note_by_id_restores_editor_focus_when_no_notes_remain() {
+    const NOTES_SOURCE: &str = include_str!("notes.rs");
+    assert!(
+        NOTES_SOURCE.contains("self.focus_editor(window, cx);"),
+        "Deleting the last note should restore editor focus"
+    );
+}
+
+#[test]
+fn test_delete_dialog_width_uses_viewport_size() {
+    const NOTES_SOURCE: &str = include_str!("notes.rs");
+    assert!(
+        NOTES_SOURCE.contains("window.viewport_size().width"),
+        "Dialog width should use viewport_size for consistency"
+    );
+    assert!(
+        !NOTES_SOURCE.contains("window.bounds().size.width"),
+        "Dialog width should not use bounds().size.width"
     );
 }
 

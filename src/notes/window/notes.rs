@@ -247,11 +247,26 @@ impl NotesApp {
         cx.notify();
     }
 
+    /// Clamp dialog width so it never exceeds the available space in a
+    /// narrow Notes popup window.  The `24.0` accounts for horizontal
+    /// padding (12px each side).
+    fn clamp_notes_delete_dialog_width(window_width: f32) -> f32 {
+        let available_width = (window_width - 24.0).max(0.0);
+        available_width.min(448.0)
+    }
+
     /// Compute dialog width clamped to the Notes window so the dialog
     /// never overflows a narrow popup window.
     fn notes_delete_dialog_width(window: &Window) -> gpui::Pixels {
-        let window_width: f32 = window.bounds().size.width.into();
-        gpui::px((window_width - 24.0).clamp(280.0, 448.0))
+        let viewport_width: f32 = window.viewport_size().width.into();
+        gpui::px(Self::clamp_notes_delete_dialog_width(viewport_width))
+    }
+
+    /// Restore keyboard focus to the editor after modal dismissal.
+    pub(super) fn focus_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.editor_state.update(cx, |state, cx| {
+            state.focus(window, cx);
+        });
     }
 
     /// Request deletion of the currently selected note with a confirmation dialog.
@@ -284,15 +299,17 @@ impl NotesApp {
             .map(|n| n.title.clone())
             .unwrap_or_default();
 
-        let dialog_width = Self::notes_delete_dialog_width(window);
-        let window_width: f32 = window.bounds().size.width.into();
+        let viewport_width: f32 = window.viewport_size().width.into();
+        let dialog_width_value = Self::clamp_notes_delete_dialog_width(viewport_width);
+        let dialog_width = gpui::px(dialog_width_value);
 
         tracing::info!(
             event = "notes_delete_confirmation_requested",
             note_id = %note_id.as_str(),
             note_title = %note_title,
             is_trash_view = (self.view_mode == NotesViewMode::Trash),
-            window_width,
+            viewport_width,
+            dialog_width = dialog_width_value,
             "notes_delete_confirmation_requested"
         );
 
@@ -333,6 +350,7 @@ impl NotesApp {
         let weak_notes = cx.entity().downgrade();
         let confirm_note_id = note_id;
         let cancel_note_id = note_id;
+        let weak_notes_for_cancel = weak_notes.clone();
 
         crate::confirm::open_parent_confirm_dialog_for_entity(
             window,
@@ -367,13 +385,19 @@ impl NotesApp {
                     }
                 }
             },
-            move |_window, _cx| {
+            move |window, cx| {
                 tracing::info!(
                     event = "notes_delete_cancelled",
                     note_id = %cancel_note_id.as_str(),
                     delete_mode = if is_trash_view { "permanent" } else { "soft" },
                     "notes_delete_cancelled"
                 );
+
+                if let Some(entity) = weak_notes_for_cancel.upgrade() {
+                    entity.update(cx, |this, cx| {
+                        this.focus_editor(window, cx);
+                    });
+                }
             },
         );
 
@@ -417,6 +441,7 @@ impl NotesApp {
             self.editor_state.update(cx, |state, cx| {
                 state.set_value("", window, cx);
             });
+            self.focus_editor(window, cx);
         }
 
         self.show_action_feedback("Deleted · ⌘⇧T trash", false);
@@ -654,8 +679,8 @@ mod notes_search_and_delete_regression_tests {
             "Notes delete should define a Notes-specific dialog width helper"
         );
         assert!(
-            normalized.contains("gpui::px((window_width - 24.0).clamp(280.0, 448.0))"),
-            "Notes delete dialog width should clamp to the Notes window size"
+            normalized.contains("fn clamp_notes_delete_dialog_width(window_width: f32) -> f32"),
+            "Notes delete should define a testable width clamp helper"
         );
 
         let delete_request = extract_section(
@@ -673,6 +698,20 @@ mod notes_search_and_delete_regression_tests {
             delete_request.contains("cx.notify();"),
             "Notes delete should request a repaint after opening the dialog"
         );
+    }
+
+    #[test]
+    fn test_notes_delete_dialog_width_shrinks_for_narrow_windows() {
+        // 240px window → available = 216, no min clamp → 216
+        assert_eq!(super::NotesApp::clamp_notes_delete_dialog_width(240.0), 216.0);
+        // 320px window → available = 296, under cap → 296
+        assert_eq!(super::NotesApp::clamp_notes_delete_dialog_width(320.0), 296.0);
+        // 600px window → available = 576, capped at 448
+        assert_eq!(super::NotesApp::clamp_notes_delete_dialog_width(600.0), 448.0);
+        // Very narrow: 10px window → available = 0 (clamped to 0)
+        assert_eq!(super::NotesApp::clamp_notes_delete_dialog_width(10.0), 0.0);
+        // Exactly at cap boundary: 472 → 448
+        assert_eq!(super::NotesApp::clamp_notes_delete_dialog_width(472.0), 448.0);
     }
 
     #[test]

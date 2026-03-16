@@ -15,7 +15,7 @@ fn is_key_right_bracket(key: &str) -> bool {
 }
 
 impl NotesApp {
-    /// Handle Cmd+Backspace / Cmd+Delete shortcut to delete the selected note.
+    /// Handle Cmd+Shift+Backspace / Cmd+Shift+Delete shortcut to delete the selected note.
     ///
     /// Returns `true` if the shortcut was handled (caller should stop propagation).
     pub(super) fn handle_platform_delete_shortcut(
@@ -28,25 +28,13 @@ impl NotesApp {
             return false;
         }
 
-        let is_trash_view = self.view_mode == NotesViewMode::Trash;
-
         tracing::info!(
             event = "notes_delete_shortcut_received",
             key = %key,
             has_selection = self.selected_note_id.is_some(),
-            is_trash_view,
+            is_trash_view = (self.view_mode == NotesViewMode::Trash),
             "notes_delete_shortcut_received"
         );
-
-        if is_trash_view {
-            tracing::warn!(
-                event = "notes_delete_shortcut_ignored",
-                key = %key,
-                reason = "trash_view_requires_dedicated_delete_flow",
-                "notes_delete_shortcut_ignored"
-            );
-            return false;
-        }
 
         let Some(note_id) = self.selected_note_id else {
             tracing::debug!(
@@ -532,6 +520,60 @@ mod dialog_modal_guard_tests {
 
     fn normalize_ws(source: &str) -> String {
         source.split_whitespace().collect::<Vec<_>>().join(" ")
+    }
+
+    /// Verify the Cmd+Shift+Backspace match arm calls `cx.stop_propagation()`
+    /// only when `handle_platform_delete_shortcut` returns true.  When the old
+    /// trash-view guard made it return false, the match arm completed without
+    /// calling either `stop_propagation` or `propagate` — silently swallowing
+    /// the key event (no dialog, no propagation signal to GPUI).
+    #[test]
+    fn delete_shortcut_caller_stop_propagation_is_conditional_on_handler_return() {
+        let source = std::fs::read_to_string("src/notes/window/keyboard.rs")
+            .expect("Failed to read keyboard.rs");
+        let normalized = normalize_ws(&source);
+
+        // The match arm: when handler returns false, no stop_propagation is called.
+        // This proves the old trash-view `return false` silently swallowed events.
+        assert!(
+            normalized.contains(
+                "if self.handle_platform_delete_shortcut(key, window, cx) { cx.stop_propagation(); }"
+            ),
+            "Delete shortcut match arm must conditionally stop propagation based on handler return"
+        );
+    }
+
+    /// Verify the delete shortcut always calls `request_delete_selected_note`
+    /// regardless of view mode — the old trash-view guard silently swallowed
+    /// the key event (no dialog, no `stop_propagation`, no `propagate`).
+    #[test]
+    fn handle_platform_delete_shortcut_does_not_early_return_for_trash_view() {
+        let source = std::fs::read_to_string("src/notes/window/keyboard.rs")
+            .expect("Failed to read keyboard.rs");
+
+        let fn_start = source
+            .find("pub(super) fn handle_platform_delete_shortcut")
+            .expect("handle_platform_delete_shortcut should exist");
+        // Extract just the function body (up to the next pub(super) fn)
+        let fn_body = &source[fn_start..];
+        let fn_end = fn_body[1..]
+            .find("\n    pub(super) fn ")
+            .map(|i| i + 1)
+            .unwrap_or(fn_body.len());
+        let fn_body = &fn_body[..fn_end];
+
+        // The trash-view guard that silently swallowed the key is gone
+        assert!(
+            !fn_body.contains("is_trash_view {"),
+            "handle_platform_delete_shortcut must not early-return for trash view — \
+             request_delete_selected_note already handles both view modes"
+        );
+
+        // The function must always route to the confirmation helper
+        assert!(
+            fn_body.contains("self.request_delete_selected_note(window, cx);"),
+            "handle_platform_delete_shortcut must route through request_delete_selected_note"
+        );
     }
 
     #[test]
