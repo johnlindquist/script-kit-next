@@ -1821,44 +1821,55 @@ impl ScriptListApp {
                 };
 
                 let send_confirm = send_response.clone();
-                let send_cancel = send_response;
+                let send_cancel = send_response.clone();
+                let send_fallback = send_response;
 
                 // Open parent confirm dialog via spawn + main window handle
                 cx.spawn(async move |_this, cx| {
                     let Some(handle) = crate::get_main_window_handle() else {
                         tracing::error!(
                             category = "ERROR",
-                            "Main window handle not available for confirm dialog"
+                            "Main window handle not available for confirm dialog — failing closed"
                         );
+                        send_fallback(false);
                         return;
                     };
-                    let _ = cx.update_window(handle, |_, window, cx| {
-                        crate::confirm::open_parent_confirm_dialog(
-                            window,
-                            cx,
-                            crate::confirm::ParentConfirmOptions {
-                                title: "Confirm".into(),
-                                body: gpui::SharedString::from(message),
-                                confirm_text: confirm_text
-                                    .map(gpui::SharedString::from)
-                                    .unwrap_or("OK".into()),
-                                cancel_text: cancel_text
-                                    .map(gpui::SharedString::from)
-                                    .unwrap_or("Cancel".into()),
-                                ..Default::default()
-                            },
-                            move |_window, _cx| {
-                                send_confirm(true);
-                            },
-                            move |_window, _cx| {
-                                send_cancel(false);
-                            },
+                    if cx
+                        .update_window(handle, |_, window, cx| {
+                            crate::confirm::open_parent_confirm_dialog(
+                                window,
+                                cx,
+                                crate::confirm::ParentConfirmOptions {
+                                    title: "Confirm".into(),
+                                    body: gpui::SharedString::from(message),
+                                    confirm_text: confirm_text
+                                        .map(gpui::SharedString::from)
+                                        .unwrap_or("OK".into()),
+                                    cancel_text: cancel_text
+                                        .map(gpui::SharedString::from)
+                                        .unwrap_or("Cancel".into()),
+                                    ..Default::default()
+                                },
+                                move |_window, _cx| {
+                                    send_confirm(true);
+                                },
+                                move |_window, _cx| {
+                                    send_cancel(false);
+                                },
+                            );
+                            tracing::info!(
+                                category = "CONFIRM",
+                                "Confirm parent dialog opened"
+                            );
+                        })
+                        .is_err()
+                    {
+                        tracing::error!(
+                            category = "ERROR",
+                            "Failed to open confirm dialog window — failing closed"
                         );
-                        tracing::info!(
-                            category = "CONFIRM",
-                            "Confirm parent dialog opened"
-                        );
-                    });
+                        send_fallback(false);
+                    }
                 })
                 .detach();
 

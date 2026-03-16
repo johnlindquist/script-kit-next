@@ -145,8 +145,8 @@ impl NotesApp {
                                 .ghost()
                                 .xsmall()
                                 .icon(IconName::Delete)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.permanently_delete_note(cx);
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.permanently_delete_note(window, cx);
                                 })),
                         ),
                 )

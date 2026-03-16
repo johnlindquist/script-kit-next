@@ -377,7 +377,7 @@ impl NotesApp {
                     if let Some(entity) = weak_notes.upgrade() {
                         entity.update(cx, |this, cx| {
                             if is_trash_view {
-                                this.permanently_delete_note(cx);
+                                this.permanently_delete_note(window, cx);
                             } else {
                                 this.delete_note_by_id(confirm_note_id, window, cx);
                             }
@@ -459,19 +459,30 @@ impl NotesApp {
     }
 
     /// Permanently delete the selected note from trash
-    pub(super) fn permanently_delete_note(&mut self, cx: &mut Context<Self>) {
-        if let Some(id) = self.selected_note_id {
-            if let Err(e) = storage::delete_note_permanently(id) {
-                tracing::error!(error = %e, "Failed to permanently delete note");
-                return;
-            }
+    pub(super) fn permanently_delete_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(id) = self.selected_note_id else {
+            return;
+        };
 
-            self.deleted_notes.retain(|n| n.id != id);
-            self.selected_note_id = self.deleted_notes.first().map(|n| n.id);
+        if let Err(e) = storage::delete_note_permanently(id) {
+            tracing::error!(error = %e, "Failed to permanently delete note");
+            return;
+        }
 
-            info!(note_id = %id, "Note permanently deleted");
+        self.deleted_notes.retain(|n| n.id != id);
+
+        if let Some(next_note) = self.deleted_notes.first() {
+            self.select_note(next_note.id, window, cx);
+        } else {
+            self.selected_note_id = None;
+            self.editor_state.update(cx, |state, cx| {
+                state.set_value("", window, cx);
+            });
+            self.focus_editor(window, cx);
             cx.notify();
         }
+
+        info!(note_id = %id, "Note permanently deleted");
     }
 
     /// Restore the selected note from trash
@@ -703,15 +714,27 @@ mod notes_search_and_delete_regression_tests {
     #[test]
     fn test_notes_delete_dialog_width_shrinks_for_narrow_windows() {
         // 240px window → available = 216, no min clamp → 216
-        assert_eq!(super::NotesApp::clamp_notes_delete_dialog_width(240.0), 216.0);
+        assert_eq!(
+            super::NotesApp::clamp_notes_delete_dialog_width(240.0),
+            216.0
+        );
         // 320px window → available = 296, under cap → 296
-        assert_eq!(super::NotesApp::clamp_notes_delete_dialog_width(320.0), 296.0);
+        assert_eq!(
+            super::NotesApp::clamp_notes_delete_dialog_width(320.0),
+            296.0
+        );
         // 600px window → available = 576, capped at 448
-        assert_eq!(super::NotesApp::clamp_notes_delete_dialog_width(600.0), 448.0);
+        assert_eq!(
+            super::NotesApp::clamp_notes_delete_dialog_width(600.0),
+            448.0
+        );
         // Very narrow: 10px window → available = 0 (clamped to 0)
         assert_eq!(super::NotesApp::clamp_notes_delete_dialog_width(10.0), 0.0);
         // Exactly at cap boundary: 472 → 448
-        assert_eq!(super::NotesApp::clamp_notes_delete_dialog_width(472.0), 448.0);
+        assert_eq!(
+            super::NotesApp::clamp_notes_delete_dialog_width(472.0),
+            448.0
+        );
     }
 
     #[test]
