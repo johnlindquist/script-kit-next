@@ -75,7 +75,6 @@ pub(crate) fn prompt_frame_fill_content(content: impl IntoElement) -> Div {
 /// background — use this for text inputs, preview cards, and any other
 /// "card-on-prompt" surface so every step of a multi-step flow shares the
 /// same visual language.
-#[allow(dead_code)]
 pub(crate) fn prompt_surface(background: Rgba, border: Rgba) -> Div {
     div()
         .w_full()
@@ -162,7 +161,6 @@ mod prompt_layout_shell_tests {
             "render_drop_prompt",
             "render_template_prompt",
             "render_chat_prompt",
-            "render_naming_prompt",
         ] {
             let body = fn_source(fn_name);
             assert!(
@@ -170,5 +168,18 @@ mod prompt_layout_shell_tests {
                 "{fn_name} should delegate to render_simple_prompt_shell"
             );
         }
+    }
+
+    #[test]
+    fn naming_prompt_uses_form_style_shell_in_other_rs() {
+        let body = fn_source("render_naming_prompt");
+        assert!(
+            body.contains("PromptFooter::new("),
+            "render_naming_prompt should use PromptFooter"
+        );
+        assert!(
+            body.contains("STANDARD_HEIGHT"),
+            "render_naming_prompt should use STANDARD_HEIGHT"
+        );
     }
 }
