@@ -130,10 +130,12 @@ fn test_render_emoji_picker_uses_uniform_row_height_and_lighter_cell_chrome() {
     );
     assert!(
         source.contains(
-            "let hover_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x14);"
+            "let cell_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x18);"
         ) && source.contains(
-            "let selected_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x2a);"
+            "let hover_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x2c);"
+        ) && source.contains(
+            "let selected_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x36);"
         ),
-        "emoji cells should rely on state-based fills"
+        "emoji cells should have persistent surface chrome with rest, hover, and selected fills"
     );
 }

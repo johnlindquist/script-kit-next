@@ -269,10 +269,12 @@ impl ScriptListApp {
             let hovered = self.hovered_index;
             let current_input_mode = self.input_mode;
             let row_height = crate::emoji::GRID_ROW_HEIGHT;
-            let hover_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x14);
+            let cell_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x18);
+            let hover_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x2c);
+            let cell_border = rgba((ui_border << 8) | 0x3c);
             let selected_border = self.theme.colors.accent.selected;
-            let selected_outline = rgba((selected_border << 8) | 0x90);
-            let selected_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x2a);
+            let selected_outline = rgba((selected_border << 8) | 0x80);
+            let selected_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x36);
             let click_entity_handle = cx.entity().downgrade();
             let hover_entity_handle = cx.entity().downgrade();
 
@@ -412,14 +414,14 @@ impl ScriptListApp {
                                                     .rounded(px(design_visual.radius_md))
                                                     .text_size(px(28.0))
                                                     .border_1()
+                                                    .bg(cell_bg)
                                                     .border_color(if is_selected {
                                                         selected_outline
                                                     } else {
-                                                        rgba(0x00000000)
+                                                        cell_border
                                                     })
-                                                    .when(is_hovered || is_selected, |d| {
-                                                        d.bg(if is_selected { selected_bg } else { hover_bg })
-                                                    })
+                                                    .when(is_hovered && !is_selected, |d| d.bg(hover_bg))
+                                                    .when(is_selected, |d| d.bg(selected_bg))
                                                     .child(emoji_display),
                                             )
                                             .into_any_element()
@@ -437,9 +439,6 @@ impl ScriptListApp {
             .track_scroll(&self.emoji_scroll_handle)
             .into_any_element()
         };
-        let grid_scrollbar =
-            self.builtin_uniform_list_scrollbar(&self.emoji_scroll_handle, rows.len(), 8);
-
         div()
             .flex()
             .flex_col()
@@ -495,14 +494,7 @@ impl ScriptListApp {
                     .min_h(px(0.0))
                     .overflow_hidden()
                     .py(px(design_spacing.padding_xs))
-                    .child(
-                        div()
-                            .relative()
-                            .w_full()
-                            .h_full()
-                            .child(grid_element)
-                            .child(grid_scrollbar),
-                    ),
+                    .child(grid_element),
             )
             .child(PromptFooter::new(
                 PromptFooterConfig::new()
