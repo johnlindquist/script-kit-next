@@ -69,7 +69,7 @@ async function runWithTimeout<T>(
 
 export interface TestResult {
   test: string;
-  status: 'pass' | 'fail' | 'timeout' | 'crash';
+  status: 'pass' | 'fail' | 'timeout' | 'crash' | 'skip';
   duration_ms: number;
   error?: string;
   stdout?: string;
@@ -457,9 +457,8 @@ async function runTestFile(testPath: string): Promise<TestFileResult> {
       } else if (event.status === 'pass') {
         status = 'pass';
       } else if (event.status === 'skip') {
-        // Convert skip to pass with note (we track skips separately)
-        status = 'pass';
-        error = event.reason || 'Skipped';
+        status = 'skip';
+        error = event.reason || event.error || 'Skipped';
       } else {
         status = 'fail';
         error = event.error;
@@ -480,6 +479,7 @@ async function runTestFile(testPath: string): Promise<TestFileResult> {
       const icon = status === 'pass' ? '  \u2705' :
                    status === 'fail' ? '  \u274C' :
                    status === 'timeout' ? '  \u23F1\uFE0F ' :
+                   status === 'skip' ? '  \u23ED\uFE0F' :
                    '  \u{1F4A5}';
       const durationStr = result.duration_ms ? ` (${result.duration_ms}ms)` : '';
       const errorStr = error ? ` - ${error}` : '';
@@ -519,6 +519,7 @@ async function runTestFile(testPath: string): Promise<TestFileResult> {
     const icon = status === 'pass' ? '  \u2705' :
                  status === 'fail' ? '  \u274C' :
                  status === 'timeout' ? '  \u23F1\uFE0F ' :
+                 status === 'skip' ? '  \u23ED\uFE0F' :
                  '  \u{1F4A5}';
 
     log(`${icon} ${fileName} (${duration_ms}ms) - ${error}`);
@@ -529,8 +530,7 @@ async function runTestFile(testPath: string): Promise<TestFileResult> {
   const failed = tests.filter(t => t.status === 'fail').length;
   const timeout = tests.filter(t => t.status === 'timeout').length;
   const crashed = tests.filter(t => t.status === 'crash').length;
-  // Note: skipped tests are converted to pass with error message
-  const skipped = events.filter(e => e.status === 'skip').length;
+  const skipped = tests.filter(t => t.status === 'skip').length;
 
   return {
     file: fileName,
