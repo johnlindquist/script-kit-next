@@ -284,11 +284,11 @@ fn test_delete_dialog_width_uses_viewport_size() {
     const NOTES_SOURCE: &str = include_str!("notes.rs");
     assert!(
         NOTES_SOURCE.contains("window.viewport_size().width"),
-        "Dialog width should use viewport_size for consistency"
+        "Dialog width should prefer viewport_size"
     );
     assert!(
-        !NOTES_SOURCE.contains("window.bounds().size.width"),
-        "Dialog width should not use bounds().size.width"
+        NOTES_SOURCE.contains("window.bounds().size.width"),
+        "Dialog width should fall back to bounds when viewport width is zero"
     );
 }
 
@@ -320,5 +320,57 @@ fn test_request_delete_selected_note_emits_structured_confirmation_logs() {
             && NOTES_SOURCE.contains("notes_delete_confirmation_opened")
             && NOTES_SOURCE.contains("notes_delete_cancelled"),
         "Delete confirmation flow should emit structured request/open/cancel logs"
+    );
+}
+
+#[test]
+fn test_resolve_notes_delete_dialog_source_width_prefers_viewport() {
+    assert_eq!(
+        NotesApp::resolve_notes_delete_dialog_source_width(360.0, 520.0),
+        360.0
+    );
+}
+
+#[test]
+fn test_resolve_notes_delete_dialog_source_width_falls_back_to_bounds() {
+    assert_eq!(
+        NotesApp::resolve_notes_delete_dialog_source_width(0.0, 520.0),
+        520.0
+    );
+}
+
+#[test]
+fn test_resolve_notes_delete_dialog_source_width_uses_default_when_sizes_missing() {
+    assert_eq!(
+        NotesApp::resolve_notes_delete_dialog_source_width(0.0, 0.0),
+        472.0
+    );
+}
+
+#[test]
+fn test_delete_dialog_width_prefers_viewport_but_falls_back_when_zero() {
+    const NOTES_SOURCE: &str = include_str!("notes.rs");
+    assert!(
+        NOTES_SOURCE.contains("window.viewport_size().width"),
+        "Dialog width should still prefer viewport_size"
+    );
+    assert!(
+        NOTES_SOURCE.contains("window.bounds().size.width"),
+        "Dialog width should fall back to bounds when viewport width is unavailable"
+    );
+}
+
+#[test]
+fn test_permanent_delete_accepts_window_and_restores_selection_or_focus() {
+    const NOTES_SOURCE: &str = include_str!("notes.rs");
+    assert!(
+        NOTES_SOURCE.contains("fn permanently_delete_note(")
+            && NOTES_SOURCE.contains("window: &mut Window,"),
+        "Permanent delete should accept window so it can restore editor state"
+    );
+    assert!(
+        NOTES_SOURCE.contains("self.select_note(next_note.id, window, cx);")
+            && NOTES_SOURCE.contains("self.focus_editor(window, cx);"),
+        "Permanent delete should either select the next trashed note or refocus the editor when empty"
     );
 }

@@ -69,6 +69,15 @@ impl NotesApp {
         let modifiers = &event.keystroke.modifiers;
 
         if window.has_active_dialog(cx) {
+            tracing::debug!(
+                event = "notes_key_deferred_to_active_dialog",
+                key = %key,
+                platform = modifiers.platform,
+                shift = modifiers.shift,
+                control = modifiers.control,
+                alt = modifiers.alt,
+                "notes_key_deferred_to_active_dialog"
+            );
             cx.propagate();
             return;
         }
@@ -583,7 +592,7 @@ mod dialog_modal_guard_tests {
         let normalized = normalize_ws(&source);
 
         let dialog_guard = normalized
-            .find("if window.has_active_dialog(cx) { cx.propagate(); return; }")
+            .find("if window.has_active_dialog(cx) {")
             .expect("Notes should defer key handling when a dialog is active");
         let tab_handler = normalized
             .find(

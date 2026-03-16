@@ -217,7 +217,7 @@ impl NotesApp {
                 return;
             }
             NotesAction::RestoreNote => self.restore_note(window, cx),
-            NotesAction::PermanentlyDeleteNote => self.permanently_delete_note(cx),
+            NotesAction::PermanentlyDeleteNote => self.permanently_delete_note(window, cx),
             NotesAction::MoveListItemUp | NotesAction::MoveListItemDown => {}
             NotesAction::Format => {
                 self.show_format_toolbar = !self.show_format_toolbar;
