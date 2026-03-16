@@ -16,23 +16,32 @@ impl Render for NamingPrompt {
         let text_muted = rgb(self.theme.colors.text.muted);
         let border_color = rgb(self.theme.colors.ui.border);
         let error_color = rgb(self.theme.colors.ui.error);
-        let accent_color = rgb(self.theme.colors.accent.selected);
         let input_bg = rgb(self.theme.colors.background.search_box);
         let preview_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x20);
 
-        let title = format!("Name your {}", self.target.display_name().to_lowercase());
-        let placeholder = self
-            .placeholder
-            .clone()
-            .unwrap_or_else(|| "Friendly name".to_string());
-        let hint = self
-            .hint
-            .clone()
-            .unwrap_or_else(|| "Enter to create \u{2022} Esc to cancel".to_string());
+        let (title, preview_label, preview_kind) = match self.target {
+            NamingTarget::Script => (
+                "Name your script",
+                "Script Preview",
+                "TypeScript script",
+            ),
+            NamingTarget::Extension => (
+                "Name your scriptlet bundle",
+                "Scriptlet Bundle Preview",
+                "Markdown bundle",
+            ),
+        };
+
+        let placeholder = self.placeholder.clone().unwrap_or_else(|| match self.target {
+            NamingTarget::Script => "My Cool Script".to_string(),
+            NamingTarget::Extension => "My Cool Scriptlet Bundle".to_string(),
+        });
+
         let validation_message = self
             .validation_error
             .as_ref()
             .map(NamingValidationError::message);
+
         let input_value = if self.friendly_name.is_empty() {
             SharedString::from(placeholder)
         } else {
@@ -60,89 +69,64 @@ impl Render for NamingPrompt {
             .text_color(text_primary)
             .child(
                 div()
+                    .w_full()
                     .flex_1()
                     .flex()
                     .flex_col()
                     .gap(px(spacing.gap_lg))
+                    .child(crate::components::prompt_form_intro(
+                        title,
+                        format!(
+                            "Use the friendly name shown in Script Kit. The file will be created in {}.",
+                            self.target_directory.display()
+                        ),
+                        text_primary,
+                        text_muted,
+                        spacing.gap_sm,
+                    ))
                     .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap(px(spacing.gap_sm))
-                            .child(div().text_lg().child(title))
-                            .child(
-                                div().text_sm().text_color(text_muted).child(
-                                    "Friendly name is used for display and converted to a filename.",
-                                ),
-                            ),
+                        crate::components::prompt_form_section(
+                            "Friendly Name",
+                            text_secondary,
+                            spacing.gap_sm,
+                            crate::components::prompt_surface(input_bg, input_border_color)
+                                .min_h(px(PROMPT_INPUT_FIELD_HEIGHT))
+                                .text_color(input_text_color)
+                                .child(input_value),
+                        )
+                        .when_some(validation_message, |d, message| {
+                            d.child(crate::components::prompt_form_help(message, error_color))
+                        }),
                     )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap(px(spacing.gap_sm))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(text_muted)
-                                    .child("Friendly Name"),
-                            )
-                            .child(
-                                crate::components::prompt_surface(input_bg, input_border_color)
-                                    .min_h(px(PROMPT_INPUT_FIELD_HEIGHT))
-                                    .text_color(input_text_color)
-                                    .child(input_value),
-                            )
-                            .when_some(validation_message, |d, message| {
-                                d.child(div().text_xs().text_color(error_color).child(message))
-                            }),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap(px(spacing.gap_sm))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(text_muted)
-                                    .child("Filename Preview"),
-                            )
-                            .child(
-                                crate::components::prompt_surface(preview_bg, border_color).child(
+                    .child(crate::components::prompt_form_section(
+                        preview_label,
+                        text_secondary,
+                        spacing.gap_sm,
+                        crate::components::prompt_surface(preview_bg, border_color).child(
+                            div()
+                                .w_full()
+                                .flex()
+                                .flex_col()
+                                .gap(px(spacing.gap_sm))
+                                .child(
                                     div()
-                                        .flex()
-                                        .flex_col()
-                                        .gap(px(spacing.gap_sm))
-                                        .child(
-                                            div()
-                                                .text_base()
-                                                .text_color(text_secondary)
-                                                .child(preview_filename.clone()),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_xs()
-                                                .text_color(text_muted)
-                                                .child(preview_path.display().to_string()),
-                                        )
-                                        .child(
-                                            div().text_xs().text_color(text_muted).child(format!(
-                                                "Target: {} \u{2022} Extension: {}",
-                                                self.target.as_str(),
-                                                self.extension_label()
-                                            )),
-                                        ),
-                                ),
-                            ),
-                    ),
-            )
-            .child(
-                div()
-                    .pt(px(spacing.gap_sm))
-                    .text_xs()
-                    .text_color(accent_color)
-                    .child(hint),
+                                        .text_base()
+                                        .text_color(text_primary)
+                                        .child(preview_filename.clone()),
+                                )
+                                .child(crate::components::prompt_form_help(
+                                    preview_path.display().to_string(),
+                                    text_muted,
+                                ))
+                                .child(crate::components::prompt_form_help(
+                                    format!(
+                                        "{preview_kind} ({}). Press Enter to create.",
+                                        self.extension_label()
+                                    ),
+                                    text_secondary,
+                                )),
+                        ),
+                    )),
             );
 
         FocusablePrompt::new(content)
@@ -178,5 +162,41 @@ impl Render for NamingPrompt {
                     }
                 },
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    const SOURCE: &str = include_str!("render.rs");
+
+    #[test]
+    fn naming_render_uses_shared_create_flow_helpers() {
+        assert!(
+            SOURCE.contains("prompt_form_intro("),
+            "render.rs should use prompt_form_intro"
+        );
+        assert!(
+            SOURCE.contains("prompt_form_section("),
+            "render.rs should use prompt_form_section"
+        );
+        assert!(
+            SOURCE.contains("prompt_form_help("),
+            "render.rs should use prompt_form_help"
+        );
+    }
+
+    #[test]
+    fn naming_render_no_longer_duplicates_footer_cancel_hint() {
+        // Check that the non-test portion of the file doesn't contain the hint.
+        // Split at the test module boundary to avoid matching our own assertion.
+        let production_code = SOURCE
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap_or(SOURCE);
+        let needle = ["Esc", " to ", "cancel"].concat();
+        assert!(
+            !production_code.contains(&needle),
+            "render.rs production code should not contain cancel hint — the footer handles that"
+        );
     }
 }

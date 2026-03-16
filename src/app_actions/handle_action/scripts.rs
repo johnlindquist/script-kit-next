@@ -349,8 +349,7 @@ impl ScriptListApp {
                             event = "quit_confirmed",
                             "quit_confirmed"
                         );
-                        PROCESS_MANAGER.kill_all_processes();
-                        PROCESS_MANAGER.remove_main_pid();
+                        Self::prepare_script_kit_shutdown();
                         cx.quit();
                     },
                     move |_window, _cx| {

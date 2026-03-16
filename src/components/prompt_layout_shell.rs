@@ -1,4 +1,4 @@
-use gpui::{div, prelude::*, px, rems, Div, Rgba};
+use gpui::{div, prelude::*, px, rems, Div, FontWeight, Rgba, SharedString};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct PromptFrameConfig {
@@ -84,6 +84,61 @@ pub(crate) fn prompt_surface(background: Rgba, border: Rgba) -> Div {
         .border_1()
         .border_color(border)
         .rounded(px(8.0))
+}
+
+/// Shared intro block for create-flow screens (title + description).
+pub(crate) fn prompt_form_intro(
+    title: impl Into<SharedString>,
+    description: impl Into<SharedString>,
+    title_color: Rgba,
+    description_color: Rgba,
+    gap_px: f32,
+) -> Div {
+    div()
+        .w_full()
+        .flex()
+        .flex_col()
+        .gap(px(gap_px))
+        .child(
+            div()
+                .text_lg()
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(title_color)
+                .child(title.into()),
+        )
+        .child(
+            div()
+                .text_sm()
+                .text_color(description_color)
+                .child(description.into()),
+        )
+}
+
+/// Shared labeled section for create-flow screens (label above content).
+pub(crate) fn prompt_form_section(
+    label: impl Into<SharedString>,
+    label_color: Rgba,
+    gap_px: f32,
+    content: impl IntoElement,
+) -> Div {
+    div()
+        .w_full()
+        .flex()
+        .flex_col()
+        .gap(px(gap_px))
+        .child(
+            div()
+                .text_xs()
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(label_color)
+                .child(label.into()),
+        )
+        .child(content)
+}
+
+/// Shared helper text for create-flow screens.
+pub(crate) fn prompt_form_help(text: impl Into<SharedString>, color: Rgba) -> Div {
+    div().text_xs().text_color(color).child(text.into())
 }
 
 /// Shared outer shell used by prompt wrappers in `render_prompts/*`.

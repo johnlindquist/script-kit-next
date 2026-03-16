@@ -3,7 +3,7 @@
 //! This panel is intentionally inline and callback-driven so the app layer can wire
 //! platform-specific behavior for each action.
 
-use gpui::{div, prelude::*, px, rgb, rgba, App, FontWeight, RenderOnce, SharedString, Window};
+use gpui::{div, prelude::*, px, rgb, rgba, App, RenderOnce, SharedString, Window};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -181,48 +181,30 @@ impl RenderOnce for CreationFeedbackPanel {
             .flex()
             .flex_col()
             .gap(px(spacing.gap_lg))
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(spacing.gap_sm))
-                    .child(
-                        div()
-                            .text_lg()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(text_primary)
-                            .child("Created"),
-                    )
+            .child(crate::components::prompt_form_intro(
+                "Created",
+                "Your new file is ready. Use the actions below to jump to it.",
+                text_primary,
+                text_secondary,
+                spacing.gap_sm,
+            ))
+            .child(crate::components::prompt_form_section(
+                "Path",
+                text_secondary,
+                spacing.gap_sm,
+                crate::components::prompt_surface(path_surface, border_color)
+                    .id("creation-feedback-path-container")
+                    .overflow_x_scroll()
+                    .overflow_y_hidden()
                     .child(
                         div()
                             .text_sm()
-                            .text_color(text_secondary)
-                            .child(
-                                "Your new file is ready. Use the actions below to jump to it.",
-                            ),
+                            .font_family(mono_font)
+                            .text_color(text_primary)
+                            .whitespace_nowrap()
+                            .child(path_text),
                     ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(spacing.gap_sm))
-                    .child(div().text_xs().text_color(text_secondary).child("Path"))
-                    .child(
-                        crate::components::prompt_surface(path_surface, border_color)
-                            .id("creation-feedback-path-container")
-                            .overflow_x_scroll()
-                            .overflow_y_hidden()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_family(mono_font)
-                                    .text_color(text_primary)
-                                    .whitespace_nowrap()
-                                    .child(path_text),
-                            ),
-                    ),
-            )
+            ))
             .child(
                 div()
                     .w_full()
@@ -235,6 +217,23 @@ impl RenderOnce for CreationFeedbackPanel {
                     .child(open_button)
                     .child(dismiss_button),
             )
+    }
+}
+
+#[cfg(test)]
+mod create_flow_layout_tests {
+    const SOURCE: &str = include_str!("creation_feedback.rs");
+
+    #[test]
+    fn creation_feedback_uses_shared_create_flow_helpers() {
+        assert!(
+            SOURCE.contains("prompt_form_intro("),
+            "creation_feedback.rs should use prompt_form_intro"
+        );
+        assert!(
+            SOURCE.contains("prompt_form_section("),
+            "creation_feedback.rs should use prompt_form_section"
+        );
     }
 }
 

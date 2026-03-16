@@ -290,4 +290,65 @@ mod tests {
             "parent confirm dialog should log the concrete width used to build the dialog"
         );
     }
+
+    #[test]
+    fn quit_action_and_builtin_quit_share_shutdown_cleanup() {
+        let scripts_source = fs::read_to_string("src/app_actions/handle_action/scripts.rs")
+            .expect("Failed to read scripts.rs");
+        let builtin_source = fs::read_to_string("src/app_execute/builtin_execution.rs")
+            .expect("Failed to read builtin_execution.rs");
+
+        let scripts = normalize_ws(&scripts_source);
+        let builtins = normalize_ws(&builtin_source);
+
+        assert!(
+            scripts.contains("Self::quit_script_kit_confirm_options()"),
+            "direct quit action should keep using the shared quit confirm copy"
+        );
+
+        let helper_idx = builtins
+            .find("fn prepare_script_kit_shutdown()")
+            .expect("Expected shared quit shutdown helper");
+        let kill_idx = builtins
+            .find("PROCESS_MANAGER.kill_all_processes();")
+            .expect("Expected helper to stop running processes");
+        let remove_pid_idx = builtins
+            .find("PROCESS_MANAGER.remove_main_pid();")
+            .expect("Expected helper to clear the main pid");
+
+        assert!(
+            helper_idx < kill_idx && kill_idx < remove_pid_idx,
+            "shared quit shutdown helper should stop processes before clearing the main pid"
+        );
+
+        let action_helper_idx = scripts
+            .find("Self::prepare_script_kit_shutdown();")
+            .expect("Expected direct quit action to use the shared shutdown helper");
+        let action_quit_idx = scripts[action_helper_idx..]
+            .find("cx.quit();")
+            .map(|idx| action_helper_idx + idx)
+            .expect("Expected direct quit action to quit after shutdown cleanup");
+
+        assert!(
+            action_helper_idx < action_quit_idx,
+            "direct quit action should run shutdown cleanup before quitting"
+        );
+
+        let builtin_branch_idx = builtins
+            .find("SystemActionType::QuitScriptKit => {")
+            .expect("Expected builtin quit system action branch");
+        let builtin_helper_idx = builtins[builtin_branch_idx..]
+            .find("Self::prepare_script_kit_shutdown();")
+            .map(|idx| builtin_branch_idx + idx)
+            .expect("Expected builtin quit to use the shared shutdown helper");
+        let builtin_quit_idx = builtins[builtin_helper_idx..]
+            .find("cx.quit();")
+            .map(|idx| builtin_helper_idx + idx)
+            .expect("Expected builtin quit to call cx.quit() after cleanup");
+
+        assert!(
+            builtin_helper_idx < builtin_quit_idx,
+            "builtin quit should run shutdown cleanup before quitting"
+        );
+    }
 }
