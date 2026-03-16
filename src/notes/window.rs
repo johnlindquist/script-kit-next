@@ -21,7 +21,7 @@ use gpui_component::{
     scroll::ScrollableElement,
     theme::ActiveTheme,
     tooltip::Tooltip,
-    IconName, Root, Sizable,
+    IconName, Root, Sizable, WindowExt as _,
 };
 #[cfg(target_os = "macos")]
 use objc::{msg_send, sel, sel_impl};
