@@ -79,6 +79,18 @@ impl NotesApp {
             //
             // Dispatching the actions explicitly here ensures Enter/Escape
             // always work while a dialog is open, regardless of focus state.
+            if !is_key_enter(key) && !is_key_escape(key) {
+                tracing::info!(
+                    event = "notes_dialog_key_guard",
+                    key = %key,
+                    platform = modifiers.platform,
+                    shift = modifiers.shift,
+                    control = modifiers.control,
+                    alt = modifiers.alt,
+                    "notes_dialog_key_guard"
+                );
+            }
+
             if is_key_enter(key) && !modifiers.platform && !modifiers.control {
                 window.dispatch_action(
                     Box::new(gpui_component::actions::Confirm { secondary: false }),
@@ -89,6 +101,15 @@ impl NotesApp {
             }
             if is_key_escape(key) {
                 window.dispatch_action(Box::new(gpui_component::actions::Cancel), cx);
+                cx.stop_propagation();
+                return;
+            }
+            if is_key_tab(key) && !modifiers.platform && !modifiers.control && !modifiers.alt {
+                if modifiers.shift {
+                    window.focus_prev_in_dialog(cx);
+                } else {
+                    window.focus_next_in_dialog(cx);
+                }
                 cx.stop_propagation();
                 return;
             }
@@ -633,6 +654,15 @@ mod dialog_modal_guard_tests {
         assert!(
             dialog_guard < tab_handler,
             "Dialog guard must run before Notes consumes Tab for indentation"
+        );
+    }
+
+    #[test]
+    fn test_notes_keyboard_logs_when_active_dialog_intercepts_keys() {
+        const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
+        assert!(
+            KEYBOARD_SOURCE.contains("event = \"notes_dialog_key_guard\""),
+            "Notes keyboard should log when an active dialog is intercepting keys"
         );
     }
 

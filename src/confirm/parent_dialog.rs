@@ -100,9 +100,20 @@ pub(crate) fn open_parent_confirm_dialog_with_lifecycle(
             width,
         } = options.clone();
 
+        let width_value: f32 = width.into();
+        tracing::info!(
+            event = "parent_confirm_dialog_building",
+            title = %title,
+            width = width_value,
+            "parent_confirm_dialog_building"
+        );
+
+        let vibrancy_bg = crate::ui_foundation::get_window_vibrancy_background();
+
         dialog
             .rounded_lg()
             .w(width)
+            .bg(vibrancy_bg)
             .confirm()
             .title(title)
             .button_props(
@@ -154,6 +165,19 @@ mod tests {
         assert!(
             activate_idx < open_idx,
             "parent confirm dialog should activate the window before opening the dialog"
+        );
+    }
+
+    #[test]
+    fn parent_confirm_dialog_logs_build_width_before_render() {
+        let source = fs::read_to_string("src/confirm/parent_dialog.rs")
+            .expect("Failed to read src/confirm/parent_dialog.rs");
+        let normalized = normalize_ws(&source);
+
+        assert!(
+            normalized.contains("event = \"parent_confirm_dialog_building\"")
+                && normalized.contains("width = width_value,"),
+            "parent confirm dialog should log the concrete width used to build the dialog"
         );
     }
 }
