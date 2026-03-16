@@ -296,14 +296,38 @@ impl NotesApp {
             "notes_delete_confirmation_requested"
         );
 
-        let body: gpui::SharedString = if note_title.is_empty() {
-            "Move this note to Trash? You can restore it later with \u{2318}\u{21e7}T.".into()
-        } else {
-            format!(
-                "Move \"{}\" to Trash? You can restore it later with \u{2318}\u{21e7}T.",
-                note_title
+        let is_trash_view = self.view_mode == NotesViewMode::Trash;
+
+        let (title, body, confirm_text): (
+            gpui::SharedString,
+            gpui::SharedString,
+            gpui::SharedString,
+        ) = if is_trash_view {
+            let body = if note_title.is_empty() {
+                "Delete this note permanently? This cannot be undone.".into()
+            } else {
+                format!(
+                    "Delete \"{}\" permanently? This cannot be undone.",
+                    note_title
+                )
+                .into()
+            };
+            (
+                "Delete note permanently".into(),
+                body,
+                "Delete permanently".into(),
             )
-            .into()
+        } else {
+            let body = if note_title.is_empty() {
+                "Move this note to Trash? You can restore it later with \u{2318}\u{21e7}T.".into()
+            } else {
+                format!(
+                    "Move \"{}\" to Trash? You can restore it later with \u{2318}\u{21e7}T.",
+                    note_title
+                )
+                .into()
+            };
+            ("Move note to Trash".into(), body, "Delete".into())
         };
 
         let weak_notes = cx.entity().downgrade();
@@ -315,9 +339,9 @@ impl NotesApp {
             cx,
             weak_notes.clone(),
             crate::confirm::ParentConfirmOptions {
-                title: "Move note to Trash".into(),
+                title,
                 body,
-                confirm_text: "Delete".into(),
+                confirm_text,
                 cancel_text: "Cancel".into(),
                 confirm_variant: gpui_component::button::ButtonVariant::Danger,
                 width: dialog_width,
@@ -328,12 +352,17 @@ impl NotesApp {
                     tracing::info!(
                         event = "notes_delete_confirmed",
                         note_id = %confirm_note_id.as_str(),
+                        delete_mode = if is_trash_view { "permanent" } else { "soft" },
                         "notes_delete_confirmed"
                     );
 
                     if let Some(entity) = weak_notes.upgrade() {
                         entity.update(cx, |this, cx| {
-                            this.delete_note_by_id(confirm_note_id, window, cx);
+                            if is_trash_view {
+                                this.permanently_delete_note(cx);
+                            } else {
+                                this.delete_note_by_id(confirm_note_id, window, cx);
+                            }
                         });
                     }
                 }
@@ -342,6 +371,7 @@ impl NotesApp {
                 tracing::info!(
                     event = "notes_delete_cancelled",
                     note_id = %cancel_note_id.as_str(),
+                    delete_mode = if is_trash_view { "permanent" } else { "soft" },
                     "notes_delete_cancelled"
                 );
             },
