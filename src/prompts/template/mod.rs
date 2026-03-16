@@ -18,7 +18,6 @@ use crate::logging;
 use crate::panel::PROMPT_INPUT_FIELD_HEIGHT;
 use crate::template_variables;
 use crate::theme;
-use crate::ui_foundation::get_vibrancy_background;
 
 use super::SubmitCallback;
 
