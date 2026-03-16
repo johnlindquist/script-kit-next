@@ -265,7 +265,7 @@ fn test_notes_keyboard_delete_shortcut_works_in_trash_view() {
 fn test_delete_dialog_cancel_restores_primary_focus_after_dialog() {
     const NOTES_SOURCE: &str = include_str!("notes.rs");
     assert!(
-        NOTES_SOURCE.contains("this.restore_primary_focus_after_dialog(cx);"),
+        NOTES_SOURCE.contains("this.restore_primary_focus_after_dialog(window, cx);"),
         "Cancel should restore focus after the dialog lifecycle completes"
     );
 }
@@ -274,8 +274,8 @@ fn test_delete_dialog_cancel_restores_primary_focus_after_dialog() {
 fn test_delete_note_by_id_restores_editor_focus_via_focus_surface() {
     const NOTES_SOURCE: &str = include_str!("notes.rs");
     assert!(
-        NOTES_SOURCE.contains("self.request_focus_surface(NotesFocusSurface::Editor, cx);"),
-        "Confirmed delete should restore editor focus via the pending focus-surface pattern"
+        NOTES_SOURCE.contains("self.request_focus_surface(NotesFocusSurface::Editor, window, cx);"),
+        "Confirmed delete should restore editor focus via the immediate focus-surface pattern"
     );
 }
 
@@ -414,17 +414,17 @@ fn test_permanent_delete_accepts_window_and_restores_selection_or_focus() {
     assert!(
         NOTES_SOURCE.contains("self.select_note_without_focus(next_note.id, window, cx);")
             && NOTES_SOURCE
-                .contains("self.request_focus_surface(NotesFocusSurface::Editor, cx);"),
+                .contains("self.request_focus_surface(NotesFocusSurface::Editor, window, cx);"),
         "Permanent delete should update selection without early focus and restore via focus surface"
     );
 }
 
 #[test]
-fn test_notes_render_applies_pending_focus_surface() {
+fn test_notes_render_does_not_apply_pending_focus_surface_in_render() {
     const RENDER_SOURCE: &str = include_str!("render.rs");
     assert!(
-        RENDER_SOURCE.contains("self.apply_pending_focus_surface(window, cx);"),
-        "Notes render should apply pending focus-surface requests"
+        !RENDER_SOURCE.contains("self.apply_pending_focus_surface(window, cx);"),
+        "Notes render must stay read-only; apply focus outside render"
     );
 }
 
@@ -432,7 +432,7 @@ fn test_notes_render_applies_pending_focus_surface() {
 fn test_delete_dialog_requests_dialog_focus_surface_before_opening() {
     const NOTES_SOURCE: &str = include_str!("notes.rs");
     assert!(
-        NOTES_SOURCE.contains("self.request_focus_surface(NotesFocusSurface::Dialog, cx);"),
+        NOTES_SOURCE.contains("self.request_focus_surface(NotesFocusSurface::Dialog, window, cx);"),
         "Delete flow should request the dialog focus surface before opening the confirm dialog"
     );
 }
@@ -443,7 +443,7 @@ fn test_confirmed_delete_updates_selection_without_early_editor_refocus() {
     assert!(
         NOTES_SOURCE.contains("self.select_note_without_focus(next_note.id, window, cx);")
             && NOTES_SOURCE
-                .contains("self.request_focus_surface(NotesFocusSurface::Editor, cx);"),
+                .contains("self.request_focus_surface(NotesFocusSurface::Editor, window, cx);"),
         "Confirmed delete should update selection first and restore editor focus after dialog dismissal"
     );
 }

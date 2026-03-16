@@ -19,9 +19,14 @@ impl NotesApp {
         }
     }
 
+    /// Request and immediately apply a focus surface transition.
+    ///
+    /// Focus is applied synchronously so that GPUI's focus state is
+    /// consistent before the next render — no deferred pending state.
     pub(super) fn request_focus_surface(
         &mut self,
         surface: NotesFocusSurface,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         tracing::info!(
@@ -32,11 +37,18 @@ impl NotesApp {
             note_switcher_open = self.note_switcher.is_open(),
             "notes_focus_surface_requested"
         );
-        self.pending_focus_surface = Some(surface);
+
+        self.apply_focus_surface(surface, window, cx);
         cx.notify();
     }
 
-    pub(super) fn restore_primary_focus_after_dialog(&mut self, cx: &mut Context<Self>) {
+    /// Restore keyboard focus to the appropriate surface after a dialog
+    /// is dismissed (cancel or confirm).
+    pub(super) fn restore_primary_focus_after_dialog(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let surface = if self.command_bar.is_open() || self.show_actions_panel {
             NotesFocusSurface::ActionsPanel
         } else if self.note_switcher.is_open() || self.show_browse_panel {
@@ -51,18 +63,19 @@ impl NotesApp {
             "notes_focus_surface_restored_after_dialog"
         );
 
-        self.pending_focus_surface = Some(surface);
+        self.apply_focus_surface(surface, window, cx);
         cx.notify();
     }
 
-    pub(super) fn apply_pending_focus_surface(
+    /// Apply a focus surface transition immediately.
+    fn apply_focus_surface(
         &mut self,
+        surface: NotesFocusSurface,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(surface) = self.pending_focus_surface.take() else {
-            return;
-        };
+        // Clear any stale pending value so render never re-applies.
+        self.pending_focus_surface = None;
 
         match surface {
             NotesFocusSurface::Editor => {

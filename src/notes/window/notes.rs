@@ -421,7 +421,7 @@ impl NotesApp {
             ("Move note to Trash".into(), body, "Delete".into())
         };
 
-        self.request_focus_surface(NotesFocusSurface::Dialog, cx);
+        self.request_focus_surface(NotesFocusSurface::Dialog, window, cx);
 
         let weak_notes = cx.entity().downgrade();
         let confirm_note_id = note_id;
@@ -461,7 +461,7 @@ impl NotesApp {
                     }
                 }
             },
-            move |_window, cx| {
+            move |window, cx| {
                 tracing::info!(
                     event = "notes_delete_cancelled",
                     note_id = %cancel_note_id.as_str(),
@@ -471,7 +471,7 @@ impl NotesApp {
 
                 if let Some(entity) = weak_notes_for_cancel.upgrade() {
                     entity.update(cx, |this, cx| {
-                        this.restore_primary_focus_after_dialog(cx);
+                        this.restore_primary_focus_after_dialog(window, cx);
                     });
                 }
             },
@@ -482,6 +482,8 @@ impl NotesApp {
         tracing::info!(
             event = "notes_delete_confirmation_opened",
             note_id = %note_id.as_str(),
+            has_active_dialog = window.has_active_dialog(cx),
+            pending_focus_surface = ?self.pending_focus_surface,
             "notes_delete_confirmation_opened"
         );
     }
@@ -520,7 +522,7 @@ impl NotesApp {
             });
         }
 
-        self.request_focus_surface(NotesFocusSurface::Editor, cx);
+        self.request_focus_surface(NotesFocusSurface::Editor, window, cx);
         self.show_action_feedback("Deleted · ⌘⇧T trash", false);
         cx.notify();
     }
@@ -559,7 +561,7 @@ impl NotesApp {
             });
         }
 
-        self.request_focus_surface(NotesFocusSurface::Editor, cx);
+        self.request_focus_surface(NotesFocusSurface::Editor, window, cx);
         info!(note_id = %id, "Note permanently deleted");
         cx.notify();
     }
@@ -835,6 +837,16 @@ mod notes_search_and_delete_regression_tests {
         assert!(
             normalized.contains("weak_notes.clone(),"),
             "Notes delete dialog should pass the WeakEntity for lifecycle binding"
+        );
+    }
+
+    #[test]
+    fn test_notes_delete_confirmation_opened_log_reports_dialog_state() {
+        const NOTES_SOURCE: &str = include_str!("notes.rs");
+        assert!(
+            NOTES_SOURCE.contains("has_active_dialog = window.has_active_dialog(cx),")
+                && NOTES_SOURCE.contains("pending_focus_surface = ?self.pending_focus_surface,"),
+            "Notes delete open log should report dialog state so invisible-dialog failures are diagnosable"
         );
     }
 }

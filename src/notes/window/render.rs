@@ -7,7 +7,6 @@ impl Render for NotesApp {
         self.detect_manual_resize(window);
         self.drain_pending_action(window, cx);
         self.drain_pending_browse_actions(window, cx);
-        self.apply_pending_focus_surface(window, cx);
         self.maybe_update_theme_cache();
         self.maybe_persist_bounds(window);
 
