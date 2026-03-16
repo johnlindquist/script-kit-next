@@ -1220,6 +1220,12 @@ pub fn grouped_emojis() -> Vec<(EmojiCategory, Vec<&'static Emoji>)> {
 /// Shared between the renderer and the arrow-key navigation interceptor.
 pub const GRID_COLS: usize = 6;
 
+/// Fixed square size for each rendered emoji tile.
+pub const GRID_TILE_SIZE: f32 = 40.0;
+
+/// Horizontal spacing between emoji tiles.
+pub const GRID_TILE_GAP: f32 = 8.0;
+
 /// Fixed height for every virtualized emoji picker row.
 /// Both category header rows and emoji cell rows must use this exact outer height
 /// so that `gpui::uniform_list` stays within its contract.
@@ -1390,6 +1396,8 @@ mod tests {
     #[test]
     fn test_emoji_picker_grid_layout_constants_match_density_targets() {
         assert_eq!(GRID_COLS, 6);
+        assert_eq!(GRID_TILE_SIZE, 40.0);
+        assert_eq!(GRID_TILE_GAP, 8.0);
         assert_eq!(GRID_ROW_HEIGHT, 56.0);
     }
 }

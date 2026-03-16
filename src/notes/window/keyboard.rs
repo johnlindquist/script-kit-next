@@ -80,6 +80,11 @@ impl NotesApp {
         let key = event.keystroke.key.as_str();
         let modifiers = &event.keystroke.modifiers;
 
+        if window.has_active_dialog(cx) {
+            cx.propagate();
+            return;
+        }
+
         if self.command_bar.is_open() {
             match key {
                 key if is_key_escape(key) => {
@@ -254,6 +259,7 @@ impl NotesApp {
             }
             let wb = window.window_bounds();
             crate::window_state::save_window_from_gpui(crate::window_state::WindowRole::Notes, wb);
+            window.close_all_dialogs(cx);
             window.remove_window();
             return;
         }
@@ -358,6 +364,7 @@ impl NotesApp {
                         crate::window_state::WindowRole::Notes,
                         wb,
                     );
+                    window.close_all_dialogs(cx);
                     window.remove_window();
                 }
                 "." => {

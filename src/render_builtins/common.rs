@@ -47,10 +47,12 @@ impl ScriptListApp {
         }
 
         let state = handle.0.borrow();
-        let scroll_offset = state
-            .deferred_scroll_to_item
-            .map(|deferred| deferred.item_index)
-            .unwrap_or_else(|| state.base_handle.logical_scroll_top().0);
+        let scroll_offset = crate::components::scrollbar::preferred_scroll_offset(
+            state.base_handle.logical_scroll_top().0,
+            state.deferred_scroll_to_item.map(|deferred| deferred.item_index),
+            state.last_item_size.is_some(),
+            total_items,
+        );
 
         let fallback_visible_items = fallback_visible_items.max(1).min(total_items);
 

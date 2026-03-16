@@ -16,6 +16,34 @@
 
 use gpui::{prelude::*, *};
 
+/// Choose the authoritative scroll offset for a uniform list scrollbar.
+///
+/// Once the list has measured at least one frame (`has_measurement` is true),
+/// the live scroll offset reported by the scroll handle is preferred over any
+/// deferred "scroll-to-item" request. Before the first measurement, the
+/// deferred offset is used so the list opens at the intended position.
+///
+/// The returned value is clamped to `total_items - 1` so it never exceeds the
+/// valid index range.
+pub(crate) fn preferred_scroll_offset(
+    live_scroll_offset: usize,
+    deferred_scroll_offset: Option<usize>,
+    has_measurement: bool,
+    total_items: usize,
+) -> usize {
+    if total_items == 0 {
+        return 0;
+    }
+
+    let raw_offset = if has_measurement {
+        live_scroll_offset
+    } else {
+        deferred_scroll_offset.unwrap_or(live_scroll_offset)
+    };
+
+    raw_offset.min(total_items.saturating_sub(1))
+}
+
 /// Width of the scrollbar track in pixels
 pub const SCROLLBAR_WIDTH: f32 = 6.0;
 
@@ -349,7 +377,7 @@ impl RenderOnce for Scrollbar {
 
 #[cfg(test)]
 mod tests {
-    use super::{Scrollbar, ScrollbarColors};
+    use super::{preferred_scroll_offset, Scrollbar, ScrollbarColors};
 
     #[test]
     fn test_scrollbar_colors_default_uses_cached_theme_tokens() {
@@ -383,5 +411,20 @@ mod tests {
         let scrollbar =
             Scrollbar::new(10, 5, 0, ScrollbarColors::default()).visibility_opacity(0.42);
         assert_eq!(scrollbar.visibility, Some(0.42));
+    }
+
+    #[test]
+    fn test_preferred_scroll_offset_prefers_live_offset_after_measurement() {
+        assert_eq!(preferred_scroll_offset(7, Some(0), true, 20), 7);
+    }
+
+    #[test]
+    fn test_preferred_scroll_offset_uses_deferred_offset_before_measurement() {
+        assert_eq!(preferred_scroll_offset(0, Some(9), false, 20), 9);
+    }
+
+    #[test]
+    fn test_preferred_scroll_offset_clamps_to_last_item() {
+        assert_eq!(preferred_scroll_offset(99, Some(120), true, 20), 19);
     }
 }
