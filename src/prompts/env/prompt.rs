@@ -85,6 +85,22 @@ impl EnvPrompt {
         env_prompt_correlation_id(&self.id, &self.key)
     }
 
+    /// Returns true if the script provided contextual prompt or title text,
+    /// indicating the UI should always be shown even if the value exists.
+    pub fn has_prompt_or_title(&self) -> bool {
+        let has_prompt = self
+            .prompt
+            .as_ref()
+            .map(|p| !p.trim().is_empty())
+            .unwrap_or(false);
+        let has_title = self
+            .title
+            .as_ref()
+            .map(|t| !t.trim().is_empty())
+            .unwrap_or(false);
+        has_prompt || has_title
+    }
+
     /// Check keyring and auto-submit if value exists
     /// Returns true if value was found and submitted
     pub fn check_keyring_and_auto_submit(&mut self) -> bool {

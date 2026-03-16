@@ -252,7 +252,11 @@ macro_rules! protocol_message_variants_prompts_media {
     Env {
         id: String,
         key: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        prompt: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         secret: Option<bool>,
     },
 

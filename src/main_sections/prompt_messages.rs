@@ -54,6 +54,7 @@ enum PromptMessage {
         id: String,
         key: String,
         prompt: Option<String>,
+        title: Option<String>,
         secret: bool,
     },
     /// Drag and drop prompt for file uploads

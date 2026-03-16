@@ -122,6 +122,8 @@ impl Message {
         Message::Env {
             id,
             key,
+            prompt: None,
+            title: None,
             secret: if secret { Some(true) } else { None },
         }
     }

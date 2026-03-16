@@ -1624,14 +1624,19 @@ impl ScriptListApp {
                                             start_path,
                                             hint,
                                         }),
-                                        Message::Env { id, key, secret } => {
-                                            Some(PromptMessage::ShowEnv {
-                                                id,
-                                                key,
-                                                prompt: None,
-                                                secret: secret.unwrap_or(false),
-                                            })
-                                        }
+                                        Message::Env {
+                                            id,
+                                            key,
+                                            prompt,
+                                            title,
+                                            secret,
+                                        } => Some(PromptMessage::ShowEnv {
+                                            id,
+                                            key,
+                                            prompt,
+                                            title,
+                                            secret: secret.unwrap_or(false),
+                                        }),
                                         Message::Drop { id } => Some(PromptMessage::ShowDrop {
                                             id,
                                             placeholder: None,
