@@ -139,8 +139,8 @@ impl Render for FormTextField {
             },
         );
 
-        // Input surface - full-width with consistent styling
-        let input_surface = div()
+        // Input surface - uses shared prompt_surface for consistent card chrome
+        let input_surface = crate::components::prompt_surface(bg_color, border_color)
             .id(ElementId::Name(format!("input-{}", field_name).into()))
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
@@ -148,14 +148,7 @@ impl Render for FormTextField {
             .flex()
             .flex_row()
             .items_center()
-            .w_full()
             .min_h(rems(2.5))
-            .px(rems(0.875))
-            .py(rems(0.625))
-            .bg(bg_color)
-            .border_1()
-            .border_color(border_color)
-            .rounded(px(8.))
             .cursor_text()
             .child(
                 div()

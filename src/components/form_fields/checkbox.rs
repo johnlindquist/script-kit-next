@@ -147,8 +147,8 @@ impl Render for FormCheckbox {
 
         let focus_handle_for_click = self.focus_handle.clone();
 
-        // Full-width interactive row with checkbox and label
-        div()
+        // Full-width interactive row - uses shared prompt_surface for consistent card chrome
+        crate::components::prompt_surface(bg_color, border_color)
             .id(ElementId::Name(
                 format!("form-checkbox-{}", field_name).into(),
             ))
@@ -162,13 +162,6 @@ impl Render for FormCheckbox {
             .flex_row()
             .items_center()
             .gap(rems(0.75))
-            .w_full()
-            .px(rems(0.875))
-            .py(rems(0.75))
-            .bg(bg_color)
-            .border_1()
-            .border_color(border_color)
-            .rounded(px(8.))
             .cursor_pointer()
             .child(checkbox_box)
             .child(

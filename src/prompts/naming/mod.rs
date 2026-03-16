@@ -15,9 +15,7 @@ use crate::components::{FocusablePrompt, FocusablePromptInterceptedKey};
 use crate::designs::{get_tokens, DesignVariant};
 use crate::panel::PROMPT_INPUT_FIELD_HEIGHT;
 use crate::theme;
-use crate::ui_foundation::{
-    get_vibrancy_background, is_key_backspace, is_key_enter, printable_char,
-};
+use crate::ui_foundation::{is_key_backspace, is_key_enter, printable_char};
 
 use super::SubmitCallback;
 

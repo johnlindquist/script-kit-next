@@ -11,12 +11,10 @@ impl Render for NamingPrompt {
         let tokens = get_tokens(self.design_variant);
         let spacing = tokens.spacing();
 
-        let vibrancy_bg = get_vibrancy_background(&self.theme);
         let text_primary = rgb(self.theme.colors.text.primary);
         let text_secondary = rgb(self.theme.colors.text.secondary);
         let text_muted = rgb(self.theme.colors.text.muted);
         let border_color = rgb(self.theme.colors.ui.border);
-        let accent_color = rgb(self.theme.colors.accent.selected);
         let error_color = rgb(self.theme.colors.ui.error);
         let input_bg = rgb(self.theme.colors.background.search_box);
         let preview_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x20);
@@ -26,10 +24,6 @@ impl Render for NamingPrompt {
             .placeholder
             .clone()
             .unwrap_or_else(|| "Friendly name".to_string());
-        let hint = self
-            .hint
-            .clone()
-            .unwrap_or_else(|| "Enter: submit • Esc: cancel".to_string());
         let validation_message = self
             .validation_error
             .as_ref()
@@ -57,11 +51,9 @@ impl Render for NamingPrompt {
             .flex()
             .flex_col()
             .w_full()
-            .h_full()
-            .when_some(vibrancy_bg, |d, bg| d.bg(bg))
+            .min_h(px(0.))
             .text_color(text_primary)
-            .p(px(spacing.padding_lg))
-            .gap(px(spacing.gap_md))
+            .gap(px(spacing.gap_lg))
             .child(
                 div()
                     .flex()
@@ -86,14 +78,8 @@ impl Render for NamingPrompt {
                             .child("Friendly Name"),
                     )
                     .child(
-                        div()
+                        crate::components::prompt_surface(input_bg, input_border_color)
                             .min_h(px(PROMPT_INPUT_FIELD_HEIGHT))
-                            .px(px(spacing.item_padding_x))
-                            .py(px(spacing.padding_md))
-                            .bg(input_bg)
-                            .border_1()
-                            .border_color(input_border_color)
-                            .rounded(px(8.))
                             .text_color(input_text_color)
                             .child(input_value),
                     )
@@ -106,7 +92,6 @@ impl Render for NamingPrompt {
                     .flex()
                     .flex_col()
                     .gap(px(spacing.gap_sm))
-                    .mt(px(spacing.margin_sm))
                     .child(
                         div()
                             .text_xs()
@@ -114,13 +99,7 @@ impl Render for NamingPrompt {
                             .child("Filename Preview"),
                     )
                     .child(
-                        div()
-                            .px(px(spacing.item_padding_x))
-                            .py(px(spacing.padding_md))
-                            .bg(preview_bg)
-                            .border_1()
-                            .border_color(border_color)
-                            .rounded(px(8.))
+                        crate::components::prompt_surface(preview_bg, border_color)
                             .child(
                                 div()
                                     .flex()
@@ -139,19 +118,12 @@ impl Render for NamingPrompt {
                                             .child(preview_path.display().to_string()),
                                     )
                                     .child(div().text_xs().text_color(text_muted).child(format!(
-                                        "Target: {} • Extension: {}",
+                                        "Target: {} \u{2022} Extension: {}",
                                         self.target.as_str(),
                                         self.extension_label()
                                     ))),
                             ),
                     ),
-            )
-            .child(
-                div()
-                    .mt_auto()
-                    .text_xs()
-                    .text_color(accent_color)
-                    .child(hint),
             );
 
         FocusablePrompt::new(container)

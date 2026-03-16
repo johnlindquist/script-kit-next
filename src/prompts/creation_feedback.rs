@@ -9,7 +9,9 @@ use std::sync::Arc;
 
 use crate::components::button::{Button, ButtonColors, ButtonVariant};
 use crate::designs::DesignVariant;
+use crate::theme::opacity::{OPACITY_BORDER, OPACITY_CARD_BG, OPACITY_PROMINENT};
 use crate::theme::{self, TypographyResolver};
+use crate::ui_foundation::hex_to_rgba_with_opacity;
 
 /// Callback for path-based quick actions from the creation feedback panel.
 pub type CreationFeedbackPathAction = Box<dyn Fn(&PathBuf, &mut Window, &mut App) + 'static>;
@@ -90,10 +92,15 @@ impl RenderOnce for CreationFeedbackPanel {
         } = self;
 
         let text_primary = rgb(theme.colors.text.primary);
-        let text_secondary = rgba((theme.colors.text.secondary << 8) | 0xD0);
-        let border_color = rgba((theme.colors.ui.border << 8) | 0x90);
+        let text_secondary =
+            rgba(hex_to_rgba_with_opacity(theme.colors.text.secondary, OPACITY_PROMINENT));
+        let border_color =
+            rgba(hex_to_rgba_with_opacity(theme.colors.ui.border, OPACITY_BORDER));
         // Translucent to preserve vibrancy from outer shell.
-        let path_surface = rgba((theme.colors.accent.selected_subtle << 8) | 0x30);
+        let path_surface = rgba(hex_to_rgba_with_opacity(
+            theme.colors.accent.selected_subtle,
+            OPACITY_CARD_BG,
+        ));
         let button_colors = ButtonColors::from_theme(&theme);
         let mono_font = TypographyResolver::new(&theme, design_variant)
             .mono_font()
@@ -181,15 +188,8 @@ impl RenderOnce for CreationFeedbackPanel {
             )
             .child(div().text_xs().text_color(text_secondary).child("Path"))
             .child(
-                div()
+                crate::components::prompt_surface(path_surface, border_color)
                     .id("creation-feedback-path-container")
-                    .w_full()
-                    .rounded(px(6.))
-                    .border_1()
-                    .border_color(border_color)
-                    .bg(path_surface)
-                    .px(px(10.))
-                    .py(px(8.))
                     .overflow_x_scroll()
                     .overflow_y_hidden()
                     .child(
@@ -198,7 +198,6 @@ impl RenderOnce for CreationFeedbackPanel {
                             .font_family(mono_font)
                             .text_color(text_primary)
                             .whitespace_nowrap()
-                            .text_ellipsis()
                             .child(path_text),
                     ),
             )

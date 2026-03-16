@@ -85,22 +85,15 @@ impl Render for FormTextArea {
                 .child(placeholder)
         };
 
-        // Input surface - full-width with consistent styling
-        let input_surface = div()
+        // Input surface - uses shared prompt_surface for consistent card chrome
+        let input_surface = crate::components::prompt_surface(bg_color, border_color)
             .id(ElementId::Name(format!("textarea-{}", field_name).into()))
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
             .on_click(handle_click)
             .flex()
             .flex_col()
-            .w_full()
             .h(rems(height_rems))
-            .px(rems(0.875))
-            .py(rems(0.625))
-            .bg(bg_color)
-            .border_1()
-            .border_color(border_color)
-            .rounded(px(8.))
             .cursor_text()
             .overflow_x_hidden()
             .overflow_y_scrollbar()
