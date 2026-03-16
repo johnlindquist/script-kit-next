@@ -186,8 +186,8 @@ impl AutoSubmitConfig {
         }
 
         let idx = self.index.min(choices.len() - 1);
-        let value = &choices[idx].value;
-        Some(format!("[\"{}\"]", value))
+        let selected_values = vec![choices[idx].value.clone()];
+        Some(serde_json::to_string(&selected_values).unwrap_or_else(|_| "[]".to_string()))
     }
 
     /// Get the default value for a fields prompt.
