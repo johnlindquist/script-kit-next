@@ -286,9 +286,12 @@ impl NotesApp {
         );
 
         let message = if note_title.is_empty() {
-            "Delete this note?".to_string()
+            "Move this note to Trash? You can restore it later with \u{2318}\u{21e7}T.".to_string()
         } else {
-            format!("Delete \"{}\"?", note_title)
+            format!(
+                "Move \"{}\" to Trash? You can restore it later with \u{2318}\u{21e7}T.",
+                note_title
+            )
         };
 
         let weak_notes = cx.entity().downgrade();
@@ -301,7 +304,7 @@ impl NotesApp {
 
             dialog
                 .confirm()
-                .title("Delete note")
+                .title("Move note to Trash")
                 .button_props(
                     gpui_component::dialog::DialogButtonProps::default()
                         .cancel_text("Cancel")

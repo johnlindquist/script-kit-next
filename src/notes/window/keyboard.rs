@@ -525,3 +525,49 @@ impl NotesApp {
         }
     }
 }
+
+#[cfg(test)]
+mod dialog_modal_guard_tests {
+    use std::fs;
+
+    fn normalize_ws(source: &str) -> String {
+        source.split_whitespace().collect::<Vec<_>>().join(" ")
+    }
+
+    #[test]
+    fn notes_dialog_guard_precedes_tab_indentation_logic() {
+        let source = fs::read_to_string("src/notes/window/keyboard.rs")
+            .expect("Failed to read src/notes/window/keyboard.rs");
+        let normalized = normalize_ws(&source);
+
+        let dialog_guard = normalized
+            .find("if window.has_active_dialog(cx) { cx.propagate(); return; }")
+            .expect("Notes should defer key handling when a dialog is active");
+        let tab_handler = normalized
+            .find(
+                "if is_key_tab(key) && !modifiers.platform && !modifiers.control && !modifiers.alt {",
+            )
+            .expect("Notes should retain editor tab indentation logic");
+
+        assert!(
+            dialog_guard < tab_handler,
+            "Dialog guard must run before Notes consumes Tab for indentation"
+        );
+    }
+
+    #[test]
+    fn notes_close_paths_close_all_dialogs_before_remove_window() {
+        let source = fs::read_to_string("src/notes/window/keyboard.rs")
+            .expect("Failed to read src/notes/window/keyboard.rs");
+        let normalized = normalize_ws(&source);
+
+        let close_then_remove_count = normalized
+            .matches("window.close_all_dialogs(cx); window.remove_window();")
+            .count();
+
+        assert!(
+            close_then_remove_count >= 2,
+            "Escape and Cmd+W should both close dialogs before removing the Notes window"
+        );
+    }
+}
