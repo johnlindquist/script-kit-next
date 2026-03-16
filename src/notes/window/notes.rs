@@ -285,53 +285,34 @@ impl NotesApp {
             "notes_delete_confirmation_requested"
         );
 
-        let message = if note_title.is_empty() {
-            "Move this note to Trash? You can restore it later with \u{2318}\u{21e7}T.".to_string()
+        let body: gpui::SharedString = if note_title.is_empty() {
+            "Move this note to Trash? You can restore it later with \u{2318}\u{21e7}T.".into()
         } else {
             format!(
                 "Move \"{}\" to Trash? You can restore it later with \u{2318}\u{21e7}T.",
                 note_title
             )
+            .into()
         };
 
         let weak_notes = cx.entity().downgrade();
+        let confirm_note_id = note_id;
+        let cancel_note_id = note_id;
 
-        window.open_dialog(cx, move |dialog, _window, cx| {
-            let weak_notes = weak_notes.clone();
-            let message = message.clone();
-            let confirm_note_id = note_id;
-            let cancel_note_id = note_id;
-
-            dialog
-                .rounded_lg()
-                .w(gpui::px(448.))
-                .confirm()
-                .title("Move note to Trash")
-                .button_props(
-                    gpui_component::dialog::DialogButtonProps::default()
-                        .cancel_text("Cancel")
-                        .cancel_variant(gpui_component::button::ButtonVariant::Secondary)
-                        .ok_text("Delete")
-                        .ok_variant(gpui_component::button::ButtonVariant::Danger),
-                )
-                .child(
-                    gpui::div()
-                        .flex()
-                        .flex_col()
-                        .gap_2()
-                        .child(
-                            gpui::div()
-                                .font_weight(gpui::FontWeight::SEMIBOLD)
-                                .child("This note will move to Trash."),
-                        )
-                        .child(
-                            gpui::div()
-                                .text_sm()
-                                .text_color(cx.theme().muted_foreground)
-                                .child(message.clone()),
-                        ),
-                )
-                .on_ok(move |_, window, cx| {
+        crate::confirm::open_parent_confirm_dialog(
+            window,
+            cx,
+            crate::confirm::ParentConfirmOptions {
+                title: "Move note to Trash".into(),
+                body,
+                confirm_text: "Delete".into(),
+                cancel_text: "Cancel".into(),
+                confirm_variant: gpui_component::button::ButtonVariant::Danger,
+                width: gpui::px(448.),
+            },
+            {
+                let weak_notes = weak_notes.clone();
+                move |window, cx| {
                     tracing::info!(
                         event = "notes_delete_confirmed",
                         note_id = %confirm_note_id.as_str(),
@@ -343,18 +324,16 @@ impl NotesApp {
                             this.delete_note_by_id(confirm_note_id, window, cx);
                         });
                     }
-
-                    true
-                })
-                .on_cancel(move |_, _window, _cx| {
-                    tracing::info!(
-                        event = "notes_delete_cancelled",
-                        note_id = %cancel_note_id.as_str(),
-                        "notes_delete_cancelled"
-                    );
-                    true
-                })
-        });
+                }
+            },
+            move |_window, _cx| {
+                tracing::info!(
+                    event = "notes_delete_cancelled",
+                    note_id = %cancel_note_id.as_str(),
+                    "notes_delete_cancelled"
+                );
+            },
+        );
 
         tracing::info!(
             event = "notes_delete_confirmation_opened",
@@ -570,7 +549,7 @@ mod notes_search_and_delete_regression_tests {
     }
 
     #[test]
-    fn test_request_delete_selected_note_uses_structured_destructive_body() {
+    fn test_request_delete_selected_note_uses_shared_parent_confirm_helper() {
         let source = fs::read_to_string("src/notes/window/notes.rs")
             .expect("Failed to read src/notes/window/notes.rs");
 
@@ -582,17 +561,21 @@ mod notes_search_and_delete_regression_tests {
         let normalized = normalize_ws(delete_request);
 
         assert!(
-            normalized.contains(".title(\"Move note to Trash\")")
-                && normalized.contains("This note will move to Trash.")
-                && normalized.contains(".text_sm()")
-                && normalized.contains(".muted_foreground")
-                && normalized.contains(".font_weight(gpui::FontWeight::SEMIBOLD)"),
-            "Notes delete dialog should use a structured destructive body instead of a plain string child"
+            normalized.contains("crate::confirm::open_parent_confirm_dialog("),
+            "Notes delete should use the shared parent-owned confirm helper"
+        );
+        assert!(
+            !normalized.contains("window.open_dialog(cx, move |dialog"),
+            "Notes delete should not inline dialog construction"
+        );
+        assert!(
+            !normalized.contains("This note will move to Trash."),
+            "Notes delete should use the simplified single-sentence dialog body"
         );
     }
 
     #[test]
-    fn test_request_delete_selected_note_uses_gpui_component_dialog() {
+    fn test_request_delete_selected_note_routes_through_weak_entity() {
         let source = fs::read_to_string("src/notes/window/notes.rs")
             .expect("Failed to read src/notes/window/notes.rs");
 
@@ -603,16 +586,6 @@ mod notes_search_and_delete_regression_tests {
         );
         let normalized = normalize_ws(delete_request);
 
-        assert!(
-            normalized.contains("window.open_dialog(cx, move |dialog, _window, cx|"),
-            "request_delete_selected_note should open an in-window gpui_component dialog"
-        );
-        assert!(
-            normalized.contains(".confirm()")
-                && normalized.contains(".button_props(")
-                && normalized.contains(".on_ok(move |_, window, cx|"),
-            "request_delete_selected_note should use Dialog::confirm() with gpui-component buttons"
-        );
         assert!(
             normalized.contains("let weak_notes = cx.entity().downgrade();")
                 && normalized.contains("entity.update(cx, |this, cx|")
@@ -621,9 +594,8 @@ mod notes_search_and_delete_regression_tests {
         );
         assert!(
             !normalized.contains("crate::confirm::open_confirm_window")
-                && !normalized.contains("async_channel::bounded::<bool>(1)")
-                && !normalized.contains("cx.spawn_in(window, async move |this, cx|"),
-            "notes delete confirmation should no longer use the separate confirm popup window"
+                && !normalized.contains("async_channel::bounded::<bool>(1)"),
+            "notes delete confirmation should not use the separate confirm popup window"
         );
     }
 }

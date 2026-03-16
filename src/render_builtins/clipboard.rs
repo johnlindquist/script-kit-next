@@ -95,7 +95,7 @@ impl ScriptListApp {
                         return;
                     }
                     ActionsRoute::Execute { action_id } => {
-                        this.handle_action(action_id, cx);
+                        this.handle_action(action_id, window, cx);
                         return;
                     }
                 }
@@ -159,7 +159,7 @@ impl ScriptListApp {
                             } else {
                                 "clipboard_pin"
                             };
-                            this.handle_action(action_id.to_string(), cx);
+                            this.handle_action(action_id.to_string(), window, cx);
                         }
                         return;
                     }
@@ -177,7 +177,7 @@ impl ScriptListApp {
                     if modifiers.control && has_cmd && key.eq_ignore_ascii_case("a") {
                         if let Some(_entry) = selected_entry {
                             drop(filtered_entries);
-                            this.handle_action("clipboard_attach_to_ai".to_string(), cx);
+                            this.handle_action("clipboard_attach_to_ai".to_string(), window, cx);
                         }
                         return;
                     }

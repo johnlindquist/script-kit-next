@@ -10,6 +10,7 @@ impl ScriptListApp {
         &mut self,
         action_id: &str,
         dctx: &DispatchContext,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> DispatchOutcome {
         let trace_id = &dctx.trace_id;
@@ -159,86 +160,96 @@ impl ScriptListApp {
                     );
                 }
 
-                let message = format!(
-                    "Move this {} to Trash?\n\n{}",
-                    target.item_kind, target.name
-                );
+                let body: gpui::SharedString = format!(
+                    "Move \"{}\" to Trash?",
+                    target.name
+                ).into();
 
                 let trace_id = trace_id.to_string();
                 let start = std::time::Instant::now();
-                cx.spawn(async move |this, cx| {
-                    match confirm_with_modal(cx, message, "Move to Trash", "Cancel", &trace_id).await {
-                        Ok(true) => {}
-                        Ok(false) => {
+                let weak_entity = cx.entity().downgrade();
+
+                crate::confirm::open_parent_confirm_dialog(
+                    window,
+                    cx,
+                    crate::confirm::ParentConfirmOptions {
+                        title: "Move to Trash".into(),
+                        body,
+                        confirm_text: "Move to Trash".into(),
+                        cancel_text: "Cancel".into(),
+                        confirm_variant: gpui_component::button::ButtonVariant::Danger,
+                        width: gpui::px(448.),
+                    },
+                    {
+                        let trace_id = trace_id.clone();
+                        let target = target.clone();
+                        move |_window, cx| {
+                            tracing::info!(
+                                trace_id = %trace_id,
+                                event = "remove_script_confirmed",
+                                item_kind = target.item_kind,
+                                name = %target.name,
+                                "remove_script_confirmed"
+                            );
+                            let trace_id = trace_id.clone();
+                            let target = target.clone();
+                            if let Some(entity) = weak_entity.upgrade() {
+                                entity.update(cx, move |this, cx| {
+                                    match move_path_to_trash(&target.path) {
+                                        Ok(()) => {
+                                            tracing::info!(
+                                                category = "UI",
+                                                trace_id = %trace_id,
+                                                status = "completed",
+                                                duration_ms = start.elapsed().as_millis() as u64,
+                                                item_kind = target.item_kind,
+                                                name = %target.name,
+                                                path = %target.path.display(),
+                                                "Async action completed: remove_script"
+                                            );
+                                            this.refresh_scripts(cx);
+                                            this.show_hud(
+                                                format!("Moved '{}' to Trash", target.name),
+                                                Some(HUD_2200_MS),
+                                                cx,
+                                            );
+                                            this.hide_main_and_reset(cx);
+                                            cx.notify();
+                                        }
+                                        Err(e) => {
+                                            tracing::error!(
+                                                trace_id = %trace_id,
+                                                status = "failed",
+                                                duration_ms = start.elapsed().as_millis() as u64,
+                                                item_kind = target.item_kind,
+                                                name = %target.name,
+                                                path = %target.path.display(),
+                                                error = %e,
+                                                "Async action failed: remove_script"
+                                            );
+                                            this.show_error_toast_with_code(
+                                                format!("Failed to remove: {}", e),
+                                                Some(crate::action_helpers::ERROR_TRASH_FAILED),
+                                                cx,
+                                            );
+                                        }
+                                    }
+                                });
+                            }
+                        }
+                    },
+                    {
+                        let trace_id = trace_id.clone();
+                        move |_window, _cx| {
                             tracing::info!(
                                 trace_id = %trace_id,
                                 status = "cancelled",
-                                duration_ms = start.elapsed().as_millis() as u64,
-                                "Async action cancelled: remove_script"
+                                event = "remove_script_cancelled",
+                                "remove_script_cancelled"
                             );
-                            return;
                         }
-                        Err(e) => {
-                            let _ = this.update(cx, |this, cx| {
-                                tracing::error!(
-                                    trace_id = %trace_id,
-                                    status = "failed",
-                                    duration_ms = start.elapsed().as_millis() as u64,
-                                    error = %e,
-                                    "failed to open confirmation modal"
-                                );
-                                this.show_error_toast_with_code(
-                                    "Failed to open confirmation dialog",
-                                    Some(crate::action_helpers::ERROR_MODAL_FAILED),
-                                    cx,
-                                );
-                            });
-                            return;
-                        }
-                    }
-
-                    let _ =
-                        this.update(cx, move |this, cx| match move_path_to_trash(&target.path) {
-                            Ok(()) => {
-                                tracing::info!(
-                                    category = "UI",
-                                    trace_id = %trace_id,
-                                    status = "completed",
-                                    duration_ms = start.elapsed().as_millis() as u64,
-                                    item_kind = target.item_kind,
-                                    name = %target.name,
-                                    path = %target.path.display(),
-                                    "Async action completed: remove_script"
-                                );
-                                this.refresh_scripts(cx);
-                                this.show_hud(
-                                    format!("Moved '{}' to Trash", target.name),
-                                    Some(HUD_2200_MS),
-                                    cx,
-                                );
-                                this.hide_main_and_reset(cx);
-                                cx.notify();
-                            }
-                            Err(e) => {
-                                tracing::error!(
-                                    trace_id = %trace_id,
-                                    status = "failed",
-                                    duration_ms = start.elapsed().as_millis() as u64,
-                                    item_kind = target.item_kind,
-                                    name = %target.name,
-                                    path = %target.path.display(),
-                                    error = %e,
-                                    "Async action failed: remove_script"
-                                );
-                                this.show_error_toast_with_code(
-                                    format!("Failed to remove: {}", e),
-                                    Some(crate::action_helpers::ERROR_TRASH_FAILED),
-                                    cx,
-                                );
-                            }
-                        });
-                })
-                .detach();
+                    },
+                );
                 DispatchOutcome::success()
             }
             "reload_scripts" => {

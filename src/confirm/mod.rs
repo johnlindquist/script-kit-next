@@ -20,9 +20,11 @@
 
 mod constants;
 mod dialog;
+mod parent_dialog;
 mod window;
 
 pub use dialog::ConfirmCallback;
+pub(crate) use parent_dialog::{open_parent_confirm_dialog, ParentConfirmOptions};
 pub use window::{
     close_confirm_window, dispatch_confirm_key, init_confirm_bindings, is_confirm_window_open,
     open_confirm_window,

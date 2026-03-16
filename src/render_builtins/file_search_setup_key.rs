@@ -106,7 +106,7 @@
                         // User selected an action - execute it
                         // Use handle_action instead of trigger_action_by_name to support
                         // both built-in actions (open_file, quick_look, etc.) and SDK actions
-                        this.handle_action(action_id, cx);
+                        this.handle_action(action_id, window, cx);
                         return;
                     }
                 }

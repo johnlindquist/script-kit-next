@@ -68,18 +68,28 @@ impl ScriptListApp {
                 selected_index,
                 ..
             } => {
-                self.filter_text = new_text.clone();
-                if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
-                    tracing::debug!(
-                        target: "script_kit::emoji_picker",
-                        event = "scroll_to_item",
-                        reason = "filter_changed",
-                        row = 0usize,
-                        filter = %new_text,
-                    );
-                    self.emoji_scroll_handle
-                        .scroll_to_item(0, ScrollStrategy::Top);
+                // Skip entirely when the text hasn't changed — avoids a
+                // spurious cx.notify() that can reset the uniform_list
+                // scroll position during trackpad/mouse scrolling.
+                if new_text == *filter {
+                    return;
                 }
+
+                self.filter_text = new_text.clone();
+                *selected_index = 0;
+                *filter = new_text.clone();
+
+                tracing::debug!(
+                    target: "script_kit::emoji_picker",
+                    event = "scroll_to_item",
+                    reason = "filter_changed",
+                    row = 0usize,
+                    filter = %new_text,
+                    selected_index = 0usize,
+                );
+                self.emoji_scroll_handle
+                    .scroll_to_item(0, ScrollStrategy::Top);
+
                 cx.notify();
                 return; // Don't run main menu filter logic
             }
@@ -613,5 +623,26 @@ mod tests {
                 view
             );
         }
+    }
+
+    #[test]
+    fn test_emoji_picker_filter_change_guards_scroll_behind_real_query_change() {
+        let source = read_filter_input_change_source();
+        let emoji_pos = source
+            .find("AppView::EmojiPickerView")
+            .expect("EmojiPickerView match arm not found");
+        let emoji_section = &source[emoji_pos..(emoji_pos + 600).min(source.len())];
+
+        // Must have an early-return guard that skips cx.notify() when text is unchanged
+        assert!(
+            emoji_section.contains("new_text == *filter"),
+            "emoji picker must early-return when the filter text has not changed"
+        );
+
+        // Must still scroll to top on real changes
+        assert!(
+            emoji_section.contains("scroll_to_item(0, ScrollStrategy::Top)"),
+            "emoji picker should reset to top on real filter changes"
+        );
     }
 }

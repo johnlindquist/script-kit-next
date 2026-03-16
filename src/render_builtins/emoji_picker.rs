@@ -136,7 +136,7 @@ impl ScriptListApp {
                         return;
                     }
                     ActionsRoute::Execute { action_id } => {
-                        this.handle_action(action_id, cx);
+                        this.handle_action(action_id, window, cx);
                         return;
                     }
                 }

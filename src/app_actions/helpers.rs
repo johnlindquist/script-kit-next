@@ -841,7 +841,7 @@ mod app_actions_tests {
     // -----------------------------------------------------------------------
 
     #[test]
-    fn test_remove_script_requires_confirmation_modal() {
+    fn test_remove_script_requires_confirmation_dialog() {
         let content = crate::test_utils::read_all_handle_action_sources();
 
         let remove_section = content
@@ -850,8 +850,8 @@ mod app_actions_tests {
         let block = &content[remove_section..remove_section + 800];
 
         assert!(
-            block.contains("confirm_with_modal("),
-            "Expected remove_script to use confirm_with_modal before deleting"
+            block.contains("open_parent_confirm_dialog("),
+            "Expected remove_script to use open_parent_confirm_dialog before deleting"
         );
         assert!(
             block.contains("Move to Trash"),
@@ -943,7 +943,7 @@ mod app_actions_tests {
     }
 
     #[test]
-    fn test_remove_script_shows_error_when_confirm_modal_fails() {
+    fn test_remove_script_uses_parent_owned_confirmation_dialog() {
         let content = crate::test_utils::read_all_handle_action_sources();
 
         let remove_section = content
@@ -952,8 +952,12 @@ mod app_actions_tests {
         let block = &content[remove_section..remove_section + 1000];
 
         assert!(
-            block.contains("Failed to open confirmation dialog"),
-            "Expected remove_script to show error toast when modal cannot be opened"
+            block.contains("crate::confirm::open_parent_confirm_dialog("),
+            "Expected remove_script to use the shared parent-owned confirm helper"
+        );
+        assert!(
+            !block.contains("confirm_with_modal("),
+            "Expected remove_script to stop using the detached popup modal"
         );
     }
 

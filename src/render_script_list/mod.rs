@@ -673,7 +673,7 @@ impl ScriptListApp {
                         "k" if has_shift => {
                             // Cmd+Shift+K - Add/Update Keyboard Shortcut
                             logging::log("KEY", "Shortcut Cmd+Shift+K -> add_shortcut");
-                            this.handle_action("add_shortcut".to_string(), cx);
+                            this.handle_action("add_shortcut".to_string(), window, cx);
                             return;
                         }
                         "k" => {
@@ -687,56 +687,56 @@ impl ScriptListApp {
                         "e" => {
                             // Cmd+E - Edit Script
                             logging::log("KEY", "Shortcut Cmd+E -> edit_script");
-                            this.handle_action("edit_script".to_string(), cx);
+                            this.handle_action("edit_script".to_string(), window, cx);
                             return;
                         }
                         "f" if has_shift => {
                             // Cmd+Shift+F - Reveal in Finder
                             logging::log("KEY", "Shortcut Cmd+Shift+F -> reveal_in_finder");
-                            this.handle_action("reveal_in_finder".to_string(), cx);
+                            this.handle_action("reveal_in_finder".to_string(), window, cx);
                             return;
                         }
                         "c" if has_shift => {
                             // Cmd+Shift+C - Copy Path
                             logging::log("KEY", "Shortcut Cmd+Shift+C -> copy_path");
-                            this.handle_action("copy_path".to_string(), cx);
+                            this.handle_action("copy_path".to_string(), window, cx);
                             return;
                         }
                         "d" if has_shift => {
                             // Cmd+Shift+D - Copy Deeplink
                             logging::log("KEY", "Shortcut Cmd+Shift+D -> copy_deeplink");
-                            this.handle_action("copy_deeplink".to_string(), cx);
+                            this.handle_action("copy_deeplink".to_string(), window, cx);
                             return;
                         }
                         "a" if has_shift => {
                             // Cmd+Shift+A - Add/Update Alias
                             logging::log("KEY", "Shortcut Cmd+Shift+A -> add_alias");
-                            this.handle_action("add_alias".to_string(), cx);
+                            this.handle_action("add_alias".to_string(), window, cx);
                             return;
                         }
                         // Global shortcuts
                         "n" => {
                             // Cmd+N - Create Script
                             logging::log("KEY", "Shortcut Cmd+N -> create_script");
-                            this.handle_action("create_script".to_string(), cx);
+                            this.handle_action("create_script".to_string(), window, cx);
                             return;
                         }
                         "r" => {
                             // Cmd+R - Reload Scripts
                             logging::log("KEY", "Shortcut Cmd+R -> reload_scripts");
-                            this.handle_action("reload_scripts".to_string(), cx);
+                            this.handle_action("reload_scripts".to_string(), window, cx);
                             return;
                         }
                         "," => {
                             // Cmd+, - Settings
                             logging::log("KEY", "Shortcut Cmd+, -> settings");
-                            this.handle_action("settings".to_string(), cx);
+                            this.handle_action("settings".to_string(), window, cx);
                             return;
                         }
                         "q" => {
                             // Cmd+Q - Quit
                             logging::log("KEY", "Shortcut Cmd+Q -> quit");
-                            this.handle_action("quit".to_string(), cx);
+                            this.handle_action("quit".to_string(), window, cx);
                             return;
                         }
                         _ => {}
@@ -793,7 +793,7 @@ impl ScriptListApp {
                                             cx,
                                         );
                                     }
-                                    this.handle_action(action_id, cx);
+                                    this.handle_action(action_id, window, cx);
                                 }
                                 // Notify to update UI state after closing popup
                                 cx.notify();
@@ -879,7 +879,7 @@ impl ScriptListApp {
                                         cx,
                                     );
                                     // Execute the action
-                                    this.handle_action(action_id, cx);
+                                    this.handle_action(action_id, window, cx);
                                     cx.notify();
                                 }
                                 return;
