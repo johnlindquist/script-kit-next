@@ -120,7 +120,7 @@ fn test_render_emoji_picker_uses_uniform_row_height_and_lighter_cell_chrome() {
         "header and cell rows should be fixed-height rows that satisfy uniform_list"
     );
     assert!(
-        source.contains(".gap(px(tile_gap))") && source.contains(".text_size(px(28.0))"),
+        source.contains(".gap(px(tile_gap))") && source.contains(".text_size(px(24.0))"),
         "emoji rows should use tile_gap spacing and compact glyph size"
     );
     assert!(
@@ -130,12 +130,17 @@ fn test_render_emoji_picker_uses_uniform_row_height_and_lighter_cell_chrome() {
     );
     assert!(
         source.contains(
-            "let cell_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x18);"
-        ) && source.contains(
-            "let hover_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x2c);"
-        ) && source.contains(
-            "let selected_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x36);"
+            "let selected_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x2a);"
         ),
-        "emoji cells should have persistent surface chrome with rest, hover, and selected fills"
+        "emoji cells should have selected fill (only selected cell gets chrome)"
+    );
+    // No hover callbacks or tooltips — they cause render churn during passive scrolling
+    assert!(
+        !source.contains(".on_hover("),
+        "emoji cells must not have on_hover callbacks (causes scroll churn)"
+    );
+    assert!(
+        !source.contains(".tooltip("),
+        "emoji cells must not have tooltips (causes scroll churn)"
     );
 }

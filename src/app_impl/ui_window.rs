@@ -18,12 +18,24 @@ impl ScriptListApp {
 
     /// Show the mouse cursor (called when mouse moves).
     /// Also switches to Mouse input mode to re-enable hover effects.
+    /// Only calls cx.notify() when state actually changes, to avoid
+    /// render churn during passive scrolling.
     pub(crate) fn show_mouse_cursor(&mut self, cx: &mut Context<Self>) {
-        self.input_mode = InputMode::Mouse;
+        let mut changed = false;
+
+        if !matches!(self.input_mode, InputMode::Mouse) {
+            self.input_mode = InputMode::Mouse;
+            changed = true;
+        }
+
         if self.mouse_cursor_hidden {
             self.mouse_cursor_hidden = false;
+            changed = true;
         }
-        cx.notify();
+
+        if changed {
+            cx.notify();
+        }
     }
 
     /// Calculate view type and item count for window sizing.
@@ -87,15 +99,9 @@ impl ScriptListApp {
                 selected_category,
                 ..
             } => {
-                let filtered_count = crate::emoji::search_emojis(filter)
-                    .into_iter()
-                    .filter(|emoji| {
-                        selected_category
-                            .map(|category| emoji.category == category)
-                            .unwrap_or(true)
-                    })
-                    .count();
-                Some((ViewType::ScriptList, filtered_count))
+                let row_count =
+                    crate::emoji::filtered_grid_row_count(filter, *selected_category);
+                Some((ViewType::ScriptList, row_count))
             }
             AppView::AppLauncherView { filter, .. } => {
                 let apps = &self.apps;

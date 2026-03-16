@@ -70,6 +70,13 @@ impl ScriptListApp {
             } => {
                 self.filter_text = new_text.clone();
                 if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
+                    tracing::debug!(
+                        target: "script_kit::emoji_picker",
+                        event = "scroll_to_item",
+                        reason = "filter_changed",
+                        row = 0usize,
+                        filter = %new_text,
+                    );
                     self.emoji_scroll_handle
                         .scroll_to_item(0, ScrollStrategy::Top);
                 }
