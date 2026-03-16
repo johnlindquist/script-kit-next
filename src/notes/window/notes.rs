@@ -296,13 +296,15 @@ impl NotesApp {
 
         let weak_notes = cx.entity().downgrade();
 
-        window.open_dialog(cx, move |dialog, _window, _cx| {
+        window.open_dialog(cx, move |dialog, _window, cx| {
             let weak_notes = weak_notes.clone();
             let message = message.clone();
             let confirm_note_id = note_id;
             let cancel_note_id = note_id;
 
             dialog
+                .rounded_lg()
+                .w(gpui::px(448.))
                 .confirm()
                 .title("Move note to Trash")
                 .button_props(
@@ -312,7 +314,23 @@ impl NotesApp {
                         .ok_text("Delete")
                         .ok_variant(gpui_component::button::ButtonVariant::Danger),
                 )
-                .child(message)
+                .child(
+                    gpui::div()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .child(
+                            gpui::div()
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .child("This note will move to Trash."),
+                        )
+                        .child(
+                            gpui::div()
+                                .text_sm()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(message.clone()),
+                        ),
+                )
                 .on_ok(move |_, window, cx| {
                     tracing::info!(
                         event = "notes_delete_confirmed",
@@ -552,6 +570,28 @@ mod notes_search_and_delete_regression_tests {
     }
 
     #[test]
+    fn test_request_delete_selected_note_uses_structured_destructive_body() {
+        let source = fs::read_to_string("src/notes/window/notes.rs")
+            .expect("Failed to read src/notes/window/notes.rs");
+
+        let delete_request = extract_section(
+            &source,
+            "pub(super) fn request_delete_selected_note",
+            "/// Delete a specific note by ID (soft delete).",
+        );
+        let normalized = normalize_ws(delete_request);
+
+        assert!(
+            normalized.contains(".title(\"Move note to Trash\")")
+                && normalized.contains("This note will move to Trash.")
+                && normalized.contains(".text_sm()")
+                && normalized.contains(".muted_foreground")
+                && normalized.contains(".font_weight(gpui::FontWeight::SEMIBOLD)"),
+            "Notes delete dialog should use a structured destructive body instead of a plain string child"
+        );
+    }
+
+    #[test]
     fn test_request_delete_selected_note_uses_gpui_component_dialog() {
         let source = fs::read_to_string("src/notes/window/notes.rs")
             .expect("Failed to read src/notes/window/notes.rs");
@@ -564,7 +604,7 @@ mod notes_search_and_delete_regression_tests {
         let normalized = normalize_ws(delete_request);
 
         assert!(
-            normalized.contains("window.open_dialog(cx, move |dialog, _window, _cx|"),
+            normalized.contains("window.open_dialog(cx, move |dialog, _window, cx|"),
             "request_delete_selected_note should open an in-window gpui_component dialog"
         );
         assert!(
