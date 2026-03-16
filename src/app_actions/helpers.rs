@@ -216,20 +216,6 @@ end tell"#,
     }
 }
 
-/// Show a confirmation modal as an in-window parent dialog and return whether
-/// the user confirmed.  Delegates to the shared async confirm helper in
-/// `crate::confirm`.
-///
-/// Returns `Ok(true)` if the user clicks confirm, `Ok(false)` if they cancel
-/// or close the dialog, and `Err` if the dialog could not be opened.
-async fn confirm_with_modal(
-    cx: &mut gpui::AsyncApp,
-    options: crate::confirm::ParentConfirmOptions,
-    trace_id: &str,
-) -> anyhow::Result<bool> {
-    crate::confirm::confirm_with_parent_dialog(cx, options, trace_id).await
-}
-
 #[cfg(test)]
 mod app_actions_tests {
     use super::{
@@ -788,11 +774,11 @@ mod app_actions_tests {
         let remove_section = content
             .find("\"remove_script\" | \"delete_script\"")
             .expect("Expected remove_script action handler");
-        let block = &content[remove_section..remove_section + 800];
+        let block = &content[remove_section..remove_section + 1000];
 
         assert!(
-            block.contains("open_parent_confirm_dialog("),
-            "Expected remove_script to use open_parent_confirm_dialog before deleting"
+            block.contains("open_parent_confirm_dialog_for_entity("),
+            "Expected remove_script to use the entity-owned parent confirm helper before deleting"
         );
         assert!(
             block.contains("Move to Trash"),
@@ -893,8 +879,8 @@ mod app_actions_tests {
         let block = &content[remove_section..remove_section + 1000];
 
         assert!(
-            block.contains("crate::confirm::open_parent_confirm_dialog("),
-            "Expected remove_script to use the shared parent-owned confirm helper"
+            block.contains("crate::confirm::open_parent_confirm_dialog_for_entity("),
+            "Expected remove_script to use the shared entity-owned confirm helper"
         );
         assert!(
             !block.contains("confirm_with_modal("),

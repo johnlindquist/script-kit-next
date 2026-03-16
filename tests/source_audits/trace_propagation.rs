@@ -371,26 +371,16 @@ fn confirmation_spawn_logs_trace_id_on_error() {
 }
 
 // ---------------------------------------------------------------------------
-// confirm_with_modal delegates to shared helper (which handles trace_id logging)
+// confirm_with_modal removed — callers call confirm_with_parent_dialog directly
 // ---------------------------------------------------------------------------
 
 #[test]
-fn confirm_with_modal_passes_trace_id_to_shared_helper() {
+fn confirm_with_modal_removed_from_helpers() {
     let content = read("src/app_actions/helpers.rs");
 
-    let fn_start = content
-        .find("async fn confirm_with_modal(")
-        .expect("Expected confirm_with_modal function");
-    let fn_body = &content[fn_start..content.len().min(fn_start + 500)];
-
-    // confirm_with_modal accepts trace_id and passes it to the shared helper
     assert!(
-        fn_body.contains("trace_id: &str"),
-        "confirm_with_modal must accept trace_id parameter"
-    );
-    assert!(
-        fn_body.contains("confirm_with_parent_dialog(cx, options, trace_id)"),
-        "confirm_with_modal must forward trace_id to confirm_with_parent_dialog"
+        !content.contains("async fn confirm_with_modal("),
+        "confirm_with_modal should be removed — callers use confirm_with_parent_dialog directly"
     );
 }
 

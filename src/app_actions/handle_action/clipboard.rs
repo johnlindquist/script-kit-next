@@ -612,7 +612,7 @@ impl ScriptListApp {
                 let start = std::time::Instant::now();
 
                 cx.spawn(async move |this, cx| {
-                    match confirm_with_modal(cx, confirm_options, &trace_id).await {
+                    match crate::confirm::confirm_with_parent_dialog(cx, confirm_options, &trace_id).await {
                         Ok(true) => {}
                         Ok(false) => {
                             tracing::info!(
@@ -728,7 +728,7 @@ impl ScriptListApp {
                 let start = std::time::Instant::now();
 
                 cx.spawn(async move |this, cx| {
-                    match confirm_with_modal(cx, confirm_options, &trace_id).await {
+                    match crate::confirm::confirm_with_parent_dialog(cx, confirm_options, &trace_id).await {
                         Ok(true) => {}
                         Ok(false) => {
                             tracing::info!(

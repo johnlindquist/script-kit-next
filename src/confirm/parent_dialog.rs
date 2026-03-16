@@ -242,22 +242,25 @@ mod tests {
 
     #[test]
     fn async_confirmation_callers_use_shared_parent_dialog_helper() {
-        let helpers_source =
-            fs::read_to_string("src/app_actions/helpers.rs").expect("Failed to read helpers.rs");
+        let clipboard_source =
+            fs::read_to_string("src/app_actions/handle_action/clipboard.rs")
+                .expect("Failed to read clipboard.rs");
         let chat_source = fs::read_to_string("src/app_impl/chat_actions.rs")
             .expect("Failed to read chat_actions.rs");
         let execution_source = fs::read_to_string("src/app_impl/execution_paths.rs")
             .expect("Failed to read execution_paths.rs");
+        let builtin_source = fs::read_to_string("src/app_execute/builtin_execution.rs")
+            .expect("Failed to read builtin_execution.rs");
 
-        let helpers = normalize_ws(&helpers_source);
+        let clipboard = normalize_ws(&clipboard_source);
         let chat = normalize_ws(&chat_source);
         let execution = normalize_ws(&execution_source);
+        let builtin = normalize_ws(&builtin_source);
 
         assert!(
-            helpers.contains(
-                "crate::confirm::confirm_with_parent_dialog(cx, options, trace_id).await"
-            ),
-            "confirm_with_modal should delegate to the shared async confirm helper"
+            clipboard.contains("crate::confirm::confirm_with_parent_dialog(")
+                && !clipboard.contains("confirm_with_modal("),
+            "clipboard.rs should call confirm_with_parent_dialog directly, not confirm_with_modal"
         );
 
         assert!(
@@ -275,6 +278,12 @@ mod tests {
                 && execution.contains("\"Move to Trash\"")
                 && !execution.contains("async_channel::bounded::<bool>(1)"),
             "execution_paths should use the shared destructive async confirm helper"
+        );
+
+        assert!(
+            builtin.contains("crate::confirm::confirm_with_parent_dialog(")
+                && !builtin.contains("confirm_with_modal("),
+            "builtin_execution.rs should call confirm_with_parent_dialog directly, not confirm_with_modal"
         );
     }
 
