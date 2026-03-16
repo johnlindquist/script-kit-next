@@ -1218,7 +1218,12 @@ pub fn grouped_emojis() -> Vec<(EmojiCategory, Vec<&'static Emoji>)> {
 
 /// Number of columns in the emoji picker grid.
 /// Shared between the renderer and the arrow-key navigation interceptor.
-pub const GRID_COLS: usize = 8;
+pub const GRID_COLS: usize = 6;
+
+/// Fixed height for every virtualized emoji picker row.
+/// Both category header rows and emoji cell rows must use this exact outer height
+/// so that `gpui::uniform_list` stays within its contract.
+pub const GRID_ROW_HEIGHT: f32 = 56.0;
 
 /// Build the filtered, category-ordered emoji list used by both the renderer
 /// and the arrow-key navigation handler. This ensures selection indices stay
@@ -1380,5 +1385,11 @@ mod tests {
     fn test_search_emojis_returns_all_when_query_is_empty() {
         let matches = search_emojis("   ");
         assert_eq!(matches.len(), EMOJIS.len());
+    }
+
+    #[test]
+    fn test_emoji_picker_grid_layout_constants_match_density_targets() {
+        assert_eq!(GRID_COLS, 6);
+        assert_eq!(GRID_ROW_HEIGHT, 56.0);
     }
 }

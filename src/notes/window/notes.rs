@@ -249,9 +249,8 @@ impl NotesApp {
 
     /// Request deletion of the currently selected note with a confirmation dialog.
     ///
-    /// Opens a confirmation modal; the actual soft-delete happens only after
-    /// the user confirms. Uses `crate::confirm::open_confirm_window` with a
-    /// `WeakEntity` + `update_in` callback to avoid dangling entity references.
+    /// Opens an in-window gpui-component `Dialog::confirm()` modal; the actual
+    /// soft-delete happens only after the user confirms via `WeakEntity::update_in`.
     pub(super) fn request_delete_selected_note(
         &mut self,
         window: &mut Window,
@@ -292,58 +291,53 @@ impl NotesApp {
             format!("Delete \"{}\"?", note_title)
         };
 
-        let main_bounds = window.bounds();
+        let weak_notes = cx.entity().downgrade();
 
-        let (tx, rx) = async_channel::bounded::<bool>(1);
-        let on_choice: crate::confirm::ConfirmCallback = Arc::new(move |confirmed| {
-            let _ = tx.try_send(confirmed);
+        window.open_dialog(cx, move |dialog, _window, _cx| {
+            let weak_notes = weak_notes.clone();
+            let message = message.clone();
+            let confirm_note_id = note_id;
+            let cancel_note_id = note_id;
+
+            dialog
+                .confirm()
+                .title("Delete note")
+                .button_props(
+                    gpui_component::dialog::DialogButtonProps::default()
+                        .cancel_text("Cancel")
+                        .cancel_variant(gpui_component::button::ButtonVariant::Secondary)
+                        .ok_text("Delete")
+                        .ok_variant(gpui_component::button::ButtonVariant::Danger),
+                )
+                .child(message)
+                .on_ok(move |_, window, cx| {
+                    tracing::info!(
+                        event = "notes_delete_confirmed",
+                        note_id = %confirm_note_id.as_str(),
+                        "notes_delete_confirmed"
+                    );
+
+                    let _ = weak_notes.update_in(cx, |this, window, cx| {
+                        this.delete_note_by_id(confirm_note_id, window, cx);
+                    });
+
+                    true
+                })
+                .on_cancel(move |_, _window, _cx| {
+                    tracing::info!(
+                        event = "notes_delete_cancelled",
+                        note_id = %cancel_note_id.as_str(),
+                        "notes_delete_cancelled"
+                    );
+                    true
+                })
         });
-
-        if let Err(e) = crate::confirm::open_confirm_window(
-            cx,
-            main_bounds,
-            None,
-            message,
-            Some("Delete".to_string()),
-            Some("Cancel".to_string()),
-            on_choice,
-        ) {
-            tracing::error!(
-                event = "notes_delete_confirmation_open_failed",
-                note_id = %note_id.as_str(),
-                error = %e,
-                "notes_delete_confirmation_open_failed"
-            );
-            return;
-        }
 
         tracing::info!(
             event = "notes_delete_confirmation_opened",
             note_id = %note_id.as_str(),
             "notes_delete_confirmation_opened"
         );
-
-        cx.spawn_in(window, async move |this, cx| {
-            if let Ok(confirmed) = rx.recv().await {
-                if confirmed {
-                    tracing::info!(
-                        event = "notes_delete_confirmed",
-                        note_id = %note_id.as_str(),
-                        "notes_delete_confirmed"
-                    );
-                    let _ = this.update_in(cx, |this, window, cx| {
-                        this.delete_note_by_id(note_id, window, cx);
-                    });
-                } else {
-                    tracing::info!(
-                        event = "notes_delete_cancelled",
-                        note_id = %note_id.as_str(),
-                        "notes_delete_cancelled"
-                    );
-                }
-            }
-        })
-        .detach();
     }
 
     /// Delete a specific note by ID (soft delete).
@@ -553,7 +547,7 @@ mod notes_search_and_delete_regression_tests {
     }
 
     #[test]
-    fn test_request_delete_selected_note_uses_confirm_modal() {
+    fn test_request_delete_selected_note_uses_gpui_component_dialog() {
         let source = fs::read_to_string("src/notes/window/notes.rs")
             .expect("Failed to read src/notes/window/notes.rs");
 
@@ -562,15 +556,29 @@ mod notes_search_and_delete_regression_tests {
             "pub(super) fn request_delete_selected_note",
             "/// Delete a specific note by ID (soft delete).",
         );
+        let normalized = normalize_ws(delete_request);
 
         assert!(
-            delete_request.contains("crate::confirm::open_confirm_window"),
-            "request_delete_selected_note should open the shared confirmation modal"
+            normalized.contains("window.open_dialog(cx, move |dialog, _window, _cx|"),
+            "request_delete_selected_note should open an in-window gpui_component dialog"
         );
         assert!(
-            delete_request.contains("this.update_in(cx, |this, window, cx| {")
-                && delete_request.contains("this.delete_note_by_id(note_id, window, cx);"),
-            "confirmed deletes should still route through delete_note_by_id"
+            normalized.contains(".confirm()")
+                && normalized.contains(".button_props(")
+                && normalized.contains(".on_ok(move |_, window, cx|"),
+            "request_delete_selected_note should use Dialog::confirm() with gpui-component buttons"
+        );
+        assert!(
+            normalized.contains("let weak_notes = cx.entity().downgrade();")
+                && normalized.contains("let _ = weak_notes.update_in(cx, |this, window, cx|")
+                && normalized.contains("this.delete_note_by_id(confirm_note_id, window, cx);"),
+            "confirmed deletes should still route through delete_note_by_id via WeakEntity"
+        );
+        assert!(
+            !normalized.contains("crate::confirm::open_confirm_window")
+                && !normalized.contains("async_channel::bounded::<bool>(1)")
+                && !normalized.contains("cx.spawn_in(window, async move |this, cx|"),
+            "notes delete confirmation should no longer use the separate confirm popup window"
         );
     }
 }

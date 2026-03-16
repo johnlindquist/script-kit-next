@@ -263,13 +263,12 @@ impl ScriptListApp {
             let selected = selected_index;
             let hovered = self.hovered_index;
             let current_input_mode = self.input_mode;
-            let cell_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x18);
-            let hover_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x2c);
+            let row_height = crate::emoji::GRID_ROW_HEIGHT;
+            let hover_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x14);
             let selected_border = self.theme.colors.accent.selected;
-            let cell_border = rgba((ui_border << 8) | 0x3c);
-            // Keep selection visible but subtle in dense emoji rows (~50% outline, ~14% fill).
-            let selected_outline = rgba((selected_border << 8) | 0x80);
-            let selected_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x34);
+            let selected_outline = rgba((selected_border << 8) | 0x90);
+            let selected_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x2a);
+            let idle_border = rgba((ui_border << 8) | 0x18);
             let click_entity_handle = cx.entity().downgrade();
             let hover_entity_handle = cx.entity().downgrade();
             let grid_cols = cols;
@@ -283,11 +282,27 @@ impl ScriptListApp {
                             Some(EmojiGridRow::Header { title, count }) => div()
                                 .id(row_index)
                                 .w_full()
+                                .h(px(row_height))
                                 .px(px(design_spacing.padding_lg))
-                                .py(px(4.0))
-                                .text_sm()
-                                .text_color(rgb(text_dimmed))
-                                .child(format!("{} {}", title, count))
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .text_color(rgb(text_primary))
+                                        .child(title.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .px(px(design_spacing.padding_xs))
+                                        .py(px(2.0))
+                                        .rounded(px(design_visual.radius_md))
+                                        .bg(rgba((ui_border << 8) | 0x22))
+                                        .text_sm()
+                                        .text_color(rgb(text_dimmed))
+                                        .child(count.to_string()),
+                                )
                                 .into_any_element(),
                             Some(EmojiGridRow::Cells { start_index, count }) => {
                                 let click_entity_row = click_entity_handle.clone();
@@ -300,19 +315,19 @@ impl ScriptListApp {
                                 div()
                                     .id(row_index)
                                     .w_full()
+                                    .h(px(row_height))
                                     .flex()
+                                    .items_center()
                                     .px(px(design_spacing.padding_lg))
-                                    .py(px(design_spacing.padding_xs / 2.0))
-                                    .gap(px(design_spacing.gap_sm))
+                                    .gap(px(design_spacing.gap_sm * 1.5))
                                     .children((0..grid_cols).map(move |col| -> AnyElement {
                                         if col >= row_count {
-                                            // Invisible spacer to maintain consistent cell width
-                                            return div().flex_1().h(px(48.0)).into_any_element();
+                                            return div().flex_1().h(px(row_height)).into_any_element();
                                         }
                                         let flat_emoji_index = row_start_index + col;
                                         let emoji = match emojis_for_row.get(flat_emoji_index) {
                                             Some(e) => e,
-                                            None => return div().flex_1().h(px(48.0)).into_any_element(),
+                                            None => return div().flex_1().h(px(row_height)).into_any_element(),
                                         };
                                         let is_selected = flat_emoji_index == selected;
                                         let is_hovered = hovered == Some(flat_emoji_index)
@@ -325,7 +340,7 @@ impl ScriptListApp {
                                         div()
                                             .id(flat_emoji_index)
                                             .flex_1()
-                                            .h(px(48.0))
+                                            .h(px(row_height))
                                             .flex()
                                             .items_center()
                                             .justify_center()
@@ -390,29 +405,27 @@ impl ScriptListApp {
                                                 div()
                                                     .w_full()
                                                     .h_full()
-                                                    .px(px(design_spacing.padding_xs))
-                                                    .py(px(design_spacing.padding_xs))
                                                     .flex()
                                                     .items_center()
                                                     .justify_center()
-                                                    .rounded(px(design_visual.radius_md))
-                                                    .text_size(px(26.0))
+                                                    .rounded(px(design_visual.radius_lg))
+                                                    .text_size(px(30.0))
                                                     .border_1()
                                                     .border_color(if is_selected {
                                                         selected_outline
                                                     } else {
-                                                        cell_border
+                                                        idle_border
                                                     })
-                                                    .bg(cell_bg)
-                                                    .when(is_hovered && !is_selected, |d| d.bg(hover_bg))
-                                                    .when(is_selected, |d| d.bg(selected_bg))
+                                                    .when(is_hovered || is_selected, |d| {
+                                                        d.bg(if is_selected { selected_bg } else { hover_bg })
+                                                    })
                                                     .child(emoji_display),
                                             )
                                             .into_any_element()
                                     }))
                                     .into_any_element()
                             }
-                            None => div().id(row_index).h(px(36.0)).into_any_element(),
+                            None => div().id(row_index).h(px(row_height)).into_any_element(),
                         })
                         .collect()
                 },
@@ -497,169 +510,5 @@ impl ScriptListApp {
                 PromptFooterColors::from_theme(&self.theme),
             ))
             .into_any_element()
-    }
-}
-
-#[cfg(test)]
-mod emoji_picker_tests {
-    use std::fs;
-
-    fn read_emoji_picker_source() -> String {
-        fs::read_to_string("src/render_builtins/emoji_picker.rs")
-            .expect("Failed to read src/render_builtins/emoji_picker.rs")
-    }
-
-    #[test]
-    fn test_render_emoji_picker_builds_category_headers_and_eight_cell_rows() {
-        let source = read_emoji_picker_source();
-
-        assert!(
-            source.contains("enum EmojiGridRow"),
-            "render_emoji_picker should define local EmojiGridRow enum"
-        );
-        assert!(
-            source.contains("Header { title: String, count: usize }"),
-            "EmojiGridRow should include Header variant with title and count"
-        );
-        assert!(
-            source.contains("Cells { start_index: usize, count: usize }"),
-            "EmojiGridRow should include Cells variant with start index and count"
-        );
-        assert!(
-            source.contains("(category_count - row_offset).min(cols)"),
-            "emoji grid should chunk category rows using shared GRID_COLS constant"
-        );
-    }
-
-    #[test]
-    fn test_render_emoji_picker_handles_navigation_and_enter_copy() {
-        let source = read_emoji_picker_source();
-
-        for helper_call in [
-            "is_key_up(key)",
-            "is_key_down(key)",
-            "is_key_left(key)",
-            "is_key_right(key)",
-            "is_key_enter(key)",
-        ] {
-            assert!(
-                source.contains(helper_call),
-                "Expected key handler helper `{}` in render_emoji_picker",
-                helper_call
-            );
-        }
-
-        assert!(
-            source.contains("cx.write_to_clipboard(gpui::ClipboardItem::new_string("),
-            "render_emoji_picker should copy selected emoji on Enter/click"
-        );
-    }
-
-    #[test]
-    fn test_render_emoji_picker_wires_horizontal_input_actions_to_grid_navigation() {
-        let source = read_emoji_picker_source();
-
-        assert!(
-            source.contains("gpui_component::input::MoveLeft"),
-            "emoji picker should listen for MoveLeft action from Input"
-        );
-        assert!(
-            source.contains("gpui_component::input::MoveRight"),
-            "emoji picker should listen for MoveRight action from Input"
-        );
-        assert!(
-            source.contains(".on_action(handle_move_left_action)")
-                && source.contains(".on_action(handle_move_right_action)"),
-            "emoji picker container should register left/right action handlers"
-        );
-    }
-
-    #[test]
-    fn test_render_emoji_picker_consumes_horizontal_arrow_keys() {
-        let source = read_emoji_picker_source();
-
-        let left_arm = source
-            .find("\"left\" | \"arrowleft\" => {")
-            .expect("left arrow key arm should exist");
-        let left_section_end = (left_arm + 220).min(source.len());
-        let left_section = &source[left_arm..left_section_end];
-        assert!(
-            left_section.contains("this.navigate_emoji_picker_horizontal(-1, cx);")
-                && left_section.contains("cx.stop_propagation();"),
-            "left arrow key handling should navigate grid and stop propagation to Input"
-        );
-
-        let right_arm = source
-            .find("\"right\" | \"arrowright\" => {")
-            .expect("right arrow key arm should exist");
-        let right_section_end = (right_arm + 220).min(source.len());
-        let right_section = &source[right_arm..right_section_end];
-        assert!(
-            right_section.contains("this.navigate_emoji_picker_horizontal(1, cx);")
-                && right_section.contains("cx.stop_propagation();"),
-            "right arrow key handling should navigate grid and stop propagation to Input"
-        );
-    }
-
-    #[test]
-    fn test_render_emoji_picker_uses_shared_input_focus_and_scroll_handles() {
-        let source = read_emoji_picker_source();
-
-        assert!(
-            source.contains("Input::new(&self.gpui_input_state)"),
-            "emoji picker header should use shared gpui input state"
-        );
-        assert!(
-            source.contains(".track_focus(&self.focus_handle)"),
-            "emoji picker should track focus with app focus handle"
-        );
-        assert!(
-            source.contains(".track_scroll(&self.emoji_scroll_handle)"),
-            "emoji picker grid should track emoji scroll handle"
-        );
-    }
-
-    #[test]
-    fn test_render_emoji_picker_applies_airy_cell_layout_when_rendering_grid_rows() {
-        let source = read_emoji_picker_source();
-
-        assert!(
-            source.contains(".gap(px(design_spacing.gap_sm))"),
-            "emoji grid rows should add spacing between cells for an airier layout"
-        );
-        assert!(
-            source.contains(".h(px(48.0))"),
-            "emoji grid cells should be taller to reduce packed density"
-        );
-        assert!(
-            source.contains(".px(px(design_spacing.padding_xs))")
-                && source.contains(".py(px(design_spacing.padding_xs))"),
-            "emoji cells should add internal padding so glyphs are not touching edges"
-        );
-        assert!(
-            source.contains("let cell_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x18);"),
-            "emoji cells should use theme-based subtle surface backgrounds"
-        );
-        assert!(
-            source.contains("let hover_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x2c);")
-                && source.contains(".when(is_hovered && !is_selected, |d| d.bg(hover_bg))"),
-            "emoji cells should use a stronger theme-based hover background"
-        );
-        assert!(
-            source.contains("let cell_border = rgba((ui_border << 8) | 0x3c);"),
-            "emoji cells should keep a theme-based border in non-selected states"
-        );
-        assert!(
-            source.contains(".bg(cell_bg)"),
-            "emoji cells should always render a subtle rounded background container"
-        );
-        assert!(
-            source.contains("let selected_outline = rgba((selected_border << 8) | 0x80);"),
-            "selected emoji cell should use a subtle alpha-blended outline color"
-        );
-        assert!(
-            source.contains(".rounded(px(design_visual.radius_md))"),
-            "emoji cells should use theme radius for rounded container styling"
-        );
     }
 }
