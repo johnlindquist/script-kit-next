@@ -108,7 +108,6 @@ impl Render for ScriptListApp {
                 && script_kit_gpui::is_main_window_visible()
                 && !self.is_pinned
                 && !script_kit_gpui::is_within_focus_grace_period()
-                && !confirm::is_confirm_window_open()
                 && !actions::is_actions_window_open()
             {
                 logging::log(
@@ -120,11 +119,6 @@ impl Render for ScriptListApp {
                 logging::log(
                     "FOCUS",
                     "Main window lost focus but actions popup is open - staying open",
-                );
-            } else if confirm::is_confirm_window_open() {
-                logging::log(
-                    "FOCUS",
-                    "Main window lost focus but confirm dialog is open - staying open",
                 );
             } else if script_kit_gpui::is_within_focus_grace_period() {
                 logging::log(

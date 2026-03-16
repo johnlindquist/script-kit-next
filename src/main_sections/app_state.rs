@@ -78,7 +78,7 @@ struct ScriptListApp {
     arg_list_scroll_handle: UniformListScrollHandle,
     // Scroll handle for clipboard history list
     clipboard_list_scroll_handle: UniformListScrollHandle,
-    // Scroll handle for emoji picker grid rows
+    // Scroll handle for emoji picker grid (uniform_list virtualized rows)
     emoji_scroll_handle: UniformListScrollHandle,
     // Scroll handle for window switcher list
     window_list_scroll_handle: UniformListScrollHandle,

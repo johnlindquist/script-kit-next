@@ -1,6 +1,6 @@
 //! Confirm Module
 //!
-//! A modal confirmation dialog that appears as a floating window.
+//! In-window confirmation dialogs using gpui-component's `Dialog`.
 //! Used by the SDK `confirm()` function to get user confirmation for actions.
 //!
 //! # Example Usage (SDK)
@@ -18,14 +18,15 @@
 //! });
 //! ```
 
-mod constants;
-mod dialog;
 mod parent_dialog;
-mod window;
 
-pub use dialog::ConfirmCallback;
-pub(crate) use parent_dialog::{open_parent_confirm_dialog, ParentConfirmOptions};
-pub use window::{
-    close_confirm_window, dispatch_confirm_key, init_confirm_bindings, is_confirm_window_open,
-    open_confirm_window,
+// Used by include!() code in app_actions/handle_action/scripts.rs — clippy
+// cannot trace usage through include!() and reports a false-positive dead_code
+// warning for the non-lifecycle variant.
+#[allow(unused_imports)]
+pub(crate) use parent_dialog::open_parent_confirm_dialog;
+#[allow(unused_imports)]
+pub(crate) use parent_dialog::{
+    open_parent_confirm_dialog_for_entity, open_parent_confirm_dialog_with_lifecycle,
+    ParentConfirmOptions,
 };

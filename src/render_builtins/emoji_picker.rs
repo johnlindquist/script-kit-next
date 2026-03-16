@@ -35,8 +35,7 @@ impl ScriptListApp {
                 row,
                 selected_index = *selected_index,
             );
-            self.emoji_scroll_handle
-                .scroll_to_item(row, gpui::ScrollStrategy::Nearest);
+            self.emoji_scroll_handle.scroll_to_item(row, ScrollStrategy::Nearest);
 
             self.input_mode = InputMode::Keyboard;
             self.hovered_index = None;
@@ -216,8 +215,7 @@ impl ScriptListApp {
                             row,
                             selected_index = *selected_index,
                         );
-                        this.emoji_scroll_handle
-                            .scroll_to_item(row, gpui::ScrollStrategy::Nearest);
+                        this.emoji_scroll_handle.scroll_to_item(row, ScrollStrategy::Nearest);
                         cx.stop_propagation();
                     }
 
@@ -277,14 +275,15 @@ impl ScriptListApp {
                 })
                 .into_any_element()
         } else {
-            let rows_for_list = rows.clone();
-            let emojis_for_list: Arc<Vec<crate::emoji::Emoji>> = Arc::new(ordered_emojis.clone());
-            let selected = selected_index;
             let row_height = crate::emoji::GRID_ROW_HEIGHT;
             let selected_outline = rgba((self.theme.colors.accent.selected << 8) | 0x80);
             let selected_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x2a);
             let idle_bg = rgba((ui_border << 8) | 0x10);
             let click_entity_handle = cx.entity().downgrade();
+
+            let rows_for_list = rows.clone();
+            let emojis_for_list = std::sync::Arc::new(ordered_emojis.clone());
+            let selected = selected_index;
 
             uniform_list(
                 "emoji-picker-grid",
@@ -318,32 +317,34 @@ impl ScriptListApp {
                                         .child(count.to_string()),
                                 )
                                 .into_any_element(),
-                            Some(EmojiGridRow::Cells { start_index, count }) => {
-                                let click_entity_row = click_entity_handle.clone();
-                                let emojis_for_row: Arc<Vec<crate::emoji::Emoji>> =
-                                    Arc::clone(&emojis_for_list);
-                                let row_start_index = *start_index;
-                                let row_count = *count;
 
-                                div()
+                            Some(EmojiGridRow::Cells { start_index, count }) => {
+                                let mut row_div = div()
                                     .id(EMOJI_ROW_ID_OFFSET + row_index)
                                     .w_full()
                                     .h(px(row_height))
                                     .flex()
                                     .items_center()
                                     .px(px(design_spacing.padding_lg))
-                                    .gap(px(tile_gap))
-                                    .children((0..row_count).map(move |col| -> AnyElement {
-                                        let flat_emoji_index = row_start_index + col;
-                                        let emoji = match emojis_for_row.get(flat_emoji_index) {
-                                            Some(e) => e,
-                                            None => return div().w(px(tile_size)).h(px(tile_size)).into_any_element(),
-                                        };
-                                        let is_selected = flat_emoji_index == selected;
-                                        let click_entity = click_entity_row.clone();
-                                        let emoji_value = emoji.emoji.to_string();
-                                        let emoji_display = emoji_value.clone();
+                                    .gap(px(tile_gap));
 
+                                for col in 0..*count {
+                                    let flat_emoji_index = *start_index + col;
+                                    let emoji = match emojis_for_list.get(flat_emoji_index) {
+                                        Some(e) => e,
+                                        None => {
+                                            row_div = row_div
+                                                .child(div().w(px(tile_size)).h(px(tile_size)));
+                                            continue;
+                                        }
+                                    };
+
+                                    let is_selected = flat_emoji_index == selected;
+                                    let click_entity = click_entity_handle.clone();
+                                    let emoji_value = emoji.emoji.to_string();
+                                    let emoji_display = emoji_value.clone();
+
+                                    row_div = row_div.child(
                                         div()
                                             .id(EMOJI_CELL_ID_OFFSET + flat_emoji_index)
                                             .w(px(tile_size))
@@ -390,15 +391,16 @@ impl ScriptListApp {
                                                             .border_color(selected_outline)
                                                     })
                                                     .child(emoji_display),
-                                            )
-                                            .into_any_element()
-                                    }))
-                                    .child(div().flex_1())
-                                    .into_any_element()
+                                            ),
+                                    );
+                                }
+
+                                row_div.child(div().flex_1()).into_any_element()
                             }
-                            None => div().id(EMOJI_ROW_ID_OFFSET + row_index).h(px(row_height)).into_any_element(),
+
+                            None => div().w_full().h(px(row_height)).into_any_element(),
                         })
-                        .collect()
+                        .collect::<Vec<_>>()
                 },
             )
             .w_full()

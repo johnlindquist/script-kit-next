@@ -299,9 +299,10 @@ impl NotesApp {
         let confirm_note_id = note_id;
         let cancel_note_id = note_id;
 
-        crate::confirm::open_parent_confirm_dialog(
+        crate::confirm::open_parent_confirm_dialog_for_entity(
             window,
             cx,
+            weak_notes.clone(),
             crate::confirm::ParentConfirmOptions {
                 title: "Move note to Trash".into(),
                 body,
@@ -561,8 +562,8 @@ mod notes_search_and_delete_regression_tests {
         let normalized = normalize_ws(delete_request);
 
         assert!(
-            normalized.contains("crate::confirm::open_parent_confirm_dialog("),
-            "Notes delete should use the shared parent-owned confirm helper"
+            normalized.contains("crate::confirm::open_parent_confirm_dialog_for_entity("),
+            "Notes delete should use the entity-owned parent confirm helper"
         );
         assert!(
             !normalized.contains("window.open_dialog(cx, move |dialog"),
@@ -596,6 +597,28 @@ mod notes_search_and_delete_regression_tests {
             !normalized.contains("crate::confirm::open_confirm_window")
                 && !normalized.contains("async_channel::bounded::<bool>(1)"),
             "notes delete confirmation should not use the separate confirm popup window"
+        );
+    }
+
+    #[test]
+    fn test_request_delete_selected_note_uses_entity_owned_confirm_helper() {
+        let source = fs::read_to_string("src/notes/window/notes.rs")
+            .expect("Failed to read src/notes/window/notes.rs");
+
+        let delete_request = extract_section(
+            &source,
+            "pub(super) fn request_delete_selected_note",
+            "/// Delete a specific note by ID (soft delete).",
+        );
+        let normalized = normalize_ws(delete_request);
+
+        assert!(
+            normalized.contains("crate::confirm::open_parent_confirm_dialog_for_entity("),
+            "Notes delete should use the entity-owned parent confirm helper"
+        );
+        assert!(
+            normalized.contains("weak_notes.clone(),"),
+            "Notes delete dialog should pass the WeakEntity for lifecycle binding"
         );
     }
 }

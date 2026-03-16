@@ -283,9 +283,6 @@ app.run(move |cx: &mut App| {
         // Must be called before opening windows that use Root wrapper
         gpui_component::init(cx);
 
-        // Initialize confirm dialog key bindings (Escape, Enter, Space)
-        confirm::init_confirm_bindings(cx);
-
         // Initialize the theme cache FIRST (before any render calls)
         // This ensures get_cached_theme() returns correct data from first render
         theme::init_theme_cache();
@@ -356,7 +353,12 @@ app.run(move |cx: &mut App| {
                 cx.new(|cx| Root::new(view, window, cx))
             },
         ) {
-            Ok(window) => window,
+            Ok(window) => {
+                // Store the main window handle globally so async contexts can
+                // open parent dialogs without needing a Window reference.
+                crate::set_main_window_handle(window.into());
+                window
+            }
             Err(error) => {
                 logging::log(
                     "APP",
@@ -1978,7 +1980,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                             *selected_index = new_idx;
                                         }
                                         let row = crate::emoji::compute_scroll_row(new_idx, &ordered);
-                                        view.emoji_scroll_handle.scroll_to_item(row, gpui::ScrollStrategy::Nearest);
+                                        view.emoji_scroll_handle.scroll_to_item(row, ScrollStrategy::Nearest);
                                         view.input_mode = InputMode::Keyboard;
                                         view.hovered_index = None;
                                         ctx.notify();

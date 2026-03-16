@@ -102,13 +102,13 @@ fn test_render_emoji_picker_uses_shared_input_focus_and_scroll_handles() {
         "emoji picker should track focus with app focus handle"
     );
     assert!(
-        source.contains(".track_scroll(&self.emoji_scroll_handle)"),
+        source.contains("track_scroll(&self.emoji_scroll_handle)"),
         "emoji picker grid should track emoji scroll handle"
     );
 }
 
 #[test]
-fn test_render_emoji_picker_uses_uniform_row_height_and_lighter_cell_chrome() {
+fn test_render_emoji_picker_uses_row_height_and_lighter_cell_chrome() {
     let source = read_emoji_picker_source();
 
     assert!(
@@ -117,7 +117,7 @@ fn test_render_emoji_picker_uses_uniform_row_height_and_lighter_cell_chrome() {
     );
     assert!(
         source.contains(".h(px(row_height))") && source.contains(".justify_between()"),
-        "header and cell rows should be fixed-height rows that satisfy uniform_list"
+        "header and cell rows should be fixed-height rows"
     );
     assert!(
         source.contains(".gap(px(tile_gap))") && source.contains(".text_size(px(28.0))"),
@@ -142,5 +142,10 @@ fn test_render_emoji_picker_uses_uniform_row_height_and_lighter_cell_chrome() {
     assert!(
         !source.contains(".tooltip("),
         "emoji cells must not have tooltips (causes scroll churn)"
+    );
+    // Must use uniform_list for virtualized row rendering (fixes scroll jumping)
+    assert!(
+        source.contains("uniform_list("),
+        "emoji picker must use uniform_list for stable virtualized scrolling"
     );
 }

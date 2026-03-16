@@ -266,6 +266,28 @@ mod actions_button_visibility_tests;
 // Used to track main window visibility across the app
 // Notes/AI windows use this to decide whether to hide the app after closing
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, OnceLock};
+
+/// Global handle to the main GPUI window.
+/// Used to open in-window dialogs (e.g. parent confirm) from async contexts
+/// that only have `&mut AsyncApp` and no `Window` reference.
+static MAIN_WINDOW_HANDLE: OnceLock<Mutex<Option<gpui::AnyWindowHandle>>> = OnceLock::new();
+
+/// Store the main window handle after creation.
+pub fn set_main_window_handle(handle: gpui::AnyWindowHandle) {
+    let storage = MAIN_WINDOW_HANDLE.get_or_init(|| Mutex::new(None));
+    if let Ok(mut guard) = storage.lock() {
+        *guard = Some(handle);
+    }
+}
+
+/// Retrieve the main window handle.
+pub fn get_main_window_handle() -> Option<gpui::AnyWindowHandle> {
+    MAIN_WINDOW_HANDLE
+        .get()
+        .and_then(|m| m.lock().ok())
+        .and_then(|guard| *guard)
+}
 
 /// Global state tracking whether the main window is visible
 /// - Used by hotkey toggle to show/hide main window

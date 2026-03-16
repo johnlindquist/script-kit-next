@@ -216,12 +216,12 @@ end tell"#,
     }
 }
 
-/// Show a confirmation modal centered over the main window and return whether
-/// the user confirmed.  Encapsulates the bounded-channel + open_confirm_window
-/// boilerplate that was previously duplicated across every destructive action.
+/// Show a confirmation modal as an in-window parent dialog and return whether
+/// the user confirmed.  Uses the global main window handle to open the dialog
+/// from async contexts that only have `&mut AsyncApp`.
 ///
 /// Returns `Ok(true)` if the user clicks confirm, `Ok(false)` if they cancel
-/// or close the window, and `Err` if the modal could not be opened.
+/// or close the dialog, and `Err` if the dialog could not be opened.
 async fn confirm_with_modal(
     cx: &mut gpui::AsyncApp,
     message: String,
@@ -237,45 +237,32 @@ async fn confirm_with_modal(
     );
     let (confirm_tx, confirm_rx) = async_channel::bounded::<bool>(1);
 
-    cx.update(|cx| {
-        let main_bounds = if let Some((x, y, w, h)) = platform::get_main_window_bounds() {
-            gpui::Bounds {
-                origin: gpui::Point {
-                    x: gpui::px(x as f32),
-                    y: gpui::px(y as f32),
-                },
-                size: gpui::Size {
-                    width: gpui::px(w as f32),
-                    height: gpui::px(h as f32),
-                },
-            }
-        } else {
-            gpui::Bounds {
-                origin: gpui::Point {
-                    x: gpui::px(100.0),
-                    y: gpui::px(100.0),
-                },
-                size: gpui::Size {
-                    width: gpui::px(600.0),
-                    height: gpui::px(400.0),
-                },
-            }
-        };
+    let window_handle = crate::get_main_window_handle()
+        .ok_or_else(|| anyhow::anyhow!("Main window handle not available"))?;
 
-        let sender = confirm_tx.clone();
-        let on_choice: confirm::ConfirmCallback = std::sync::Arc::new(move |confirmed| {
-            let _ = sender.try_send(confirmed);
-        });
+    let confirm_label = confirm_label.to_string();
+    let cancel_label = cancel_label.to_string();
+    let sender_ok = confirm_tx.clone();
+    let sender_cancel = confirm_tx.clone();
 
-        confirm::open_confirm_window(
+    cx.update_window(window_handle, |_, window, cx| {
+        crate::confirm::open_parent_confirm_dialog(
+            window,
             cx,
-            main_bounds,
-            None,
-            message,
-            Some(confirm_label.to_string()),
-            Some(cancel_label.to_string()),
-            on_choice,
-        )
+            crate::confirm::ParentConfirmOptions {
+                title: "Confirm".into(),
+                body: gpui::SharedString::from(message),
+                confirm_text: gpui::SharedString::from(confirm_label),
+                cancel_text: gpui::SharedString::from(cancel_label),
+                ..Default::default()
+            },
+            move |_window, _cx| {
+                let _ = sender_ok.try_send(true);
+            },
+            move |_window, _cx| {
+                let _ = sender_cancel.try_send(false);
+            },
+        );
     })?;
 
     let confirmed = confirm_rx.recv().await.unwrap_or(false);

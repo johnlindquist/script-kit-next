@@ -280,7 +280,7 @@ fn confirm_with_modal_awaits_receiver_for_result() {
 }
 
 #[test]
-fn confirm_with_modal_delegates_to_open_confirm_window() {
+fn confirm_with_modal_delegates_to_parent_confirm_dialog() {
     let helpers = read("src/app_actions/helpers.rs");
 
     let fn_start = helpers
@@ -289,8 +289,8 @@ fn confirm_with_modal_delegates_to_open_confirm_window() {
     let fn_body = &helpers[fn_start..helpers.len().min(fn_start + 3000)];
 
     assert!(
-        fn_body.contains("confirm::open_confirm_window("),
-        "confirm_with_modal must delegate to the shared confirm window"
+        fn_body.contains("crate::confirm::open_parent_confirm_dialog("),
+        "confirm_with_modal must delegate to the shared parent confirm dialog"
     );
 }
 

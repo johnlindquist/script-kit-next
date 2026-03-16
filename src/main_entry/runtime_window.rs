@@ -21,7 +21,10 @@
                 cx.new(|cx| Root::new(view, window, cx))
             },
         ) {
-            Ok(window) => window,
+            Ok(window) => {
+                crate::set_main_window_handle(window.into());
+                window
+            }
             Err(error) => {
                 tracing::error!(error = ?error, "Failed to open main runtime window");
                 return;

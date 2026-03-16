@@ -599,17 +599,6 @@ impl ScriptListApp {
                 {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            // FIRST: If confirm dialog is open, route Tab to it for button switching
-                            let confirm_open = crate::confirm::is_confirm_window_open();
-                            crate::logging::log(
-                                "KEY",
-                                &format!("Tab intercepted, confirm_open={}", confirm_open),
-                            );
-                            if confirm_open && crate::confirm::dispatch_confirm_key(key, cx) {
-                                cx.stop_propagation();
-                                return;
-                            }
-
                             // Handle Tab/Shift+Tab in FileSearchView for directory/file navigation
                             // CRITICAL: ALWAYS consume Tab/Shift+Tab to prevent focus traversal
                             if let AppView::FileSearchView {
@@ -818,14 +807,6 @@ impl ScriptListApp {
                 if (is_left || is_right) && no_direction_modifiers {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            // FIRST: If confirm dialog is open, route all arrow keys to it
-                            if crate::confirm::is_confirm_window_open()
-                                && crate::confirm::dispatch_confirm_key(key, cx)
-                            {
-                                cx.stop_propagation();
-                                return;
-                            }
-
                             // Keep left/right from moving any focused input while actions popup is open.
                             if this.show_actions_popup {
                                 cx.stop_propagation();
@@ -864,8 +845,7 @@ impl ScriptListApp {
 
                                 let row =
                                     crate::emoji::compute_scroll_row(*selected_index, &ordered);
-                                this.emoji_scroll_handle
-                                    .scroll_to_item(row, gpui::ScrollStrategy::Nearest);
+                                this.emoji_scroll_handle.scroll_to_item(row, ScrollStrategy::Nearest);
 
                                 this.input_mode = InputMode::Keyboard;
                                 this.hovered_index = None;
@@ -879,14 +859,6 @@ impl ScriptListApp {
                 if (is_up || is_down) && no_direction_modifiers {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            // FIRST: If confirm dialog is open, route all arrow keys to it
-                            if crate::confirm::is_confirm_window_open()
-                                && crate::confirm::dispatch_confirm_key(key, cx)
-                            {
-                                cx.stop_propagation();
-                                return;
-                            }
-
                             // Universal: Route arrow keys to actions dialog when popup is open
                             // This ensures ALL views (ChatPrompt, ArgPrompt, etc.) route
                             // arrows to the dialog, not just the few views with explicit cases below.
@@ -1311,17 +1283,6 @@ impl ScriptListApp {
 
                 if let Some(app) = app_entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        // FIRST: If confirm dialog is open, route Enter/Escape to it
-                        // NOTE: Tab is handled by the dedicated Tab interceptor above, so
-                        // we exclude it here to avoid double-dispatching toggle_focus()
-                        if !key.eq_ignore_ascii_case("tab")
-                            && crate::confirm::is_confirm_window_open()
-                            && crate::confirm::dispatch_confirm_key(key, cx)
-                        {
-                            cx.stop_propagation();
-                            return;
-                        }
-
                         // Handle Cmd+K to toggle actions popup (works in ScriptList, FileSearchView, ArgPrompt)
                         // This MUST be intercepted here because the Input component has focus and
                         // normal on_key_down handlers won't receive the event

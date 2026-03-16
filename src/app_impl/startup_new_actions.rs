@@ -28,17 +28,6 @@
 
                 if let Some(app) = app_entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        // FIRST: If confirm dialog is open, route Enter/Escape to it
-                        // NOTE: Tab is handled by the dedicated Tab interceptor above, so
-                        // we exclude it here to avoid double-dispatching toggle_focus()
-                        if !key.eq_ignore_ascii_case("tab")
-                            && crate::confirm::is_confirm_window_open()
-                            && crate::confirm::dispatch_confirm_key(key, cx)
-                        {
-                            cx.stop_propagation();
-                            return;
-                        }
-
                         // Handle Cmd+K to toggle actions popup (works in ScriptList, FileSearchView, ArgPrompt)
                         // This MUST be intercepted here because the Input component has focus and
                         // normal on_key_down handlers won't receive the event

@@ -743,14 +743,6 @@ impl ScriptListApp {
                     }
                 }
 
-                // If confirm dialog is open, just return - key routing is handled by
-                // the dedicated interceptors in app_impl.rs (Tab at line 462-478,
-                // arrows at line 645-659, all others at line 920-928)
-                // We must NOT dispatch here or it will double-fire toggle_focus!
-                if crate::confirm::is_confirm_window_open() {
-                    return;
-                }
-
                 // If actions popup is open, route keyboard events to it
                 if this.show_actions_popup {
                     if let Some(ref dialog) = this.actions_dialog {

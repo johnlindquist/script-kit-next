@@ -229,7 +229,6 @@ use actions::{
     close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
     resize_actions_window, ActionsDialog, ScriptInfo,
 };
-use confirm::{open_confirm_window, ConfirmCallback};
 use panel::{
     CURSOR_GAP_X, CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y, CURSOR_WIDTH, DEFAULT_PLACEHOLDER, HEADER_GAP,
     HEADER_PADDING_X, HEADER_PADDING_Y,
@@ -253,7 +252,10 @@ use utils::render_path_with_highlights;
 // Global state for hotkey signaling between threads
 static NEEDS_RESET: AtomicBool = AtomicBool::new(false); // Track if window needs reset to script list on next show
 
-pub use script_kit_gpui::{emoji, is_main_window_visible, set_main_window_visible};
+pub use script_kit_gpui::{
+    emoji, get_main_window_handle, is_main_window_visible, set_main_window_handle,
+    set_main_window_visible,
+};
 static PANEL_CONFIGURED: AtomicBool = AtomicBool::new(false); // Track if floating panel has been configured (one-time setup on first show)
 static SHUTDOWN_REQUESTED: AtomicBool = AtomicBool::new(false); // Track if shutdown signal received (prevents new script spawns)
 

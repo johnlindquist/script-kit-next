@@ -41,7 +41,7 @@ fn clipboard_delete_all_requires_confirmation_before_delete() {
 }
 
 #[test]
-fn confirm_with_modal_helper_calls_open_confirm_window() {
+fn confirm_with_modal_helper_calls_parent_confirm_dialog() {
     let helpers = read("src/app_actions/helpers.rs");
 
     assert!(
@@ -49,8 +49,8 @@ fn confirm_with_modal_helper_calls_open_confirm_window() {
         "Expected helpers.rs to define confirm_with_modal async helper"
     );
     assert!(
-        helpers.contains("confirm::open_confirm_window("),
-        "Expected confirm_with_modal to delegate to open_confirm_window"
+        helpers.contains("crate::confirm::open_parent_confirm_dialog("),
+        "Expected confirm_with_modal to delegate to open_parent_confirm_dialog"
     );
     assert!(
         helpers.contains("async_channel::bounded::<bool>(1)"),

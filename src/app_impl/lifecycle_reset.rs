@@ -133,12 +133,6 @@ impl ScriptListApp {
             logging::log("VISIBILITY", "Closed actions window before hiding main");
         }
 
-        // Confirm window (modal)
-        if crate::confirm::is_confirm_window_open() {
-            crate::confirm::close_confirm_window(cx);
-            logging::log("VISIBILITY", "Closed confirm window before hiding main");
-        }
-
         // Save window position BEFORE hiding (main window is hidden, not closed)
         if let Some((x, y, w, h)) = crate::platform::get_main_window_bounds() {
             let bounds = crate::window_state::PersistedWindowBounds::new(x, y, w, h);
@@ -269,8 +263,7 @@ impl ScriptListApp {
                 ..
             } => {
                 Self::clear_builtin_query_state(filter, selected_index);
-                self.emoji_scroll_handle
-                    .scroll_to_item(0, ScrollStrategy::Top);
+                self.emoji_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
             }
             AppView::WindowSwitcherView {
                 filter,

@@ -69,8 +69,8 @@ impl ScriptListApp {
                 ..
             } => {
                 // Skip entirely when the text hasn't changed — avoids a
-                // spurious cx.notify() that can reset the uniform_list
-                // scroll position during trackpad/mouse scrolling.
+                // spurious cx.notify() that can reset the scroll
+                // position during trackpad/mouse scrolling.
                 if new_text == *filter {
                     return;
                 }
@@ -87,8 +87,7 @@ impl ScriptListApp {
                     filter = %new_text,
                     selected_index = 0usize,
                 );
-                self.emoji_scroll_handle
-                    .scroll_to_item(0, ScrollStrategy::Top);
+                self.emoji_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
 
                 cx.notify();
                 return; // Don't run main menu filter logic
@@ -615,7 +614,7 @@ mod tests {
             let view_pos = source
                 .find(view)
                 .unwrap_or_else(|| panic!("{} match arm not found", view));
-            let view_end = (view_pos + 260).min(source.len());
+            let view_end = (view_pos + 500).min(source.len());
             let view_section = &source[view_pos..view_end];
             assert!(
                 view_section.contains("self.filter_text = new_text.clone();"),
