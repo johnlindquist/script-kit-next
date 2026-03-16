@@ -135,60 +135,43 @@ impl ScriptListApp {
 
                 cx.spawn(async move |this, cx| {
                     let (confirm_tx, confirm_rx) = async_channel::bounded::<bool>(1);
-                    let open_result = cx.update(|cx| {
-                        let main_bounds =
-                            if let Some((x, y, w, h)) = platform::get_main_window_bounds() {
-                                gpui::Bounds {
-                                    origin: gpui::Point {
-                                        x: gpui::px(x as f32),
-                                        y: gpui::px(y as f32),
-                                    },
-                                    size: gpui::Size {
-                                        width: gpui::px(w as f32),
-                                        height: gpui::px(h as f32),
-                                    },
-                                }
-                            } else {
-                                gpui::Bounds {
-                                    origin: gpui::Point {
-                                        x: gpui::px(100.0),
-                                        y: gpui::px(100.0),
-                                    },
-                                    size: gpui::Size {
-                                        width: gpui::px(600.0),
-                                        height: gpui::px(400.0),
-                                    },
-                                }
-                            };
+                    let sender_ok = confirm_tx.clone();
+                    let sender_cancel = confirm_tx.clone();
 
-                        let sender = confirm_tx.clone();
-                        let on_choice: ConfirmCallback = std::sync::Arc::new(move |confirmed| {
-                            let _ = sender.try_send(confirmed);
+                    let window_handle = crate::get_main_window_handle();
+                    let open_result = if let Some(handle) = window_handle {
+                        cx.update_window(handle, |_, window, cx| {
+                            crate::confirm::open_parent_confirm_dialog(
+                                window,
+                                cx,
+                                crate::confirm::ParentConfirmOptions {
+                                    title: "Move to Trash".into(),
+                                    body: gpui::SharedString::from(message),
+                                    confirm_text: "Yes".into(),
+                                    cancel_text: "Cancel".into(),
+                                    ..Default::default()
+                                },
+                                move |_window, _cx| {
+                                    let _ = sender_ok.try_send(true);
+                                },
+                                move |_window, _cx| {
+                                    let _ = sender_cancel.try_send(false);
+                                },
+                            );
+                        })
+                    } else {
+                        Err(anyhow::anyhow!("Main window handle not available"))
+                    };
+
+                    if let Err(e) = open_result {
+                        let _ = this.update(cx, |this, cx| {
+                            logging::log(
+                                "ERROR",
+                                &format!("Failed to open confirmation dialog: {}", e),
+                            );
+                            this.show_error_toast("Failed to open confirmation dialog", cx);
                         });
-
-                        open_confirm_window(
-                            cx,
-                            main_bounds,
-                            None,
-                            message,
-                            Some("Yes".to_string()),
-                            Some("Cancel".to_string()),
-                            on_choice,
-                        )
-                    });
-
-                    match open_result {
-                        Ok(_) => {}
-                        Err(e) => {
-                            let _ = this.update(cx, |this, cx| {
-                                logging::log(
-                                    "ERROR",
-                                    &format!("Failed to open confirmation modal: {}", e),
-                                );
-                                this.show_error_toast("Failed to open confirmation dialog", cx);
-                            });
-                            return;
-                        }
+                        return;
                     }
 
                     let Ok(confirmed) = confirm_rx.recv().await else {

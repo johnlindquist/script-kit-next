@@ -35,14 +35,6 @@
                 {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            // FIRST: If confirm dialog is open, route all arrow keys to it
-                            if crate::confirm::is_confirm_window_open()
-                                && crate::confirm::dispatch_confirm_key(key, cx)
-                            {
-                                cx.stop_propagation();
-                                return;
-                            }
-
                             // Universal: Route arrow keys to actions dialog when popup is open
                             // This ensures ALL views (ChatPrompt, ArgPrompt, etc.) route
                             // arrows to the dialog, not just the few views with explicit cases below.
@@ -413,10 +405,7 @@
                                         *selected_index,
                                         &ordered,
                                     );
-                                    this.emoji_scroll_handle.scroll_to_item(
-                                        row,
-                                        gpui::ScrollStrategy::Nearest,
-                                    );
+                                    this.emoji_scroll_handle.scroll_to_item(row, ScrollStrategy::Nearest);
 
                                     this.input_mode = InputMode::Keyboard;
                                     this.hovered_index = None;

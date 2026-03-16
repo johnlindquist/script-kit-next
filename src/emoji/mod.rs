@@ -1226,9 +1226,7 @@ pub const GRID_TILE_SIZE: f32 = 36.0;
 /// Horizontal spacing between emoji tiles.
 pub const GRID_TILE_GAP: f32 = 4.0;
 
-/// Fixed height for every virtualized emoji picker row.
-/// Both category header rows and emoji cell rows must use this exact outer height
-/// so that `gpui::uniform_list` stays within its contract.
+/// Fixed height for every emoji picker row (headers and cell rows).
 pub const GRID_ROW_HEIGHT: f32 = 48.0;
 
 /// Build the filtered, category-ordered emoji list used by both the renderer

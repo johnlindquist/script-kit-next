@@ -282,25 +282,6 @@ mod tests {
         );
     }
 
-    /// Verify confirm key dispatch uses shared enter/escape alias helpers.
-    ///
-    /// This ensures `return` and `esc` aliases are routed consistently with
-    /// other keyboard paths.
-    #[test]
-    fn test_dispatch_confirm_key_uses_shared_alias_helpers() {
-        let content =
-            fs::read_to_string("src/confirm/window.rs").expect("Failed to read confirm/window.rs");
-
-        assert!(
-            content.contains("is_key_enter"),
-            "dispatch_confirm_key should use is_key_enter for enter/return parity"
-        );
-        assert!(
-            content.contains("is_key_escape"),
-            "dispatch_confirm_key should use is_key_escape for escape/esc parity"
-        );
-    }
-
     /// Verify main input focus closes actions popup through shared close path.
     ///
     /// This prevents focus overlay state from desynchronizing.

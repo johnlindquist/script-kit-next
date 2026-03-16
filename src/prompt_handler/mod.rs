@@ -39,14 +39,14 @@ fn escape_windows_cmd_open_target(value: &str) -> String {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PromptMessageRoute {
-    ConfirmWindow,
+    ConfirmDialog,
     UnhandledWarning,
     Other,
 }
 #[inline]
 fn classify_prompt_message_route(message: &PromptMessage) -> PromptMessageRoute {
     match message {
-        PromptMessage::ShowConfirm { .. } => PromptMessageRoute::ConfirmWindow,
+        PromptMessage::ShowConfirm { .. } => PromptMessageRoute::ConfirmDialog,
         PromptMessage::UnhandledMessage { .. } => PromptMessageRoute::UnhandledWarning,
         _ => PromptMessageRoute::Other,
     }
@@ -1772,99 +1772,88 @@ impl ScriptListApp {
                     "ShowConfirm prompt"
                 );
 
-                // Create callback to send response and close the confirm window
+                // Build response callback that sends submit message back to the script
                 let response_sender = self.response_sender.clone();
                 let prompt_id = id.clone();
-                let on_choice: ConfirmCallback = std::sync::Arc::new(move |confirmed: bool| {
-                    tracing::info!(
-                        category = "CONFIRM",
-                        prompt_id = %prompt_id,
-                        confirmed,
-                        "User choice received"
-                    );
-                    if let Some(ref sender) = response_sender {
-                        let value = if confirmed {
-                            Some("true".to_string())
-                        } else {
-                            Some("false".to_string())
-                        };
-                        let response = Message::Submit {
-                            id: prompt_id.clone(),
-                            value,
-                        };
-                        match sender.try_send(response) {
-                            Ok(()) => {
-                                tracing::info!(category = "CONFIRM", "Submit message sent");
-                            }
-                            Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                                tracing::warn!(
-                                    category = "WARN",
-                                    "Response channel full - confirm response dropped"
-                                );
-                            }
-                            Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                                tracing::info!(
-                                    category = "UI",
-                                    "Response channel disconnected - script exited"
-                                );
+                let send_response = {
+                    let response_sender = response_sender.clone();
+                    let prompt_id = prompt_id.clone();
+                    move |confirmed: bool| {
+                        tracing::info!(
+                            category = "CONFIRM",
+                            prompt_id = %prompt_id,
+                            confirmed,
+                            "User choice received"
+                        );
+                        if let Some(ref sender) = response_sender {
+                            let value = if confirmed {
+                                Some("true".to_string())
+                            } else {
+                                Some("false".to_string())
+                            };
+                            let response = Message::Submit {
+                                id: prompt_id.clone(),
+                                value,
+                            };
+                            match sender.try_send(response) {
+                                Ok(()) => {
+                                    tracing::info!(category = "CONFIRM", "Submit message sent");
+                                }
+                                Err(std::sync::mpsc::TrySendError::Full(_)) => {
+                                    tracing::warn!(
+                                        category = "WARN",
+                                        "Response channel full - confirm response dropped"
+                                    );
+                                }
+                                Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
+                                    tracing::info!(
+                                        category = "UI",
+                                        "Response channel disconnected - script exited"
+                                    );
+                                }
                             }
                         }
-                    }
-                });
-
-                // Get main window bounds from native API for positioning
-                let main_bounds = if let Some((x, y, w, h)) = platform::get_main_window_bounds() {
-                    gpui::Bounds {
-                        origin: gpui::Point {
-                            x: gpui::px(x as f32),
-                            y: gpui::px(y as f32),
-                        },
-                        size: gpui::Size {
-                            width: gpui::px(w as f32),
-                            height: gpui::px(h as f32),
-                        },
-                    }
-                } else {
-                    // Fallback to centered on primary display
-                    gpui::Bounds {
-                        origin: gpui::Point {
-                            x: gpui::px(200.0),
-                            y: gpui::px(200.0),
-                        },
-                        size: gpui::Size {
-                            width: gpui::px(750.0),
-                            height: gpui::px(500.0),
-                        },
                     }
                 };
-                let display_id: Option<gpui::DisplayId> = None; // Use primary display
 
-                // Clone callback for the close handler
-                let on_choice_for_close = on_choice.clone();
+                let send_confirm = send_response.clone();
+                let send_cancel = send_response;
 
-                // Open confirm window via spawn
+                // Open parent confirm dialog via spawn + main window handle
                 cx.spawn(async move |_this, cx| {
-                    cx.update(|cx| {
-                        match open_confirm_window(
+                    let Some(handle) = crate::get_main_window_handle() else {
+                        tracing::error!(
+                            category = "ERROR",
+                            "Main window handle not available for confirm dialog"
+                        );
+                        return;
+                    };
+                    let _ = cx.update_window(handle, |_, window, cx| {
+                        crate::confirm::open_parent_confirm_dialog(
+                            window,
                             cx,
-                            main_bounds,
-                            display_id,
-                            message,
-                            confirm_text,
-                            cancel_text,
-                            on_choice_for_close,
-                        ) {
-                            Ok((_handle, _dialog)) => {
-                                tracing::info!(category = "CONFIRM", "Confirm popup window opened");
-                            }
-                            Err(e) => {
-                                tracing::error!(
-                                    category = "ERROR",
-                                    error = %e,
-                                    "Failed to open confirm window"
-                                );
-                            }
-                        }
+                            crate::confirm::ParentConfirmOptions {
+                                title: "Confirm".into(),
+                                body: gpui::SharedString::from(message),
+                                confirm_text: confirm_text
+                                    .map(gpui::SharedString::from)
+                                    .unwrap_or("OK".into()),
+                                cancel_text: cancel_text
+                                    .map(gpui::SharedString::from)
+                                    .unwrap_or("Cancel".into()),
+                                ..Default::default()
+                            },
+                            move |_window, _cx| {
+                                send_confirm(true);
+                            },
+                            move |_window, _cx| {
+                                send_cancel(false);
+                            },
+                        );
+                        tracing::info!(
+                            category = "CONFIRM",
+                            "Confirm parent dialog opened"
+                        );
                     });
                 })
                 .detach();
@@ -2452,7 +2441,7 @@ mod prompt_handler_message_tests {
         };
         assert_eq!(
             classify_prompt_message_route(&message),
-            PromptMessageRoute::ConfirmWindow
+            PromptMessageRoute::ConfirmDialog
         );
     }
 

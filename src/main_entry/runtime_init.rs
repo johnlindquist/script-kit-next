@@ -24,9 +24,6 @@
         // Must be called before opening windows that use Root wrapper
         gpui_component::init(cx);
 
-        // Initialize confirm dialog key bindings (Escape, Enter, Space)
-        confirm::init_confirm_bindings(cx);
-
         // Initialize the theme cache FIRST (before any render calls)
         // This ensures get_cached_theme() returns correct data from first render
         theme::init_theme_cache();

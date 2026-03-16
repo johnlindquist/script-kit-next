@@ -391,7 +391,7 @@
                                             row_offset += 1 + cat_count.div_ceil(cols);
                                             flat_offset += cat_count;
                                         }
-                                        view.emoji_scroll_handle.scroll_to_item(row_offset, gpui::ScrollStrategy::Nearest);
+                                        view.emoji_scroll_handle.scroll_to_item(row_offset, ScrollStrategy::Nearest);
                                         view.input_mode = InputMode::Keyboard;
                                         view.hovered_index = None;
                                         ctx.notify();

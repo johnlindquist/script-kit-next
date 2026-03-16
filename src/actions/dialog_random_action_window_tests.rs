@@ -1449,17 +1449,8 @@ fn all_builder_actions_use_script_context_category() {
 // 28. Confirm dialog default button focus
 // =========================================================================
 
-#[test]
-fn confirm_dialog_default_focus_is_confirm_button() {
-    // The ConfirmDialog defaults focused_button=1 (confirm)
-    // This is important UX: confirm is focused by default so Enter confirms
-    // We verify this by checking the constant in the source
-    // (Can't construct ConfirmDialog without GPUI context, so we test the constant)
-    assert_eq!(
-        1_usize, 1,
-        "ConfirmDialog defaults to focused_button=1 (confirm)"
-    );
-}
+// confirm_dialog_default_focus_is_confirm_button removed:
+// ConfirmDialog replaced by gpui-component Dialog (parent dialog pattern).
 
 // =========================================================================
 // 29. Action with_all constructor fields
