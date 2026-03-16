@@ -208,10 +208,6 @@ impl ScriptListApp {
             }
             AppView::SettingsView { .. } => Some((ViewType::ScriptList, 0)),
             AppView::FavoritesBrowseView { .. } => Some((ViewType::ScriptList, 0)),
-            AppView::QuicklinksBrowseView { .. } => Some((ViewType::ScriptList, 0)),
-            AppView::QuicklinksEditView { .. } => {
-                Some((ViewType::ArgPromptNoChoices, 0))
-            }
         }
     }
 

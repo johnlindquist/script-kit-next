@@ -114,14 +114,6 @@ fn emoji_picker_label(emoji: &script_kit_gpui::emoji::Emoji) -> String {
     format!("{}  {}", emoji.emoji, emoji.name)
 }
 
-#[allow(dead_code)] // Used in tests
-fn quicklink_picker_label(quicklink: &script_kit_gpui::quicklinks::Quicklink) -> String {
-    format!(
-        "{}  {}",
-        crate::utils::escape_applescript_string(&quicklink.name),
-        crate::utils::escape_applescript_string(&quicklink.url_template)
-    )
-}
 
 impl ScriptListApp {
     fn spawn_send_screen_to_ai_after_hide(&mut self, cx: &mut Context<Self>) {
@@ -1027,25 +1019,6 @@ impl ScriptListApp {
                 );
 
                 Self::builtin_success(dctx, "open_emoji_picker")
-            }
-            builtins::BuiltInFeature::Quicklinks => {
-                tracing::info!(
-                    category = "BUILTIN",
-                    action = "show_quicklinks_browse",
-                    trace_id = %dctx.trace_id,
-                    "Opening quicklinks browse view"
-                );
-
-                self.open_builtin_filterable_view(
-                    AppView::QuicklinksBrowseView {
-                        filter: String::new(),
-                        selected_index: 0,
-                    },
-                    "Search quicklinks...",
-                    cx,
-                );
-
-                Self::builtin_success(dctx, "open_quicklinks")
             }
             builtins::BuiltInFeature::MenuBarAction(action) => {
                 tracing::info!(
@@ -2024,11 +1997,9 @@ mod builtin_execution_ai_feedback_tests {
         AI_CAPTURE_HIDE_SETTLE_MS, ai_capture_hide_settle_duration,
         ai_command_uses_hide_then_capture_flow, ai_open_failure_message,
         created_file_path_for_feedback, emoji_picker_label, favorites_loaded_message,
-        quicklink_picker_label,
     };
     use crate::builtins::AiCommandType;
     use script_kit_gpui::emoji::{Emoji, EmojiCategory};
-    use script_kit_gpui::quicklinks::Quicklink;
     use std::path::PathBuf;
 
     #[test]
@@ -2094,17 +2065,6 @@ mod builtin_execution_ai_feedback_tests {
         assert_eq!(emoji_picker_label(&emoji), "🚀  rocket");
     }
 
-    #[test]
-    fn test_quicklink_picker_label_includes_name_and_url_template() {
-        let quicklink = Quicklink {
-            id: "ql-1".to_string(),
-            name: "Docs".to_string(),
-            url_template: "https://docs.rs".to_string(),
-            icon: None,
-        };
-
-        assert_eq!(quicklink_picker_label(&quicklink), "Docs  https://docs.rs");
-    }
 
     #[test]
     fn test_created_file_path_for_feedback_returns_same_path_when_already_absolute() {

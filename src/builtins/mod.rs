@@ -232,8 +232,6 @@ pub enum BuiltInFeature {
     Notes,
     /// Emoji picker for selecting and copying emojis
     EmojiPicker,
-    /// Quick links manager and URL launcher
-    Quicklinks,
     /// Menu bar action from the frontmost application
     MenuBarAction(MenuBarActionInfo),
 
@@ -490,23 +488,6 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
         debug!("Added Emoji Picker built-in entry");
 
-        entries.push(BuiltInEntry::new_with_icon(
-            "builtin-quicklinks",
-            "Quicklinks",
-            "Manage quick links and open URLs with optional {query} expansion",
-            vec![
-                "quicklinks",
-                "quicklink",
-                "link",
-                "url",
-                "bookmark",
-                "open",
-                "search",
-            ],
-            BuiltInFeature::Quicklinks,
-            "🔗",
-        ));
-        debug!("Added Quicklinks built-in entry");
 
         // Design Gallery is only available in debug builds (developer tool)
         #[cfg(debug_assertions)]
@@ -1589,14 +1570,6 @@ mod tests {
         assert!(emoji_picker.keywords.contains(&"emoji".to_string()));
         assert!(emoji_picker.keywords.contains(&"picker".to_string()));
 
-        // Check Quicklinks entry
-        let quicklinks = entries.iter().find(|e| e.id == "builtin-quicklinks");
-        assert!(quicklinks.is_some());
-        let quicklinks = quicklinks.unwrap();
-        assert_eq!(quicklinks.name, "Quicklinks");
-        assert_eq!(quicklinks.feature, BuiltInFeature::Quicklinks);
-        assert!(quicklinks.keywords.contains(&"quicklinks".to_string()));
-        assert!(quicklinks.keywords.contains(&"url".to_string()));
 
         // Note: App Launcher built-in removed - apps now appear directly in main search
     }
@@ -1699,7 +1672,6 @@ mod tests {
         assert_eq!(BuiltInFeature::AiChat, BuiltInFeature::AiChat);
         assert_eq!(BuiltInFeature::Favorites, BuiltInFeature::Favorites);
         assert_eq!(BuiltInFeature::EmojiPicker, BuiltInFeature::EmojiPicker);
-        assert_eq!(BuiltInFeature::Quicklinks, BuiltInFeature::Quicklinks);
         assert_eq!(
             BuiltInFeature::PasteSequentially,
             BuiltInFeature::PasteSequentially
@@ -1728,8 +1700,6 @@ mod tests {
             BuiltInFeature::EmojiPicker,
             BuiltInFeature::ClipboardHistory
         );
-        assert_ne!(BuiltInFeature::Quicklinks, BuiltInFeature::ClipboardHistory);
-        assert_ne!(BuiltInFeature::EmojiPicker, BuiltInFeature::Quicklinks);
 
         // Test App variant
         assert_eq!(

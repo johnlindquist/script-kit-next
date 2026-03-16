@@ -26,7 +26,8 @@ impl ScriptListApp {
             });
 
         let config = prompts::NamingPromptConfig::new(target, target_directory, extension)
-            .placeholder(format!("My Cool {}", target.display_name()));
+            .placeholder(format!("My Cool {}", target.display_name()))
+            .design_variant(self.current_design);
 
         let theme = self.theme.clone();
         let entity = cx.new(|cx| {

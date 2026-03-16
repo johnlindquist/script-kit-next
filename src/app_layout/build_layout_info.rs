@@ -44,8 +44,6 @@ impl ScriptListApp {
             AppView::CreateAiPresetView { .. } => "createAiPreset",
             AppView::SettingsView { .. } => "settings",
             AppView::FavoritesBrowseView { .. } => "favoritesBrowse",
-            AppView::QuicklinksBrowseView { .. } => "quicklinksBrowse",
-            AppView::QuicklinksEditView { .. } => "quicklinksEdit",
         };
 
         let mut components = Vec::new();

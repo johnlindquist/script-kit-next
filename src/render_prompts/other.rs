@@ -267,6 +267,7 @@ impl ScriptListApp {
         let entity_dismiss = entity.clone();
 
         let panel = prompts::CreationFeedbackPanel::new(path, theme)
+            .design_variant(self.current_design)
             .on_reveal_in_finder(Box::new(move |p, _window, _cx| {
                 if let Err(e) = crate::platform::reveal_in_finder(p) {
                     tracing::warn!(error = %e, "reveal_in_finder failed");
@@ -306,18 +307,25 @@ impl ScriptListApp {
             }
         });
 
-        gpui::div()
+        let shell_radius = self.other_prompt_shell_radius_lg();
+        let vibrancy_bg = get_vibrancy_background(&self.theme);
+
+        crate::components::prompt_shell_container(shell_radius, vibrancy_bg)
             .id("creation-feedback-shell")
             .key_context("CreationFeedback")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
-            .w_full()
-            .h_full()
-            .flex()
-            .flex_col()
-            .items_center()
-            .justify_center()
-            .child(panel)
+            .child(crate::components::prompt_shell_content(
+                gpui::div()
+                    .w_full()
+                    .h_full()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .justify_center()
+                    .p(px(24.))
+                    .child(panel),
+            ))
             .into_any_element()
     }
 }
