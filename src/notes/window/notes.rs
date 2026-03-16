@@ -317,9 +317,11 @@ impl NotesApp {
                         "notes_delete_confirmed"
                     );
 
-                    let _ = weak_notes.update_in(cx, |this, window, cx| {
-                        this.delete_note_by_id(confirm_note_id, window, cx);
-                    });
+                    if let Some(entity) = weak_notes.upgrade() {
+                        entity.update(cx, |this, cx| {
+                            this.delete_note_by_id(confirm_note_id, window, cx);
+                        });
+                    }
 
                     true
                 })
@@ -570,7 +572,7 @@ mod notes_search_and_delete_regression_tests {
         );
         assert!(
             normalized.contains("let weak_notes = cx.entity().downgrade();")
-                && normalized.contains("let _ = weak_notes.update_in(cx, |this, window, cx|")
+                && normalized.contains("entity.update(cx, |this, cx|")
                 && normalized.contains("this.delete_note_by_id(confirm_note_id, window, cx);"),
             "confirmed deletes should still route through delete_note_by_id via WeakEntity"
         );
