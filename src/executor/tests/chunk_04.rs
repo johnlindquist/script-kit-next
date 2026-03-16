@@ -251,6 +251,47 @@ fn test_auto_submit_config_get_select_value() {
     );
 }
 
+/// Test get_select_value() properly escapes special characters in JSON.
+#[test]
+fn test_auto_submit_config_get_select_value_escapes_quotes() {
+    let choices = vec![Choice {
+        name: "Quoted".to_string(),
+        value: "say \"hi\"".to_string(),
+        description: None,
+        key: None,
+        semantic_id: None,
+    }];
+
+    let config = AutoSubmitConfig::default();
+    let json = config
+        .get_select_value(&choices)
+        .expect("select auto-submit value");
+
+    let parsed: Vec<String> =
+        serde_json::from_str(&json).expect("auto-submit select payload should be valid json");
+    assert_eq!(parsed, vec!["say \"hi\"".to_string()]);
+}
+
+#[test]
+fn test_auto_submit_config_get_select_value_escapes_backslashes_and_newlines() {
+    let choices = vec![Choice {
+        name: "Escaped".to_string(),
+        value: "one\\two\nthree".to_string(),
+        description: None,
+        key: None,
+        semantic_id: None,
+    }];
+
+    let config = AutoSubmitConfig::default();
+    let json = config
+        .get_select_value(&choices)
+        .expect("select auto-submit value");
+
+    let parsed: Vec<String> =
+        serde_json::from_str(&json).expect("auto-submit select payload should be valid json");
+    assert_eq!(parsed, vec!["one\\two\nthree".to_string()]);
+}
+
 /// Test get_fields_value() returns JSON array of empty strings.
 #[test]
 fn test_auto_submit_config_get_fields_value() {
