@@ -172,6 +172,7 @@ impl NotesApp {
             show_shortcuts_help: false,
             last_save_confirmed: None,
             action_feedback: None,
+            pending_focus_surface: None,
         }
     }
 

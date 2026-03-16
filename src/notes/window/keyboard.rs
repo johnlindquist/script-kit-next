@@ -69,15 +69,29 @@ impl NotesApp {
         let modifiers = &event.keystroke.modifiers;
 
         if window.has_active_dialog(cx) {
-            tracing::debug!(
-                event = "notes_key_deferred_to_active_dialog",
-                key = %key,
-                platform = modifiers.platform,
-                shift = modifiers.shift,
-                control = modifiers.control,
-                alt = modifiers.alt,
-                "notes_key_deferred_to_active_dialog"
-            );
+            // The dialog component registers Enter→Confirm and Escape→Cancel
+            // keybindings in the "Dialog" key context.  However, the Notes
+            // window uses `capture_key_down` which runs *after* GPUI action
+            // dispatch.  If the dialog's focus handle is not yet in the
+            // rendered dispatch tree (e.g. first frame after opening) or if
+            // macOS routes the key through the text input system before GPUI
+            // sees it, the built-in keybinding never fires.
+            //
+            // Dispatching the actions explicitly here ensures Enter/Escape
+            // always work while a dialog is open, regardless of focus state.
+            if is_key_enter(key) && !modifiers.platform && !modifiers.control {
+                window.dispatch_action(
+                    Box::new(gpui_component::actions::Confirm { secondary: false }),
+                    cx,
+                );
+                cx.stop_propagation();
+                return;
+            }
+            if is_key_escape(key) {
+                window.dispatch_action(Box::new(gpui_component::actions::Cancel), cx);
+                cx.stop_propagation();
+                return;
+            }
             cx.propagate();
             return;
         }
