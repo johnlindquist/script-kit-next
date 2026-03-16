@@ -1534,12 +1534,9 @@ impl ScriptListApp {
                                                     error = %e,
                                                     "Screenshot capture failed"
                                                 );
-                                                // Send empty result on error
-                                                Message::screenshot_result(
+                                                Message::screenshot_error(
                                                     request_id.clone(),
-                                                    String::new(),
-                                                    0,
-                                                    0,
+                                                    e.to_string(),
                                                 )
                                             }
                                         };

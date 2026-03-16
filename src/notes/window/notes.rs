@@ -620,15 +620,11 @@ mod notes_search_and_delete_regression_tests {
         let normalized = normalize_ws(&source);
 
         assert!(
-            normalized.contains(
-                "fn notes_delete_dialog_width(window: &Window) -> gpui::Pixels"
-            ),
+            normalized.contains("fn notes_delete_dialog_width(window: &Window) -> gpui::Pixels"),
             "Notes delete should define a Notes-specific dialog width helper"
         );
         assert!(
-            normalized.contains(
-                "gpui::px((window_width - 24.0).clamp(280.0, 448.0))"
-            ),
+            normalized.contains("gpui::px((window_width - 24.0).clamp(280.0, 448.0))"),
             "Notes delete dialog width should clamp to the Notes window size"
         );
 

@@ -45,6 +45,8 @@ macro_rules! protocol_message_variants_query_ops {
         data: String,
         width: u32,
         height: u32,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
     },
 
     // ============================================================
