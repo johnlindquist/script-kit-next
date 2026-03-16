@@ -1581,11 +1581,12 @@ impl ScriptListApp {
                 id,
                 key,
                 prompt,
+                title,
                 secret,
             } => {
                 self.prepare_window_for_prompt("UI", "env", "");
 
-                tracing::info!(id, key, ?prompt, secret, "ShowEnv received");
+                tracing::info!(id, key, ?prompt, ?title, secret, "ShowEnv received");
                 tracing::info!(
                     category = "UI",
                     id = %id,
@@ -1612,7 +1613,7 @@ impl ScriptListApp {
                     id.clone(),
                     key,
                     prompt,
-                    None, // title - SDK scripts don't provide one yet
+                    title,
                     secret,
                     focus_handle,
                     submit_callback,
@@ -1621,8 +1622,11 @@ impl ScriptListApp {
                     modified_at,
                 );
 
-                // Check keyring first - if value exists, auto-submit without showing UI
-                if env_prompt.check_keyring_and_auto_submit() {
+                // Check keyring first - if value exists and no contextual prompt/title
+                // was provided, auto-submit without showing UI. When prompt or title
+                // are set, the script wants the user to see the setup context.
+                let has_contextual_text = env_prompt.has_prompt_or_title();
+                if !has_contextual_text && env_prompt.check_keyring_and_auto_submit() {
                     tracing::info!(
                         category = "UI",
                         "EnvPrompt value found in keyring, auto-submitted"
