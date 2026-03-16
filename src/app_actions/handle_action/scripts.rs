@@ -168,10 +168,12 @@ impl ScriptListApp {
                 let trace_id = trace_id.to_string();
                 let start = std::time::Instant::now();
                 let weak_entity = cx.entity().downgrade();
+                let owner = weak_entity.clone();
 
-                crate::confirm::open_parent_confirm_dialog(
+                crate::confirm::open_parent_confirm_dialog_for_entity(
                     window,
                     cx,
+                    owner,
                     crate::confirm::ParentConfirmOptions {
                         title: "Move to Trash".into(),
                         body,
@@ -339,9 +341,12 @@ impl ScriptListApp {
             "quit" => {
                 tracing::info!(category = "UI", "quit action");
 
-                crate::confirm::open_parent_confirm_dialog(
+                let owner = cx.entity().downgrade();
+
+                crate::confirm::open_parent_confirm_dialog_for_entity(
                     window,
                     cx,
+                    owner,
                     Self::quit_script_kit_confirm_options(),
                     move |_window, cx| {
                         tracing::info!(

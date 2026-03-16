@@ -291,6 +291,51 @@ mod tests {
         );
     }
 
+    fn extract_section<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
+        source
+            .split(start)
+            .nth(1)
+            .and_then(|section| section.split(end).next())
+            .expect("expected section to exist")
+    }
+
+    #[test]
+    fn script_list_confirm_actions_bind_dialog_lifecycle_to_script_list_entity() {
+        let source = fs::read_to_string("src/app_actions/handle_action/scripts.rs")
+            .expect("Failed to read scripts.rs");
+
+        let remove_branch = normalize_ws(extract_section(
+            &source,
+            "\"remove_script\" | \"delete_script\" => {",
+            "\"reload_scripts\" => {",
+        ));
+        assert!(
+            remove_branch.contains("let weak_entity = cx.entity().downgrade();")
+                && remove_branch.contains(
+                    "crate::confirm::open_parent_confirm_dialog_for_entity("
+                )
+                && remove_branch.contains("this.refresh_scripts(cx);")
+                && !remove_branch.contains("crate::confirm::open_parent_confirm_dialog("),
+            "script removal should use the entity-owned parent confirm helper and keep refreshing the list after confirmation"
+        );
+
+        let quit_branch = normalize_ws(extract_section(
+            &source,
+            "\"quit\" => {",
+            "\"copy_content\" => {",
+        ));
+        assert!(
+            quit_branch.contains("let owner = cx.entity().downgrade();")
+                && quit_branch.contains(
+                    "crate::confirm::open_parent_confirm_dialog_for_entity("
+                )
+                && quit_branch.contains("Self::quit_script_kit_confirm_options()")
+                && quit_branch.contains("Self::prepare_script_kit_shutdown();")
+                && !quit_branch.contains("crate::confirm::open_parent_confirm_dialog("),
+            "quit should use the entity-owned parent confirm helper while preserving the shared copy and shutdown cleanup"
+        );
+    }
+
     #[test]
     fn quit_action_and_builtin_quit_share_shutdown_cleanup() {
         let scripts_source = fs::read_to_string("src/app_actions/handle_action/scripts.rs")
