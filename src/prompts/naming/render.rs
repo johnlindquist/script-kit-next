@@ -14,10 +14,7 @@ impl Render for NamingPrompt {
         let text_primary = rgb(self.theme.colors.text.primary);
         let text_secondary = rgb(self.theme.colors.text.secondary);
         let text_muted = rgb(self.theme.colors.text.muted);
-        let border_color = rgb(self.theme.colors.ui.border);
         let error_color = rgb(self.theme.colors.ui.error);
-        let input_bg = rgb(self.theme.colors.background.search_box);
-        let preview_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x20);
 
         let (title, preview_label, preview_kind) = match self.target {
             NamingTarget::Script => (
@@ -47,16 +44,23 @@ impl Render for NamingPrompt {
         } else {
             SharedString::from(self.friendly_name.clone())
         };
-        let input_text_color = if self.friendly_name.is_empty() {
-            text_muted
+
+        let input_state = if self.validation_error.is_some() {
+            crate::components::PromptFieldState::Error
         } else {
-            text_primary
+            crate::components::PromptFieldState::Active
         };
-        let input_border_color = if self.validation_error.is_some() {
-            error_color
-        } else {
-            border_color
-        };
+        let input_style = crate::components::prompt_field_style(
+            &self.theme,
+            input_state,
+            self.friendly_name.is_empty(),
+        );
+        let preview_style = crate::components::prompt_field_style(
+            &self.theme,
+            crate::components::PromptFieldState::ReadOnly,
+            false,
+        );
+
         let preview_filename = self.filename_preview();
         let preview_path = self.target_directory.join(&preview_filename);
 
@@ -89,10 +93,11 @@ impl Render for NamingPrompt {
                             "Friendly Name",
                             text_secondary,
                             spacing.gap_sm,
-                            crate::components::prompt_surface(input_bg, input_border_color)
-                                .min_h(px(PROMPT_INPUT_FIELD_HEIGHT))
-                                .text_color(input_text_color)
-                                .child(input_value),
+                            crate::components::prompt_text_field(
+                                input_value,
+                                input_style,
+                                PROMPT_INPUT_FIELD_HEIGHT,
+                            ),
                         )
                         .when_some(validation_message, |d, message| {
                             d.child(crate::components::prompt_form_help(message, error_color))
@@ -102,29 +107,18 @@ impl Render for NamingPrompt {
                         preview_label,
                         text_secondary,
                         spacing.gap_sm,
-                        crate::components::prompt_surface(preview_bg, border_color).child(
-                            div()
-                                .w_full()
-                                .flex()
-                                .flex_col()
-                                .gap(px(spacing.gap_sm))
-                                .child(
-                                    div()
-                                        .text_base()
-                                        .text_color(text_primary)
-                                        .child(preview_filename.clone()),
-                                )
-                                .child(crate::components::prompt_form_help(
-                                    preview_path.display().to_string(),
-                                    text_muted,
-                                ))
-                                .child(crate::components::prompt_form_help(
-                                    format!(
-                                        "{preview_kind} ({}). Press Enter to create.",
-                                        self.extension_label()
-                                    ),
-                                    text_secondary,
-                                )),
+                        crate::components::prompt_detail_card(
+                            preview_filename.clone(),
+                            preview_path.display().to_string(),
+                            format!(
+                                "{preview_kind} ({}). Press Enter to create.",
+                                self.extension_label()
+                            ),
+                            text_primary,
+                            text_muted,
+                            text_secondary,
+                            preview_style,
+                            spacing.gap_sm,
                         ),
                     )),
             );

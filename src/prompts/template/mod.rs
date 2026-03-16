@@ -7,7 +7,7 @@
 //! - Submit returns the filled template string
 
 use gpui::{
-    div, prelude::*, px, rgb, rgba, Context, FocusHandle, Focusable, Render, SharedString, Window,
+    div, prelude::*, px, rgb, Context, FocusHandle, Focusable, Render, SharedString, Window,
 };
 use regex::Regex;
 use std::collections::HashMap;

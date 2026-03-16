@@ -17,11 +17,7 @@ impl Render for TemplatePrompt {
         let text_primary = rgb(self.theme.colors.text.primary);
         let text_secondary = rgb(self.theme.colors.text.secondary);
         let text_muted = rgb(self.theme.colors.text.muted);
-        let border_color = rgb(self.theme.colors.ui.border);
         let error_color = rgb(self.theme.colors.ui.error);
-        let input_bg = rgb(self.theme.colors.background.search_box);
-        let current_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x20);
-        let current_border = rgb(self.theme.colors.accent.selected);
 
         let description = if self.inputs.is_empty() {
             "This template has no editable placeholders. Review the preview and press Enter to submit."
@@ -34,6 +30,11 @@ impl Render for TemplatePrompt {
         };
 
         let preview = self.preview_template();
+        let preview_style = crate::components::prompt_field_style(
+            &self.theme,
+            crate::components::PromptFieldState::ReadOnly,
+            false,
+        );
 
         let mut content = div()
             .id(gpui::ElementId::Name("window:template".into()))
@@ -54,12 +55,10 @@ impl Render for TemplatePrompt {
                 "Preview",
                 text_secondary,
                 spacing.gap_sm,
-                crate::components::prompt_surface(current_bg, border_color).child(
-                    div()
-                        .w_full()
-                        .text_sm()
-                        .text_color(text_primary)
-                        .child(preview),
+                crate::components::prompt_text_field(
+                    preview,
+                    preview_style,
+                    PROMPT_INPUT_FIELD_HEIGHT,
                 ),
             ));
 
@@ -99,28 +98,31 @@ impl Render for TemplatePrompt {
                 } else {
                     SharedString::from(value.clone())
                 };
-                let display_color = if value.is_empty() {
-                    text_muted
-                } else {
-                    text_primary
-                };
-                let field_bg = if is_current { current_bg } else { input_bg };
-                let field_border = if is_current {
-                    current_border
-                } else {
-                    border_color
-                };
                 let validation_message =
                     self.validation_errors.get(idx).and_then(|m| m.as_ref());
+
+                let field_state = if validation_message.is_some() {
+                    crate::components::PromptFieldState::Error
+                } else if is_current {
+                    crate::components::PromptFieldState::Active
+                } else {
+                    crate::components::PromptFieldState::Default
+                };
+                let field_style = crate::components::prompt_field_style(
+                    &self.theme,
+                    field_state,
+                    value.is_empty(),
+                );
 
                 let field_section = crate::components::prompt_form_section(
                     label,
                     text_secondary,
                     spacing.gap_sm,
-                    crate::components::prompt_surface(field_bg, field_border)
-                        .min_h(px(PROMPT_INPUT_FIELD_HEIGHT))
-                        .text_color(display_color)
-                        .child(display),
+                    crate::components::prompt_text_field(
+                        display,
+                        field_style,
+                        PROMPT_INPUT_FIELD_HEIGHT,
+                    ),
                 )
                 .when_some(validation_message, |d, message| {
                     d.child(crate::components::prompt_form_help(
@@ -195,8 +197,12 @@ mod tests {
             "render.rs should use prompt_form_help"
         );
         assert!(
-            SOURCE.contains("prompt_surface("),
-            "render.rs should use prompt_surface"
+            SOURCE.contains("prompt_text_field("),
+            "render.rs should use prompt_text_field"
+        );
+        assert!(
+            SOURCE.contains("prompt_field_style("),
+            "render.rs should use prompt_field_style"
         );
     }
 

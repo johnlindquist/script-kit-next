@@ -16,9 +16,6 @@ use crate::ui_foundation::hex_to_rgba_with_opacity;
 /// Callback for path-based quick actions from the creation feedback panel.
 pub type CreationFeedbackPathAction = Box<dyn Fn(&PathBuf, &mut Window, &mut App) + 'static>;
 
-/// Callback for dismissing the creation feedback panel.
-pub type CreationFeedbackDismissAction = Box<dyn Fn(&mut Window, &mut App) + 'static>;
-
 /// Inline panel that renders post-creation feedback and quick path actions.
 #[derive(IntoElement)]
 pub struct CreationFeedbackPanel {
@@ -28,7 +25,6 @@ pub struct CreationFeedbackPanel {
     on_reveal_in_finder: Option<CreationFeedbackPathAction>,
     on_copy_path: Option<CreationFeedbackPathAction>,
     on_open: Option<CreationFeedbackPathAction>,
-    on_dismiss: Option<CreationFeedbackDismissAction>,
 }
 
 impl CreationFeedbackPanel {
@@ -44,7 +40,6 @@ impl CreationFeedbackPanel {
             on_reveal_in_finder: None,
             on_copy_path: None,
             on_open: None,
-            on_dismiss: None,
         }
     }
 
@@ -68,11 +63,6 @@ impl CreationFeedbackPanel {
         self
     }
 
-    pub fn on_dismiss(mut self, callback: CreationFeedbackDismissAction) -> Self {
-        self.on_dismiss = Some(callback);
-        self
-    }
-
     fn path_text(&self) -> SharedString {
         self.path.to_string_lossy().to_string().into()
     }
@@ -88,7 +78,6 @@ impl RenderOnce for CreationFeedbackPanel {
             on_reveal_in_finder,
             on_copy_path,
             on_open,
-            on_dismiss,
         } = self;
 
         let text_primary = rgb(theme.colors.text.primary);
@@ -160,18 +149,6 @@ impl RenderOnce for CreationFeedbackPanel {
                 .disabled(true),
         };
 
-        let dismiss_button = match on_dismiss {
-            Some(callback) => Button::new("Dismiss", button_colors)
-                .variant(ButtonVariant::Primary)
-                .on_click(Box::new(move |_event, window, cx| {
-                    tracing::debug!("creation_feedback_panel_action_dismiss");
-                    callback(window, cx);
-                })),
-            None => Button::new("Dismiss", button_colors)
-                .variant(ButtonVariant::Primary)
-                .disabled(true),
-        };
-
         let tokens = crate::designs::get_tokens(design_variant);
         let spacing = tokens.spacing();
 
@@ -214,8 +191,7 @@ impl RenderOnce for CreationFeedbackPanel {
                     .gap(px(spacing.gap_md))
                     .child(reveal_button)
                     .child(copy_path_button)
-                    .child(open_button)
-                    .child(dismiss_button),
+                    .child(open_button),
             )
     }
 }
@@ -251,7 +227,6 @@ mod tests {
         assert!(panel.on_reveal_in_finder.is_none());
         assert!(panel.on_copy_path.is_none());
         assert!(panel.on_open.is_none());
-        assert!(panel.on_dismiss.is_none());
     }
 
     #[test]
@@ -262,13 +237,11 @@ mod tests {
         )
         .on_reveal_in_finder(Box::new(|_, _, _| {}))
         .on_copy_path(Box::new(|_, _, _| {}))
-        .on_open(Box::new(|_, _, _| {}))
-        .on_dismiss(Box::new(|_, _| {}));
+        .on_open(Box::new(|_, _, _| {}));
 
         assert!(panel.on_reveal_in_finder.is_some());
         assert!(panel.on_copy_path.is_some());
         assert!(panel.on_open.is_some());
-        assert!(panel.on_dismiss.is_some());
     }
 
     #[test]

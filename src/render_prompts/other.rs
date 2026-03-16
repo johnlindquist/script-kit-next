@@ -318,12 +318,20 @@ impl ScriptListApp {
     ) -> AnyElement {
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = self.theme.clone();
+        let design_colors = render_context.design_colors;
         let design_spacing = render_context.design_spacing;
         let shell_radius = render_context.design_visual.radius_lg;
         let vibrancy_bg = get_vibrancy_background(render_context.theme);
+        let footer_colors = prompt_footer_colors_for_prompt(&design_colors, !render_context.theme.is_dark_mode());
+        let footer_config = prompt_footer_config_with_status(
+            "Done",
+            false,
+            Some("Enter or Esc to return".to_string()),
+            None,
+        );
 
         let entity = cx.entity().downgrade();
-        let entity_dismiss = entity.clone();
+        let footer_entity = cx.entity().downgrade();
 
         let panel = prompts::CreationFeedbackPanel::new(path, theme)
             .design_variant(self.current_design)
@@ -344,15 +352,6 @@ impl ScriptListApp {
             .on_open(Box::new(move |p, _window, _cx| {
                 if let Err(e) = crate::platform::open_in_default_app(p) {
                     tracing::warn!(error = %e, "open_in_default_app failed");
-                }
-            }))
-            .on_dismiss(Box::new(move |_window, cx| {
-                if let Some(app) = entity_dismiss.upgrade() {
-                    app.update(cx, |this, cx| {
-                        this.current_view = AppView::ScriptList;
-                        this.request_script_list_main_filter_focus(cx);
-                        cx.notify();
-                    });
                 }
             }));
 
@@ -380,6 +379,18 @@ impl ScriptListApp {
                     .overflow_y_scrollbar()
                     .p(px(design_spacing.padding_xl))
                     .child(panel),
+            )
+            .child(
+                PromptFooter::new(footer_config, footer_colors)
+                    .on_primary_click(Box::new(move |_, _window, cx| {
+                        if let Some(app) = footer_entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.current_view = AppView::ScriptList;
+                                this.request_script_list_main_filter_focus(cx);
+                                cx.notify();
+                            });
+                        }
+                    })),
             )
             .into_any_element()
     }
@@ -467,6 +478,14 @@ mod other_prompt_render_wrapper_tests {
         assert!(
             body.contains("prompt_shell_container("),
             "render_creation_feedback should use prompt_shell_container"
+        );
+        assert!(
+            body.contains("PromptFooter::new("),
+            "render_creation_feedback should include a PromptFooter"
+        );
+        assert!(
+            !body.contains("on_dismiss"),
+            "render_creation_feedback should not use on_dismiss (footer handles dismissal)"
         );
     }
 
