@@ -159,7 +159,34 @@ impl ScriptListApp {
         entity: Entity<TemplatePrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        self.render_simple_prompt_shell(entity, Self::other_prompt_shell_handle_key_default, cx)
+        let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
+        let theme = render_context.theme;
+        let design_colors = render_context.design_colors;
+        let design_spacing = render_context.design_spacing;
+        let shell_radius = render_context.design_visual.radius_lg;
+        let vibrancy_bg = get_vibrancy_background(theme);
+        let footer_colors = prompt_footer_colors_for_prompt(&design_colors, !theme.is_dark_mode());
+        let footer_config = prompt_footer_config_with_status(
+            "Submit",
+            false,
+            Some("Tab to move \u{2022} Enter to submit \u{2022} Esc to cancel".to_string()),
+            None,
+        );
+
+        crate::components::prompt_shell_container(shell_radius, vibrancy_bg)
+            .h(window_resize::layout::STANDARD_HEIGHT)
+            .on_key_down(cx.listener(Self::other_prompt_shell_handle_key_default))
+            .child(
+                div()
+                    .flex_1()
+                    .w_full()
+                    .min_h(px(0.))
+                    .overflow_y_scrollbar()
+                    .p(px(design_spacing.padding_xl))
+                    .child(entity),
+            )
+            .child(PromptFooter::new(footer_config, footer_colors))
+            .into_any_element()
     }
 
     fn render_chat_prompt(
@@ -378,7 +405,6 @@ mod other_prompt_render_wrapper_tests {
             "render_select_prompt",
             "render_env_prompt",
             "render_drop_prompt",
-            "render_template_prompt",
             "render_chat_prompt",
         ] {
             let body = fn_source(fn_name);
@@ -395,6 +421,23 @@ mod other_prompt_render_wrapper_tests {
                 "{fn_name} should not allocate unused box shadows in the shell wrapper"
             );
         }
+    }
+
+    #[test]
+    fn render_template_prompt_uses_form_style_shell() {
+        let body = fn_source("render_template_prompt");
+        assert!(
+            body.contains("PromptFooter::new("),
+            "render_template_prompt should include a PromptFooter"
+        );
+        assert!(
+            body.contains("window_resize::layout::STANDARD_HEIGHT"),
+            "render_template_prompt should use STANDARD_HEIGHT"
+        );
+        assert!(
+            !body.contains("render_simple_prompt_shell("),
+            "render_template_prompt should not delegate to render_simple_prompt_shell"
+        );
     }
 
     #[test]

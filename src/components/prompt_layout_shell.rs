@@ -214,7 +214,6 @@ mod prompt_layout_shell_tests {
             "render_select_prompt",
             "render_env_prompt",
             "render_drop_prompt",
-            "render_template_prompt",
             "render_chat_prompt",
         ] {
             let body = fn_source(fn_name);
@@ -223,6 +222,19 @@ mod prompt_layout_shell_tests {
                 "{fn_name} should delegate to render_simple_prompt_shell"
             );
         }
+    }
+
+    #[test]
+    fn template_prompt_uses_form_style_shell_in_other_rs() {
+        let body = fn_source("render_template_prompt");
+        assert!(
+            body.contains("PromptFooter::new("),
+            "render_template_prompt should use PromptFooter"
+        );
+        assert!(
+            body.contains("STANDARD_HEIGHT"),
+            "render_template_prompt should use STANDARD_HEIGHT"
+        );
     }
 
     #[test]
