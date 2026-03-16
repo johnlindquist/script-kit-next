@@ -247,6 +247,13 @@ impl NotesApp {
         cx.notify();
     }
 
+    /// Compute dialog width clamped to the Notes window so the dialog
+    /// never overflows a narrow popup window.
+    fn notes_delete_dialog_width(window: &Window) -> gpui::Pixels {
+        let window_width: f32 = window.bounds().size.width.into();
+        gpui::px((window_width - 24.0).clamp(280.0, 448.0))
+    }
+
     /// Request deletion of the currently selected note with a confirmation dialog.
     ///
     /// Opens an in-window gpui-component `Dialog::confirm()` modal; the actual
@@ -277,11 +284,15 @@ impl NotesApp {
             .map(|n| n.title.clone())
             .unwrap_or_default();
 
+        let dialog_width = Self::notes_delete_dialog_width(window);
+        let window_width: f32 = window.bounds().size.width.into();
+
         tracing::info!(
             event = "notes_delete_confirmation_requested",
             note_id = %note_id.as_str(),
             note_title = %note_title,
             is_trash_view = (self.view_mode == NotesViewMode::Trash),
+            window_width,
             "notes_delete_confirmation_requested"
         );
 
@@ -309,7 +320,7 @@ impl NotesApp {
                 confirm_text: "Delete".into(),
                 cancel_text: "Cancel".into(),
                 confirm_variant: gpui_component::button::ButtonVariant::Danger,
-                width: gpui::px(448.),
+                width: dialog_width,
             },
             {
                 let weak_notes = weak_notes.clone();
@@ -335,6 +346,8 @@ impl NotesApp {
                 );
             },
         );
+
+        cx.notify();
 
         tracing::info!(
             event = "notes_delete_confirmation_opened",
@@ -597,6 +610,42 @@ mod notes_search_and_delete_regression_tests {
             !normalized.contains("crate::confirm::open_confirm_window")
                 && !normalized.contains("async_channel::bounded::<bool>(1)"),
             "notes delete confirmation should not use the separate confirm popup window"
+        );
+    }
+
+    #[test]
+    fn test_request_delete_selected_note_clamps_width_and_notifies() {
+        let source = fs::read_to_string("src/notes/window/notes.rs")
+            .expect("Failed to read src/notes/window/notes.rs");
+        let normalized = normalize_ws(&source);
+
+        assert!(
+            normalized.contains(
+                "fn notes_delete_dialog_width(window: &Window) -> gpui::Pixels"
+            ),
+            "Notes delete should define a Notes-specific dialog width helper"
+        );
+        assert!(
+            normalized.contains(
+                "gpui::px((window_width - 24.0).clamp(280.0, 448.0))"
+            ),
+            "Notes delete dialog width should clamp to the Notes window size"
+        );
+
+        let delete_request = extract_section(
+            &source,
+            "pub(super) fn request_delete_selected_note",
+            "/// Delete a specific note by ID (soft delete).",
+        );
+        let delete_request = normalize_ws(delete_request);
+
+        assert!(
+            delete_request.contains("width: dialog_width,"),
+            "Notes delete should use the computed Notes dialog width"
+        );
+        assert!(
+            delete_request.contains("cx.notify();"),
+            "Notes delete should request a repaint after opening the dialog"
         );
     }
 

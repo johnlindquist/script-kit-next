@@ -80,6 +80,8 @@ pub(crate) fn open_parent_confirm_dialog_with_lifecycle(
         "parent_confirm_dialog_opened"
     );
 
+    window.activate_window();
+
     let keep_open_while: Rc<dyn Fn() -> bool> = Rc::new(keep_open_while);
     let on_confirm: ConfirmCallback = Rc::new(on_confirm);
     let on_cancel: ConfirmCallback = Rc::new(on_cancel);
@@ -126,4 +128,32 @@ pub(crate) fn open_parent_confirm_dialog_with_lifecycle(
                 true
             })
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    fn normalize_ws(source: &str) -> String {
+        source.split_whitespace().collect::<Vec<_>>().join(" ")
+    }
+
+    #[test]
+    fn parent_confirm_dialog_activates_window_before_opening() {
+        let source = fs::read_to_string("src/confirm/parent_dialog.rs")
+            .expect("Failed to read src/confirm/parent_dialog.rs");
+        let normalized = normalize_ws(&source);
+
+        let activate_idx = normalized
+            .find("window.activate_window();")
+            .expect("parent confirm dialog should activate the parent window");
+        let open_idx = normalized
+            .find("window.open_dialog(cx, move |dialog, _window, cx|")
+            .expect("parent confirm dialog should still open an in-window dialog");
+
+        assert!(
+            activate_idx < open_idx,
+            "parent confirm dialog should activate the window before opening the dialog"
+        );
+    }
 }
