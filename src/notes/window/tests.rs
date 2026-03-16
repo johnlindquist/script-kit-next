@@ -262,20 +262,20 @@ fn test_notes_keyboard_delete_shortcut_works_in_trash_view() {
 }
 
 #[test]
-fn test_delete_dialog_cancel_restores_editor_focus() {
+fn test_delete_dialog_cancel_restores_primary_focus_after_dialog() {
     const NOTES_SOURCE: &str = include_str!("notes.rs");
     assert!(
-        NOTES_SOURCE.contains("this.focus_editor(window, cx);"),
-        "Cancelling the delete dialog should restore editor focus"
+        NOTES_SOURCE.contains("this.restore_primary_focus_after_dialog(cx);"),
+        "Cancel should restore focus after the dialog lifecycle completes"
     );
 }
 
 #[test]
-fn test_delete_note_by_id_restores_editor_focus_when_no_notes_remain() {
+fn test_delete_note_by_id_restores_editor_focus_via_focus_surface() {
     const NOTES_SOURCE: &str = include_str!("notes.rs");
     assert!(
-        NOTES_SOURCE.contains("self.focus_editor(window, cx);"),
-        "Deleting the last note should restore editor focus"
+        NOTES_SOURCE.contains("self.request_focus_surface(NotesFocusSurface::Editor, cx);"),
+        "Confirmed delete should restore editor focus via the pending focus-surface pattern"
     );
 }
 
@@ -324,6 +324,18 @@ fn test_request_delete_selected_note_emits_structured_confirmation_logs() {
 }
 
 #[test]
+fn test_request_delete_selected_note_log_includes_viability_fields() {
+    const NOTES_SOURCE: &str = include_str!("notes.rs");
+    assert!(
+        NOTES_SOURCE.contains("viewport_viable,")
+            && NOTES_SOURCE.contains("bounds_viable,")
+            && NOTES_SOURCE.contains("source_width,")
+            && NOTES_SOURCE.contains("dialog_width = dialog_width_value,"),
+        "notes_delete_confirmation_requested log should include viewport_viable, bounds_viable, source_width, and dialog_width fields"
+    );
+}
+
+#[test]
 fn test_resolve_notes_delete_dialog_source_width_prefers_viewport() {
     assert_eq!(
         NotesApp::resolve_notes_delete_dialog_source_width(360.0, 520.0),
@@ -344,6 +356,37 @@ fn test_resolve_notes_delete_dialog_source_width_uses_default_when_sizes_missing
     assert_eq!(
         NotesApp::resolve_notes_delete_dialog_source_width(0.0, 0.0),
         472.0
+    );
+}
+
+#[test]
+fn test_resolve_notes_delete_dialog_source_width_ignores_tiny_startup_sizes() {
+    // Both viewport and bounds are tiny positive startup artifacts → default
+    assert_eq!(
+        NotesApp::resolve_notes_delete_dialog_source_width(0.0, 12.0),
+        472.0
+    );
+    assert_eq!(
+        NotesApp::resolve_notes_delete_dialog_source_width(8.0, 16.0),
+        472.0
+    );
+}
+
+#[test]
+fn test_resolve_notes_delete_dialog_source_width_uses_viable_bounds_during_startup() {
+    // Viewport zero but bounds is a real window size → use bounds
+    assert_eq!(
+        NotesApp::resolve_notes_delete_dialog_source_width(0.0, 320.0),
+        320.0
+    );
+}
+
+#[test]
+fn test_resolve_notes_delete_dialog_source_width_uses_viable_viewport_over_tiny_bounds() {
+    // Viewport is viable, bounds is tiny → use viewport
+    assert_eq!(
+        NotesApp::resolve_notes_delete_dialog_source_width(360.0, 12.0),
+        360.0
     );
 }
 
@@ -369,8 +412,38 @@ fn test_permanent_delete_accepts_window_and_restores_selection_or_focus() {
         "Permanent delete should accept window so it can restore editor state"
     );
     assert!(
-        NOTES_SOURCE.contains("self.select_note(next_note.id, window, cx);")
-            && NOTES_SOURCE.contains("self.focus_editor(window, cx);"),
-        "Permanent delete should either select the next trashed note or refocus the editor when empty"
+        NOTES_SOURCE.contains("self.select_note_without_focus(next_note.id, window, cx);")
+            && NOTES_SOURCE
+                .contains("self.request_focus_surface(NotesFocusSurface::Editor, cx);"),
+        "Permanent delete should update selection without early focus and restore via focus surface"
+    );
+}
+
+#[test]
+fn test_notes_render_applies_pending_focus_surface() {
+    const RENDER_SOURCE: &str = include_str!("render.rs");
+    assert!(
+        RENDER_SOURCE.contains("self.apply_pending_focus_surface(window, cx);"),
+        "Notes render should apply pending focus-surface requests"
+    );
+}
+
+#[test]
+fn test_delete_dialog_requests_dialog_focus_surface_before_opening() {
+    const NOTES_SOURCE: &str = include_str!("notes.rs");
+    assert!(
+        NOTES_SOURCE.contains("self.request_focus_surface(NotesFocusSurface::Dialog, cx);"),
+        "Delete flow should request the dialog focus surface before opening the confirm dialog"
+    );
+}
+
+#[test]
+fn test_confirmed_delete_updates_selection_without_early_editor_refocus() {
+    const NOTES_SOURCE: &str = include_str!("notes.rs");
+    assert!(
+        NOTES_SOURCE.contains("self.select_note_without_focus(next_note.id, window, cx);")
+            && NOTES_SOURCE
+                .contains("self.request_focus_surface(NotesFocusSurface::Editor, cx);"),
+        "Confirmed delete should update selection first and restore editor focus after dialog dismissal"
     );
 }

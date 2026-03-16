@@ -205,8 +205,14 @@ impl NotesApp {
         }
     }
 
-    /// Select a note for editing
-    pub(super) fn select_note(&mut self, id: NoteId, window: &mut Window, cx: &mut Context<Self>) {
+    /// Internal note selection with optional editor focus.
+    fn select_note_internal(
+        &mut self,
+        id: NoteId,
+        focus_editor_after_select: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         // Save any unsaved changes to the current note before switching
         self.save_current_note();
 
@@ -239,12 +245,32 @@ impl NotesApp {
             });
         }
 
-        // Focus the editor after selecting a note
-        self.editor_state.update(cx, |state, cx| {
-            state.focus(window, cx);
-        });
+        if focus_editor_after_select {
+            // Focus the editor after selecting a note
+            self.editor_state.update(cx, |state, cx| {
+                state.focus(window, cx);
+            });
+        }
 
         cx.notify();
+    }
+
+    /// Select a note for editing (with editor focus)
+    pub(super) fn select_note(&mut self, id: NoteId, window: &mut Window, cx: &mut Context<Self>) {
+        self.select_note_internal(id, true, window, cx);
+    }
+
+    /// Select a note without immediately focusing the editor.
+    ///
+    /// Used by the delete flow so that focus restoration happens via the
+    /// pending focus-surface pattern after dialog dismissal.
+    pub(super) fn select_note_without_focus(
+        &mut self,
+        id: NoteId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.select_note_internal(id, false, window, cx);
     }
 
     /// Clamp dialog width so it never exceeds the available space in a
@@ -255,25 +281,39 @@ impl NotesApp {
         available_width.min(448.0)
     }
 
+    /// Minimum width (px) to trust a viewport or bounds measurement as a real
+    /// window size.  Tiny positive values during startup produce an invisible
+    /// 0 px dialog, so we fall through to the default instead.
+    const MIN_NOTES_DELETE_DIALOG_SOURCE_WIDTH: f32 = 240.0;
+
+    /// Default source width when neither viewport nor bounds are viable.
+    /// Produces a 448 px dialog after the 24 px padding clamp.
+    const DEFAULT_NOTES_DELETE_DIALOG_SOURCE_WIDTH: f32 = 472.0;
+
     /// Resolve the source width for the Notes delete dialog.
     ///
     /// Prefer the viewport width when available, but fall back to bounds
     /// width for the "open window -> immediate delete shortcut" path where
     /// viewport size can still be zero before the first stable layout.
-    /// Final fallback 472.0 produces a 448px dialog after padding clamp.
+    /// Tiny positive values (< 240) are rejected so startup measurements
+    /// like 12 px don't produce an invisible dialog.
     pub(crate) fn resolve_notes_delete_dialog_source_width(
         viewport_width: f32,
         bounds_width: f32,
     ) -> f32 {
-        if viewport_width.is_finite() && viewport_width > 0.0 {
+        if viewport_width.is_finite()
+            && viewport_width >= Self::MIN_NOTES_DELETE_DIALOG_SOURCE_WIDTH
+        {
             return viewport_width;
         }
 
-        if bounds_width.is_finite() && bounds_width > 0.0 {
+        if bounds_width.is_finite()
+            && bounds_width >= Self::MIN_NOTES_DELETE_DIALOG_SOURCE_WIDTH
+        {
             return bounds_width;
         }
 
-        472.0
+        Self::DEFAULT_NOTES_DELETE_DIALOG_SOURCE_WIDTH
     }
 
     /// Compute dialog width clamped to the Notes window so the dialog
@@ -330,6 +370,11 @@ impl NotesApp {
         let dialog_width = Self::notes_delete_dialog_width(window);
         let dialog_width_value: f32 = dialog_width.into();
 
+        let viewport_viable = viewport_width.is_finite()
+            && viewport_width >= Self::MIN_NOTES_DELETE_DIALOG_SOURCE_WIDTH;
+        let bounds_viable = bounds_width.is_finite()
+            && bounds_width >= Self::MIN_NOTES_DELETE_DIALOG_SOURCE_WIDTH;
+
         tracing::info!(
             event = "notes_delete_confirmation_requested",
             note_id = %note_id.as_str(),
@@ -337,6 +382,8 @@ impl NotesApp {
             is_trash_view = (self.view_mode == NotesViewMode::Trash),
             viewport_width,
             bounds_width,
+            viewport_viable,
+            bounds_viable,
             source_width,
             dialog_width = dialog_width_value,
             "notes_delete_confirmation_requested"
@@ -376,6 +423,8 @@ impl NotesApp {
             ("Move note to Trash".into(), body, "Delete".into())
         };
 
+        self.request_focus_surface(NotesFocusSurface::Dialog, cx);
+
         let weak_notes = cx.entity().downgrade();
         let confirm_note_id = note_id;
         let cancel_note_id = note_id;
@@ -414,7 +463,7 @@ impl NotesApp {
                     }
                 }
             },
-            move |window, cx| {
+            move |_window, cx| {
                 tracing::info!(
                     event = "notes_delete_cancelled",
                     note_id = %cancel_note_id.as_str(),
@@ -424,7 +473,7 @@ impl NotesApp {
 
                 if let Some(entity) = weak_notes_for_cancel.upgrade() {
                     entity.update(cx, |this, cx| {
-                        this.focus_editor(window, cx);
+                        this.restore_primary_focus_after_dialog(cx);
                     });
                 }
             },
@@ -461,18 +510,19 @@ impl NotesApp {
             self.deleted_notes.insert(0, note);
         }
 
-        // Select next note and update editor
+        // Select next note without immediate editor focus — focus restoration
+        // happens via the pending focus-surface pattern after dialog dismissal.
         if let Some(next_note) = self.notes.first() {
             let next_id = next_note.id;
-            self.select_note(next_id, window, cx);
+            self.select_note_without_focus(next_id, window, cx);
         } else {
             self.selected_note_id = None;
             self.editor_state.update(cx, |state, cx| {
                 state.set_value("", window, cx);
             });
-            self.focus_editor(window, cx);
         }
 
+        self.request_focus_surface(NotesFocusSurface::Editor, cx);
         self.show_action_feedback("Deleted · ⌘⇧T trash", false);
         cx.notify();
     }
@@ -500,18 +550,20 @@ impl NotesApp {
 
         self.deleted_notes.retain(|n| n.id != id);
 
+        // Select next note without immediate editor focus — focus restoration
+        // happens via the pending focus-surface pattern after dialog dismissal.
         if let Some(next_note) = self.deleted_notes.first() {
-            self.select_note(next_note.id, window, cx);
+            self.select_note_without_focus(next_note.id, window, cx);
         } else {
             self.selected_note_id = None;
             self.editor_state.update(cx, |state, cx| {
                 state.set_value("", window, cx);
             });
-            self.focus_editor(window, cx);
-            cx.notify();
         }
 
+        self.request_focus_surface(NotesFocusSurface::Editor, cx);
         info!(note_id = %id, "Note permanently deleted");
+        cx.notify();
     }
 
     /// Restore the selected note from trash

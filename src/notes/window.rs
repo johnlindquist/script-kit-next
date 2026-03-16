@@ -339,12 +339,18 @@ pub struct NotesApp {
     /// Brief action feedback message shown in footer (e.g. "Deleted", "Pinned", "Duplicated")
     /// Tuple of (message, accent_colored, timestamp). Clears after 2 seconds.
     action_feedback: Option<(String, bool, Instant)>,
+
+    /// Pending focus surface request — applied in the next render frame.
+    /// Used to defer focus changes until after dialog dismissal completes.
+    pending_focus_surface: Option<focus::NotesFocusSurface>,
 }
 
 mod clipboard_ops;
 mod editor_formatting;
 mod editor_ops_a;
 mod editor_ops_b;
+mod focus;
+use focus::NotesFocusSurface;
 mod init;
 mod keyboard;
 mod navigation;
