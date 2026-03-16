@@ -307,9 +307,7 @@ impl NotesApp {
             return viewport_width;
         }
 
-        if bounds_width.is_finite()
-            && bounds_width >= Self::MIN_NOTES_DELETE_DIALOG_SOURCE_WIDTH
-        {
+        if bounds_width.is_finite() && bounds_width >= Self::MIN_NOTES_DELETE_DIALOG_SOURCE_WIDTH {
             return bounds_width;
         }
 
@@ -372,8 +370,8 @@ impl NotesApp {
 
         let viewport_viable = viewport_width.is_finite()
             && viewport_width >= Self::MIN_NOTES_DELETE_DIALOG_SOURCE_WIDTH;
-        let bounds_viable = bounds_width.is_finite()
-            && bounds_width >= Self::MIN_NOTES_DELETE_DIALOG_SOURCE_WIDTH;
+        let bounds_viable =
+            bounds_width.is_finite() && bounds_width >= Self::MIN_NOTES_DELETE_DIALOG_SOURCE_WIDTH;
 
         tracing::info!(
             event = "notes_delete_confirmation_requested",
