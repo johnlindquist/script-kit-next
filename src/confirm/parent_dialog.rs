@@ -1,7 +1,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    px, App, ClickEvent, ParentElement as _, Pixels, SharedString, Styled as _, WeakEntity, Window,
+    px, App, AppContext as _, ClickEvent, ParentElement as _, Pixels, SharedString, Styled as _,
+    WeakEntity, Window,
 };
 use gpui_component::{
     button::ButtonVariant, dialog::DialogButtonProps, ActiveTheme as _, WindowExt as _,
@@ -159,6 +160,59 @@ pub(crate) fn open_parent_confirm_dialog_with_lifecycle(
     });
 }
 
+/// Open a confirmation modal as an in-window parent dialog and return whether
+/// the user confirmed.  Uses the global main window handle to open the dialog
+/// from async contexts that only have `&mut AsyncApp`.
+///
+/// Returns `Ok(true)` if the user clicks confirm, `Ok(false)` if they cancel
+/// or close the dialog, and `Err` if the dialog could not be opened.
+#[allow(dead_code)]
+pub(crate) async fn confirm_with_parent_dialog(
+    cx: &mut gpui::AsyncApp,
+    options: ParentConfirmOptions,
+    trace_id: &str,
+) -> anyhow::Result<bool> {
+    tracing::info!(
+        category = "UI",
+        trace_id = %trace_id,
+        event = "confirm_modal_open",
+        title = %options.title,
+        "Opening confirmation modal"
+    );
+
+    let (confirm_tx, confirm_rx) = async_channel::bounded::<bool>(1);
+
+    let window_handle = crate::get_main_window_handle()
+        .ok_or_else(|| anyhow::anyhow!("Main window handle not available"))?;
+
+    let sender_ok = confirm_tx.clone();
+    let sender_cancel = confirm_tx.clone();
+
+    cx.update_window(window_handle, move |_, window, cx| {
+        open_parent_confirm_dialog(
+            window,
+            cx,
+            options,
+            move |_window, _cx| {
+                let _ = sender_ok.try_send(true);
+            },
+            move |_window, _cx| {
+                let _ = sender_cancel.try_send(false);
+            },
+        );
+    })?;
+
+    let confirmed = confirm_rx.recv().await.unwrap_or(false);
+    tracing::info!(
+        category = "UI",
+        trace_id = %trace_id,
+        event = "confirm_modal_result",
+        confirmed,
+        "Confirmation modal resolved"
+    );
+    Ok(confirmed)
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -183,6 +237,44 @@ mod tests {
         assert!(
             activate_idx < open_idx,
             "parent confirm dialog should activate the window before opening the dialog"
+        );
+    }
+
+    #[test]
+    fn async_confirmation_callers_use_shared_parent_dialog_helper() {
+        let helpers_source =
+            fs::read_to_string("src/app_actions/helpers.rs").expect("Failed to read helpers.rs");
+        let chat_source = fs::read_to_string("src/app_impl/chat_actions.rs")
+            .expect("Failed to read chat_actions.rs");
+        let execution_source = fs::read_to_string("src/app_impl/execution_paths.rs")
+            .expect("Failed to read execution_paths.rs");
+
+        let helpers = normalize_ws(&helpers_source);
+        let chat = normalize_ws(&chat_source);
+        let execution = normalize_ws(&execution_source);
+
+        assert!(
+            helpers.contains(
+                "crate::confirm::confirm_with_parent_dialog(cx, options, trace_id).await"
+            ),
+            "confirm_with_modal should delegate to the shared async confirm helper"
+        );
+
+        assert!(
+            chat.contains("crate::confirm::confirm_with_parent_dialog(")
+                && chat.contains("ParentConfirmOptions::destructive(")
+                && chat.contains("\"Clear Conversation\"")
+                && chat.contains("\"Clear\"")
+                && !chat.contains("async_channel::bounded::<bool>(1)"),
+            "chat_actions should use the shared destructive async confirm helper"
+        );
+
+        assert!(
+            execution.contains("crate::confirm::confirm_with_parent_dialog(")
+                && execution.contains("ParentConfirmOptions::destructive(")
+                && execution.contains("\"Move to Trash\"")
+                && !execution.contains("async_channel::bounded::<bool>(1)"),
+            "execution_paths should use the shared destructive async confirm helper"
         );
     }
 

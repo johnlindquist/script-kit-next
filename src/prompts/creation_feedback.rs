@@ -172,33 +172,55 @@ impl RenderOnce for CreationFeedbackPanel {
                 .disabled(true),
         };
 
+        let tokens = crate::designs::get_tokens(design_variant);
+        let spacing = tokens.spacing();
+
         div()
             .id("creation-feedback-panel")
             .w_full()
             .flex()
             .flex_col()
-            .gap(px(10.))
-            .p(px(12.))
+            .gap(px(spacing.gap_lg))
             .child(
                 div()
-                    .text_sm()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(text_primary)
-                    .child("Created"),
-            )
-            .child(div().text_xs().text_color(text_secondary).child("Path"))
-            .child(
-                crate::components::prompt_surface(path_surface, border_color)
-                    .id("creation-feedback-path-container")
-                    .overflow_x_scroll()
-                    .overflow_y_hidden()
+                    .flex()
+                    .flex_col()
+                    .gap(px(spacing.gap_sm))
+                    .child(
+                        div()
+                            .text_lg()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(text_primary)
+                            .child("Created"),
+                    )
                     .child(
                         div()
                             .text_sm()
-                            .font_family(mono_font)
-                            .text_color(text_primary)
-                            .whitespace_nowrap()
-                            .child(path_text),
+                            .text_color(text_secondary)
+                            .child(
+                                "Your new file is ready. Use the actions below to jump to it.",
+                            ),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(spacing.gap_sm))
+                    .child(div().text_xs().text_color(text_secondary).child("Path"))
+                    .child(
+                        crate::components::prompt_surface(path_surface, border_color)
+                            .id("creation-feedback-path-container")
+                            .overflow_x_scroll()
+                            .overflow_y_hidden()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_family(mono_font)
+                                    .text_color(text_primary)
+                                    .whitespace_nowrap()
+                                    .child(path_text),
+                            ),
                     ),
             )
             .child(
@@ -207,7 +229,7 @@ impl RenderOnce for CreationFeedbackPanel {
                     .flex()
                     .flex_row()
                     .flex_wrap()
-                    .gap(px(8.))
+                    .gap(px(spacing.gap_md))
                     .child(reveal_button)
                     .child(copy_path_button)
                     .child(open_button)

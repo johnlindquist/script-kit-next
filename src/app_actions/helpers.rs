@@ -217,8 +217,8 @@ end tell"#,
 }
 
 /// Show a confirmation modal as an in-window parent dialog and return whether
-/// the user confirmed.  Uses the global main window handle to open the dialog
-/// from async contexts that only have `&mut AsyncApp`.
+/// the user confirmed.  Delegates to the shared async confirm helper in
+/// `crate::confirm`.
 ///
 /// Returns `Ok(true)` if the user clicks confirm, `Ok(false)` if they cancel
 /// or close the dialog, and `Err` if the dialog could not be opened.
@@ -227,44 +227,7 @@ async fn confirm_with_modal(
     options: crate::confirm::ParentConfirmOptions,
     trace_id: &str,
 ) -> anyhow::Result<bool> {
-    tracing::info!(
-        category = "UI",
-        trace_id = %trace_id,
-        event = "confirm_modal_open",
-        title = %options.title,
-        "Opening confirmation modal"
-    );
-    let (confirm_tx, confirm_rx) = async_channel::bounded::<bool>(1);
-
-    let window_handle = crate::get_main_window_handle()
-        .ok_or_else(|| anyhow::anyhow!("Main window handle not available"))?;
-
-    let sender_ok = confirm_tx.clone();
-    let sender_cancel = confirm_tx.clone();
-
-    cx.update_window(window_handle, move |_, window, cx| {
-        crate::confirm::open_parent_confirm_dialog(
-            window,
-            cx,
-            options,
-            move |_window, _cx| {
-                let _ = sender_ok.try_send(true);
-            },
-            move |_window, _cx| {
-                let _ = sender_cancel.try_send(false);
-            },
-        );
-    })?;
-
-    let confirmed = confirm_rx.recv().await.unwrap_or(false);
-    tracing::info!(
-        category = "UI",
-        trace_id = %trace_id,
-        event = "confirm_modal_result",
-        confirmed,
-        "Confirmation modal resolved"
-    );
-    Ok(confirmed)
+    crate::confirm::confirm_with_parent_dialog(cx, options, trace_id).await
 }
 
 #[cfg(test)]

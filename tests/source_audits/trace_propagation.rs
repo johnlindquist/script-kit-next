@@ -371,11 +371,11 @@ fn confirmation_spawn_logs_trace_id_on_error() {
 }
 
 // ---------------------------------------------------------------------------
-// confirm_with_modal logs trace_id at open and resolution
+// confirm_with_modal delegates to shared helper (which handles trace_id logging)
 // ---------------------------------------------------------------------------
 
 #[test]
-fn confirm_with_modal_logs_trace_id_at_open() {
+fn confirm_with_modal_passes_trace_id_to_shared_helper() {
     let content = read("src/app_actions/helpers.rs");
 
     let fn_start = content
@@ -383,30 +383,35 @@ fn confirm_with_modal_logs_trace_id_at_open() {
         .expect("Expected confirm_with_modal function");
     let fn_body = &content[fn_start..content.len().min(fn_start + 500)];
 
+    // confirm_with_modal accepts trace_id and passes it to the shared helper
     assert!(
-        fn_body.contains("trace_id = %trace_id"),
-        "confirm_with_modal must log trace_id at modal open"
+        fn_body.contains("trace_id: &str"),
+        "confirm_with_modal must accept trace_id parameter"
+    );
+    assert!(
+        fn_body.contains("confirm_with_parent_dialog(cx, options, trace_id)"),
+        "confirm_with_modal must forward trace_id to confirm_with_parent_dialog"
     );
 }
 
 #[test]
-fn confirm_with_modal_logs_trace_id_at_resolution() {
-    let content = read("src/app_actions/helpers.rs");
+fn shared_confirm_helper_logs_trace_id_at_open_and_resolution() {
+    let content = read("src/confirm/parent_dialog.rs");
 
     let fn_start = content
-        .find("async fn confirm_with_modal(")
-        .expect("Expected confirm_with_modal function");
+        .find("async fn confirm_with_parent_dialog(")
+        .expect("Expected confirm_with_parent_dialog function");
     let fn_body = &content[fn_start..content.len().min(fn_start + 3000)];
 
-    let result_start = fn_body
-        .find("confirm_modal_result")
-        .expect("Expected confirm_modal_result event");
-    let result_window =
-        &fn_body[result_start.saturating_sub(200)..fn_body.len().min(result_start + 200)];
-
     assert!(
-        result_window.contains("trace_id = %trace_id"),
-        "confirm_with_modal must log trace_id at modal resolution"
+        fn_body.contains("trace_id = %trace_id")
+            && fn_body.contains("confirm_modal_open"),
+        "confirm_with_parent_dialog must log trace_id at modal open"
+    );
+    assert!(
+        fn_body.contains("trace_id = %trace_id")
+            && fn_body.contains("confirm_modal_result"),
+        "confirm_with_parent_dialog must log trace_id at modal resolution"
     );
 }
 

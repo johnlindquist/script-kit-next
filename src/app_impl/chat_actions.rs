@@ -51,55 +51,36 @@ impl ScriptListApp {
                     return;
                 };
 
-                let message = "Are you sure you want to clear this conversation?".to_string();
+                let message = "Clear this conversation? This cannot be undone.".to_string();
                 cx.spawn(async move |this, cx| {
-                    let (confirm_tx, confirm_rx) = async_channel::bounded::<bool>(1);
-                    let sender_ok = confirm_tx.clone();
-                    let sender_cancel = confirm_tx.clone();
-
-                    let window_handle = crate::get_main_window_handle();
-                    let open_result = if let Some(handle) = window_handle {
-                        cx.update_window(handle, |_, window, cx| {
-                            crate::confirm::open_parent_confirm_dialog(
-                                window,
-                                cx,
-                                crate::confirm::ParentConfirmOptions {
-                                    title: "Clear Conversation".into(),
-                                    body: gpui::SharedString::from(message),
-                                    confirm_text: "Yes".into(),
-                                    cancel_text: "Cancel".into(),
-                                    ..Default::default()
-                                },
-                                move |_window, _cx| {
-                                    let _ = sender_ok.try_send(true);
-                                },
-                                move |_window, _cx| {
-                                    let _ = sender_cancel.try_send(false);
-                                },
-                            );
-                        })
-                    } else {
-                        Err(anyhow::anyhow!("Main window handle not available"))
+                    let confirmed = match crate::confirm::confirm_with_parent_dialog(
+                        cx,
+                        crate::confirm::ParentConfirmOptions::destructive(
+                            "Clear Conversation",
+                            message,
+                            "Clear",
+                        ),
+                        "clear_conversation",
+                    )
+                    .await
+                    {
+                        Ok(confirmed) => confirmed,
+                        Err(e) => {
+                            let _ = this.update(cx, move |this, cx| {
+                                tracing::error!(
+                                    event = "clear_conversation_dialog_open_failed",
+                                    error = %e,
+                                    "Failed to open clear conversation dialog"
+                                );
+                                this.show_error_toast(
+                                    "Failed to open confirmation dialog",
+                                    cx,
+                                );
+                            });
+                            return;
+                        }
                     };
 
-                    if let Err(e) = open_result {
-                        let _ = this.update(cx, |this, cx| {
-                            logging::log(
-                                "ERROR",
-                                &format!("Failed to open confirmation dialog: {}", e),
-                            );
-                            this.show_hud(
-                                "Failed to open confirmation dialog".to_string(),
-                                Some(HUD_2500_MS),
-                                cx,
-                            );
-                        });
-                        return;
-                    }
-
-                    let Ok(confirmed) = confirm_rx.recv().await else {
-                        return;
-                    };
                     if !confirmed {
                         return;
                     }

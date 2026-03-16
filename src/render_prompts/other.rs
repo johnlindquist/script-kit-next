@@ -289,7 +289,12 @@ impl ScriptListApp {
         path: std::path::PathBuf,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = self.theme.clone();
+        let design_spacing = render_context.design_spacing;
+        let shell_radius = render_context.design_visual.radius_lg;
+        let vibrancy_bg = get_vibrancy_background(render_context.theme);
+
         let entity = cx.entity().downgrade();
         let entity_dismiss = entity.clone();
 
@@ -334,26 +339,21 @@ impl ScriptListApp {
             }
         });
 
-        let shell_radius = self.other_prompt_shell_radius_lg();
-        let vibrancy_bg = get_vibrancy_background(&self.theme);
-
         crate::components::prompt_shell_container(shell_radius, vibrancy_bg)
             .id("creation-feedback-shell")
             .h(window_resize::layout::STANDARD_HEIGHT)
             .key_context("CreationFeedback")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
-            .child(crate::components::prompt_shell_content(
-                gpui::div()
+            .child(
+                div()
+                    .flex_1()
                     .w_full()
-                    .h_full()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .justify_center()
-                    .p(px(24.))
+                    .min_h(px(0.))
+                    .overflow_y_scrollbar()
+                    .p(px(design_spacing.padding_xl))
                     .child(panel),
-            ))
+            )
             .into_any_element()
     }
 }
