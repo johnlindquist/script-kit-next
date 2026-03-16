@@ -248,49 +248,32 @@ fn builtin_confirmation_does_not_call_open_confirm_window() {
 }
 
 // ---------------------------------------------------------------------------
-// confirm_with_modal helper — channel patterns
+// confirm_with_modal helper — delegates to shared async confirm helper
 // ---------------------------------------------------------------------------
 
 #[test]
-fn confirm_with_modal_uses_bounded_channel_capacity_one() {
-    let helpers = read("src/app_actions/helpers.rs");
-
-    // The channel must be bounded(1) — not unbounded, not larger capacity
-    assert!(
-        helpers.contains("async_channel::bounded::<bool>(1)"),
-        "confirm_with_modal must use bounded channel with capacity 1 for single-shot confirmation"
-    );
-}
-
-#[test]
-fn confirm_with_modal_awaits_receiver_for_result() {
-    let helpers = read("src/app_actions/helpers.rs");
-
-    // Find the confirm_with_modal function body
-    let fn_start = helpers
-        .find("async fn confirm_with_modal(")
-        .expect("Expected confirm_with_modal function");
-    let fn_body = &helpers[fn_start..helpers.len().min(fn_start + 3000)];
-
-    // Must await the receiver to get the confirmation result
-    assert!(
-        fn_body.contains("confirm_rx.recv().await"),
-        "confirm_with_modal must await confirm_rx.recv() for the confirmation result"
-    );
-}
-
-#[test]
-fn confirm_with_modal_delegates_to_parent_confirm_dialog() {
+fn confirm_with_modal_delegates_to_shared_async_helper() {
     let helpers = read("src/app_actions/helpers.rs");
 
     let fn_start = helpers
         .find("async fn confirm_with_modal(")
         .expect("Expected confirm_with_modal function");
-    let fn_body = &helpers[fn_start..helpers.len().min(fn_start + 3000)];
+    let fn_body = &helpers[fn_start..helpers.len().min(fn_start + 500)];
 
+    // Must delegate to the shared confirm_with_parent_dialog helper
     assert!(
-        fn_body.contains("crate::confirm::open_parent_confirm_dialog("),
-        "confirm_with_modal must delegate to the shared parent confirm dialog"
+        fn_body.contains("crate::confirm::confirm_with_parent_dialog(cx, options, trace_id).await"),
+        "confirm_with_modal must delegate to crate::confirm::confirm_with_parent_dialog"
+    );
+
+    // Must NOT contain inline channel or window handle logic
+    assert!(
+        !fn_body.contains("async_channel::bounded"),
+        "confirm_with_modal must not contain inline channel logic — delegate to shared helper"
+    );
+    assert!(
+        !fn_body.contains("get_main_window_handle"),
+        "confirm_with_modal must not contain inline window handle logic — delegate to shared helper"
     );
 }
 

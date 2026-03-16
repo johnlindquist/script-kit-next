@@ -128,55 +128,34 @@ impl ScriptListApp {
             "move_to_trash" => {
                 let path_info = path_info.clone();
                 let path_prompt_entity = path_prompt_entity.clone();
-                let message = format!(
-                    "Are you sure you want to move '{}' to Trash?",
-                    path_info.name
-                );
+                let message = format!("Move \"{}\" to Trash?", path_info.name);
 
                 cx.spawn(async move |this, cx| {
-                    let (confirm_tx, confirm_rx) = async_channel::bounded::<bool>(1);
-                    let sender_ok = confirm_tx.clone();
-                    let sender_cancel = confirm_tx.clone();
-
-                    let window_handle = crate::get_main_window_handle();
-                    let open_result = if let Some(handle) = window_handle {
-                        cx.update_window(handle, |_, window, cx| {
-                            crate::confirm::open_parent_confirm_dialog(
-                                window,
-                                cx,
-                                crate::confirm::ParentConfirmOptions {
-                                    title: "Move to Trash".into(),
-                                    body: gpui::SharedString::from(message),
-                                    confirm_text: "Yes".into(),
-                                    cancel_text: "Cancel".into(),
-                                    ..Default::default()
-                                },
-                                move |_window, _cx| {
-                                    let _ = sender_ok.try_send(true);
-                                },
-                                move |_window, _cx| {
-                                    let _ = sender_cancel.try_send(false);
-                                },
-                            );
-                        })
-                    } else {
-                        Err(anyhow::anyhow!("Main window handle not available"))
+                    let confirmed = match crate::confirm::confirm_with_parent_dialog(
+                        cx,
+                        crate::confirm::ParentConfirmOptions::destructive(
+                            "Move to Trash",
+                            message,
+                            "Move to Trash",
+                        ),
+                        "execution_path_move_to_trash",
+                    )
+                    .await
+                    {
+                        Ok(confirmed) => confirmed,
+                        Err(e) => {
+                            let _ = this.update(cx, move |this, cx| {
+                                tracing::error!(
+                                    event = "execution_path_dialog_open_failed",
+                                    error = %e,
+                                    "Failed to open execution path move-to-trash dialog"
+                                );
+                                this.show_error_toast("Failed to open confirmation dialog", cx);
+                            });
+                            return;
+                        }
                     };
 
-                    if let Err(e) = open_result {
-                        let _ = this.update(cx, |this, cx| {
-                            logging::log(
-                                "ERROR",
-                                &format!("Failed to open confirmation dialog: {}", e),
-                            );
-                            this.show_error_toast("Failed to open confirmation dialog", cx);
-                        });
-                        return;
-                    }
-
-                    let Ok(confirmed) = confirm_rx.recv().await else {
-                        return;
-                    };
                     if !confirmed {
                         return;
                     }

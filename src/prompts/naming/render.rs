@@ -16,6 +16,7 @@ impl Render for NamingPrompt {
         let text_muted = rgb(self.theme.colors.text.muted);
         let border_color = rgb(self.theme.colors.ui.border);
         let error_color = rgb(self.theme.colors.ui.error);
+        let accent_color = rgb(self.theme.colors.accent.selected);
         let input_bg = rgb(self.theme.colors.background.search_box);
         let preview_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x20);
 
@@ -24,6 +25,10 @@ impl Render for NamingPrompt {
             .placeholder
             .clone()
             .unwrap_or_else(|| "Friendly name".to_string());
+        let hint = self
+            .hint
+            .clone()
+            .unwrap_or_else(|| "Enter to create \u{2022} Esc to cancel".to_string());
         let validation_message = self
             .validation_error
             .as_ref()
@@ -46,87 +51,101 @@ impl Render for NamingPrompt {
         let preview_filename = self.filename_preview();
         let preview_path = self.target_directory.join(&preview_filename);
 
-        let container = div()
+        let content = div()
             .id(gpui::ElementId::Name("window:naming".into()))
             .flex()
             .flex_col()
             .w_full()
-            .min_h(px(0.))
+            .h_full()
             .text_color(text_primary)
-            .gap(px(spacing.gap_lg))
             .child(
                 div()
+                    .flex_1()
                     .flex()
                     .flex_col()
-                    .gap(px(spacing.gap_sm))
-                    .child(div().text_lg().child(title))
-                    .child(
-                        div().text_sm().text_color(text_muted).child(
-                            "Friendly name is used for display and converted to a filename.",
-                        ),
-                    ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(spacing.gap_sm))
+                    .gap(px(spacing.gap_lg))
                     .child(
                         div()
-                            .text_xs()
-                            .text_color(text_muted)
-                            .child("Friendly Name"),
+                            .flex()
+                            .flex_col()
+                            .gap(px(spacing.gap_sm))
+                            .child(div().text_lg().child(title))
+                            .child(
+                                div().text_sm().text_color(text_muted).child(
+                                    "Friendly name is used for display and converted to a filename.",
+                                ),
+                            ),
                     )
-                    .child(
-                        crate::components::prompt_surface(input_bg, input_border_color)
-                            .min_h(px(PROMPT_INPUT_FIELD_HEIGHT))
-                            .text_color(input_text_color)
-                            .child(input_value),
-                    )
-                    .when_some(validation_message, |d, message| {
-                        d.child(div().text_xs().text_color(error_color).child(message))
-                    }),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(spacing.gap_sm))
                     .child(
                         div()
-                            .text_xs()
-                            .text_color(text_muted)
-                            .child("Filename Preview"),
-                    )
-                    .child(
-                        crate::components::prompt_surface(preview_bg, border_color)
+                            .flex()
+                            .flex_col()
+                            .gap(px(spacing.gap_sm))
                             .child(
                                 div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap(px(spacing.gap_sm))
-                                    .child(
-                                        div()
-                                            .text_base()
-                                            .text_color(text_secondary)
-                                            .child(preview_filename.clone()),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(text_muted)
-                                            .child(preview_path.display().to_string()),
-                                    )
-                                    .child(div().text_xs().text_color(text_muted).child(format!(
-                                        "Target: {} \u{2022} Extension: {}",
-                                        self.target.as_str(),
-                                        self.extension_label()
-                                    ))),
+                                    .text_xs()
+                                    .text_color(text_muted)
+                                    .child("Friendly Name"),
+                            )
+                            .child(
+                                crate::components::prompt_surface(input_bg, input_border_color)
+                                    .min_h(px(PROMPT_INPUT_FIELD_HEIGHT))
+                                    .text_color(input_text_color)
+                                    .child(input_value),
+                            )
+                            .when_some(validation_message, |d, message| {
+                                d.child(div().text_xs().text_color(error_color).child(message))
+                            }),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(spacing.gap_sm))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(text_muted)
+                                    .child("Filename Preview"),
+                            )
+                            .child(
+                                crate::components::prompt_surface(preview_bg, border_color).child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap(px(spacing.gap_sm))
+                                        .child(
+                                            div()
+                                                .text_base()
+                                                .text_color(text_secondary)
+                                                .child(preview_filename.clone()),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(text_muted)
+                                                .child(preview_path.display().to_string()),
+                                        )
+                                        .child(
+                                            div().text_xs().text_color(text_muted).child(format!(
+                                                "Target: {} \u{2022} Extension: {}",
+                                                self.target.as_str(),
+                                                self.extension_label()
+                                            )),
+                                        ),
+                                ),
                             ),
                     ),
+            )
+            .child(
+                div()
+                    .pt(px(spacing.gap_sm))
+                    .text_xs()
+                    .text_color(accent_color)
+                    .child(hint),
             );
 
-        FocusablePrompt::new(container)
+        FocusablePrompt::new(content)
             .key_context("naming_prompt")
             .focus_handle(self.focus_handle.clone())
             .build(
