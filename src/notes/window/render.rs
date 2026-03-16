@@ -61,5 +61,6 @@ impl Render for NotesApp {
             .when(self.show_shortcuts_help, |d| {
                 d.child(self.render_shortcuts_help(cx))
             })
+            .children(gpui_component::Root::render_dialog_layer(window, cx))
     }
 }
