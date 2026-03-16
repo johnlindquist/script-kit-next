@@ -513,6 +513,8 @@ impl NotesApp {
                 key if (is_key_backspace(key) || is_key_delete(key)) && modifiers.shift => {
                     if self.handle_platform_delete_shortcut(key, window, cx) {
                         cx.stop_propagation();
+                    } else {
+                        cx.propagate();
                     }
                 }
                 "7" if modifiers.shift => {
@@ -560,7 +562,7 @@ mod dialog_modal_guard_tests {
         // This proves the old trash-view `return false` silently swallowed events.
         assert!(
             normalized.contains(
-                "if self.handle_platform_delete_shortcut(key, window, cx) { cx.stop_propagation(); }"
+                "if self.handle_platform_delete_shortcut(key, window, cx) { cx.stop_propagation(); } else { cx.propagate(); }"
             ),
             "Delete shortcut match arm must conditionally stop propagation based on handler return"
         );
@@ -569,6 +571,20 @@ mod dialog_modal_guard_tests {
     /// Verify the delete shortcut always calls `request_delete_selected_note`
     /// regardless of view mode — the old trash-view guard silently swallowed
     /// the key event (no dialog, no `stop_propagation`, no `propagate`).
+    #[test]
+    fn delete_shortcut_propagates_when_handler_declines_key() {
+        let source = fs::read_to_string("src/notes/window/keyboard.rs")
+            .expect("Failed to read src/notes/window/keyboard.rs");
+        let normalized = normalize_ws(&source);
+
+        assert!(
+            normalized.contains(
+                "if self.handle_platform_delete_shortcut(key, window, cx) { cx.stop_propagation(); } else { cx.propagate(); }"
+            ),
+            "Delete shortcut match arm should propagate when the handler declines the key"
+        );
+    }
+
     #[test]
     fn handle_platform_delete_shortcut_does_not_early_return_for_trash_view() {
         let source = std::fs::read_to_string("src/notes/window/keyboard.rs")
