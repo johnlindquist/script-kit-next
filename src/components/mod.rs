@@ -71,7 +71,8 @@ pub use prompt_header::{PromptHeader, PromptHeaderColors, PromptHeaderConfig};
 pub use prompt_layout_shell::{prompt_shell_container, prompt_shell_content};
 #[allow(unused_imports)]
 pub(crate) use prompt_layout_shell::{
-    prompt_form_help, prompt_form_intro, prompt_form_section, prompt_surface,
+    prompt_detail_card, prompt_field_style, prompt_form_help, prompt_form_intro,
+    prompt_form_section, prompt_surface, prompt_text_field, PromptFieldState, PromptFieldStyle,
 };
 #[allow(unused_imports)]
 pub use shortcut_recorder::{

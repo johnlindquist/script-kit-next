@@ -1,4 +1,4 @@
-use gpui::{div, prelude::*, px, rems, Div, FontWeight, Rgba, SharedString};
+use gpui::{div, prelude::*, px, rems, rgb, rgba, Div, FontWeight, Rgba, SharedString};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct PromptFrameConfig {
@@ -139,6 +139,112 @@ pub(crate) fn prompt_form_section(
 /// Shared helper text for create-flow screens.
 pub(crate) fn prompt_form_help(text: impl Into<SharedString>, color: Rgba) -> Div {
     div().text_xs().text_color(color).child(text.into())
+}
+
+/// State of a form field within a create-flow prompt.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PromptFieldState {
+    Default,
+    Active,
+    Error,
+    ReadOnly,
+}
+
+/// Pre-computed colors for a form field based on its state.
+#[derive(Clone, Copy)]
+pub(crate) struct PromptFieldStyle {
+    pub background: Rgba,
+    pub border: Rgba,
+    pub value: Rgba,
+}
+
+/// Compute field colors from the theme, field state, and whether the value is empty.
+pub(crate) fn prompt_field_style(
+    theme: &crate::theme::Theme,
+    state: PromptFieldState,
+    empty: bool,
+) -> PromptFieldStyle {
+    let default_background = rgb(theme.colors.background.search_box);
+    let highlighted_background = rgba((theme.colors.accent.selected_subtle << 8) | 0x20);
+    let default_border = rgb(theme.colors.ui.border);
+    let active_border = rgb(theme.colors.accent.selected);
+    let error_border = rgb(theme.colors.ui.error);
+    let value = if empty {
+        rgb(theme.colors.text.muted)
+    } else {
+        rgb(theme.colors.text.primary)
+    };
+
+    match state {
+        PromptFieldState::Default => PromptFieldStyle {
+            background: default_background,
+            border: default_border,
+            value,
+        },
+        PromptFieldState::Active => PromptFieldStyle {
+            background: highlighted_background,
+            border: active_border,
+            value,
+        },
+        PromptFieldState::Error => PromptFieldStyle {
+            background: default_background,
+            border: error_border,
+            value,
+        },
+        PromptFieldState::ReadOnly => PromptFieldStyle {
+            background: highlighted_background,
+            border: default_border,
+            value: rgb(theme.colors.text.primary),
+        },
+    }
+}
+
+/// Single-line text field card using the shared prompt surface.
+pub(crate) fn prompt_text_field(
+    value: impl Into<SharedString>,
+    style: PromptFieldStyle,
+    min_height: f32,
+) -> Div {
+    prompt_surface(style.background, style.border)
+        .min_h(px(min_height))
+        .flex()
+        .items_center()
+        .child(
+            div()
+                .w_full()
+                .text_sm()
+                .text_color(style.value)
+                .child(value.into()),
+        )
+}
+
+/// Multi-line detail card with headline, supporting text, and detail text rows.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn prompt_detail_card(
+    headline: impl Into<SharedString>,
+    supporting_text: impl Into<SharedString>,
+    detail_text: impl Into<SharedString>,
+    headline_color: Rgba,
+    supporting_color: Rgba,
+    detail_color: Rgba,
+    style: PromptFieldStyle,
+    gap_px: f32,
+) -> Div {
+    prompt_surface(style.background, style.border).child(
+        div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .gap(px(gap_px))
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(headline_color)
+                    .child(headline.into()),
+            )
+            .child(prompt_form_help(supporting_text, supporting_color))
+            .child(prompt_form_help(detail_text, detail_color)),
+    )
 }
 
 /// Shared outer shell used by prompt wrappers in `render_prompts/*`.

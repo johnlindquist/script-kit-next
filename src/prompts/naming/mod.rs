@@ -6,7 +6,7 @@
 //! - Validates empty names, invalid path characters, and duplicate filenames
 
 use gpui::{
-    div, prelude::*, px, rgb, rgba, Context, FocusHandle, Focusable, Render, SharedString, Window,
+    div, prelude::*, px, rgb, Context, FocusHandle, Focusable, Render, SharedString, Window,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
