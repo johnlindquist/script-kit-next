@@ -451,7 +451,7 @@ impl ScriptListApp {
     }
 
     /// Handle action selection from the actions dialog
-    fn handle_action(&mut self, action_id: String, cx: &mut Context<Self>) {
+    fn handle_action(&mut self, action_id: String, window: &mut Window, cx: &mut Context<Self>) {
         let start = std::time::Instant::now();
 
         let action_id_stripped = action_id
@@ -499,7 +499,7 @@ impl ScriptListApp {
             if o.was_handled() {
                 ("shortcut_alias", o)
             } else {
-                let o = self.handle_script_action(&action_id_stripped, &dctx, cx);
+                let o = self.handle_script_action(&action_id_stripped, &dctx, window, cx);
                 if o.was_handled() {
                     ("script", o)
                 } else {

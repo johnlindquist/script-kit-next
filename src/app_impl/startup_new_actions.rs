@@ -137,7 +137,7 @@
                             && matches!(this.current_view, AppView::ScriptList)
                         {
                             logging::log("KEY", "Interceptor: Cmd+Shift+K -> add_shortcut (ScriptList)");
-                            this.handle_action("add_shortcut".to_string(), cx);
+                            this.handle_action("add_shortcut".to_string(), window, cx);
                             cx.stop_propagation();
                             return;
                         }
@@ -259,7 +259,7 @@
                                                 Self::log_builtin_outcome("builtin-webcam", &dctx, "webcam_action", &outcome, &start);
                                             }
                                             _ => {
-                                                this.handle_action(action_id, cx);
+                                                this.handle_action(action_id, window, cx);
                                             }
                                         }
                                         cx.stop_propagation();
@@ -373,7 +373,7 @@
                                     // Use handle_action instead of trigger_action_by_name
                                     // handle_action supports both built-in actions (open_file, quick_look, etc.)
                                     // and SDK actions
-                                    this.handle_action(action_id, cx);
+                                    this.handle_action(action_id, window, cx);
                                 }
                             }
                             cx.stop_propagation();
