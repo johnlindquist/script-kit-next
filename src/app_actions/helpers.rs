@@ -224,15 +224,14 @@ end tell"#,
 /// or close the dialog, and `Err` if the dialog could not be opened.
 async fn confirm_with_modal(
     cx: &mut gpui::AsyncApp,
-    message: String,
-    confirm_label: &str,
-    cancel_label: &str,
+    options: crate::confirm::ParentConfirmOptions,
     trace_id: &str,
 ) -> anyhow::Result<bool> {
     tracing::info!(
         category = "UI",
         trace_id = %trace_id,
         event = "confirm_modal_open",
+        title = %options.title,
         "Opening confirmation modal"
     );
     let (confirm_tx, confirm_rx) = async_channel::bounded::<bool>(1);
@@ -240,22 +239,14 @@ async fn confirm_with_modal(
     let window_handle = crate::get_main_window_handle()
         .ok_or_else(|| anyhow::anyhow!("Main window handle not available"))?;
 
-    let confirm_label = confirm_label.to_string();
-    let cancel_label = cancel_label.to_string();
     let sender_ok = confirm_tx.clone();
     let sender_cancel = confirm_tx.clone();
 
-    cx.update_window(window_handle, |_, window, cx| {
+    cx.update_window(window_handle, move |_, window, cx| {
         crate::confirm::open_parent_confirm_dialog(
             window,
             cx,
-            crate::confirm::ParentConfirmOptions {
-                title: "Confirm".into(),
-                body: gpui::SharedString::from(message),
-                confirm_text: gpui::SharedString::from(confirm_label),
-                cancel_text: gpui::SharedString::from(cancel_label),
-                ..Default::default()
-            },
+            options,
             move |_window, _cx| {
                 let _ = sender_ok.try_send(true);
             },

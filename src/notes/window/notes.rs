@@ -459,6 +459,17 @@ impl NotesApp {
                             }
                         });
                     }
+
+                    let msg = if is_trash_view {
+                        "Note deleted permanently"
+                    } else {
+                        "Note moved to Trash"
+                    };
+                    let notif_bg = crate::ui_foundation::get_window_vibrancy_background();
+                    window.push_notification(
+                        gpui_component::notification::Notification::success(msg).bg(notif_bg),
+                        cx,
+                    );
                 }
             },
             move |window, cx| {
