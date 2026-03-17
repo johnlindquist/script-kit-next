@@ -22,6 +22,12 @@ mod tests {
         }
     }
 
+    /// Return the production portion of a Rust source file by stripping
+    /// everything after the first `#[cfg(test)]` marker.
+    fn production_source(source: &str) -> &str {
+        source.split("#[cfg(test)]").next().unwrap_or(source)
+    }
+
     #[test]
     fn repo_has_no_open_confirm_window_callers() {
         let mut files = Vec::new();
@@ -31,7 +37,7 @@ mod tests {
             .into_iter()
             .filter_map(|path| {
                 let source = fs::read_to_string(&path).expect("read_to_string failed");
-                source
+                production_source(&source)
                     .contains("open_confirm_window(")
                     .then(|| path.display().to_string())
             })
