@@ -145,3 +145,17 @@ fn test_render_emoji_picker_uses_row_height_and_lighter_cell_chrome() {
         "emoji picker must use uniform_list for stable virtualized scrolling"
     );
 }
+
+#[test]
+fn test_emoji_picker_renders_shared_scrollbar_overlay() {
+    let source = read_emoji_picker_source();
+
+    assert!(
+        source.contains("builtin_uniform_list_scrollbar("),
+        "Emoji picker should reuse the shared builtin scrollbar overlay",
+    );
+    assert!(
+        source.contains(".child(list_scrollbar)"),
+        "Emoji picker should mount the scrollbar overlay next to the tracked list",
+    );
+}

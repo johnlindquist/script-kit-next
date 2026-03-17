@@ -37,8 +37,18 @@ impl ScriptListApp {
             } => {
                 self.filter_text = new_text.clone();
                 if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
-                    self.clipboard_list_scroll_handle
-                        .scroll_to_item(0, ScrollStrategy::Top);
+                    let input_mode = if self.input_mode == InputMode::Keyboard {
+                        "keyboard"
+                    } else {
+                        "mouse"
+                    };
+                    Self::scroll_builtin_to_top_with_log(
+                        &self.clipboard_list_scroll_handle,
+                        "clipboard_history",
+                        self.cached_clipboard_entries.len(),
+                        &new_text,
+                        input_mode,
+                    );
                 }
                 let filtered_entries: Vec<_> = if filter.is_empty() {
                     self.cached_clipboard_entries.iter().enumerate().collect()
@@ -66,7 +76,7 @@ impl ScriptListApp {
             AppView::EmojiPickerView {
                 filter,
                 selected_index,
-                ..
+                selected_category,
             } => {
                 // Skip entirely when the text hasn't changed — avoids a
                 // spurious cx.notify() that can reset the scroll
@@ -79,15 +89,21 @@ impl ScriptListApp {
                 *selected_index = 0;
                 *filter = new_text.clone();
 
-                tracing::debug!(
-                    target: "script_kit::emoji_picker",
-                    event = "scroll_to_item",
-                    reason = "filter_changed",
-                    row = 0usize,
-                    filter = %new_text,
-                    selected_index = 0usize,
+                let input_mode = if self.input_mode == InputMode::Keyboard {
+                    "keyboard"
+                } else {
+                    "mouse"
+                };
+                let emoji_count =
+                    crate::emoji::filtered_ordered_emojis(&new_text, *selected_category).len();
+
+                Self::scroll_builtin_to_top_with_log(
+                    &self.emoji_scroll_handle,
+                    "emoji_picker",
+                    emoji_count,
+                    &new_text,
+                    input_mode,
                 );
-                self.emoji_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
 
                 cx.notify();
                 return; // Don't run main menu filter logic
@@ -98,8 +114,18 @@ impl ScriptListApp {
             } => {
                 self.filter_text = new_text.clone();
                 if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
-                    self.list_scroll_handle
-                        .scroll_to_item(0, ScrollStrategy::Top);
+                    let input_mode = if self.input_mode == InputMode::Keyboard {
+                        "keyboard"
+                    } else {
+                        "mouse"
+                    };
+                    Self::scroll_builtin_to_top_with_log(
+                        &self.list_scroll_handle,
+                        "app_launcher",
+                        self.apps.len(),
+                        &new_text,
+                        input_mode,
+                    );
                     cx.notify();
                 }
                 return; // Don't run main menu filter logic
@@ -110,8 +136,18 @@ impl ScriptListApp {
             } => {
                 self.filter_text = new_text.clone();
                 if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
-                    self.window_list_scroll_handle
-                        .scroll_to_item(0, ScrollStrategy::Top);
+                    let input_mode = if self.input_mode == InputMode::Keyboard {
+                        "keyboard"
+                    } else {
+                        "mouse"
+                    };
+                    Self::scroll_builtin_to_top_with_log(
+                        &self.window_list_scroll_handle,
+                        "window_switcher",
+                        self.cached_windows.len(),
+                        &new_text,
+                        input_mode,
+                    );
                     cx.notify();
                 }
                 return; // Don't run main menu filter logic
@@ -122,8 +158,18 @@ impl ScriptListApp {
             } => {
                 self.filter_text = new_text.clone();
                 if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
-                    self.process_list_scroll_handle
-                        .scroll_to_item(0, ScrollStrategy::Top);
+                    let input_mode = if self.input_mode == InputMode::Keyboard {
+                        "keyboard"
+                    } else {
+                        "mouse"
+                    };
+                    Self::scroll_builtin_to_top_with_log(
+                        &self.process_list_scroll_handle,
+                        "process_manager",
+                        self.cached_processes.len(),
+                        &new_text,
+                        input_mode,
+                    );
                     cx.notify();
                 }
                 return; // Don't run main menu filter logic
@@ -628,10 +674,32 @@ mod tests {
             "emoji picker must early-return when the filter text has not changed"
         );
 
-        // Must still scroll to top on real changes
+        // Must still scroll to top on real changes (via shared helper)
         assert!(
-            emoji_section.contains("scroll_to_item(0, ScrollStrategy::Top)"),
-            "emoji picker should reset to top on real filter changes"
+            emoji_section.contains("scroll_builtin_to_top_with_log"),
+            "emoji picker should reset to top on real filter changes via shared helper"
         );
+    }
+
+    #[test]
+    fn test_scrollable_builtin_views_use_shared_scroll_logging_helper() {
+        let source = read_filter_input_change_source();
+        for view in [
+            "AppView::ClipboardHistoryView",
+            "AppView::EmojiPickerView",
+            "AppView::AppLauncherView",
+            "AppView::WindowSwitcherView",
+            "AppView::ProcessManagerView",
+        ] {
+            let view_pos = source
+                .find(view)
+                .unwrap_or_else(|| panic!("{} match arm not found", view));
+            let view_section = &source[view_pos..(view_pos + 1200).min(source.len())];
+            assert!(
+                view_section.contains("scroll_builtin_to_top_with_log"),
+                "{} should use the shared structured scroll helper",
+                view,
+            );
+        }
     }
 }

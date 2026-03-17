@@ -64,6 +64,7 @@ pub(crate) fn open_parent_confirm_dialog(
     open_parent_confirm_dialog_with_lifecycle(window, cx, options, || true, on_confirm, on_cancel);
 }
 
+#[allow(dead_code)]
 pub(crate) fn open_parent_confirm_dialog_for_entity<T: 'static>(
     window: &mut Window,
     cx: &mut App,
@@ -127,7 +128,7 @@ pub(crate) fn open_parent_confirm_dialog_with_lifecycle(
             "parent_confirm_dialog_building"
         );
 
-        let vibrancy_bg = crate::ui_foundation::get_window_vibrancy_background();
+        let vibrancy_bg = crate::ui_foundation::get_vibrancy_surface_background(0.65);
 
         dialog
             .rounded_lg()

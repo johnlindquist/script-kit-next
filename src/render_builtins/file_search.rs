@@ -867,123 +867,135 @@ impl ScriptListApp {
                 None
             };
 
+            {
+                let meta_row = |label: &str, value: String| {
+                    div()
+                        .flex()
+                        .flex_row()
+                        .gap(px(design_spacing.gap_md))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(rgb(text_muted))
+                                .child(label.to_string()),
+                        )
+                        .child(
+                            div()
+                                .ml_auto()
+                                .text_xs()
+                                .text_color(rgb(text_dimmed))
+                                .child(value),
+                        )
+                };
+
+                div()
+                    .flex_1()
+                    .flex()
+                    .flex_col()
+                    .p(px(design_spacing.padding_lg))
+                    .gap(px(design_spacing.gap_md))
+                    .overflow_y_hidden()
+                    .when_some(thumbnail_section, |container, section| container.child(section))
+                    // Name + type badge
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(design_spacing.gap_sm))
+                            .child(
+                                div()
+                                    .text_lg()
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .text_color(rgb(text_primary))
+                                    .child(file.name.clone()),
+                            )
+                            .child(
+                                div()
+                                    .px(px(6.0))
+                                    .py(px(2.0))
+                                    .rounded(px(4.0))
+                                    .bg(rgba((ui_border << 8) | 0x24))
+                                    .text_xs()
+                                    .text_color(rgb(text_muted))
+                                    .child(file_type_str.to_string()),
+                            ),
+                    )
+                    // Path label
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(rgb(text_muted))
+                            .child("Path"),
+                    )
+                    // Scrollable path
+                    .child(crate::components::prompt_scroll_value_with_id(
+                        "file-search-preview-path",
+                        file.path.clone(),
+                        rgb(text_dimmed),
+                    ))
+                    // Divider
+                    .child(
+                        div()
+                            .w_full()
+                            .h(px(design_visual.border_thin))
+                            .bg(rgba((ui_border << 8) | 0x24)),
+                    )
+                    // Details label
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(rgb(text_muted))
+                            .child("Details"),
+                    )
+                    // Meta rows
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(design_spacing.gap_sm))
+                            .child(meta_row("Size", file_search::format_file_size(file.size)))
+                            .child(meta_row(
+                                "Modified",
+                                file_search::format_relative_time(file.modified),
+                            ))
+                            .child(meta_row("Type", file_type_str.to_string())),
+                    )
+            }
+        } else if is_loading {
+            div()
+                .flex_1()
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(rgb(text_muted))
+                        .child("Loading preview\u{2026}"),
+                )
+        } else {
             div()
                 .flex_1()
                 .flex()
                 .flex_col()
-                .p(px(design_spacing.padding_lg))
-                .gap(px(design_spacing.gap_md))
-                .overflow_y_hidden()
-                .when_some(thumbnail_section, |container, section| container.child(section))
-                // Name section (labeled like main menu)
+                .items_center()
+                .justify_center()
+                .gap(px(6.0))
                 .child(
                     div()
-                        .flex()
-                        .flex_col()
-                        .pb(px(design_spacing.padding_md))
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(rgb(text_muted))
-                                .pb(px(design_spacing.padding_xs / 2.0))
-                                .child("Name"),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .gap(px(design_spacing.gap_sm))
-                                .child(
-                                    div()
-                                        .text_lg()
-                                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                                        .text_color(rgb(text_primary))
-                                        .child(file.name.clone()),
-                                )
-                                .child(
-                                    div()
-                                        .px(px(6.))
-                                        .py(px(2.))
-                                        .rounded(px(4.))
-                                        .bg(rgba((ui_border << 8) | 0x40))
-                                        .text_xs()
-                                        .text_color(rgb(text_muted))
-                                        .child(file_type_str),
-                                ),
-                        ),
+                        .text_sm()
+                        .text_color(rgb(text_dimmed))
+                        .child("No file selected"),
                 )
-                // Path section (labeled)
                 .child(
                     div()
-                        .flex()
-                        .flex_col()
-                        .pb(px(design_spacing.padding_md))
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(rgb(text_muted))
-                                .pb(px(design_spacing.padding_xs / 2.0))
-                                .child("Path"),
-                        )
-                        .child(
-                            div()
-                                .text_sm()
-                                .text_color(rgb(text_dimmed))
-                                .child(file.path.clone()),
-                        ),
+                        .text_xs()
+                        .text_color(rgb(text_muted))
+                        .child("Use \u{2191}\u{2193} to inspect results"),
                 )
-                // Divider (like main menu)
-                .child(
-                    div()
-                        .w_full()
-                        .h(px(design_visual.border_thin))
-                        .bg(rgba((ui_border << 8) | 0x60))
-                        .my(px(design_spacing.padding_sm)),
-                )
-                // Details section (labeled)
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(rgb(text_muted))
-                                .pb(px(design_spacing.padding_xs / 2.0))
-                                .child("Details"),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap(px(design_spacing.gap_sm))
-                                .child(div().text_sm().text_color(rgb(text_dimmed)).child(format!(
-                                    "Size: {}",
-                                    file_search::format_file_size(file.size)
-                                )))
-                                .child(div().text_sm().text_color(rgb(text_dimmed)).child(format!(
-                                    "Modified: {}",
-                                    file_search::format_relative_time(file.modified)
-                                )))
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(rgb(text_dimmed))
-                                        .child(format!("Type: {}", file_type_str)),
-                                ),
-                        ),
-                )
-        } else if is_loading {
-            // When loading, show empty preview (no distracting message)
-            div().flex_1()
-        } else {
-            div().flex_1().flex().items_center().justify_center().child(
-                div()
-                    .text_sm()
-                    .text_color(rgb(text_dimmed))
-                    .child("No file selected"),
-            )
         };
 
         // Main container - styled to match main menu exactly

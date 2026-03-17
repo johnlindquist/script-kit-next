@@ -34,15 +34,13 @@ impl Render for AliasInput {
         let can_clear = self.current_alias.is_some();
 
         // Build header — title only, no explanatory subtitle
-        let header = div()
-            .w_full()
-            .child(
-                div()
-                    .text_base()
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .text_color(rgb(colors.text_primary))
-                    .child(format!("Alias for \"{}\"", self.command_name)),
-            );
+        let header = div().w_full().child(
+            div()
+                .text_base()
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .text_color(rgb(colors.text_primary))
+                .child(format!("Alias for \"{}\"", self.command_name)),
+        );
 
         // Build button row
         let clear_handler = cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {

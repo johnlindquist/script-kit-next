@@ -428,10 +428,10 @@ impl NotesApp {
         let cancel_note_id = note_id;
         let weak_notes_for_cancel = weak_notes.clone();
 
-        crate::confirm::open_parent_confirm_dialog_for_entity(
+        // Non-entity-bound: avoids keep_open_while closing dialog on re-render
+        crate::confirm::open_parent_confirm_dialog(
             window,
             cx,
-            weak_notes.clone(),
             crate::confirm::ParentConfirmOptions {
                 title,
                 body,
@@ -465,7 +465,7 @@ impl NotesApp {
                     } else {
                         "Note moved to Trash"
                     };
-                    let notif_bg = crate::ui_foundation::get_window_vibrancy_background();
+                    let notif_bg = crate::ui_foundation::get_vibrancy_surface_background(0.55);
                     window.push_notification(
                         gpui_component::notification::Notification::success(msg).bg(notif_bg),
                         cx,

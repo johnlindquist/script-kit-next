@@ -11,10 +11,6 @@
 // Provides ActionsDialog with configurable layout for script actions, AI command bar, etc.
 pub mod actions;
 
-// App Shell - Unified frame and chrome for all prompts
-// Provides ShellSpec, HeaderSpec, FooterSpec, ChromeSpec for consistent prompt layout
-pub mod app_shell;
-
 pub mod calculator;
 #[cfg(target_os = "macos")]
 pub mod camera;
@@ -51,9 +47,6 @@ pub mod terminal;
 pub mod theme;
 pub mod toast_manager;
 
-// Unified notification system - centralized notification handling
-// Supports toast, HUD, banner, system notifications with deduplication and history
-pub mod notification;
 #[cfg(not(test))]
 pub mod tray;
 pub mod utils;
@@ -66,8 +59,14 @@ pub mod windows;
 
 // Phase 1 system API modules
 pub mod clipboard_history;
+#[allow(dead_code)]
+pub mod clipboard_preview_helpers;
 pub mod file_search;
 pub mod window_control;
+
+// Render helper data (proper modules so tests are discoverable)
+#[allow(dead_code)]
+pub mod actions_dialog_items;
 
 // System actions - macOS AppleScript-based system commands
 #[cfg(target_os = "macos")]

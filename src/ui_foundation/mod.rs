@@ -144,6 +144,19 @@ pub fn get_window_vibrancy_background() -> Rgba {
     let bg_hex = theme.colors.background.main;
     gpui::rgba(hex_to_rgba_with_opacity(bg_hex, opacity))
 }
+
+/// Lighter vibrancy background for floating surfaces (dialogs, notifications).
+/// Uses a lower alpha than the window root so native macOS blur shows through.
+pub fn get_vibrancy_surface_background(alpha: f32) -> Rgba {
+    let theme = crate::theme::get_cached_theme();
+    let bg_hex = theme.colors.background.main;
+    if theme.is_vibrancy_enabled() {
+        gpui::rgba(hex_to_rgba_with_opacity(bg_hex, alpha))
+    } else {
+        gpui::rgba(hex_to_rgba_with_opacity(bg_hex, 1.0))
+    }
+}
+
 /// Get the background color for vibrancy-aware containers.
 ///
 /// **CRITICAL VIBRANCY PATTERN:** When vibrancy is enabled, content divs should NOT

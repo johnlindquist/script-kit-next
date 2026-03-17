@@ -653,12 +653,7 @@ mod tests {
     #[test]
     fn test_after_scroll_bottom_resumes_auto_follow() {
         assert_eq!(
-            resolve_chat_scroll_follow_after_scroll(
-                true,
-                ChatScrollDirection::Down,
-                false,
-                true,
-            ),
+            resolve_chat_scroll_follow_after_scroll(true, ChatScrollDirection::Down, false, true,),
             ChatScrollFollowDecision {
                 next_manual_mode: false,
             }
@@ -668,16 +663,10 @@ mod tests {
     #[test]
     fn test_after_scroll_up_not_at_bottom_enters_manual_follow() {
         assert_eq!(
-            resolve_chat_scroll_follow_after_scroll(
-                false,
-                ChatScrollDirection::Up,
-                true,
-                false,
-            ),
+            resolve_chat_scroll_follow_after_scroll(false, ChatScrollDirection::Up, true, false,),
             ChatScrollFollowDecision {
                 next_manual_mode: true,
             }
         );
     }
-
 }
