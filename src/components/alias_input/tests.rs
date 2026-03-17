@@ -1,10 +1,10 @@
 use std::time::Duration;
 
+use crate::components::overlay_modal::{compute_overlay_appear_style, OVERLAY_ANIMATION_DURATION_MS};
 use crate::theme::Theme;
 
 use super::types::{
-    compute_overlay_appear_style, is_clear_alias_shortcut, is_command_modifier,
-    validate_alias_input, ALIAS_INPUT_PLACEHOLDER, OVERLAY_ANIMATION_DURATION_MS,
+    is_clear_alias_shortcut, is_command_modifier, validate_alias_input, ALIAS_INPUT_PLACEHOLDER,
 };
 use super::{AliasInputAction, AliasInputColors, AliasValidationError};
 
@@ -37,10 +37,7 @@ fn test_alias_input_action_variants() {
 
 #[test]
 fn test_alias_placeholder_copy_is_clear() {
-    assert_eq!(
-        ALIAS_INPUT_PLACEHOLDER,
-        "Type a short alias, e.g. ch for Clipboard History"
-    );
+    assert_eq!(ALIAS_INPUT_PLACEHOLDER, "e.g. ch, clip, todo");
 }
 
 #[test]

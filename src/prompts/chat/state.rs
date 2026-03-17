@@ -54,6 +54,41 @@ impl ChatPrompt {
         scroll_top.item_ix >= item_count
     }
 
+    pub(super) fn apply_scroll_follow_decision(
+        &mut self,
+        reason: &'static str,
+        direction: ChatScrollDirection,
+        at_bottom_before: bool,
+        at_bottom_after: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let previous_manual_mode = self.user_has_scrolled_up;
+        let decision = resolve_chat_scroll_follow_after_scroll(
+            previous_manual_mode,
+            direction,
+            at_bottom_before,
+            at_bottom_after,
+        );
+
+        tracing::debug!(
+            target: "script_kit::chat_scroll",
+            event = "follow_state",
+            reason,
+            direction = ?direction,
+            previous_manual_mode,
+            next_manual_mode = decision.next_manual_mode,
+            at_bottom_before,
+            at_bottom_after,
+            turn_count = self.conversation_turns_cache.len(),
+            scroll_top_item_ix = self.turns_list_state.logical_scroll_top().item_ix,
+        );
+
+        if decision.next_manual_mode != previous_manual_mode {
+            self.user_has_scrolled_up = decision.next_manual_mode;
+            cx.notify();
+        }
+    }
+
     pub(super) fn scroll_turns_to_bottom(&mut self) {
         self.ensure_conversation_turns_cache();
         let item_count = self.conversation_turns_cache.len();
@@ -61,25 +96,34 @@ impl ChatPrompt {
             return;
         }
 
-        // If manual mode is active but the user has returned to the bottom,
-        // resume auto-follow for subsequent stream chunks.
         if self.user_has_scrolled_up && self.turns_list_is_at_bottom() {
-            logging::log(
-                "CHAT",
-                "Resuming chat auto-follow after returning to bottom",
+            tracing::debug!(
+                target: "script_kit::chat_scroll",
+                event = "resume_auto_follow",
+                reason = "already_at_bottom",
+                item_count,
             );
             self.user_has_scrolled_up = false;
         }
 
-        // Use scroll_to with a large offset_in_item to reach the actual bottom
-        // of the last (growing) turn, not just "reveal" it. This ensures the
-        // viewport follows content as a streaming item grows taller than the
-        // viewport (e.g., long markdown tables).
         if !self.user_has_scrolled_up {
+            tracing::debug!(
+                target: "script_kit::chat_scroll",
+                event = "scroll_to_bottom",
+                reason = "auto_follow",
+                item_count,
+            );
             self.turns_list_state.scroll_to(ListOffset {
                 item_ix: item_count - 1,
                 offset_in_item: px(1_000_000.),
             });
+        } else {
+            tracing::debug!(
+                target: "script_kit::chat_scroll",
+                event = "scroll_to_bottom_skipped",
+                reason = "manual_mode",
+                item_count,
+            );
         }
     }
 
@@ -88,6 +132,12 @@ impl ChatPrompt {
         self.ensure_conversation_turns_cache();
         let item_count = self.conversation_turns_cache.len();
         if item_count > 0 {
+            tracing::debug!(
+                target: "script_kit::chat_scroll",
+                event = "scroll_to_bottom",
+                reason = "force",
+                item_count,
+            );
             self.turns_list_state.scroll_to(ListOffset {
                 item_ix: item_count - 1,
                 offset_in_item: px(1_000_000.),

@@ -1,10 +1,10 @@
 use gpui::{div, prelude::*, px, rgb, rgba, IntoElement};
 
-use super::types::{BUTTON_GAP, KEYCAP_GAP, KEYCAP_SIZE, KEY_DISPLAY_HEIGHT, KEY_DISPLAY_PADDING};
+use super::types::{KEYCAP_GAP, KEYCAP_SIZE, KEY_DISPLAY_HEIGHT, KEY_DISPLAY_PADDING};
 use super::ShortcutRecorder;
 
 impl ShortcutRecorder {
-    /// Render a single keycap
+    /// Render a single keycap — lightweight, reduced chrome
     pub(super) fn render_keycap(&self, key: &str) -> impl IntoElement {
         let colors = self.colors;
         div()
@@ -13,12 +13,12 @@ impl ShortcutRecorder {
             .flex()
             .items_center()
             .justify_center()
-            .bg(rgba((colors.keycap_bg << 8) | 0xFF))
+            .bg(rgba((colors.keycap_bg << 8) | 0xCC))
             .border_1()
-            .border_color(rgba((colors.keycap_border << 8) | 0x80))
-            .rounded(px(8.))
-            .text_xl()
-            .font_weight(gpui::FontWeight::MEDIUM)
+            .border_color(rgba((colors.keycap_border << 8) | 0x40))
+            .rounded(px(6.))
+            .text_base()
+            .font_weight(gpui::FontWeight::NORMAL)
             .text_color(rgb(colors.text_primary))
             .child(key.to_string())
     }
@@ -51,7 +51,7 @@ impl ShortcutRecorder {
         }
     }
 
-    /// Render the key display area
+    /// Render the key display area — subtle container, no heavy border
     pub(super) fn render_key_display(&self) -> impl IntoElement {
         let colors = self.colors;
         let keycaps = self.get_display_keycaps();
@@ -64,15 +64,14 @@ impl ShortcutRecorder {
             .gap(px(KEYCAP_GAP));
 
         if keycaps.is_empty() {
-            // Show placeholder when nothing is pressed
+            // Quiet placeholder
             key_row = key_row.child(
                 div()
-                    .text_base()
+                    .text_sm()
                     .text_color(rgb(colors.text_muted))
-                    .child("Press any key combination..."),
+                    .child("Waiting for input…"),
             );
         } else {
-            // Show keycaps (either live modifiers or recorded shortcut)
             for keycap in keycaps {
                 key_row = key_row.child(self.render_keycap(&keycap));
             }
@@ -85,46 +84,26 @@ impl ShortcutRecorder {
             .flex()
             .items_center()
             .justify_center()
-            .bg(rgba((colors.key_display_bg << 8) | 0x60))
-            .rounded(px(8.))
-            .border_1()
-            .border_color(rgba((colors.border << 8) | 0x40))
+            .bg(rgba((colors.key_display_bg << 8) | 0x40))
+            .rounded(px(6.))
             .child(key_row)
     }
 
-    /// Render conflict warning if present
+    /// Render conflict warning — inline text, no bordered box
     pub(super) fn render_conflict_warning(&self) -> impl IntoElement {
         let colors = self.colors;
 
         if let Some(ref conflict) = self.conflict {
             div()
                 .w_full()
-                .mt(px(12.))
-                .px(px(12.))
-                .py(px(8.))
-                .bg(rgba((colors.warning << 8) | 0x20))
-                .border_1()
-                .border_color(rgba((colors.warning << 8) | 0x40))
-                .rounded(px(6.))
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(px(8.))
-                .child(div().text_sm().text_color(rgb(colors.warning)).child("⚠"))
-                .child(
-                    div()
-                        .flex_1()
-                        .text_sm()
-                        .text_color(rgb(colors.text_secondary))
-                        .child(format!("Already used by \"{}\"", conflict.command_name)),
-                )
+                .mt(px(8.))
+                .text_xs()
+                .text_color(rgb(colors.warning))
+                .text_center()
+                .child(format!("Conflicts with \"{}\"", conflict.command_name))
                 .into_any_element()
         } else {
             div().into_any_element()
         }
-    }
-
-    pub(super) fn button_gap_px() -> f32 {
-        BUTTON_GAP
     }
 }

@@ -5,20 +5,20 @@ use crate::error::ErrorSeverity;
 
 /// Canonical max width for toasts.
 pub const TOAST_MAX_WIDTH_PX: f32 = 400.0;
-/// Canonical left border width for variant indicator.
-pub const TOAST_BORDER_WIDTH_PX: f32 = 4.0;
+/// Canonical left border width for variant indicator (subtle accent line).
+pub const TOAST_BORDER_WIDTH_PX: f32 = 2.0;
 /// Canonical toast corner radius.
 pub const TOAST_RADIUS_PX: f32 = 8.0;
 /// Canonical gap between toast icon and content column.
-pub const TOAST_CONTENT_GAP_PX: f32 = 12.0;
+pub const TOAST_CONTENT_GAP_PX: f32 = 10.0;
 /// Canonical horizontal content padding.
-pub const TOAST_CONTENT_PADDING_X_PX: f32 = 16.0;
+pub const TOAST_CONTENT_PADDING_X_PX: f32 = 12.0;
 /// Canonical vertical content padding.
-pub const TOAST_CONTENT_PADDING_Y_PX: f32 = 12.0;
+pub const TOAST_CONTENT_PADDING_Y_PX: f32 = 10.0;
 /// Canonical icon container width/height.
-pub const TOAST_ICON_SIZE_PX: f32 = 24.0;
+pub const TOAST_ICON_SIZE_PX: f32 = 18.0;
 /// Canonical vertical gap within message/action content column.
-pub const TOAST_MESSAGE_COLUMN_GAP_PX: f32 = 8.0;
+pub const TOAST_MESSAGE_COLUMN_GAP_PX: f32 = 6.0;
 /// Canonical action button row gap.
 pub const TOAST_ACTIONS_GAP_PX: f32 = 8.0;
 /// Canonical top margin above actions row.

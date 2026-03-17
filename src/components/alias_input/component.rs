@@ -3,16 +3,18 @@ use std::time::Instant;
 
 use gpui::{div, prelude::*, px, rgb, rgba, Context, FocusHandle, IntoElement};
 
+use crate::components::overlay_modal::OverlayAnimation;
 use crate::components::text_input::TextInputState;
 use crate::logging;
 use crate::panel::PROMPT_INPUT_FIELD_HEIGHT;
 use crate::theme::Theme;
 
 use super::types::{
-    compute_overlay_appear_style, validate_alias_input, AliasInputAction, AliasInputColors,
-    AliasValidationError, OverlayAppearStyle, ALIAS_INPUT_PLACEHOLDER, ALIAS_VALID_HELP_TEXT,
-    INPUT_PADDING,
+    validate_alias_input, AliasInputAction, AliasInputColors, AliasValidationError,
+    ALIAS_INPUT_PLACEHOLDER, ALIAS_VALID_HELP_TEXT, INPUT_PADDING, OVERLAY_BACKDROP_ALPHA,
+    OVERLAY_BACKDROP_HOVER_ALPHA,
 };
+use crate::components::overlay_modal::overlay_color_with_alpha;
 
 #[path = "render.rs"]
 mod render;
@@ -43,6 +45,18 @@ pub struct AliasInput {
     overlay_animation_started_at: Instant,
     /// Ensures we schedule at most one animation tick task at a time
     overlay_animation_tick_scheduled: bool,
+}
+
+impl OverlayAnimation for AliasInput {
+    fn overlay_animation_started_at(&self) -> Instant {
+        self.overlay_animation_started_at
+    }
+    fn overlay_animation_tick_scheduled(&self) -> bool {
+        self.overlay_animation_tick_scheduled
+    }
+    fn set_overlay_animation_tick_scheduled(&mut self, scheduled: bool) {
+        self.overlay_animation_tick_scheduled = scheduled;
+    }
 }
 
 impl AliasInput {
@@ -156,40 +170,16 @@ impl AliasInput {
         self.cursor_visible = visible;
     }
 
-    fn overlay_appear_style(&self) -> OverlayAppearStyle {
-        compute_overlay_appear_style(self.overlay_animation_started_at.elapsed())
-    }
-
-    fn schedule_overlay_animation_tick_if_needed(
-        &mut self,
-        animation_complete: bool,
-        cx: &mut Context<Self>,
-    ) {
-        if animation_complete || self.overlay_animation_tick_scheduled {
-            return;
-        }
-
-        self.overlay_animation_tick_scheduled = true;
-        cx.spawn(async move |this, cx| {
-            cx.background_executor()
-                .timer(std::time::Duration::from_millis(16))
-                .await;
-            cx.update(|cx| {
-                let _ = this.update(cx, |app, cx| {
-                    app.overlay_animation_tick_scheduled = false;
-                    cx.notify();
-                });
-            });
-        })
-        .detach();
-    }
-
     pub(crate) fn input_hover_border_token(colors: AliasInputColors) -> u32 {
-        (colors.accent << 8) | 0x90
+        overlay_color_with_alpha(colors.accent, 0x90)
     }
 
     pub(crate) fn backdrop_hover_bg_token(colors: AliasInputColors) -> u32 {
-        (colors.overlay_bg << 8) | 0x96
+        overlay_color_with_alpha(colors.overlay_bg, OVERLAY_BACKDROP_HOVER_ALPHA)
+    }
+
+    pub(crate) fn backdrop_bg_token(colors: AliasInputColors) -> u32 {
+        overlay_color_with_alpha(colors.overlay_bg, OVERLAY_BACKDROP_ALPHA)
     }
 
     /// Render the text input field with cursor and selection

@@ -27,6 +27,7 @@
 //! - **Theme integration**: Use `from_theme()` or `from_design()` for colors
 
 pub mod alias_input;
+pub(crate) mod overlay_modal;
 pub mod button;
 #[cfg(test)]
 mod error_handling_audit_tests;

@@ -1,47 +1,19 @@
-use std::time::Duration;
-
 use crate::theme::Theme;
-use crate::transitions;
 
-/// Constants for shortcut recorder styling
-pub(super) const MODAL_WIDTH: f32 = 420.0;
-pub(super) const MODAL_PADDING: f32 = 24.0;
-pub(super) const KEY_DISPLAY_HEIGHT: f32 = 64.0;
-pub(super) const KEY_DISPLAY_PADDING: f32 = 16.0;
-pub(super) const KEYCAP_SIZE: f32 = 44.0;
-pub(super) const KEYCAP_GAP: f32 = 8.0;
-pub(super) const BUTTON_GAP: f32 = 12.0;
-pub(super) const OVERLAY_ANIMATION_DURATION_MS: u64 = 140;
-pub(super) const OVERLAY_MODAL_ENTRY_OFFSET_PX: f32 = 12.0;
-pub(super) const OVERLAY_MODAL_START_OPACITY: f32 = 0.82;
+// Re-export shared overlay constants consumed by render.rs and render_helpers.rs
+pub(super) use crate::components::overlay_modal::{
+    overlay_color_with_alpha, BUTTON_GAP, MODAL_PADDING, MODAL_WIDTH,
+};
+
+/// Shortcut-recorder-specific layout constants
+pub(super) const KEY_DISPLAY_HEIGHT: f32 = 52.0;
+pub(super) const KEY_DISPLAY_PADDING: f32 = 12.0;
+pub(super) const KEYCAP_SIZE: f32 = 36.0;
+pub(super) const KEYCAP_GAP: f32 = 6.0;
+
+/// Backdrop alpha values specific to shortcut recorder
 pub(super) const OVERLAY_BACKDROP_ALPHA: u8 = 0x80;
 pub(super) const OVERLAY_BACKDROP_HOVER_ALPHA: u8 = 0x90;
-
-#[derive(Clone, Copy, Debug)]
-pub(super) struct OverlayAppearStyle {
-    pub(super) backdrop_opacity: f32,
-    pub(super) modal_opacity: f32,
-    pub(super) modal_offset_y: f32,
-    pub(super) complete: bool,
-}
-
-pub(super) fn compute_overlay_appear_style(elapsed: Duration) -> OverlayAppearStyle {
-    let progress =
-        (elapsed.as_secs_f32() / (OVERLAY_ANIMATION_DURATION_MS as f32 / 1000.0)).clamp(0.0, 1.0);
-    let eased = transitions::ease_out_quad(progress);
-    let modal_opacity = OVERLAY_MODAL_START_OPACITY + ((1.0 - OVERLAY_MODAL_START_OPACITY) * eased);
-
-    OverlayAppearStyle {
-        backdrop_opacity: eased,
-        modal_opacity,
-        modal_offset_y: OVERLAY_MODAL_ENTRY_OFFSET_PX * (1.0 - eased),
-        complete: progress >= 1.0,
-    }
-}
-
-pub(super) fn overlay_color_with_alpha(color: u32, alpha: u8) -> u32 {
-    ((color & 0x00ff_ffff) << 8) | (alpha as u32)
-}
 
 /// Pre-computed colors for ShortcutRecorder rendering
 #[derive(Clone, Copy, Debug)]

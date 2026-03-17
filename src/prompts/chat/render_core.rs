@@ -512,24 +512,49 @@ impl Render for ChatPrompt {
                             ChatScrollDirection::None
                         };
 
-                        let is_at_bottom = this.turns_list_is_at_bottom();
-                        let next_state = next_chat_scroll_follow_state(
-                            this.user_has_scrolled_up,
-                            direction,
-                            is_at_bottom,
+                        let at_bottom_before = this.turns_list_is_at_bottom();
+                        let previous_manual_mode = this.user_has_scrolled_up;
+                        let was_up = matches!(direction, ChatScrollDirection::Up);
+                        let was_down = matches!(direction, ChatScrollDirection::Down);
+
+                        tracing::debug!(
+                            target: "script_kit::chat_scroll",
+                            event = "wheel",
+                            phase = "before",
+                            direction = ?direction,
+                            delta_y = ?delta_y,
+                            at_bottom_before,
+                            previous_manual_mode,
+                            turn_count = this.conversation_turns_cache.len(),
+                            scroll_top_item_ix = this.turns_list_state.logical_scroll_top().item_ix,
                         );
 
-                        if next_state != this.user_has_scrolled_up {
-                            logging::log(
-                                "CHAT",
-                                &format!(
-                                    "Scroll follow changed: manual_mode={} direction={:?} at_bottom={}",
-                                    next_state, direction, is_at_bottom
-                                ),
-                            );
-                            this.user_has_scrolled_up = next_state;
-                            cx.notify();
-                        }
+                        cx.spawn(async move |this, cx| {
+                            cx.background_executor()
+                                .timer(std::time::Duration::from_millis(1))
+                                .await;
+
+                            this.update(cx, |this, cx| {
+                                let direction = if was_up {
+                                    ChatScrollDirection::Up
+                                } else if was_down {
+                                    ChatScrollDirection::Down
+                                } else {
+                                    ChatScrollDirection::None
+                                };
+
+                                let at_bottom_after = this.turns_list_is_at_bottom();
+                                this.apply_scroll_follow_decision(
+                                    "wheel",
+                                    direction,
+                                    at_bottom_before,
+                                    at_bottom_after,
+                                    cx,
+                                );
+                            })
+                            .ok();
+                        })
+                        .detach();
                     }),
                 )
                 .child(turns_list)

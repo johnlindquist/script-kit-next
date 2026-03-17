@@ -4,6 +4,7 @@ use gpui::{
 };
 
 use crate::components::button::{Button, ButtonColors, ButtonVariant};
+use crate::components::overlay_modal::OverlayAnimation;
 use crate::logging;
 use crate::ui_foundation::{is_key_enter, is_key_escape};
 
@@ -24,6 +25,7 @@ impl Render for AliasInput {
         let button_colors = ButtonColors::from_theme(&self.theme);
         let validation_feedback = self.validation_feedback();
         let overlay_appear = self.overlay_appear_style();
+        let backdrop_bg = rgba(Self::backdrop_bg_token(colors));
         let backdrop_hover_bg = rgba(Self::backdrop_hover_bg_token(colors));
         self.schedule_overlay_animation_tick_if_needed(overlay_appear.complete, cx);
 
@@ -31,24 +33,15 @@ impl Render for AliasInput {
         let can_save = validation_feedback.is_ok();
         let can_clear = self.current_alias.is_some();
 
-        // Build header with command info
+        // Build header — title only, no explanatory subtitle
         let header = div()
             .w_full()
-            .flex()
-            .flex_col()
-            .gap(px(4.))
             .child(
                 div()
-                    .text_lg()
+                    .text_base()
                     .font_weight(gpui::FontWeight::SEMIBOLD)
                     .text_color(rgb(colors.text_primary))
-                    .child(format!("Set Alias for \"{}\"", self.command_name)),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(rgb(colors.text_muted))
-                    .child("Type the alias + space in the main menu to run this command"),
+                    .child(format!("Alias for \"{}\"", self.command_name)),
             );
 
         // Build button row
@@ -69,7 +62,7 @@ impl Render for AliasInput {
 
         let buttons = div()
             .w_full()
-            .mt(px(16.))
+            .mt(px(12.))
             .flex()
             .flex_row()
             .items_center()
@@ -193,7 +186,7 @@ impl Render for AliasInput {
                 // Empty handler stops propagation to backdrop
             })
             .child(header)
-            .child(div().h(px(16.))) // Spacer
+            .child(div().h(px(12.))) // Spacer
             .child(self.render_input_field(cx))
             .child(validation)
             .child(buttons);
@@ -212,7 +205,7 @@ impl Render for AliasInput {
                     .id("alias-input-backdrop")
                     .absolute()
                     .inset_0()
-                    .bg(rgba((colors.overlay_bg << 8) | 0x80)) // 50% opacity
+                    .bg(backdrop_bg)
                     .opacity(overlay_appear.backdrop_opacity)
                     .cursor_pointer()
                     .hover(move |style| style.bg(backdrop_hover_bg))
