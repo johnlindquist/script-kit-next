@@ -488,7 +488,6 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
         debug!("Added Emoji Picker built-in entry");
 
-
         // Design Gallery is only available in debug builds (developer tool)
         #[cfg(debug_assertions)]
         {
@@ -1569,7 +1568,6 @@ mod tests {
         assert_eq!(emoji_picker.feature, BuiltInFeature::EmojiPicker);
         assert!(emoji_picker.keywords.contains(&"emoji".to_string()));
         assert!(emoji_picker.keywords.contains(&"picker".to_string()));
-
 
         // Note: App Launcher built-in removed - apps now appear directly in main search
     }

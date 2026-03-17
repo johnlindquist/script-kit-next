@@ -167,16 +167,25 @@ pub(crate) fn prompt_field_style(
     state: PromptFieldState,
     empty: bool,
 ) -> PromptFieldStyle {
-    let default_background =
-        rgba(hex_to_rgba_with_opacity(theme.colors.background.search_box, OPACITY_CARD_BG));
-    let highlighted_background =
-        rgba(hex_to_rgba_with_opacity(theme.colors.accent.selected_subtle, OPACITY_CARD_BG));
-    let default_border =
-        rgba(hex_to_rgba_with_opacity(theme.colors.ui.border, OPACITY_BORDER));
+    let default_background = rgba(hex_to_rgba_with_opacity(
+        theme.colors.background.search_box,
+        OPACITY_CARD_BG,
+    ));
+    let highlighted_background = rgba(hex_to_rgba_with_opacity(
+        theme.colors.accent.selected_subtle,
+        OPACITY_CARD_BG,
+    ));
+    let default_border = rgba(hex_to_rgba_with_opacity(
+        theme.colors.ui.border,
+        OPACITY_BORDER,
+    ));
     let active_border = rgb(theme.colors.accent.selected);
     let error_border = rgb(theme.colors.ui.error);
     let value = if empty {
-        rgba(hex_to_rgba_with_opacity(theme.colors.text.muted, OPACITY_PROMINENT))
+        rgba(hex_to_rgba_with_opacity(
+            theme.colors.text.muted,
+            OPACITY_PROMINENT,
+        ))
     } else {
         rgb(theme.colors.text.primary)
     };
@@ -329,10 +338,7 @@ mod prompt_layout_shell_tests {
     fn prompt_surface_defaults_match_create_flow_field_chrome() {
         // Verify the shared surface uses the design-specified values.
         // If these change, update all callers too.
-        let _surface = super::prompt_surface(
-            gpui::rgba(0x112233ee),
-            gpui::rgba(0x445566ff),
-        );
+        let _surface = super::prompt_surface(gpui::rgba(0x112233ee), gpui::rgba(0x445566ff));
         // The function is purely a builder; the real assertion is that it
         // compiles and the constants below stay in sync with the implementation.
         assert_eq!(8.0_f32, 8.0); // radius

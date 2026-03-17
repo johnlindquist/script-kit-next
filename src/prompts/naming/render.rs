@@ -31,10 +31,13 @@ impl Render for NamingPrompt {
             ),
         };
 
-        let placeholder = self.placeholder.clone().unwrap_or_else(|| match self.target {
-            NamingTarget::Script => "My Cool Script".to_string(),
-            NamingTarget::Extension => "My Cool Scriptlet Bundle".to_string(),
-        });
+        let placeholder = self
+            .placeholder
+            .clone()
+            .unwrap_or_else(|| match self.target {
+                NamingTarget::Script => "My Cool Script".to_string(),
+                NamingTarget::Extension => "My Cool Scriptlet Bundle".to_string(),
+            });
 
         let validation_message = self
             .validation_error
@@ -116,11 +119,13 @@ impl Render for NamingPrompt {
                             preview_style.background,
                             preview_style.border,
                         )
-                        .child(crate::components::prompt_scroll_value_with_id(
-                            "naming-destination-path",
-                            destination_text,
-                            text_muted,
-                        )),
+                        .child(
+                            crate::components::prompt_scroll_value_with_id(
+                                "naming-destination-path",
+                                destination_text,
+                                text_muted,
+                            ),
+                        ),
                     ))
                     .child(crate::components::prompt_form_section(
                         preview_label,
@@ -149,10 +154,7 @@ impl Render for NamingPrompt {
                                     text_muted,
                                 ))
                                 .child(crate::components::prompt_form_help(
-                                    format!(
-                                        "{preview_kind} ({})",
-                                        self.extension_label()
-                                    ),
+                                    format!("{preview_kind} ({})", self.extension_label()),
                                     text_secondary,
                                 )),
                         ),
@@ -228,10 +230,7 @@ mod tests {
     fn naming_render_no_longer_duplicates_footer_cancel_hint() {
         // Check that the non-test portion of the file doesn't contain the hint.
         // Split at the test module boundary to avoid matching our own assertion.
-        let production_code = SOURCE
-            .split("#[cfg(test)]")
-            .next()
-            .unwrap_or(SOURCE);
+        let production_code = SOURCE.split("#[cfg(test)]").next().unwrap_or(SOURCE);
         let needle = ["Esc", " to ", "cancel"].concat();
         assert!(
             !production_code.contains(&needle),
