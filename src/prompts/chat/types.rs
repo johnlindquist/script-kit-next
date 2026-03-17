@@ -265,6 +265,26 @@ pub(crate) fn next_chat_scroll_follow_state(
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ChatScrollFollowDecision {
+    pub next_manual_mode: bool,
+}
+
+pub(crate) fn resolve_chat_scroll_follow_after_scroll(
+    previous_manual_mode: bool,
+    direction: ChatScrollDirection,
+    at_bottom_before: bool,
+    at_bottom_after: bool,
+) -> ChatScrollFollowDecision {
+    let next_manual_mode = if at_bottom_after {
+        false
+    } else {
+        next_chat_scroll_follow_state(previous_manual_mode, direction, at_bottom_before)
+    };
+
+    ChatScrollFollowDecision { next_manual_mode }
+}
+
 /// A conversation turn: user prompt + optional AI response
 #[derive(Clone, Debug)]
 pub struct ConversationTurn {
@@ -629,4 +649,35 @@ mod tests {
             "downward scroll at bottom should resume auto-follow"
         );
     }
+
+    #[test]
+    fn test_after_scroll_bottom_resumes_auto_follow() {
+        assert_eq!(
+            resolve_chat_scroll_follow_after_scroll(
+                true,
+                ChatScrollDirection::Down,
+                false,
+                true,
+            ),
+            ChatScrollFollowDecision {
+                next_manual_mode: false,
+            }
+        );
+    }
+
+    #[test]
+    fn test_after_scroll_up_not_at_bottom_enters_manual_follow() {
+        assert_eq!(
+            resolve_chat_scroll_follow_after_scroll(
+                false,
+                ChatScrollDirection::Up,
+                true,
+                false,
+            ),
+            ChatScrollFollowDecision {
+                next_manual_mode: true,
+            }
+        );
+    }
+
 }

@@ -171,13 +171,34 @@
                                 } => {
                                     // Filter apps to get correct count
                                     let filtered_len = this.apps.len();
+                                    let old_index = *selected_index;
+
                                     if is_up && *selected_index > 0 {
                                         *selected_index -= 1;
-                                        cx.notify();
                                     } else if is_down && *selected_index + 1 < filtered_len {
                                         *selected_index += 1;
+                                    }
+
+                                    if *selected_index != old_index {
+                                        tracing::debug!(
+                                            target: "script_kit::scroll",
+                                            event = "builtin_selection_nav",
+                                            view = "app_launcher",
+                                            old_index,
+                                            new_index = *selected_index,
+                                            total_items = filtered_len,
+                                            strategy = "nearest",
+                                        );
+
+                                        this.list_scroll_handle.scroll_to_item(
+                                            *selected_index,
+                                            gpui::ScrollStrategy::Nearest,
+                                        );
+                                        this.input_mode = InputMode::Keyboard;
+                                        this.hovered_index = None;
                                         cx.notify();
                                     }
+
                                     cx.stop_propagation();
                                 }
                                 AppView::WindowSwitcherView {

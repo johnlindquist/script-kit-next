@@ -1,14 +1,15 @@
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
-use gpui::{Context, FocusHandle};
+use gpui::Context;
 
+use crate::components::overlay_modal::OverlayAnimation;
 use crate::logging;
 use crate::theme::Theme;
 
 use super::types::{
-    compute_overlay_appear_style, ConflictChecker, OnCancelCallback, OnSaveCallback,
-    OverlayAppearStyle, RecordedShortcut, RecorderAction, ShortcutConflict, ShortcutRecorderColors,
+    ConflictChecker, OnCancelCallback, OnSaveCallback, RecordedShortcut, RecorderAction,
+    ShortcutConflict, ShortcutRecorderColors,
 };
 
 fn has_recording_modifier(modifiers: gpui::Modifiers) -> bool {
@@ -24,7 +25,7 @@ fn should_finish_recording(key: &str, is_modifier_key: bool, modifiers: gpui::Mo
 /// A modal dialog for recording keyboard shortcuts with visual feedback.
 pub struct ShortcutRecorder {
     /// Focus handle for keyboard input
-    pub focus_handle: FocusHandle,
+    pub focus_handle: gpui::FocusHandle,
     /// Theme for styling
     pub theme: Arc<Theme>,
     /// Pre-computed colors
@@ -50,9 +51,21 @@ pub struct ShortcutRecorder {
     /// Pending action for the parent to handle (polled after render)
     pub pending_action: Option<RecorderAction>,
     /// Timestamp for enter animation start (fade/slide-in)
-    pub(super) overlay_animation_started_at: Instant,
+    overlay_animation_started_at: Instant,
     /// Ensures we schedule at most one animation tick task at a time
-    pub(super) overlay_animation_tick_scheduled: bool,
+    overlay_animation_tick_scheduled: bool,
+}
+
+impl OverlayAnimation for ShortcutRecorder {
+    fn overlay_animation_started_at(&self) -> Instant {
+        self.overlay_animation_started_at
+    }
+    fn overlay_animation_tick_scheduled(&self) -> bool {
+        self.overlay_animation_tick_scheduled
+    }
+    fn set_overlay_animation_tick_scheduled(&mut self, scheduled: bool) {
+        self.overlay_animation_tick_scheduled = scheduled;
+    }
 }
 
 impl ShortcutRecorder {
@@ -273,34 +286,6 @@ impl ShortcutRecorder {
     pub fn update_theme(&mut self, theme: Arc<Theme>) {
         self.colors = ShortcutRecorderColors::from_theme(&theme);
         self.theme = theme;
-    }
-
-    pub(super) fn overlay_appear_style(&self) -> OverlayAppearStyle {
-        compute_overlay_appear_style(self.overlay_animation_started_at.elapsed())
-    }
-
-    pub(super) fn schedule_overlay_animation_tick_if_needed(
-        &mut self,
-        animation_complete: bool,
-        cx: &mut Context<Self>,
-    ) {
-        if animation_complete || self.overlay_animation_tick_scheduled {
-            return;
-        }
-
-        self.overlay_animation_tick_scheduled = true;
-        cx.spawn(async move |this, cx| {
-            cx.background_executor()
-                .timer(Duration::from_millis(16))
-                .await;
-            cx.update(|cx| {
-                let _ = this.update(cx, |recorder, cx| {
-                    recorder.overlay_animation_tick_scheduled = false;
-                    cx.notify();
-                });
-            });
-        })
-        .detach();
     }
 }
 

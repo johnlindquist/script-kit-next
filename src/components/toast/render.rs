@@ -3,26 +3,34 @@ use gpui::*;
 use crate::components::button::{Button, ButtonColors, ButtonVariant};
 use crate::list_item::FONT_MONO;
 use crate::theme::get_cached_theme;
+use crate::theme::opacity::{OPACITY_HIDDEN, OPACITY_ICON_MUTED, OPACITY_MUTED, OPACITY_NEAR_FULL};
 
 use super::types::{
     TOAST_ACTIONS_GAP_PX, TOAST_ACTIONS_MARGIN_TOP_PX, TOAST_BORDER_WIDTH_PX, TOAST_CONTENT_GAP_PX,
     TOAST_CONTENT_PADDING_X_PX, TOAST_CONTENT_PADDING_Y_PX, TOAST_ICON_SIZE_PX, TOAST_MAX_WIDTH_PX,
     TOAST_MESSAGE_COLUMN_GAP_PX, TOAST_RADIUS_PX,
 };
-use super::{Toast, ToastColors};
+use super::{Toast, ToastColors, ToastVariant};
 
 impl RenderOnce for Toast {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let colors = self.colors;
         let variant = self.variant;
         let on_dismiss_callback = self.on_dismiss;
+        let is_error = variant == ToastVariant::Error;
 
         // Check vibrancy to conditionally apply shadow
         let theme = get_cached_theme();
         let vibrancy_enabled = theme.is_vibrancy_enabled();
 
+        // Icon opacity: full for error (must stay prominent), muted for others
+        let icon_opacity = if is_error {
+            OPACITY_NEAR_FULL
+        } else {
+            OPACITY_ICON_MUTED
+        };
+
         // Main toast container
-        // Apply shadow conditionally BEFORE .id() to avoid Stateful<Div> type issues
         let base_toast = div()
             .flex()
             .flex_col()
@@ -45,7 +53,8 @@ impl RenderOnce for Toast {
                 "toast-{}",
                 self.message
             ))))
-            .overflow_hidden();
+            .overflow_hidden()
+            .group("toast");
 
         // Content row (icon, message, actions, dismiss)
         let content_row = div()
@@ -62,9 +71,10 @@ impl RenderOnce for Toast {
             .justify_center()
             .w(px(TOAST_ICON_SIZE_PX))
             .h(px(TOAST_ICON_SIZE_PX))
-            .text_lg()
+            .text_sm()
             .text_color(rgb(colors.icon))
-            .font_weight(FontWeight::BOLD)
+            .opacity(icon_opacity)
+            .font_weight(FontWeight::MEDIUM)
             .child(variant.icon());
 
         // Message and actions column
@@ -94,7 +104,6 @@ impl RenderOnce for Toast {
             for action in self.actions {
                 let callback = action.callback.clone();
                 let label = action.label.clone();
-                // Create button colors for toast action buttons (Ghost style)
                 let button_colors = ButtonColors {
                     text_color: colors.action_text,
                     text_hover: colors.action_text,
@@ -119,10 +128,9 @@ impl RenderOnce for Toast {
             message_col = message_col.child(actions_row);
         }
 
-        // Dismiss button (if dismissible)
+        // Dismiss button — quiet by default, visible on hover
         let dismiss_btn = if self.dismissible {
             let dismiss_callback = on_dismiss_callback.clone();
-            // Create button colors for dismiss button (Icon style)
             let button_colors = ButtonColors {
                 text_color: colors.dismiss,
                 text_hover: colors.text,
@@ -135,14 +143,19 @@ impl RenderOnce for Toast {
                 hover_overlay: ToastColors::overlay_with_alpha(colors.action_background, 0x26),
             };
             Some(
-                Button::new("×", button_colors)
-                    .variant(ButtonVariant::Icon)
-                    .on_click(Box::new(move |_event, window, cx| {
-                        tracing::debug!("Toast dismiss button clicked");
-                        if let Some(ref callback) = dismiss_callback {
-                            callback(window, cx);
-                        }
-                    })),
+                div()
+                    .opacity(OPACITY_HIDDEN)
+                    .group_hover("toast", |s| s.opacity(OPACITY_MUTED))
+                    .child(
+                        Button::new("×", button_colors)
+                            .variant(ButtonVariant::Icon)
+                            .on_click(Box::new(move |_event, window, cx| {
+                                tracing::debug!("Toast dismiss button clicked");
+                                if let Some(ref callback) = dismiss_callback {
+                                    callback(window, cx);
+                                }
+                            })),
+                    ),
             )
         } else {
             None

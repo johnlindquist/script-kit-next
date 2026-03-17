@@ -82,6 +82,25 @@ fn test_search_ai_presets_arrow_navigation_clamps_to_filtered_count() {
 }
 
 #[test]
+fn test_app_launcher_arrow_navigation_scrolls_selected_item() {
+    let source = read_arrow_interceptor_source();
+
+    let arm_start = source
+        .find("AppView::AppLauncherView")
+        .expect("AppLauncherView arrow handler not found");
+    let arm = &source[arm_start..(arm_start + 2000).min(source.len())];
+
+    assert!(
+        arm.contains("list_scroll_handle"),
+        "AppLauncherView should use list_scroll_handle for keyboard navigation"
+    );
+    assert!(
+        arm.contains("scroll_to_item"),
+        "AppLauncherView keyboard navigation should keep the selected row visible"
+    );
+}
+
+#[test]
 fn test_favorites_browse_arrow_navigation_clamps_to_filtered_count() {
     let source = read_arrow_interceptor_source();
 

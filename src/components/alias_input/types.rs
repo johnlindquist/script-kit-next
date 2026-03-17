@@ -1,42 +1,17 @@
-use std::time::Duration;
-
 use crate::theme::Theme;
-use crate::transitions;
 
-/// Constants for alias input styling
-pub(super) const MODAL_WIDTH: f32 = 420.0;
-pub(super) const MODAL_PADDING: f32 = 24.0;
+// Re-export shared overlay constants consumed by render.rs (via super::super::types)
+pub(super) use crate::components::overlay_modal::{BUTTON_GAP, MODAL_PADDING, MODAL_WIDTH};
+
+/// Constants specific to alias input
 pub(super) const INPUT_PADDING: f32 = 12.0;
-pub(super) const BUTTON_GAP: f32 = 12.0;
 pub(super) const ALIAS_MAX_LENGTH: usize = 32;
-pub(super) const ALIAS_INPUT_PLACEHOLDER: &str =
-    "Type a short alias, e.g. ch for Clipboard History";
-pub(super) const ALIAS_VALID_HELP_TEXT: &str = "Alias runs with <alias> + space in the main menu";
-pub(super) const OVERLAY_ANIMATION_DURATION_MS: u64 = 140;
-pub(super) const OVERLAY_MODAL_ENTRY_OFFSET_PX: f32 = 12.0;
-pub(super) const OVERLAY_MODAL_START_OPACITY: f32 = 0.82;
+pub(super) const ALIAS_INPUT_PLACEHOLDER: &str = "e.g. ch, clip, todo";
+pub(super) const ALIAS_VALID_HELP_TEXT: &str = "Type alias + space in the main menu to run";
 
-#[derive(Clone, Copy, Debug)]
-pub(super) struct OverlayAppearStyle {
-    pub(super) backdrop_opacity: f32,
-    pub(super) modal_opacity: f32,
-    pub(super) modal_offset_y: f32,
-    pub(super) complete: bool,
-}
-
-pub(super) fn compute_overlay_appear_style(elapsed: Duration) -> OverlayAppearStyle {
-    let progress =
-        (elapsed.as_secs_f32() / (OVERLAY_ANIMATION_DURATION_MS as f32 / 1000.0)).clamp(0.0, 1.0);
-    let eased = transitions::ease_out_quad(progress);
-    let modal_opacity = OVERLAY_MODAL_START_OPACITY + ((1.0 - OVERLAY_MODAL_START_OPACITY) * eased);
-
-    OverlayAppearStyle {
-        backdrop_opacity: eased,
-        modal_opacity,
-        modal_offset_y: OVERLAY_MODAL_ENTRY_OFFSET_PX * (1.0 - eased),
-        complete: progress >= 1.0,
-    }
-}
+/// Backdrop alpha values specific to alias input (0x96 hover differs from shortcut recorder's 0x90)
+pub(super) const OVERLAY_BACKDROP_ALPHA: u8 = 0x80;
+pub(super) const OVERLAY_BACKDROP_HOVER_ALPHA: u8 = 0x96;
 
 /// Pre-computed colors for AliasInput rendering
 #[derive(Clone, Copy, Debug)]

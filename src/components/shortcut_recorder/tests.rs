@@ -1,11 +1,11 @@
 use std::time::Duration;
 
+use crate::components::overlay_modal::{
+    compute_overlay_appear_style, overlay_color_with_alpha, OVERLAY_ANIMATION_DURATION_MS,
+};
 use crate::theme::Theme;
 
-use super::types::{
-    compute_overlay_appear_style, overlay_color_with_alpha, OVERLAY_ANIMATION_DURATION_MS,
-    OVERLAY_BACKDROP_ALPHA, OVERLAY_BACKDROP_HOVER_ALPHA,
-};
+use super::types::{OVERLAY_BACKDROP_ALPHA, OVERLAY_BACKDROP_HOVER_ALPHA};
 use super::{RecordedShortcut, ShortcutRecorderColors};
 
 #[test]

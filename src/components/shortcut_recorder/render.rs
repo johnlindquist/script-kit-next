@@ -4,11 +4,12 @@ use gpui::{
 };
 
 use crate::components::button::{Button, ButtonColors, ButtonVariant};
+use crate::components::overlay_modal::OverlayAnimation;
 use crate::logging;
 use crate::ui_foundation::{is_key_enter, is_key_escape};
 
 use super::types::{
-    overlay_color_with_alpha, MODAL_PADDING, MODAL_WIDTH, OVERLAY_BACKDROP_ALPHA,
+    overlay_color_with_alpha, BUTTON_GAP, MODAL_PADDING, MODAL_WIDTH, OVERLAY_BACKDROP_ALPHA,
     OVERLAY_BACKDROP_HOVER_ALPHA,
 };
 use super::ShortcutRecorder;
@@ -38,35 +39,18 @@ impl Render for ShortcutRecorder {
         let can_save = self.shortcut.is_complete() && self.conflict.is_none();
         let can_clear = !self.shortcut.is_empty();
 
-        // Build header with command info
-        let header = div()
-            .w_full()
-            .flex()
-            .flex_col()
-            .gap(px(4.))
-            .child(
-                div()
-                    .text_lg()
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .text_color(rgb(colors.text_primary))
-                    .child("Record Keyboard Shortcut"),
-            )
-            .when_some(self.command_name.clone(), |d, name| {
-                d.child(
-                    div()
-                        .text_base()
-                        .text_color(rgb(colors.text_secondary))
-                        .child(format!("For: {}", name)),
-                )
-            })
-            .when_some(self.command_description.clone(), |d, desc| {
-                d.child(
-                    div()
-                        .text_sm()
-                        .text_color(rgb(colors.text_muted))
-                        .child(desc),
-                )
-            });
+        // Build header — single title line, command name folded in
+        let title = match self.command_name.as_deref() {
+            Some(name) => format!("Shortcut for \"{}\"", name),
+            None => "Record Shortcut".to_string(),
+        };
+        let header = div().w_full().child(
+            div()
+                .text_base()
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .text_color(rgb(colors.text_primary))
+                .child(title),
+        );
 
         // Build button row
         let clear_handler = cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
@@ -83,7 +67,7 @@ impl Render for ShortcutRecorder {
 
         let buttons = div()
             .w_full()
-            .mt(px(16.))
+            .mt(px(12.))
             .flex()
             .flex_row()
             .items_center()
@@ -102,7 +86,7 @@ impl Render for ShortcutRecorder {
                 div()
                     .flex()
                     .flex_row()
-                    .gap(px(Self::button_gap_px()))
+                    .gap(px(BUTTON_GAP))
                     .child(
                         Button::new("Cancel", button_colors)
                             .variant(ButtonVariant::Ghost)
@@ -122,14 +106,14 @@ impl Render for ShortcutRecorder {
                     ),
             );
 
-        // Instructions
+        // Compact hint — just the modifier symbols
         let instructions = div()
             .w_full()
-            .mt(px(12.))
+            .mt(px(8.))
             .text_xs()
             .text_color(rgb(colors.text_muted))
             .text_center()
-            .child("Press a modifier (⌘⌃⌥⇧) + a key");
+            .child("⌘ ⌃ ⌥ ⇧ + key");
 
         // Key down event handler - captures modifiers and keys
         let handle_key_down = cx.listener(move |this, event: &gpui::KeyDownEvent, _window, cx| {
@@ -200,7 +184,7 @@ impl Render for ShortcutRecorder {
                 // Empty handler stops propagation to backdrop
             })
             .child(header)
-            .child(div().h(px(16.))) // Spacer
+            .child(div().h(px(12.))) // Spacer
             .child(self.render_key_display())
             .child(self.render_conflict_warning())
             .child(instructions)
