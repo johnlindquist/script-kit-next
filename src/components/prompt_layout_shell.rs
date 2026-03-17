@@ -1,6 +1,5 @@
 use gpui::{div, prelude::*, px, rems, rgb, rgba, Div, FontWeight, Rgba, SharedString};
 
-use crate::theme::opacity::{OPACITY_BORDER, OPACITY_CARD_BG, OPACITY_PROMINENT};
 use crate::ui_foundation::hex_to_rgba_with_opacity;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -162,54 +161,45 @@ pub(crate) struct PromptFieldStyle {
 }
 
 /// Compute field colors from the theme, field state, and whether the value is empty.
+///
+/// All color/opacity decisions route through [`AppChromeColors`] so prompt
+/// fields stay consistent with the rest of the app chrome.
 pub(crate) fn prompt_field_style(
     theme: &crate::theme::Theme,
     state: PromptFieldState,
     empty: bool,
 ) -> PromptFieldStyle {
-    let default_background = rgba(hex_to_rgba_with_opacity(
-        theme.colors.background.search_box,
-        OPACITY_CARD_BG,
+    let chrome = crate::theme::AppChromeColors::from_theme(theme);
+    let muted_value = rgba(hex_to_rgba_with_opacity(
+        theme.colors.text.muted,
+        theme.get_opacity().input_inactive,
     ));
-    let highlighted_background = rgba(hex_to_rgba_with_opacity(
-        theme.colors.accent.selected_subtle,
-        OPACITY_CARD_BG,
-    ));
-    let default_border = rgba(hex_to_rgba_with_opacity(
-        theme.colors.ui.border,
-        OPACITY_BORDER,
-    ));
-    let active_border = rgb(theme.colors.accent.selected);
-    let error_border = rgb(theme.colors.ui.error);
     let value = if empty {
-        rgba(hex_to_rgba_with_opacity(
-            theme.colors.text.muted,
-            OPACITY_PROMINENT,
-        ))
+        muted_value
     } else {
-        rgb(theme.colors.text.primary)
+        rgb(chrome.text_primary_hex)
     };
 
     match state {
         PromptFieldState::Default => PromptFieldStyle {
-            background: default_background,
-            border: default_border,
+            background: rgba(chrome.input_surface_rgba),
+            border: rgba(chrome.badge_border_rgba),
             value,
         },
         PromptFieldState::Active => PromptFieldStyle {
-            background: highlighted_background,
-            border: active_border,
+            background: rgba(chrome.selection_rgba),
+            border: rgb(chrome.accent_hex),
             value,
         },
         PromptFieldState::Error => PromptFieldStyle {
-            background: default_background,
-            border: error_border,
+            background: rgba(chrome.input_surface_rgba),
+            border: rgb(theme.colors.ui.error),
             value,
         },
         PromptFieldState::ReadOnly => PromptFieldStyle {
-            background: highlighted_background,
-            border: default_border,
-            value: rgb(theme.colors.text.primary),
+            background: rgba(chrome.selection_rgba),
+            border: rgba(chrome.badge_border_rgba),
+            value: rgb(chrome.text_primary_hex),
         },
     }
 }
@@ -344,6 +334,22 @@ mod prompt_layout_shell_tests {
         assert_eq!(8.0_f32, 8.0); // radius
         assert_eq!(0.875_f32, 0.875); // px padding
         assert_eq!(0.625_f32, 0.625); // py padding
+    }
+
+    #[test]
+    fn prompt_field_style_uses_theme_chrome_contract_for_default_and_active_states() {
+        let theme = crate::theme::Theme::light_default();
+        let chrome = crate::theme::AppChromeColors::from_theme(&theme);
+
+        let default_style =
+            super::prompt_field_style(&theme, super::PromptFieldState::Default, true);
+        let active_style =
+            super::prompt_field_style(&theme, super::PromptFieldState::Active, false);
+
+        assert_eq!(default_style.background, gpui::rgba(chrome.input_surface_rgba));
+        assert_eq!(default_style.border, gpui::rgba(chrome.badge_border_rgba));
+        assert_eq!(active_style.background, gpui::rgba(chrome.selection_rgba));
+        assert_eq!(active_style.border, gpui::rgb(chrome.accent_hex));
     }
 
     const OTHER_RENDERERS_SOURCE: &str = include_str!("../render_prompts/other.rs");

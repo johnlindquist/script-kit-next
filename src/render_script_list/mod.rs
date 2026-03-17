@@ -969,6 +969,7 @@ impl ScriptListApp {
         // Footer uses theme tokens directly so app-shell chrome stays consistent
         // across design variants (avoids design-token backgrounds like pure white).
         let footer_colors = app_shell_footer_colors(&self.theme);
+        let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
 
         // NOTE: No .bg() here - Root provides vibrancy background for ALL content
         // This ensures main menu, AI chat, and all prompts have consistent styling
@@ -1003,9 +1004,6 @@ impl ScriptListApp {
                 } else {
                     design_spacing.gap_md
                 };
-                let text_muted = color_resolver.empty_text_color();
-                let accent_color = color_resolver.primary_accent();
-                let search_box_bg = color_resolver.secondary_background_color();
                 let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
 
                 div()
@@ -1048,24 +1046,24 @@ impl ScriptListApp {
                                     .px(px(ASK_AI_BUTTON_PADDING_X))
                                     .py(px(ASK_AI_BUTTON_PADDING_Y))
                                     .rounded(px(ASK_AI_BUTTON_RADIUS))
-                                    .bg(rgba((accent_color << 8) | ALPHA_HOVER_ACCENT))
+                                    .bg(rgba(chrome.accent_badge_bg_rgba))
                                     .cursor_default()
                                     // "Ask AI" text - YELLOW (accent)
                                     .child(
                                         div()
                                             .text_sm()
-                                            .text_color(rgb(accent_color))
+                                            .text_color(rgb(chrome.accent_badge_text_hex))
                                             .child("Ask AI"),
                                     )
-                                    // "Tab" badge - grey background at ALPHA_TAB_BADGE_BG opacity (no border)
+                                    // "Tab" badge - grey background via chrome contract (no border)
                                     .child(
                                         div()
                                             .px(px(TAB_BADGE_PADDING_X))
                                             .py(px(TAB_BADGE_PADDING_Y))
                                             .rounded(px(TAB_BADGE_RADIUS))
-                                            .bg(rgba((search_box_bg << 8) | ALPHA_TAB_BADGE_BG))
+                                            .bg(rgba(chrome.badge_bg_rgba))
                                             .text_xs()
-                                            .text_color(rgb(text_muted))
+                                            .text_color(rgb(chrome.badge_text_hex))
                                             .child("Tab"),
                                     ),
                             ),
@@ -1079,7 +1077,6 @@ impl ScriptListApp {
                 } else {
                     spacing_resolver.margin_lg()
                 };
-                let border_color = color_resolver.border_color();
                 let border_width = if is_default_design {
                     DIVIDER_BORDER_WIDTH_DEFAULT
                 } else {
@@ -1089,7 +1086,7 @@ impl ScriptListApp {
                 div()
                     .mx(px(divider_margin))
                     .h(px(border_width))
-                    .bg(rgba((border_color << 8) | ALPHA_DIVIDER))
+                    .bg(rgba(chrome.divider_rgba))
             });
 
         // Main content area - 50/50 split: List on left, Preview on right

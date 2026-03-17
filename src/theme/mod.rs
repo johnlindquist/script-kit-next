@@ -15,6 +15,7 @@
 //! - `gpui_integration` - gpui-component theme mapping
 //! - `service` - Global theme watcher service
 
+mod chrome;
 mod color_resolver;
 pub(crate) mod gpui_integration;
 mod helpers;
@@ -25,6 +26,9 @@ pub mod presets;
 pub mod service;
 mod types;
 pub(crate) mod validation;
+
+// Re-export shared chrome contract for app surfaces
+pub(crate) use chrome::AppChromeColors;
 
 // Re-export types used externally
 pub(crate) use types::relative_luminance_srgb;
