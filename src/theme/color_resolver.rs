@@ -167,6 +167,7 @@ impl ColorResolver {
 #[derive(Debug, Clone)]
 pub struct TypographyResolver {
     font_family: String,
+    #[cfg_attr(not(test), allow(dead_code))]
     font_family_mono: String,
     font_size_xl: f32,
 }
@@ -207,6 +208,7 @@ impl TypographyResolver {
     }
 
     /// Get the monospace font family
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn mono_font(&self) -> &str {
         &self.font_family_mono
     }

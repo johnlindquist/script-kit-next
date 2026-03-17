@@ -16,15 +16,17 @@ impl Render for NamingPrompt {
         let text_muted = rgb(self.theme.colors.text.muted);
         let error_color = rgb(self.theme.colors.ui.error);
 
-        let (title, preview_label, preview_kind) = match self.target {
+        let (title, destination_label, preview_label, preview_kind) = match self.target {
             NamingTarget::Script => (
                 "Name your script",
-                "Script Preview",
+                "Destination",
+                "Filename",
                 "TypeScript script",
             ),
             NamingTarget::Extension => (
                 "Name your scriptlet bundle",
-                "Scriptlet Bundle Preview",
+                "Destination",
+                "Bundle Filename",
                 "Markdown bundle",
             ),
         };
@@ -62,7 +64,13 @@ impl Render for NamingPrompt {
         );
 
         let preview_filename = self.filename_preview();
-        let preview_path = self.target_directory.join(&preview_filename);
+        let destination_text = SharedString::from(self.target_directory.display().to_string());
+        let preview_path_text = SharedString::from(
+            self.target_directory
+                .join(&preview_filename)
+                .display()
+                .to_string(),
+        );
 
         let content = div()
             .id(gpui::ElementId::Name("window:naming".into()))
@@ -80,10 +88,7 @@ impl Render for NamingPrompt {
                     .gap(px(spacing.gap_lg))
                     .child(crate::components::prompt_form_intro(
                         title,
-                        format!(
-                            "Use the friendly name shown in Script Kit. The file will be created in {}.",
-                            self.target_directory.display()
-                        ),
+                        "Choose a display name. Script Kit generates the filename automatically.",
                         text_primary,
                         text_muted,
                         spacing.gap_sm,
@@ -104,21 +109,52 @@ impl Render for NamingPrompt {
                         }),
                     )
                     .child(crate::components::prompt_form_section(
+                        destination_label,
+                        text_secondary,
+                        spacing.gap_sm,
+                        crate::components::prompt_surface(
+                            preview_style.background,
+                            preview_style.border,
+                        )
+                        .child(crate::components::prompt_scroll_value_with_id(
+                            "naming-destination-path",
+                            destination_text,
+                            text_muted,
+                        )),
+                    ))
+                    .child(crate::components::prompt_form_section(
                         preview_label,
                         text_secondary,
                         spacing.gap_sm,
-                        crate::components::prompt_detail_card(
-                            preview_filename.clone(),
-                            preview_path.display().to_string(),
-                            format!(
-                                "{preview_kind} ({}). Press Enter to create.",
-                                self.extension_label()
-                            ),
-                            text_primary,
-                            text_muted,
-                            text_secondary,
-                            preview_style,
-                            spacing.gap_sm,
+                        crate::components::prompt_surface(
+                            preview_style.background,
+                            preview_style.border,
+                        )
+                        .child(
+                            div()
+                                .w_full()
+                                .flex()
+                                .flex_col()
+                                .gap(px(spacing.gap_sm))
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                        .text_color(text_primary)
+                                        .child(SharedString::from(preview_filename)),
+                                )
+                                .child(crate::components::prompt_scroll_value_with_id(
+                                    "naming-preview-path",
+                                    preview_path_text,
+                                    text_muted,
+                                ))
+                                .child(crate::components::prompt_form_help(
+                                    format!(
+                                        "{preview_kind} ({})",
+                                        self.extension_label()
+                                    ),
+                                    text_secondary,
+                                )),
                         ),
                     )),
             );
@@ -176,6 +212,15 @@ mod tests {
         assert!(
             SOURCE.contains("prompt_form_help("),
             "render.rs should use prompt_form_help"
+        );
+    }
+
+    #[test]
+    fn naming_render_leaves_submit_hint_to_footer() {
+        let production_code = SOURCE.split("#[cfg(test)]").next().unwrap_or(SOURCE);
+        assert!(
+            !production_code.contains("Press Enter to create"),
+            "render.rs production code should not contain submit hint — the footer handles that"
         );
     }
 

@@ -3,15 +3,13 @@
 //! This panel is intentionally inline and callback-driven so the app layer can wire
 //! platform-specific behavior for each action.
 
-use gpui::{div, prelude::*, px, rgb, rgba, App, RenderOnce, SharedString, Window};
+use gpui::{div, prelude::*, px, rgb, App, RenderOnce, SharedString, Window};
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::components::button::{Button, ButtonColors, ButtonVariant};
 use crate::designs::DesignVariant;
-use crate::theme::opacity::{OPACITY_BORDER, OPACITY_CARD_BG, OPACITY_PROMINENT};
-use crate::theme::{self, TypographyResolver};
-use crate::ui_foundation::hex_to_rgba_with_opacity;
+use crate::theme;
 
 /// Callback for path-based quick actions from the creation feedback panel.
 pub type CreationFeedbackPathAction = Box<dyn Fn(&PathBuf, &mut Window, &mut App) + 'static>;
@@ -81,19 +79,14 @@ impl RenderOnce for CreationFeedbackPanel {
         } = self;
 
         let text_primary = rgb(theme.colors.text.primary);
-        let text_secondary =
-            rgba(hex_to_rgba_with_opacity(theme.colors.text.secondary, OPACITY_PROMINENT));
-        let border_color =
-            rgba(hex_to_rgba_with_opacity(theme.colors.ui.border, OPACITY_BORDER));
-        // Translucent to preserve vibrancy from outer shell.
-        let path_surface = rgba(hex_to_rgba_with_opacity(
-            theme.colors.accent.selected_subtle,
-            OPACITY_CARD_BG,
-        ));
+        let text_secondary = rgb(theme.colors.text.secondary);
+        let text_muted = rgb(theme.colors.text.muted);
+        let path_style = crate::components::prompt_field_style(
+            &theme,
+            crate::components::PromptFieldState::ReadOnly,
+            false,
+        );
         let button_colors = ButtonColors::from_theme(&theme);
-        let mono_font = TypographyResolver::new(&theme, design_variant)
-            .mono_font()
-            .to_string();
 
         let reveal_button = match on_reveal_in_finder {
             Some(callback) => {
@@ -162,25 +155,18 @@ impl RenderOnce for CreationFeedbackPanel {
                 "Created",
                 "Your new file is ready. Use the actions below to jump to it.",
                 text_primary,
-                text_secondary,
+                text_muted,
                 spacing.gap_sm,
             ))
             .child(crate::components::prompt_form_section(
                 "Path",
                 text_secondary,
                 spacing.gap_sm,
-                crate::components::prompt_surface(path_surface, border_color)
-                    .id("creation-feedback-path-container")
-                    .overflow_x_scroll()
-                    .overflow_y_hidden()
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_family(mono_font)
-                            .text_color(text_primary)
-                            .whitespace_nowrap()
-                            .child(path_text),
-                    ),
+                crate::components::prompt_surface(path_style.background, path_style.border)
+                    .child(crate::components::prompt_scroll_value(
+                        path_text,
+                        text_primary,
+                    )),
             ))
             .child(
                 div()
@@ -209,6 +195,24 @@ mod create_flow_layout_tests {
         assert!(
             SOURCE.contains("prompt_form_section("),
             "creation_feedback.rs should use prompt_form_section"
+        );
+    }
+
+    #[test]
+    fn creation_feedback_uses_prompt_field_style() {
+        let production_code = SOURCE.split("#[cfg(test)]").next().unwrap_or(SOURCE);
+        assert!(
+            production_code.contains("prompt_field_style("),
+            "creation_feedback.rs should use prompt_field_style instead of inline color math"
+        );
+    }
+
+    #[test]
+    fn creation_feedback_uses_scroll_value() {
+        let production_code = SOURCE.split("#[cfg(test)]").next().unwrap_or(SOURCE);
+        assert!(
+            production_code.contains("prompt_scroll_value("),
+            "creation_feedback.rs should use prompt_scroll_value for long-path handling"
         );
     }
 }
