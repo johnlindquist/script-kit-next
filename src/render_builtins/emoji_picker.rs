@@ -1,6 +1,6 @@
 impl ScriptListApp {
     #[allow(dead_code)] // Called from startup_new_arrow.rs interceptor
-    fn navigate_emoji_picker(
+    pub(crate) fn navigate_emoji_picker(
         &mut self,
         direction: crate::emoji::EmojiNavDirection,
         cx: &mut Context<Self>,

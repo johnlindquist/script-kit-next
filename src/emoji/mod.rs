@@ -1636,4 +1636,69 @@ mod tests {
         assert_eq!(GRID_TILE_GAP, 4.0);
         assert_eq!(GRID_ROW_HEIGHT, 48.0);
     }
+
+    #[test]
+    fn test_grid_layout_scroll_rows_are_monotonic() {
+        let ordered = filtered_ordered_emojis("", None);
+        assert!(!ordered.is_empty(), "emoji dataset should not be empty");
+
+        let layout = build_emoji_grid_layout(&ordered, GRID_COLS, |emoji| emoji.category);
+        let mut last_row = layout.scroll_row_for_index(0);
+
+        for ix in 1..ordered.len() {
+            let row = layout.scroll_row_for_index(ix);
+            assert!(
+                row >= last_row,
+                "scroll row must be monotonic: ix={} row={} previous_row={}",
+                ix,
+                row,
+                last_row
+            );
+            last_row = row;
+        }
+    }
+
+    #[test]
+    fn test_grid_layout_left_and_right_clamp_at_edges() {
+        let ordered = filtered_ordered_emojis("", None);
+        assert!(!ordered.is_empty(), "emoji dataset should not be empty");
+
+        let layout = build_emoji_grid_layout(&ordered, GRID_COLS, |emoji| emoji.category);
+        assert_eq!(layout.move_index(0, EmojiNavDirection::Left), 0);
+
+        let last = ordered.len() - 1;
+        assert_eq!(layout.move_index(last, EmojiNavDirection::Right), last);
+    }
+
+    #[test]
+    fn test_grid_layout_down_then_up_round_trips_when_destination_exists() {
+        let ordered = filtered_ordered_emojis("", None);
+        assert!(
+            ordered.len() > GRID_COLS,
+            "need at least two rows of emoji data for navigation coverage"
+        );
+
+        let layout = build_emoji_grid_layout(&ordered, GRID_COLS, |emoji| emoji.category);
+
+        let mut found_round_trip = false;
+        for ix in 0..(ordered.len() - GRID_COLS) {
+            let down = layout.move_index(ix, EmojiNavDirection::Down);
+            if down != ix {
+                found_round_trip = true;
+                assert_eq!(
+                    layout.move_index(down, EmojiNavDirection::Up),
+                    ix,
+                    "down/up should round-trip when a destination cell exists: start={} down={}",
+                    ix,
+                    down
+                );
+                break;
+            }
+        }
+
+        assert!(
+            found_round_trip,
+            "expected at least one index with a valid downward move"
+        );
+    }
 }

@@ -258,3 +258,31 @@ Detailed guidance lives in `.claude/skills/` — load only when relevant:
 - GPUI docs: https://docs.rs/gpui/latest/gpui/
 - Zed source: https://github.com/zed-industries/zed/tree/main/crates/gpui
 - Protocol reference: `docs/PROTOCOL.md`
+
+## Design Context
+
+### Users
+Power developers and automation enthusiasts who demand speed and precision. They invoke Script Kit as a launcher/command palette — it must appear instantly, respond to keystrokes without lag, and disappear the moment the task is done. The interface should evoke **confidence**: every interaction feels deliberate, fast, and under their control.
+
+### Brand Personality
+**Fast. Focused. Minimal.**
+
+Script Kit is a sharp tool, not a playground. It respects the user's time and attention. No unnecessary animation, no visual noise, no chrome that doesn't earn its place. The gold accent (#fbbf24) is the one warm touch — a signature that says "this is Script Kit" without shouting.
+
+### Aesthetic Direction
+- **Reference:** Raycast — clean launcher with macOS vibrancy, polished transitions, keyboard-first interaction, information-dense but not cluttered
+- **Anti-references:** Electron apps with visible latency, over-decorated dashboards, anything that feels like a web page pretending to be native
+- **Theme:** Dark mode primary with native macOS vibrancy (popover blur). Semi-transparent backgrounds let the desktop bleed through. Light mode supported but secondary
+- **Visual tone:** Native macOS feel — if Apple made a scriptable launcher, it would look like this. Precision over personality
+
+### Design Principles
+
+1. **Speed is the design** — Every pixel serves instant comprehension. If an element slows the user down (visually or mechanically), remove it. Sub-frame response to input is non-negotiable.
+
+2. **Keyboard-first, always** — The mouse is a fallback. Every interaction must be reachable and obvious via keyboard. Visual affordances should reinforce keyboard shortcuts, not compete with them.
+
+3. **Quiet confidence** — Use restraint. One accent color (gold). One font stack (system). Subtle opacity shifts over hard borders. Let vibrancy and spacing do the work instead of decoration.
+
+4. **Native or nothing** — Respect macOS conventions. Vibrancy, system fonts, PopUp panel behavior, proper focus/unfocus dimming. Users should forget they're in a third-party app.
+
+5. **Information density without clutter** — Show everything the user needs in a single glance. Use typography hierarchy (weight, size, opacity) to create visual layers, not boxes and dividers.
