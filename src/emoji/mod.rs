@@ -1296,6 +1296,134 @@ pub fn filtered_grid_row_count(filter: &str, selected_category: Option<EmojiCate
     row_count
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EmojiNavDirection {
+    Left,
+    Right,
+    Up,
+    Down,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EmojiCellRow {
+    pub visible_row_index: usize,
+    pub start_index: usize,
+    pub count: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EmojiGridLayout {
+    pub rows: Vec<EmojiCellRow>,
+    pub item_to_row: Vec<usize>,
+}
+
+pub fn build_emoji_grid_layout<T>(
+    ordered_emojis: &[T],
+    cols: usize,
+    category_of: impl Fn(&T) -> EmojiCategory,
+) -> EmojiGridLayout {
+    let mut rows = Vec::new();
+    let mut item_to_row = vec![0; ordered_emojis.len()];
+    let mut flat_offset = 0usize;
+    let mut visible_row_index = 0usize;
+
+    for category in all_categories() {
+        let category_count = ordered_emojis[flat_offset..]
+            .iter()
+            .take_while(|emoji| category_of(emoji) == category)
+            .count();
+
+        if category_count == 0 {
+            continue;
+        }
+
+        // Skip the header row for this category.
+        visible_row_index += 1;
+
+        let mut row_offset = 0usize;
+        while row_offset < category_count {
+            let count = (category_count - row_offset).min(cols);
+            let start_index = flat_offset + row_offset;
+            let cell_row_index = rows.len();
+
+            rows.push(EmojiCellRow {
+                visible_row_index,
+                start_index,
+                count,
+            });
+
+            for entry in item_to_row.iter_mut().skip(start_index).take(count) {
+                *entry = cell_row_index;
+            }
+
+            visible_row_index += 1;
+            row_offset += count;
+        }
+
+        flat_offset += category_count;
+    }
+
+    EmojiGridLayout { rows, item_to_row }
+}
+
+impl EmojiGridLayout {
+    pub fn scroll_row_for_index(&self, index: usize) -> usize {
+        self.item_to_row
+            .get(index)
+            .and_then(|row_ix| self.rows.get(*row_ix))
+            .map(|row| row.visible_row_index)
+            .unwrap_or(0)
+    }
+
+    pub fn move_index(&self, index: usize, direction: EmojiNavDirection) -> usize {
+        let Some(&cell_row_index) = self.item_to_row.get(index) else {
+            return 0;
+        };
+        let Some(row) = self.rows.get(cell_row_index) else {
+            return index;
+        };
+
+        let column = index.saturating_sub(row.start_index);
+
+        match direction {
+            EmojiNavDirection::Left => {
+                if column > 0 {
+                    index - 1
+                } else if cell_row_index > 0 {
+                    let prev = &self.rows[cell_row_index - 1];
+                    prev.start_index + prev.count.saturating_sub(1)
+                } else {
+                    index
+                }
+            }
+            EmojiNavDirection::Right => {
+                if column + 1 < row.count {
+                    index + 1
+                } else if let Some(next) = self.rows.get(cell_row_index + 1) {
+                    next.start_index
+                } else {
+                    index
+                }
+            }
+            EmojiNavDirection::Up => {
+                if cell_row_index == 0 {
+                    index
+                } else {
+                    let prev = &self.rows[cell_row_index - 1];
+                    prev.start_index + column.min(prev.count.saturating_sub(1))
+                }
+            }
+            EmojiNavDirection::Down => {
+                if let Some(next) = self.rows.get(cell_row_index + 1) {
+                    next.start_index + column.min(next.count.saturating_sub(1))
+                } else {
+                    index
+                }
+            }
+        }
+    }
+}
+
 pub fn search_emojis(query: &str) -> Vec<&Emoji> {
     let query = query.trim().to_ascii_lowercase();
     if query.is_empty() {
@@ -1432,6 +1560,73 @@ mod tests {
         // "pizza" filter should be very small
         let pizza = filtered_grid_row_count("pizza", None);
         assert!(pizza > 0 && pizza <= 4, "pizza filter should have 1-4 rows");
+    }
+
+    #[test]
+    fn emoji_grid_layout_moves_across_ragged_rows() {
+        let layout = EmojiGridLayout {
+            rows: vec![
+                EmojiCellRow {
+                    visible_row_index: 1,
+                    start_index: 0,
+                    count: 4,
+                },
+                EmojiCellRow {
+                    visible_row_index: 2,
+                    start_index: 4,
+                    count: 1,
+                },
+                EmojiCellRow {
+                    visible_row_index: 4,
+                    start_index: 5,
+                    count: 4,
+                },
+            ],
+            item_to_row: vec![0, 0, 0, 0, 1, 2, 2, 2, 2],
+        };
+
+        // Down from full row into short row (column clamping: col 3 → col 0)
+        assert_eq!(layout.move_index(3, EmojiNavDirection::Down), 4);
+        // Down from short row into next full row
+        assert_eq!(layout.move_index(4, EmojiNavDirection::Down), 5);
+        // Up from full row into short row with column clamping (col 3 → col 0)
+        assert_eq!(layout.move_index(8, EmojiNavDirection::Up), 4);
+        // scroll_row_for_index returns correct visible_row_index
+        assert_eq!(layout.scroll_row_for_index(5), 4);
+        // Left wrapping to previous row's last item
+        assert_eq!(
+            layout.move_index(5, EmojiNavDirection::Left),
+            4,
+            "Left from first cell of row 2 should wrap to last cell of row 1"
+        );
+        // Right wrapping to next row's first item
+        assert_eq!(
+            layout.move_index(4, EmojiNavDirection::Right),
+            5,
+            "Right from last cell of short row should wrap to first cell of next row"
+        );
+    }
+
+    #[test]
+    fn emoji_grid_layout_build_produces_correct_rows() {
+        // Build layout from real emoji data and verify structure
+        let ordered = filtered_ordered_emojis("", None);
+        let layout = build_emoji_grid_layout(&ordered, GRID_COLS, |e| e.category);
+
+        // Every item should map to a valid row
+        for (i, &row_ix) in layout.item_to_row.iter().enumerate() {
+            assert!(
+                row_ix < layout.rows.len(),
+                "item {i} maps to out-of-bounds row {row_ix}"
+            );
+            let row = &layout.rows[row_ix];
+            assert!(
+                i >= row.start_index && i < row.start_index + row.count,
+                "item {i} not within its mapped row (start={}, count={})",
+                row.start_index,
+                row.count
+            );
+        }
     }
 
     #[test]

@@ -1,46 +1,56 @@
 impl ScriptListApp {
-    fn navigate_emoji_picker_horizontal(&mut self, delta: isize, cx: &mut Context<Self>) {
-        if let AppView::EmojiPickerView {
+    #[allow(dead_code)] // Called from startup_new_arrow.rs interceptor
+    fn navigate_emoji_picker(
+        &mut self,
+        direction: crate::emoji::EmojiNavDirection,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let AppView::EmojiPickerView {
             filter,
             selected_index,
             selected_category,
         } = &mut self.current_view
-        {
-            let ordered_emojis = crate::emoji::filtered_ordered_emojis(filter, *selected_category);
-            let filtered_len = ordered_emojis.len();
-            if filtered_len == 0 {
-                *selected_index = 0;
-                self.hovered_index = None;
-                cx.notify();
-                return;
-            }
+        else {
+            return false;
+        };
 
-            if *selected_index >= filtered_len {
-                *selected_index = filtered_len - 1;
-            }
-
-            if delta < 0 {
-                let step = delta.saturating_neg() as usize;
-                *selected_index = selected_index.saturating_sub(step);
-            } else {
-                let step = delta as usize;
-                *selected_index = selected_index.saturating_add(step).min(filtered_len - 1);
-            }
-
-            let row = crate::emoji::compute_scroll_row(*selected_index, &ordered_emojis);
-            tracing::debug!(
-                target: "script_kit::emoji_picker",
-                event = "scroll_to_item",
-                reason = "horizontal_nav",
-                row,
-                selected_index = *selected_index,
-            );
-            self.emoji_scroll_handle.scroll_to_item(row, ScrollStrategy::Nearest);
-
-            self.input_mode = InputMode::Keyboard;
+        let ordered_emojis = crate::emoji::filtered_ordered_emojis(filter, *selected_category);
+        if ordered_emojis.is_empty() {
+            *selected_index = 0;
             self.hovered_index = None;
             cx.notify();
+            return false;
         }
+
+        *selected_index = (*selected_index).min(ordered_emojis.len() - 1);
+
+        let layout = crate::emoji::build_emoji_grid_layout(
+            &ordered_emojis,
+            crate::emoji::GRID_COLS,
+            |emoji| emoji.category,
+        );
+
+        let old_index = *selected_index;
+        *selected_index = layout.move_index(old_index, direction);
+        let row = layout.scroll_row_for_index(*selected_index);
+
+        tracing::debug!(
+            target: "script_kit::emoji_picker",
+            event = "scroll_to_item",
+            reason = "nav",
+            direction = ?direction,
+            old_index,
+            selected_index = *selected_index,
+            row,
+        );
+
+        self.emoji_scroll_handle
+            .scroll_to_item(row, ScrollStrategy::Nearest);
+
+        self.input_mode = InputMode::Keyboard;
+        self.hovered_index = None;
+        cx.notify();
+        true
     }
 
     fn render_emoji_picker(
@@ -160,38 +170,8 @@ impl ScriptListApp {
                 {
                     let ordered_emojis =
                         crate::emoji::filtered_ordered_emojis(filter, *selected_category);
-                    let filtered_len = ordered_emojis.len();
-                    if filtered_len == 0 {
-                        *selected_index = 0;
-                        this.hovered_index = None;
-                        cx.notify();
-                        return;
-                    }
 
-                    if *selected_index >= filtered_len {
-                        *selected_index = filtered_len - 1;
-                    }
-
-                    let cols = crate::emoji::GRID_COLS;
-                    let navigated = match key {
-                        _ if is_key_up(key) => {
-                            *selected_index = (*selected_index).saturating_sub(cols);
-                            true
-                        }
-                        _ if is_key_down(key) => {
-                            *selected_index = (*selected_index + cols).min(filtered_len - 1);
-                            true
-                        }
-                        _ if is_key_left(key) => {
-                            this.navigate_emoji_picker_horizontal(-1, cx);
-                            cx.stop_propagation();
-                            return;
-                        }
-                        _ if is_key_right(key) => {
-                            this.navigate_emoji_picker_horizontal(1, cx);
-                            cx.stop_propagation();
-                            return;
-                        }
+                    match key {
                         _ if is_key_enter(key) => {
                             if let Some(emoji) = ordered_emojis.get(*selected_index) {
                                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(
@@ -200,59 +180,10 @@ impl ScriptListApp {
                                 this.close_and_reset_window(cx);
                             }
                             cx.stop_propagation();
-                            return;
                         }
-                        _ => return,
-                    };
-
-                    if navigated {
-                        let row =
-                            crate::emoji::compute_scroll_row(*selected_index, &ordered_emojis);
-                        tracing::debug!(
-                            target: "script_kit::emoji_picker",
-                            event = "scroll_to_item",
-                            reason = "vertical_nav",
-                            row,
-                            selected_index = *selected_index,
-                        );
-                        this.emoji_scroll_handle.scroll_to_item(row, ScrollStrategy::Nearest);
-                        cx.stop_propagation();
+                        _ => (),
                     }
-
-                    this.input_mode = InputMode::Keyboard;
-                    this.hovered_index = None;
-                    cx.notify();
                 }
-            },
-        );
-
-        let handle_move_left_action = cx.listener(
-            |this: &mut Self,
-             _: &gpui_component::input::MoveLeft,
-             _window: &mut Window,
-             cx: &mut Context<Self>| {
-                if this.shortcut_recorder_state.is_some() {
-                    cx.stop_propagation();
-                    return;
-                }
-
-                this.navigate_emoji_picker_horizontal(-1, cx);
-                cx.stop_propagation();
-            },
-        );
-
-        let handle_move_right_action = cx.listener(
-            |this: &mut Self,
-             _: &gpui_component::input::MoveRight,
-             _window: &mut Window,
-             cx: &mut Context<Self>| {
-                if this.shortcut_recorder_state.is_some() {
-                    cx.stop_propagation();
-                    return;
-                }
-
-                this.navigate_emoji_picker_horizontal(1, cx);
-                cx.stop_propagation();
             },
         );
 
@@ -418,8 +349,6 @@ impl ScriptListApp {
             .font_family(design_typography.font_family)
             .key_context("emoji_picker")
             .track_focus(&self.focus_handle)
-            .on_action(handle_move_left_action)
-            .on_action(handle_move_right_action)
             .on_key_down(handle_key)
             .child(
                 div()

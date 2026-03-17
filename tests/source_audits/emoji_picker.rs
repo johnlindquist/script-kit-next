@@ -28,22 +28,13 @@ fn test_render_emoji_picker_builds_category_headers_and_six_cell_rows() {
 }
 
 #[test]
-fn test_render_emoji_picker_handles_navigation_and_enter_copy() {
+fn test_render_emoji_picker_handles_enter_copy() {
     let source = read_emoji_picker_source();
 
-    for helper_call in [
-        "is_key_up(key)",
-        "is_key_down(key)",
-        "is_key_left(key)",
-        "is_key_right(key)",
-        "is_key_enter(key)",
-    ] {
-        assert!(
-            source.contains(helper_call),
-            "Expected key handler helper `{}` in render_emoji_picker",
-            helper_call
-        );
-    }
+    assert!(
+        source.contains("is_key_enter(key)"),
+        "Expected key handler helper `is_key_enter(key)` in render_emoji_picker"
+    );
 
     assert!(
         source.contains("cx.write_to_clipboard(gpui::ClipboardItem::new_string("),
@@ -52,40 +43,45 @@ fn test_render_emoji_picker_handles_navigation_and_enter_copy() {
 }
 
 #[test]
-fn test_render_emoji_picker_wires_horizontal_input_actions_to_grid_navigation() {
+fn test_render_emoji_picker_delegates_arrow_navigation_to_navigate_emoji_picker() {
     let source = read_emoji_picker_source();
 
+    // Arrow keys are now handled exclusively via navigate_emoji_picker called
+    // from the interceptor in startup_new_arrow.rs — no local arrow handling.
     assert!(
-        source.contains("gpui_component::input::MoveLeft"),
-        "emoji picker should listen for MoveLeft action from Input"
+        source.contains("navigate_emoji_picker"),
+        "emoji picker should define navigate_emoji_picker method"
     );
     assert!(
-        source.contains("gpui_component::input::MoveRight"),
-        "emoji picker should listen for MoveRight action from Input"
+        source.contains("crate::emoji::EmojiNavDirection"),
+        "navigate_emoji_picker should use EmojiNavDirection from emoji module"
     );
     assert!(
-        source.contains(".on_action(handle_move_left_action)")
-            && source.contains(".on_action(handle_move_right_action)"),
-        "emoji picker container should register left/right action handlers"
+        source.contains("crate::emoji::build_emoji_grid_layout"),
+        "navigate_emoji_picker should use row-aware build_emoji_grid_layout"
+    );
+    assert!(
+        source.contains("scroll_row_for_index"),
+        "navigate_emoji_picker should use row-aware scroll position"
     );
 }
 
 #[test]
-fn test_render_emoji_picker_consumes_horizontal_arrow_keys() {
+fn test_render_emoji_picker_no_duplicate_arrow_handling() {
     let source = read_emoji_picker_source();
 
+    // Old duplicate handlers must be removed
     assert!(
-        source.contains("_ if is_key_left(key) => {")
-            && source.contains("this.navigate_emoji_picker_horizontal(-1, cx);")
-            && source.contains("cx.stop_propagation();"),
-        "left arrow handling should navigate grid and stop propagation to Input"
+        !source.contains("navigate_emoji_picker_horizontal"),
+        "old navigate_emoji_picker_horizontal helper should be removed"
     );
-
     assert!(
-        source.contains("_ if is_key_right(key) => {")
-            && source.contains("this.navigate_emoji_picker_horizontal(1, cx);")
-            && source.contains("cx.stop_propagation();"),
-        "right arrow handling should navigate grid and stop propagation to Input"
+        !source.contains("MoveLeft"),
+        "local MoveLeft action handler should be removed (arrows handled by interceptor)"
+    );
+    assert!(
+        !source.contains("MoveRight"),
+        "local MoveRight action handler should be removed (arrows handled by interceptor)"
     );
 }
 
