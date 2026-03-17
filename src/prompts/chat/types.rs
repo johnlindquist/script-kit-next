@@ -533,3 +533,100 @@ impl ChatErrorType {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cmd_down_maps_to_jump_to_latest() {
+        assert_eq!(
+            resolve_chat_input_key_action("down", true, false),
+            ChatInputKeyAction::JumpToLatest
+        );
+        assert_eq!(
+            resolve_chat_input_key_action("arrowdown", true, false),
+            ChatInputKeyAction::JumpToLatest
+        );
+    }
+
+    #[test]
+    fn test_end_maps_to_jump_to_latest() {
+        assert_eq!(
+            resolve_chat_input_key_action("end", false, false),
+            ChatInputKeyAction::JumpToLatest
+        );
+        assert_eq!(
+            resolve_chat_input_key_action("End", false, false),
+            ChatInputKeyAction::JumpToLatest
+        );
+    }
+
+    #[test]
+    fn test_existing_key_mappings_unchanged() {
+        assert_eq!(
+            resolve_chat_input_key_action("escape", false, false),
+            ChatInputKeyAction::Escape
+        );
+        assert_eq!(
+            resolve_chat_input_key_action(".", true, false),
+            ChatInputKeyAction::StopStreaming
+        );
+        assert_eq!(
+            resolve_chat_input_key_action("k", true, false),
+            ChatInputKeyAction::ToggleActions
+        );
+        assert_eq!(
+            resolve_chat_input_key_action("enter", true, false),
+            ChatInputKeyAction::ContinueInChat
+        );
+        assert_eq!(
+            resolve_chat_input_key_action("c", true, false),
+            ChatInputKeyAction::CopyLastResponse
+        );
+        assert_eq!(
+            resolve_chat_input_key_action("backspace", true, false),
+            ChatInputKeyAction::ClearConversation
+        );
+        assert_eq!(
+            resolve_chat_input_key_action("v", true, false),
+            ChatInputKeyAction::Paste
+        );
+        assert_eq!(
+            resolve_chat_input_key_action("enter", false, false),
+            ChatInputKeyAction::Submit
+        );
+        assert_eq!(
+            resolve_chat_input_key_action("enter", false, true),
+            ChatInputKeyAction::InsertNewline
+        );
+    }
+
+    #[test]
+    fn test_scroll_follow_state_up_enters_manual() {
+        assert!(
+            next_chat_scroll_follow_state(false, ChatScrollDirection::Up, true),
+            "upward scroll should disable auto-follow"
+        );
+        assert!(
+            next_chat_scroll_follow_state(false, ChatScrollDirection::Up, false),
+            "upward scroll should disable auto-follow regardless of bottom position"
+        );
+    }
+
+    #[test]
+    fn test_scroll_follow_state_down_not_at_bottom_stays_manual() {
+        assert!(
+            next_chat_scroll_follow_state(true, ChatScrollDirection::Down, false),
+            "downward scroll away from bottom should remain in manual mode"
+        );
+    }
+
+    #[test]
+    fn test_scroll_follow_state_down_at_bottom_resumes_auto() {
+        assert!(
+            !next_chat_scroll_follow_state(true, ChatScrollDirection::Down, true),
+            "downward scroll at bottom should resume auto-follow"
+        );
+    }
+}
