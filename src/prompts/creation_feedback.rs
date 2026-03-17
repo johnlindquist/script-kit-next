@@ -162,11 +162,9 @@ impl RenderOnce for CreationFeedbackPanel {
                 "Path",
                 text_secondary,
                 spacing.gap_sm,
-                crate::components::prompt_surface(path_style.background, path_style.border)
-                    .child(crate::components::prompt_scroll_value(
-                        path_text,
-                        text_primary,
-                    )),
+                crate::components::prompt_surface(path_style.background, path_style.border).child(
+                    crate::components::prompt_scroll_value(path_text, text_primary),
+                ),
             ))
             .child(
                 div()

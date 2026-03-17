@@ -98,8 +98,7 @@ impl Render for TemplatePrompt {
                 } else {
                     SharedString::from(value.clone())
                 };
-                let validation_message =
-                    self.validation_errors.get(idx).and_then(|m| m.as_ref());
+                let validation_message = self.validation_errors.get(idx).and_then(|m| m.as_ref());
 
                 let field_state = if validation_message.is_some() {
                     crate::components::PromptFieldState::Error
@@ -134,7 +133,11 @@ impl Render for TemplatePrompt {
                 fields = fields.child(field_section);
             }
 
-            if self.inputs.iter().any(|input| Self::is_name_field(&input.name)) {
+            if self
+                .inputs
+                .iter()
+                .any(|input| Self::is_name_field(&input.name))
+            {
                 fields = fields.child(crate::components::prompt_form_help(
                     "Naming tip: use lowercase letters, numbers, and hyphens.",
                     text_muted,
@@ -208,15 +211,11 @@ mod tests {
 
     #[test]
     fn template_render_no_longer_renders_inline_shortcut_footer_text() {
-        let production_code = SOURCE
-            .split("#[cfg(test)]")
-            .next()
-            .unwrap_or(SOURCE);
+        let production_code = SOURCE.split("#[cfg(test)]").next().unwrap_or(SOURCE);
 
         assert!(
-            !production_code.contains(
-                "Tab: next field | Shift+Tab: previous | Enter: submit | Escape: cancel"
-            ),
+            !production_code
+                .contains("Tab: next field | Shift+Tab: previous | Enter: submit | Escape: cancel"),
             "render.rs production code should not contain inline shortcut footer text"
         );
     }

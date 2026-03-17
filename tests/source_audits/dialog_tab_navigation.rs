@@ -26,10 +26,11 @@ mod tests {
             "Dialog should bind Tab and Shift-Tab in the Dialog key context"
         );
         assert!(
-            normalized
-                .contains(".on_action(|_: &FocusNext, window, cx| { window.focus_next_in_dialog(cx); })")
-                && normalized
-                    .contains(".on_action(|_: &FocusPrev, window, cx| { window.focus_prev_in_dialog(cx); })"),
+            normalized.contains(
+                ".on_action(|_: &FocusNext, window, cx| { window.focus_next_in_dialog(cx); })"
+            ) && normalized.contains(
+                ".on_action(|_: &FocusPrev, window, cx| { window.focus_prev_in_dialog(cx); })"
+            ),
             "Dialog should move focus between tab stops from inside the dialog context"
         );
     }

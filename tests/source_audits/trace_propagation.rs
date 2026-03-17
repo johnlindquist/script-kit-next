@@ -394,13 +394,11 @@ fn shared_confirm_helper_logs_trace_id_at_open_and_resolution() {
     let fn_body = &content[fn_start..content.len().min(fn_start + 3000)];
 
     assert!(
-        fn_body.contains("trace_id = %trace_id")
-            && fn_body.contains("confirm_modal_open"),
+        fn_body.contains("trace_id = %trace_id") && fn_body.contains("confirm_modal_open"),
         "confirm_with_parent_dialog must log trace_id at modal open"
     );
     assert!(
-        fn_body.contains("trace_id = %trace_id")
-            && fn_body.contains("confirm_modal_result"),
+        fn_body.contains("trace_id = %trace_id") && fn_body.contains("confirm_modal_result"),
         "confirm_with_parent_dialog must log trace_id at modal resolution"
     );
 }
