@@ -454,6 +454,26 @@ await div("Hello");"#;
             "No directional input should preserve follow mode"
         );
     }
+
+    #[test]
+    fn test_resolve_chat_input_key_action_maps_cmd_down_and_end_to_jump_to_latest() {
+        assert_eq!(
+            resolve_chat_input_key_action("down", true, false),
+            ChatInputKeyAction::JumpToLatest
+        );
+        assert_eq!(
+            resolve_chat_input_key_action("arrowdown", true, false),
+            ChatInputKeyAction::JumpToLatest
+        );
+        assert_eq!(
+            resolve_chat_input_key_action("end", false, false),
+            ChatInputKeyAction::JumpToLatest
+        );
+        assert_eq!(
+            resolve_chat_input_key_action("End", false, false),
+            ChatInputKeyAction::JumpToLatest
+        );
+    }
 }
 
 /// Test-only public access to `next_reveal_boundary` for cross-module tests.

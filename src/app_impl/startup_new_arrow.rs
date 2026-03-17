@@ -182,9 +182,31 @@
                                 }
                                 AppView::WindowSwitcherView {
                                     selected_index,
-                                    filter: _,
+                                    filter,
                                 } => {
-                                    let filtered_len = this.cached_windows.len();
+                                    let filtered_len = if filter.is_empty() {
+                                        this.cached_windows.len()
+                                    } else {
+                                        let filter_lower = filter.to_lowercase();
+                                        this.cached_windows
+                                            .iter()
+                                            .filter(|w| {
+                                                w.title.to_lowercase().contains(&filter_lower)
+                                                    || w.app.to_lowercase().contains(&filter_lower)
+                                            })
+                                            .count()
+                                    };
+
+                                    if filtered_len == 0 {
+                                        *selected_index = 0;
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+
+                                    if *selected_index >= filtered_len {
+                                        *selected_index = filtered_len - 1;
+                                    }
+
                                     if is_up && *selected_index > 0 {
                                         *selected_index -= 1;
                                         this.window_list_scroll_handle.scroll_to_item(
@@ -204,9 +226,31 @@
                                 }
                                 AppView::ProcessManagerView {
                                     selected_index,
-                                    filter: _,
+                                    filter,
                                 } => {
-                                    let filtered_len = this.cached_processes.len();
+                                    let filtered_len = if filter.is_empty() {
+                                        this.cached_processes.len()
+                                    } else {
+                                        let filter_lower = filter.to_lowercase();
+                                        this.cached_processes
+                                            .iter()
+                                            .filter(|p| {
+                                                p.script_path.to_lowercase().contains(&filter_lower)
+                                                    || p.pid.to_string().contains(&filter_lower)
+                                            })
+                                            .count()
+                                    };
+
+                                    if filtered_len == 0 {
+                                        *selected_index = 0;
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+
+                                    if *selected_index >= filtered_len {
+                                        *selected_index = filtered_len - 1;
+                                    }
+
                                     if is_up && *selected_index > 0 {
                                         *selected_index -= 1;
                                         this.process_list_scroll_handle.scroll_to_item(
@@ -226,14 +270,53 @@
                                 }
                                 AppView::SearchAiPresetsView {
                                     selected_index,
-                                    filter: _,
+                                    filter,
                                 } => {
-                                    // Simple up/down navigation for presets list
-                                    // (count is computed at render time, use a reasonable max)
+                                    // Replicate render-time filtering from ai_presets.rs
+                                    let default_presets: Vec<(&str, &str, &str)> = vec![
+                                        ("general", "General Assistant", "Helpful AI assistant for any task"),
+                                        ("coder", "Code Assistant", "Expert programmer and debugger"),
+                                        ("writer", "Writing Assistant", "Help with writing and editing"),
+                                        ("researcher", "Research Assistant", "Deep analysis and research"),
+                                        ("creative", "Creative Partner", "Brainstorming and creative ideas"),
+                                    ];
+                                    let all_presets = crate::ai::presets::load_presets().unwrap_or_default();
+                                    let mut items: Vec<(String, String, String)> = Vec::new();
+                                    for (id, name, desc) in &default_presets {
+                                        items.push((id.to_string(), name.to_string(), desc.to_string()));
+                                    }
+                                    for preset in &all_presets {
+                                        if !default_presets.iter().any(|(did, _, _)| *did == preset.id) {
+                                            items.push((preset.id.clone(), preset.name.clone(), preset.description.clone()));
+                                        }
+                                    }
+                                    let filtered_len = if filter.is_empty() {
+                                        items.len()
+                                    } else {
+                                        let filter_lower = filter.to_lowercase();
+                                        items.iter()
+                                            .filter(|(id, name, desc)| {
+                                                name.to_lowercase().contains(&filter_lower)
+                                                    || desc.to_lowercase().contains(&filter_lower)
+                                                    || id.to_lowercase().contains(&filter_lower)
+                                            })
+                                            .count()
+                                    };
+
+                                    if filtered_len == 0 {
+                                        *selected_index = 0;
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+
+                                    if *selected_index >= filtered_len {
+                                        *selected_index = filtered_len - 1;
+                                    }
+
                                     if is_up && *selected_index > 0 {
                                         *selected_index -= 1;
                                         cx.notify();
-                                    } else if is_down {
+                                    } else if is_down && *selected_index + 1 < filtered_len {
                                         *selected_index += 1;
                                         cx.notify();
                                     }
@@ -241,12 +324,69 @@
                                 }
                                 AppView::FavoritesBrowseView {
                                     selected_index,
-                                    filter: _,
+                                    filter,
                                 } => {
+                                    // Replicate render-time filtering from favorites.rs
+                                    let favorites = script_kit_gpui::favorites::load_favorites()
+                                        .unwrap_or_default();
+                                    let resolved: Vec<(String, String)> = favorites
+                                        .script_ids
+                                        .iter()
+                                        .map(|id| {
+                                            let display_name = this
+                                                .scripts
+                                                .iter()
+                                                .find(|s| s.name == *id)
+                                                .map(|s| s.name.clone())
+                                                .or_else(|| {
+                                                    this.scriptlets
+                                                        .iter()
+                                                        .find(|sl| sl.name == *id)
+                                                        .map(|sl| sl.name.clone())
+                                                })
+                                                .unwrap_or_else(|| id.clone());
+                                            let description = this
+                                                .scripts
+                                                .iter()
+                                                .find(|s| s.name == *id)
+                                                .and_then(|s| s.description.clone())
+                                                .or_else(|| {
+                                                    this.scriptlets
+                                                        .iter()
+                                                        .find(|sl| sl.name == *id)
+                                                        .and_then(|sl| sl.description.clone())
+                                                })
+                                                .unwrap_or_default();
+                                            (display_name, description)
+                                        })
+                                        .collect();
+                                    let filtered_len = if filter.is_empty() {
+                                        resolved.len()
+                                    } else {
+                                        let filter_lower = filter.to_lowercase();
+                                        resolved
+                                            .iter()
+                                            .filter(|(name, desc)| {
+                                                name.to_lowercase().contains(&filter_lower)
+                                                    || desc.to_lowercase().contains(&filter_lower)
+                                            })
+                                            .count()
+                                    };
+
+                                    if filtered_len == 0 {
+                                        *selected_index = 0;
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+
+                                    if *selected_index >= filtered_len {
+                                        *selected_index = filtered_len - 1;
+                                    }
+
                                     if is_up && *selected_index > 0 {
                                         *selected_index -= 1;
                                         cx.notify();
-                                    } else if is_down {
+                                    } else if is_down && *selected_index + 1 < filtered_len {
                                         *selected_index += 1;
                                         cx.notify();
                                     }

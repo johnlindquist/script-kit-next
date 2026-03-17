@@ -198,9 +198,16 @@ pub(crate) fn resolve_chat_input_key_action(
         return ChatInputKeyAction::Escape;
     }
 
+    if key.eq_ignore_ascii_case("end") {
+        return ChatInputKeyAction::JumpToLatest;
+    }
+
     if cmd_pressed {
         if key == "." {
             return ChatInputKeyAction::StopStreaming;
+        }
+        if is_key_down(key) {
+            return ChatInputKeyAction::JumpToLatest;
         }
         if is_key_k(key) {
             return ChatInputKeyAction::ToggleActions;
