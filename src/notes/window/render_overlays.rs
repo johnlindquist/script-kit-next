@@ -1,4 +1,17 @@
 use super::*;
+use crate::ui_foundation::{log_ui_action, modal_overlay_root, UiActionSpec, UiSurface};
+
+const ACTIONS_PANEL_BACKDROP: UiActionSpec = UiActionSpec {
+    id: "actions-panel-backdrop",
+    label: "Actions Panel Backdrop",
+    shortcut: Some("Escape"),
+};
+
+const BROWSE_PANEL_BACKDROP: UiActionSpec = UiActionSpec {
+    id: "browse-panel-backdrop",
+    label: "Browse Panel Backdrop",
+    shortcut: Some("Escape"),
+};
 
 impl NotesApp {
     /// Render the actions panel overlay (Cmd+K)
@@ -15,12 +28,8 @@ impl NotesApp {
 
         // Fixed top offset so search input stays at same position regardless of item count
 
-        div()
-            .id("actions-panel-overlay")
-            .absolute()
-            .inset_0()
+        modal_overlay_root("actions-panel-overlay")
             .bg(Self::get_modal_overlay_background()) // Theme-aware overlay
-            .flex()
             .flex_col()
             .items_center() // Horizontally centered
             .justify_start() // Vertically aligned to top (not centered!)
@@ -28,13 +37,18 @@ impl NotesApp {
             .on_mouse_down(
                 gpui::MouseButton::Left,
                 cx.listener(|this, _, window, cx| {
+                    log_ui_action(
+                        UiSurface::NotesOverlay,
+                        ACTIONS_PANEL_BACKDROP,
+                        "backdrop_close",
+                    );
                     this.close_actions_panel(window, cx);
                 }),
             )
             .child(
                 div()
-                    .on_mouse_down(gpui::MouseButton::Left, |_, _, _| {
-                        // Stop propagation - don't close when clicking panel
+                    .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| {
+                        cx.stop_propagation();
                     })
                     .child(panel),
             )
@@ -59,17 +73,21 @@ impl NotesApp {
                 .collect();
 
             // We need a simple inline version since we can't create entities in render
-            div()
-                .id("browse-panel-overlay")
-                .absolute()
-                .inset_0()
+            modal_overlay_root("browse-panel-overlay")
                 .bg(Self::get_modal_overlay_background()) // Theme-aware overlay
-                .flex()
                 .items_center()
                 .justify_center()
-                .on_click(cx.listener(|this, _, window, cx| {
-                    this.close_browse_panel(window, cx);
-                }))
+                .on_mouse_down(
+                    gpui::MouseButton::Left,
+                    cx.listener(|this, _, window, cx| {
+                        log_ui_action(
+                            UiSurface::NotesOverlay,
+                            BROWSE_PANEL_BACKDROP,
+                            "backdrop_close",
+                        );
+                        this.close_browse_panel(window, cx);
+                    }),
+                )
                 .child(
                     div()
                         .w(px(BROWSE_PANEL_WIDTH))
@@ -80,8 +98,8 @@ impl NotesApp {
                         .rounded_lg()
                         // Shadow disabled for vibrancy - shadows on transparent elements cause gray fill
                         .p_4()
-                        .on_mouse_down(gpui::MouseButton::Left, |_, _, _| {
-                            // Stop propagation
+                        .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| {
+                            cx.stop_propagation();
                         })
                         .child(
                             div()
