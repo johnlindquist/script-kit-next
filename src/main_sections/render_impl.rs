@@ -406,53 +406,62 @@ impl Render for ScriptListApp {
         // Get themed border color with 25% opacity (0x40 = 64/255)
         let border_color = rgba((self.theme.colors.ui.border << 8) | 0x40);
 
+        // Outer container: holds both the clipped main content and the dialog
+        // layer which must NOT be clipped (same pattern as Notes window).
         div()
-            .w_full()
-            .h_full()
+            .id("main-window-root")
+            .size_full()
             .relative()
-            .flex()
-            .flex_col()
-            // Hide mouse cursor while typing - use cursor() modifier instead of window method
-            .when(mouse_cursor_hidden, |d| d.cursor(CursorStyle::None))
-            // Hide cursor and clear hover on any keyboard interaction
-            .capture_key_down(cx.listener(|this, _: &KeyDownEvent, _window, cx| {
-                this.input_mode = InputMode::Keyboard;
-                this.hovered_index = None;
-                this.hide_mouse_cursor(cx);
-            }))
-            // Show cursor when mouse moves.
-            .on_mouse_move(cx.listener(|this, _: &MouseMoveEvent, _window, cx| {
-                this.show_mouse_cursor(cx);
-            }))
-            // Apply background only when vibrancy is disabled; otherwise let Root blur through
-            .when_some(vibrancy_bg, |d, bg| d.bg(bg))
-            // Visual styling from vibrancy POC - rounded corners, subtle border, clip content
-            .rounded(px(12.))
-            .border_1()
-            .border_color(border_color)
-            .overflow_hidden()
-            // Warning banner appears at the top when bun is not available
-            .when_some(warning_banner, |container, banner| container.child(banner))
-            // Main content takes remaining space
-            .child(div().flex_1().w_full().min_h(px(0.)).child(main_content))
-            // Shortcut recorder overlay (on top of main content when recording)
-            .when_some(shortcut_recorder_overlay, |container, overlay| {
-                container.child(overlay)
-            })
-            // Alias input overlay (on top of main content when entering alias)
-            .when_some(alias_input_overlay, |container, overlay| {
-                container.child(overlay)
-            })
-            .when_some(grid_config, |container, config| {
-                let overlay_bounds = gpui::Bounds {
-                    origin: gpui::point(px(0.), px(0.)),
-                    size: window_size,
-                };
-                container.child(debug_grid::render_grid_overlay(
-                    &config,
-                    overlay_bounds,
-                    &component_bounds,
-                ))
-            })
+            .child(
+                div()
+                    .w_full()
+                    .h_full()
+                    .flex()
+                    .flex_col()
+                    // Hide mouse cursor while typing
+                    .when(mouse_cursor_hidden, |d| d.cursor(CursorStyle::None))
+                    // Hide cursor and clear hover on any keyboard interaction
+                    .capture_key_down(cx.listener(|this, _: &KeyDownEvent, _window, cx| {
+                        this.input_mode = InputMode::Keyboard;
+                        this.hovered_index = None;
+                        this.hide_mouse_cursor(cx);
+                    }))
+                    // Show cursor when mouse moves.
+                    .on_mouse_move(cx.listener(|this, _: &MouseMoveEvent, _window, cx| {
+                        this.show_mouse_cursor(cx);
+                    }))
+                    // Apply background only when vibrancy is disabled
+                    .when_some(vibrancy_bg, |d, bg| d.bg(bg))
+                    // Visual styling - rounded corners, subtle border, clip content
+                    .rounded(px(12.))
+                    .border_1()
+                    .border_color(border_color)
+                    .overflow_hidden()
+                    // Warning banner appears at the top when bun is not available
+                    .when_some(warning_banner, |container, banner| container.child(banner))
+                    // Main content takes remaining space
+                    .child(div().flex_1().w_full().min_h(px(0.)).child(main_content))
+                    // Shortcut recorder overlay (on top of main content when recording)
+                    .when_some(shortcut_recorder_overlay, |container, overlay| {
+                        container.child(overlay)
+                    })
+                    // Alias input overlay (on top of main content when entering alias)
+                    .when_some(alias_input_overlay, |container, overlay| {
+                        container.child(overlay)
+                    })
+                    .when_some(grid_config, |container, config| {
+                        let overlay_bounds = gpui::Bounds {
+                            origin: gpui::point(px(0.), px(0.)),
+                            size: window_size,
+                        };
+                        container.child(debug_grid::render_grid_overlay(
+                            &config,
+                            overlay_bounds,
+                            &component_bounds,
+                        ))
+                    }),
+            )
+            // Dialog layer rendered outside overflow_hidden so it isn't clipped
+            .children(gpui_component::Root::render_dialog_layer(window, cx))
     }
 }

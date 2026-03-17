@@ -359,45 +359,23 @@
                                     }
                                     cx.stop_propagation();
                                 }
-                                AppView::EmojiPickerView {
-                                    selected_index,
-                                    filter,
-                                    selected_category,
-                                } => {
-                                    let ordered = crate::emoji::filtered_ordered_emojis(
-                                        filter,
-                                        *selected_category,
-                                    );
-                                    let filtered_len = ordered.len();
-                                    if filtered_len == 0 {
-                                        cx.stop_propagation();
-                                        return;
-                                    }
-
-                                    let cols = crate::emoji::GRID_COLS;
-                                    let old_idx = *selected_index;
-                                    if is_up {
-                                        *selected_index = old_idx.saturating_sub(cols);
+                                AppView::EmojiPickerView { .. } => {
+                                    let direction = if is_up {
+                                        Some(crate::emoji::EmojiNavDirection::Up)
                                     } else if is_down {
-                                        *selected_index =
-                                            (old_idx + cols).min(filtered_len.saturating_sub(1));
+                                        Some(crate::emoji::EmojiNavDirection::Down)
                                     } else if is_left {
-                                        *selected_index = old_idx.saturating_sub(1);
+                                        Some(crate::emoji::EmojiNavDirection::Left)
                                     } else if is_right {
-                                        *selected_index =
-                                            (old_idx + 1).min(filtered_len.saturating_sub(1));
+                                        Some(crate::emoji::EmojiNavDirection::Right)
+                                    } else {
+                                        None
+                                    };
+
+                                    if let Some(direction) = direction {
+                                        this.navigate_emoji_picker(direction, cx);
+                                        cx.stop_propagation();
                                     }
-
-                                    let row = crate::emoji::compute_scroll_row(
-                                        *selected_index,
-                                        &ordered,
-                                    );
-                                    this.emoji_scroll_handle.scroll_to_item(row, ScrollStrategy::Nearest);
-
-                                    this.input_mode = InputMode::Keyboard;
-                                    this.hovered_index = None;
-                                    cx.notify();
-                                    cx.stop_propagation();
                                 }
                                 _ => {
                                     // Don't intercept arrows for other views (let normal handling work)

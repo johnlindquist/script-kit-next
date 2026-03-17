@@ -1,5 +1,5 @@
 use crate::ui_foundation::{
-    is_key_down, is_key_enter, is_key_escape, is_key_left, is_key_right, is_key_space, is_key_up,
+    is_key_down, is_key_enter, is_key_escape, is_key_space, is_key_up,
 };
 
 impl ScriptListApp {
