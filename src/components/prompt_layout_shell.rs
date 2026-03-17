@@ -1,5 +1,8 @@
 use gpui::{div, prelude::*, px, rems, rgb, rgba, Div, FontWeight, Rgba, SharedString};
 
+use crate::theme::opacity::{OPACITY_BORDER, OPACITY_CARD_BG, OPACITY_PROMINENT};
+use crate::ui_foundation::hex_to_rgba_with_opacity;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct PromptFrameConfig {
     pub relative: bool,
@@ -164,13 +167,16 @@ pub(crate) fn prompt_field_style(
     state: PromptFieldState,
     empty: bool,
 ) -> PromptFieldStyle {
-    let default_background = rgb(theme.colors.background.search_box);
-    let highlighted_background = rgba((theme.colors.accent.selected_subtle << 8) | 0x20);
-    let default_border = rgb(theme.colors.ui.border);
+    let default_background =
+        rgba(hex_to_rgba_with_opacity(theme.colors.background.search_box, OPACITY_CARD_BG));
+    let highlighted_background =
+        rgba(hex_to_rgba_with_opacity(theme.colors.accent.selected_subtle, OPACITY_CARD_BG));
+    let default_border =
+        rgba(hex_to_rgba_with_opacity(theme.colors.ui.border, OPACITY_BORDER));
     let active_border = rgb(theme.colors.accent.selected);
     let error_border = rgb(theme.colors.ui.error);
     let value = if empty {
-        rgb(theme.colors.text.muted)
+        rgba(hex_to_rgba_with_opacity(theme.colors.text.muted, OPACITY_PROMINENT))
     } else {
         rgb(theme.colors.text.primary)
     };
@@ -219,7 +225,7 @@ pub(crate) fn prompt_text_field(
 }
 
 /// Multi-line detail card with headline, supporting text, and detail text rows.
-#[allow(clippy::too_many_arguments)]
+#[allow(dead_code, clippy::too_many_arguments)]
 pub(crate) fn prompt_detail_card(
     headline: impl Into<SharedString>,
     supporting_text: impl Into<SharedString>,
@@ -245,6 +251,38 @@ pub(crate) fn prompt_detail_card(
             .child(prompt_form_help(supporting_text, supporting_color))
             .child(prompt_form_help(detail_text, detail_color)),
     )
+}
+
+/// Horizontally scrollable single-line value for long paths or strings.
+#[allow(dead_code)]
+pub(crate) fn prompt_scroll_value(
+    value: impl Into<SharedString>,
+    color: Rgba,
+) -> gpui::Stateful<Div> {
+    prompt_scroll_value_with_id("prompt-scroll-value", value, color)
+}
+
+/// Horizontally scrollable single-line value with a custom element ID.
+///
+/// Use this when multiple scroll values appear in the same view to avoid
+/// duplicate element IDs.
+pub(crate) fn prompt_scroll_value_with_id(
+    id: impl Into<gpui::ElementId>,
+    value: impl Into<SharedString>,
+    color: Rgba,
+) -> gpui::Stateful<Div> {
+    div()
+        .id(id.into())
+        .w_full()
+        .overflow_x_scroll()
+        .overflow_y_hidden()
+        .child(
+            div()
+                .text_xs()
+                .text_color(color)
+                .whitespace_nowrap()
+                .child(value.into()),
+        )
 }
 
 /// Shared outer shell used by prompt wrappers in `render_prompts/*`.
