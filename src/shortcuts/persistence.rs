@@ -65,7 +65,6 @@ pub fn invalidate_shortcut_cache() {
 
 use serde::{Deserialize, Serialize};
 
-use super::registry::ShortcutRegistry;
 use super::types::{Shortcut, ShortcutParseError};
 
 /// User shortcut overrides configuration.
@@ -169,45 +168,6 @@ impl ShortcutOverrides {
         let content = serde_json::to_string_pretty(self)?;
         fs::write(path, content)?;
         Ok(())
-    }
-
-    /// Apply overrides to a registry.
-    ///
-    /// Returns a list of parse errors for invalid shortcuts (but still applies valid ones).
-    pub fn apply_to_registry(&self, registry: &mut ShortcutRegistry) -> Vec<PersistenceError> {
-        let mut errors = Vec::new();
-
-        for (binding_id, override_opt) in &self.overrides {
-            match override_opt {
-                None => {
-                    // Disable this shortcut
-                    registry.set_override(binding_id, None);
-                }
-                Some(shortcut_str) => {
-                    // Parse and set override
-                    match Shortcut::parse(shortcut_str) {
-                        Ok(shortcut) => {
-                            registry.set_override(binding_id, Some(shortcut));
-                        }
-                        Err(e) => {
-                            errors.push(PersistenceError::InvalidShortcut {
-                                binding_id: binding_id.clone(),
-                                shortcut: shortcut_str.clone(),
-                                error: e,
-                            });
-                        }
-                    }
-                }
-            }
-        }
-
-        errors
-    }
-
-    /// Extract current overrides from a registry.
-    pub fn from_registry(registry: &ShortcutRegistry) -> Self {
-        let overrides = registry.export_overrides();
-        Self { overrides }
     }
 
     /// Set an override.
@@ -400,79 +360,6 @@ mod tests {
         assert_eq!(loaded.len(), 2);
         assert_eq!(loaded.get("test.action"), Some(&Some("cmd+k".to_string())));
         assert_eq!(loaded.get("test.disabled"), Some(&None));
-    }
-
-    #[test]
-    fn apply_valid_override_to_registry() {
-        use super::super::context::ShortcutContext;
-        use super::super::registry::{ShortcutBinding, ShortcutCategory, ShortcutRegistry};
-        use super::super::types::Modifiers;
-
-        let mut registry = ShortcutRegistry::new();
-        registry.register(ShortcutBinding::builtin(
-            "test.action",
-            "Test",
-            Shortcut {
-                key: "k".to_string(),
-                modifiers: Modifiers::cmd(),
-            },
-            ShortcutContext::Global,
-            ShortcutCategory::Actions,
-        ));
-
-        let mut overrides = ShortcutOverrides::default();
-        overrides.set("test.action", Some("cmd+j".to_string()));
-
-        let errors = overrides.apply_to_registry(&mut registry);
-        assert!(errors.is_empty());
-
-        let shortcut = registry.get_shortcut("test.action").unwrap();
-        assert_eq!(shortcut.key, "j");
-    }
-
-    #[test]
-    fn apply_disable_override_to_registry() {
-        use super::super::context::ShortcutContext;
-        use super::super::registry::{ShortcutBinding, ShortcutCategory, ShortcutRegistry};
-        use super::super::types::Modifiers;
-
-        let mut registry = ShortcutRegistry::new();
-        registry.register(ShortcutBinding::builtin(
-            "test.action",
-            "Test",
-            Shortcut {
-                key: "k".to_string(),
-                modifiers: Modifiers::cmd(),
-            },
-            ShortcutContext::Global,
-            ShortcutCategory::Actions,
-        ));
-
-        let mut overrides = ShortcutOverrides::default();
-        overrides.set("test.action", None);
-
-        let errors = overrides.apply_to_registry(&mut registry);
-        assert!(errors.is_empty());
-
-        assert!(registry.is_disabled("test.action"));
-    }
-
-    #[test]
-    fn apply_invalid_shortcut_returns_error() {
-        use super::super::registry::ShortcutRegistry;
-
-        let mut registry = ShortcutRegistry::new();
-        let mut overrides = ShortcutOverrides::default();
-        overrides.set("test.action", Some("invalid+shortcut+xyz".to_string()));
-
-        let errors = overrides.apply_to_registry(&mut registry);
-        assert_eq!(errors.len(), 1);
-        match &errors[0] {
-            PersistenceError::InvalidShortcut { binding_id, .. } => {
-                assert_eq!(binding_id, "test.action");
-            }
-            _ => panic!("Expected InvalidShortcut error"),
-        }
     }
 
     #[test]

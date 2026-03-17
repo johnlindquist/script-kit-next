@@ -27,7 +27,6 @@
 //! - **Theme integration**: Use `from_theme()` or `from_design()` for colors
 
 pub mod alias_input;
-pub(crate) mod overlay_modal;
 pub mod button;
 #[cfg(test)]
 mod error_handling_audit_tests;
@@ -35,6 +34,7 @@ pub mod focusable_prompt_wrapper;
 pub mod form_fields;
 #[cfg(test)]
 mod form_fields_tests;
+pub(crate) mod overlay_modal;
 pub mod prompt_container;
 pub mod prompt_footer;
 pub mod prompt_header;

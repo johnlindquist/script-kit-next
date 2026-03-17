@@ -65,10 +65,10 @@ pub(super) const CHAT_LAYOUT_FOOTER_BG_LIGHT_ALPHA: u8 = 0x14;
 
 use self::types::{
     build_conversation_turns, default_conversation_starters, next_reveal_boundary,
-    resolve_chat_input_key_action, resolve_chat_scroll_follow_after_scroll,
-    resolve_setup_card_key, should_ignore_stream_reveal_update,
-    should_show_script_generation_actions, ChatInputKeyAction, ChatScrollDirection,
-    RunScriptCallback, ScriptGenerationAction, ScriptSavedCallback, SetupCardAction,
+    resolve_chat_input_key_action, resolve_chat_scroll_follow_after_scroll, resolve_setup_card_key,
+    should_ignore_stream_reveal_update, should_show_script_generation_actions, ChatInputKeyAction,
+    ChatScrollDirection, RunScriptCallback, ScriptGenerationAction, ScriptSavedCallback,
+    SetupCardAction,
 };
 
 #[cfg(test)]

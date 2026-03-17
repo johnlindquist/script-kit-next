@@ -99,9 +99,13 @@ mod windows;
 
 // Phase 1 system API modules
 mod clipboard_history;
+mod clipboard_preview_helpers;
 mod file_search;
 mod toast_manager;
 mod window_control;
+
+// Render helper data (proper modules so tests are discoverable)
+mod actions_dialog_items;
 
 // Secrets - age-encrypted secrets storage (replacement for keyring)
 mod secrets;

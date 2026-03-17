@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use crate::components::overlay_modal::{compute_overlay_appear_style, OVERLAY_ANIMATION_DURATION_MS};
+use crate::components::overlay_modal::{
+    compute_overlay_appear_style, OVERLAY_ANIMATION_DURATION_MS,
+};
 use crate::theme::Theme;
 
 use super::types::{

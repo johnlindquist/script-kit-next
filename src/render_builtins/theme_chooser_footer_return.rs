@@ -1,4 +1,21 @@
         // ── Footer with keyboard shortcuts ─────────────────────────
+        let shortcut_rows: &[&[(&str, &str)]] = &[
+            &[
+                ("\u{2191}\u{2193}", "Preview"),
+                ("Enter", "Apply"),
+                ("Esc", "Cancel"),
+                ("PgUp/Dn", "Jump"),
+                ("Type", "Search"),
+            ],
+            &[
+                ("\u{2318}[]", "Accent"),
+                ("\u{2318}-/=", "Opacity"),
+                ("\u{2318}B", "Vibrancy"),
+                ("\u{2318}M", "Material"),
+                ("\u{2318}R", "Reset"),
+            ],
+        ];
+
         let shortcut = |key: &str, label: &str| {
             div()
                 .flex()
@@ -17,6 +34,7 @@
                         .child(label.to_string()),
                 )
         };
+
         let footer_border = rgba((ui_border << 8) | 0x30);
         let footer = div()
             .w_full()
@@ -27,30 +45,14 @@
             .flex()
             .flex_col()
             .gap(px(2.0))
-            .child(
+            .children(shortcut_rows.iter().map(|row| {
                 div()
                     .flex()
                     .flex_row()
                     .justify_center()
                     .gap(px(12.0))
-                    .child(shortcut("↑↓", "Preview"))
-                    .child(shortcut("Enter", "Apply"))
-                    .child(shortcut("Esc", "Cancel"))
-                    .child(shortcut("PgUp/Dn", "Jump"))
-                    .child(shortcut("Type", "Search")),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .justify_center()
-                    .gap(px(12.0))
-                    .child(shortcut("⌘[]", "Accent"))
-                    .child(shortcut("⌘-/=", "Opacity"))
-                    .child(shortcut("⌘B", "Vibrancy"))
-                    .child(shortcut("⌘M", "Material"))
-                    .child(shortcut("⌘R", "Reset")),
-            );
+                    .children(row.iter().map(|(key, label)| shortcut(key, label)))
+            }));
 
         // ── Empty state when filter has no matches ─────────────────
         if filtered_count == 0 {

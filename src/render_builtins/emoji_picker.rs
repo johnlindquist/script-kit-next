@@ -35,9 +35,9 @@ impl ScriptListApp {
         let row = layout.scroll_row_for_index(*selected_index);
 
         tracing::debug!(
-            target: "script_kit::emoji_picker",
+            target: "script_kit::scroll",
             event = "scroll_to_item",
-            reason = "nav",
+            reason = "selection_changed",
             direction = ?direction,
             old_index,
             selected_index = *selected_index,
@@ -339,6 +339,13 @@ impl ScriptListApp {
             .track_scroll(&self.emoji_scroll_handle)
             .into_any_element()
         };
+
+        let list_scrollbar = self.builtin_uniform_list_scrollbar(
+            &self.emoji_scroll_handle,
+            rows.len(),
+            8,
+        );
+
         div()
             .flex()
             .flex_col()
@@ -392,7 +399,14 @@ impl ScriptListApp {
                     .min_h(px(0.0))
                     .overflow_hidden()
                     .py(px(design_spacing.padding_xs))
-                    .child(grid_element),
+                    .child(
+                        div()
+                            .relative()
+                            .w_full()
+                            .h_full()
+                            .child(grid_element)
+                            .child(list_scrollbar),
+                    ),
             )
             .child(PromptFooter::new(
                 PromptFooterConfig::new()

@@ -36,6 +36,61 @@ impl ScriptListApp {
         theme::accent_color_name(color)
     }
 
+    /// Emit a structured scroll log line for builtin views.
+    #[allow(clippy::too_many_arguments)]
+    fn log_builtin_scroll_event(
+        view: &'static str,
+        action: &'static str,
+        reason: &'static str,
+        item_count: usize,
+        selected_index: Option<usize>,
+        target_item: Option<usize>,
+        filter: Option<&str>,
+        input_mode: &'static str,
+    ) {
+        tracing::debug!(
+            target: "script_kit::scroll",
+            view = view,
+            action = action,
+            reason = reason,
+            item_count = item_count,
+            selected_index = selected_index
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "none".into())
+                .as_str(),
+            target_item = target_item
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "none".into())
+                .as_str(),
+            filter_len = filter
+                .map(|v| v.chars().count().to_string())
+                .unwrap_or_else(|| "none".into())
+                .as_str(),
+            input_mode = input_mode,
+        );
+    }
+
+    /// Scroll a builtin uniform list to the top and emit a structured log.
+    fn scroll_builtin_to_top_with_log(
+        handle: &UniformListScrollHandle,
+        view: &'static str,
+        item_count: usize,
+        filter: &str,
+        input_mode: &'static str,
+    ) {
+        Self::log_builtin_scroll_event(
+            view,
+            "scroll_to_item",
+            "filter_changed",
+            item_count,
+            Some(0),
+            Some(0),
+            Some(filter),
+            input_mode,
+        );
+        handle.scroll_to_item(0, ScrollStrategy::Top);
+    }
+
     /// Compute scrollbar metrics for a tracked uniform list.
     fn builtin_uniform_list_scrollbar_metrics(
         handle: &UniformListScrollHandle,
