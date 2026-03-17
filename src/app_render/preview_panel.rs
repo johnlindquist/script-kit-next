@@ -174,42 +174,14 @@ impl ScriptListApp {
         let section_label_font_size = preview_panel_typography_section_label_size(typography);
         let body_text_line_height = preview_panel_typography_body_line_height(typography);
 
-        // Preview badge colors — light mode needs opaque fills for vibrancy readability
-        // Light mode: use theme text colors (dark on light) for visible badges
-        // Dark mode: use semi-transparent overlays that work with vibrancy
-        let badge_bg = if is_light_mode {
-            rgba((ui_border << 8) | 0x0C) // border at ~5% for light vibrancy
-        } else {
-            rgba((ui_border << 8) | 0x60) // border at 37% on dark
-        };
-        let badge_text = if is_light_mode {
-            rgb(text_secondary) // dark gray for strong contrast
-        } else {
-            rgb(text_muted)
-        };
-        let badge_border = if is_light_mode {
-            rgba((ui_border << 8) | 0x18) // border at ~9% for light vibrancy
-        } else {
-            rgba((ui_border << 8) | 0x40)
-        };
-        // Accent badge colors — yellow/gold design accent is unreadable on light backgrounds,
-        // so use the theme's selected accent (typically blue) for light mode instead
-        let light_accent = self.theme.colors.accent.selected;
-        let accent_badge_bg = if is_light_mode {
-            rgba((light_accent << 8) | 0x14) // theme accent at ~8%
-        } else {
-            rgba((colors.accent << 8) | 0x30) // design accent at ~19%
-        };
-        let accent_badge_border = if is_light_mode {
-            rgba((light_accent << 8) | 0x30) // theme accent at ~19%
-        } else {
-            rgba((colors.accent << 8) | 0x50) // design accent at ~31%
-        };
-        let accent_badge_text = if is_light_mode {
-            rgb(light_accent) // theme accent (blue) for light mode
-        } else {
-            rgb(colors.accent) // design accent (yellow/gold) fine on dark
-        };
+        // Badge and chrome colors from shared theme contract
+        let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
+        let badge_bg = rgba(chrome.badge_bg_rgba);
+        let badge_text = rgb(chrome.badge_text_hex);
+        let badge_border = rgba(chrome.badge_border_rgba);
+        let accent_badge_bg = rgba(chrome.accent_badge_bg_rgba);
+        let accent_badge_border = rgba(chrome.accent_badge_border_rgba);
+        let accent_badge_text = rgb(chrome.accent_badge_text_hex);
 
         // Get shortcut display string for the selected item (if any)
         // Check BOTH config.ts commands AND shortcut overrides file
@@ -246,7 +218,7 @@ impl ScriptListApp {
                 d.bg(rgba((bg_main << 8) | preview_alpha))
             })
             .border_l_1()
-            .border_color(rgba((ui_border << 8) | 0x80))
+            .border_color(rgba(chrome.divider_rgba))
             .p(px(spacing.padding_lg))
             .flex()
             .flex_col()
@@ -309,7 +281,7 @@ impl ScriptListApp {
                     div()
                         .w_full()
                         .h(px(visual.border_thin))
-                        .bg(rgba((ui_border << 8) | if is_light_mode { 0x30 } else { 0x60 }))
+                        .bg(rgba(chrome.divider_rgba))
                         .my(px(spacing.padding_sm)),
                 )
                 .child(
@@ -562,7 +534,7 @@ impl ScriptListApp {
                             div()
                                 .w_full()
                                 .h(px(visual.border_thin))
-                                .bg(rgba((ui_border << 8) | if is_light_mode { 0x30 } else { 0x60 }))
+                                .bg(rgba(chrome.divider_rgba))
                                 .my(px(spacing.padding_sm)),
                         );
 
@@ -806,7 +778,7 @@ impl ScriptListApp {
                             div()
                                 .w_full()
                                 .h(px(visual.border_thin))
-                                .bg(rgba((ui_border << 8) | if is_light_mode { 0x30 } else { 0x60 }))
+                                .bg(rgba(chrome.divider_rgba))
                                 .my(px(spacing.padding_sm)),
                         );
 

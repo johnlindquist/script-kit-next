@@ -153,11 +153,13 @@ impl ColorResolver {
     }
 
     /// Get the border color
+    #[allow(dead_code)]
     pub fn border_color(&self) -> u32 {
         self.border
     }
 
     /// Get the secondary background color
+    #[allow(dead_code)]
     pub fn secondary_background_color(&self) -> u32 {
         self.background_secondary
     }
