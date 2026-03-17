@@ -37,7 +37,7 @@
 // --- merged from part_000.rs ---
 use crate::designs::{get_tokens, DesignColors, DesignSpacing, DesignVariant};
 use crate::theme::{ColorScheme, Theme};
-use gpui::{px, Div, Hsla, Rgba, Styled};
+use gpui::{px, Div, Hsla, InteractiveElement, Rgba, Stateful, Styled};
 /// Convert a hex color (u32) to RGBA with specified opacity.
 ///
 /// This is the standard way to create semi-transparent colors for vibrancy support.
@@ -546,6 +546,65 @@ pub fn spacer() -> Div {
     gpui::div().flex_1()
 }
 
+// ============================================================================
+// Action / Overlay Primitives
+// ============================================================================
+
+/// Identifies the UI surface where an action originates.
+/// Names are stable wire values — do not rename variants.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum UiSurface {
+    NotesToolbar,
+    NotesExportMenu,
+    NotesOverlay,
+    ThemeChooserPreview,
+}
+
+impl UiSurface {
+    #[inline]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::NotesToolbar => "notes_toolbar",
+            Self::NotesExportMenu => "notes_export_menu",
+            Self::NotesOverlay => "notes_overlay",
+            Self::ThemeChooserPreview => "theme_chooser_preview",
+        }
+    }
+}
+
+/// Describes a single UI action for logging and introspection.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct UiActionSpec {
+    pub id: &'static str,
+    pub label: &'static str,
+    pub shortcut: Option<&'static str>,
+}
+
+/// Emit a structured log line for a UI action.
+#[inline]
+pub(crate) fn log_ui_action(surface: UiSurface, spec: UiActionSpec, phase: &'static str) {
+    tracing::info!(
+        surface = surface.as_str(),
+        control_id = spec.id,
+        control_label = spec.label,
+        shortcut = spec.shortcut.unwrap_or(""),
+        phase = phase,
+        "ui_action"
+    );
+}
+
+/// A compact horizontal action row with 4px gap and wrapping.
+#[inline]
+pub(crate) fn compact_action_row() -> Div {
+    hstack().gap(px(4.0)).flex_wrap()
+}
+
+/// Root div for a modal overlay: absolute, fills parent, flex.
+#[inline]
+pub(crate) fn modal_overlay_root(id: &'static str) -> Stateful<Div> {
+    gpui::div().id(id).absolute().inset_0().flex()
+}
+
 // --- merged from part_001.rs ---
 // ============================================================================
 // Key Normalization - Allocation-free key matching
@@ -951,6 +1010,21 @@ mod tests {
         opacity.vibrancy_background = Some(-0.2);
         theme.opacity = Some(opacity);
         assert!((resolve_window_vibrancy_opacity(&theme) - 0.0).abs() < 0.0001);
+    }
+
+    // ========================================================================
+    // UiSurface / Action Primitive Tests
+    // ========================================================================
+
+    #[test]
+    fn ui_surface_names_are_stable() {
+        assert_eq!(UiSurface::NotesToolbar.as_str(), "notes_toolbar");
+        assert_eq!(UiSurface::NotesExportMenu.as_str(), "notes_export_menu");
+        assert_eq!(UiSurface::NotesOverlay.as_str(), "notes_overlay");
+        assert_eq!(
+            UiSurface::ThemeChooserPreview.as_str(),
+            "theme_chooser_preview"
+        );
     }
 
     #[test]

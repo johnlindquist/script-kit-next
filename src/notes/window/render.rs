@@ -1,9 +1,7 @@
 use super::*;
 
-impl Render for NotesApp {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let mouse_cursor_hidden = self.mouse_cursor_hidden;
-
+impl NotesApp {
+    fn process_render_side_effects(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.detect_manual_resize(window);
         self.drain_pending_action(window, cx);
         self.drain_pending_browse_actions(window, cx);
@@ -11,8 +9,27 @@ impl Render for NotesApp {
         self.maybe_persist_bounds(window);
 
         if self.should_save_now() {
+            tracing::debug!(
+                surface = "notes_window",
+                action = "autosave",
+                has_selected_note = self.selected_note_id.is_some(),
+                has_unsaved_changes = self.has_unsaved_changes,
+                show_actions_panel = self.show_actions_panel,
+                show_search = self.show_search,
+                preview_enabled = self.preview_enabled,
+                focus_mode = self.focus_mode,
+                "ui_render_decision"
+            );
             self.save_current_note();
         }
+    }
+}
+
+impl Render for NotesApp {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let mouse_cursor_hidden = self.mouse_cursor_hidden;
+
+        self.process_render_side_effects(window, cx);
 
         let show_actions =
             self.show_actions_panel && self.actions_panel.is_some() && !self.command_bar.is_open();
