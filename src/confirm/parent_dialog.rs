@@ -242,9 +242,8 @@ mod tests {
 
     #[test]
     fn async_confirmation_callers_use_shared_parent_dialog_helper() {
-        let clipboard_source =
-            fs::read_to_string("src/app_actions/handle_action/clipboard.rs")
-                .expect("Failed to read clipboard.rs");
+        let clipboard_source = fs::read_to_string("src/app_actions/handle_action/clipboard.rs")
+            .expect("Failed to read clipboard.rs");
         let chat_source = fs::read_to_string("src/app_impl/chat_actions.rs")
             .expect("Failed to read chat_actions.rs");
         let execution_source = fs::read_to_string("src/app_impl/execution_paths.rs")
@@ -416,6 +415,66 @@ mod tests {
         assert!(
             builtin_helper_idx < builtin_quit_idx,
             "builtin quit should run shutdown cleanup before quitting"
+        );
+    }
+
+    #[test]
+    fn no_legacy_confirmation_surfaces_exist_outside_shared_helper() {
+        use std::path::{Path, PathBuf};
+
+        fn collect_rs_files(dir: &Path, out: &mut Vec<PathBuf>) {
+            for entry in fs::read_dir(dir).expect("read_dir failed") {
+                let entry = entry.expect("dir entry failed");
+                let path = entry.path();
+
+                if path.is_dir() {
+                    let name = path
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .unwrap_or_default();
+                    if matches!(name, "target" | "vendor" | ".git") {
+                        continue;
+                    }
+                    collect_rs_files(&path, out);
+                    continue;
+                }
+
+                if path.extension().and_then(|ext| ext.to_str()) == Some("rs") {
+                    out.push(path);
+                }
+            }
+        }
+
+        let mut files = Vec::new();
+        collect_rs_files(Path::new("src"), &mut files);
+
+        let allow_inline_confirm = [Path::new("src/confirm/parent_dialog.rs")];
+
+        let offenders: Vec<String> = files
+            .into_iter()
+            .filter(|path| !allow_inline_confirm.iter().any(|allowed| path == allowed))
+            .filter_map(|path| {
+                let source = fs::read_to_string(&path)
+                    .unwrap_or_else(|_| panic!("Failed to read {}", path.display()));
+                // Only scan production code — strip everything after #[cfg(test)]
+                let production_source = source.split("#[cfg(test)]").next().unwrap_or(&source);
+                let normalized = normalize_ws(production_source);
+
+                let uses_legacy_helper = normalized.contains("confirm_with_modal(")
+                    || normalized.contains("open_confirm_window(");
+
+                let inlines_confirm_dialog = normalized
+                    .contains("window.open_dialog(cx, move |dialog")
+                    && normalized.contains(".confirm()");
+
+                (uses_legacy_helper || inlines_confirm_dialog).then(|| path.display().to_string())
+            })
+            .collect();
+
+        assert!(
+            offenders.is_empty(),
+            "remaining legacy confirmation callers: {:?}",
+            offenders
         );
     }
 }
