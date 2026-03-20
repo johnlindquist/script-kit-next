@@ -17,44 +17,35 @@ pub fn move_first_window_to(x: f64, y: f64, width: f64, height: f64) {
     if require_main_thread("move_first_window_to") {
         return;
     }
+
+    let primary_screen_height = match primary_screen_height() {
+        Some(h) => h,
+        None => {
+            logging::log(
+                "POSITION",
+                "WARNING: Could not determine primary screen height",
+            );
+            return;
+        }
+    };
+
+    // Use WindowManager to get the main window reliably
+    let window = match window_manager::get_main_window() {
+        Some(w) => w,
+        None => {
+            logging::log(
+                "POSITION",
+                "WARNING: Main window not registered in WindowManager, cannot move",
+            );
+            return;
+        }
+    };
+
     // SAFETY: Main thread verified. Window from WindowManager is valid.
-    // NSScreen.mainScreen nil-checked with fallback. setFrame:display:animate:
-    // is a standard NSWindow method.
+    // primary_screen_height() already resolved the primary screen (screens[0])
+    // used for global coordinate conversion. frame and setFrame:display:animate:
+    // are standard NSWindow methods.
     unsafe {
-        // Use WindowManager to get the main window reliably
-        let window = match window_manager::get_main_window() {
-            Some(w) => w,
-            None => {
-                logging::log(
-                    "POSITION",
-                    "WARNING: Main window not registered in WindowManager, cannot move",
-                );
-                return;
-            }
-        };
-
-        // Get the PRIMARY screen's height for coordinate conversion
-        // CRITICAL: Use mainScreen, not firstObject - they can differ when display arrangement changes
-        let main_screen: id = msg_send![class!(NSScreen), mainScreen];
-        let main_screen = if main_screen == nil {
-            // Fallback to firstObject if mainScreen is nil (shouldn't happen but be safe)
-            let screens: id = msg_send![class!(NSScreen), screens];
-            if screens.is_null() {
-                logging::log("POSITION", "WARNING: NSScreen.screens returned nil");
-                return;
-            }
-            let fallback: id = msg_send![screens, firstObject];
-            if fallback.is_null() {
-                logging::log("POSITION", "WARNING: No screens available");
-                return;
-            }
-            fallback
-        } else {
-            main_screen
-        };
-        let main_screen_frame: NSRect = msg_send![main_screen, frame];
-        let primary_screen_height = main_screen_frame.size.height;
-
         // Log current window position before move
         let current_frame: NSRect = msg_send![window, frame];
         logging::log(
@@ -275,7 +266,9 @@ fn calculate_bounds_on_mouse_display(
             visible.origin_y + (visible.height - window_height) / 2.0
         }
         MouseDisplayPlacement::EyeLine => visible.origin_y + visible.height * EYE_LINE_Y_RATIO,
-        MouseDisplayPlacement::Centered => visible.origin_y + (visible.height - window_height) / 2.0,
+        MouseDisplayPlacement::Centered => {
+            visible.origin_y + (visible.height - window_height) / 2.0
+        }
     };
 
     let desired_bounds = Bounds {

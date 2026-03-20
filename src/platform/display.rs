@@ -30,6 +30,16 @@ pub fn flip_y(primary_height: f64, y: f64, height: f64) -> f64 {
     primary_height - y - height
 }
 
+#[cfg(target_os = "macos")]
+const PRIMARY_SCREEN_ARRAY_INDEX: usize = 0;
+
+#[cfg(target_os = "macos")]
+fn primary_screen_array_index(screen_count: usize) -> Option<usize> {
+    // Cocoa global coordinates are anchored to the primary/menu-bar screen, which is screens[0].
+    // The key-window screen API tracks focus instead and cannot be used for coordinate conversion.
+    (screen_count > 0).then_some(PRIMARY_SCREEN_ARRAY_INDEX)
+}
+
 /// Get the current global mouse cursor position using macOS Core Graphics API.
 /// Returns the position in global display coordinates (top-left origin, Y increases down).
 ///
@@ -75,7 +85,7 @@ pub fn get_global_mouse_position() -> Option<(f64, f64)> {
     None
 }
 
-/// Get the height of the primary (main) screen for coordinate conversion.
+/// Get the height of the primary screen (screens[0]) for coordinate conversion.
 /// macOS uses bottom-left origin; we convert to top-left origin.
 #[cfg(target_os = "macos")]
 pub fn primary_screen_height() -> Option<f64> {
@@ -83,15 +93,23 @@ pub fn primary_screen_height() -> Option<f64> {
         return None;
     }
 
-    // SAFETY: Main thread verified. NSScreen.mainScreen is a class method
-    // that returns the primary screen. Nil checked before accessing frame.
+    // SAFETY: Main thread verified. NSScreen.screens is a class method.
+    // We nil-check the NSArray, require at least one screen, and nil-check
+    // the primary screen (screens[0]) before accessing its frame.
     unsafe {
-        let main_screen: id = msg_send![class!(NSScreen), mainScreen];
-        if main_screen == nil {
+        let screens: id = msg_send![class!(NSScreen), screens];
+        if screens.is_null() {
             return None;
         }
 
-        let frame: NSRect = msg_send![main_screen, frame];
+        let count: usize = msg_send![screens, count];
+        let primary_screen_index = primary_screen_array_index(count)?;
+        let primary_screen: id = msg_send![screens, objectAtIndex: primary_screen_index];
+        if primary_screen == nil {
+            return None;
+        }
+
+        let frame: NSRect = msg_send![primary_screen, frame];
         Some(frame.size.height)
     }
 }
@@ -119,7 +137,8 @@ pub fn get_macos_visible_displays() -> Vec<VisibleDisplayBounds> {
     }
 
     // SAFETY: Main thread verified. NSScreen.screens is a class method.
-    // We check mainScreen for nil and bound all NSArray access by count.
+    // We nil-check the NSArray, ensure the primary screen (screens[0]) exists
+    // before reading its frame, and bound all objectAtIndex: access by count.
     unsafe {
         let screens: id = msg_send![class!(NSScreen), screens];
         if screens.is_null() {
@@ -127,24 +146,22 @@ pub fn get_macos_visible_displays() -> Vec<VisibleDisplayBounds> {
         }
 
         let count: usize = msg_send![screens, count];
-
-        let main_screen: id = msg_send![class!(NSScreen), mainScreen];
-        let main_screen = if main_screen == nil {
-            logging::log(
-                "POSITION",
-                "WARNING: mainScreen returned nil, falling back to firstObject",
-            );
-            let fallback: id = msg_send![screens, firstObject];
-            if fallback.is_null() {
-                return Vec::new();
-            }
-            fallback
-        } else {
-            main_screen
+        let primary_screen_index = match primary_screen_array_index(count) {
+            Some(index) => index,
+            None => return Vec::new(),
         };
 
-        let main_frame: NSRect = msg_send![main_screen, frame];
-        let primary_height = main_frame.size.height;
+        let primary_screen: id = msg_send![screens, objectAtIndex: primary_screen_index];
+        if primary_screen == nil {
+            logging::log(
+                "POSITION",
+                "WARNING: primary screen (screens[0]) returned nil",
+            );
+            return Vec::new();
+        }
+
+        let primary_frame: NSRect = msg_send![primary_screen, frame];
+        let primary_height = primary_frame.size.height;
 
         let mut displays = Vec::with_capacity(count);
         for i in 0..count {
@@ -271,6 +288,20 @@ mod tests {
                 height: visible_height,
             },
         }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_primary_screen_array_index_does_select_screens_zero_when_available() {
+        assert_eq!(primary_screen_array_index(0), None);
+        assert_eq!(
+            primary_screen_array_index(1),
+            Some(PRIMARY_SCREEN_ARRAY_INDEX)
+        );
+        assert_eq!(
+            primary_screen_array_index(3),
+            Some(PRIMARY_SCREEN_ARRAY_INDEX)
+        );
     }
 
     #[test]
