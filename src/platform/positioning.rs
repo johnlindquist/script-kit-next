@@ -179,8 +179,11 @@ fn log_available_displays(displays: &[VisibleDisplayBounds]) {
     }
 }
 
-fn select_display_for_mouse(displays: &[VisibleDisplayBounds]) -> Option<VisibleDisplayBounds> {
-    if let Some((mouse_x, mouse_y)) = get_global_mouse_position() {
+fn select_display_for_mouse(
+    mouse: Option<(f64, f64)>,
+    displays: &[VisibleDisplayBounds],
+) -> Option<VisibleDisplayBounds> {
+    if let Some((mouse_x, mouse_y)) = mouse {
         logging::log(
             "POSITION",
             &format!("Mouse cursor at ({:.0}, {:.0})", mouse_x, mouse_y),
@@ -218,11 +221,12 @@ fn fallback_display_bounds() -> VisibleDisplayBounds {
     }
 }
 
-fn calculate_bounds_on_mouse_display(
+fn calculate_bounds_for_snapshot(
     window_size: gpui::Size<Pixels>,
+    mouse: Option<(f64, f64)>,
+    displays: &[VisibleDisplayBounds],
     placement: MouseDisplayPlacement,
 ) -> Bounds<Pixels> {
-    let displays = get_macos_visible_displays();
     let title_line = match placement {
         MouseDisplayPlacement::EyeLine => {
             "║  CALCULATING WINDOW POSITION FOR MOUSE DISPLAY             ║"
@@ -236,10 +240,10 @@ fn calculate_bounds_on_mouse_display(
         "POSITION",
         &format!("Available displays: {}", displays.len()),
     );
-    log_available_displays(&displays);
+    log_available_displays(displays);
 
     let mut used_fallback_display = false;
-    let display = select_display_for_mouse(&displays).unwrap_or_else(|| {
+    let display = select_display_for_mouse(mouse, displays).unwrap_or_else(|| {
         used_fallback_display = true;
         logging::log(
             "POSITION",
@@ -296,17 +300,41 @@ fn calculate_bounds_on_mouse_display(
     final_bounds
 }
 
-/// Calculate window bounds positioned at eye-line height on the display containing the mouse cursor.
+fn calculate_bounds_on_mouse_display(
+    window_size: gpui::Size<Pixels>,
+    placement: MouseDisplayPlacement,
+) -> Bounds<Pixels> {
+    let mouse = get_global_mouse_position();
+    let displays = get_macos_visible_displays();
+    calculate_bounds_for_snapshot(window_size, mouse, &displays, placement)
+}
+
+/// Calculate window bounds positioned at eye-line height using a single caller-provided
+/// mouse/display snapshot.
 ///
-/// - Finds the display where the mouse cursor is located
+/// - Finds the display where the sampled mouse cursor is located
 /// - Centers the window horizontally on that display
 /// - Positions the window at "eye-line" height (upper 14% of the screen)
 ///
 /// This matches the behavior of Raycast/Alfred where the prompt appears on the active display.
+pub fn calculate_eye_line_bounds_for_snapshot(
+    window_size: gpui::Size<Pixels>,
+    mouse: Option<(f64, f64)>,
+    displays: &[VisibleDisplayBounds],
+) -> Bounds<Pixels> {
+    calculate_bounds_for_snapshot(window_size, mouse, displays, MouseDisplayPlacement::EyeLine)
+}
+
+/// Calculate window bounds positioned at eye-line height on the display containing the mouse cursor.
+///
+/// This thin wrapper samples mouse position and visible displays once, then delegates to
+/// `calculate_eye_line_bounds_for_snapshot`.
 pub fn calculate_eye_line_bounds_on_mouse_display(
     window_size: gpui::Size<Pixels>,
 ) -> Bounds<Pixels> {
-    calculate_bounds_on_mouse_display(window_size, MouseDisplayPlacement::EyeLine)
+    let mouse = get_global_mouse_position();
+    let displays = get_macos_visible_displays();
+    calculate_eye_line_bounds_for_snapshot(window_size, mouse, &displays)
 }
 
 /// Calculate window bounds centered on the display containing the mouse cursor.
@@ -344,6 +372,66 @@ mod positioning_bounds_tests {
         assert_eq!(fallback.visible_area.origin_y, 0.0);
         assert_eq!(fallback.visible_area.width, FALLBACK_VISIBLE_WIDTH);
         assert_eq!(fallback.visible_area.height, FALLBACK_VISIBLE_HEIGHT);
+    }
+
+    #[test]
+    fn test_calculate_eye_line_bounds_for_snapshot_uses_selected_display_visible_area() {
+        let window_size = size(px(600.0), px(240.0));
+        let displays = vec![
+            VisibleDisplayBounds {
+                frame: DisplayBounds {
+                    origin_x: 0.0,
+                    origin_y: 0.0,
+                    width: 1440.0,
+                    height: 900.0,
+                },
+                visible_area: DisplayBounds {
+                    origin_x: 0.0,
+                    origin_y: 24.0,
+                    width: 1440.0,
+                    height: 840.0,
+                },
+            },
+            VisibleDisplayBounds {
+                frame: DisplayBounds {
+                    origin_x: 1440.0,
+                    origin_y: 0.0,
+                    width: 1920.0,
+                    height: 1080.0,
+                },
+                visible_area: DisplayBounds {
+                    origin_x: 1440.0,
+                    origin_y: 32.0,
+                    width: 1920.0,
+                    height: 1008.0,
+                },
+            },
+        ];
+
+        let bounds = calculate_eye_line_bounds_for_snapshot(
+            window_size,
+            Some((1700.0, 200.0)),
+            &displays,
+        );
+
+        let x: f64 = bounds.origin.x.into();
+        let y: f64 = bounds.origin.y.into();
+
+        assert_eq!(x, 2100.0);
+        assert!((y - 173.12).abs() < 0.01, "expected y near 173.12, got {y}");
+    }
+
+    #[test]
+    fn test_calculate_eye_line_bounds_for_snapshot_centers_when_snapshot_has_no_displays() {
+        let window_size = size(px(1000.0), px(200.0));
+
+        let bounds = calculate_eye_line_bounds_for_snapshot(window_size, None, &[]);
+
+        let x: f64 = bounds.origin.x.into();
+        let y: f64 = bounds.origin.y.into();
+
+        assert_eq!(x, 256.0);
+        assert_eq!(y, 391.0);
     }
 
     #[cfg(target_os = "macos")]
