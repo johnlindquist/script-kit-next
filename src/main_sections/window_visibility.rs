@@ -43,8 +43,13 @@ fn show_main_window_helper(
 
     // 4. Position window - try per-display saved position first, then fall back to eye-line
     let window_size = gpui::size(px(750.), initial_window_height());
-    let displays = platform::get_macos_displays();
-    let bounds = if let Some((mouse_x, mouse_y)) = platform::get_global_mouse_position() {
+    let visible_displays = platform::get_macos_visible_displays();
+    let displays: Vec<_> = visible_displays
+        .iter()
+        .map(|display| display.frame.clone())
+        .collect();
+    let mouse = platform::get_global_mouse_position();
+    let bounds = if let Some((mouse_x, mouse_y)) = mouse {
         // Try to restore saved position for the mouse display
         if let Some((saved, display)) =
             window_state::get_main_position_for_mouse_display(mouse_x, mouse_y, &displays)
@@ -70,18 +75,26 @@ fn show_main_window_helper(
                     "VISIBILITY",
                     "Saved position no longer visible, using eye-line",
                 );
-                platform::calculate_eye_line_bounds_on_mouse_display(window_size)
+                platform::calculate_eye_line_bounds_for_snapshot(
+                    window_size,
+                    mouse,
+                    &visible_displays,
+                )
             }
         } else {
             logging::log(
                 "VISIBILITY",
                 "No saved position for this display, using eye-line",
             );
-            platform::calculate_eye_line_bounds_on_mouse_display(window_size)
+            platform::calculate_eye_line_bounds_for_snapshot(
+                window_size,
+                mouse,
+                &visible_displays,
+            )
         }
     } else {
         logging::log("VISIBILITY", "Could not get mouse position, using eye-line");
-        platform::calculate_eye_line_bounds_on_mouse_display(window_size)
+        platform::calculate_eye_line_bounds_for_snapshot(window_size, mouse, &visible_displays)
     };
     platform::move_first_window_to_bounds(&bounds);
 
