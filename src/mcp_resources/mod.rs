@@ -138,6 +138,15 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
             description: Some("List of all available scriptlets from markdown files".to_string()),
             mime_type: "application/json".to_string(),
         },
+        McpResource {
+            uri: "kit://context".to_string(),
+            name: "Current Context".to_string(),
+            description: Some(
+                "Deterministic snapshot of AI-relevant desktop context (selected text, frontmost app, menu bar, browser URL, focused window)"
+                    .to_string(),
+            ),
+            mime_type: "application/json".to_string(),
+        },
     ]
 }
 /// Read a specific resource by URI
@@ -161,6 +170,7 @@ pub fn read_resource(
         "kit://state" => read_state_resource(app_state),
         "scripts://" => read_scripts_resource(scripts),
         "scriptlets://" => read_scriptlets_resource(scriptlets),
+        "kit://context" => read_context_resource(),
         _ => Err(format!("Resource not found: {}", uri)),
     }
 }
@@ -224,6 +234,20 @@ pub fn resource_list_to_value(resources: &[McpResource]) -> Value {
     .unwrap_or(serde_json::json!({"resources": []}))
 }
 
+/// Read kit://context resource — deterministic AI context snapshot
+fn read_context_resource() -> Result<ResourceContent, String> {
+    let json = crate::context_snapshot::capture_context_snapshot_json(
+        &crate::context_snapshot::CaptureContextOptions::default(),
+    )
+    .map_err(|e| format!("Failed to capture context snapshot: {e}"))?;
+
+    Ok(ResourceContent {
+        uri: "kit://context".to_string(),
+        mime_type: "application/json".to_string(),
+        text: json,
+    })
+}
+
 // --- merged from part_001.rs ---
 #[cfg(test)]
 mod tests {
@@ -285,7 +309,7 @@ mod tests {
         // REQUIREMENT: resources/list returns all three resources
         let resources = get_resource_definitions();
 
-        assert_eq!(resources.len(), 3, "Should have exactly 3 resources");
+        assert_eq!(resources.len(), 4, "Should have exactly 4 resources");
 
         let uris: Vec<&str> = resources.iter().map(|r| r.uri.as_str()).collect();
         assert!(uris.contains(&"kit://state"), "Should include kit://state");
@@ -465,7 +489,7 @@ mod tests {
         assert!(resource_array.is_some());
 
         let resource_array = resource_array.unwrap();
-        assert_eq!(resource_array.len(), 3);
+        assert_eq!(resource_array.len(), 4);
 
         // First resource should have expected fields
         let first = &resource_array[0];

@@ -47,6 +47,7 @@ mod camera;
 mod components;
 mod config;
 mod confirm;
+mod context_snapshot;
 mod designs;
 mod editor;
 #[allow(dead_code)] // Public API in lib.rs; binary only uses ErrorSeverity currently
