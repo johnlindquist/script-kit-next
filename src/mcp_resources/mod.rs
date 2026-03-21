@@ -675,8 +675,7 @@ mod tests {
 
     #[test]
     fn parse_context_resource_options_supports_minimal_profile() {
-        let options =
-            parse_context_resource_options("kit://context?profile=minimal").unwrap();
+        let options = parse_context_resource_options("kit://context?profile=minimal").unwrap();
         assert_eq!(
             options,
             crate::context_snapshot::CaptureContextOptions::minimal()
@@ -705,16 +704,14 @@ mod tests {
 
     #[test]
     fn parse_context_rejects_unknown_profile() {
-        let error =
-            parse_context_resource_options("kit://context?profile=heavy").unwrap_err();
+        let error = parse_context_resource_options("kit://context?profile=heavy").unwrap_err();
         assert!(error.contains("Unknown profile"));
     }
 
     #[test]
     fn context_resource_preserves_query_uri() {
         let content =
-            read_resource("kit://context?profile=minimal", &[], &[], None)
-                .expect("should resolve");
+            read_resource("kit://context?profile=minimal", &[], &[], None).expect("should resolve");
         assert_eq!(content.uri, "kit://context?profile=minimal");
     }
 }

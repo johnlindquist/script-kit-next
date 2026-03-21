@@ -47,24 +47,49 @@ fn test_elements_result_contains_expected_semantic_ids() {
         ElementInfo::choice(1, "Banana", "banana", false),
     ];
 
-    let response = crate::protocol::Message::elements_result("elm-1".to_string(), elements, 4, None, None, Vec::new());
+    let response = crate::protocol::Message::elements_result(
+        "elm-1".to_string(),
+        elements,
+        4,
+        None,
+        None,
+        Vec::new(),
+    );
     let json = serde_json::to_string(&response).expect("Should serialize elementsResult");
 
     // Must contain the correct type
-    assert!(json.contains(r#""type":"elementsResult"#), "Missing type field");
+    assert!(
+        json.contains(r#""type":"elementsResult"#),
+        "Missing type field"
+    );
     assert!(json.contains(r#""requestId":"elm-1"#), "Missing requestId");
 
     // Must contain semantic IDs
-    assert!(json.contains("input:filter"), "Missing input:filter semantic ID");
-    assert!(json.contains("list:choices"), "Missing list:choices semantic ID");
-    assert!(json.contains("choice:0:apple"), "Missing choice:0:apple semantic ID");
-    assert!(json.contains("choice:1:banana"), "Missing choice:1:banana semantic ID");
+    assert!(
+        json.contains("input:filter"),
+        "Missing input:filter semantic ID"
+    );
+    assert!(
+        json.contains("list:choices"),
+        "Missing list:choices semantic ID"
+    );
+    assert!(
+        json.contains("choice:0:apple"),
+        "Missing choice:0:apple semantic ID"
+    );
+    assert!(
+        json.contains("choice:1:banana"),
+        "Missing choice:1:banana semantic ID"
+    );
 
     // Must contain totalCount
     assert!(json.contains(r#""totalCount":4"#), "Missing totalCount");
 
     // Not truncated when elements.len() == totalCount
-    assert!(json.contains(r#""truncated":false"#), "Should not be truncated");
+    assert!(
+        json.contains(r#""truncated":false"#),
+        "Should not be truncated"
+    );
 }
 
 #[test]
@@ -75,8 +100,14 @@ fn test_elements_result_roundtrip_preserves_structure() {
         ElementInfo::choice(0, "Item One", "item-one", true),
     ];
 
-    let original =
-        crate::protocol::Message::elements_result("rt-1".to_string(), elements.clone(), 3, None, None, Vec::new());
+    let original = crate::protocol::Message::elements_result(
+        "rt-1".to_string(),
+        elements.clone(),
+        3,
+        None,
+        None,
+        Vec::new(),
+    );
     let json = serde_json::to_string(&original).expect("Should serialize");
     let parsed: crate::protocol::Message =
         serde_json::from_str(&json).expect("Should deserialize elementsResult");
@@ -202,14 +233,26 @@ fn test_simulated_choice_prompt_elements_structure() {
     ];
 
     let total_count = elements.len();
-    let response =
-        crate::protocol::Message::elements_result("sim-1".to_string(), elements, total_count, None, None, Vec::new());
+    let response = crate::protocol::Message::elements_result(
+        "sim-1".to_string(),
+        elements,
+        total_count,
+        None,
+        None,
+        Vec::new(),
+    );
 
     match response {
         crate::protocol::Message::ElementsResult {
-            elements, total_count, truncated, ..
+            elements,
+            total_count,
+            truncated,
+            ..
         } => {
-            assert!(!truncated, "Should not be truncated when all elements included");
+            assert!(
+                !truncated,
+                "Should not be truncated when all elements included"
+            );
             // Acceptance criteria: input:filter present
             assert!(
                 elements.iter().any(|e| e.semantic_id == "input:filter"),
@@ -224,11 +267,16 @@ fn test_simulated_choice_prompt_elements_structure() {
 
             // Acceptance criteria: at least one choice:*:* element
             assert!(
-                elements.iter().any(|e| e.semantic_id.starts_with("choice:")),
+                elements
+                    .iter()
+                    .any(|e| e.semantic_id.starts_with("choice:")),
                 "Must contain at least one choice:*:* element"
             );
 
-            assert!(total_count >= 3, "Total count should include input + list + choices");
+            assert!(
+                total_count >= 3,
+                "Total count should include input + list + choices"
+            );
         }
         other => panic!("Expected ElementsResult, got: {:?}", other),
     }
@@ -258,7 +306,10 @@ fn test_elements_result_marks_truncated_when_elements_are_capped() {
         } => {
             assert_eq!(request_id, "elm-trunc");
             assert_eq!(total_count, 3);
-            assert!(truncated, "Must be truncated when elements.len() < totalCount");
+            assert!(
+                truncated,
+                "Must be truncated when elements.len() < totalCount"
+            );
         }
         other => panic!("Expected ElementsResult, got: {:?}", other),
     }
@@ -270,12 +321,21 @@ fn test_elements_result_not_truncated_when_complete() {
         ElementInfo::input("filter", Some(""), true),
         ElementInfo::panel("div-prompt"),
     ];
-    let response =
-        crate::protocol::Message::elements_result("elm-full".to_string(), elements, 2, None, None, Vec::new());
+    let response = crate::protocol::Message::elements_result(
+        "elm-full".to_string(),
+        elements,
+        2,
+        None,
+        None,
+        Vec::new(),
+    );
 
     match response {
         crate::protocol::Message::ElementsResult { truncated, .. } => {
-            assert!(!truncated, "Must not be truncated when elements.len() == totalCount");
+            assert!(
+                !truncated,
+                "Must not be truncated when elements.len() == totalCount"
+            );
         }
         other => panic!("Expected ElementsResult, got: {:?}", other),
     }
@@ -288,8 +348,8 @@ fn test_elements_result_not_truncated_when_complete() {
 #[test]
 fn test_choice_generate_id_prefers_stable_key() {
     use crate::protocol::types::Choice;
-    let choice = Choice::new("Apple".to_string(), "apple".to_string())
-        .with_key("fruit-apple".to_string());
+    let choice =
+        Choice::new("Apple".to_string(), "apple".to_string()).with_key("fruit-apple".to_string());
 
     // Key-based ID should ignore the index entirely
     assert_eq!(choice.generate_id(999), "choice:fruit-apple");
@@ -332,8 +392,14 @@ fn test_select_prompt_scenario_elements_result_structure() {
     ];
 
     let total_count = elements.len();
-    let response =
-        crate::protocol::Message::elements_result("sel-1".to_string(), elements, total_count, None, None, Vec::new());
+    let response = crate::protocol::Message::elements_result(
+        "sel-1".to_string(),
+        elements,
+        total_count,
+        None,
+        None,
+        Vec::new(),
+    );
 
     match response {
         crate::protocol::Message::ElementsResult {
@@ -347,19 +413,25 @@ fn test_select_prompt_scenario_elements_result_structure() {
 
             // Must include select-filter input
             assert!(
-                elements.iter().any(|e| e.semantic_id == "input:select-filter"),
+                elements
+                    .iter()
+                    .any(|e| e.semantic_id == "input:select-filter"),
                 "Must contain input:select-filter"
             );
 
             // Must include select-choices list
             assert!(
-                elements.iter().any(|e| e.semantic_id == "list:select-choices"),
+                elements
+                    .iter()
+                    .any(|e| e.semantic_id == "list:select-choices"),
                 "Must contain list:select-choices"
             );
 
             // Must include at least one choice row
             assert!(
-                elements.iter().any(|e| e.semantic_id.starts_with("choice:")),
+                elements
+                    .iter()
+                    .any(|e| e.semantic_id.starts_with("choice:")),
                 "Must contain at least one choice row"
             );
         }
@@ -407,10 +479,22 @@ fn test_elements_result_includes_observation_receipt_fields() {
 
     let json = serde_json::to_string(&response).expect("Should serialize elementsResult");
 
-    assert!(json.contains(r#""truncated":true"#), "Missing truncated: {json}");
-    assert!(json.contains(r#""focusedSemanticId":"input:filter""#), "Missing focusedSemanticId: {json}");
-    assert!(json.contains(r#""selectedSemanticId":"choice:0:apple""#), "Missing selectedSemanticId: {json}");
-    assert!(json.contains(r#""warnings":["panel_only_theme_chooser"]"#), "Missing warnings: {json}");
+    assert!(
+        json.contains(r#""truncated":true"#),
+        "Missing truncated: {json}"
+    );
+    assert!(
+        json.contains(r#""focusedSemanticId":"input:filter""#),
+        "Missing focusedSemanticId: {json}"
+    );
+    assert!(
+        json.contains(r#""selectedSemanticId":"choice:0:apple""#),
+        "Missing selectedSemanticId: {json}"
+    );
+    assert!(
+        json.contains(r#""warnings":["panel_only_theme_chooser"]"#),
+        "Missing warnings: {json}"
+    );
 }
 
 #[test]

@@ -1,5 +1,5 @@
-use super::*;
 use super::prompt::collect_select_prompt_elements;
+use super::*;
 
 fn choice(name: &str, value: &str, description: Option<&str>) -> Choice {
     let mut choice = Choice::new(name.to_string(), value.to_string());
@@ -315,14 +315,20 @@ fn test_select_prompt_get_elements_returns_visible_choices() {
 
     // First element: input
     assert_eq!(elements[0].semantic_id, "input:select-filter");
-    assert_eq!(elements[0].element_type, crate::protocol::ElementType::Input);
+    assert_eq!(
+        elements[0].element_type,
+        crate::protocol::ElementType::Input
+    );
 
     // Second element: list container
     assert_eq!(elements[1].semantic_id, "list:select-choices");
     assert_eq!(elements[1].element_type, crate::protocol::ElementType::List);
 
     // Choice rows
-    assert_eq!(elements[2].element_type, crate::protocol::ElementType::Choice);
+    assert_eq!(
+        elements[2].element_type,
+        crate::protocol::ElementType::Choice
+    );
     assert_eq!(elements[2].text.as_deref(), Some("Apple"));
     assert_eq!(elements[2].value.as_deref(), Some("apple"));
     assert_eq!(elements[2].selected, Some(false));
@@ -357,21 +363,22 @@ fn test_select_prompt_get_elements_respects_limit() {
         collect_select_prompt_elements("", &choices, &filtered, &selected, 0, 3);
     assert_eq!(elements.len(), 3);
     assert_eq!(total_count, 5);
-    assert_eq!(elements[2].element_type, crate::protocol::ElementType::Choice);
+    assert_eq!(
+        elements[2].element_type,
+        crate::protocol::ElementType::Choice
+    );
 }
 
 #[test]
 fn test_select_prompt_get_elements_uses_stable_key_semantic_id() {
     let choices = vec![
-        Choice::new("Apple".to_string(), "apple".to_string())
-            .with_key("fruit-apple".to_string()),
+        Choice::new("Apple".to_string(), "apple".to_string()).with_key("fruit-apple".to_string()),
         Choice::new("Banana".to_string(), "banana".to_string()),
     ];
     let filtered: Vec<usize> = (0..choices.len()).collect();
     let selected: HashSet<usize> = HashSet::new();
 
-    let (elements, _) =
-        collect_select_prompt_elements("", &choices, &filtered, &selected, 0, 50);
+    let (elements, _) = collect_select_prompt_elements("", &choices, &filtered, &selected, 0, 50);
 
     // Keyed choice uses choice:key format
     assert_eq!(elements[2].semantic_id, "choice:fruit-apple");
@@ -389,9 +396,8 @@ fn test_select_prompt_get_elements_reflects_selection_state() {
     let mut selected = HashSet::new();
     selected.insert(1); // Select Banana
 
-    let (elements, _) =
-        collect_select_prompt_elements("", &choices, &filtered, &selected, 0, 50);
+    let (elements, _) = collect_select_prompt_elements("", &choices, &filtered, &selected, 0, 50);
 
     assert_eq!(elements[2].selected, Some(false)); // Apple not selected
-    assert_eq!(elements[3].selected, Some(true));  // Banana selected
+    assert_eq!(elements[3].selected, Some(true)); // Banana selected
 }
