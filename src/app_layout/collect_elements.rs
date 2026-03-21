@@ -1,6 +1,50 @@
 // Element collection for getElements protocol support.
 // Returns a bounded list of visible UI elements with semantic IDs.
 
+/// Outcome of collecting visible UI elements, carrying receipt metadata
+/// for the `elementsResult` protocol response.
+#[derive(Debug, Clone)]
+pub(crate) struct ElementCollectionOutcome {
+    pub elements: Vec<protocol::ElementInfo>,
+    pub total_count: usize,
+    pub warnings: Vec<String>,
+}
+
+impl ElementCollectionOutcome {
+    pub fn new(elements: Vec<protocol::ElementInfo>, total_count: usize) -> Self {
+        Self {
+            elements,
+            total_count,
+            warnings: Vec::new(),
+        }
+    }
+
+    pub fn with_warning(mut self, warning: impl Into<String>) -> Self {
+        self.warnings.push(warning.into());
+        self
+    }
+
+    pub fn focused_semantic_id(&self) -> Option<String> {
+        self.elements
+            .iter()
+            .find(|element| element.focused == Some(true))
+            .map(|element| element.semantic_id.clone())
+    }
+
+    pub fn selected_semantic_id(&self) -> Option<String> {
+        self.elements
+            .iter()
+            .find(|element| element.selected == Some(true))
+            .map(|element| element.semantic_id.clone())
+    }
+}
+
+impl From<(Vec<protocol::ElementInfo>, usize)> for ElementCollectionOutcome {
+    fn from((elements, total_count): (Vec<protocol::ElementInfo>, usize)) -> Self {
+        Self::new(elements, total_count)
+    }
+}
+
 impl ScriptListApp {
     /// Push an element into the vec only if it hasn't reached the limit.
     /// Returns true if the element was added, false if capped.
@@ -35,13 +79,13 @@ impl ScriptListApp {
         }
     }
 
-    fn collect_visible_elements(
+    pub(crate) fn collect_visible_elements(
         &self,
         limit: usize,
         cx: &Context<Self>,
-    ) -> (Vec<protocol::ElementInfo>, usize) {
+    ) -> ElementCollectionOutcome {
         match &self.current_view {
-            AppView::ScriptList => self.collect_script_list_elements(limit),
+            AppView::ScriptList => self.collect_script_list_elements(limit).into(),
 
             AppView::ArgPrompt { choices, .. } => self.collect_choice_view_elements(
                 "filter",
@@ -49,7 +93,7 @@ impl ScriptListApp {
                 choices,
                 self.arg_selected_index,
                 limit,
-            ),
+            ).into(),
 
             AppView::MiniPrompt { choices, .. } => self.collect_choice_view_elements(
                 "filter",
@@ -57,7 +101,7 @@ impl ScriptListApp {
                 choices,
                 self.arg_selected_index,
                 limit,
-            ),
+            ).into(),
 
             AppView::MicroPrompt { choices, .. } => self.collect_choice_view_elements(
                 "filter",
@@ -65,7 +109,7 @@ impl ScriptListApp {
                 choices,
                 self.arg_selected_index,
                 limit,
-            ),
+            ).into(),
 
             AppView::ClipboardHistoryView {
                 filter,
@@ -83,7 +127,7 @@ impl ScriptListApp {
                     &rows,
                     *selected_index,
                     limit,
-                )
+                ).into()
             }
 
             AppView::AppLauncherView {
@@ -99,7 +143,7 @@ impl ScriptListApp {
                     &rows,
                     *selected_index,
                     limit,
-                )
+                ).into()
             }
 
             AppView::WindowSwitcherView {
@@ -118,7 +162,7 @@ impl ScriptListApp {
                     &rows,
                     *selected_index,
                     limit,
-                )
+                ).into()
             }
 
             AppView::FileSearchView {
@@ -137,7 +181,7 @@ impl ScriptListApp {
                     &rows,
                     *selected_index,
                     limit,
-                )
+                ).into()
             }
 
             AppView::ProcessManagerView {
@@ -156,7 +200,7 @@ impl ScriptListApp {
                     &rows,
                     *selected_index,
                     limit,
-                )
+                ).into()
             }
 
             AppView::EmojiPickerView {
@@ -180,7 +224,7 @@ impl ScriptListApp {
                     &rows,
                     *selected_index,
                     limit,
-                )
+                ).into()
             }
 
             AppView::BrowseKitsView {
@@ -197,7 +241,7 @@ impl ScriptListApp {
                     &rows,
                     *selected_index,
                     limit,
-                )
+                ).into()
             }
 
             AppView::ThemeChooserView { filter, .. } => {
@@ -213,7 +257,8 @@ impl ScriptListApp {
                 .into_iter()
                 .take(limit)
                 .collect();
-                (elements, total_count)
+                ElementCollectionOutcome::new(elements, total_count)
+                    .with_warning("panel_only_theme_chooser")
             }
 
             AppView::ActionsDialog => {
@@ -223,7 +268,8 @@ impl ScriptListApp {
                         .into_iter()
                         .take(limit)
                         .collect();
-                (elements, total_count)
+                ElementCollectionOutcome::new(elements, total_count)
+                    .with_warning("panel_only_actions_dialog")
             }
 
             AppView::DivPrompt { .. } => {
@@ -233,7 +279,8 @@ impl ScriptListApp {
                         .into_iter()
                         .take(limit)
                         .collect();
-                (elements, total_count)
+                ElementCollectionOutcome::new(elements, total_count)
+                    .with_warning("panel_only_div_prompt")
             }
 
             AppView::FormPrompt { .. } => {
@@ -243,7 +290,8 @@ impl ScriptListApp {
                         .into_iter()
                         .take(limit)
                         .collect();
-                (elements, total_count)
+                ElementCollectionOutcome::new(elements, total_count)
+                    .with_warning("panel_only_form_prompt")
             }
 
             AppView::TermPrompt { .. } => {
@@ -253,7 +301,8 @@ impl ScriptListApp {
                         .into_iter()
                         .take(limit)
                         .collect();
-                (elements, total_count)
+                ElementCollectionOutcome::new(elements, total_count)
+                    .with_warning("panel_only_term_prompt")
             }
 
             AppView::EditorPrompt { .. } => {
@@ -263,11 +312,12 @@ impl ScriptListApp {
                         .into_iter()
                         .take(limit)
                         .collect();
-                (elements, total_count)
+                ElementCollectionOutcome::new(elements, total_count)
+                    .with_warning("panel_only_editor_prompt")
             }
 
             AppView::SelectPrompt { entity, .. } => {
-                entity.read(cx).collect_elements(limit)
+                entity.read(cx).collect_elements(limit).into()
             }
 
             AppView::PathPrompt { .. } => {
@@ -277,7 +327,8 @@ impl ScriptListApp {
                         .into_iter()
                         .take(limit)
                         .collect();
-                (elements, total_count)
+                ElementCollectionOutcome::new(elements, total_count)
+                    .with_warning("panel_only_path_prompt")
             }
 
             AppView::ChatPrompt { .. } => {
@@ -287,7 +338,8 @@ impl ScriptListApp {
                         .into_iter()
                         .take(limit)
                         .collect();
-                (elements, total_count)
+                ElementCollectionOutcome::new(elements, total_count)
+                    .with_warning("panel_only_chat_prompt")
             }
 
             AppView::EnvPrompt { .. } => {
@@ -297,7 +349,8 @@ impl ScriptListApp {
                         .into_iter()
                         .take(limit)
                         .collect();
-                (elements, total_count)
+                ElementCollectionOutcome::new(elements, total_count)
+                    .with_warning("panel_only_env_prompt")
             }
 
             AppView::DropPrompt { .. } => {
@@ -307,7 +360,8 @@ impl ScriptListApp {
                         .into_iter()
                         .take(limit)
                         .collect();
-                (elements, total_count)
+                ElementCollectionOutcome::new(elements, total_count)
+                    .with_warning("panel_only_drop_prompt")
             }
 
             AppView::TemplatePrompt { .. } => {
@@ -317,7 +371,8 @@ impl ScriptListApp {
                         .into_iter()
                         .take(limit)
                         .collect();
-                (elements, total_count)
+                ElementCollectionOutcome::new(elements, total_count)
+                    .with_warning("panel_only_template_prompt")
             }
 
             AppView::NamingPrompt { .. } => {
@@ -327,7 +382,8 @@ impl ScriptListApp {
                         .into_iter()
                         .take(limit)
                         .collect();
-                (elements, total_count)
+                ElementCollectionOutcome::new(elements, total_count)
+                    .with_warning("panel_only_naming_prompt")
             }
 
             AppView::CreationFeedback { .. } => {
@@ -337,7 +393,8 @@ impl ScriptListApp {
                         .into_iter()
                         .take(limit)
                         .collect();
-                (elements, total_count)
+                ElementCollectionOutcome::new(elements, total_count)
+                    .with_warning("panel_only_creation_feedback")
             }
 
             AppView::WebcamView { .. } => {
@@ -347,7 +404,8 @@ impl ScriptListApp {
                         .into_iter()
                         .take(limit)
                         .collect();
-                (elements, total_count)
+                ElementCollectionOutcome::new(elements, total_count)
+                    .with_warning("panel_only_webcam")
             }
 
             AppView::ScratchPadView { .. } => {
@@ -357,7 +415,8 @@ impl ScriptListApp {
                         .into_iter()
                         .take(limit)
                         .collect();
-                (elements, total_count)
+                ElementCollectionOutcome::new(elements, total_count)
+                    .with_warning("panel_only_scratch_pad")
             }
 
             AppView::QuickTerminalView { .. } => {
@@ -367,7 +426,8 @@ impl ScriptListApp {
                         .into_iter()
                         .take(limit)
                         .collect();
-                (elements, total_count)
+                ElementCollectionOutcome::new(elements, total_count)
+                    .with_warning("panel_only_quick_terminal")
             }
 
             _ => {
@@ -377,7 +437,8 @@ impl ScriptListApp {
                         .into_iter()
                         .take(limit)
                         .collect();
-                (elements, total_count)
+                ElementCollectionOutcome::new(elements, total_count)
+                    .with_warning("collector_used_current_view_fallback")
             }
         }
     }

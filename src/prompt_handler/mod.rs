@@ -1382,46 +1382,67 @@ impl ScriptListApp {
             }
 
             PromptMessage::GetElements { request_id, limit } => {
-                tracing::info!(
-                    category = "UI",
-                    request_id = %request_id,
-                    limit = ?limit,
-                    "Collecting visible elements for request"
-                );
-
                 let max_elements = limit.unwrap_or(50).clamp(1, 1000);
-                let (elements, total_count) = self.collect_visible_elements(max_elements, cx);
 
                 tracing::info!(
-                    category = "UI",
+                    category = "UI_ELEMENTS",
                     request_id = %request_id,
-                    element_count = elements.len(),
-                    total_count = total_count,
-                    "Sending elements result"
+                    limit = max_elements,
+                    "ui.elements.request"
                 );
 
-                let response = Message::elements_result(request_id.clone(), elements, total_count);
+                let outcome = self.collect_visible_elements(max_elements, cx);
+                let returned_count = outcome.elements.len();
+                let focused_semantic_id = outcome.focused_semantic_id();
+                let selected_semantic_id = outcome.selected_semantic_id();
+                let truncated = outcome.total_count > returned_count;
+                let warnings = outcome.warnings.clone();
+
+                tracing::info!(
+                    category = "UI_ELEMENTS",
+                    request_id = %request_id,
+                    limit = max_elements,
+                    returned_count = returned_count,
+                    total_count = outcome.total_count,
+                    truncated = truncated,
+                    focused_semantic_id = focused_semantic_id.as_deref().unwrap_or(""),
+                    selected_semantic_id = selected_semantic_id.as_deref().unwrap_or(""),
+                    warnings = ?warnings,
+                    "ui.elements.result"
+                );
+
+                let response = Message::elements_result(
+                    request_id.clone(),
+                    outcome.elements,
+                    outcome.total_count,
+                    focused_semantic_id,
+                    selected_semantic_id,
+                    warnings,
+                );
 
                 if let Some(ref sender) = self.response_sender {
                     match sender.try_send(response) {
                         Ok(()) => {}
                         Err(std::sync::mpsc::TrySendError::Full(_)) => {
                             tracing::warn!(
-                                category = "WARN",
-                                "Response channel full - elements result dropped"
+                                category = "UI_ELEMENTS",
+                                request_id = %request_id,
+                                "ui.elements.response_channel_full"
                             );
                         }
                         Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
                             tracing::info!(
-                                category = "UI",
-                                "Response channel disconnected - script exited"
+                                category = "UI_ELEMENTS",
+                                request_id = %request_id,
+                                "ui.elements.response_channel_disconnected"
                             );
                         }
                     }
                 } else {
                     tracing::error!(
-                        category = "ERROR",
-                        "No response sender available for elements result"
+                        category = "UI_ELEMENTS",
+                        request_id = %request_id,
+                        "ui.elements.no_response_sender"
                     );
                 }
             }

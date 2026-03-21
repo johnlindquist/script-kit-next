@@ -119,8 +119,18 @@ macro_rules! protocol_message_variants_query_ops {
         /// Total number of elements (may be larger than returned if limit applied)
         #[serde(rename = "totalCount")]
         total_count: usize,
-        /// Whether the returned elements were capped by the limit
+        /// True when limit caused the response to omit elements
+        #[serde(default)]
         truncated: bool,
+        /// Semantic ID of the currently focused element, if any
+        #[serde(rename = "focusedSemanticId", default, skip_serializing_if = "Option::is_none")]
+        focused_semantic_id: Option<String>,
+        /// Semantic ID of the currently selected element, if any
+        #[serde(rename = "selectedSemanticId", default, skip_serializing_if = "Option::is_none")]
+        selected_semantic_id: Option<String>,
+        /// Machine-readable collection warnings
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        warnings: Vec<String>,
     },
 
     // ============================================================
