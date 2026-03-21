@@ -27,6 +27,9 @@ This document provides a comprehensive reference for the JSONL protocol used in 
    - [File Search](#file-search)
    - [Screenshot Capture](#screenshot-capture)
    - [Error Reporting](#error-reporting)
+   - [Element Introspection](#element-introspection)
+   - [MCP Context Resources](#mcp-context-resources)
+   - [AI Context Parts](#ai-context-parts)
 6. [Data Types](#data-types)
 7. [Graceful Error Handling](#graceful-error-handling)
 8. [SDK Integration](#sdk-integration)
@@ -1441,6 +1444,182 @@ Report script execution errors with structured information.
 ```
 
 **Note:** All fields except `errorMessage` and `scriptPath` are optional.
+
+---
+
+### Element Introspection
+
+#### `getElements` — Query Visible UI Elements
+
+Request the current visible UI surface. Returns semantic IDs for AI-driven targeting.
+
+**Request:**
+```json
+{
+  "type": "getElements",
+  "requestId": "elm-1",
+  "limit": 50
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `requestId` | string | yes | Correlation ID returned in the response |
+| `limit` | number | no | Max elements to return (default 50, clamped 1–1000) |
+
+#### `elementsResult` — Element Query Response
+
+**Response:**
+```json
+{
+  "type": "elementsResult",
+  "requestId": "elm-1",
+  "elements": [
+    {
+      "semanticId": "input:filter",
+      "type": "input",
+      "text": null,
+      "value": "app",
+      "selected": false,
+      "focused": true,
+      "index": null
+    },
+    {
+      "semanticId": "list:choices",
+      "type": "list",
+      "text": "2 items"
+    },
+    {
+      "semanticId": "choice:0:apple",
+      "type": "choice",
+      "text": "Apple",
+      "value": "apple",
+      "selected": true,
+      "focused": false,
+      "index": 0
+    }
+  ],
+  "totalCount": 3,
+  "truncated": false,
+  "focusedSemanticId": "input:filter",
+  "selectedSemanticId": "choice:0:apple",
+  "warnings": []
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `requestId` | string | Matches the request |
+| `elements` | ElementInfo[] | Visible elements up to `limit` |
+| `totalCount` | number | Total elements before truncation |
+| `truncated` | boolean | `true` if `totalCount > elements.length` |
+| `focusedSemanticId` | string? | Semantic ID of the focused element |
+| `selectedSemanticId` | string? | Semantic ID of the selected element |
+| `warnings` | string[] | Machine-readable collection warnings |
+
+**ElementInfo:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `semanticId` | string | Stable ID: `input:filter`, `choice:0:apple`, `list:choices`, `button:0:Submit`, `panel:div-prompt` |
+| `type` | string | One of: `choice`, `input`, `button`, `panel`, `list`, `unknown` |
+| `text` | string? | Display text |
+| `value` | string? | Underlying value |
+| `selected` | boolean? | Whether this element is selected |
+| `focused` | boolean? | Whether this element has focus |
+| `index` | number? | Position in list (choices only) |
+
+**Warning codes:** `panel_only_theme_chooser`, `panel_only_div_prompt`, `panel_only_form_prompt`, `panel_only_editor_prompt`, `panel_only_chat_prompt`, `panel_only_env_prompt`, `panel_only_drop_prompt`, `panel_only_template_prompt`, `panel_only_naming_prompt`, `panel_only_webcam`, `panel_only_scratch_pad`, `panel_only_quick_terminal`, `panel_only_actions_dialog`, `collector_used_current_view_fallback`
+
+---
+
+### MCP Context Resources
+
+Script Kit exposes desktop context via MCP resource URIs. These are read through the MCP protocol, not stdin/stdout.
+
+#### `kit://context` — Desktop Context Snapshot
+
+Returns a JSON snapshot of the user's current desktop state.
+
+**Response shape:**
+```json
+{
+  "schemaVersion": 1,
+  "selectedText": "function hello() { ... }",
+  "frontmostApp": {
+    "pid": 1234,
+    "bundleId": "com.apple.Safari",
+    "name": "Safari"
+  },
+  "menuBarItems": [
+    {
+      "title": "File",
+      "enabled": true,
+      "shortcut": null,
+      "children": [{"title": "New Window", "enabled": true, "shortcut": "⌘N", "children": []}]
+    }
+  ],
+  "browser": {"url": "https://docs.rs/gpui"},
+  "focusedWindow": {"title": "PROTOCOL.md", "width": 1440, "height": 900, "usedFallback": false},
+  "warnings": []
+}
+```
+
+**Query parameters:**
+
+| Parameter | Values | Description |
+|-----------|--------|-------------|
+| `profile` | `full` (default), `minimal` | Preset field sets. Minimal excludes `selectedText` and `menuBarItems` |
+| `selectedText` | `0`/`1`/`true`/`false` | Include selected text |
+| `frontmostApp` | `0`/`1`/`true`/`false` | Include frontmost app info |
+| `menuBar` | `0`/`1`/`true`/`false` | Include menu bar hierarchy |
+| `browserUrl` | `0`/`1`/`true`/`false` | Include browser URL |
+| `focusedWindow` | `0`/`1`/`true`/`false` | Include focused window info |
+| `diagnostics` | `0`/`1` | Include per-field capture status and timing |
+
+Per-field flags override the profile. Unknown parameters return an error.
+
+#### `kit://context/schema` — Self-Describing Schema
+
+Returns a JSON document describing supported profiles, parameters, their defaults, and diagnostics schema. Useful for clients to discover capabilities without hardcoding URIs.
+
+---
+
+### AI Context Parts
+
+Context parts are typed attachments (MCP resources or files) that can be added to AI chat messages. They are resolved at submit time.
+
+**Serde format** (tagged by `kind`):
+```json
+{"kind": "resourceUri", "uri": "kit://context?profile=minimal", "label": "Current Context"}
+{"kind": "filePath", "path": "/Users/me/code.rs", "label": "code.rs"}
+```
+
+**Resolution output** wraps content in XML tags:
+```xml
+<context source="kit://context?profile=minimal" mimeType="application/json">
+{"schemaVersion":1,...}
+</context>
+
+<attachment path="/Users/me/code.rs">
+fn main() { ... }
+</attachment>
+```
+
+Unreadable files produce a metadata-only tag:
+```xml
+<attachment path="/tmp/binary.bin" unreadable="true" bytes="1024" />
+```
+
+**Resolution receipt:**
+```json
+{
+  "attempted": 2,
+  "resolved": 1,
+  "failures": [{"label": "missing.txt", "source": "/nonexistent/missing.txt", "error": "No such file"}],
+  "promptPrefix": "<attachment path=\"/tmp/good.rs\">...</attachment>"
+}
+```
 
 ---
 

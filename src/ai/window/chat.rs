@@ -414,58 +414,55 @@ impl AiApp {
             let scripts = crate::scripts::read_scripts();
             let scriptlets = crate::scripts::load_scriptlets();
 
-            let receipt = crate::ai::message_parts::resolve_context_parts_with_receipt(
+            let prepared = crate::ai::message_parts::prepare_user_message_with_receipt(
+                &message,
                 &parts,
                 &scripts,
                 &scriptlets,
             );
 
-            if receipt.has_failures() {
-                tracing::warn!(
-                    checkpoint = "resolution_partial",
-                    attempted = receipt.attempted,
-                    resolved = receipt.resolved,
-                    failures = ?receipt.failures,
-                    chat_id = %chat_id,
-                    "start_chat_context: partial resolution failure"
-                );
+            self.last_prepared_message_receipt = Some(prepared.clone());
 
-                // If nothing resolved at all, surface the error deterministically
-                if receipt.resolved == 0 {
-                    let failure_summaries: Vec<String> = receipt
-                        .failures
-                        .iter()
-                        .map(|f| format!("{}: {}", f.label, f.error))
-                        .collect();
-                    self.streaming_error = Some(format!(
-                        "Failed to resolve context: {}",
-                        failure_summaries.join("; ")
-                    ));
-
+            match prepared.decision {
+                crate::ai::message_parts::PreparedMessageDecision::Ready => {
+                    self.streaming_error = None;
+                    prepared.final_user_content
+                }
+                crate::ai::message_parts::PreparedMessageDecision::Partial => {
+                    tracing::warn!(
+                        checkpoint = "resolution_partial",
+                        attempted = prepared.context.attempted,
+                        resolved = prepared.context.resolved,
+                        outcomes = ?prepared.outcomes,
+                        failures = ?prepared.context.failures,
+                        chat_id = %chat_id,
+                        "start_chat_context: partial resolution failure"
+                    );
+                    self.streaming_error = prepared.user_error;
+                    prepared.final_user_content
+                }
+                crate::ai::message_parts::PreparedMessageDecision::Blocked => {
+                    tracing::warn!(
+                        checkpoint = "resolution_blocked",
+                        attempted = prepared.context.attempted,
+                        resolved = prepared.context.resolved,
+                        outcomes = ?prepared.outcomes,
+                        failures = ?prepared.context.failures,
+                        chat_id = %chat_id,
+                        "start_chat_context: blocked due to unresolved context"
+                    );
+                    self.streaming_error = prepared.user_error;
                     // Still create the chat with raw message so the SDK gets a valid chatId,
                     // but surface the error so it's not silently swallowed.
-                    message.clone()
-                } else {
-                    // Partial success: use the resolved prefix with user text
-                    let prefix = &receipt.prompt_prefix;
-                    if !message.trim().is_empty() {
-                        format!("{prefix}\n\n{message}")
-                    } else {
-                        prefix.clone()
-                    }
-                }
-            } else {
-                let prefix = &receipt.prompt_prefix;
-                if !prefix.is_empty() && !message.trim().is_empty() {
-                    format!("{prefix}\n\n{message}")
-                } else if !prefix.is_empty() {
-                    prefix.clone()
-                } else {
                     message.clone()
                 }
             }
         } else {
-            message.clone()
+            let prepared =
+                crate::ai::message_parts::prepare_user_message_with_receipt(&message, &[], &[], &[]);
+            self.last_prepared_message_receipt = Some(prepared.clone());
+            self.streaming_error = None;
+            prepared.final_user_content
         };
 
         if let Some(on_created) = on_created {
