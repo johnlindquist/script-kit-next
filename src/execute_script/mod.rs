@@ -1898,6 +1898,7 @@ impl ScriptListApp {
                                             image,
                                             model_id,
                                             no_response,
+                                            parts,
                                         } => Some(PromptMessage::AiStartChat {
                                             request_id,
                                             message,
@@ -1905,6 +1906,7 @@ impl ScriptListApp {
                                             image,
                                             model_id,
                                             no_response,
+                                            parts,
                                         }),
                                         // AI window focus
                                         Message::AiFocus { request_id } => {

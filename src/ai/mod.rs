@@ -33,6 +33,7 @@
 #![allow(dead_code)]
 
 pub(crate) mod config;
+pub mod message_parts;
 pub(crate) mod model;
 pub(crate) mod presets;
 pub(crate) mod providers;
@@ -44,6 +45,9 @@ pub(crate) mod window;
 
 // Re-export commonly used types
 pub use self::config::{DetectedKeys, ModelInfo, ProviderConfig};
+pub use self::message_parts::{
+    resolve_context_part_to_prompt_block, resolve_context_parts_to_prompt_prefix, AiContextPart,
+};
 pub use self::model::{Chat, ChatId, ChatSource, Message, MessageRole};
 pub use self::providers::{AiProvider, ProviderMessage, ProviderRegistry};
 pub use self::script_generation::{generate_script_from_prompt, GeneratedScriptOutput};

@@ -4,6 +4,21 @@ use serde::{Deserialize, Serialize};
 // AI CHAT SDK API
 // ============================================================
 
+/// A typed context part that can be attached to AI protocol messages.
+///
+/// Scripts can send these alongside `message`/`content` to inject
+/// resource-backed or file-backed context into the AI composer pipeline.
+/// The `parts` field is optional and defaults to an empty vec for
+/// wire compatibility with existing payloads.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum AiContextPartInput {
+    /// An MCP resource URI (e.g. `kit://context?profile=minimal`)
+    ResourceUri { uri: String, label: String },
+    /// A local file path attachment
+    FilePath { path: String, label: String },
+}
+
 /// Chat information returned by AI SDK API responses
 ///
 /// Used for `aiListChats()`, `aiGetActiveChat()`, and other chat-related operations.

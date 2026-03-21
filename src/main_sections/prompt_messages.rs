@@ -140,6 +140,7 @@ enum PromptMessage {
         image: Option<String>,
         model_id: Option<String>,
         no_response: bool,
+        parts: Vec<crate::protocol::AiContextPartInput>,
     },
     /// Focus the AI window (opens if not already open)
     AiFocus {

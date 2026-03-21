@@ -114,6 +114,9 @@ macro_rules! protocol_message_variants_ai {
         /// If true, don't trigger AI response (just create chat with user message)
         #[serde(rename = "noResponse", default)]
         no_response: bool,
+        /// Optional typed context parts (resource URIs, file paths) resolved at submit
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        parts: Vec<AiContextPartInput>,
     },
 
     /// Response with created chat info (App → SDK)
@@ -176,6 +179,9 @@ macro_rules! protocol_message_variants_ai {
         /// Optional base64-encoded image attachment
         #[serde(skip_serializing_if = "Option::is_none")]
         image: Option<String>,
+        /// Optional typed context parts (resource URIs, file paths) resolved at submit
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        parts: Vec<AiContextPartInput>,
     },
 
     /// Response after sending message (App → SDK)

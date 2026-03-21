@@ -78,20 +78,24 @@ fn test_submit_while_streaming_different_chat() {
 #[test]
 fn test_ai_window_can_submit_message_returns_true_when_only_image_is_attached() {
     assert!(
-        ai_window_can_submit_message("", true),
+        ai_window_can_submit_message("", true, false),
         "Image-only messages should be allowed"
     );
     assert!(
-        ai_window_can_submit_message("   ", true),
+        ai_window_can_submit_message("   ", true, false),
         "Whitespace text with an attachment should be allowed"
     );
     assert!(
-        ai_window_can_submit_message("hello", false),
+        ai_window_can_submit_message("hello", false, false),
         "Non-empty text should be allowed"
     );
     assert!(
-        !ai_window_can_submit_message("   ", false),
+        !ai_window_can_submit_message("   ", false, false),
         "Whitespace-only messages without attachments should be blocked"
+    );
+    assert!(
+        ai_window_can_submit_message("", false, true),
+        "Context-parts-only messages should be allowed"
     );
 }
 
@@ -201,6 +205,10 @@ fn test_ai_window_queue_command_if_open_preserves_start_chat_provider_metadata()
         AiCommand::StartChat {
             chat_id: ChatId::new(),
             message: "hello".to_string(),
+            parts: vec![crate::ai::message_parts::AiContextPart::ResourceUri {
+                uri: "kit://context?profile=minimal".to_string(),
+                label: "Current Context".to_string(),
+            }],
             image: None,
             system_prompt: None,
             model_id: Some("gpt-4o".to_string()),
@@ -217,11 +225,13 @@ fn test_ai_window_queue_command_if_open_preserves_start_chat_provider_metadata()
 
     match pending_commands.first() {
         Some(AiCommand::StartChat {
+            parts,
             model_id,
             provider,
             on_created,
             ..
         }) => {
+            assert_eq!(parts.len(), 1, "Queued StartChat command should retain context parts");
             assert_eq!(model_id.as_deref(), Some("gpt-4o"));
             assert_eq!(provider.as_deref(), Some("openai"));
             assert!(
@@ -504,7 +514,7 @@ fn test_welcome_suggestion_texts_pass_submit_guard() {
 
     for suggestion in &suggestions {
         assert!(
-            ai_window_can_submit_message(suggestion, false),
+            ai_window_can_submit_message(suggestion, false, false),
             "Welcome suggestion '{}' must pass the submit guard for auto-submit to work",
             suggestion
         );
@@ -969,4 +979,170 @@ fn test_set_composer_value_normalizes_crlf_to_lf() {
 
     // Mixed: CR+LF and LF
     assert_eq!(normalize("a\r\nb\nc\r\nd"), "a\nb\nc\nd");
+}
+
+/// Proves that a pending file-path context part changes the final user message content.
+///
+/// This mirrors the just-in-time resolution logic in `submit_message`:
+/// resolve parts → prefix → combine with user text.
+#[test]
+fn test_pending_context_part_changes_final_user_message_content() {
+    use crate::ai::message_parts::{resolve_context_parts_to_prompt_prefix, AiContextPart};
+
+    let dir = tempfile::tempdir().expect("create temp dir");
+    let file_path = dir.path().join("context.txt");
+    std::fs::write(&file_path, "important context here").expect("write");
+
+    let pending_parts = vec![AiContextPart::FilePath {
+        path: file_path.to_string_lossy().to_string(),
+        label: "context.txt".to_string(),
+    }];
+
+    let user_typed_content = "What does this mean?";
+
+    // Resolve context parts (mirrors submit_message logic)
+    let prefix = resolve_context_parts_to_prompt_prefix(&pending_parts, &[], &[])
+        .expect("resolution should succeed");
+    assert!(
+        !prefix.is_empty(),
+        "Resolved prefix must not be empty when parts are present"
+    );
+
+    // Compose final content (mirrors submit_message composition)
+    let final_content = if !prefix.is_empty() && !user_typed_content.trim().is_empty() {
+        format!("{prefix}\n\n{user_typed_content}")
+    } else if !prefix.is_empty() {
+        prefix.clone()
+    } else {
+        user_typed_content.to_string()
+    };
+
+    // The final content must differ from the raw typed content
+    assert_ne!(
+        final_content, user_typed_content,
+        "Final content must include resolved context prefix, not just raw typed text"
+    );
+    assert!(
+        final_content.contains("important context here"),
+        "Final content must include the resolved file content"
+    );
+    assert!(
+        final_content.contains(user_typed_content),
+        "Final content must still include the user's typed text"
+    );
+    assert!(
+        final_content.contains("<attachment"),
+        "Final content must contain structured attachment tag from resolution"
+    );
+}
+
+/// Proves that image-only submit (no text, no context parts) still works.
+#[test]
+fn test_image_only_submit_still_works_without_context_parts() {
+    let content = "";
+    let has_pending_image = true;
+    let has_pending_context_parts = false;
+
+    assert!(
+        ai_window_can_submit_message(content, has_pending_image, has_pending_context_parts),
+        "Image-only messages must pass the submit guard"
+    );
+
+    // With no context parts, the final content should be the raw content
+    let pending_parts: Vec<crate::ai::message_parts::AiContextPart> = Vec::new();
+
+    let prefix =
+        crate::ai::message_parts::resolve_context_parts_to_prompt_prefix(&pending_parts, &[], &[])
+            .expect("empty resolution should succeed");
+    assert!(
+        prefix.is_empty(),
+        "Empty parts should produce empty prefix"
+    );
+
+    // Final content with no parts and empty text should remain empty
+    let final_content = if !prefix.is_empty() && !content.trim().is_empty() {
+        format!("{prefix}\n\n{content}")
+    } else if !prefix.is_empty() {
+        prefix
+    } else {
+        content.to_string()
+    };
+
+    assert_eq!(
+        final_content, "",
+        "Image-only submit should leave message content empty (image is attached separately)"
+    );
+}
+
+/// Proves that context-parts-only submit (no text, no image) produces valid content.
+#[test]
+fn test_context_parts_only_submit_produces_valid_content() {
+    let dir = tempfile::tempdir().expect("create temp dir");
+    let file_path = dir.path().join("data.json");
+    std::fs::write(&file_path, r#"{"key": "value"}"#).expect("write");
+
+    let pending_parts = vec![crate::ai::message_parts::AiContextPart::FilePath {
+        path: file_path.to_string_lossy().to_string(),
+        label: "data.json".to_string(),
+    }];
+
+    let content = "";
+
+    assert!(
+        ai_window_can_submit_message(content, false, true),
+        "Context-parts-only messages must pass the submit guard"
+    );
+
+    let prefix =
+        crate::ai::message_parts::resolve_context_parts_to_prompt_prefix(&pending_parts, &[], &[])
+            .expect("resolution should succeed");
+
+    // With no user text, final content is just the prefix
+    let final_content = if !prefix.is_empty() && !content.trim().is_empty() {
+        format!("{prefix}\n\n{content}")
+    } else if !prefix.is_empty() {
+        prefix
+    } else {
+        content.to_string()
+    };
+
+    assert!(
+        !final_content.is_empty(),
+        "Context-parts-only submit must produce non-empty final content"
+    );
+    assert!(
+        final_content.contains("<attachment"),
+        "Context-parts-only content must contain structured attachment from resolution"
+    );
+}
+
+/// Proves that failed context resolution falls back to raw content without crashing.
+#[test]
+fn test_failed_context_resolution_falls_back_to_raw_content() {
+    let pending_parts = vec![crate::ai::message_parts::AiContextPart::FilePath {
+        path: "/nonexistent/path/that/does/not/exist.txt".to_string(),
+        label: "ghost.txt".to_string(),
+    }];
+
+    let user_typed_content = "My question";
+
+    let result =
+        crate::ai::message_parts::resolve_context_parts_to_prompt_prefix(&pending_parts, &[], &[]);
+
+    // Resolution fails for nonexistent files
+    assert!(result.is_err(), "Nonexistent file path should fail resolution");
+
+    // The submit path falls back to raw content on error
+    let final_content = match result {
+        Ok(prefix) if !prefix.is_empty() && !user_typed_content.trim().is_empty() => {
+            format!("{prefix}\n\n{user_typed_content}")
+        }
+        Ok(prefix) if !prefix.is_empty() => prefix,
+        _ => user_typed_content.to_string(),
+    };
+
+    assert_eq!(
+        final_content, user_typed_content,
+        "Failed resolution must fall back to raw user content"
+    );
 }
