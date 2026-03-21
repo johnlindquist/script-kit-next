@@ -206,6 +206,7 @@ pub fn capture_context_snapshot(options: &CaptureContextOptions) -> AiContextSna
 }
 
 /// Capture and serialize snapshot as pretty-printed JSON.
+#[allow(dead_code)] // Public API surface for lib consumers
 pub fn capture_context_snapshot_json(options: &CaptureContextOptions) -> anyhow::Result<String> {
     serde_json::to_string_pretty(&capture_context_snapshot(options))
         .context("Failed to serialize context snapshot")

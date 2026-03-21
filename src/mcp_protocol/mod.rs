@@ -464,11 +464,35 @@ fn handle_resources_read_with_context(
 
     // Read the resource
     match mcp_resources::read_resource(uri, scripts, scriptlets, app_state) {
-        Ok(content) => JsonRpcResponse::success(
-            request.id,
-            mcp_resources::resource_content_to_value(content),
-        ),
-        Err(err) => JsonRpcResponse::error(request.id, error_codes::METHOD_NOT_FOUND, err),
+        Ok(content) => {
+            tracing::info!(
+                target: "script_kit::mcp",
+                uri = %uri,
+                "mcp_resources_read_ok"
+            );
+
+            JsonRpcResponse::success(
+                request.id,
+                mcp_resources::resource_content_to_value(content),
+            )
+        }
+        Err(err) => {
+            let error_code = if mcp_resources::is_context_resource_uri(uri) {
+                error_codes::INVALID_PARAMS
+            } else {
+                error_codes::METHOD_NOT_FOUND
+            };
+
+            tracing::warn!(
+                target: "script_kit::mcp",
+                uri = %uri,
+                error = %err,
+                error_code = error_code,
+                "mcp_resources_read_failed"
+            );
+
+            JsonRpcResponse::error(request.id, error_code, err)
+        }
     }
 }
 
@@ -653,7 +677,7 @@ mod tests {
             .get("resources")
             .and_then(|v| v.as_array())
             .context("missing resources array")?;
-        assert_eq!(resources.len(), 4, "Should have 4 resources");
+        assert_eq!(resources.len(), 5, "Should have 5 resources");
 
         // Verify expected resources are present
         let uris: Vec<&str> = resources
@@ -1481,6 +1505,87 @@ mod tests {
                 assert!(response.error.is_none(), "Should succeed for {}", uri);
                 assert!(response.result.is_some());
             }
+            Ok(())
+        }
+
+        // =======================================================
+        // Protocol-level error-code tests for resources/read
+        // =======================================================
+
+        #[test]
+        fn handle_resources_read_returns_invalid_params_for_bad_context_query() -> anyhow::Result<()>
+        {
+            // Bad query param on a known kit://context resource → INVALID_PARAMS (-32602)
+            let request = JsonRpcRequest {
+                jsonrpc: "2.0".to_string(),
+                id: serde_json::json!(99),
+                method: "resources/read".to_string(),
+                params: serde_json::json!({"uri": "kit://context?nope=1"}),
+            };
+
+            let response = handle_resources_read_with_context(request, &[], &[], None);
+
+            let err = response
+                .error
+                .as_ref()
+                .context("expected error response for bad context query")?;
+            assert_eq!(
+                err.code,
+                error_codes::INVALID_PARAMS,
+                "Bad kit://context query params must return INVALID_PARAMS (-32602), got {}",
+                err.code
+            );
+            Ok(())
+        }
+
+        #[test]
+        fn handle_resources_read_returns_method_not_found_for_unknown_resource(
+        ) -> anyhow::Result<()> {
+            // Completely unknown resource URI → METHOD_NOT_FOUND (-32601)
+            let request = JsonRpcRequest {
+                jsonrpc: "2.0".to_string(),
+                id: serde_json::json!(100),
+                method: "resources/read".to_string(),
+                params: serde_json::json!({"uri": "unknown://resource"}),
+            };
+
+            let response = handle_resources_read_with_context(request, &[], &[], None);
+
+            let err = response
+                .error
+                .as_ref()
+                .context("expected error response for unknown resource")?;
+            assert_eq!(
+                err.code,
+                error_codes::METHOD_NOT_FOUND,
+                "Unknown resource URI must return METHOD_NOT_FOUND (-32601), got {}",
+                err.code
+            );
+            Ok(())
+        }
+
+        #[test]
+        fn handle_resources_read_returns_method_not_found_for_context_like_unknown_uri(
+        ) -> anyhow::Result<()> {
+            let request = JsonRpcRequest {
+                jsonrpc: "2.0".to_string(),
+                id: serde_json::json!(101),
+                method: "resources/read".to_string(),
+                params: serde_json::json!({"uri": "kit://contextual"}),
+            };
+
+            let response = handle_resources_read_with_context(request, &[], &[], None);
+
+            let err = response
+                .error
+                .as_ref()
+                .context("expected error response for unknown context-like resource")?;
+            assert_eq!(
+                err.code,
+                error_codes::METHOD_NOT_FOUND,
+                "Unknown context-like URI must return METHOD_NOT_FOUND (-32601), got {}",
+                err.code
+            );
             Ok(())
         }
     }

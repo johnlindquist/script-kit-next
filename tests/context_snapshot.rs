@@ -115,7 +115,10 @@ fn minimal_profile_omits_selected_text_and_menu_bar_from_json() {
         "selectedText must be absent in minimal profile JSON"
     );
     assert!(
-        parsed.get("menuBarItems").is_none() || parsed["menuBarItems"].as_array().is_some_and(|a| a.is_empty()),
+        parsed.get("menuBarItems").is_none()
+            || parsed["menuBarItems"]
+                .as_array()
+                .is_some_and(|a| a.is_empty()),
         "menuBarItems must be absent or empty in minimal profile JSON"
     );
 
