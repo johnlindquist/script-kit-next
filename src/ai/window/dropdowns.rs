@@ -475,6 +475,8 @@ impl AiApp {
         self.showing_presets_dropdown = false;
         self.showing_new_chat_dropdown = false;
         self.new_chat_dropdown_filter.clear();
+        // Close context picker if open
+        self.context_picker = None;
         cx.notify();
     }
 }

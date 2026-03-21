@@ -107,6 +107,29 @@ fn init_ai_db_at(db_path: PathBuf) -> Result<()> {
 
         CREATE INDEX IF NOT EXISTS idx_message_images_message_id ON message_images(message_id);
 
+        -- Machine-readable preflight audits for developer and agent inspection
+        CREATE TABLE IF NOT EXISTS message_preparation_audits (
+            correlation_id TEXT PRIMARY KEY,
+            chat_id TEXT NOT NULL,
+            message_id TEXT,
+            decision TEXT NOT NULL,
+            attempted INTEGER NOT NULL,
+            resolved INTEGER NOT NULL,
+            failures_count INTEGER NOT NULL,
+            raw_content TEXT NOT NULL,
+            authored_content TEXT NOT NULL,
+            audit_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE,
+            FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE SET NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_message_preparation_audits_chat_id_created_at
+            ON message_preparation_audits(chat_id, created_at DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_message_preparation_audits_message_id
+            ON message_preparation_audits(message_id);
+
         -- Full-text search support for chats (searches titles and message content)
         CREATE VIRTUAL TABLE IF NOT EXISTS chats_fts USING fts5(
             title,
@@ -1632,6 +1655,107 @@ pub fn insert_mock_data() -> Result<()> {
     Ok(())
 }
 
+// ============================================================================
+// Message Preparation Audit Operations
+// ============================================================================
+
+/// Persist a full message-preparation audit as JSON.
+/// Safe to call multiple times for the same correlation_id; later calls upsert.
+pub fn save_message_preparation_audit(audit: &crate::ai::AiPreflightAudit) -> Result<()> {
+    let db = get_db()?;
+    let conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+
+    let audit_json = serde_json::to_string(audit).context("Failed to serialize preflight audit")?;
+
+    conn.execute(
+        r#"
+        INSERT INTO message_preparation_audits (
+            correlation_id,
+            chat_id,
+            message_id,
+            decision,
+            attempted,
+            resolved,
+            failures_count,
+            raw_content,
+            authored_content,
+            audit_json,
+            created_at
+        )
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+        ON CONFLICT(correlation_id) DO UPDATE SET
+            message_id = excluded.message_id,
+            decision = excluded.decision,
+            attempted = excluded.attempted,
+            resolved = excluded.resolved,
+            failures_count = excluded.failures_count,
+            raw_content = excluded.raw_content,
+            authored_content = excluded.authored_content,
+            audit_json = excluded.audit_json,
+            created_at = excluded.created_at
+        "#,
+        params![
+            audit.correlation_id.as_str(),
+            audit.chat_id.as_str(),
+            audit.message_id.as_deref(),
+            format!("{:?}", audit.decision),
+            audit.receipt.context.attempted as i64,
+            audit.receipt.context.resolved as i64,
+            audit.receipt.context.failures.len() as i64,
+            audit.raw_content.as_str(),
+            audit.authored_content.as_str(),
+            audit_json,
+            audit.created_at.as_str(),
+        ],
+    )
+    .context("Failed to save message preparation audit")?;
+
+    tracing::info!(
+        target: "script_kit::ai_preflight",
+        correlation_id = %audit.correlation_id,
+        chat_id = %audit.chat_id,
+        message_id = ?audit.message_id,
+        decision = ?audit.decision,
+        "message_preparation_audit_saved"
+    );
+
+    Ok(())
+}
+
+/// Fetch the most recent preflight audit for a chat.
+pub fn get_last_message_preparation_audit(
+    chat_id: &ChatId,
+) -> Result<Option<crate::ai::AiPreflightAudit>> {
+    let db = get_db()?;
+    let conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+
+    let audit_json = conn
+        .query_row(
+            r#"
+            SELECT audit_json
+            FROM message_preparation_audits
+            WHERE chat_id = ?1
+            ORDER BY created_at DESC
+            LIMIT 1
+            "#,
+            params![chat_id.as_str()],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .context("Failed to load latest message preparation audit")?;
+
+    audit_json
+        .map(|json| {
+            serde_json::from_str::<crate::ai::AiPreflightAudit>(&json)
+                .context("Failed to deserialize message preparation audit")
+        })
+        .transpose()
+}
+
 /// Clear all mock data (for test cleanup)
 pub fn clear_all_chats() -> Result<()> {
     let db = get_db()?;
@@ -2056,6 +2180,119 @@ mod tests {
             "Snippet should contain the keyword: got '{}'",
             snippet
         );
+
+        // Cleanup
+        delete_chat_permanently(&chat_id).expect("Should cleanup");
+    }
+
+    #[test]
+    fn test_message_preparation_audit_round_trip() {
+        use crate::ai::message_parts::{
+            ContextResolutionFailure, ContextResolutionReceipt, PreparedMessageDecision,
+            PreparedMessageReceipt,
+        };
+        use crate::ai::preflight_audit::{actionable_context_failure, AiPreflightAudit};
+
+        init_test_db();
+
+        // Create a parent chat so the FK is satisfied
+        let chat_id = ChatId::new();
+        let chat = Chat {
+            id: chat_id,
+            title: "Audit round-trip test".to_string(),
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            deleted_at: None,
+            model_id: "test-model".to_string(),
+            provider: "test".to_string(),
+            source: ChatSource::AiWindow,
+        };
+        create_chat(&chat).expect("Should create parent chat");
+
+        // Build a receipt with a failure
+        let receipt = PreparedMessageReceipt {
+            schema_version: 1,
+            decision: PreparedMessageDecision::Partial,
+            raw_content: "Summarize this page".to_string(),
+            final_user_content: "<context>...</context>\n\nSummarize this page".to_string(),
+            context: ContextResolutionReceipt {
+                attempted: 2,
+                resolved: 1,
+                failures: vec![ContextResolutionFailure {
+                    label: "Browser URL".to_string(),
+                    source: "kit://context?browserUrl=1".to_string(),
+                    error: "No browser detected".to_string(),
+                }],
+                prompt_prefix: "<context>...</context>".to_string(),
+            },
+            assembly: None,
+            outcomes: Vec::new(),
+            unresolved_parts: Vec::new(),
+            user_error: None,
+        };
+
+        let mut audit = AiPreflightAudit {
+            schema_version: 1,
+            correlation_id: format!("test-roundtrip-{}", std::process::id()),
+            chat_id: chat_id.as_str(),
+            message_id: None,
+            decision: PreparedMessageDecision::Partial,
+            raw_content: "Summarize this page".to_string(),
+            authored_content: "Summarize this page".to_string(),
+            has_pending_image: false,
+            has_context_parts: true,
+            actionable_failures: receipt
+                .context
+                .failures
+                .iter()
+                .map(actionable_context_failure)
+                .collect(),
+            receipt,
+            created_at: chrono::Utc::now().to_rfc3339(),
+        };
+
+        // Save
+        save_message_preparation_audit(&audit).expect("Should save audit");
+
+        // Load back
+        let loaded = get_last_message_preparation_audit(&chat_id)
+            .expect("Should query audit")
+            .expect("Should find saved audit");
+
+        assert_eq!(loaded.schema_version, audit.schema_version);
+        assert_eq!(loaded.correlation_id, audit.correlation_id);
+        assert_eq!(loaded.chat_id, audit.chat_id);
+        assert_eq!(loaded.decision, audit.decision);
+        assert_eq!(loaded.receipt.context.attempted, 2);
+        assert_eq!(loaded.receipt.context.resolved, 1);
+        assert_eq!(loaded.receipt.context.failures.len(), 1);
+        assert_eq!(loaded.actionable_failures.len(), 1);
+        assert_eq!(
+            loaded.actionable_failures[0].code,
+            "browser_url_unavailable"
+        );
+        assert_eq!(loaded.message_id, None);
+
+        // Create a real message so the FK constraint is satisfied on upsert
+        let msg = Message {
+            id: "msg-audit-rt".to_string(),
+            chat_id,
+            role: MessageRole::User,
+            content: "Summarize this page".to_string(),
+            created_at: chrono::Utc::now(),
+            tokens_used: None,
+            images: Vec::new(),
+        };
+        save_message(&msg).expect("Should save message");
+
+        // Upsert with message_id
+        audit.attach_message_id(&msg.id);
+        save_message_preparation_audit(&audit).expect("Should upsert audit");
+
+        let reloaded = get_last_message_preparation_audit(&chat_id)
+            .expect("Should re-query audit")
+            .expect("Should find upserted audit");
+        assert_eq!(reloaded.message_id, Some("msg-audit-rt".to_string()));
 
         // Cleanup
         delete_chat_permanently(&chat_id).expect("Should cleanup");

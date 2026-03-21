@@ -260,6 +260,8 @@ impl AiApp {
             new_chat_dropdown_section: 0,
             new_chat_dropdown_index: 0,
             last_used_settings,
+            // Context picker state
+            context_picker: None,
             // Attachments state
             pending_context_parts: Vec::new(),
             context_preview_index: None,
@@ -290,6 +292,7 @@ impl AiApp {
             chat_transcript_copied_at: None,
             search_debounce_task: None,
             last_prepared_message_receipt: None,
+            last_preflight_audit: None,
             last_context_receipt: None,
             show_context_inspector: false,
             context_preflight: super::context_preflight::ContextPreflightState::default(),

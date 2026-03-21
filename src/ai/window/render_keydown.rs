@@ -66,6 +66,43 @@ impl AiApp {
             }
         }
 
+        // Handle context picker navigation when it's open
+        if self.is_context_picker_open() {
+            match key {
+                k if is_key_up(k) => {
+                    self.context_picker_select_prev(cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                k if is_key_down(k) => {
+                    self.context_picker_select_next(cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                k if is_key_enter(k) => {
+                    self.accept_context_picker_selection(window, cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                k if is_key_escape(k) => {
+                    self.close_context_picker(cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                k if is_key_tab(k) => {
+                    self.accept_context_picker_selection(window, cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                _ => {
+                    // Let other keys (including printable chars) propagate to the input.
+                    // The input change handler will update the picker query.
+                    cx.propagate();
+                }
+            }
+            return;
+        }
+
         // Handle command bar navigation when it's open
         // This routes all relevant keys to the CommandBar
         // CRITICAL: Must stop propagation to prevent Input from consuming the keys

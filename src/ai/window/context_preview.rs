@@ -112,9 +112,7 @@ fn build_resource_description(
 
     match profile {
         ContextPreviewProfile::Minimal => {
-            lines.push(
-                "Captures: frontmost app, browser URL, focused window".to_string(),
-            );
+            lines.push("Captures: frontmost app, browser URL, focused window".to_string());
             lines.push("Excludes: selected text, menu bar".to_string());
         }
         ContextPreviewProfile::Full => {
@@ -152,9 +150,7 @@ fn build_resource_description(
     }
 
     if has_diagnostics {
-        lines.push(
-            "Includes field-level diagnostics (warnings, status per field)".to_string(),
-        );
+        lines.push("Includes field-level diagnostics (warnings, status per field)".to_string());
     }
 
     lines.join(". ")
@@ -273,8 +269,9 @@ mod tests {
     #[test]
     fn context_preview_ui_custom_flags_parsed() {
         let part = AiContextPart::ResourceUri {
-            uri: "kit://context?selectedText=1&frontmostApp=0&menuBar=0&browserUrl=1&focusedWindow=0"
-                .to_string(),
+            uri:
+                "kit://context?selectedText=1&frontmostApp=0&menuBar=0&browserUrl=1&focusedWindow=0"
+                    .to_string(),
             label: "Custom".to_string(),
         };
         let info = derive_context_preview_info(&part);

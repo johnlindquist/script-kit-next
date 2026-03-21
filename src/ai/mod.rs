@@ -39,6 +39,7 @@ mod context_contract_integration_tests;
 pub(crate) mod context_mentions;
 pub mod message_parts;
 pub(crate) mod model;
+pub(crate) mod preflight_audit;
 pub(crate) mod presets;
 pub(crate) mod providers;
 pub(crate) mod script_generation;
@@ -57,12 +58,17 @@ pub use self::message_parts::{
     PreparedMessageDecision, PreparedMessageReceipt, AI_MESSAGE_PREPARATION_SCHEMA_VERSION,
 };
 pub use self::model::{Chat, ChatId, ChatSource, Message, MessageRole};
+pub use self::preflight_audit::{
+    build_actionable_preflight_error, log_preflight_audit, ActionableContextFailure,
+    AiPreflightAudit, AI_PREFLIGHT_AUDIT_SCHEMA_VERSION,
+};
 pub use self::providers::{AiProvider, ProviderMessage, ProviderRegistry};
 pub use self::script_generation::{generate_script_from_prompt, GeneratedScriptOutput};
 pub use self::sdk_handlers::try_handle_ai_message;
 pub use self::storage::{
     clear_all_chats, create_chat, delete_chat, get_all_chats, get_chat, get_chat_messages,
-    get_deleted_chats, init_ai_db, insert_mock_data, save_message, search_chats, update_chat_title,
+    get_deleted_chats, get_last_message_preparation_audit, init_ai_db, insert_mock_data,
+    save_message, save_message_preparation_audit, search_chats, update_chat_title,
 };
 pub use self::window::{
     add_ai_attachment, apply_ai_preset, close_ai_window, is_ai_window, is_ai_window_open,

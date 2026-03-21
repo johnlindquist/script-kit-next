@@ -41,8 +41,7 @@ fn explicit_context_surfaces_share_one_contract_end_to_end() {
     // Step 4: Prepare through the full pipeline with empty script/scriptlet
     // lists — kit://context URIs resolve via the MCP resource handler which
     // works without scripts.
-    let receipt =
-        prepare_user_message_with_receipt(&parsed.cleaned_content, &merged, &[], &[]);
+    let receipt = prepare_user_message_with_receipt(&parsed.cleaned_content, &merged, &[], &[]);
 
     assert_eq!(
         receipt.decision,

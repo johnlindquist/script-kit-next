@@ -6,8 +6,7 @@
 //! verify that mixed context parts still prepare consistently end to end.
 
 use script_kit_gpui::ai::message_parts::{
-    merge_context_parts, prepare_user_message_with_receipt, AiContextPart,
-    PreparedMessageDecision,
+    merge_context_parts, prepare_user_message_with_receipt, AiContextPart, PreparedMessageDecision,
 };
 use std::sync::Arc;
 

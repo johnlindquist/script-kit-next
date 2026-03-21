@@ -2,8 +2,34 @@ use super::*;
 use crate::theme::opacity::{OPACITY_HOVER, OPACITY_SELECTED};
 
 impl AiApp {
-    pub(super) fn on_input_change(&mut self, _cx: &mut Context<Self>) {
-        // TODO: Handle input changes (e.g., streaming, auto-complete)
+    pub(super) fn on_input_change(&mut self, cx: &mut Context<Self>) {
+        let value = self.input_state.read(cx).value().to_string();
+
+        // Detect @mention trigger for context picker
+        if let Some(at_query) = extract_at_query(&value) {
+            if self.is_context_picker_open() {
+                // Update existing picker with new query
+                self.update_context_picker_query(at_query, cx);
+            } else {
+                // Open the picker (no Window needed for open_context_picker when
+                // called from input change — pass a placeholder; the real Window
+                // is only needed when accepting, which goes through keydown).
+                let items = super::context_picker::build_picker_items(&at_query);
+                tracing::info!(
+                    target: "ai",
+                    query = %at_query,
+                    item_count = items.len(),
+                    selected_index = 0,
+                    "ai_context_picker_opened"
+                );
+                self.context_picker =
+                    Some(super::context_picker::types::ContextPickerState::new(at_query, items));
+                cx.notify();
+            }
+        } else if self.is_context_picker_open() {
+            // No @ query detected — close the picker
+            self.close_context_picker(cx);
+        }
     }
 
     /// Handle paste event - check for clipboard images
@@ -522,5 +548,73 @@ impl AiApp {
     pub fn request_focus(&mut self, cx: &mut Context<Self>) {
         self.needs_focus_input = true;
         cx.notify(); // Trigger re-render to process the flag
+    }
+}
+
+/// Extract the query text after the last `@` in the input.
+///
+/// Returns `Some(query)` when the caret is positioned after an `@` trigger
+/// (i.e. `@` is the last special trigger character in the text, and there is
+/// no whitespace between `@` and the end of the current word).
+/// Returns `None` if there is no `@` or if `@` is followed by a space.
+fn extract_at_query(input: &str) -> Option<String> {
+    let at_pos = input.rfind('@')?;
+    let after_at = &input[at_pos + 1..];
+
+    // If there's a space right after @, the mention is complete or cancelled
+    if after_at.starts_with(' ') {
+        return None;
+    }
+
+    // Extract the word after @ (up to the next space or end of string)
+    let query = match after_at.find(char::is_whitespace) {
+        Some(end) => &after_at[..end],
+        None => after_at,
+    };
+
+    Some(query.to_string())
+}
+
+#[cfg(test)]
+mod at_query_tests {
+    use super::extract_at_query;
+
+    #[test]
+    fn extract_at_query_returns_none_for_no_at() {
+        assert_eq!(extract_at_query("hello world"), None);
+    }
+
+    #[test]
+    fn extract_at_query_returns_empty_string_for_bare_at() {
+        assert_eq!(extract_at_query("hello @"), Some(String::new()));
+    }
+
+    #[test]
+    fn extract_at_query_returns_query_after_at() {
+        assert_eq!(
+            extract_at_query("hello @sel"),
+            Some("sel".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_at_query_returns_none_when_at_followed_by_space() {
+        assert_eq!(extract_at_query("hello @ world"), None);
+    }
+
+    #[test]
+    fn extract_at_query_uses_last_at() {
+        assert_eq!(
+            extract_at_query("@context hello @sel"),
+            Some("sel".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_at_query_full_mention_no_trailing_space() {
+        assert_eq!(
+            extract_at_query("@selection"),
+            Some("selection".to_string())
+        );
     }
 }

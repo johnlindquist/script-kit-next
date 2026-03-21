@@ -304,7 +304,7 @@ pub fn get_ai_command_bar_actions() -> Vec<Action> {
         Action::new(
             "chat:inspect_context",
             "Inspect Context Receipt",
-            Some("Shows the exact merged and resolved context payload".to_string()),
+            Some("Shows the last context preflight audit as machine-readable JSON".to_string()),
             ActionCategory::ScriptContext,
         )
         .with_shortcut("\u{2325}\u{2318}I")

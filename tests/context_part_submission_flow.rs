@@ -39,7 +39,9 @@ fn submit_flow_mixed_success_keeps_unresolved_part_pending() {
     assert_eq!(receipt.failures[0].label, "ghost.txt");
     assert_eq!(receipt.failures[0].source, "/nonexistent/ghost.txt");
     assert!(
-        receipt.failures[0].error.contains("Failed to stat attachment"),
+        receipt.failures[0]
+            .error
+            .contains("Failed to stat attachment"),
         "error should mention stat failure, got: {}",
         receipt.failures[0].error
     );
@@ -142,7 +144,10 @@ fn submit_flow_all_failures_saves_no_message_and_sets_error() {
         .iter()
         .map(|f| format!("{}: {}", f.label, f.error))
         .collect();
-    let error_text = format!("Failed to resolve context: {}", failure_summaries.join("; "));
+    let error_text = format!(
+        "Failed to resolve context: {}",
+        failure_summaries.join("; ")
+    );
 
     assert!(error_text.contains("a.txt"));
     assert!(error_text.contains("b.txt"));
@@ -213,7 +218,10 @@ fn e2e_submit_resource_uri_produces_context_source_block() {
     let receipt = prepare_user_message_with_receipt("explain this", &parts, &[], &[]);
 
     assert_eq!(receipt.decision, PreparedMessageDecision::Ready);
-    assert_eq!(receipt.schema_version, AI_MESSAGE_PREPARATION_SCHEMA_VERSION);
+    assert_eq!(
+        receipt.schema_version,
+        AI_MESSAGE_PREPARATION_SCHEMA_VERSION
+    );
     assert_eq!(receipt.context.attempted, 1);
     assert_eq!(receipt.context.resolved, 1);
     assert!(!receipt.context.has_failures());
@@ -275,7 +283,10 @@ fn e2e_submit_partial_failure_preserves_successful_blocks_and_tracks_unresolved(
 
     // Decision: Partial (some resolved, some failed)
     assert_eq!(receipt.decision, PreparedMessageDecision::Partial);
-    assert!(receipt.can_send_message(), "Partial should still be sendable");
+    assert!(
+        receipt.can_send_message(),
+        "Partial should still be sendable"
+    );
 
     // Context receipt tracks both attempted and resolved
     assert_eq!(receipt.context.attempted, 2);
@@ -303,7 +314,10 @@ fn e2e_submit_partial_failure_preserves_successful_blocks_and_tracks_unresolved(
 
     // Unresolved parts are inspectable
     assert_eq!(receipt.unresolved_parts.len(), 1);
-    assert_eq!(receipt.unresolved_parts[0].source(), "/nonexistent/vanished.txt");
+    assert_eq!(
+        receipt.unresolved_parts[0].source(),
+        "/nonexistent/vanished.txt"
+    );
     assert_eq!(receipt.unresolved_parts[0].label(), "vanished.txt");
 
     // Per-part outcomes explain what happened
@@ -383,7 +397,10 @@ fn e2e_submit_all_failures_blocked_state_surfaced_explicitly() {
     assert!(receipt.user_error.is_some());
     let err = receipt.user_error.as_ref().unwrap();
     assert!(err.contains("first.txt"), "error should mention first.txt");
-    assert!(err.contains("second.txt"), "error should mention second.txt");
+    assert!(
+        err.contains("second.txt"),
+        "error should mention second.txt"
+    );
     assert!(
         err.starts_with("Failed to resolve context:"),
         "error should use deterministic prefix"
