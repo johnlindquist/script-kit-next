@@ -177,9 +177,6 @@ pub struct AiApp {
     pub(super) last_used_settings: Vec<LastUsedSetting>,
 
     // === Attachments State ===
-    /// Whether the attachments picker is visible
-    pub(super) showing_attachments_picker: bool,
-
     /// Pending context parts (file paths and resource URIs) that will be resolved
     /// into prompt blocks at submit time.
     pub(super) pending_context_parts: Vec<crate::ai::message_parts::AiContextPart>,
@@ -262,8 +259,7 @@ pub struct AiApp {
 
     /// The last context-resolution receipt, persisted for compact UI summary after submit.
     /// Cleared when submitting with no pending context parts; set when parts are resolved.
-    pub(super) last_context_receipt:
-        Option<crate::ai::message_parts::ContextResolutionReceipt>,
+    pub(super) last_context_receipt: Option<crate::ai::message_parts::ContextResolutionReceipt>,
 
     /// Whether the full prepared-message inspector is visible (toggled via ⌥⌘I).
     pub(super) show_context_inspector: bool,

@@ -61,7 +61,6 @@ mod render_main_panel;
 mod render_message;
 mod render_message_actions;
 mod render_messages;
-mod render_overlays_attachments;
 mod render_overlays_dropdowns;
 mod render_overlays_shortcuts;
 mod render_root;

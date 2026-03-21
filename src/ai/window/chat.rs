@@ -278,7 +278,6 @@ impl AiApp {
         self.last_streaming_duration = None;
         self.last_streaming_completed_at = None;
         self.streaming_error = None;
-        self.showing_attachments_picker = false;
         self.editing_message_id = None;
 
         let chat_id = self.create_chat(window, cx);

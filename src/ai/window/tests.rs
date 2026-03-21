@@ -20,7 +20,10 @@ fn test_context_inspector_shortcut_requires_cmd_alt_i_only() {
             ..Default::default()
         },
     );
-    assert!(!wrong_key, "Cmd+Alt+K must not toggle the context inspector");
+    assert!(
+        !wrong_key,
+        "Cmd+Alt+K must not toggle the context inspector"
+    );
 
     let missing_alt = crate::ai::window::render_keydown::is_context_inspector_shortcut(
         "i",
@@ -280,7 +283,11 @@ fn test_ai_window_queue_command_if_open_preserves_start_chat_provider_metadata()
             on_created,
             ..
         }) => {
-            assert_eq!(parts.len(), 1, "Queued StartChat command should retain context parts");
+            assert_eq!(
+                parts.len(),
+                1,
+                "Queued StartChat command should retain context parts"
+            );
             assert_eq!(model_id.as_deref(), Some("gpt-4o"));
             assert_eq!(provider.as_deref(), Some("openai"));
             assert!(
@@ -587,7 +594,6 @@ fn test_message_body_content_does_not_truncate_long_messages() {
 ///   - copied_message_id / copied_at
 ///   - last_streaming_duration / last_streaming_completed_at
 ///   - streaming_error
-///   - showing_attachments_picker
 ///   - editing_message_id
 ///
 /// Additionally it cancels any active stream (is_streaming) before reset.
@@ -608,7 +614,6 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
         last_streaming_duration: Option<std::time::Duration>,
         last_streaming_completed_at: Option<std::time::Instant>,
         streaming_error: Option<String>,
-        showing_attachments_picker: bool,
         editing_message_id: Option<String>,
     }
 
@@ -624,7 +629,6 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
             self.last_streaming_duration = None;
             self.last_streaming_completed_at = None;
             self.streaming_error = None;
-            self.showing_attachments_picker = false;
             self.editing_message_id = None;
         }
     }
@@ -632,12 +636,10 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
     // Build dirty state (simulates mid-conversation)
     let mut state = ConversationTransientState {
         pending_image: Some("base64data".to_string()),
-        pending_context_parts: vec![
-            crate::ai::message_parts::AiContextPart::FilePath {
-                path: "/tmp/file.txt".to_string(),
-                label: "file.txt".to_string(),
-            },
-        ],
+        pending_context_parts: vec![crate::ai::message_parts::AiContextPart::FilePath {
+            path: "/tmp/file.txt".to_string(),
+            label: "file.txt".to_string(),
+        }],
         collapsed_messages: ["msg-1".to_string()].into_iter().collect(),
         expanded_messages: ["msg-2".to_string()].into_iter().collect(),
         copied_message_id: Some("msg-1".to_string()),
@@ -645,7 +647,6 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
         last_streaming_duration: Some(std::time::Duration::from_secs(5)),
         last_streaming_completed_at: Some(std::time::Instant::now()),
         streaming_error: Some("previous error".to_string()),
-        showing_attachments_picker: true,
         editing_message_id: Some("msg-3".to_string()),
     };
 
@@ -659,7 +660,6 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
     assert!(state.last_streaming_duration.is_some());
     assert!(state.last_streaming_completed_at.is_some());
     assert!(state.streaming_error.is_some());
-    assert!(state.showing_attachments_picker);
     assert!(state.editing_message_id.is_some());
 
     // Apply reset
@@ -701,10 +701,6 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
     assert!(
         state.streaming_error.is_none(),
         "streaming_error must be cleared on new conversation"
-    );
-    assert!(
-        !state.showing_attachments_picker,
-        "showing_attachments_picker must be false on new conversation"
     );
     assert!(
         state.editing_message_id.is_none(),
@@ -1108,10 +1104,7 @@ fn test_image_only_submit_still_works_without_context_parts() {
     let prefix =
         crate::ai::message_parts::resolve_context_parts_to_prompt_prefix(&pending_parts, &[], &[])
             .expect("empty resolution should succeed");
-    assert!(
-        prefix.is_empty(),
-        "Empty parts should produce empty prefix"
-    );
+    assert!(prefix.is_empty(), "Empty parts should produce empty prefix");
 
     // Final content with no parts and empty text should remain empty
     let final_content = if !prefix.is_empty() && !content.trim().is_empty() {
@@ -1184,7 +1177,10 @@ fn test_failed_context_resolution_falls_back_to_raw_content() {
         crate::ai::message_parts::resolve_context_parts_to_prompt_prefix(&pending_parts, &[], &[]);
 
     // Resolution fails for nonexistent files
-    assert!(result.is_err(), "Nonexistent file path should fail resolution");
+    assert!(
+        result.is_err(),
+        "Nonexistent file path should fail resolution"
+    );
 
     // The submit path falls back to raw content on error
     let final_content = match result {
@@ -1397,22 +1393,18 @@ fn context_action_behavior_duplicate_attach_is_idempotent() {
     let mut state = ContextPartState::new();
 
     // First invocation - should insert
-    let inserted = state.add_context_part(
-        crate::ai::message_parts::AiContextPart::ResourceUri {
-            uri: "kit://context?profile=minimal".to_string(),
-            label: "Current Context".to_string(),
-        },
-    );
+    let inserted = state.add_context_part(crate::ai::message_parts::AiContextPart::ResourceUri {
+        uri: "kit://context?profile=minimal".to_string(),
+        label: "Current Context".to_string(),
+    });
     assert!(inserted, "first add should succeed");
     assert_eq!(state.pending_context_parts.len(), 1);
 
     // Second invocation - should be a no-op (dedup)
-    let inserted = state.add_context_part(
-        crate::ai::message_parts::AiContextPart::ResourceUri {
-            uri: "kit://context?profile=minimal".to_string(),
-            label: "Current Context".to_string(),
-        },
-    );
+    let inserted = state.add_context_part(crate::ai::message_parts::AiContextPart::ResourceUri {
+        uri: "kit://context?profile=minimal".to_string(),
+        label: "Current Context".to_string(),
+    });
     assert!(!inserted, "duplicate add should be rejected");
     assert_eq!(
         state.pending_context_parts.len(),
@@ -1466,10 +1458,7 @@ fn context_action_behavior_all_actions_via_execute_action() {
     for (i, expected_uri) in expected_uris.iter().enumerate() {
         match &state.pending_context_parts[i] {
             crate::ai::message_parts::AiContextPart::ResourceUri { uri, .. } => {
-                assert_eq!(
-                    uri, expected_uri,
-                    "URI mismatch at index {i}"
-                );
+                assert_eq!(uri, expected_uri, "URI mismatch at index {i}");
             }
             other => panic!("expected ResourceUri at index {i}, got {other:?}"),
         }
@@ -1594,9 +1583,7 @@ impl PreviewTestState {
         self.context_preview_index = None;
     }
 
-    fn active_preview(
-        &self,
-    ) -> Option<(usize, context_preview::ContextPreviewInfo)> {
+    fn active_preview(&self) -> Option<(usize, context_preview::ContextPreviewInfo)> {
         let idx = self.context_preview_index?;
         let part = self.pending_context_parts.get(idx)?;
         Some((idx, context_preview::derive_context_preview_info(part)))
@@ -1615,11 +1602,17 @@ fn context_preview_ui_open_and_close_deterministic() {
     assert_eq!(state.context_preview_index, Some(0));
     let (idx, info) = state.active_preview().expect("preview should be active");
     assert_eq!(idx, 0);
-    assert_eq!(info.profile, context_preview::ContextPreviewProfile::Minimal);
+    assert_eq!(
+        info.profile,
+        context_preview::ContextPreviewProfile::Minimal
+    );
 
     // Close by toggling same index
     state.toggle_preview(0);
-    assert!(state.active_preview().is_none(), "preview closed on re-toggle");
+    assert!(
+        state.active_preview().is_none(),
+        "preview closed on re-toggle"
+    );
 }
 
 #[test]
@@ -1652,7 +1645,10 @@ fn context_preview_ui_diagnostics_chip_shows_diagnostics() {
     let mut state = make_preview_test_state();
     state.toggle_preview(2); // diagnostics chip
     let (_, info) = state.active_preview().expect("preview should be active");
-    assert!(info.has_diagnostics, "diagnostics chip must show diagnostics");
+    assert!(
+        info.has_diagnostics,
+        "diagnostics chip must show diagnostics"
+    );
     assert!(info.description.contains("diagnostics"));
 }
 

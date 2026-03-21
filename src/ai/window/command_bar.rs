@@ -164,7 +164,6 @@ impl AiApp {
 
         // Also hide other dropdowns
         self.hide_presets_dropdown(cx);
-        self.hide_attachments_picker(cx);
 
         cx.notify();
     }
@@ -400,11 +399,7 @@ impl AiApp {
 
         // Default key handling (when no overlays are open)
         match key_lower.as_str() {
-            k if is_key_escape(k) => {
-                if self.showing_attachments_picker {
-                    self.hide_attachments_picker(cx);
-                }
-            }
+            k if is_key_escape(k) => {}
             _ => {
                 tracing::debug!(target: "ai", key = %key_lower, "SimulateKey: Unhandled key in AI window");
             }

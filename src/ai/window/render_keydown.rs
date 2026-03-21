@@ -171,13 +171,6 @@ impl AiApp {
             }
         }
 
-        // Handle attachments picker
-        if self.showing_attachments_picker && is_key_escape(key) {
-            self.hide_attachments_picker(cx);
-            cx.stop_propagation();
-            return;
-        }
-
         // Cmd+1-4: submit welcome suggestion cards (only when welcome screen is visible)
         if modifiers.platform
             && !modifiers.shift
@@ -380,11 +373,7 @@ impl AiApp {
         }
 
         // Escape closes any open dropdown
-        if is_key_escape(key)
-            && (self.command_bar.is_open()
-                || self.showing_presets_dropdown
-                || self.showing_attachments_picker)
-        {
+        if is_key_escape(key) && (self.command_bar.is_open() || self.showing_presets_dropdown) {
             self.hide_all_dropdowns(cx);
         }
     }

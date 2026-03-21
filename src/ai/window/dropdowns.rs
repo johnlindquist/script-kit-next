@@ -287,20 +287,6 @@ impl AiApp {
         self.new_conversation(window, cx);
     }
 
-    // === Attachments Picker Methods ===
-
-    /// Show the attachments picker
-    pub(super) fn show_attachments_picker(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.showing_attachments_picker = true;
-        cx.notify();
-    }
-
-    /// Hide the attachments picker
-    pub(super) fn hide_attachments_picker(&mut self, cx: &mut Context<Self>) {
-        self.showing_attachments_picker = false;
-        cx.notify();
-    }
-
     /// Add a file attachment.
     ///
     /// Delegates to `add_context_part` for dedup and structured logging.
@@ -329,7 +315,10 @@ impl AiApp {
             .iter()
             .enumerate()
             .filter(|(_, part)| {
-                matches!(part, crate::ai::message_parts::AiContextPart::FilePath { .. })
+                matches!(
+                    part,
+                    crate::ai::message_parts::AiContextPart::FilePath { .. }
+                )
             })
             .nth(file_index)
             .map(|(i, _)| i);
@@ -383,7 +372,10 @@ impl AiApp {
         part: crate::ai::message_parts::AiContextPart,
         cx: &mut Context<Self>,
     ) {
-        let already_present = self.pending_context_parts.iter().any(|existing| existing == &part);
+        let already_present = self
+            .pending_context_parts
+            .iter()
+            .any(|existing| existing == &part);
 
         if already_present {
             tracing::info!(
@@ -440,10 +432,12 @@ impl AiApp {
     ///
     /// Only `FilePath` entries are removed; `ResourceUri` entries are preserved.
     pub(super) fn clear_attachments(&mut self, cx: &mut Context<Self>) {
-        let before =
-            crate::ai::message_parts::file_path_parts(&self.pending_context_parts).len();
+        let before = crate::ai::message_parts::file_path_parts(&self.pending_context_parts).len();
         self.pending_context_parts.retain(|part| {
-            !matches!(part, crate::ai::message_parts::AiContextPart::FilePath { .. })
+            !matches!(
+                part,
+                crate::ai::message_parts::AiContextPart::FilePath { .. }
+            )
         });
         if before > 0 {
             tracing::info!(
@@ -460,7 +454,6 @@ impl AiApp {
         // Close command bar vibrancy window if open
         self.command_bar.close_app(cx);
         self.showing_presets_dropdown = false;
-        self.showing_attachments_picker = false;
         self.showing_new_chat_dropdown = false;
         self.new_chat_dropdown_filter.clear();
         cx.notify();
