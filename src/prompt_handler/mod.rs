@@ -1390,7 +1390,7 @@ impl ScriptListApp {
                 );
 
                 let max_elements = limit.unwrap_or(50).clamp(1, 1000);
-                let (elements, total_count) = self.collect_visible_elements(max_elements);
+                let (elements, total_count) = self.collect_visible_elements(max_elements, cx);
 
                 tracing::info!(
                     category = "UI",
