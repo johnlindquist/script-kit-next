@@ -191,6 +191,11 @@ enum PromptMessage {
     GetState {
         request_id: String,
     },
+    /// Request visible UI elements - triggers ElementsResult response
+    GetElements {
+        request_id: String,
+        limit: Option<usize>,
+    },
     /// Request to get layout info with component tree and computed styles
     GetLayoutInfo {
         request_id: String,
