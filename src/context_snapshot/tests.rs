@@ -1,3 +1,4 @@
+use super::capture::{capture_context_snapshot_from_seed, CaptureContextSeed};
 use super::*;
 
 #[test]
@@ -137,4 +138,147 @@ fn capture_options_roundtrip_through_serde() {
 
     let deserialized: CaptureContextOptions = serde_json::from_str(&json).expect("deserialize");
     assert_eq!(original, deserialized);
+}
+
+// =======================================================
+// Profile constructor tests
+// =======================================================
+
+#[test]
+fn all_profile_matches_default() {
+    assert_eq!(
+        CaptureContextOptions::all(),
+        CaptureContextOptions::default()
+    );
+}
+
+#[test]
+fn minimal_profile_disables_selected_text_and_menu_bar() {
+    let minimal = CaptureContextOptions::minimal();
+    assert!(!minimal.include_selected_text);
+    assert!(!minimal.include_menu_bar);
+    assert!(minimal.include_frontmost_app);
+    assert!(minimal.include_browser_url);
+    assert!(minimal.include_focused_window);
+}
+
+#[test]
+fn default_snapshot_uses_schema_constant() {
+    let snapshot = AiContextSnapshot::default();
+    assert_eq!(snapshot.schema_version, AI_CONTEXT_SNAPSHOT_SCHEMA_VERSION);
+}
+
+// =======================================================
+// Seed-based capture tests
+// =======================================================
+
+fn full_seed() -> CaptureContextSeed {
+    CaptureContextSeed {
+        selected_text: Ok(Some("secret code".into())),
+        frontmost_app: Ok(Some(FrontmostAppContext {
+            pid: 7,
+            bundle_id: "com.test.editor".into(),
+            name: "Editor".into(),
+        })),
+        menu_bar_items: Ok(vec![MenuBarItemSummary {
+            title: "File".into(),
+            enabled: true,
+            shortcut: None,
+            children: vec![],
+        }]),
+        browser: Ok(Some(BrowserContext {
+            url: "https://example.com".into(),
+        })),
+        focused_window: Ok(Some(FocusedWindowContext {
+            title: "Main".into(),
+            width: 1200,
+            height: 800,
+            used_fallback: false,
+        })),
+    }
+}
+
+#[test]
+fn capture_from_seed_respects_minimal_profile() {
+    let snapshot =
+        capture_context_snapshot_from_seed(&CaptureContextOptions::minimal(), full_seed());
+
+    assert_eq!(snapshot.schema_version, AI_CONTEXT_SNAPSHOT_SCHEMA_VERSION);
+    // minimal disables selected_text and menu_bar
+    assert_eq!(snapshot.selected_text, None);
+    assert!(snapshot.menu_bar_items.is_empty());
+    // but keeps the rest
+    assert_eq!(
+        snapshot.frontmost_app.as_ref().map(|a| a.name.as_str()),
+        Some("Editor")
+    );
+    assert_eq!(
+        snapshot.browser.as_ref().map(|b| b.url.as_str()),
+        Some("https://example.com")
+    );
+    assert_eq!(
+        snapshot.focused_window.as_ref().map(|w| w.title.as_str()),
+        Some("Main")
+    );
+    assert!(snapshot.warnings.is_empty());
+}
+
+#[test]
+fn capture_from_seed_all_profile_includes_everything() {
+    let snapshot = capture_context_snapshot_from_seed(&CaptureContextOptions::all(), full_seed());
+
+    assert_eq!(snapshot.selected_text, Some("secret code".into()));
+    assert!(snapshot.frontmost_app.is_some());
+    assert_eq!(snapshot.menu_bar_items.len(), 1);
+    assert!(snapshot.browser.is_some());
+    assert!(snapshot.focused_window.is_some());
+    assert!(snapshot.warnings.is_empty());
+}
+
+#[test]
+fn capture_from_seed_keeps_partial_success_and_records_warnings() {
+    let seed = CaptureContextSeed {
+        selected_text: Err("permission denied".into()),
+        frontmost_app: Ok(None),
+        menu_bar_items: Err("menu not ready".into()),
+        browser: Ok(Some(BrowserContext {
+            url: "https://example.com".into(),
+        })),
+        focused_window: Err("no focused window".into()),
+    };
+
+    let snapshot = capture_context_snapshot_from_seed(&CaptureContextOptions::all(), seed);
+
+    assert_eq!(
+        snapshot.browser.as_ref().map(|b| b.url.as_str()),
+        Some("https://example.com")
+    );
+    assert!(snapshot
+        .warnings
+        .contains(&"selectedText: permission denied".to_string()));
+    assert!(snapshot
+        .warnings
+        .contains(&"menuBar: menu not ready".to_string()));
+    assert!(snapshot
+        .warnings
+        .contains(&"focusedWindow: no focused window".to_string()));
+}
+
+#[test]
+fn capture_from_seed_skips_warnings_for_disabled_providers() {
+    let seed = CaptureContextSeed {
+        selected_text: Err("would fail".into()),
+        frontmost_app: Ok(None),
+        menu_bar_items: Err("would also fail".into()),
+        browser: Ok(None),
+        focused_window: Ok(None),
+    };
+
+    // minimal disables selected_text and menu_bar, so their errors are silent
+    let snapshot = capture_context_snapshot_from_seed(&CaptureContextOptions::minimal(), seed);
+
+    assert!(
+        snapshot.warnings.is_empty(),
+        "disabled providers should not produce warnings"
+    );
 }

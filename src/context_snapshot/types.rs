@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
 
+/// Schema version for `AiContextSnapshot`. Bump when adding/removing/renaming fields.
+pub const AI_CONTEXT_SNAPSHOT_SCHEMA_VERSION: u32 = 1;
+
 /// Options controlling which context sections are captured.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -11,8 +14,9 @@ pub struct CaptureContextOptions {
     pub include_focused_window: bool,
 }
 
-impl Default for CaptureContextOptions {
-    fn default() -> Self {
+impl CaptureContextOptions {
+    /// Full capture — every provider enabled. Equivalent to `Default`.
+    pub const fn all() -> Self {
         Self {
             include_selected_text: true,
             include_frontmost_app: true,
@@ -20,6 +24,24 @@ impl Default for CaptureContextOptions {
             include_browser_url: true,
             include_focused_window: true,
         }
+    }
+
+    /// Lightweight capture — omits selected text and menu bar for lower
+    /// token cost and reduced permission surface.
+    pub const fn minimal() -> Self {
+        Self {
+            include_selected_text: false,
+            include_frontmost_app: true,
+            include_menu_bar: false,
+            include_browser_url: true,
+            include_focused_window: true,
+        }
+    }
+}
+
+impl Default for CaptureContextOptions {
+    fn default() -> Self {
+        Self::all()
     }
 }
 
@@ -45,7 +67,7 @@ pub struct AiContextSnapshot {
 impl Default for AiContextSnapshot {
     fn default() -> Self {
         Self {
-            schema_version: 1,
+            schema_version: AI_CONTEXT_SNAPSHOT_SCHEMA_VERSION,
             selected_text: None,
             frontmost_app: None,
             menu_bar_items: Vec::new(),

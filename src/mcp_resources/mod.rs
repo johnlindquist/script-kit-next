@@ -142,7 +142,7 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
             uri: "kit://context".to_string(),
             name: "Current Context".to_string(),
             description: Some(
-                "Deterministic snapshot of AI-relevant desktop context (selected text, frontmost app, menu bar, browser URL, focused window)"
+                "Deterministic snapshot of AI-relevant desktop context. Supports ?profile=minimal and per-field flags: selectedText, frontmostApp, menuBar, browserUrl, focusedWindow"
                     .to_string(),
             ),
             mime_type: "application/json".to_string(),
@@ -170,7 +170,9 @@ pub fn read_resource(
         "kit://state" => read_state_resource(app_state),
         "scripts://" => read_scripts_resource(scripts),
         "scriptlets://" => read_scriptlets_resource(scriptlets),
-        "kit://context" => read_context_resource(),
+        _ if uri == "kit://context" || uri.starts_with("kit://context?") => {
+            read_context_resource(uri)
+        }
         _ => Err(format!("Resource not found: {}", uri)),
     }
 }
@@ -234,15 +236,64 @@ pub fn resource_list_to_value(resources: &[McpResource]) -> Value {
     .unwrap_or(serde_json::json!({"resources": []}))
 }
 
+/// Parse a `kit://context` URI (with optional query params) into capture options.
+fn parse_bool_param(value: &str) -> Result<bool, String> {
+    match value {
+        "1" | "true" => Ok(true),
+        "0" | "false" => Ok(false),
+        _ => Err(format!("Invalid boolean value: {value}")),
+    }
+}
+
+fn parse_context_resource_options(
+    uri: &str,
+) -> Result<crate::context_snapshot::CaptureContextOptions, String> {
+    use crate::context_snapshot::CaptureContextOptions;
+
+    if uri == "kit://context" {
+        return Ok(CaptureContextOptions::default());
+    }
+
+    let (base, query) = uri
+        .split_once('?')
+        .ok_or_else(|| format!("Resource not found: {uri}"))?;
+
+    if base != "kit://context" {
+        return Err(format!("Resource not found: {uri}"));
+    }
+
+    // Start from default; profile= resets, then per-field flags override.
+    let mut options = CaptureContextOptions::default();
+
+    for pair in query.split('&').filter(|p| !p.is_empty()) {
+        let (key, value) = pair.split_once('=').unwrap_or((pair, "1"));
+
+        match (key, value) {
+            ("profile", "full") => options = CaptureContextOptions::all(),
+            ("profile", "minimal") => options = CaptureContextOptions::minimal(),
+            ("profile", other) => {
+                return Err(format!("Unknown profile: {other}"));
+            }
+            ("selectedText", v) => options.include_selected_text = parse_bool_param(v)?,
+            ("frontmostApp", v) => options.include_frontmost_app = parse_bool_param(v)?,
+            ("menuBar", v) => options.include_menu_bar = parse_bool_param(v)?,
+            ("browserUrl", v) => options.include_browser_url = parse_bool_param(v)?,
+            ("focusedWindow", v) => options.include_focused_window = parse_bool_param(v)?,
+            _ => return Err(format!("Invalid kit://context parameter: {key}={value}")),
+        }
+    }
+
+    Ok(options)
+}
+
 /// Read kit://context resource — deterministic AI context snapshot
-fn read_context_resource() -> Result<ResourceContent, String> {
-    let json = crate::context_snapshot::capture_context_snapshot_json(
-        &crate::context_snapshot::CaptureContextOptions::default(),
-    )
-    .map_err(|e| format!("Failed to capture context snapshot: {e}"))?;
+fn read_context_resource(uri: &str) -> Result<ResourceContent, String> {
+    let options = parse_context_resource_options(uri)?;
+    let json = crate::context_snapshot::capture_context_snapshot_json(&options)
+        .map_err(|e| format!("Failed to capture context snapshot: {e}"))?;
 
     Ok(ResourceContent {
-        uri: "kit://context".to_string(),
+        uri: uri.to_string(),
         mime_type: "application/json".to_string(),
         text: json,
     })
@@ -607,5 +658,63 @@ mod tests {
         let content = result.unwrap();
         let parsed: Vec<ScriptletResourceEntry> = serde_json::from_str(&content.text).unwrap();
         assert!(parsed.is_empty());
+    }
+
+    // =======================================================
+    // Context resource URI parsing tests
+    // =======================================================
+
+    #[test]
+    fn parse_context_bare_uri_returns_default() {
+        let options = parse_context_resource_options("kit://context").unwrap();
+        assert_eq!(
+            options,
+            crate::context_snapshot::CaptureContextOptions::default()
+        );
+    }
+
+    #[test]
+    fn parse_context_resource_options_supports_minimal_profile() {
+        let options =
+            parse_context_resource_options("kit://context?profile=minimal").unwrap();
+        assert_eq!(
+            options,
+            crate::context_snapshot::CaptureContextOptions::minimal()
+        );
+    }
+
+    #[test]
+    fn parse_context_resource_options_allows_profile_overrides() {
+        let options = parse_context_resource_options(
+            "kit://context?profile=minimal&menuBar=1&selectedText=0",
+        )
+        .unwrap();
+
+        assert!(!options.include_selected_text);
+        assert!(options.include_menu_bar);
+        assert!(options.include_frontmost_app);
+        assert!(options.include_browser_url);
+        assert!(options.include_focused_window);
+    }
+
+    #[test]
+    fn parse_context_resource_options_rejects_unknown_flags() {
+        let error = parse_context_resource_options("kit://context?nope=1").unwrap_err();
+        assert_eq!(error, "Invalid kit://context parameter: nope=1");
+    }
+
+    #[test]
+    fn parse_context_rejects_unknown_profile() {
+        let error =
+            parse_context_resource_options("kit://context?profile=heavy").unwrap_err();
+        assert!(error.contains("Unknown profile"));
+    }
+
+    #[test]
+    fn context_resource_preserves_query_uri() {
+        let content =
+            read_resource("kit://context?profile=minimal", &[], &[], None)
+                .expect("should resolve");
+        assert_eq!(content.uri, "kit://context?profile=minimal");
     }
 }
