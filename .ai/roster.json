@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-13T16:57:20.235Z",
+  "updatedAt": "2026-03-20T23:21:29.800Z",
   "agents": {
     "codex-actions-consistency": {
       "id": "codex-actions-consistency",
@@ -7580,6 +7580,127 @@
       "startSha": "4f1048d0d3e0cacc0d988cf1d56963de734b9100",
       "notes": "[auto] timed out after 600s — task too broad",
       "claimed_at": {}
+    },
+    "codex-mainscreen-fix": {
+      "id": "codex-mainscreen-fix",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Fix the mainScreen vs screens[0] bug in window positioning. In macOS, NSScreen.mainScreen returns the screen with the key window (focused window), NOT the primary/menu-bar screen. The primary screen is always screens[0]. Three files need fixing:\n\n1. src/platform/display.rs line 89: In primary_screen_height(), replace 'msg_send![class!(NSScreen), mainScreen]' with getting screens array then objectAtIndex:0usize. Keep nil checks.\n\n2. src/platform/display.rs line 131: In get_macos_visible_displays(), replace the mainScreen block (lines 131-144) with: get screens array, check count > 0, then 'msg_send![screens, objectAtIndex:0usize]' to get primary screen. Update the SAFETY comment.\n\n3. src/platform/positioning.rs lines 36-54: In move_first_window_to(), replace the mainScreen block with a call to the already-existing primary_screen_height() function (after it's fixed). Replace lines 36-56 with: 'let primary_screen_height = match primary_screen_height() { Some(h) => h, None => { logging::log(\"POSITION\", \"WARNING: Could not determine primary screen height\"); return; } };' — remove the inline mainScreen lookup entirely.\n\nUpdate all comments to say 'primary screen (screens[0])' instead of 'mainScreen'. The window_control/display.rs:85-91 already has the correct pattern with a detailed comment explaining why.\n\nIMPORTANT: Run 'cargo check && cargo clippy --all-targets -- -D warnings && cargo test' after changes.",
+      "scope": "src/platform/display.rs src/platform/positioning.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-03-20T23:00:33.855Z",
+      "lastSeenAt": "2026-03-20T23:08:46.864Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "3fb0a8e8b3249a3c5ae1d9e671c17a6d0c7e6ea1",
+      "notes": "[policy] commits touch files outside declared scope",
+      "claimed_at": {},
+      "report": {
+        "schema": "opex.agent_report.v1",
+        "agentId": "codex-mainscreen-fix",
+        "taskSummary": "Updated macOS primary-screen detection to use NSScreen.screens[0] and made window positioning reuse the shared primary screen height helper.",
+        "tests": [
+          {
+            "cmd": "cargo test -p script-kit-gpui --lib test_primary_screen_array_index_does_select_screens_zero_when_available",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo test -p script-kit-gpui --lib test_move_first_window_to_does_not_panic",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo test -p script-kit-gpui --lib test_move_first_window_to_bounds_does_not_panic",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo check -p script-kit-gpui --lib",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo clippy -p script-kit-gpui --lib --tests -- -D warnings",
+            "result": "pass"
+          }
+        ],
+        "changedFiles": [
+          "src/platform/display.rs",
+          "src/platform/positioning.rs"
+        ],
+        "commitCount": 1,
+        "commitShas": [
+          "319c939874ca53cc91bfc285a112ac09ce29e053"
+        ],
+        "commitFiles": [
+          "src/platform/display.rs",
+          "src/platform/positioning.rs"
+        ]
+      }
+    },
+    "codex-single-snapshot": {
+      "id": "codex-single-snapshot",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Fix the double-sampling race condition in window show path. Currently src/main_sections/window_visibility.rs reads displays+mouse at lines 46-47, then the fallback path calls calculate_eye_line_bounds_on_mouse_display() which reads displays AND mouse AGAIN inside positioning.rs. This creates a TOCTOU race.\n\nFix by refactoring positioning.rs to accept pre-sampled data:\n\n1. In src/platform/positioning.rs, add a new public function calculate_eye_line_bounds_for_snapshot(window_size: gpui::Size<Pixels>, mouse: Option<(f64, f64)>, displays: &[VisibleDisplayBounds]) -> Bounds<Pixels> that does the same logic as calculate_bounds_on_mouse_display but uses the passed-in mouse and displays instead of re-reading them. Refactor select_display_for_mouse to take mouse as a parameter (select_display_for_mouse_point).\n\n2. Keep the existing calculate_eye_line_bounds_on_mouse_display and calculate_centered_bounds_on_mouse_display as thin wrappers that sample once then call the snapshot version.\n\n3. In src/main_sections/window_visibility.rs, change the fallback positioning paths (around lines 73, 80, 84) to call the new snapshot function using the already-sampled mouse and displays from lines 46-47. The displays need to be get_macos_visible_displays() (returns VisibleDisplayBounds), not get_macos_displays() (returns only frames). Fix the initial sampling at line 46 to use get_macos_visible_displays() if it currently uses get_macos_displays().\n\nIMPORTANT: This file uses include!() into main.rs scope — do NOT add top-level use statements. Use fully qualified paths like platform::get_macos_visible_displays(). Run 'cargo check && cargo clippy --all-targets -- -D warnings && cargo test' after changes.",
+      "scope": "src/platform/positioning.rs src/main_sections/window_visibility.rs src/platform/display.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-03-20T23:02:33.986Z",
+      "lastSeenAt": "2026-03-20T23:12:34.024Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "3fb0a8e8b3249a3c5ae1d9e671c17a6d0c7e6ea1",
+      "notes": "[auto] timed out after 600s — task too broad",
+      "claimed_at": {}
+    },
+    "codex-single-snapshot-v2": {
+      "id": "codex-single-snapshot-v2",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Fix the double-sampling race condition in the window show path. The previous worker (codex-mainscreen-fix) already fixed src/platform/display.rs and src/platform/positioning.rs to use screens[0] instead of mainScreen (commit 319c9398). Now fix the remaining race condition.\n\nPROBLEM: In src/main_sections/window_visibility.rs the show_main_window_helper function reads displays+mouse at lines ~46-47, then the fallback paths call calculate_eye_line_bounds_on_mouse_display() which re-reads displays AND mouse again inside positioning.rs:230-234 and positioning.rs:191-192. Two separate reads means TOCTOU race.\n\nCHANGES NEEDED:\n\n1. In src/platform/positioning.rs, add this new public function:\n   pub fn calculate_eye_line_bounds_for_snapshot(window_size: gpui::Size<Pixels>, mouse: Option<(f64, f64)>, displays: &[VisibleDisplayBounds]) -> Bounds<Pixels>\n   It should do the same logic as calculate_bounds_on_mouse_display but use the passed-in mouse/displays. Refactor the internal select_display_for_mouse() to accept mouse as a parameter instead of calling get_global_mouse_position() internally.\n\n2. Make calculate_eye_line_bounds_on_mouse_display a thin wrapper: sample mouse+displays once, then call the snapshot version.\n\n3. In src/main_sections/window_visibility.rs (this is an include!() file in main.rs scope — NO top-level use statements allowed, use fully qualified paths), change the fallback positioning to call platform::calculate_eye_line_bounds_for_snapshot() using the already-sampled mouse and visible_displays. The initial sampling at line ~46 should use platform::get_macos_visible_displays() to get VisibleDisplayBounds, not get_macos_displays() which strips visible_area.\n\nRun 'cargo check && cargo clippy --all-targets -- -D warnings && cargo test' after changes.",
+      "scope": "src/platform/positioning.rs src/main_sections/window_visibility.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-03-20T23:13:45.828Z",
+      "lastSeenAt": "2026-03-20T23:21:29.800Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "319c939874ca53cc91bfc285a112ac09ce29e053",
+      "notes": "[policy] commits touch files outside declared scope",
+      "claimed_at": {},
+      "report": {
+        "schema": "opex.agent_report.v1",
+        "agentId": "codex-single-snapshot-v2",
+        "taskSummary": "Fixed the remaining main-window show-path TOCTOU by snapshotting mouse and visible display state once, threading that snapshot through eye-line fallback positioning, and adding targeted positioning tests.",
+        "tests": [
+          {
+            "cmd": "cargo check -p script-kit-gpui --bin script-kit-gpui",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo clippy -p script-kit-gpui --bin script-kit-gpui --tests -- -D warnings",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo test -p script-kit-gpui positioning_bounds_tests -- --nocapture",
+            "result": "pass"
+          }
+        ],
+        "changedFiles": [
+          "src/platform/positioning.rs",
+          "src/main_sections/window_visibility.rs"
+        ],
+        "commitCount": 1,
+        "commitShas": [
+          "391f82b798805bb8eb18cf94812069fc5cd2093c"
+        ],
+        "commitFiles": [
+          "src/main_sections/window_visibility.rs",
+          "src/platform/positioning.rs"
+        ]
+      }
     }
   }
 }

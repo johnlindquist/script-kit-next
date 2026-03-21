@@ -135,13 +135,7 @@ impl ChatPrompt {
                         .w_full()
                         .min_w_0()
                         .overflow_x_hidden()
-                        .child(render_markdown(markdown_response.as_ref(), colors))
-                        .child(
-                            div()
-                                .text_sm()
-                                .text_color(rgb(theme_colors.accent.selected))
-                                .child("▌"),
-                        ),
+                        .child(render_markdown(markdown_response.as_ref(), colors)),
                 );
             } else {
                 // Complete response - full markdown rendering (with container for proper wrapping)

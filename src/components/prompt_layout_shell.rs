@@ -346,7 +346,10 @@ mod prompt_layout_shell_tests {
         let active_style =
             super::prompt_field_style(&theme, super::PromptFieldState::Active, false);
 
-        assert_eq!(default_style.background, gpui::rgba(chrome.input_surface_rgba));
+        assert_eq!(
+            default_style.background,
+            gpui::rgba(chrome.input_surface_rgba)
+        );
         assert_eq!(default_style.border, gpui::rgba(chrome.badge_border_rgba));
         assert_eq!(active_style.background, gpui::rgba(chrome.selection_rgba));
         assert_eq!(active_style.border, gpui::rgb(chrome.accent_hex));
