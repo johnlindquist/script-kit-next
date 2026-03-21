@@ -345,6 +345,101 @@ cargo bundle --release
 | `mic()` | Audio recording |
 | `webcam()` | Camera capture |
 
+## AI & Context Features
+
+Script Kit exposes desktop context and UI state to scripts and AI agents through protocol commands and MCP resources.
+
+### Element Introspection (`getElements`)
+
+Scripts can query the visible UI surface to discover what elements are currently displayed — inputs, choices, buttons, panels, and lists. This enables AI-driven automation that targets elements by stable semantic IDs.
+
+**Request:**
+```json
+{"type": "getElements", "requestId": "elm-1", "limit": 50}
+```
+
+- `requestId` (string, required) — correlation ID for the response
+- `limit` (number, optional) — max elements to return (default 50, clamped 1–1000)
+
+**Response:**
+```json
+{
+  "type": "elementsResult",
+  "requestId": "elm-1",
+  "elements": [
+    {"semanticId": "input:filter", "type": "input", "value": "app", "focused": true},
+    {"semanticId": "list:choices", "type": "list", "text": "2 items"},
+    {"semanticId": "choice:0:apple", "type": "choice", "text": "Apple", "value": "apple", "selected": true, "index": 0}
+  ],
+  "totalCount": 3,
+  "truncated": false,
+  "focusedSemanticId": "input:filter",
+  "selectedSemanticId": "choice:0:apple",
+  "warnings": []
+}
+```
+
+**Semantic ID format:** `input:filter`, `list:choices`, `choice:<index>:<value>`, `button:<index>:<label>`, `panel:<type>`
+
+**Observation receipts** are included in every response:
+- `focusedSemanticId` — which element has keyboard focus
+- `selectedSemanticId` — which choice/item is currently selected
+- `truncated` — `true` if elements were capped by limit
+- `warnings` — machine-readable codes like `panel_only_div_prompt` when a view has limited introspection
+
+### MCP Context Resources
+
+Script Kit exposes desktop context as an MCP resource that AI agents can read to understand what the user is currently doing.
+
+**`kit://context`** — Full desktop snapshot:
+```json
+{
+  "schemaVersion": 1,
+  "selectedText": "function hello() { ... }",
+  "frontmostApp": {"pid": 1234, "bundleId": "com.apple.Safari", "name": "Safari"},
+  "menuBarItems": [{"title": "File", "enabled": true, "children": [...]}],
+  "browser": {"url": "https://docs.rs/gpui"},
+  "focusedWindow": {"title": "PROTOCOL.md", "width": 1440, "height": 900},
+  "warnings": []
+}
+```
+
+**Profiles** control which fields are captured:
+
+| URI | Fields | Use Case |
+|-----|--------|----------|
+| `kit://context` | All fields | Comprehensive context |
+| `kit://context?profile=minimal` | App, browser, window (no text/menu) | Low-token overhead |
+| `kit://context?selectedText=1&menuBar=0` | Custom field selection | Fine-grained control |
+| `kit://context/schema` | Schema JSON | Discover profiles, parameters, diagnostics |
+| `kit://context?diagnostics=1` | Snapshot + field status | Debug capture failures |
+
+Per-field flags: `selectedText`, `frontmostApp`, `menuBar`, `browserUrl`, `focusedWindow` — each accepts `0`/`1`/`true`/`false`.
+
+### Context Parts in AI Chat
+
+The AI chat window supports attaching structured context to messages via slash commands:
+
+| Command | Context Attached |
+|---------|-----------------|
+| `/context` | Desktop snapshot (minimal profile) |
+| `/context-full` | Desktop snapshot (full profile) |
+| `/selection` | Selected text only |
+| `/browser` | Browser URL only |
+| `/window` | Focused window info only |
+
+Context parts can also be file attachments. All parts are resolved at submit time with partial-failure tolerance — if one part fails (e.g., browser not available), successful parts are still included and failures are tracked in a resolution receipt.
+
+**Resolution receipt structure:**
+```json
+{
+  "attempted": 2,
+  "resolved": 1,
+  "failures": [{"label": "Browser URL", "source": "kit://context?browserUrl=1", "error": "No browser detected"}],
+  "promptPrefix": "<context source=\"kit://context?profile=minimal\">...</context>"
+}
+```
+
 ## Contributing
 
 1. Fork the repository

@@ -250,6 +250,11 @@ pub struct AiApp {
     /// When the user types, we delay the DB query by 150ms; if another keystroke
     /// arrives before the timer fires, the old task is dropped (cancelled).
     pub(super) search_debounce_task: Option<gpui::Task<()>>,
+
+    /// The last message-preparation receipt, persisted for UI/debug/agent inspection.
+    /// Updated immediately after preparation in both `submit_message` and `handle_start_chat`.
+    pub(super) last_prepared_message_receipt:
+        Option<crate::ai::message_parts::PreparedMessageReceipt>,
 }
 
 #[cfg(test)]

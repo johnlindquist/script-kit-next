@@ -144,89 +144,63 @@ impl AiApp {
         let pending_parts = std::mem::take(&mut self.pending_context_parts);
 
         let final_user_content = if pending_parts.is_empty() {
+            let prepared =
+                crate::ai::message_parts::prepare_user_message_with_receipt(&content, &[], &[], &[]);
+            self.last_prepared_message_receipt = Some(prepared.clone());
+            self.streaming_error = None;
             tracing::info!(
-                checkpoint = "resolution_success",
-                parts_count = 0,
+                checkpoint = "message_prepare",
+                decision = "ready",
+                attempted = 0,
+                resolved = 0,
+                failures = 0,
                 "submit_context: no pending context parts to resolve"
             );
-            content.clone()
+            prepared.final_user_content
         } else {
             let scripts = crate::scripts::read_scripts();
             let scriptlets = crate::scripts::load_scriptlets();
 
-            let receipt = crate::ai::message_parts::resolve_context_parts_with_receipt(
+            let prepared = crate::ai::message_parts::prepare_user_message_with_receipt(
+                &content,
                 &pending_parts,
                 &scripts,
                 &scriptlets,
             );
 
-            if receipt.has_failures() {
-                tracing::warn!(
-                    checkpoint = "resolution_partial",
-                    attempted = receipt.attempted,
-                    resolved = receipt.resolved,
-                    failures = ?receipt.failures,
-                    "submit_context: partial resolution failure"
-                );
+            self.last_prepared_message_receipt = Some(prepared.clone());
 
-                // Restore unresolved parts back to composer state
-                let failed_sources: std::collections::HashSet<&str> =
-                    receipt.failures.iter().map(|f| f.source.as_str()).collect();
-                let unresolved: Vec<_> = pending_parts
-                    .iter()
-                    .filter(|p| failed_sources.contains(p.source()))
-                    .cloned()
-                    .collect();
-                self.pending_context_parts = unresolved;
-
-                // Build a user-visible error summary
-                let failure_summaries: Vec<String> = receipt
-                    .failures
-                    .iter()
-                    .map(|f| format!("{}: {}", f.label, f.error))
-                    .collect();
-                self.streaming_error =
-                    Some(format!("Failed to resolve context: {}", failure_summaries.join("; ")));
-
-                // If nothing resolved at all, do not save any message
-                if receipt.resolved == 0 {
+            match prepared.decision {
+                crate::ai::message_parts::PreparedMessageDecision::Ready => {
+                    self.streaming_error = None;
+                    prepared.final_user_content
+                }
+                crate::ai::message_parts::PreparedMessageDecision::Partial => {
+                    tracing::warn!(
+                        checkpoint = "resolution_partial",
+                        attempted = prepared.context.attempted,
+                        resolved = prepared.context.resolved,
+                        outcomes = ?prepared.outcomes,
+                        failures = ?prepared.context.failures,
+                        "submit_context: partial resolution failure"
+                    );
+                    self.pending_context_parts = prepared.unresolved_parts;
+                    self.streaming_error = prepared.user_error;
+                    prepared.final_user_content
+                }
+                crate::ai::message_parts::PreparedMessageDecision::Blocked => {
+                    tracing::warn!(
+                        checkpoint = "resolution_blocked",
+                        attempted = prepared.context.attempted,
+                        resolved = prepared.context.resolved,
+                        outcomes = ?prepared.outcomes,
+                        failures = ?prepared.context.failures,
+                        "submit_context: blocked due to unresolved context"
+                    );
+                    self.pending_context_parts = prepared.unresolved_parts;
+                    self.streaming_error = prepared.user_error;
                     cx.notify();
                     return;
-                }
-
-                // Partial success: use the resolved prefix with user text
-                let prefix = &receipt.prompt_prefix;
-                if !content.trim().is_empty() {
-                    format!("{prefix}\n\n{content}")
-                } else {
-                    prefix.clone()
-                }
-            } else {
-                let prefix = &receipt.prompt_prefix;
-                if !prefix.is_empty() && !content.trim().is_empty() {
-                    tracing::info!(
-                        checkpoint = "resolution_success",
-                        parts_count = pending_parts.len(),
-                        prefix_len = prefix.len(),
-                        content_len = content.len(),
-                        "submit_context: resolved context parts with user text"
-                    );
-                    format!("{prefix}\n\n{content}")
-                } else if !prefix.is_empty() {
-                    tracing::info!(
-                        checkpoint = "resolution_success",
-                        parts_count = pending_parts.len(),
-                        prefix_len = prefix.len(),
-                        "submit_context: resolved context parts (no user text)"
-                    );
-                    prefix.clone()
-                } else {
-                    tracing::info!(
-                        checkpoint = "resolution_success",
-                        parts_count = pending_parts.len(),
-                        "submit_context: resolved to empty prefix, using raw content"
-                    );
-                    content.clone()
                 }
             }
         };

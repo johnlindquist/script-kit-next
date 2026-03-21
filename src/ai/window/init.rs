@@ -289,6 +289,7 @@ impl AiApp {
             export_copied_at: None,
             chat_transcript_copied_at: None,
             search_debounce_task: None,
+            last_prepared_message_receipt: None,
         }
     }
 

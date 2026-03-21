@@ -178,6 +178,94 @@ Rules:
 - Protocol: bidirectional JSONL over stdin/stdout between bun scripts and Rust app — see `docs/PROTOCOL.md`, runtime code in `src/protocol/**` and `src/stdin_commands/mod.rs`
 - Organization: there is no monolithic `app_impl.rs`; app logic is split across `src/main_sections/`, `src/app_impl/`, `src/app_execute/`, and `src/render_*` modules
 
+## AI Context & Introspection
+
+### Element Introspection (`getElements`)
+
+Protocol command allowing scripts to query the live UI surface. Returns semantic IDs, element types, and observation metadata.
+
+**Key files:**
+- `src/protocol/message/variants/query_ops.rs` — `GetElements` / `ElementsResult` message variants
+- `src/protocol/types/elements_actions_scriptlets.rs` — `ElementType` enum (Choice, Input, Button, Panel, List, Unknown), `ElementInfo` struct
+- `src/app_layout/collect_elements.rs` — `ElementCollectionOutcome`, per-view collectors (`collect_visible_elements()`)
+- `src/prompt_handler/mod.rs` — request handler (clamps limit, builds receipt)
+- `src/protocol/message/constructors/query_ops.rs` — `get_elements()`, `elements_result()` constructors
+
+**Element types:** `Choice`, `Input`, `Button`, `Panel`, `List`, `Unknown` (forward-compatible)
+
+**Semantic ID format:** `input:filter`, `list:choices`, `choice:<index>:<value>`, `button:<index>:<label>`, `panel:<type>`
+
+**Observation receipts** (on every `ElementsResult`):
+- `focused_semantic_id` / `selected_semantic_id` — extracted from `ElementCollectionOutcome`
+- `truncated` — `true` when `total_count > returned elements`
+- `warnings` — machine-readable codes for views with limited introspection:
+  - `panel_only_theme_chooser`, `panel_only_actions_dialog`, `panel_only_div_prompt`, `panel_only_form_prompt`, `panel_only_editor_prompt`, `panel_only_chat_prompt`, `panel_only_env_prompt`, `panel_only_drop_prompt`, `panel_only_template_prompt`, `panel_only_naming_prompt`, `panel_only_webcam`, `panel_only_scratch_pad`, `panel_only_quick_terminal`, `collector_used_current_view_fallback`
+
+**Tests:** `src/protocol/types/tests/get_elements.rs` (request parsing, response roundtrip, semantic IDs, truncation, receipts)
+
+### MCP Desktop Context (`kit://context`)
+
+Exposes a deterministic, schema-versioned snapshot of ambient desktop state as an MCP resource.
+
+**Key files:**
+- `src/mcp_resources/mod.rs` — resource definition (URI `kit://context`), read handler (`read_context_resource()`), query parameter parsing, schema generation
+- `src/context_snapshot/types.rs` — `CaptureContextOptions` (profiles), `AiContextSnapshot`, `FrontmostAppContext`, `BrowserContext`, `FocusedWindowContext`, `MenuBarItemSummary`
+- `src/context_snapshot/capture.rs` — `capture_context_snapshot()` (live), `capture_context_snapshot_from_seed()` (deterministic for tests)
+
+**Profiles:**
+- `CaptureContextOptions::all()` — all fields (default, `?profile=full`)
+- `CaptureContextOptions::minimal()` — excludes `selected_text` and `menu_bar` (`?profile=minimal`)
+
+**Per-field flags:** `?selectedText=0|1`, `?frontmostApp=0|1`, `?menuBar=0|1`, `?browserUrl=0|1`, `?focusedWindow=0|1` — accepts `0`, `1`, `true`, `false`
+
+**Special URIs:**
+- `kit://context/schema` — self-describing JSON with profiles, parameters, and diagnostics schema
+- `kit://context?diagnostics=1` — adds `ContextFieldStatus` per field (disabled/captured/empty/failed) and overall status
+
+**URI routing:** `kit://context` → `read_resource()` → `read_context_resource()` → `parse_context_resource_request()` → `capture_context_snapshot()` → `serialize_context_resource()`
+
+**Tests:** `tests/context_snapshot.rs` (resource listing, JSON validity, profile stability, minimal resolution, content validation)
+
+### Typed Context Parts & Resolution
+
+Composable context attachments for AI chat flows with deterministic resolution and partial-failure tolerance.
+
+**Key files:**
+- `src/ai/message_parts.rs` — `AiContextPart` enum, `ContextResolutionReceipt`, `resolve_context_parts_with_receipt()`, `resolve_context_part_to_prompt_block()`
+- `src/ai/window/context_commands.rs` — slash commands (`/context`, `/context-full`, `/selection`, `/browser`, `/window`)
+- `src/ai/window/state.rs` — `pending_context_parts: Vec<AiContextPart>` (composer state)
+- `src/ai/window/streaming_submit.rs` — resolution at submit time
+
+**`AiContextPart` enum** (serde-tagged by `kind`):
+- `ResourceUri { uri, label }` — MCP resource (e.g., `kit://context?profile=minimal`)
+- `FilePath { path, label }` — local file attachment
+
+**`ContextResolutionReceipt`:**
+- `attempted` / `resolved` — counts for success/failure tracking
+- `failures: Vec<ContextResolutionFailure>` — each with label, source, error message
+- `prompt_prefix` — concatenated `<context>` / `<attachment>` blocks from successful parts
+- `has_failures()` — convenience check
+
+**Resolution algorithm:**
+1. `ResourceUri` → `mcp_resources::read_resource()` → wrap in `<context source="..." mimeType="...">...</context>`
+2. `FilePath` → read file → wrap in `<attachment path="...">...</attachment>`; unreadable files get `<attachment path="..." unreadable="true" bytes="N" />`
+3. Failures recorded but don't block other parts; `prompt_prefix` contains only successful blocks
+
+**Slash command mappings:**
+| Command | URI | Label |
+|---------|-----|-------|
+| `/context` | `kit://context?profile=minimal` | Current Context |
+| `/context-full` | `kit://context` | Full Context |
+| `/selection` | `kit://context?selectedText=1&frontmostApp=0&menuBar=0&browserUrl=0&focusedWindow=0` | Selected Text |
+| `/browser` | `kit://context?selectedText=0&frontmostApp=0&menuBar=0&browserUrl=1&focusedWindow=0` | Browser URL |
+| `/window` | `kit://context?selectedText=0&frontmostApp=0&menuBar=0&browserUrl=0&focusedWindow=1` | Focused Window |
+
+**Tests:**
+- `tests/context_part_resolution.rs` — serde roundtrip, single/multi-part resolution, receipt tracking, partial failure
+- `tests/context_part_composer_state.rs` — file_path_parts extraction, order preservation, removal
+- `tests/context_part_start_chat_flow.rs` — empty message + parts, message + parts, invalid parts, mixed success, order
+- `tests/context_part_submission_flow.rs` — mixed success tracking, full success prefix persistence
+
 ## Consistency Rules (Non-Negotiable)
 
 These rules exist because mixed patterns break both human navigation and AI agent effectiveness.
