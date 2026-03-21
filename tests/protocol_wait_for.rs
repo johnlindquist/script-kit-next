@@ -116,9 +116,9 @@ fn wait_for_all_named_conditions_parse() {
 #[test]
 fn wait_for_all_detailed_conditions_parse() {
     let conditions = [
-        serde_json::json!({"type": "elementExists", "semantic_id": "choice:0:apple"}),
-        serde_json::json!({"type": "elementVisible", "semantic_id": "input:filter"}),
-        serde_json::json!({"type": "elementFocused", "semantic_id": "input:filter"}),
+        serde_json::json!({"type": "elementExists", "semanticId": "choice:0:apple"}),
+        serde_json::json!({"type": "elementVisible", "semanticId": "input:filter"}),
+        serde_json::json!({"type": "elementFocused", "semanticId": "input:filter"}),
         serde_json::json!({"type": "stateMatch", "state": {"promptType": "arg"}}),
     ];
 
