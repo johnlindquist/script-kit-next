@@ -263,6 +263,12 @@ pub struct AiApp {
 
     /// Whether the full prepared-message inspector is visible (toggled via ⌥⌘I).
     pub(super) show_context_inspector: bool,
+
+    /// Pre-submit context preflight state.
+    /// Updated whenever pending context parts change. Reuses the same
+    /// `prepare_outbound_user_message` compiler as the submit path so
+    /// the preview can never drift from what is actually sent.
+    pub(super) context_preflight: super::context_preflight::ContextPreflightState,
 }
 
 #[cfg(test)]

@@ -264,6 +264,7 @@ impl AiApp {
         let context_parts_count = self.pending_context_parts.len();
         self.pending_image = None;
         self.pending_context_parts.clear();
+        self.clear_context_preflight(cx);
         if had_image || context_parts_count > 0 {
             tracing::info!(
                 had_pending_image = had_image,

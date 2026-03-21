@@ -49,6 +49,9 @@ use state::*;
 mod chat;
 mod command_bar;
 mod context_commands;
+mod context_preflight;
+#[cfg(test)]
+mod context_preflight_tests;
 mod context_preview;
 mod dropdowns;
 mod images;
