@@ -13,7 +13,7 @@ pub use capture::{capture_context_snapshot, capture_context_snapshot_json};
 #[allow(unused_imports)] // Public API surface for lib consumers and MCP
 pub use types::{
     AiContextSnapshot, BrowserContext, CaptureContextOptions, FocusedWindowContext,
-    FrontmostAppContext, MenuBarItemSummary,
+    FrontmostAppContext, MenuBarItemSummary, AI_CONTEXT_SNAPSHOT_SCHEMA_VERSION,
 };
 
 #[cfg(test)]
