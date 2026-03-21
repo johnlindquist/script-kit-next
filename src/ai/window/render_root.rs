@@ -242,9 +242,6 @@ impl Render for AiApp {
             .when(self.showing_presets_dropdown, |el| {
                 el.child(self.render_presets_dropdown(cx))
             })
-            .when(self.showing_attachments_picker, |el| {
-                el.child(self.render_attachments_picker(cx))
-            })
             // Keyboard shortcuts overlay (Cmd+/)
             .when(self.showing_shortcuts_overlay, |el| {
                 el.child(self.render_shortcuts_overlay(cx))

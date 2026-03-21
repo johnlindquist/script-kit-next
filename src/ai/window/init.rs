@@ -261,7 +261,6 @@ impl AiApp {
             new_chat_dropdown_index: 0,
             last_used_settings,
             // Attachments state
-            showing_attachments_picker: false,
             pending_context_parts: Vec::new(),
             context_preview_index: None,
             // Mouse cursor state

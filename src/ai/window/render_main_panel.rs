@@ -1,7 +1,6 @@
 use super::*;
 use crate::theme::opacity::{
-    OPACITY_ACCENT_MEDIUM, OPACITY_BORDER, OPACITY_DISABLED, OPACITY_HOVER, OPACITY_SELECTED,
-    OPACITY_TEXT_MUTED,
+    OPACITY_BORDER, OPACITY_DISABLED, OPACITY_SELECTED, OPACITY_TEXT_MUTED,
 };
 
 fn ai_main_panel_can_submit(
@@ -15,13 +14,12 @@ fn ai_main_panel_can_submit(
 impl AiApp {
     pub(super) fn render_main_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
         // Build input area at bottom:
-        // Row 1: single composer surface containing [+] and input text field
+        // Row 1: single composer surface containing the input text field
         // Row 2: model picker + word count on left, submit/actions on right
 
         // Check if we have a pending image or context parts to show
         let has_pending_image = self.pending_image.is_some();
         let has_pending_context_parts = !self.pending_context_parts.is_empty();
-        let has_pending_content = has_pending_image || has_pending_context_parts;
         let is_editing = self.editing_message_id.is_some();
         let input_value = self.input_state.read(cx).value().to_string();
         let input_is_empty =
@@ -34,7 +32,6 @@ impl AiApp {
         let action_button_colors =
             crate::components::ButtonColors::from_theme(&crate::theme::get_cached_theme());
         let entity = cx.entity();
-        let is_mouse_mode = self.input_mode == InputMode::Mouse;
 
         let input_area = div()
             .id("ai-input-area")
@@ -65,7 +62,7 @@ impl AiApp {
             .when(has_pending_image, |d| {
                 d.child(self.render_pending_image_preview(cx))
             })
-            // Composer row: one surface for attachments + text input
+            // Composer row: one surface for text input
             .child(
                 div()
                     .id("ai-composer")
@@ -81,58 +78,6 @@ impl AiApp {
                     .border_1()
                     .border_color(cx.theme().border.opacity(OPACITY_SELECTED))
                     .bg(cx.theme().muted.opacity(OPACITY_DISABLED))
-                    // Plus button on the left
-                    .child(
-                        div()
-                            .id("attachments-btn")
-                            .relative()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .flex_shrink_0()
-                            .size(S6)
-                            .rounded(R_MD)
-                            .border_1()
-                            .border_color(if has_pending_content {
-                                cx.theme().accent.opacity(OPACITY_ACCENT_MEDIUM)
-                            } else {
-                                cx.theme().muted_foreground.opacity(OPACITY_BORDER)
-                            })
-                            .cursor_pointer()
-                            .when(is_mouse_mode, |d| {
-                                d.hover(|s| s.bg(cx.theme().muted.opacity(OPACITY_HOVER)))
-                            })
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                if this.showing_attachments_picker {
-                                    this.hide_attachments_picker(cx);
-                                } else {
-                                    this.hide_all_dropdowns(cx);
-                                    this.show_attachments_picker(window, cx);
-                                }
-                            }))
-                            .child(
-                                svg()
-                                    .external_path(LocalIconName::Plus.external_path())
-                                    .size(ICON_SM)
-                                    .text_color(if has_pending_content {
-                                        cx.theme().accent
-                                    } else {
-                                        cx.theme().muted_foreground
-                                    }),
-                            )
-                            // Small accent dot when image or context part is attached
-                            .when(has_pending_content, |d| {
-                                d.child(
-                                    div()
-                                        .absolute()
-                                        .top(S0)
-                                        .right(S0)
-                                        .size(S2)
-                                        .rounded_full()
-                                        .bg(cx.theme().accent),
-                                )
-                            }),
-                    )
                     .child(self.render_input_with_cursor(cx)),
             )
             // Bottom row: Model picker left, submit right
@@ -475,14 +420,7 @@ impl AiApp {
             .flex()
             .flex_col()
             .gap(S2)
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .flex_wrap()
-                    .gap(S2)
-                    .children(chips),
-            );
+            .child(div().flex().flex_row().flex_wrap().gap(S2).children(chips));
 
         // Inline preview panel — shown below chips when a ResourceUri is expanded
         if let Some((_, preview)) = self.active_context_preview() {
@@ -532,21 +470,17 @@ impl AiApp {
             .bg(theme.background.opacity(OPACITY_SELECTED))
             // Profile badge
             .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(S2)
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(gpui::FontWeight::MEDIUM)
-                            .px(S2)
-                            .py(S0)
-                            .rounded(R_SM)
-                            .bg(profile_bg)
-                            .text_color(fg)
-                            .child(profile_label),
-                    ),
+                div().flex().items_center().gap(S2).child(
+                    div()
+                        .text_xs()
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .px(S2)
+                        .py(S0)
+                        .rounded(R_SM)
+                        .bg(profile_bg)
+                        .text_color(fg)
+                        .child(profile_label),
+                ),
             )
             // Source URI
             .child(
@@ -570,12 +504,7 @@ impl AiApp {
                     ),
             )
             // Description
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(muted_fg)
-                    .child(desc_label),
-            );
+            .child(div().text_xs().text_color(muted_fg).child(desc_label));
 
         // Diagnostics badge
         if preview.has_diagnostics {
