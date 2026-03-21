@@ -5,7 +5,7 @@ use super::*;
 /// Mirrors [`PreparedMessageDecision`] but adds lifecycle states
 /// (`Idle`, `Loading`) so the UI can show spinners and transitions.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(super) enum ContextPreflightStatus {
+pub enum ContextPreflightStatus {
     /// No preflight has been requested yet (or it was cleared).
     #[default]
     Idle,
@@ -25,49 +25,49 @@ pub(super) enum ContextPreflightStatus {
 /// never drift from the real submit path. The struct exists to give
 /// render code a cheap, read-only view without cloning the full receipt.
 #[derive(Debug, Clone, Default)]
-pub(super) struct ContextPreflightState {
+pub struct ContextPreflightState {
     /// Monotonically increasing generation counter.
     /// Each call to `schedule_context_preflight` bumps this value;
     /// stale completions (where `gen != self.preflight_generation`) are dropped.
-    pub(super) generation: u64,
+    pub generation: u64,
 
     /// Current lifecycle status.
-    pub(super) status: ContextPreflightStatus,
+    pub status: ContextPreflightStatus,
 
     /// Number of context parts that were sent to the resolver.
-    pub(super) attempted: usize,
+    pub attempted: usize,
 
     /// Number of parts that resolved successfully.
-    pub(super) resolved: usize,
+    pub resolved: usize,
 
     /// Number of parts that failed to resolve.
-    pub(super) failures: usize,
+    pub failures: usize,
 
     /// Duplicates removed during the assembly/merge phase.
-    pub(super) duplicates_removed: usize,
+    pub duplicates_removed: usize,
 
     /// Approximate token count derived from `estimate_tokens_from_text`
     /// applied to the resolved prompt prefix. Labeled as approximate
     /// because we don't have access to a provider-specific tokenizer.
-    pub(super) approx_tokens: usize,
+    pub approx_tokens: usize,
 
     /// Character count of the resolved prompt prefix.
-    pub(super) prompt_chars: usize,
+    pub prompt_chars: usize,
 
     /// The full receipt, stored for drawer/inspector views.
-    pub(super) receipt: Option<crate::ai::message_parts::PreparedMessageReceipt>,
+    pub receipt: Option<crate::ai::message_parts::PreparedMessageReceipt>,
 }
 
 /// Rough token estimate: divide character count by 4 (the widely-used
 /// English-text heuristic for BPE tokenizers). This is intentionally
 /// labeled "approximate" everywhere it surfaces in the UI.
-pub(super) fn estimate_tokens_from_text(text: &str) -> usize {
+pub fn estimate_tokens_from_text(text: &str) -> usize {
     let char_count = text.chars().count();
     ((char_count as f64) / 4.0).ceil() as usize
 }
 
 /// Map a [`PreparedMessageDecision`] to a [`ContextPreflightStatus`].
-pub(super) fn status_from_decision(
+pub fn status_from_decision(
     decision: &crate::ai::message_parts::PreparedMessageDecision,
 ) -> ContextPreflightStatus {
     match decision {
@@ -85,7 +85,7 @@ pub(super) fn status_from_decision(
 ///
 /// This is the canonical way to build preflight state from the same
 /// receipt pipeline used at submit time.
-pub(super) fn preflight_state_from_receipt(
+pub fn preflight_state_from_receipt(
     generation: u64,
     receipt: crate::ai::message_parts::PreparedMessageReceipt,
 ) -> ContextPreflightState {

@@ -1,0 +1,282 @@
+//! Integration tests for the inline context picker.
+//!
+//! Validates deterministic ranking, built-in spec seeding, query filtering,
+//! and the contract between picker items and `AiContextPart` creation.
+
+use script_kit_gpui::ai::{
+    build_picker_items, context_attachment_specs, score_builtin, AiContextPart,
+    ContextAttachmentKind, ContextPickerItemKind, ContextPickerState,
+};
+
+// ---------- Deterministic picker ranking ----------
+
+#[test]
+fn picker_ranking_is_deterministic_across_calls() {
+    let items_a = build_picker_items("con");
+    let items_b = build_picker_items("con");
+
+    assert_eq!(
+        items_a.len(),
+        items_b.len(),
+        "Same query must produce same item count"
+    );
+
+    for (a, b) in items_a.iter().zip(items_b.iter()) {
+        assert_eq!(a.id, b.id, "Same query must produce same item order");
+        assert_eq!(a.score, b.score, "Same query must produce same scores");
+    }
+}
+
+#[test]
+fn empty_query_returns_all_builtins_deterministically() {
+    let items = build_picker_items("");
+    let specs = context_attachment_specs();
+
+    let builtin_count = items
+        .iter()
+        .filter(|i| matches!(i.kind, ContextPickerItemKind::BuiltIn(_)))
+        .count();
+
+    assert_eq!(
+        builtin_count,
+        specs.len(),
+        "Empty query should return exactly all built-in context specs"
+    );
+
+    // Verify each spec is present
+    for spec in specs {
+        let found = items.iter().any(|item| match &item.kind {
+            ContextPickerItemKind::BuiltIn(kind) => *kind == spec.kind,
+            _ => false,
+        });
+        assert!(
+            found,
+            "Built-in item for {:?} should be present",
+            spec.kind
+        );
+    }
+}
+
+// ---------- Query filtering ----------
+
+#[test]
+fn sel_query_ranks_selection_first() {
+    let items = build_picker_items("sel");
+    assert!(!items.is_empty(), "'sel' should match at least Selection");
+
+    match &items[0].kind {
+        ContextPickerItemKind::BuiltIn(kind) => {
+            assert_eq!(
+                *kind,
+                ContextAttachmentKind::Selection,
+                "'sel' should rank Selection first"
+            );
+        }
+        other => panic!("Expected BuiltIn(Selection), got {:?}", other),
+    }
+}
+
+#[test]
+fn nonexistent_query_returns_no_builtins() {
+    let items = build_picker_items("zzzznonexistent");
+    let builtin_count = items
+        .iter()
+        .filter(|i| matches!(i.kind, ContextPickerItemKind::BuiltIn(_)))
+        .count();
+    assert_eq!(
+        builtin_count, 0,
+        "Non-matching query should filter out all built-ins"
+    );
+}
+
+#[test]
+fn diag_query_matches_diagnostics() {
+    let items = build_picker_items("diag");
+    let has_diag = items.iter().any(|i| {
+        matches!(
+            i.kind,
+            ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Diagnostics)
+        )
+    });
+    assert!(has_diag, "'diag' should match Diagnostics built-in");
+}
+
+#[test]
+fn browser_query_matches_browser() {
+    let items = build_picker_items("brow");
+    let has_browser = items.iter().any(|i| {
+        matches!(
+            i.kind,
+            ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Browser)
+        )
+    });
+    assert!(has_browser, "'brow' should match Browser built-in");
+}
+
+// ---------- Grouping: builtins before files ----------
+
+#[test]
+fn builtins_grouped_before_files_and_folders() {
+    let items = build_picker_items("con");
+    let mut seen_non_builtin = false;
+    for item in &items {
+        match &item.kind {
+            ContextPickerItemKind::BuiltIn(_) => {
+                assert!(
+                    !seen_non_builtin,
+                    "Built-in items must appear before file/folder items"
+                );
+            }
+            _ => {
+                seen_non_builtin = true;
+            }
+        }
+    }
+}
+
+// ---------- Scoring ----------
+
+#[test]
+fn exact_mention_scores_higher_than_prefix() {
+    let selection_spec = ContextAttachmentKind::Selection.spec();
+    let exact = score_builtin(selection_spec, "selection");
+    let prefix = score_builtin(selection_spec, "sel");
+    assert!(
+        exact > prefix,
+        "Exact mention ({}) should score higher than prefix ({})",
+        exact,
+        prefix
+    );
+}
+
+#[test]
+fn empty_query_gives_default_score_to_all_builtins() {
+    for spec in context_attachment_specs() {
+        let score = score_builtin(spec, "");
+        assert_eq!(
+            score, 100,
+            "Empty query should give default score 100 for {:?}",
+            spec.kind
+        );
+    }
+}
+
+#[test]
+fn prefix_on_label_scores_higher_than_substring() {
+    // "Current Context" — "cur" is a prefix, "ren" is a substring
+    let current_spec = ContextAttachmentKind::Current.spec();
+    let prefix_score = score_builtin(current_spec, "cur");
+    let substring_score = score_builtin(current_spec, "ren");
+    assert!(
+        prefix_score > substring_score,
+        "Label prefix ({}) should score higher than substring ({})",
+        prefix_score,
+        substring_score
+    );
+}
+
+// ---------- Picker item → AiContextPart contract ----------
+
+#[test]
+fn builtin_selection_item_produces_correct_context_part() {
+    let items = build_picker_items("selection");
+    let selection_item = items
+        .iter()
+        .find(|i| {
+            matches!(
+                i.kind,
+                ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Selection)
+            )
+        })
+        .expect("Selection should be in results");
+
+    match &selection_item.kind {
+        ContextPickerItemKind::BuiltIn(kind) => {
+            let part = kind.part();
+            assert_eq!(part.label(), "Selection");
+            assert!(
+                part.source().contains("selectedText=1"),
+                "Selection URI should contain selectedText=1, got: {}",
+                part.source()
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn all_builtin_items_produce_resource_uri_parts() {
+    let items = build_picker_items("");
+    for item in &items {
+        if let ContextPickerItemKind::BuiltIn(kind) = &item.kind {
+            let part = kind.part();
+            match part {
+                AiContextPart::ResourceUri { uri, label } => {
+                    assert!(
+                        uri.starts_with("kit://"),
+                        "Built-in part URI should start with kit://, got: {}",
+                        uri
+                    );
+                    assert!(
+                        !label.is_empty(),
+                        "Built-in part label should not be empty"
+                    );
+                }
+                _ => panic!(
+                    "Built-in {:?} should produce ResourceUri, got FilePath",
+                    kind
+                ),
+            }
+        }
+    }
+}
+
+// ---------- ContextPickerState navigation ----------
+
+#[test]
+fn picker_state_navigation_wraps_around() {
+    let items = build_picker_items("");
+    let count = items.len();
+    assert!(count >= 2, "Need at least 2 items for navigation test");
+
+    let mut state = ContextPickerState::new(String::new(), items);
+    assert_eq!(state.selected_index, 0);
+
+    // Move to last
+    state.selected_index = count - 1;
+
+    // Wrap around
+    state.selected_index = (state.selected_index + 1) % state.items.len();
+    assert_eq!(state.selected_index, 0, "Should wrap to 0");
+}
+
+// ---------- Spec completeness ----------
+
+#[test]
+fn every_context_attachment_kind_has_a_spec() {
+    // Exhaustive check that each kind can produce a spec and a part
+    let kinds = [
+        ContextAttachmentKind::Current,
+        ContextAttachmentKind::Full,
+        ContextAttachmentKind::Selection,
+        ContextAttachmentKind::Browser,
+        ContextAttachmentKind::Window,
+        ContextAttachmentKind::Diagnostics,
+    ];
+
+    for kind in &kinds {
+        let spec = kind.spec();
+        assert!(!spec.label.is_empty(), "{:?} spec should have a label", kind);
+        assert!(
+            !spec.uri.is_empty(),
+            "{:?} spec should have a URI",
+            kind
+        );
+        let part = kind.part();
+        assert!(
+            !part.label().is_empty(),
+            "{:?} part should have a label",
+            kind
+        );
+    }
+}

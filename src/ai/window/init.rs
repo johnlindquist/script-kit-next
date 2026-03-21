@@ -295,6 +295,7 @@ impl AiApp {
             last_preflight_audit: None,
             last_context_receipt: None,
             show_context_inspector: false,
+            show_context_drawer: false,
             context_preflight: super::context_preflight::ContextPreflightState::default(),
         }
     }

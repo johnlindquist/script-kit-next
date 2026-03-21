@@ -5,7 +5,7 @@
 //! and folders. Accepting a row creates the matching `AiContextPart` and
 //! schedules a preflight update automatically.
 
-pub(crate) mod types;
+pub mod types;
 
 mod render;
 #[cfg(test)]
@@ -177,7 +177,7 @@ impl AiApp {
 /// Items are grouped: built-ins first, then files, then folders.
 /// Within each group, items are sorted by relevance score (descending),
 /// with ties broken by original order (stable sort).
-pub(crate) fn build_picker_items(query: &str) -> Vec<ContextPickerItem> {
+pub fn build_picker_items(query: &str) -> Vec<ContextPickerItem> {
     let query_lower = query.to_lowercase();
     let mut items = Vec::new();
 
@@ -225,7 +225,7 @@ pub(crate) fn build_picker_items(query: &str) -> Vec<ContextPickerItem> {
 ///
 /// Returns 0 if no match, higher values for better matches.
 /// Deterministic: same query always produces the same score.
-pub(crate) fn score_builtin(
+pub fn score_builtin(
     spec: &crate::ai::context_contract::ContextAttachmentSpec,
     query: &str,
 ) -> u32 {

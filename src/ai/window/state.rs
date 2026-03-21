@@ -272,6 +272,10 @@ pub struct AiApp {
     /// Whether the full prepared-message inspector is visible (toggled via ⌥⌘I).
     pub(super) show_context_inspector: bool,
 
+    /// Whether the context drawer is open (shows per-part provenance rows).
+    /// Toggled by clicking the context bar summary line.
+    pub(super) show_context_drawer: bool,
+
     /// Pre-submit context preflight state.
     /// Updated whenever pending context parts change. Reuses the same
     /// `prepare_outbound_user_message` compiler as the submit path so
