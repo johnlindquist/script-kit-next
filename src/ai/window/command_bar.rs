@@ -267,9 +267,8 @@ impl AiApp {
             "delete_chat" => {
                 self.delete_selected_chat(cx);
             }
-            "add_attachment" => {
-                self.show_attachments_picker(window, cx);
-            }
+            "add_file" => self.open_file_picker(cx),
+            "add_image" => self.open_image_picker(cx),
             "paste_image" => self.paste_image_from_clipboard(cx),
             "capture_screen_area" => {
                 self.capture_screen_area_attachment(cx);
