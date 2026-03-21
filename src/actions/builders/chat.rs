@@ -252,13 +252,21 @@ pub fn get_ai_command_bar_actions() -> Vec<Action> {
         .with_icon(IconName::Trash)
         .with_section("Actions"),
         Action::new(
-            "chat:add_attachment",
-            "Add Attachments...",
-            Some("Attaches files to your message".to_string()),
+            "chat:add_file",
+            "Add File",
+            Some("Browse for a file to attach".to_string()),
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⇧⌘A")
-        .with_icon(IconName::Plus)
+        .with_icon(IconName::File)
+        .with_section("Attachments"),
+        Action::new(
+            "chat:add_image",
+            "Add Image",
+            Some("Browse for an image to attach".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::File)
         .with_section("Attachments"),
         Action::new(
             "chat:paste_image",
@@ -369,6 +377,40 @@ mod tests {
     fn test_get_ai_command_bar_actions_prefixes_ids_with_chat_namespace() {
         let actions = get_ai_command_bar_actions();
         assert!(actions.iter().all(|action| action.id.starts_with("chat:")));
+    }
+
+    #[test]
+    fn test_get_ai_command_bar_actions_exposes_direct_attachment_actions() {
+        let actions = get_ai_command_bar_actions();
+
+        let add_file = actions
+            .iter()
+            .find(|action| action.id == "chat:add_file")
+            .expect("missing add_file action");
+        let add_image = actions
+            .iter()
+            .find(|action| action.id == "chat:add_image")
+            .expect("missing add_image action");
+
+        assert_eq!(add_file.title, "Add File");
+        assert_eq!(
+            add_file.description.as_deref(),
+            Some("Browse for a file to attach")
+        );
+        assert_eq!(add_file.icon, Some(IconName::File));
+        assert_eq!(add_file.section.as_deref(), Some("Attachments"));
+
+        assert_eq!(add_image.title, "Add Image");
+        assert_eq!(
+            add_image.description.as_deref(),
+            Some("Browse for an image to attach")
+        );
+        assert_eq!(add_image.icon, Some(IconName::File));
+        assert_eq!(add_image.section.as_deref(), Some("Attachments"));
+
+        assert!(actions
+            .iter()
+            .all(|action| action.id != "chat:add_attachment"));
     }
 
     #[test]
