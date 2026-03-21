@@ -117,11 +117,14 @@ impl Message {
         }
     }
 
-    /// Create an elements result response
+    /// Create an elements result response with observation receipt metadata
     pub fn elements_result(
         request_id: String,
         elements: Vec<ElementInfo>,
         total_count: usize,
+        focused_semantic_id: Option<String>,
+        selected_semantic_id: Option<String>,
+        warnings: Vec<String>,
     ) -> Self {
         let truncated = elements.len() < total_count;
         Message::ElementsResult {
@@ -129,6 +132,9 @@ impl Message {
             elements,
             total_count,
             truncated,
+            focused_semantic_id,
+            selected_semantic_id,
+            warnings,
         }
     }
 
