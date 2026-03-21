@@ -272,6 +272,7 @@ impl AiApp {
                 "chat_switch_cleared_context_parts"
             );
         }
+        self.context_picker = None;
         self.collapsed_messages.clear();
         self.expanded_messages.clear();
         self.copied_message_id = None;
@@ -280,6 +281,10 @@ impl AiApp {
         self.last_streaming_completed_at = None;
         self.streaming_error = None;
         self.editing_message_id = None;
+        self.last_prepared_message_receipt = None;
+        self.last_preflight_audit = None;
+        self.last_context_receipt = None;
+        self.show_context_inspector = false;
 
         let chat_id = self.create_chat(window, cx);
 

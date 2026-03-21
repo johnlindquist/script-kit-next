@@ -144,7 +144,9 @@ fn start_chat_invalid_part_surfaces_failure_deterministically() {
     assert_eq!(receipt.failures[0].label, "ghost.txt");
     assert_eq!(receipt.failures[0].source, "/nonexistent/ghost.txt");
     assert!(
-        receipt.failures[0].error.contains("Failed to stat attachment"),
+        receipt.failures[0]
+            .error
+            .contains("Failed to stat attachment"),
         "error should mention stat failure, got: {}",
         receipt.failures[0].error
     );

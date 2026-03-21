@@ -69,8 +69,14 @@ fn context_part_resolution_resource_uri_returns_deterministic_block() {
     );
 
     // Must be wrapped in <context> tags
-    assert!(block.starts_with("<context "), "block should start with <context");
-    assert!(block.ends_with("</context>"), "block should end with </context>");
+    assert!(
+        block.starts_with("<context "),
+        "block should start with <context"
+    );
+    assert!(
+        block.ends_with("</context>"),
+        "block should end with </context>"
+    );
 
     // Content should be valid JSON
     let inner = block
@@ -131,7 +137,8 @@ fn context_part_resolution_unreadable_file_path_returns_metadata_fallback() {
 
     #[cfg(unix)]
     {
-        let block = resolve_context_part_to_prompt_block(&part, &[], &[]).expect("should not panic");
+        let block =
+            resolve_context_part_to_prompt_block(&part, &[], &[]).expect("should not panic");
         assert!(
             block.contains("unreadable=\"true\""),
             "unreadable file should have unreadable marker"
@@ -259,8 +266,7 @@ fn receipt_reports_all_successes_for_two_readable_files() {
         },
     ];
 
-    let receipt: ContextResolutionReceipt =
-        resolve_context_parts_with_receipt(&parts, &[], &[]);
+    let receipt: ContextResolutionReceipt = resolve_context_parts_with_receipt(&parts, &[], &[]);
 
     assert_eq!(receipt.attempted, 2);
     assert_eq!(receipt.resolved, 2);
@@ -269,7 +275,9 @@ fn receipt_reports_all_successes_for_two_readable_files() {
     assert!(receipt.prompt_prefix.contains("fn alpha() {}"));
     assert!(receipt.prompt_prefix.contains("fn beta() {}"));
     assert!(
-        receipt.prompt_prefix.contains("</attachment>\n\n<attachment"),
+        receipt
+            .prompt_prefix
+            .contains("</attachment>\n\n<attachment"),
         "blocks should be separated by double newline"
     );
 }
@@ -300,7 +308,9 @@ fn receipt_reports_partial_failure_for_missing_file() {
     assert_eq!(receipt.failures[0].label, "ghost.txt");
     assert_eq!(receipt.failures[0].source, "/nonexistent/ghost.txt");
     assert!(
-        receipt.failures[0].error.contains("Failed to stat attachment"),
+        receipt.failures[0]
+            .error
+            .contains("Failed to stat attachment"),
         "error should mention stat failure, got: {}",
         receipt.failures[0].error
     );

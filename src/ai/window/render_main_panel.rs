@@ -54,6 +54,10 @@ impl AiApp {
             })
             // Editing indicator (shown above input when editing a message)
             .when(is_editing, |d| d.child(self.render_editing_indicator(cx)))
+            // Context picker overlay (shown above input when @ trigger is active)
+            .when(self.is_context_picker_open(), |d| {
+                d.child(self.render_context_picker(cx))
+            })
             // Pending context part chips (shown above input when parts are attached)
             .when(has_pending_context_parts, |d| {
                 d.child(self.render_pending_context_chips(cx))
@@ -277,7 +281,28 @@ impl AiApp {
                     ),
             )
             .when(self.show_context_inspector, |container| {
-                if let Some(prepared) = &self.last_prepared_message_receipt {
+                if let Some(audit) = &self.last_preflight_audit {
+                    let json = serde_json::to_string_pretty(audit).unwrap_or_else(|error| {
+                        format!("{{\"error\":\"failed to serialize AiPreflightAudit: {}\"}}", error)
+                    });
+                    let json_text: SharedString = json.into();
+                    container.child(
+                        div()
+                            .id("context-inspector")
+                            .px(S4)
+                            .py(S3)
+                            .rounded(R_MD)
+                            .bg(cx.theme().muted.opacity(OPACITY_DISABLED))
+                            .max_h(px(300.0))
+                            .overflow_y_scroll()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().foreground)
+                                    .child(json_text),
+                            ),
+                    )
+                } else if let Some(prepared) = &self.last_prepared_message_receipt {
                     let json = serde_json::to_string_pretty(prepared).unwrap_or_else(|error| {
                         format!(
                             "{{\"error\":\"failed to serialize PreparedMessageReceipt: {}\"}}",

@@ -96,9 +96,7 @@ fn protocol_ai_send_message_with_file_path_part_round_trips() {
     let msg: Message = serde_json::from_value(json).expect("should deserialize with file part");
     let reserialized = serde_json::to_value(&msg).expect("should reserialize");
 
-    let parts = reserialized
-        .get("parts")
-        .expect("parts should be present");
+    let parts = reserialized.get("parts").expect("parts should be present");
     assert_eq!(parts.as_array().expect("array").len(), 1);
 
     let part = &parts[0];
@@ -130,9 +128,7 @@ fn protocol_ai_start_chat_with_mixed_parts_round_trips() {
     let msg: Message = serde_json::from_value(json).expect("should deserialize mixed parts");
     let reserialized = serde_json::to_value(&msg).expect("should reserialize");
 
-    let parts = reserialized
-        .get("parts")
-        .expect("parts should be present");
+    let parts = reserialized.get("parts").expect("parts should be present");
     let parts_array = parts.as_array().expect("array");
     assert_eq!(parts_array.len(), 2);
     assert_eq!(parts_array[0]["kind"], "resourceUri");

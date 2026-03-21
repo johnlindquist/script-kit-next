@@ -150,6 +150,30 @@ impl AiApp {
             has_context_parts,
         } = self.prepare_outbound_user_message(&content, &pending_parts);
 
+        self.last_prepared_message_receipt = Some(receipt.clone());
+
+        // Build correlation-scoped preflight audit and persist before send.
+        let mut preflight_audit = crate::ai::AiPreflightAudit::new(
+            &chat_id,
+            &content,
+            &authored_content,
+            has_image,
+            has_context_parts,
+            receipt.clone(),
+        );
+        self.last_preflight_audit = Some(preflight_audit.clone());
+
+        if let Err(error) = crate::ai::save_message_preparation_audit(&preflight_audit) {
+            tracing::warn!(
+                chat_id = %chat_id,
+                correlation_id = %preflight_audit.correlation_id,
+                error = %error,
+                "Failed to persist preflight audit"
+            );
+        }
+
+        crate::ai::log_preflight_audit(&preflight_audit, "prepared");
+
         self.last_context_receipt = if has_context_parts {
             Some(receipt.context.clone())
         } else {
@@ -168,10 +192,12 @@ impl AiApp {
                     resolved = receipt.context.resolved,
                     outcomes = ?receipt.outcomes,
                     failures = ?receipt.context.failures,
+                    correlation_id = %preflight_audit.correlation_id,
                     "submit_context: partial resolution failure"
                 );
                 self.pending_context_parts = receipt.unresolved_parts;
-                self.streaming_error = receipt.user_error;
+                self.streaming_error = crate::ai::build_actionable_preflight_error(&preflight_audit)
+                    .or_else(|| receipt.user_error.clone());
                 receipt.final_user_content
             }
             crate::ai::message_parts::PreparedMessageDecision::Blocked => {
@@ -181,10 +207,12 @@ impl AiApp {
                     resolved = receipt.context.resolved,
                     outcomes = ?receipt.outcomes,
                     failures = ?receipt.context.failures,
+                    correlation_id = %preflight_audit.correlation_id,
                     "submit_context: blocked due to unresolved context"
                 );
                 self.pending_context_parts = receipt.unresolved_parts;
-                self.streaming_error = receipt.user_error;
+                self.streaming_error = crate::ai::build_actionable_preflight_error(&preflight_audit)
+                    .or_else(|| receipt.user_error.clone());
                 cx.notify();
                 return;
             }
@@ -228,6 +256,22 @@ impl AiApp {
             cx.notify();
             return;
         }
+
+        // Link the saved message ID to the preflight audit and re-persist.
+        preflight_audit.attach_message_id(&user_message.id);
+        self.last_preflight_audit = Some(preflight_audit.clone());
+
+        if let Err(error) = crate::ai::save_message_preparation_audit(&preflight_audit) {
+            tracing::warn!(
+                chat_id = %chat_id,
+                message_id = %user_message.id,
+                correlation_id = %preflight_audit.correlation_id,
+                error = %error,
+                "Failed to upsert linked preflight audit"
+            );
+        }
+
+        crate::ai::log_preflight_audit(&preflight_audit, "message_saved");
 
         // Add to current messages for display
         self.current_messages.push(user_message);

@@ -83,6 +83,5 @@ fn parse_file_mention(trimmed: &str) -> Option<AiContextPart> {
     })
 }
 
-
 #[cfg(test)]
 mod tests;

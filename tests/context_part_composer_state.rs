@@ -267,9 +267,9 @@ fn remove_context_part_preserves_order_of_remaining_parts() {
 
 /// Mirrors the dedup logic from `AiApp::add_attachment`.
 fn add_attachment(parts: &mut Vec<AiContextPart>, path: &str) -> bool {
-    let already_present = parts.iter().any(|part| {
-        matches!(part, AiContextPart::FilePath { path: p, .. } if p == path)
-    });
+    let already_present = parts
+        .iter()
+        .any(|part| matches!(part, AiContextPart::FilePath { path: p, .. } if p == path));
     if already_present {
         return false;
     }

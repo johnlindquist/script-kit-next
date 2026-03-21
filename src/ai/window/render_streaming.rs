@@ -228,13 +228,7 @@ impl AiApp {
                         }),
                 )
             })
-            .child(
-                div()
-                    .w_full()
-                    .px(MSG_PX)
-                    .py(MSG_PY)
-                    .child(content_element),
-            )
+            .child(div().w_full().px(MSG_PX).py(MSG_PY).child(content_element))
     }
 
     /// Render a streaming error row with a retry button and contextual help.

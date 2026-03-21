@@ -607,6 +607,7 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
     struct ConversationTransientState {
         pending_image: Option<String>,
         pending_context_parts: Vec<crate::ai::message_parts::AiContextPart>,
+        context_picker_open: bool,
         collapsed_messages: std::collections::HashSet<String>,
         expanded_messages: std::collections::HashSet<String>,
         copied_message_id: Option<String>,
@@ -615,6 +616,10 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
         last_streaming_completed_at: Option<std::time::Instant>,
         streaming_error: Option<String>,
         editing_message_id: Option<String>,
+        last_prepared_message_receipt: bool,
+        last_preflight_audit: bool,
+        last_context_receipt: bool,
+        show_context_inspector: bool,
     }
 
     impl ConversationTransientState {
@@ -622,6 +627,7 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
         fn reset(&mut self) {
             self.pending_image = None;
             self.pending_context_parts.clear();
+            self.context_picker_open = false;
             self.collapsed_messages.clear();
             self.expanded_messages.clear();
             self.copied_message_id = None;
@@ -630,6 +636,10 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
             self.last_streaming_completed_at = None;
             self.streaming_error = None;
             self.editing_message_id = None;
+            self.last_prepared_message_receipt = false;
+            self.last_preflight_audit = false;
+            self.last_context_receipt = false;
+            self.show_context_inspector = false;
         }
     }
 
@@ -640,6 +650,7 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
             path: "/tmp/file.txt".to_string(),
             label: "file.txt".to_string(),
         }],
+        context_picker_open: true,
         collapsed_messages: ["msg-1".to_string()].into_iter().collect(),
         expanded_messages: ["msg-2".to_string()].into_iter().collect(),
         copied_message_id: Some("msg-1".to_string()),
@@ -648,11 +659,16 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
         last_streaming_completed_at: Some(std::time::Instant::now()),
         streaming_error: Some("previous error".to_string()),
         editing_message_id: Some("msg-3".to_string()),
+        last_prepared_message_receipt: true,
+        last_preflight_audit: true,
+        last_context_receipt: true,
+        show_context_inspector: true,
     };
 
     // Verify dirty state is non-default
     assert!(state.pending_image.is_some());
     assert!(!state.pending_context_parts.is_empty());
+    assert!(state.context_picker_open);
     assert!(!state.collapsed_messages.is_empty());
     assert!(!state.expanded_messages.is_empty());
     assert!(state.copied_message_id.is_some());
@@ -661,6 +677,10 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
     assert!(state.last_streaming_completed_at.is_some());
     assert!(state.streaming_error.is_some());
     assert!(state.editing_message_id.is_some());
+    assert!(state.last_prepared_message_receipt);
+    assert!(state.last_preflight_audit);
+    assert!(state.last_context_receipt);
+    assert!(state.show_context_inspector);
 
     // Apply reset
     state.reset();
@@ -673,6 +693,10 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
     assert!(
         state.pending_context_parts.is_empty(),
         "pending_context_parts must be cleared on new conversation"
+    );
+    assert!(
+        !state.context_picker_open,
+        "context_picker must be cleared on new conversation"
     );
     assert!(
         state.collapsed_messages.is_empty(),
@@ -705,6 +729,22 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
     assert!(
         state.editing_message_id.is_none(),
         "editing_message_id must be cleared on new conversation"
+    );
+    assert!(
+        !state.last_prepared_message_receipt,
+        "last_prepared_message_receipt must be cleared on new conversation"
+    );
+    assert!(
+        !state.last_preflight_audit,
+        "last_preflight_audit must be cleared on new conversation"
+    );
+    assert!(
+        !state.last_context_receipt,
+        "last_context_receipt must be cleared on new conversation"
+    );
+    assert!(
+        !state.show_context_inspector,
+        "show_context_inspector must be cleared on new conversation"
     );
 }
 

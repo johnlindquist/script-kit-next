@@ -9,16 +9,18 @@ fn parse_context_mentions_extracts_resource_directives_and_keeps_body() {
     assert_eq!(
         parsed.parts[0],
         AiContextPart::ResourceUri {
-            uri: "kit://context?selectedText=1&frontmostApp=0&menuBar=0&browserUrl=0&focusedWindow=0"
-                .to_string(),
+            uri:
+                "kit://context?selectedText=1&frontmostApp=0&menuBar=0&browserUrl=0&focusedWindow=0"
+                    .to_string(),
             label: "Selection".to_string(),
         }
     );
     assert_eq!(
         parsed.parts[1],
         AiContextPart::ResourceUri {
-            uri: "kit://context?selectedText=0&frontmostApp=0&menuBar=0&browserUrl=1&focusedWindow=0"
-                .to_string(),
+            uri:
+                "kit://context?selectedText=0&frontmostApp=0&menuBar=0&browserUrl=1&focusedWindow=0"
+                    .to_string(),
             label: "Browser URL".to_string(),
         }
     );

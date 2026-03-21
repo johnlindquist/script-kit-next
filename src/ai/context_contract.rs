@@ -177,7 +177,10 @@ mod tests {
             );
 
             // Round-trip: action_id without prefix → kind
-            let suffix = spec.action_id.strip_prefix("chat:").unwrap_or(spec.action_id);
+            let suffix = spec
+                .action_id
+                .strip_prefix("chat:")
+                .unwrap_or(spec.action_id);
             assert_eq!(
                 ContextAttachmentKind::from_action_id(suffix),
                 Some(spec.kind),

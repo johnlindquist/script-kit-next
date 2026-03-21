@@ -176,6 +176,10 @@ pub struct AiApp {
     /// Last used settings (derived from recent chats)
     pub(super) last_used_settings: Vec<LastUsedSetting>,
 
+    // === Context Picker State ===
+    /// Inline `@` context picker state. `Some` when the picker overlay is open.
+    pub(super) context_picker: Option<super::context_picker::types::ContextPickerState>,
+
     // === Attachments State ===
     /// Pending context parts (file paths and resource URIs) that will be resolved
     /// into prompt blocks at submit time.
@@ -256,6 +260,10 @@ pub struct AiApp {
     /// Updated immediately after preparation in both `submit_message` and `handle_start_chat`.
     pub(super) last_prepared_message_receipt:
         Option<crate::ai::message_parts::PreparedMessageReceipt>,
+
+    /// Full machine-readable preflight audit for the most recent composer attempt.
+    /// This is the canonical payload behind "Inspect Context".
+    pub(super) last_preflight_audit: Option<crate::ai::AiPreflightAudit>,
 
     /// The last context-resolution receipt, persisted for compact UI summary after submit.
     /// Cleared when submitting with no pending context parts; set when parts are resolved.

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-21T18:31:02.445Z",
+  "updatedAt": "2026-03-21T18:41:13.396Z",
   "agents": {
     "codex-actions-consistency": {
       "id": "codex-actions-consistency",
@@ -7710,20 +7710,130 @@
       "task": "In the AI chat's Cmd+K actions menu, replace the single 'Add Attachments...' action (chat:add_attachment) with two separate direct actions: 'Add File' (chat:add_file, icon: IconName::File, description: 'Browse for a file to attach') and 'Add Image' (chat:add_image, icon: IconName::Image, description: 'Browse for an image to attach'). Both should be in the 'Attachments' section. Keep the existing chat:paste_image and chat:capture_screen_area actions as-is. Then in src/ai/window/command_bar.rs, update the execute_action match block: replace the 'add_attachment' arm (which calls show_attachments_picker) with two new arms: 'add_file' => self.open_file_picker(window, cx) and 'add_image' => self.open_image_picker(window, cx). Both open_file_picker and open_image_picker already exist in src/ai/window/images.rs. Do NOT remove or modify any other code — another worker handles cleanup.",
       "scope": "src/actions/builders/chat.rs,src/ai/window/command_bar.rs",
       "readonly": false,
-      "status": "in_progress",
-      "claims": [
-        "src/actions/builders/chat.rs",
-        "src/ai/window/command_bar.rs"
-      ],
+      "status": "done",
+      "claims": [],
       "createdAt": "2026-03-21T18:30:17.431Z",
-      "lastSeenAt": "2026-03-21T18:31:02.445Z",
+      "lastSeenAt": "2026-03-21T18:34:46.127Z",
       "host": "johns.macbook.pro.lan",
       "startSha": "fba01c429697c8a48c67686d6660e832e081b987",
-      "notes": "Inspecting chat action builder and command bar routing for add_file/add_image split",
-      "pid": 70716,
-      "claimed_at": {
-        "src/actions/builders/chat.rs": "2026-03-21T18:30:28.374Z",
-        "src/ai/window/command_bar.rs": "2026-03-21T18:30:28.495Z"
+      "notes": "done. exit=0. final=.ai/logs/codex-actions-add.final.md. See final message file.",
+      "claimed_at": {},
+      "report": {
+        "schema": "opex.agent_report.v1",
+        "agentId": "codex-actions-add",
+        "taskSummary": "Replaced the chat Cmd+K attachment action with direct Add File and Add Image actions and routed them to the existing file and image pickers.",
+        "tests": [
+          {
+            "cmd": "cargo test test_get_ai_command_bar_actions_exposes_direct_attachment_actions --lib",
+            "result": "pass"
+          },
+          {
+            "cmd": "git diff --check -- src/actions/builders/chat.rs src/ai/window/command_bar.rs",
+            "result": "pass"
+          },
+          {
+            "cmd": "rustfmt src/actions/builders/chat.rs src/ai/window/command_bar.rs",
+            "result": "pass"
+          }
+        ],
+        "changedFiles": [
+          "src/actions/builders/chat.rs",
+          "src/ai/window/command_bar.rs"
+        ],
+        "commitCount": 1,
+        "commitShas": [
+          "d528b9d39480f318f779dc973a4a323ae2e01b4a"
+        ],
+        "commitFiles": [
+          "src/actions/builders/chat.rs",
+          "src/ai/window/command_bar.rs"
+        ]
+      }
+    },
+    "codex-remove-plus-btn": {
+      "id": "codex-remove-plus-btn",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Remove the '+' attachment button and its overlay picker from the AI chat window. Specifically: (1) In src/ai/window/render_main_panel.rs, remove the entire .child(div().id(\"attachments-btn\")...) block (~lines 84-135) that renders the plus button — the input field (.child(self.render_input_with_cursor(cx))) should become the first child of the composer row. (2) In src/ai/window/render_root.rs, remove the .when(self.showing_attachments_picker, ...) conditional that renders the overlay. (3) Delete or empty src/ai/window/render_overlays_attachments.rs and remove its mod declaration from src/ai/window/mod.rs. (4) In src/ai/window/state.rs, remove the showing_attachments_picker: bool field. (5) In src/ai/window/init.rs, remove showing_attachments_picker: false initialization. (6) In src/ai/window/dropdowns.rs, remove show_attachments_picker() and hide_attachments_picker() methods. (7) In src/ai/window/render_keydown.rs, remove the escape handler for showing_attachments_picker. (8) Search for any remaining references to showing_attachments_picker or show_attachments_picker/hide_attachments_picker and remove them. The project must compile after these changes.",
+      "scope": "src/ai/window/render_main_panel.rs,src/ai/window/render_root.rs,src/ai/window/render_overlays_attachments.rs,src/ai/window/mod.rs,src/ai/window/state.rs,src/ai/window/init.rs,src/ai/window/dropdowns.rs,src/ai/window/render_keydown.rs,src/ai/window/command_bar.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-03-21T18:32:17.778Z",
+      "lastSeenAt": "2026-03-21T18:41:13.396Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "e7352e755bf962c5f5efe3490605a7ef900f6466",
+      "notes": "[policy] tests failed",
+      "claimed_at": {},
+      "report": {
+        "schema": "opex.agent_report.v1",
+        "agentId": "codex-remove-plus-btn",
+        "taskSummary": "Removed the AI chat '+' attachment button, deleted the attachment overlay path and state, and updated keyboard/reset handling and tests accordingly.",
+        "tests": [
+          {
+            "cmd": "cargo test --lib ai::window::tests::test_new_conversation_reset_contract_clears_all_per_conversation_transient_fields -- --exact",
+            "result": "fail"
+          },
+          {
+            "cmd": "cargo test --lib ai::window::tests::test_new_conversation_reset_contract_clears_all_per_conversation_transient_fields -- --exact",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo test --lib ai::window::tests --no-run",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo fmt --check -- src/ai/window.rs src/ai/window/chat.rs src/ai/window/command_bar.rs src/ai/window/dropdowns.rs src/ai/window/init.rs src/ai/window/render_keydown.rs src/ai/window/render_main_panel.rs src/ai/window/render_root.rs src/ai/window/state.rs src/ai/window/tests.rs",
+            "result": "fail"
+          },
+          {
+            "cmd": "rustfmt --edition 2021 src/ai/window.rs src/ai/window/chat.rs src/ai/window/command_bar.rs src/ai/window/dropdowns.rs src/ai/window/init.rs src/ai/window/render_keydown.rs src/ai/window/render_main_panel.rs src/ai/window/render_root.rs src/ai/window/state.rs src/ai/window/tests.rs",
+            "result": "pass"
+          },
+          {
+            "cmd": "rustfmt --edition 2021 --check src/ai/window.rs src/ai/window/chat.rs src/ai/window/command_bar.rs src/ai/window/dropdowns.rs src/ai/window/init.rs src/ai/window/render_keydown.rs src/ai/window/render_main_panel.rs src/ai/window/render_root.rs src/ai/window/state.rs src/ai/window/tests.rs",
+            "result": "fail"
+          },
+          {
+            "cmd": "rustfmt --edition 2021 --config skip_children=true --check src/ai/window.rs src/ai/window/chat.rs src/ai/window/command_bar.rs src/ai/window/dropdowns.rs src/ai/window/init.rs src/ai/window/render_keydown.rs src/ai/window/render_main_panel.rs src/ai/window/render_root.rs src/ai/window/state.rs src/ai/window/tests.rs",
+            "result": "pass"
+          },
+          {
+            "cmd": "git diff --check -- src/ai/window.rs src/ai/window/chat.rs src/ai/window/command_bar.rs src/ai/window/dropdowns.rs src/ai/window/init.rs src/ai/window/render_keydown.rs src/ai/window/render_main_panel.rs src/ai/window/render_root.rs src/ai/window/state.rs src/ai/window/tests.rs src/ai/window/render_overlays_attachments.rs",
+            "result": "pass"
+          }
+        ],
+        "changedFiles": [
+          "src/ai/window.rs",
+          "src/ai/window/chat.rs",
+          "src/ai/window/command_bar.rs",
+          "src/ai/window/dropdowns.rs",
+          "src/ai/window/init.rs",
+          "src/ai/window/render_keydown.rs",
+          "src/ai/window/render_main_panel.rs",
+          "src/ai/window/render_overlays_attachments.rs",
+          "src/ai/window/render_root.rs",
+          "src/ai/window/state.rs",
+          "src/ai/window/tests.rs"
+        ],
+        "commitCount": 1,
+        "commitShas": [
+          "fb67795968908365d10a5c567fa31f41db431962"
+        ],
+        "commitFiles": [
+          "src/ai/window.rs",
+          "src/ai/window/chat.rs",
+          "src/ai/window/command_bar.rs",
+          "src/ai/window/dropdowns.rs",
+          "src/ai/window/init.rs",
+          "src/ai/window/render_keydown.rs",
+          "src/ai/window/render_main_panel.rs",
+          "src/ai/window/render_overlays_attachments.rs",
+          "src/ai/window/render_root.rs",
+          "src/ai/window/state.rs",
+          "src/ai/window/tests.rs"
+        ]
       }
     }
   }

@@ -312,10 +312,7 @@ pub(crate) fn merge_context_parts_with_receipt(
 /// This is a backward-compatible wrapper around [`merge_context_parts_with_receipt`].
 /// It treats `left` as mentions and `right` as pending parts, returning only the
 /// merged list without provenance metadata.
-pub fn merge_context_parts(
-    left: &[AiContextPart],
-    right: &[AiContextPart],
-) -> Vec<AiContextPart> {
+pub fn merge_context_parts(left: &[AiContextPart], right: &[AiContextPart]) -> Vec<AiContextPart> {
     merge_context_parts_with_receipt(left, right).merged_parts
 }
 
@@ -704,8 +701,7 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let _ =
-                std::fs::set_permissions(&file_path, std::fs::Permissions::from_mode(0o644));
+            let _ = std::fs::set_permissions(&file_path, std::fs::Permissions::from_mode(0o644));
         }
     }
 
@@ -749,8 +745,7 @@ mod tests {
 
     #[test]
     fn test_resolve_empty_parts_returns_empty_string() {
-        let prefix =
-            resolve_context_parts_to_prompt_prefix(&[], &[], &[]).expect("resolve empty");
+        let prefix = resolve_context_parts_to_prompt_prefix(&[], &[], &[]).expect("resolve empty");
         assert!(prefix.is_empty());
     }
 
@@ -761,7 +756,10 @@ mod tests {
         let receipt = prepare_user_message_with_receipt("hello", &[], &[], &[]);
 
         assert_eq!(receipt.decision, PreparedMessageDecision::Ready);
-        assert_eq!(receipt.schema_version, AI_MESSAGE_PREPARATION_SCHEMA_VERSION);
+        assert_eq!(
+            receipt.schema_version,
+            AI_MESSAGE_PREPARATION_SCHEMA_VERSION
+        );
         assert_eq!(receipt.raw_content, "hello");
         assert_eq!(receipt.final_user_content, "hello");
         assert!(receipt.outcomes.is_empty());
@@ -835,8 +833,7 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let _ =
-                std::fs::set_permissions(&file_path, std::fs::Permissions::from_mode(0o644));
+            let _ = std::fs::set_permissions(&file_path, std::fs::Permissions::from_mode(0o644));
         }
     }
 
@@ -896,13 +893,15 @@ mod tests {
     #[test]
     fn merge_context_parts_deduplicates_and_preserves_order() {
         let selection = AiContextPart::ResourceUri {
-            uri: "kit://context?selectedText=1&frontmostApp=0&menuBar=0&browserUrl=0&focusedWindow=0"
-                .to_string(),
+            uri:
+                "kit://context?selectedText=1&frontmostApp=0&menuBar=0&browserUrl=0&focusedWindow=0"
+                    .to_string(),
             label: "Selection".to_string(),
         };
         let browser = AiContextPart::ResourceUri {
-            uri: "kit://context?selectedText=0&frontmostApp=0&menuBar=0&browserUrl=1&focusedWindow=0"
-                .to_string(),
+            uri:
+                "kit://context?selectedText=0&frontmostApp=0&menuBar=0&browserUrl=1&focusedWindow=0"
+                    .to_string(),
             label: "Browser URL".to_string(),
         };
 
@@ -978,13 +977,15 @@ mod tests {
     #[test]
     fn merge_context_parts_with_receipt_reports_duplicate_provenance() {
         let selection = AiContextPart::ResourceUri {
-            uri: "kit://context?selectedText=1&frontmostApp=0&menuBar=0&browserUrl=0&focusedWindow=0"
-                .to_string(),
+            uri:
+                "kit://context?selectedText=1&frontmostApp=0&menuBar=0&browserUrl=0&focusedWindow=0"
+                    .to_string(),
             label: "Selection".to_string(),
         };
         let browser = AiContextPart::ResourceUri {
-            uri: "kit://context?selectedText=0&frontmostApp=0&menuBar=0&browserUrl=1&focusedWindow=0"
-                .to_string(),
+            uri:
+                "kit://context?selectedText=0&frontmostApp=0&menuBar=0&browserUrl=1&focusedWindow=0"
+                    .to_string(),
             label: "Browser URL".to_string(),
         };
 
@@ -1024,9 +1025,7 @@ mod tests {
         );
 
         assert!(prepared.can_send_message());
-        let assembly = prepared
-            .assembly
-            .expect("assembly receipt must be present");
+        let assembly = prepared.assembly.expect("assembly receipt must be present");
         assert_eq!(assembly.mention_count, 1);
         assert_eq!(assembly.pending_count, 1);
         assert_eq!(assembly.merged_count, 1);
