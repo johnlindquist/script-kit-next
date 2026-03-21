@@ -154,10 +154,15 @@ fn batch_result_entry_failure_includes_error() {
         command: "selectByValue".to_string(),
         elapsed: Some(5),
         value: None,
-        error: Some("No visible choice matched value 'grape'".to_string()),
+        error: Some(crate::protocol::TransactionError::selection_not_found(
+            "No visible choice matched value 'grape'",
+        )),
     };
     let json = serde_json::to_value(&entry).expect("serialize failed entry");
-    assert_eq!(json["error"], "No visible choice matched value 'grape'");
+    assert_eq!(
+        json["error"]["message"],
+        "No visible choice matched value 'grape'"
+    );
     assert_eq!(json["success"], false);
 }
 
@@ -183,6 +188,7 @@ fn batch_request_parses_full_transaction() {
             request_id,
             commands,
             options,
+            ..
         } => {
             assert_eq!(request_id, "txn-1");
             assert_eq!(commands.len(), 3);
@@ -293,7 +299,9 @@ fn batch_result_stop_on_error_serializes_failed_at() {
                 command: "selectByValue".to_string(),
                 elapsed: Some(3),
                 value: None,
-                error: Some("No visible choice matched value 'grape'".to_string()),
+                error: Some(crate::protocol::TransactionError::selection_not_found(
+                    "No visible choice matched value 'grape'",
+                )),
             },
         ],
         Some(1),
@@ -303,7 +311,8 @@ fn batch_result_stop_on_error_serializes_failed_at() {
 
     assert_eq!(json["success"], false);
     assert_eq!(json["failedAt"], 1);
-    assert_eq!(json["results"][1]["error"], "No visible choice matched value 'grape'");
+    assert_eq!(json["results"][1]["error"]["code"], "selection_not_found");
+    assert_eq!(json["results"][1]["error"]["message"], "No visible choice matched value 'grape'");
 }
 
 #[test]
@@ -334,12 +343,14 @@ fn batch_result_round_trips() {
             results,
             failed_at,
             total_elapsed,
+            trace,
         } => {
             assert_eq!(request_id, "txn-rt");
             assert!(success);
             assert_eq!(results.len(), 1);
             assert_eq!(failed_at, None);
             assert_eq!(total_elapsed, 1);
+            assert!(trace.is_none());
         }
         other => panic!("Expected BatchResult, got: {:?}", other),
     }

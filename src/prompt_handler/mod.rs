@@ -1519,7 +1519,7 @@ impl ScriptListApp {
                         request_id.clone(),
                         true,
                         0,
-                        None,
+                        None::<crate::protocol::TransactionError>,
                     );
                     if let Some(ref sender) = self.response_sender {
                         let _ = sender.try_send(response);
@@ -1546,7 +1546,11 @@ impl ScriptListApp {
                                         rid.clone(),
                                         false,
                                         start.elapsed().as_millis() as u64,
-                                        Some(format!("Timeout after {}ms", timeout_ms)),
+                                        Some(crate::protocol::TransactionError {
+                                            code: crate::protocol::TransactionErrorCode::WaitConditionTimeout,
+                                            message: format!("Timeout after {}ms", timeout_ms),
+                                            suggestion: None,
+                                        }),
                                     ));
                                 }
                                 break;
@@ -1566,7 +1570,7 @@ impl ScriptListApp {
                                             rid.clone(),
                                             true,
                                             start.elapsed().as_millis() as u64,
-                                            None,
+                                            None::<crate::protocol::TransactionError>,
                                         ));
                                     }
                                     break;
@@ -1583,7 +1587,11 @@ impl ScriptListApp {
                                             rid.clone(),
                                             false,
                                             start.elapsed().as_millis() as u64,
-                                            Some("Entity dropped during WaitFor".to_string()),
+                                            Some(crate::protocol::TransactionError {
+                                                code: crate::protocol::TransactionErrorCode::ActionFailed,
+                                                message: "Entity dropped during WaitFor".to_string(),
+                                                suggestion: None,
+                                            }),
                                         ));
                                     }
                                     break;
@@ -1630,7 +1638,7 @@ impl ScriptListApp {
                                 command: batch_command_name(cmd),
                                 elapsed: Some(0),
                                 value: None,
-                                error: Some("Batch timeout exceeded".to_string()),
+                                error: Some(protocol::TransactionError::wait_timeout("Batch timeout exceeded")),
                             };
                             results.push(entry);
                             failed = true;
@@ -1661,7 +1669,7 @@ impl ScriptListApp {
                                             command: "setInput".to_string(),
                                             elapsed: Some(cmd_start.elapsed().as_millis() as u64),
                                             value: None,
-                                            error: Some(format!("{e}")),
+                                            error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
                                         });
                                         failed = true;
                                         if opts.stop_on_error { break; }
@@ -1693,7 +1701,7 @@ impl ScriptListApp {
                                             command: "selectByValue".to_string(),
                                             elapsed: Some(cmd_start.elapsed().as_millis() as u64),
                                             value: None,
-                                            error: Some(format!("{e}")),
+                                            error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
                                         });
                                         failed = true;
                                         if opts.stop_on_error { break; }
@@ -1705,7 +1713,7 @@ impl ScriptListApp {
                                             command: "selectByValue".to_string(),
                                             elapsed: Some(cmd_start.elapsed().as_millis() as u64),
                                             value: None,
-                                            error: Some(format!("{e}")),
+                                            error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
                                         });
                                         failed = true;
                                         if opts.stop_on_error { break; }
@@ -1743,7 +1751,7 @@ impl ScriptListApp {
                                             command: "filterAndSelect".to_string(),
                                             elapsed: Some(cmd_start.elapsed().as_millis() as u64),
                                             value: None,
-                                            error: Some(format!("{e}")),
+                                            error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
                                         });
                                         failed = true;
                                         if opts.stop_on_error { break; }
@@ -1774,7 +1782,7 @@ impl ScriptListApp {
                                             command: "typeAndSubmit".to_string(),
                                             elapsed: Some(cmd_start.elapsed().as_millis() as u64),
                                             value: None,
-                                            error: Some(format!("{e}")),
+                                            error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
                                         });
                                         failed = true;
                                         if opts.stop_on_error { break; }
@@ -1803,7 +1811,7 @@ impl ScriptListApp {
                                     }
                                     Ok(false) => {
                                         // Poll loop
-                                        let mut wait_result: Result<Option<String>, String> = Err(format!("WaitFor timeout after {}ms", wait_timeout.as_millis()));
+                                        let mut wait_result: Result<Option<String>, protocol::TransactionError> = Err(protocol::TransactionError::wait_timeout(format!("WaitFor timeout after {}ms", wait_timeout.as_millis())));
                                         loop {
                                             cx.background_executor().timer(wait_poll).await;
                                             if wait_start.elapsed() >= wait_timeout {
@@ -1814,7 +1822,7 @@ impl ScriptListApp {
                                             }) {
                                                 Ok(true) => { wait_result = Ok(None); break; }
                                                 Ok(false) => continue,
-                                                _ => { wait_result = Err("Entity dropped during WaitFor".to_string()); break; }
+                                                _ => { wait_result = Err(protocol::TransactionError::action_failed("Entity dropped during WaitFor")); break; }
                                             }
                                         }
                                         match wait_result {
@@ -1834,7 +1842,7 @@ impl ScriptListApp {
                                                     request_id = %rid,
                                                     index = index,
                                                     command = %batch_command_name(cmd),
-                                                    error = %e,
+                                                    error = %e.message,
                                                     "batch.step.error"
                                                 );
                                                 results.push(protocol::BatchResultEntry {
@@ -1857,7 +1865,7 @@ impl ScriptListApp {
                                             command: "waitFor".to_string(),
                                             elapsed: Some(wait_start.elapsed().as_millis() as u64),
                                             value: None,
-                                            error: Some("Entity dropped".to_string()),
+                                            error: Some(protocol::TransactionError::action_failed("Entity dropped")),
                                         });
                                         failed = true;
                                         if opts.stop_on_error { break; }

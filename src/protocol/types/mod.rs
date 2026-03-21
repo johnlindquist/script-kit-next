@@ -10,7 +10,7 @@
 //! - Error data types
 
 mod ai;
-mod batch_wait;
+pub(crate) mod batch_wait;
 mod chat;
 mod elements_actions_scriptlets;
 mod grid_layout;
@@ -21,8 +21,10 @@ mod system;
 
 pub use ai::{AiChatInfo, AiContextPartInput, AiMessageInfo};
 pub use batch_wait::{
-    BatchCommand, BatchOptions, BatchResultEntry, StateMatchSpec, WaitCondition,
-    WaitDetailedCondition, WaitNamedCondition,
+    BatchCommand, BatchOptions, BatchResultEntry, StateMatchSpec, TransactionCommandTrace,
+    TransactionError, TransactionErrorCode, TransactionTrace, TransactionTraceMode,
+    TransactionTraceStatus, UiStateSnapshot, WaitCondition, WaitDetailedCondition,
+    WaitNamedCondition, WaitPollObservation,
 };
 pub use chat::{ChatMessagePosition, ChatMessageRole, ChatPromptConfig, ChatPromptMessage};
 pub use elements_actions_scriptlets::{

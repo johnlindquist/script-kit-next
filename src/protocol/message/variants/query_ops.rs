@@ -397,6 +397,9 @@ macro_rules! protocol_message_variants_query_ops {
         /// Poll interval in milliseconds (default: 25)
         #[serde(rename = "pollInterval", skip_serializing_if = "Option::is_none")]
         poll_interval: Option<u64>,
+        /// Trace mode: off (default), on, or onFailure
+        #[serde(default, skip_serializing_if = "super::types::batch_wait::is_trace_off")]
+        trace: TransactionTraceMode,
     },
 
     /// Result of a waitFor request.
@@ -408,9 +411,12 @@ macro_rules! protocol_message_variants_query_ops {
         success: bool,
         /// Wall-clock time elapsed in milliseconds
         elapsed: u64,
-        /// Error message if the wait failed (e.g., timeout)
+        /// Structured error if the wait failed (e.g., timeout)
         #[serde(skip_serializing_if = "Option::is_none")]
-        error: Option<String>,
+        error: Option<TransactionError>,
+        /// Embedded trace receipt (present when trace mode is on or onFailure+failed)
+        #[serde(skip_serializing_if = "Option::is_none")]
+        trace: Option<TransactionTrace>,
     },
 
     /// Execute a sequence of atomic UI commands as a transaction.
@@ -426,6 +432,9 @@ macro_rules! protocol_message_variants_query_ops {
         /// Execution options (stop-on-error, timeout)
         #[serde(skip_serializing_if = "Option::is_none")]
         options: Option<BatchOptions>,
+        /// Trace mode: off (default), on, or onFailure
+        #[serde(default, skip_serializing_if = "super::types::batch_wait::is_trace_off")]
+        trace: TransactionTraceMode,
     },
 
     /// Result of a batch execution.
@@ -443,6 +452,9 @@ macro_rules! protocol_message_variants_query_ops {
         /// Total wall-clock time for the entire batch, in milliseconds
         #[serde(rename = "totalElapsed")]
         total_elapsed: u64,
+        /// Embedded trace receipt (present when trace mode is on or onFailure+failed)
+        #[serde(skip_serializing_if = "Option::is_none")]
+        trace: Option<TransactionTrace>,
     },
 
         }
