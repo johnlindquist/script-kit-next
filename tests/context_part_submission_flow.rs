@@ -1,11 +1,14 @@
 //! Integration tests for the submit_message context-part resolution flow.
 //!
-//! Validates that `resolve_context_parts_with_receipt` produces correct receipts
-//! for mixed success, all success, and all failure scenarios — the same logic
-//! that `submit_message` relies on for deterministic failure handling.
+//! Validates that both `resolve_context_parts_with_receipt` and the canonical
+//! `prepare_user_message_with_receipt` produce correct receipts for mixed success,
+//! all success, and all failure scenarios — the same logic that `submit_message`
+//! relies on for deterministic failure handling.
 
 use script_kit_gpui::ai::message_parts::{
-    resolve_context_parts_with_receipt, AiContextPart, ContextResolutionReceipt,
+    prepare_user_message_with_receipt, resolve_context_parts_with_receipt, AiContextPart,
+    ContextPartPreparationOutcomeKind, ContextResolutionReceipt, PreparedMessageDecision,
+    AI_MESSAGE_PREPARATION_SCHEMA_VERSION,
 };
 
 /// When one file resolves and another is missing, the receipt must report
@@ -192,4 +195,343 @@ fn receipt_serde_omits_empty_failures() {
         "empty failures should be omitted from JSON"
     );
     assert!(!receipt.has_failures());
+}
+
+// ==========================================================================
+// End-to-end submit path tests via prepare_user_message_with_receipt
+// ==========================================================================
+
+/// Successful ResourceUri attachment produces `<context source="...">` block
+/// in the prepared `final_user_content`.
+#[test]
+fn e2e_submit_resource_uri_produces_context_source_block() {
+    let parts = vec![AiContextPart::ResourceUri {
+        uri: "kit://context?profile=minimal".to_string(),
+        label: "Current Context".to_string(),
+    }];
+
+    let receipt = prepare_user_message_with_receipt("explain this", &parts, &[], &[]);
+
+    assert_eq!(receipt.decision, PreparedMessageDecision::Ready);
+    assert_eq!(receipt.schema_version, AI_MESSAGE_PREPARATION_SCHEMA_VERSION);
+    assert_eq!(receipt.context.attempted, 1);
+    assert_eq!(receipt.context.resolved, 1);
+    assert!(!receipt.context.has_failures());
+
+    // The final_user_content must contain the resolved <context source="..."> block
+    assert!(
+        receipt
+            .final_user_content
+            .contains("source=\"kit://context?profile=minimal\""),
+        "final_user_content should contain <context source=\"...\"> block, got: {}",
+        &receipt.final_user_content[..receipt.final_user_content.len().min(200)]
+    );
+    assert!(
+        receipt
+            .final_user_content
+            .contains("mimeType=\"application/json\""),
+        "final_user_content should contain MIME type"
+    );
+    assert!(
+        receipt.final_user_content.ends_with("explain this"),
+        "user message should follow context block"
+    );
+
+    // Outcome should be FullContent for the resource
+    assert_eq!(receipt.outcomes.len(), 1);
+    assert_eq!(
+        receipt.outcomes[0].kind,
+        ContextPartPreparationOutcomeKind::FullContent
+    );
+    assert_eq!(receipt.outcomes[0].label, "Current Context");
+    assert_eq!(receipt.outcomes[0].source, "kit://context?profile=minimal");
+
+    assert!(receipt.unresolved_parts.is_empty());
+    assert!(receipt.user_error.is_none());
+    assert!(receipt.can_send_message());
+}
+
+/// Mixed success/failure through prepare_user_message_with_receipt:
+/// successful context blocks remain in prepared content, unresolved parts
+/// are inspectable, and decision is Partial.
+#[test]
+fn e2e_submit_partial_failure_preserves_successful_blocks_and_tracks_unresolved() {
+    let dir = tempfile::tempdir().expect("create temp dir");
+    let good_file = dir.path().join("code.rs");
+    std::fs::write(&good_file, "fn important() {}").expect("write");
+
+    let parts = vec![
+        AiContextPart::FilePath {
+            path: good_file.to_string_lossy().to_string(),
+            label: "code.rs".to_string(),
+        },
+        AiContextPart::FilePath {
+            path: "/nonexistent/vanished.txt".to_string(),
+            label: "vanished.txt".to_string(),
+        },
+    ];
+
+    let receipt = prepare_user_message_with_receipt("review this", &parts, &[], &[]);
+
+    // Decision: Partial (some resolved, some failed)
+    assert_eq!(receipt.decision, PreparedMessageDecision::Partial);
+    assert!(receipt.can_send_message(), "Partial should still be sendable");
+
+    // Context receipt tracks both attempted and resolved
+    assert_eq!(receipt.context.attempted, 2);
+    assert_eq!(receipt.context.resolved, 1);
+    assert_eq!(receipt.context.failures.len(), 1);
+    assert_eq!(receipt.context.failures[0].label, "vanished.txt");
+
+    // Successful block survives in final_user_content
+    assert!(
+        receipt.final_user_content.contains("<attachment path="),
+        "successful attachment block must be in final_user_content"
+    );
+    assert!(
+        receipt.final_user_content.contains("fn important() {}"),
+        "successful file content must be in final_user_content"
+    );
+    assert!(
+        !receipt.final_user_content.contains("vanished.txt"),
+        "failed part must not appear in final_user_content"
+    );
+    assert!(
+        receipt.final_user_content.ends_with("review this"),
+        "user message must follow prefix"
+    );
+
+    // Unresolved parts are inspectable
+    assert_eq!(receipt.unresolved_parts.len(), 1);
+    assert_eq!(receipt.unresolved_parts[0].source(), "/nonexistent/vanished.txt");
+    assert_eq!(receipt.unresolved_parts[0].label(), "vanished.txt");
+
+    // Per-part outcomes explain what happened
+    assert_eq!(receipt.outcomes.len(), 2);
+    assert_eq!(
+        receipt.outcomes[0].kind,
+        ContextPartPreparationOutcomeKind::FullContent
+    );
+    assert_eq!(receipt.outcomes[0].label, "code.rs");
+    assert_eq!(
+        receipt.outcomes[1].kind,
+        ContextPartPreparationOutcomeKind::Failed
+    );
+    assert_eq!(receipt.outcomes[1].label, "vanished.txt");
+
+    // User error is present for UI display
+    assert!(receipt.user_error.is_some());
+    assert!(
+        receipt
+            .user_error
+            .as_ref()
+            .unwrap()
+            .contains("vanished.txt"),
+        "user_error should mention the failing part"
+    );
+}
+
+/// When all attached context parts fail, the decision is Blocked,
+/// no false-success receipt is emitted, and can_send_message returns false.
+#[test]
+fn e2e_submit_all_failures_blocked_state_surfaced_explicitly() {
+    let parts = vec![
+        AiContextPart::FilePath {
+            path: "/nonexistent/first.txt".to_string(),
+            label: "first.txt".to_string(),
+        },
+        AiContextPart::FilePath {
+            path: "/nonexistent/second.txt".to_string(),
+            label: "second.txt".to_string(),
+        },
+    ];
+
+    let receipt = prepare_user_message_with_receipt("help me", &parts, &[], &[]);
+
+    // Decision must be Blocked (not Ready or Partial)
+    assert_eq!(receipt.decision, PreparedMessageDecision::Blocked);
+    assert!(
+        !receipt.can_send_message(),
+        "Blocked state must prevent sending"
+    );
+
+    // Context receipt: zero resolved
+    assert_eq!(receipt.context.attempted, 2);
+    assert_eq!(receipt.context.resolved, 0);
+    assert_eq!(receipt.context.failures.len(), 2);
+    assert!(
+        receipt.context.prompt_prefix.is_empty(),
+        "prompt_prefix must be empty when nothing resolved"
+    );
+
+    // All parts remain unresolved
+    assert_eq!(receipt.unresolved_parts.len(), 2);
+    assert_eq!(receipt.unresolved_parts[0].label(), "first.txt");
+    assert_eq!(receipt.unresolved_parts[1].label(), "second.txt");
+
+    // Per-part outcomes are all Failed
+    assert_eq!(receipt.outcomes.len(), 2);
+    assert!(
+        receipt
+            .outcomes
+            .iter()
+            .all(|o| o.kind == ContextPartPreparationOutcomeKind::Failed),
+        "all outcomes must be Failed"
+    );
+
+    // User error mentions both failing parts
+    assert!(receipt.user_error.is_some());
+    let err = receipt.user_error.as_ref().unwrap();
+    assert!(err.contains("first.txt"), "error should mention first.txt");
+    assert!(err.contains("second.txt"), "error should mention second.txt");
+    assert!(
+        err.starts_with("Failed to resolve context:"),
+        "error should use deterministic prefix"
+    );
+
+    // final_user_content falls back to raw content only (no context prefix)
+    assert_eq!(
+        receipt.final_user_content, "help me",
+        "when all parts fail, content is raw message only"
+    );
+}
+
+/// Receipt data is sufficient for machine verification: serializable,
+/// contains all fields needed to reconstruct what was sent, failed, and pending.
+#[test]
+fn e2e_submit_receipt_is_machine_verifiable() {
+    let dir = tempfile::tempdir().expect("create temp dir");
+    let file = dir.path().join("data.rs");
+    std::fs::write(&file, "struct Data;").expect("write");
+
+    let parts = vec![
+        AiContextPart::ResourceUri {
+            uri: "kit://context?profile=minimal".to_string(),
+            label: "Context".to_string(),
+        },
+        AiContextPart::FilePath {
+            path: file.to_string_lossy().to_string(),
+            label: "data.rs".to_string(),
+        },
+        AiContextPart::FilePath {
+            path: "/nonexistent/gone.txt".to_string(),
+            label: "gone.txt".to_string(),
+        },
+    ];
+
+    let receipt = prepare_user_message_with_receipt("query", &parts, &[], &[]);
+
+    // Serde roundtrip: receipt can be serialized for structured logging
+    let json = serde_json::to_string(&receipt).expect("serialize");
+    let rt: script_kit_gpui::ai::message_parts::PreparedMessageReceipt =
+        serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(receipt, rt, "receipt must survive serde roundtrip");
+
+    // Machine-readable fields present
+    assert!(json.contains("\"schemaVersion\""));
+    assert!(json.contains("\"decision\""));
+    assert!(json.contains("\"rawContent\""));
+    assert!(json.contains("\"finalUserContent\""));
+    assert!(json.contains("\"unresolvedParts\""));
+    assert!(json.contains("\"outcomes\""));
+
+    // Receipt explains what was sent
+    assert_eq!(rt.context.attempted, 3);
+    assert_eq!(rt.context.resolved, 2);
+    assert_eq!(rt.context.failures.len(), 1);
+
+    // Receipt explains what failed
+    assert_eq!(rt.context.failures[0].label, "gone.txt");
+
+    // Receipt explains what remains pending
+    assert_eq!(rt.unresolved_parts.len(), 1);
+    assert_eq!(rt.unresolved_parts[0].label(), "gone.txt");
+
+    // Outcome kinds are machine-parseable
+    let outcome_kinds: Vec<_> = rt.outcomes.iter().map(|o| &o.kind).collect();
+    assert_eq!(
+        outcome_kinds,
+        vec![
+            &ContextPartPreparationOutcomeKind::FullContent,
+            &ContextPartPreparationOutcomeKind::FullContent,
+            &ContextPartPreparationOutcomeKind::Failed,
+        ]
+    );
+}
+
+/// No parts + no message: receipt is Ready with empty content.
+#[test]
+fn e2e_submit_no_parts_no_message_is_ready_empty() {
+    let receipt = prepare_user_message_with_receipt("", &[], &[], &[]);
+
+    assert_eq!(receipt.decision, PreparedMessageDecision::Ready);
+    assert!(receipt.can_send_message());
+    assert_eq!(receipt.context.attempted, 0);
+    assert_eq!(receipt.context.resolved, 0);
+    assert!(receipt.outcomes.is_empty());
+    assert!(receipt.unresolved_parts.is_empty());
+    assert!(receipt.user_error.is_none());
+    assert!(receipt.final_user_content.is_empty());
+}
+
+/// Full success with multiple context sources: final_user_content preserves
+/// block order and all blocks are present.
+#[test]
+fn e2e_submit_full_success_preserves_all_blocks_in_order() {
+    let dir = tempfile::tempdir().expect("create temp dir");
+    let file_a = dir.path().join("first.rs");
+    let file_b = dir.path().join("second.rs");
+    std::fs::write(&file_a, "// first").expect("write a");
+    std::fs::write(&file_b, "// second").expect("write b");
+
+    let parts = vec![
+        AiContextPart::ResourceUri {
+            uri: "kit://context?profile=minimal".to_string(),
+            label: "Context".to_string(),
+        },
+        AiContextPart::FilePath {
+            path: file_a.to_string_lossy().to_string(),
+            label: "first.rs".to_string(),
+        },
+        AiContextPart::FilePath {
+            path: file_b.to_string_lossy().to_string(),
+            label: "second.rs".to_string(),
+        },
+    ];
+
+    let receipt = prepare_user_message_with_receipt("explain", &parts, &[], &[]);
+
+    assert_eq!(receipt.decision, PreparedMessageDecision::Ready);
+    assert_eq!(receipt.context.attempted, 3);
+    assert_eq!(receipt.context.resolved, 3);
+    assert!(receipt.unresolved_parts.is_empty());
+
+    // All blocks present in final content
+    assert!(receipt.final_user_content.contains("<context source="));
+    assert!(receipt.final_user_content.contains("// first"));
+    assert!(receipt.final_user_content.contains("// second"));
+    assert!(receipt.final_user_content.ends_with("explain"));
+
+    // Order preserved: context block before file blocks
+    let context_pos = receipt
+        .final_user_content
+        .find("<context source=")
+        .expect("context block present");
+    let first_pos = receipt
+        .final_user_content
+        .find("// first")
+        .expect("first file present");
+    let second_pos = receipt
+        .final_user_content
+        .find("// second")
+        .expect("second file present");
+
+    assert!(
+        context_pos < first_pos,
+        "context block should come before first file"
+    );
+    assert!(
+        first_pos < second_pos,
+        "first file should come before second file"
+    );
 }

@@ -186,6 +186,26 @@ pub(super) fn should_retry_existing_user_turn(messages: &[Message]) -> bool {
         .unwrap_or(false)
 }
 
+/// Derive display text for chat title/preview from authored content.
+///
+/// When the user's authored content (after stripping directives) is empty,
+/// falls back to descriptive placeholders based on what attachments exist.
+/// This prevents raw directive lines (`@selection`, `@context`) from leaking
+/// into titles or sidebar previews.
+pub(super) fn ai_window_outbound_display_source(
+    authored_content: &str,
+    has_pending_image: bool,
+    has_context_parts: bool,
+) -> String {
+    if authored_content.trim().is_empty() && has_pending_image {
+        "Image attachment".to_string()
+    } else if authored_content.trim().is_empty() && has_context_parts {
+        "Context attachment".to_string()
+    } else {
+        authored_content.to_string()
+    }
+}
+
 pub(super) fn ai_window_can_submit_message(
     content: &str,
     has_pending_image: bool,
@@ -777,3 +797,45 @@ pub(super) const AI_SHORTCUT_SECTIONS: &[AiShortcutSection] = &[
 // The entity was being kept alive by this global reference and by theme watcher tasks,
 // causing the AiApp to never be dropped even after the window closed.
 // Instead, we use AI_FOCUS_REQUESTED (AtomicBool) which AiApp checks in render().
+
+#[cfg(test)]
+mod outbound_display_source_tests {
+    use super::*;
+
+    #[test]
+    fn outbound_display_source_uses_context_attachment_for_empty_authored_content() {
+        assert_eq!(
+            ai_window_outbound_display_source("", false, true),
+            "Context attachment"
+        );
+    }
+
+    #[test]
+    fn outbound_display_source_uses_authored_content_when_present() {
+        assert_eq!(
+            ai_window_outbound_display_source("Summarize this.", false, true),
+            "Summarize this."
+        );
+    }
+
+    #[test]
+    fn outbound_display_source_prefers_image_over_context_when_both_empty() {
+        assert_eq!(
+            ai_window_outbound_display_source("", true, true),
+            "Image attachment"
+        );
+    }
+
+    #[test]
+    fn outbound_display_source_returns_empty_string_for_no_attachments() {
+        assert_eq!(ai_window_outbound_display_source("", false, false), "");
+    }
+
+    #[test]
+    fn outbound_display_source_trims_whitespace_only_authored_content() {
+        assert_eq!(
+            ai_window_outbound_display_source("   ", false, true),
+            "Context attachment"
+        );
+    }
+}

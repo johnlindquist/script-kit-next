@@ -263,6 +263,7 @@ impl AiApp {
             // Attachments state
             showing_attachments_picker: false,
             pending_context_parts: Vec::new(),
+            context_preview_index: None,
             // Mouse cursor state
             mouse_cursor_hidden: false,
             input_mode: InputMode::Mouse,

@@ -2,7 +2,73 @@ use super::window_api::get_pending_chat;
 use super::*;
 use crate::ai::model::ImageAttachment;
 
+/// Intermediate result from the shared outbound message compiler.
+///
+/// Both `handle_start_chat` (SDK path) and `submit_message` (composer path)
+/// produce this struct, ensuring directive parsing, context merging, receipt
+/// generation, and display-text derivation happen in exactly one place.
+#[derive(Debug, Clone)]
+pub(super) struct OutboundUserMessagePreparation {
+    pub(super) receipt: crate::ai::message_parts::PreparedMessageReceipt,
+    pub(super) authored_content: String,
+    pub(super) has_context_parts: bool,
+}
+
 impl AiApp {
+    /// Shared outbound message compiler used by both send paths.
+    ///
+    /// 1. Parses `@context` / `@file` directives from `raw_content`.
+    /// 2. Merges directive-derived parts with `explicit_parts`.
+    /// 3. Runs the receipt pipeline (`prepare_user_message_with_receipt`).
+    /// 4. Emits the `ai_context_mentions_compiled` structured log checkpoint.
+    /// 5. Stores the receipt in `self.last_prepared_message_receipt`.
+    pub(super) fn prepare_outbound_user_message(
+        &mut self,
+        raw_content: &str,
+        explicit_parts: &[crate::ai::message_parts::AiContextPart],
+    ) -> OutboundUserMessagePreparation {
+        let parsed_mentions = crate::ai::context_mentions::parse_context_mentions(raw_content);
+        let effective_parts =
+            crate::ai::message_parts::merge_context_parts(explicit_parts, &parsed_mentions.parts);
+        let has_context_parts = !effective_parts.is_empty();
+
+        tracing::info!(
+            target: "ai",
+            raw_len = raw_content.len(),
+            authored_len = parsed_mentions.cleaned_content.len(),
+            explicit_parts = explicit_parts.len(),
+            directive_parts = parsed_mentions.parts.len(),
+            merged_parts = effective_parts.len(),
+            "ai_context_mentions_compiled"
+        );
+
+        let receipt = if has_context_parts {
+            let scripts = crate::scripts::read_scripts();
+            let scriptlets = crate::scripts::load_scriptlets();
+
+            crate::ai::message_parts::prepare_user_message_with_receipt(
+                &parsed_mentions.cleaned_content,
+                &effective_parts,
+                &scripts,
+                &scriptlets,
+            )
+        } else {
+            crate::ai::message_parts::prepare_user_message_with_receipt(
+                &parsed_mentions.cleaned_content,
+                &[],
+                &[],
+                &[],
+            )
+        };
+
+        self.last_prepared_message_receipt = Some(receipt.clone());
+
+        OutboundUserMessagePreparation {
+            receipt,
+            authored_content: parsed_mentions.cleaned_content,
+            has_context_parts,
+        }
+    }
     fn model_matches_chat_identity(model: &ModelInfo, chat: &Chat) -> bool {
         model.id == chat.model_id && model.provider == chat.provider
     }
@@ -408,63 +474,54 @@ impl AiApp {
         );
         let resolved_model_id = resolved.model_id.clone();
         let resolved_provider = resolved.provider.clone();
-        let has_parts = !parts.is_empty();
 
-        let final_user_content = if has_parts {
-            let scripts = crate::scripts::read_scripts();
-            let scriptlets = crate::scripts::load_scriptlets();
+        // --- Shared outbound compiler: parse directives, merge, resolve ---
+        let OutboundUserMessagePreparation {
+            receipt,
+            authored_content,
+            has_context_parts: has_parts,
+        } = self.prepare_outbound_user_message(&message, &parts);
 
-            let prepared = crate::ai::message_parts::prepare_user_message_with_receipt(
-                &message,
-                &parts,
-                &scripts,
-                &scriptlets,
-            );
-
-            self.last_prepared_message_receipt = Some(prepared.clone());
-            self.last_context_receipt = Some(prepared.context.clone());
-
-            match prepared.decision {
-                crate::ai::message_parts::PreparedMessageDecision::Ready => {
-                    self.streaming_error = None;
-                    prepared.final_user_content
-                }
-                crate::ai::message_parts::PreparedMessageDecision::Partial => {
-                    tracing::warn!(
-                        checkpoint = "resolution_partial",
-                        attempted = prepared.context.attempted,
-                        resolved = prepared.context.resolved,
-                        outcomes = ?prepared.outcomes,
-                        failures = ?prepared.context.failures,
-                        chat_id = %chat_id,
-                        "start_chat_context: partial resolution failure"
-                    );
-                    self.streaming_error = prepared.user_error;
-                    prepared.final_user_content
-                }
-                crate::ai::message_parts::PreparedMessageDecision::Blocked => {
-                    tracing::warn!(
-                        checkpoint = "resolution_blocked",
-                        attempted = prepared.context.attempted,
-                        resolved = prepared.context.resolved,
-                        outcomes = ?prepared.outcomes,
-                        failures = ?prepared.context.failures,
-                        chat_id = %chat_id,
-                        "start_chat_context: blocked due to unresolved context"
-                    );
-                    self.streaming_error = prepared.user_error;
-                    // Still create the chat with raw message so the SDK gets a valid chatId,
-                    // but surface the error so it's not silently swallowed.
-                    message.clone()
-                }
-            }
+        let decision = receipt.decision.clone();
+        self.last_context_receipt = if has_parts {
+            Some(receipt.context.clone())
         } else {
-            let prepared =
-                crate::ai::message_parts::prepare_user_message_with_receipt(&message, &[], &[], &[]);
-            self.last_prepared_message_receipt = Some(prepared.clone());
-            self.last_context_receipt = None;
-            self.streaming_error = None;
-            prepared.final_user_content
+            None
+        };
+
+        let final_user_content = match decision {
+            crate::ai::message_parts::PreparedMessageDecision::Ready => {
+                self.streaming_error = None;
+                receipt.final_user_content.clone()
+            }
+            crate::ai::message_parts::PreparedMessageDecision::Partial => {
+                tracing::warn!(
+                    checkpoint = "resolution_partial",
+                    attempted = receipt.context.attempted,
+                    resolved = receipt.context.resolved,
+                    outcomes = ?receipt.outcomes,
+                    failures = ?receipt.context.failures,
+                    chat_id = %chat_id,
+                    "start_chat_context: partial resolution failure"
+                );
+                self.streaming_error = receipt.user_error.clone();
+                receipt.final_user_content.clone()
+            }
+            crate::ai::message_parts::PreparedMessageDecision::Blocked => {
+                tracing::warn!(
+                    checkpoint = "resolution_blocked",
+                    attempted = receipt.context.attempted,
+                    resolved = receipt.context.resolved,
+                    outcomes = ?receipt.outcomes,
+                    failures = ?receipt.context.failures,
+                    chat_id = %chat_id,
+                    "start_chat_context: blocked due to unresolved context"
+                );
+                self.streaming_error = receipt.user_error.clone();
+                // Still create the chat with raw message so the SDK gets a valid chatId,
+                // but surface the error so it's not silently swallowed.
+                message.clone()
+            }
         };
 
         if let Some(on_created) = on_created {
@@ -476,15 +533,11 @@ impl AiApp {
         chat.id = chat_id;
         chat.source = ChatSource::Script;
 
-        // Set title from message content
+        // Derive title from cleaned authored content, not raw directive lines
         let has_image = image.is_some();
-        let title = if message.trim().is_empty() && has_image {
-            "Image attachment".to_string()
-        } else if message.trim().is_empty() && has_parts {
-            "Context attachment".to_string()
-        } else {
-            Chat::generate_title_from_content(&message)
-        };
+        let display_source =
+            ai_window_outbound_display_source(&authored_content, has_image, has_parts);
+        let title = Chat::generate_title_from_content(&display_source);
         chat.set_title(&title);
 
         // Apply system prompt if provided
@@ -532,14 +585,8 @@ impl AiApp {
             }
         }
 
-        // Update preview and count caches
-        let preview_source = if message.trim().is_empty() && has_image {
-            "Image attachment"
-        } else if message.trim().is_empty() && has_parts {
-            "Context attachment"
-        } else {
-            message.as_str()
-        };
+        // Update preview and count caches — derived from cleaned authored content
+        let preview_source = display_source.as_str();
         let preview: String = preview_source.chars().take(60).collect();
         let preview = if preview.len() < preview_source.len() {
             format!("{}...", preview.trim())
@@ -564,6 +611,7 @@ impl AiApp {
             has_parts = has_parts,
             has_system_prompt = system_prompt.is_some(),
             message_len = message.len(),
+            authored_content_len = authored_content.len(),
             "ai_sdk.start_chat created"
         );
 

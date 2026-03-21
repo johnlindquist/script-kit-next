@@ -143,75 +143,50 @@ impl AiApp {
         // pending_context_parts is the single source of truth — no separate attachments vec.
         let pending_parts = std::mem::take(&mut self.pending_context_parts);
 
-        let final_user_content = if pending_parts.is_empty() {
-            let prepared =
-                crate::ai::message_parts::prepare_user_message_with_receipt(&content, &[], &[], &[]);
-            self.last_prepared_message_receipt = Some(prepared.clone());
-            self.last_context_receipt = None;
-            self.streaming_error = None;
-            tracing::info!(
-                checkpoint = "message_prepare",
-                decision = "ready",
-                attempted = 0,
-                resolved = 0,
-                failures = 0,
-                "submit_context: no pending context parts to resolve"
-            );
-            prepared.final_user_content
+        // --- Shared outbound compiler: parse directives, merge, resolve ---
+        let super::chat::OutboundUserMessagePreparation {
+            receipt,
+            authored_content,
+            has_context_parts,
+        } = self.prepare_outbound_user_message(&content, &pending_parts);
+
+        self.last_context_receipt = if has_context_parts {
+            Some(receipt.context.clone())
         } else {
-            let scripts = crate::scripts::read_scripts();
-            let scriptlets = crate::scripts::load_scriptlets();
+            None
+        };
 
-            let prepared = crate::ai::message_parts::prepare_user_message_with_receipt(
-                &content,
-                &pending_parts,
-                &scripts,
-                &scriptlets,
-            );
-
-            self.last_prepared_message_receipt = Some(prepared.clone());
-            self.last_context_receipt = Some(prepared.context.clone());
-
-            tracing::info!(
-                checkpoint = "context_receipt_persisted",
-                attempted = prepared.context.attempted,
-                resolved = prepared.context.resolved,
-                failures = prepared.context.failures.len(),
-                "submit_context: context resolution receipt stored"
-            );
-
-            match prepared.decision {
-                crate::ai::message_parts::PreparedMessageDecision::Ready => {
-                    self.streaming_error = None;
-                    prepared.final_user_content
-                }
-                crate::ai::message_parts::PreparedMessageDecision::Partial => {
-                    tracing::warn!(
-                        checkpoint = "resolution_partial",
-                        attempted = prepared.context.attempted,
-                        resolved = prepared.context.resolved,
-                        outcomes = ?prepared.outcomes,
-                        failures = ?prepared.context.failures,
-                        "submit_context: partial resolution failure"
-                    );
-                    self.pending_context_parts = prepared.unresolved_parts;
-                    self.streaming_error = prepared.user_error;
-                    prepared.final_user_content
-                }
-                crate::ai::message_parts::PreparedMessageDecision::Blocked => {
-                    tracing::warn!(
-                        checkpoint = "resolution_blocked",
-                        attempted = prepared.context.attempted,
-                        resolved = prepared.context.resolved,
-                        outcomes = ?prepared.outcomes,
-                        failures = ?prepared.context.failures,
-                        "submit_context: blocked due to unresolved context"
-                    );
-                    self.pending_context_parts = prepared.unresolved_parts;
-                    self.streaming_error = prepared.user_error;
-                    cx.notify();
-                    return;
-                }
+        let final_user_content = match receipt.decision {
+            crate::ai::message_parts::PreparedMessageDecision::Ready => {
+                self.streaming_error = None;
+                receipt.final_user_content
+            }
+            crate::ai::message_parts::PreparedMessageDecision::Partial => {
+                tracing::warn!(
+                    checkpoint = "resolution_partial",
+                    attempted = receipt.context.attempted,
+                    resolved = receipt.context.resolved,
+                    outcomes = ?receipt.outcomes,
+                    failures = ?receipt.context.failures,
+                    "submit_context: partial resolution failure"
+                );
+                self.pending_context_parts = receipt.unresolved_parts;
+                self.streaming_error = receipt.user_error;
+                receipt.final_user_content
+            }
+            crate::ai::message_parts::PreparedMessageDecision::Blocked => {
+                tracing::warn!(
+                    checkpoint = "resolution_blocked",
+                    attempted = receipt.context.attempted,
+                    resolved = receipt.context.resolved,
+                    outcomes = ?receipt.outcomes,
+                    failures = ?receipt.context.failures,
+                    "submit_context: blocked due to unresolved context"
+                );
+                self.pending_context_parts = receipt.unresolved_parts;
+                self.streaming_error = receipt.user_error;
+                cx.notify();
+                return;
             }
         };
 
@@ -221,16 +196,12 @@ impl AiApp {
             "submit_context: cleared pending context parts and attachments"
         );
 
-        // Update chat title if this is the first message
+        // Update chat title if this is the first message — use cleaned authored content
+        let display_source =
+            ai_window_outbound_display_source(&authored_content, has_image, has_context_parts);
         if let Some(chat) = self.chats.iter_mut().find(|c| c.id == chat_id) {
             if chat.title == "New Chat" {
-                let new_title = if content.trim().is_empty() && has_image {
-                    "Image attachment".to_string()
-                } else if content.trim().is_empty() && !pending_parts.is_empty() {
-                    "Context attachment".to_string()
-                } else {
-                    Chat::generate_title_from_content(&content)
-                };
+                let new_title = Chat::generate_title_from_content(&display_source);
                 chat.set_title(&new_title);
 
                 // Persist title update
@@ -261,14 +232,8 @@ impl AiApp {
         // Force scroll to bottom when user sends a new message (always scroll, even if scrolled up)
         self.force_scroll_to_bottom();
 
-        // Update message preview and count cache
-        let preview_source = if content.trim().is_empty() && has_image {
-            "Image attachment"
-        } else if content.trim().is_empty() && !pending_parts.is_empty() {
-            "Context attachment"
-        } else {
-            content.as_str()
-        };
+        // Update message preview and count cache — derived from cleaned authored content
+        let preview_source = display_source.as_str();
         let preview: String = preview_source.chars().take(60).collect();
         let preview = if preview.len() < preview_source.len() {
             format!("{}...", preview.trim())

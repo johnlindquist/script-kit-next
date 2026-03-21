@@ -1151,3 +1151,531 @@ fn test_failed_context_resolution_falls_back_to_raw_content() {
         "Failed resolution must fall back to raw user content"
     );
 }
+
+// =========================================================================
+// Context action behavior tests
+//
+// Proves that each context command-bar action mutates pending_context_parts
+// correctly: exact URI, dedup, and clear semantics.
+//
+// Uses a mirror struct that replicates the add/clear logic from
+// AiApp::add_context_part / AiApp::clear_context_parts (dropdowns.rs)
+// so we can test without a GPUI window context.
+//
+// Run with: cargo test --quiet context_action_behavior
+// =========================================================================
+
+/// Minimal mirror of AiApp's context-part mutation logic.
+/// Replicates `add_context_part` dedup and `clear_context_parts` from dropdowns.rs.
+struct ContextPartState {
+    pending_context_parts: Vec<crate::ai::message_parts::AiContextPart>,
+}
+
+impl ContextPartState {
+    fn new() -> Self {
+        Self {
+            pending_context_parts: Vec::new(),
+        }
+    }
+
+    /// Mirror of AiApp::add_context_part (dropdowns.rs:373-399)
+    fn add_context_part(&mut self, part: crate::ai::message_parts::AiContextPart) -> bool {
+        let already_present = self
+            .pending_context_parts
+            .iter()
+            .any(|existing| existing == &part);
+
+        if already_present {
+            tracing::info!(
+                target: "ai",
+                label = %part.label(),
+                source = %part.source(),
+                "context_action_behavior_add_skipped_duplicate"
+            );
+            return false;
+        }
+
+        let count_before = self.pending_context_parts.len();
+        tracing::info!(
+            target: "ai",
+            label = %part.label(),
+            source = %part.source(),
+            count_before,
+            "context_action_behavior_part_added"
+        );
+
+        self.pending_context_parts.push(part);
+        true
+    }
+
+    /// Mirror of AiApp::clear_context_parts (dropdowns.rs:403-416)
+    fn clear_context_parts(&mut self) -> usize {
+        let cleared_count = self.pending_context_parts.len();
+        if cleared_count == 0 {
+            return 0;
+        }
+        self.pending_context_parts.clear();
+        tracing::info!(
+            target: "ai",
+            cleared_count,
+            "context_action_behavior_parts_cleared"
+        );
+        cleared_count
+    }
+
+    /// Simulate execute_action dispatch from command_bar.rs:261-317.
+    fn execute_action(&mut self, action_id: &str) {
+        let action_id = action_id.strip_prefix("chat:").unwrap_or(action_id);
+        match action_id {
+            "add_current_context" => {
+                self.add_context_part(
+                    crate::ai::message_parts::AiContextPart::ResourceUri {
+                        uri: "kit://context?profile=minimal".to_string(),
+                        label: "Current Context".to_string(),
+                    },
+                );
+            }
+            "add_context_full" => {
+                self.add_context_part(
+                    crate::ai::message_parts::AiContextPart::ResourceUri {
+                        uri: "kit://context".to_string(),
+                        label: "Current Context (Full)".to_string(),
+                    },
+                );
+            }
+            "add_selection_context" => {
+                self.add_context_part(
+                    crate::ai::message_parts::AiContextPart::ResourceUri {
+                        uri: "kit://context?selectedText=1&frontmostApp=0&menuBar=0&browserUrl=0&focusedWindow=0".to_string(),
+                        label: "Selection".to_string(),
+                    },
+                );
+            }
+            "add_browser_context" => {
+                self.add_context_part(
+                    crate::ai::message_parts::AiContextPart::ResourceUri {
+                        uri: "kit://context?selectedText=0&frontmostApp=0&menuBar=0&browserUrl=1&focusedWindow=0".to_string(),
+                        label: "Browser URL".to_string(),
+                    },
+                );
+            }
+            "add_window_context" => {
+                self.add_context_part(
+                    crate::ai::message_parts::AiContextPart::ResourceUri {
+                        uri: "kit://context?selectedText=0&frontmostApp=1&menuBar=0&browserUrl=0&focusedWindow=1".to_string(),
+                        label: "Focused Window".to_string(),
+                    },
+                );
+            }
+            "add_context_diagnostics" => {
+                self.add_context_part(
+                    crate::ai::message_parts::AiContextPart::ResourceUri {
+                        uri: "kit://context?diagnostics=1".to_string(),
+                        label: "Context Diagnostics".to_string(),
+                    },
+                );
+            }
+            "clear_context" => {
+                self.clear_context_parts();
+            }
+            _ => panic!("unexpected action: {action_id}"),
+        }
+    }
+}
+
+/// add_current_context inserts exactly one ResourceUri with the minimal profile URI.
+#[test]
+fn context_action_behavior_add_current_context_inserts_minimal_uri() {
+    let mut state = ContextPartState::new();
+    state.execute_action("add_current_context");
+
+    assert_eq!(
+        state.pending_context_parts.len(),
+        1,
+        "add_current_context must insert exactly one part"
+    );
+    match &state.pending_context_parts[0] {
+        crate::ai::message_parts::AiContextPart::ResourceUri { uri, label } => {
+            assert_eq!(uri, "kit://context?profile=minimal");
+            assert_eq!(label, "Current Context");
+        }
+        other => panic!("expected ResourceUri, got {other:?}"),
+    }
+
+    tracing::info!(
+        target: "ai",
+        count = state.pending_context_parts.len(),
+        parts = ?state.pending_context_parts,
+        "context_action_behavior_add_current_context_result"
+    );
+}
+
+/// add_context_full inserts exactly one ResourceUri with the full context URI.
+#[test]
+fn context_action_behavior_add_context_full_inserts_full_uri() {
+    let mut state = ContextPartState::new();
+    state.execute_action("add_context_full");
+
+    assert_eq!(
+        state.pending_context_parts.len(),
+        1,
+        "add_context_full must insert exactly one part"
+    );
+    match &state.pending_context_parts[0] {
+        crate::ai::message_parts::AiContextPart::ResourceUri { uri, label } => {
+            assert_eq!(uri, "kit://context");
+            assert_eq!(label, "Current Context (Full)");
+        }
+        other => panic!("expected ResourceUri, got {other:?}"),
+    }
+}
+
+/// add_context_diagnostics inserts the exact diagnostics URI.
+#[test]
+fn context_action_behavior_add_context_diagnostics_inserts_diagnostics_uri() {
+    let mut state = ContextPartState::new();
+    state.execute_action("add_context_diagnostics");
+
+    assert_eq!(
+        state.pending_context_parts.len(),
+        1,
+        "add_context_diagnostics must insert exactly one part"
+    );
+    match &state.pending_context_parts[0] {
+        crate::ai::message_parts::AiContextPart::ResourceUri { uri, label } => {
+            assert_eq!(
+                uri, "kit://context?diagnostics=1",
+                "diagnostics URI contract"
+            );
+            assert_eq!(label, "Context Diagnostics");
+        }
+        other => panic!("expected ResourceUri, got {other:?}"),
+    }
+}
+
+/// clear_context removes all pending context parts.
+#[test]
+fn context_action_behavior_clear_context_removes_all_parts() {
+    let mut state = ContextPartState::new();
+
+    // Attach multiple different parts
+    state.execute_action("add_current_context");
+    state.execute_action("add_context_full");
+    state.execute_action("add_context_diagnostics");
+    assert_eq!(
+        state.pending_context_parts.len(),
+        3,
+        "should have 3 parts before clear"
+    );
+
+    let count_before = state.pending_context_parts.len();
+    state.execute_action("clear_context");
+
+    tracing::info!(
+        target: "ai",
+        count_before,
+        count_after = state.pending_context_parts.len(),
+        "context_action_behavior_clear_result"
+    );
+
+    assert!(
+        state.pending_context_parts.is_empty(),
+        "clear_context must remove all pending context parts"
+    );
+}
+
+/// Invoking the same attach action twice does not create duplicate pending context parts.
+#[test]
+fn context_action_behavior_duplicate_attach_is_idempotent() {
+    let mut state = ContextPartState::new();
+
+    // First invocation - should insert
+    let inserted = state.add_context_part(
+        crate::ai::message_parts::AiContextPart::ResourceUri {
+            uri: "kit://context?profile=minimal".to_string(),
+            label: "Current Context".to_string(),
+        },
+    );
+    assert!(inserted, "first add should succeed");
+    assert_eq!(state.pending_context_parts.len(), 1);
+
+    // Second invocation - should be a no-op (dedup)
+    let inserted = state.add_context_part(
+        crate::ai::message_parts::AiContextPart::ResourceUri {
+            uri: "kit://context?profile=minimal".to_string(),
+            label: "Current Context".to_string(),
+        },
+    );
+    assert!(!inserted, "duplicate add should be rejected");
+    assert_eq!(
+        state.pending_context_parts.len(),
+        1,
+        "duplicate add must not increase pending parts count"
+    );
+
+    tracing::info!(
+        target: "ai",
+        count = state.pending_context_parts.len(),
+        parts = ?state.pending_context_parts,
+        "context_action_behavior_dedup_result"
+    );
+}
+
+/// All seven context actions via execute_action produce the expected state transitions.
+#[test]
+fn context_action_behavior_all_actions_via_execute_action() {
+    let mut state = ContextPartState::new();
+
+    // Attach all six add_* actions
+    let add_actions = [
+        "add_current_context",
+        "add_context_full",
+        "add_selection_context",
+        "add_browser_context",
+        "add_window_context",
+        "add_context_diagnostics",
+    ];
+
+    for (i, action) in add_actions.iter().enumerate() {
+        state.execute_action(action);
+        assert_eq!(
+            state.pending_context_parts.len(),
+            i + 1,
+            "after executing {action}, expected {} parts",
+            i + 1
+        );
+    }
+
+    // Verify each part's URI
+    let expected_uris = [
+        "kit://context?profile=minimal",
+        "kit://context",
+        "kit://context?selectedText=1&frontmostApp=0&menuBar=0&browserUrl=0&focusedWindow=0",
+        "kit://context?selectedText=0&frontmostApp=0&menuBar=0&browserUrl=1&focusedWindow=0",
+        "kit://context?selectedText=0&frontmostApp=1&menuBar=0&browserUrl=0&focusedWindow=1",
+        "kit://context?diagnostics=1",
+    ];
+
+    for (i, expected_uri) in expected_uris.iter().enumerate() {
+        match &state.pending_context_parts[i] {
+            crate::ai::message_parts::AiContextPart::ResourceUri { uri, .. } => {
+                assert_eq!(
+                    uri, expected_uri,
+                    "URI mismatch at index {i}"
+                );
+            }
+            other => panic!("expected ResourceUri at index {i}, got {other:?}"),
+        }
+    }
+
+    tracing::info!(
+        target: "ai",
+        count = state.pending_context_parts.len(),
+        "context_action_behavior_all_actions_attached"
+    );
+
+    // Now clear
+    state.execute_action("clear_context");
+    assert!(
+        state.pending_context_parts.is_empty(),
+        "clear_context must empty all parts after attaching all six"
+    );
+}
+
+/// Duplicate execute_action calls for each action type are all idempotent.
+#[test]
+fn context_action_behavior_execute_action_dedup_all_types() {
+    let add_actions = [
+        "add_current_context",
+        "add_context_full",
+        "add_selection_context",
+        "add_browser_context",
+        "add_window_context",
+        "add_context_diagnostics",
+    ];
+
+    for action in &add_actions {
+        let mut state = ContextPartState::new();
+
+        state.execute_action(action);
+        assert_eq!(state.pending_context_parts.len(), 1, "{action}: first call");
+
+        state.execute_action(action);
+        assert_eq!(
+            state.pending_context_parts.len(),
+            1,
+            "{action}: duplicate call must not increase count"
+        );
+    }
+}
+
+/// clear_context on empty state is a no-op (returns 0).
+#[test]
+fn context_action_behavior_clear_empty_is_noop() {
+    let mut state = ContextPartState::new();
+    let cleared = state.clear_context_parts();
+    assert_eq!(cleared, 0, "clearing empty state should report 0 cleared");
+    assert!(state.pending_context_parts.is_empty());
+}
+
+/// Serialized pending parts array is valid JSON (agent-parseable).
+#[test]
+fn context_action_behavior_pending_parts_serializable() {
+    let mut state = ContextPartState::new();
+    state.execute_action("add_current_context");
+    state.execute_action("add_context_full");
+
+    let json = serde_json::to_string(&state.pending_context_parts)
+        .expect("pending_context_parts must serialize to JSON");
+    let parsed: Vec<crate::ai::message_parts::AiContextPart> =
+        serde_json::from_str(&json).expect("JSON must roundtrip");
+
+    assert_eq!(parsed.len(), 2);
+    assert_eq!(parsed, state.pending_context_parts);
+
+    tracing::info!(
+        target: "ai",
+        count_before = state.pending_context_parts.len(),
+        count_after = parsed.len(),
+        serialized = %json,
+        "context_action_behavior_serialization_result"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Context preview UI tests
+// ---------------------------------------------------------------------------
+
+/// Helper: build a minimal stub with pending_context_parts for preview tests.
+fn make_preview_test_state() -> PreviewTestState {
+    let parts = vec![
+        crate::ai::message_parts::AiContextPart::ResourceUri {
+            uri: "kit://context?profile=minimal".to_string(),
+            label: "Current Context".to_string(),
+        },
+        crate::ai::message_parts::AiContextPart::ResourceUri {
+            uri: "kit://context".to_string(),
+            label: "Full Context".to_string(),
+        },
+        crate::ai::message_parts::AiContextPart::ResourceUri {
+            uri: "kit://context?diagnostics=1".to_string(),
+            label: "Context Diagnostics".to_string(),
+        },
+    ];
+    PreviewTestState {
+        pending_context_parts: parts,
+        context_preview_index: None,
+    }
+}
+
+/// Lightweight stand-in for the fields of AiApp used by preview logic.
+struct PreviewTestState {
+    pending_context_parts: Vec<crate::ai::message_parts::AiContextPart>,
+    context_preview_index: Option<usize>,
+}
+
+impl PreviewTestState {
+    fn toggle_preview(&mut self, index: usize) {
+        if self.context_preview_index == Some(index) {
+            self.context_preview_index = None;
+        } else {
+            self.context_preview_index = Some(index);
+        }
+    }
+
+    fn close_preview(&mut self) {
+        self.context_preview_index = None;
+    }
+
+    fn active_preview(
+        &self,
+    ) -> Option<(usize, context_preview::ContextPreviewInfo)> {
+        let idx = self.context_preview_index?;
+        let part = self.pending_context_parts.get(idx)?;
+        Some((idx, context_preview::derive_context_preview_info(part)))
+    }
+}
+
+#[test]
+fn context_preview_ui_open_and_close_deterministic() {
+    let mut state = make_preview_test_state();
+
+    // Initially no preview
+    assert!(state.active_preview().is_none(), "no preview at start");
+
+    // Open preview for index 0 (minimal)
+    state.toggle_preview(0);
+    assert_eq!(state.context_preview_index, Some(0));
+    let (idx, info) = state.active_preview().expect("preview should be active");
+    assert_eq!(idx, 0);
+    assert_eq!(info.profile, context_preview::ContextPreviewProfile::Minimal);
+
+    // Close by toggling same index
+    state.toggle_preview(0);
+    assert!(state.active_preview().is_none(), "preview closed on re-toggle");
+}
+
+#[test]
+fn context_preview_ui_switch_between_chips() {
+    let mut state = make_preview_test_state();
+
+    // Open minimal
+    state.toggle_preview(0);
+    assert_eq!(state.context_preview_index, Some(0));
+
+    // Switch to full
+    state.toggle_preview(1);
+    assert_eq!(state.context_preview_index, Some(1));
+    let (_, info) = state.active_preview().expect("preview should be active");
+    assert_eq!(info.profile, context_preview::ContextPreviewProfile::Full);
+}
+
+#[test]
+fn context_preview_ui_close_explicit() {
+    let mut state = make_preview_test_state();
+    state.toggle_preview(2);
+    assert!(state.active_preview().is_some());
+
+    state.close_preview();
+    assert!(state.active_preview().is_none());
+}
+
+#[test]
+fn context_preview_ui_diagnostics_chip_shows_diagnostics() {
+    let mut state = make_preview_test_state();
+    state.toggle_preview(2); // diagnostics chip
+    let (_, info) = state.active_preview().expect("preview should be active");
+    assert!(info.has_diagnostics, "diagnostics chip must show diagnostics");
+    assert!(info.description.contains("diagnostics"));
+}
+
+#[test]
+fn context_preview_ui_full_visually_distinct_from_minimal() {
+    let mut state = make_preview_test_state();
+
+    state.toggle_preview(0);
+    let (_, minimal_info) = state.active_preview().expect("minimal preview");
+
+    state.toggle_preview(1);
+    let (_, full_info) = state.active_preview().expect("full preview");
+
+    assert_ne!(
+        minimal_info.profile, full_info.profile,
+        "minimal and full must have different profiles"
+    );
+    assert_ne!(
+        minimal_info.description, full_info.description,
+        "minimal and full must have different descriptions"
+    );
+}
+
+#[test]
+fn context_preview_ui_stale_index_returns_none() {
+    let mut state = make_preview_test_state();
+    // Set preview to an out-of-bounds index
+    state.context_preview_index = Some(99);
+    assert!(
+        state.active_preview().is_none(),
+        "out-of-bounds index must return None"
+    );
+}

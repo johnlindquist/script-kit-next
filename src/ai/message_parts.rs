@@ -215,6 +215,36 @@ pub fn resolve_context_parts_to_prompt_prefix(
     Ok(receipt.prompt_prefix)
 }
 
+/// Merge two slices of context parts into a single list with first-seen order
+/// preserved and duplicates removed by value equality.
+///
+/// This is the canonical deduplication point for combining directive-derived
+/// parts (from parsed `@context` mentions) with explicit pending parts (from
+/// the composer UI or SDK). The merge is pure, deterministic, and side-effect
+/// free.
+pub(crate) fn merge_context_parts(
+    left: &[AiContextPart],
+    right: &[AiContextPart],
+) -> Vec<AiContextPart> {
+    let mut merged = Vec::with_capacity(left.len() + right.len());
+
+    for part in left.iter().chain(right.iter()) {
+        if !merged.iter().any(|existing| existing == part) {
+            merged.push(part.clone());
+        }
+    }
+
+    tracing::info!(
+        left_count = left.len(),
+        right_count = right.len(),
+        merged_count = merged.len(),
+        duplicates_removed = (left.len() + right.len()) - merged.len(),
+        "merge_context_parts"
+    );
+
+    merged
+}
+
 // ---------------------------------------------------------------------------
 // Schema-versioned message-preparation receipt
 // ---------------------------------------------------------------------------
@@ -748,6 +778,52 @@ mod tests {
         assert!(receipt.final_user_content.ends_with("query"));
         assert!(receipt.user_error.is_some());
         assert!(receipt.can_send_message());
+    }
+
+    #[test]
+    fn merge_context_parts_deduplicates_and_preserves_order() {
+        let selection = AiContextPart::ResourceUri {
+            uri: "kit://context?selectedText=1&frontmostApp=0&menuBar=0&browserUrl=0&focusedWindow=0"
+                .to_string(),
+            label: "Selection".to_string(),
+        };
+        let browser = AiContextPart::ResourceUri {
+            uri: "kit://context?selectedText=0&frontmostApp=0&menuBar=0&browserUrl=1&focusedWindow=0"
+                .to_string(),
+            label: "Browser URL".to_string(),
+        };
+
+        let merged = merge_context_parts(
+            &[selection.clone(), browser.clone()],
+            std::slice::from_ref(&selection),
+        );
+
+        assert_eq!(merged, vec![selection, browser]);
+    }
+
+    #[test]
+    fn merge_context_parts_empty_inputs() {
+        let merged = merge_context_parts(&[], &[]);
+        assert!(merged.is_empty());
+    }
+
+    #[test]
+    fn merge_context_parts_preserves_left_then_right_order() {
+        let a = AiContextPart::FilePath {
+            path: "/a.rs".to_string(),
+            label: "a.rs".to_string(),
+        };
+        let b = AiContextPart::FilePath {
+            path: "/b.rs".to_string(),
+            label: "b.rs".to_string(),
+        };
+        let c = AiContextPart::FilePath {
+            path: "/c.rs".to_string(),
+            label: "c.rs".to_string(),
+        };
+
+        let merged = merge_context_parts(&[a.clone(), b.clone()], &[c.clone(), a.clone()]);
+        assert_eq!(merged, vec![a, b, c]);
     }
 
     #[test]
