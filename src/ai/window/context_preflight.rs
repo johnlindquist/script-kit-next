@@ -111,6 +111,35 @@ pub fn preflight_state_from_receipt(
     }
 }
 
+/// Serializable snapshot of preflight state for agent verification.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ContextPreflightSnapshot {
+    pub generation: u64,
+    pub status: String,
+    pub attempted: usize,
+    pub resolved: usize,
+    pub failures: usize,
+    pub duplicates_removed: usize,
+    pub approx_tokens: usize,
+    pub prompt_chars: usize,
+}
+
+impl ContextPreflightState {
+    /// Machine-readable snapshot for agent verification.
+    pub fn snapshot(&self) -> ContextPreflightSnapshot {
+        ContextPreflightSnapshot {
+            generation: self.generation,
+            status: format!("{:?}", self.status),
+            attempted: self.attempted,
+            resolved: self.resolved,
+            failures: self.failures,
+            duplicates_removed: self.duplicates_removed,
+            approx_tokens: self.approx_tokens,
+            prompt_chars: self.prompt_chars,
+        }
+    }
+}
+
 impl AiApp {
     /// Schedule a context preflight check.
     ///

@@ -8,6 +8,11 @@ pub(super) fn is_context_inspector_shortcut(key: &str, modifiers: &gpui::Modifie
     modifiers.platform && modifiers.alt && !modifiers.shift && !modifiers.control && key == "i"
 }
 
+/// Cmd+Shift+A opens the context palette (keyboard-first attach flow).
+pub(super) fn is_context_palette_shortcut(key: &str, modifiers: &gpui::Modifiers) -> bool {
+    modifiers.platform && modifiers.shift && !modifiers.alt && !modifiers.control && key == "a"
+}
+
 impl AiApp {
     pub(super) fn handle_root_key_down(
         &mut self,
@@ -244,6 +249,17 @@ impl AiApp {
             match key {
                 k if is_context_inspector_shortcut(k, modifiers) => {
                     self.toggle_context_inspector(cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                // Cmd+Shift+A to open context palette (keyboard-first attach)
+                k if is_context_palette_shortcut(k, modifiers) => {
+                    if self.is_context_picker_open() {
+                        self.close_context_picker(cx);
+                    } else {
+                        self.hide_all_dropdowns(cx);
+                        self.open_context_picker(String::new(), window, cx);
+                    }
                     cx.stop_propagation();
                     return;
                 }

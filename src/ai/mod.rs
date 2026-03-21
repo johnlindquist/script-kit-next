@@ -36,6 +36,8 @@ pub(crate) mod config;
 pub(crate) mod context_contract;
 #[cfg(test)]
 mod context_contract_integration_tests;
+#[cfg(test)]
+mod public_contract_tests;
 pub(crate) mod context_mentions;
 pub mod message_parts;
 pub(crate) mod model;
@@ -81,11 +83,12 @@ pub use self::window::{
 // Re-export context-composer types for integration tests
 pub use self::window::context_preflight::{
     estimate_tokens_from_text, preflight_state_from_receipt, status_from_decision,
-    ContextPreflightState, ContextPreflightStatus,
+    ContextPreflightSnapshot, ContextPreflightState, ContextPreflightStatus,
 };
 pub use self::window::context_picker::{build_picker_items, score_builtin};
 pub use self::window::context_picker::types::{
-    ContextPickerItem, ContextPickerItemKind, ContextPickerSection, ContextPickerState,
+    ContextPickerItem, ContextPickerItemKind, ContextPickerItemSnapshot, ContextPickerSection,
+    ContextPickerSnapshot, ContextPickerState,
 };
 pub use self::context_contract::{
     context_attachment_specs, ContextAttachmentKind, ContextAttachmentSpec,

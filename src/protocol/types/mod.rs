@@ -10,6 +10,7 @@
 //! - Error data types
 
 mod ai;
+mod batch_wait;
 mod chat;
 mod elements_actions_scriptlets;
 mod grid_layout;
@@ -19,6 +20,10 @@ mod primitives;
 mod system;
 
 pub use ai::{AiChatInfo, AiContextPartInput, AiMessageInfo};
+pub use batch_wait::{
+    BatchCommand, BatchOptions, BatchResultEntry, StateMatchSpec, WaitCondition,
+    WaitDetailedCondition, WaitNamedCondition,
+};
 pub use chat::{ChatMessagePosition, ChatMessageRole, ChatPromptConfig, ChatPromptMessage};
 pub use elements_actions_scriptlets::{
     ElementInfo, ElementType, ProtocolAction, ScriptletData, ScriptletMetadataData,

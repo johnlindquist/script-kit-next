@@ -1591,20 +1591,12 @@ fn context_action_behavior_pending_parts_serializable() {
 // ---------------------------------------------------------------------------
 
 /// Helper: build a minimal stub with pending_context_parts for preview tests.
+/// Uses canonical labels from `ContextAttachmentKind` to prevent drift.
 fn make_preview_test_state() -> PreviewTestState {
     let parts = vec![
-        crate::ai::message_parts::AiContextPart::ResourceUri {
-            uri: "kit://context?profile=minimal".to_string(),
-            label: "Current Context".to_string(),
-        },
-        crate::ai::message_parts::AiContextPart::ResourceUri {
-            uri: "kit://context".to_string(),
-            label: "Full Context".to_string(),
-        },
-        crate::ai::message_parts::AiContextPart::ResourceUri {
-            uri: "kit://context?diagnostics=1".to_string(),
-            label: "Context Diagnostics".to_string(),
-        },
+        crate::ai::context_contract::ContextAttachmentKind::Current.part(),
+        crate::ai::context_contract::ContextAttachmentKind::Full.part(),
+        crate::ai::context_contract::ContextAttachmentKind::Diagnostics.part(),
     ];
     PreviewTestState {
         pending_context_parts: parts,
@@ -1728,5 +1720,704 @@ fn context_preview_ui_stale_index_returns_none() {
     assert!(
         state.active_preview().is_none(),
         "out-of-bounds index must return None"
+    );
+}
+
+// =========================================================================
+// End-to-end composer receipt tests
+//
+// Proves the full assembly → preflight → resolution → receipt pipeline
+// with duplicate handling, partial failures, and sendability decisions.
+//
+// Run with: cargo test ai::window::tests -- --nocapture
+// =========================================================================
+
+/// A pending context chip plus an identical mention yields one attached part
+/// and a receipt that records the duplicate provenance outcome.
+#[test]
+fn composer_receipt_pending_chip_plus_identical_mention_deduplicates() {
+    use crate::ai::context_contract::ContextAttachmentKind;
+    use crate::ai::message_parts::{
+        prepare_user_message_from_sources_with_receipt, ContextAssemblyOrigin,
+        PreparedMessageDecision,
+    };
+
+    let current_part = ContextAttachmentKind::Current.part();
+
+    // Mention has the same part as the pending chip
+    let mention_parts = vec![current_part.clone()];
+    let pending_parts = vec![current_part.clone()];
+
+    let receipt = prepare_user_message_from_sources_with_receipt(
+        "explain this",
+        &mention_parts,
+        &pending_parts,
+        &[],
+        &[],
+    );
+
+    let assembly = receipt
+        .assembly
+        .as_ref()
+        .expect("assembly receipt must be present");
+
+    // One merged part (the duplicate was removed)
+    assert_eq!(
+        assembly.merged_count, 1,
+        "identical mention + pending chip must merge to 1 part"
+    );
+    assert_eq!(assembly.duplicates_removed, 1);
+    assert_eq!(assembly.duplicates.len(), 1);
+    assert_eq!(assembly.duplicates[0].kept_from, ContextAssemblyOrigin::Mention);
+    assert_eq!(
+        assembly.duplicates[0].dropped_from,
+        ContextAssemblyOrigin::Pending
+    );
+    assert_eq!(
+        assembly.duplicates[0].label,
+        ContextAttachmentKind::Current.spec().label,
+    );
+
+    // The receipt is sendable (the MCP resource may fail to resolve in test
+    // environment, but the assembly stage itself is valid)
+    assert_ne!(
+        receipt.decision,
+        PreparedMessageDecision::Blocked,
+        "duplicate dedup must not block the message"
+    );
+
+    // Emit JSON receipt snapshot for agent verification
+    let snapshot = serde_json::json!({
+        "test": "composer_receipt_pending_chip_plus_identical_mention_deduplicates",
+        "assembly": {
+            "mention_count": assembly.mention_count,
+            "pending_count": assembly.pending_count,
+            "merged_count": assembly.merged_count,
+            "duplicates_removed": assembly.duplicates_removed,
+        },
+        "decision": format!("{:?}", receipt.decision),
+        "sendable": receipt.can_send_message(),
+    });
+    println!(
+        "--- RECEIPT_SNAPSHOT_JSON ---\n{}\n--- END_RECEIPT_SNAPSHOT_JSON ---",
+        serde_json::to_string_pretty(&snapshot).expect("snapshot must serialize")
+    );
+
+    tracing::info!(
+        checkpoint = "composer_receipt_dedup",
+        merged_count = assembly.merged_count,
+        duplicates_removed = assembly.duplicates_removed,
+        decision = ?receipt.decision,
+        "dedup composer receipt test passed"
+    );
+}
+
+/// A mixed valid-invalid attachment set yields a partial receipt with at least
+/// one successful attachment preserved and at least one failure surfaced.
+#[test]
+fn composer_receipt_mixed_valid_invalid_yields_partial_receipt() {
+    use crate::ai::message_parts::{
+        prepare_user_message_with_receipt, AiContextPart, PreparedMessageDecision,
+    };
+
+    let dir = tempfile::tempdir().expect("create temp dir");
+    let good_file = dir.path().join("good.txt");
+    std::fs::write(&good_file, "valid content").expect("write");
+
+    let parts = vec![
+        AiContextPart::FilePath {
+            path: good_file.to_string_lossy().to_string(),
+            label: "good.txt".to_string(),
+        },
+        AiContextPart::FilePath {
+            path: "/nonexistent/path/bad.txt".to_string(),
+            label: "bad.txt".to_string(),
+        },
+    ];
+
+    let receipt = prepare_user_message_with_receipt("tell me about these", &parts, &[], &[]);
+
+    assert_eq!(
+        receipt.decision,
+        PreparedMessageDecision::Partial,
+        "mixed success/failure must yield Partial decision"
+    );
+    assert_eq!(receipt.context.attempted, 2);
+    assert!(
+        receipt.context.resolved >= 1,
+        "at least one attachment must be preserved"
+    );
+    assert!(
+        !receipt.context.failures.is_empty(),
+        "at least one failure must be surfaced"
+    );
+    assert!(
+        receipt.final_user_content.contains("valid content"),
+        "successful attachment must appear in final content"
+    );
+    assert!(
+        receipt.can_send_message(),
+        "Partial decision must still be sendable"
+    );
+    assert!(
+        receipt.user_error.is_some(),
+        "failure must produce user-visible error"
+    );
+
+    // Emit JSON receipt snapshot
+    let snapshot = serde_json::json!({
+        "test": "composer_receipt_mixed_valid_invalid_yields_partial_receipt",
+        "attempted": receipt.context.attempted,
+        "resolved": receipt.context.resolved,
+        "failure_count": receipt.context.failures.len(),
+        "decision": format!("{:?}", receipt.decision),
+        "sendable": receipt.can_send_message(),
+    });
+    println!(
+        "--- RECEIPT_SNAPSHOT_JSON ---\n{}\n--- END_RECEIPT_SNAPSHOT_JSON ---",
+        serde_json::to_string_pretty(&snapshot).expect("snapshot must serialize")
+    );
+
+    tracing::info!(
+        checkpoint = "composer_receipt_partial",
+        attempted = receipt.context.attempted,
+        resolved = receipt.context.resolved,
+        failures = receipt.context.failures.len(),
+        decision = ?receipt.decision,
+        "partial receipt test passed"
+    );
+}
+
+/// An empty typed message with valid context parts still produces sendable
+/// final user content (the resolved prefix becomes the entire message).
+#[test]
+fn composer_receipt_empty_message_with_valid_parts_is_sendable() {
+    use crate::ai::message_parts::{
+        prepare_user_message_with_receipt, AiContextPart, PreparedMessageDecision,
+    };
+
+    let dir = tempfile::tempdir().expect("create temp dir");
+    let file_path = dir.path().join("context.txt");
+    std::fs::write(&file_path, "ambient context data").expect("write");
+
+    let parts = vec![AiContextPart::FilePath {
+        path: file_path.to_string_lossy().to_string(),
+        label: "context.txt".to_string(),
+    }];
+
+    let receipt = prepare_user_message_with_receipt("", &parts, &[], &[]);
+
+    assert_eq!(receipt.decision, PreparedMessageDecision::Ready);
+    assert!(receipt.can_send_message(), "empty text + valid parts must be sendable");
+    assert!(
+        !receipt.final_user_content.is_empty(),
+        "final content must be non-empty when parts resolve"
+    );
+    assert!(
+        receipt.final_user_content.contains("ambient context data"),
+        "resolved content must appear in final message"
+    );
+    assert_eq!(
+        receipt.raw_content, "",
+        "raw content must reflect the empty typed message"
+    );
+
+    // Emit JSON receipt snapshot
+    let snapshot = serde_json::json!({
+        "test": "composer_receipt_empty_message_with_valid_parts_is_sendable",
+        "decision": format!("{:?}", receipt.decision),
+        "sendable": receipt.can_send_message(),
+        "final_content_len": receipt.final_user_content.len(),
+        "raw_content_empty": receipt.raw_content.is_empty(),
+    });
+    println!(
+        "--- RECEIPT_SNAPSHOT_JSON ---\n{}\n--- END_RECEIPT_SNAPSHOT_JSON ---",
+        serde_json::to_string_pretty(&snapshot).expect("snapshot must serialize")
+    );
+
+    tracing::info!(
+        checkpoint = "composer_receipt_empty_text_sendable",
+        final_content_len = receipt.final_user_content.len(),
+        decision = ?receipt.decision,
+        "empty message sendability test passed"
+    );
+}
+
+/// Diagnostics attachments remain machine-readable and do not block unrelated
+/// healthy file-path parts.
+#[test]
+fn composer_receipt_diagnostics_does_not_block_healthy_parts() {
+    use crate::ai::context_contract::ContextAttachmentKind;
+    use crate::ai::message_parts::{prepare_user_message_with_receipt, AiContextPart};
+
+    let dir = tempfile::tempdir().expect("create temp dir");
+    let good_file = dir.path().join("healthy.txt");
+    std::fs::write(&good_file, "healthy content").expect("write");
+
+    let diagnostics_part = ContextAttachmentKind::Diagnostics.part();
+
+    let parts = vec![
+        AiContextPart::FilePath {
+            path: good_file.to_string_lossy().to_string(),
+            label: "healthy.txt".to_string(),
+        },
+        diagnostics_part,
+    ];
+
+    let receipt = prepare_user_message_with_receipt("check this", &parts, &[], &[]);
+
+    // The healthy file must be resolved regardless of diagnostics outcome
+    assert!(
+        receipt.context.resolved >= 1,
+        "healthy part must resolve even when diagnostics is present"
+    );
+    assert!(
+        receipt.final_user_content.contains("healthy content"),
+        "healthy part content must appear in final message"
+    );
+    assert!(
+        receipt.can_send_message(),
+        "diagnostics must not block sendability when healthy parts exist"
+    );
+
+    // Verify diagnostics outcome is machine-readable
+    let diag_outcome = receipt
+        .outcomes
+        .iter()
+        .find(|o| o.label == ContextAttachmentKind::Diagnostics.spec().label);
+    assert!(
+        diag_outcome.is_some(),
+        "diagnostics outcome must be present in outcomes list"
+    );
+
+    // Emit JSON receipt snapshot
+    let snapshot = serde_json::json!({
+        "test": "composer_receipt_diagnostics_does_not_block_healthy_parts",
+        "attempted": receipt.context.attempted,
+        "resolved": receipt.context.resolved,
+        "failure_count": receipt.context.failures.len(),
+        "decision": format!("{:?}", receipt.decision),
+        "sendable": receipt.can_send_message(),
+        "diagnostics_outcome_kind": diag_outcome.map(|o| format!("{:?}", o.kind)),
+    });
+    println!(
+        "--- RECEIPT_SNAPSHOT_JSON ---\n{}\n--- END_RECEIPT_SNAPSHOT_JSON ---",
+        serde_json::to_string_pretty(&snapshot).expect("snapshot must serialize")
+    );
+
+    tracing::info!(
+        checkpoint = "composer_receipt_diagnostics_non_blocking",
+        resolved = receipt.context.resolved,
+        decision = ?receipt.decision,
+        "diagnostics non-blocking test passed"
+    );
+}
+
+/// Visible attachment labels in tests come from the canonical attachment spec
+/// helper rather than duplicated string literals.
+#[test]
+fn composer_receipt_labels_match_canonical_spec() {
+    use crate::ai::context_contract::{context_attachment_specs, ContextAttachmentKind};
+
+    let all_kinds = [
+        ContextAttachmentKind::Current,
+        ContextAttachmentKind::Full,
+        ContextAttachmentKind::Selection,
+        ContextAttachmentKind::Browser,
+        ContextAttachmentKind::Window,
+        ContextAttachmentKind::Diagnostics,
+    ];
+
+    let specs = context_attachment_specs();
+
+    for kind in &all_kinds {
+        let part = kind.part();
+        let spec = kind.spec();
+
+        // The part's label must match the canonical spec label
+        assert_eq!(
+            part.label(),
+            spec.label,
+            "part label for {:?} must match canonical spec",
+            kind
+        );
+        // The part's source URI must match the canonical spec URI
+        assert_eq!(
+            part.source(),
+            spec.uri,
+            "part source for {:?} must match canonical spec",
+            kind
+        );
+
+        // The spec must exist in the global specs table
+        assert!(
+            specs.iter().any(|s| s.kind == *kind),
+            "{:?} must be present in context_attachment_specs()",
+            kind
+        );
+    }
+
+    // Emit JSON receipt for agent verification
+    let label_matrix: Vec<serde_json::Value> = all_kinds
+        .iter()
+        .map(|kind| {
+            serde_json::json!({
+                "kind": format!("{:?}", kind),
+                "label": kind.spec().label,
+                "uri": kind.spec().uri,
+            })
+        })
+        .collect();
+
+    let snapshot = serde_json::json!({
+        "test": "composer_receipt_labels_match_canonical_spec",
+        "label_matrix": label_matrix,
+    });
+    println!(
+        "--- RECEIPT_SNAPSHOT_JSON ---\n{}\n--- END_RECEIPT_SNAPSHOT_JSON ---",
+        serde_json::to_string_pretty(&snapshot).expect("snapshot must serialize")
+    );
+
+    tracing::info!(
+        total_kinds = all_kinds.len(),
+        "canonical label verification complete"
+    );
+}
+
+// ============================================================================
+// Context Palette wiring tests
+// ============================================================================
+
+/// Cmd+Shift+A shortcut detection is correct.
+#[test]
+fn test_context_palette_shortcut_requires_cmd_shift_a() {
+    let correct = crate::ai::window::render_keydown::is_context_palette_shortcut(
+        "a",
+        &gpui::Modifiers {
+            platform: true,
+            shift: true,
+            ..Default::default()
+        },
+    );
+    assert!(correct, "Cmd+Shift+A should match the context palette shortcut");
+
+    let wrong_key = crate::ai::window::render_keydown::is_context_palette_shortcut(
+        "b",
+        &gpui::Modifiers {
+            platform: true,
+            shift: true,
+            ..Default::default()
+        },
+    );
+    assert!(!wrong_key, "Cmd+Shift+B must not match");
+
+    let missing_shift = crate::ai::window::render_keydown::is_context_palette_shortcut(
+        "a",
+        &gpui::Modifiers {
+            platform: true,
+            ..Default::default()
+        },
+    );
+    assert!(!missing_shift, "Cmd+A without Shift must not match");
+
+    let extra_alt = crate::ai::window::render_keydown::is_context_palette_shortcut(
+        "a",
+        &gpui::Modifiers {
+            platform: true,
+            shift: true,
+            alt: true,
+            ..Default::default()
+        },
+    );
+    assert!(!extra_alt, "Cmd+Shift+Alt+A must not match");
+}
+
+/// Picker items from all entry points (slash, mention, palette) produce identical parts.
+#[test]
+fn test_palette_slash_mention_produce_identical_parts() {
+    use crate::ai::context_contract::{context_attachment_specs, ContextAttachmentKind};
+    use crate::ai::message_parts::AiContextPart;
+    use crate::ai::window::context_picker::{build_picker_items, types::ContextPickerItemKind};
+
+    for spec in context_attachment_specs() {
+        // Part from canonical contract
+        let canonical_part = spec.kind.part();
+
+        // Part from picker item
+        let items = build_picker_items("");
+        let picker_item = items
+            .iter()
+            .find(|i| matches!(&i.kind, ContextPickerItemKind::BuiltIn(k) if *k == spec.kind))
+            .unwrap_or_else(|| panic!("picker should contain {:?}", spec.kind));
+        let picker_part = match &picker_item.kind {
+            ContextPickerItemKind::BuiltIn(k) => k.part(),
+            _ => unreachable!(),
+        };
+
+        // Part from slash command (if available)
+        if let Some(slash) = spec.slash_command {
+            let slash_kind = ContextAttachmentKind::from_slash_command(slash)
+                .unwrap_or_else(|| panic!("slash command {slash} should parse"));
+            let slash_part = slash_kind.part();
+            assert_eq!(
+                canonical_part, slash_part,
+                "Slash command part for {:?} must match canonical",
+                spec.kind,
+            );
+        }
+
+        // Part from mention (if available)
+        if let Some(mention) = spec.mention {
+            let mention_kind = ContextAttachmentKind::from_mention_line(mention)
+                .unwrap_or_else(|| panic!("mention {mention} should parse"));
+            let mention_part = mention_kind.part();
+            assert_eq!(
+                canonical_part, mention_part,
+                "Mention part for {:?} must match canonical",
+                spec.kind,
+            );
+        }
+
+        assert_eq!(
+            canonical_part, picker_part,
+            "Picker part for {:?} must match canonical",
+            spec.kind,
+        );
+
+        // Verify label consistency: chip label == spec label
+        assert_eq!(
+            canonical_part.label(),
+            spec.label,
+            "Part label for {:?} must match spec label",
+            spec.kind,
+        );
+    }
+}
+
+/// Picker snapshot is machine-readable and matches actual state.
+#[test]
+fn test_picker_snapshot_is_serializable_and_consistent() {
+    use crate::ai::window::context_picker::{build_picker_items, types::ContextPickerState};
+
+    let items = build_picker_items("sel");
+    let mut state = ContextPickerState::new("sel".to_string(), items);
+    state.selected_index = 0;
+
+    let snapshot = state.snapshot();
+
+    // Must serialize to JSON
+    let json = serde_json::to_string_pretty(&snapshot).expect("snapshot must serialize");
+    assert!(json.contains("\"query\": \"sel\""), "snapshot must contain query");
+    assert!(
+        json.contains("\"selected_index\": 0"),
+        "snapshot must contain selected_index"
+    );
+
+    // Items must match
+    assert_eq!(
+        snapshot.items.len(),
+        state.items.len(),
+        "snapshot item count must match state"
+    );
+
+    // First item should be Selection (highest score for "sel" query)
+    assert!(
+        snapshot.items[0].label.contains("Selection"),
+        "first snapshot item for 'sel' query should be Selection, got: {}",
+        snapshot.items[0].label,
+    );
+
+    println!(
+        "--- PICKER_SNAPSHOT_JSON ---\n{json}\n--- END_PICKER_SNAPSHOT_JSON ---"
+    );
+}
+
+/// Preflight snapshot is machine-readable.
+#[test]
+fn test_preflight_snapshot_is_serializable() {
+    use crate::ai::window::context_preflight::{
+        preflight_state_from_receipt, ContextPreflightStatus,
+    };
+
+    let receipt = crate::ai::message_parts::PreparedMessageReceipt {
+        schema_version: crate::ai::message_parts::AI_MESSAGE_PREPARATION_SCHEMA_VERSION,
+        decision: crate::ai::message_parts::PreparedMessageDecision::Ready,
+        raw_content: "test".to_string(),
+        final_user_content: "prefix\n\ntest".to_string(),
+        context: crate::ai::message_parts::ContextResolutionReceipt {
+            attempted: 2,
+            resolved: 2,
+            failures: vec![],
+            prompt_prefix: "some resolved content".to_string(),
+        },
+        assembly: None,
+        outcomes: vec![],
+        unresolved_parts: vec![],
+        user_error: None,
+    };
+
+    let state = preflight_state_from_receipt(7, receipt);
+    let snapshot = state.snapshot();
+
+    let json = serde_json::to_string_pretty(&snapshot).expect("preflight snapshot must serialize");
+    assert!(json.contains("\"generation\": 7"), "must contain generation");
+    assert!(json.contains("\"Ready\""), "must contain Ready status");
+    assert!(json.contains("\"attempted\": 2"), "must contain attempted");
+    assert!(json.contains("\"resolved\": 2"), "must contain resolved");
+
+    println!(
+        "--- PREFLIGHT_SNAPSHOT_JSON ---\n{json}\n--- END_PREFLIGHT_SNAPSHOT_JSON ---"
+    );
+}
+
+/// The send button is enabled when context parts are attached (no text needed).
+#[test]
+fn test_send_button_enabled_by_context_parts_alone() {
+    assert!(
+        ai_window_can_submit_message("", false, true),
+        "Context-parts-only should enable send button"
+    );
+    assert!(
+        ai_window_can_submit_message("hello", false, true),
+        "Text + context parts should enable send button"
+    );
+    assert!(
+        !ai_window_can_submit_message("", false, false),
+        "Empty message without parts should disable send button"
+    );
+}
+
+/// End-to-end: picker selection → pending part → preflight receipt → valid content.
+#[test]
+fn test_palette_to_preflight_to_send_end_to_end() {
+    use crate::ai::context_contract::ContextAttachmentKind;
+    use crate::ai::message_parts::{
+        prepare_user_message_with_receipt, PreparedMessageDecision,
+    };
+    use crate::ai::window::context_picker::{build_picker_items, types::ContextPickerItemKind};
+    use crate::ai::window::context_preflight::preflight_state_from_receipt;
+
+    // Step 1: User opens palette, selects "Current Context"
+    let items = build_picker_items("");
+    let current_item = items
+        .iter()
+        .find(|i| {
+            matches!(
+                &i.kind,
+                ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Current)
+            )
+        })
+        .expect("palette should contain Current Context");
+
+    // Step 2: Accept creates a pending part
+    let part = match &current_item.kind {
+        ContextPickerItemKind::BuiltIn(kind) => kind.part(),
+        _ => unreachable!(),
+    };
+
+    // Step 3: Run preflight with the pending part
+    let receipt = prepare_user_message_with_receipt(
+        "What do you see?",
+        &[part],
+        &[],
+        &[],
+    );
+
+    assert_eq!(
+        receipt.decision,
+        PreparedMessageDecision::Ready,
+        "kit://context URI should resolve; got {:?}",
+        receipt.decision,
+    );
+    assert_eq!(receipt.context.attempted, 1);
+    assert_eq!(receipt.context.resolved, 1);
+    assert!(
+        receipt.final_user_content.contains("kit://context"),
+        "final content should contain resolved context"
+    );
+    assert!(
+        receipt.final_user_content.contains("What do you see?"),
+        "final content should preserve user text"
+    );
+
+    // Step 4: Verify preflight state derivation
+    let preflight = preflight_state_from_receipt(1, receipt);
+    assert_eq!(
+        preflight.status,
+        crate::ai::window::context_preflight::ContextPreflightStatus::Ready
+    );
+    assert!(preflight.approx_tokens > 0, "resolved context should have tokens");
+
+    // Step 5: Verify send button would be enabled
+    assert!(ai_window_can_submit_message("What do you see?", false, true));
+}
+
+/// Duplicate attachment via palette + mention deduplicates correctly.
+#[test]
+fn test_palette_plus_mention_deduplication() {
+    use crate::ai::context_contract::ContextAttachmentKind;
+    use crate::ai::context_mentions::parse_context_mentions;
+    use crate::ai::message_parts::{
+        merge_context_parts_with_receipt, prepare_user_message_with_receipt,
+        PreparedMessageDecision,
+    };
+
+    // User added Selection via palette (pending part)
+    let palette_part = ContextAttachmentKind::Selection.part();
+
+    // User also typed @selection in the message
+    let parsed = parse_context_mentions("@selection\nWhat is selected?");
+    assert_eq!(parsed.parts.len(), 1, "mention should parse");
+
+    // Merge should deduplicate
+    let assembly =
+        merge_context_parts_with_receipt(&parsed.parts, std::slice::from_ref(&palette_part));
+    assert_eq!(
+        assembly.duplicates_removed, 1,
+        "identical parts from mention + palette should dedup"
+    );
+    assert_eq!(assembly.merged_count, 1, "should have exactly one unique part");
+
+    // Full pipeline should still work
+    let receipt = prepare_user_message_with_receipt(
+        &parsed.cleaned_content,
+        &assembly.merged_parts,
+        &[],
+        &[],
+    );
+    assert_eq!(receipt.decision, PreparedMessageDecision::Ready);
+}
+
+/// Mixed valid and invalid context parts yield Partial, not silent loss.
+#[test]
+fn test_mixed_valid_invalid_parts_yield_partial() {
+    use crate::ai::context_contract::ContextAttachmentKind;
+    use crate::ai::message_parts::{
+        prepare_user_message_with_receipt, AiContextPart, PreparedMessageDecision,
+    };
+
+    let valid_part = ContextAttachmentKind::Current.part();
+    let invalid_part = AiContextPart::FilePath {
+        path: "/nonexistent/path/that/does/not/exist/ever.txt".to_string(),
+        label: "Missing File".to_string(),
+    };
+
+    let receipt = prepare_user_message_with_receipt(
+        "Show me everything",
+        &[valid_part, invalid_part],
+        &[],
+        &[],
+    );
+
+    assert_eq!(
+        receipt.decision,
+        PreparedMessageDecision::Partial,
+        "mixed valid+invalid should be Partial, not Ready or Blocked"
+    );
+    assert_eq!(receipt.context.resolved, 1, "valid part should resolve");
+    assert_eq!(receipt.context.failures.len(), 1, "invalid part should fail");
+    assert!(
+        receipt.final_user_content.contains("kit://context"),
+        "valid part content should be present"
     );
 }

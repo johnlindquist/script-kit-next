@@ -54,12 +54,19 @@ impl AiApp {
     ) {
         let items = build_picker_items(&query);
         if let Some(picker) = self.context_picker.as_mut() {
-            picker.query = query;
+            picker.query = query.clone();
             picker.items = items;
             // Clamp selected_index to valid range
             if picker.selected_index >= picker.items.len() {
                 picker.selected_index = picker.items.len().saturating_sub(1);
             }
+            tracing::info!(
+                target: "ai",
+                query = %query,
+                item_count = picker.items.len(),
+                selected_index = picker.selected_index,
+                "ai_context_picker_filtered"
+            );
         }
         cx.notify();
     }

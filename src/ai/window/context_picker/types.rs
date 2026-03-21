@@ -49,6 +49,46 @@ impl ContextPickerState {
             selected_index: 0,
         }
     }
+
+    /// Machine-readable snapshot of picker entries and selection state.
+    /// Used by agents to verify UI state without brittle string scraping.
+    pub fn snapshot(&self) -> ContextPickerSnapshot {
+        ContextPickerSnapshot {
+            query: self.query.clone(),
+            selected_index: self.selected_index,
+            items: self
+                .items
+                .iter()
+                .map(|item| ContextPickerItemSnapshot {
+                    id: item.id.to_string(),
+                    label: item.label.to_string(),
+                    section: match &item.kind {
+                        ContextPickerItemKind::BuiltIn(_) => "builtin",
+                        ContextPickerItemKind::File(_) => "file",
+                        ContextPickerItemKind::Folder(_) => "folder",
+                    },
+                    score: item.score,
+                })
+                .collect(),
+        }
+    }
+}
+
+/// Serializable snapshot of picker state for agent verification.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ContextPickerSnapshot {
+    pub query: String,
+    pub selected_index: usize,
+    pub items: Vec<ContextPickerItemSnapshot>,
+}
+
+/// Serializable snapshot of a single picker item.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ContextPickerItemSnapshot {
+    pub id: String,
+    pub label: String,
+    pub section: &'static str,
+    pub score: u32,
 }
 
 /// Section header for grouped picker results.

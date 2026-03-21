@@ -281,4 +281,68 @@ impl Message {
             exit_code,
         }
     }
+
+    // ============================================================
+    // Constructor methods for wait/batch transaction layer
+    // ============================================================
+
+    /// Create a waitFor request
+    pub fn wait_for(
+        request_id: String,
+        condition: WaitCondition,
+        timeout: Option<u64>,
+        poll_interval: Option<u64>,
+    ) -> Self {
+        Message::WaitFor {
+            request_id,
+            condition,
+            timeout,
+            poll_interval,
+        }
+    }
+
+    /// Create a waitFor result
+    pub fn wait_for_result(
+        request_id: String,
+        success: bool,
+        elapsed: u64,
+        error: Option<String>,
+    ) -> Self {
+        Message::WaitForResult {
+            request_id,
+            success,
+            elapsed,
+            error,
+        }
+    }
+
+    /// Create a batch request
+    pub fn batch(
+        request_id: String,
+        commands: Vec<BatchCommand>,
+        options: Option<BatchOptions>,
+    ) -> Self {
+        Message::Batch {
+            request_id,
+            commands,
+            options,
+        }
+    }
+
+    /// Create a batch result
+    pub fn batch_result(
+        request_id: String,
+        success: bool,
+        results: Vec<BatchResultEntry>,
+        failed_at: Option<usize>,
+        total_elapsed: u64,
+    ) -> Self {
+        Message::BatchResult {
+            request_id,
+            success,
+            results,
+            failed_at,
+            total_elapsed,
+        }
+    }
 }
