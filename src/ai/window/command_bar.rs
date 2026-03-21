@@ -258,6 +258,63 @@ impl AiApp {
                 // Cycle to next model as a convenience
                 self.cycle_model(cx);
             }
+            "add_current_context" => {
+                self.add_context_part(
+                    crate::ai::message_parts::AiContextPart::ResourceUri {
+                        uri: "kit://context?profile=minimal".to_string(),
+                        label: "Current Context".to_string(),
+                    },
+                    cx,
+                );
+            }
+            "add_context_full" => {
+                self.add_context_part(
+                    crate::ai::message_parts::AiContextPart::ResourceUri {
+                        uri: "kit://context".to_string(),
+                        label: "Current Context (Full)".to_string(),
+                    },
+                    cx,
+                );
+            }
+            "add_selection_context" => {
+                self.add_context_part(
+                    crate::ai::message_parts::AiContextPart::ResourceUri {
+                        uri: "kit://context?selectedText=1&frontmostApp=0&menuBar=0&browserUrl=0&focusedWindow=0".to_string(),
+                        label: "Selection".to_string(),
+                    },
+                    cx,
+                );
+            }
+            "add_browser_context" => {
+                self.add_context_part(
+                    crate::ai::message_parts::AiContextPart::ResourceUri {
+                        uri: "kit://context?selectedText=0&frontmostApp=0&menuBar=0&browserUrl=1&focusedWindow=0".to_string(),
+                        label: "Browser URL".to_string(),
+                    },
+                    cx,
+                );
+            }
+            "add_window_context" => {
+                self.add_context_part(
+                    crate::ai::message_parts::AiContextPart::ResourceUri {
+                        uri: "kit://context?selectedText=0&frontmostApp=1&menuBar=0&browserUrl=0&focusedWindow=1".to_string(),
+                        label: "Focused Window".to_string(),
+                    },
+                    cx,
+                );
+            }
+            "add_context_diagnostics" => {
+                self.add_context_part(
+                    crate::ai::message_parts::AiContextPart::ResourceUri {
+                        uri: "kit://context?diagnostics=1".to_string(),
+                        label: "Context Diagnostics".to_string(),
+                    },
+                    cx,
+                );
+            }
+            "clear_context" => {
+                self.clear_context_parts(cx);
+            }
             _ => {
                 tracing::warn!(action = action_id, "Unknown action");
             }

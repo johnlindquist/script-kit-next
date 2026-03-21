@@ -57,7 +57,6 @@ pub(super) const SIDEBAR_SEARCH_ICON_SIZE: Pixels = px(10.);
 // -- Message bubble tokens --
 pub(super) const MSG_PX: Pixels = S3;
 pub(super) const MSG_PY: Pixels = S2;
-pub(super) const MSG_RADIUS: Pixels = R_XL;
 pub(super) const MSG_GAP: Pixels = S6;
 pub(super) const MSG_GAP_CONTINUATION: Pixels = S2;
 

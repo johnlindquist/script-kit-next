@@ -321,6 +321,7 @@ mod from_dialog_builtin_action_validation_tests {
             "Actions",
             "Attachments",
             "Export",
+            "Context",
             "Help",
             "Settings",
         ];
@@ -418,7 +419,7 @@ mod from_dialog_builtin_action_validation_tests {
     
     #[test]
     fn ai_command_bar_action_count_is_exactly_twelve() {
-        assert_eq!(get_ai_command_bar_actions().len(), 13);
+        assert_eq!(get_ai_command_bar_actions().len(), 20);
     }
     
     // =========================================================================
@@ -3233,13 +3234,13 @@ mod from_dialog_builtin_action_validation_tests_2 {
     // =========================================================================
     
     #[test]
-    fn ai_section_header_count_is_seven() {
+    fn ai_section_header_count_is_eight() {
         let actions = get_ai_command_bar_actions();
         let filtered: Vec<usize> = (0..actions.len()).collect();
         let header_count = count_section_headers(&actions, &filtered);
         assert_eq!(
-            header_count, 7,
-            "AI command bar should have 7 section headers (Response, Actions, Attachments, Export, Actions, Help, Settings)"
+            header_count, 8,
+            "AI command bar should have 8 section headers (Response, Actions, Attachments, Export, Context, Actions, Help, Settings)"
         );
     }
     
@@ -3746,7 +3747,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
     }
     
     // =========================================================================
-    // 5. AI command bar section ordering: Response > Actions > Attachments > Settings
+    // 5. AI command bar section ordering: Response > Actions > Attachments > Export > Context > Actions > Help > Settings
     // =========================================================================
     
     #[test]
@@ -3760,6 +3761,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
                 "Actions",
                 "Attachments",
                 "Export",
+                "Context",
                 "Actions",
                 "Help",
                 "Settings"
@@ -4869,8 +4871,8 @@ mod from_dialog_builtin_action_validation_tests_3 {
             .filter(|g| matches!(g, GroupedActionItem::SectionHeader(_)))
             .count();
         assert!(
-            header_count >= 7,
-            "Headers style should produce at least 7 section headers, got {}",
+            header_count >= 8,
+            "Headers style should produce at least 8 section headers, got {}",
             header_count
         );
     }
@@ -5617,8 +5619,8 @@ mod from_dialog_builtin_action_validation_tests_3 {
     fn ai_command_bar_has_exactly_13_actions() {
         let count = get_ai_command_bar_actions().len();
         assert_eq!(
-            count, 13,
-            "AI command bar should have exactly 13 actions, got {}",
+            count, 20,
+            "AI command bar should have exactly 20 actions, got {}",
             count
         );
     }
@@ -6212,7 +6214,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
     }
     
     #[test]
-    fn ai_command_bar_exactly_six_sections() {
+    fn ai_command_bar_exactly_seven_sections() {
         let actions = get_ai_command_bar_actions();
         let unique_sections: HashSet<&str> = actions
             .iter()
@@ -6220,8 +6222,8 @@ mod from_dialog_builtin_action_validation_tests_4 {
             .collect();
         assert_eq!(
             unique_sections.len(),
-            6,
-            "AI command bar should have exactly 6 sections, got {:?}",
+            7,
+            "AI command bar should have exactly 7 sections, got {:?}",
             unique_sections
         );
     }
@@ -6237,6 +6239,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
                 "Actions",
                 "Attachments",
                 "Export",
+                "Context",
                 "Actions",
                 "Help",
                 "Settings"
@@ -6678,8 +6681,8 @@ mod from_dialog_builtin_action_validation_tests_4 {
             .count();
         // Should have section headers for each section transition
         assert_eq!(
-            header_count, 7,
-            "AI command bar should have 7 section headers, got {}",
+            header_count, 8,
+            "AI command bar should have 8 section headers, got {}",
             header_count
         );
     }
@@ -8452,7 +8455,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
         #[test]
         fn ai_command_bar_total_is_12() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 13);
+            assert_eq!(actions.len(), 20);
         }
     
         #[test]
@@ -8462,7 +8465,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 .iter()
                 .filter_map(|a| a.section.as_deref())
                 .collect();
-            // Should transition: Response, Actions, Attachments, Export, Actions, Help, Settings
+            // Should transition: Response, Actions, Attachments, Export, Context, Actions, Help, Settings
             let mut seen_sections: Vec<&str> = Vec::new();
             for s in &sections {
                 if seen_sections.last() != Some(s) {
@@ -8476,6 +8479,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                     "Actions",
                     "Attachments",
                     "Export",
+                    "Context",
                     "Actions",
                     "Help",
                     "Settings"
@@ -11904,7 +11908,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
         #[test]
         fn ai_command_bar_has_exactly_12_actions() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 13);
+            assert_eq!(actions.len(), 20);
         }
     
         #[test]
@@ -11978,7 +11982,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 .iter()
                 .filter_map(|a| a.section.as_deref())
                 .collect();
-            // Order: Response(3), Actions(3), Attachments(2), Export(1), Actions(1), Help(1), Settings(1)
+            // Order: Response(3), Actions(3), Attachments(3), Export(1), Context(7), Actions(1), Help(1), Settings(1)
             let unique_order: Vec<&str> = {
                 let mut result = vec![];
                 let mut prev: Option<&str> = None;
@@ -11997,6 +12001,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                     "Actions",
                     "Attachments",
                     "Export",
+                    "Context",
                     "Actions",
                     "Help",
                     "Settings"
@@ -13545,7 +13550,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
         #[test]
         fn ai_command_bar_exactly_12_actions() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 13);
+            assert_eq!(actions.len(), 20);
         }
     
         #[test]
@@ -13581,7 +13586,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 .iter()
                 .filter_map(|a| a.section.as_deref())
                 .collect();
-            // Verify order: Response before Actions before Attachments before Settings
+            // Verify order: Response before Actions before Attachments before Context before Settings
             let first_response = sections.iter().position(|&s| s == "Response").unwrap();
             let first_actions = sections.iter().position(|&s| s == "Actions").unwrap();
             let first_attachments = sections.iter().position(|&s| s == "Attachments").unwrap();
@@ -17514,7 +17519,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
     //! 8. Notes command bar conditional section groups (section strings)
     //! 9. ScriptInfo mixed agent+scriptlet flag precedence
     //! 10. Clipboard save_snippet/save_file always present for both text and image
-    //! 11. AI command bar section completeness (12 actions across 6 sections)
+    //! 11. AI command bar section completeness (20 actions across 7 sections)
     //! 12. Path context open_in_finder/editor/terminal descriptions
     //! 13. Note switcher empty notes placeholder action
     //! 14. New chat action icon/section consistency
@@ -17607,13 +17612,13 @@ mod from_dialog_builtin_action_validation_tests_9 {
         }
     
         // ============================================================
-        // 1. AI command bar expanded actions (12 actions, 6 sections)
+        // 1. AI command bar expanded actions (20 actions, 7 sections)
         // ============================================================
     
         #[test]
         fn ai_command_bar_has_exactly_12_actions() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 13, "AI command bar should have 12 actions");
+            assert_eq!(actions.len(), 20, "AI command bar should have 20 actions");
         }
     
         #[test]
@@ -17649,14 +17654,15 @@ mod from_dialog_builtin_action_validation_tests_9 {
         }
     
         #[test]
-        fn ai_command_bar_has_six_sections() {
+        fn ai_command_bar_has_seven_sections() {
             let actions = get_ai_command_bar_actions();
             let sections: HashSet<_> = actions.iter().filter_map(|a| a.section.as_ref()).collect();
-            assert_eq!(sections.len(), 6, "Should have 6 distinct sections");
+            assert_eq!(sections.len(), 7, "Should have 7 distinct sections");
             assert!(sections.contains(&"Response".to_string()));
             assert!(sections.contains(&"Actions".to_string()));
             assert!(sections.contains(&"Attachments".to_string()));
             assert!(sections.contains(&"Export".to_string()));
+            assert!(sections.contains(&"Context".to_string()));
             assert!(sections.contains(&"Help".to_string()));
             assert!(sections.contains(&"Settings".to_string()));
         }

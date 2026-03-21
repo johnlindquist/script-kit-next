@@ -973,7 +973,7 @@ fn ai_command_bar_all_twelve_ids() {
     for id in &expected {
         assert!(ids.contains(id), "Missing AI action: {}", id);
     }
-    assert_eq!(actions.len(), 13);
+    assert_eq!(actions.len(), 20);
 }
 
 #[test]

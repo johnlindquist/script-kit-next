@@ -255,6 +255,11 @@ pub struct AiApp {
     /// Updated immediately after preparation in both `submit_message` and `handle_start_chat`.
     pub(super) last_prepared_message_receipt:
         Option<crate::ai::message_parts::PreparedMessageReceipt>,
+
+    /// The last context-resolution receipt, persisted for compact UI summary after submit.
+    /// Cleared when submitting with no pending context parts; set when parts are resolved.
+    pub(super) last_context_receipt:
+        Option<crate::ai::message_parts::ContextResolutionReceipt>,
 }
 
 #[cfg(test)]

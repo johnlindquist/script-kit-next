@@ -303,31 +303,17 @@ impl AiApp {
 
     /// Add a file attachment.
     ///
-    /// Checks `pending_context_parts` (the single source of truth) for duplicates.
+    /// Delegates to `add_context_part` for dedup and structured logging.
     pub(super) fn add_attachment(&mut self, path: String, cx: &mut Context<Self>) {
-        let already_present = self.pending_context_parts.iter().any(|part| {
-            matches!(part, crate::ai::message_parts::AiContextPart::FilePath { path: p, .. } if p == &path)
-        });
-        if !already_present {
-            let label = std::path::Path::new(&path)
-                .file_name()
-                .map(|name| name.to_string_lossy().to_string())
-                .unwrap_or_else(|| path.clone());
+        let label = std::path::Path::new(&path)
+            .file_name()
+            .map(|name| name.to_string_lossy().to_string())
+            .unwrap_or_else(|| path.clone());
 
-            self.pending_context_parts.push(
-                crate::ai::message_parts::AiContextPart::FilePath {
-                    path: path.clone(),
-                    label: label.clone(),
-                },
-            );
-            tracing::info!(
-                kind = "file_path",
-                label = %label,
-                path = %path,
-                "attachment_added_via_context_part"
-            );
-            cx.notify();
-        }
+        self.add_context_part(
+            crate::ai::message_parts::AiContextPart::FilePath { path, label },
+            cx,
+        );
     }
 
     /// Remove a file attachment by its index in the file-path subset of `pending_context_parts`.
@@ -365,19 +351,68 @@ impl AiApp {
 
     /// Remove a pending context part by index.
     pub(super) fn remove_context_part(&mut self, index: usize, cx: &mut Context<Self>) {
-        if index < self.pending_context_parts.len() {
-            let removed = self.pending_context_parts.remove(index);
-            tracing::info!(
-                index = index,
-                kind = %match &removed {
-                    crate::ai::message_parts::AiContextPart::ResourceUri { .. } => "resource_uri",
-                    crate::ai::message_parts::AiContextPart::FilePath { .. } => "file_path",
-                },
-                label = %removed.label(),
-                "context_part_removed"
-            );
-            cx.notify();
+        if index >= self.pending_context_parts.len() {
+            return;
         }
+        let removed = self.pending_context_parts.remove(index);
+        tracing::info!(
+            target: "ai",
+            index,
+            label = %removed.label(),
+            source = %removed.source(),
+            remaining = self.pending_context_parts.len(),
+            "ai_context_part_removed"
+        );
+        cx.notify();
+    }
+
+    /// Add a context part with deterministic dedup.
+    ///
+    /// If an identical part (same variant, URI/path, and label) is already
+    /// present, the call is a no-op and a structured log checkpoint is emitted.
+    pub(super) fn add_context_part(
+        &mut self,
+        part: crate::ai::message_parts::AiContextPart,
+        cx: &mut Context<Self>,
+    ) {
+        let already_present = self.pending_context_parts.iter().any(|existing| existing == &part);
+
+        if already_present {
+            tracing::info!(
+                target: "ai",
+                label = %part.label(),
+                source = %part.source(),
+                "ai_context_part_add_skipped_duplicate"
+            );
+            return;
+        }
+
+        tracing::info!(
+            target: "ai",
+            label = %part.label(),
+            source = %part.source(),
+            count_before = self.pending_context_parts.len(),
+            "ai_context_part_added"
+        );
+
+        self.pending_context_parts.push(part);
+        cx.notify();
+    }
+
+    /// Clear all pending context parts (both ResourceUri and FilePath).
+    pub(super) fn clear_context_parts(&mut self, cx: &mut Context<Self>) {
+        let cleared_count = self.pending_context_parts.len();
+        if cleared_count == 0 {
+            return;
+        }
+
+        self.pending_context_parts.clear();
+        tracing::info!(
+            target: "ai",
+            cleared_count,
+            "ai_context_parts_cleared"
+        );
+        cx.notify();
     }
 
     /// Clear all file-path attachments from `pending_context_parts`.

@@ -74,15 +74,15 @@ impl AiApp {
             "slash_command: parsed and inserting context part"
         );
 
-        self.pending_context_parts.push(
+        self.add_context_part(
             crate::ai::message_parts::AiContextPart::ResourceUri {
                 uri: uri.to_string(),
                 label: label.to_string(),
             },
+            cx,
         );
 
         self.clear_composer(window, cx);
-        cx.notify();
 
         true
     }

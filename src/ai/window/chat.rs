@@ -422,6 +422,7 @@ impl AiApp {
             );
 
             self.last_prepared_message_receipt = Some(prepared.clone());
+            self.last_context_receipt = Some(prepared.context.clone());
 
             match prepared.decision {
                 crate::ai::message_parts::PreparedMessageDecision::Ready => {
@@ -461,6 +462,7 @@ impl AiApp {
             let prepared =
                 crate::ai::message_parts::prepare_user_message_with_receipt(&message, &[], &[], &[]);
             self.last_prepared_message_receipt = Some(prepared.clone());
+            self.last_context_receipt = None;
             self.streaming_error = None;
             prepared.final_user_content
         };

@@ -577,7 +577,7 @@ mod from_dialog_builtin_action_validation_tests_11 {
     #[test]
     fn cat13_ai_command_bar_has_12_actions() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 13);
+        assert_eq!(actions.len(), 20);
     }
     
     #[test]
@@ -589,6 +589,7 @@ mod from_dialog_builtin_action_validation_tests_11 {
             "Actions",
             "Attachments",
             "Export",
+            "Context",
             "Help",
             "Settings",
         ] {
@@ -2236,19 +2237,19 @@ mod from_dialog_builtin_action_validation_tests_12 {
     
         #[test]
         fn cat06_ai_total_12_actions() {
-            assert_eq!(get_ai_command_bar_actions().len(), 13);
+            assert_eq!(get_ai_command_bar_actions().len(), 20);
         }
     
     
         // --- merged from tests_part_02.rs ---
         #[test]
-        fn cat06_ai_6_unique_sections() {
+        fn cat06_ai_7_unique_sections() {
             let actions = get_ai_command_bar_actions();
             let sections: HashSet<_> = actions
                 .iter()
                 .filter_map(|a| a.section.as_deref())
                 .collect();
-            assert_eq!(sections.len(), 6);
+            assert_eq!(sections.len(), 7);
         }
     
         // =========================================================================
@@ -9402,7 +9403,7 @@ mod from_dialog_builtin_action_validation_tests_15 {
     
         #[test]
         fn cat24_ai_total_13() {
-            assert_eq!(get_ai_command_bar_actions().len(), 13);
+            assert_eq!(get_ai_command_bar_actions().len(), 20);
         }
     
         #[test]
@@ -9428,13 +9429,13 @@ mod from_dialog_builtin_action_validation_tests_15 {
         }
     
         #[test]
-        fn cat24_ai_6_unique_sections() {
+        fn cat24_ai_7_unique_sections() {
             let actions = get_ai_command_bar_actions();
             let sections: HashSet<&str> = actions
                 .iter()
                 .filter_map(|a| a.section.as_deref())
                 .collect();
-            assert_eq!(sections.len(), 6);
+            assert_eq!(sections.len(), 7);
         }
     
         #[test]
@@ -15056,7 +15057,7 @@ mod from_dialog_builtin_action_validation_tests_18 {
         #[test]
         fn cat27_total_ai_actions_is_12() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 13);
+            assert_eq!(actions.len(), 20);
         }
     
         // =========================================================================

@@ -1,8 +1,7 @@
 use super::*;
 use crate::theme::opacity::{
-    OPACITY_ACCENT_MEDIUM, OPACITY_HIDDEN, OPACITY_MESSAGE_ASSISTANT_BACKGROUND,
-    OPACITY_MESSAGE_USER_BACKGROUND, OPACITY_MUTED, OPACITY_SELECTED, OPACITY_STRONG,
-    OPACITY_SUBTLE,
+    OPACITY_HIDDEN, OPACITY_MESSAGE_ASSISTANT_BACKGROUND, OPACITY_MESSAGE_USER_BACKGROUND,
+    OPACITY_MUTED, OPACITY_SELECTED, OPACITY_STRONG, OPACITY_SUBTLE,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -245,12 +244,9 @@ impl AiApp {
                     .w_full()
                     .px(MSG_PX)
                     .py(MSG_PY)
-                    .rounded(MSG_RADIUS)
                     .bg(bubble_bg)
-                    .border_l_2()
-                    .when(is_user, |d| {
-                        d.border_color(cx.theme().accent.opacity(OPACITY_ACCENT_MEDIUM))
-                    })
+                    .border_l(px(3.0))
+                    .when(is_user, |d| d.border_color(cx.theme().accent))
                     .when(!is_user, |d| {
                         d.border_color(cx.theme().muted.opacity(OPACITY_SUBTLE))
                     })
