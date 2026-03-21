@@ -136,6 +136,7 @@ fn wait_for_request_parses_with_named_condition() {
             condition,
             timeout,
             poll_interval,
+            ..
         } => {
             assert_eq!(request_id, "wait-1");
             assert_eq!(condition, WaitCondition::Named(WaitNamedCondition::ChoicesRendered));
@@ -164,6 +165,7 @@ fn wait_for_request_parses_with_detailed_condition() {
             condition,
             timeout,
             poll_interval,
+            ..
         } => {
             assert_eq!(request_id, "wait-2");
             assert_eq!(
@@ -216,6 +218,7 @@ fn wait_for_result_success_serializes_correctly() {
     assert_eq!(json["success"], true);
     assert_eq!(json["elapsed"], 17);
     assert!(json.get("error").is_none(), "error should be omitted on success");
+    assert!(json.get("trace").is_none(), "trace should be omitted when absent");
 }
 
 #[test]
@@ -224,7 +227,7 @@ fn wait_for_result_timeout_serializes_correctly() {
         "wait-1".to_string(),
         false,
         5000,
-        Some("Timeout after 5000ms".to_string()),
+        Some(crate::protocol::TransactionError::wait_timeout("Timeout after 5000ms")),
     );
     let json = serde_json::to_value(&msg).expect("serialize waitForResult timeout");
 
@@ -232,7 +235,8 @@ fn wait_for_result_timeout_serializes_correctly() {
     assert_eq!(json["requestId"], "wait-1");
     assert_eq!(json["success"], false);
     assert_eq!(json["elapsed"], 5000);
-    assert_eq!(json["error"], "Timeout after 5000ms");
+    assert_eq!(json["error"]["code"], "wait_condition_timeout");
+    assert_eq!(json["error"]["message"], "Timeout after 5000ms");
 }
 
 #[test]
@@ -252,11 +256,13 @@ fn wait_for_result_round_trips() {
             success,
             elapsed,
             error,
+            trace,
         } => {
             assert_eq!(request_id, "wait-rt");
             assert!(success);
             assert_eq!(elapsed, 42);
             assert_eq!(error, None);
+            assert!(trace.is_none());
         }
         other => panic!("Expected WaitForResult, got: {:?}", other),
     }

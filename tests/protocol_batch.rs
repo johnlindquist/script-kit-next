@@ -151,7 +151,9 @@ fn batch_result_stop_on_error_sets_failed_at() {
                 command: "selectByValue".to_string(),
                 elapsed: Some(3),
                 value: None,
-                error: Some("No visible choice matched value 'grape'".to_string()),
+                error: Some(script_kit_gpui::protocol::TransactionError::selection_not_found(
+                    "No visible choice matched value 'grape'",
+                )),
             },
         ],
         Some(1),
@@ -168,7 +170,8 @@ fn batch_result_stop_on_error_sets_failed_at() {
     assert_eq!(results.len(), 2, "stop-on-error should include results up to and including failure");
     assert_eq!(results[0]["success"], true);
     assert_eq!(results[1]["success"], false);
-    assert_eq!(results[1]["error"], "No visible choice matched value 'grape'");
+    assert_eq!(results[1]["error"]["code"], "selection_not_found");
+    assert_eq!(results[1]["error"]["message"], "No visible choice matched value 'grape'");
 }
 
 #[test]
@@ -201,7 +204,9 @@ fn batch_result_stop_on_error_preserves_successful_prefix() {
                 command: "selectByValue".to_string(),
                 elapsed: Some(2),
                 value: None,
-                error: Some("No visible choice matched value 'mango'".to_string()),
+                error: Some(script_kit_gpui::protocol::TransactionError::selection_not_found(
+                    "No visible choice matched value 'mango'",
+                )),
             },
         ],
         Some(2),
@@ -303,4 +308,185 @@ fn batch_filter_and_select_round_trips() {
     assert_eq!(cmd["filter"], "app");
     assert_eq!(cmd["selectFirst"], true);
     assert_eq!(cmd["submit"], true);
+}
+
+// ---------- batch with trace mode ----------
+
+#[test]
+fn batch_with_trace_mode_parses_and_preserves() {
+    let raw = serde_json::json!({
+        "type": "batch",
+        "requestId": "txn-trace",
+        "commands": [
+            {"type": "setInput", "text": "apple"},
+            {"type": "waitFor", "condition": "choicesRendered"}
+        ],
+        "trace": "onFailure"
+    });
+    let msg: Message = serde_json::from_value(raw).expect("parse batch with trace");
+    let reserialized = serde_json::to_value(&msg).expect("reserialize");
+
+    assert_eq!(reserialized["trace"], "onFailure");
+    assert_eq!(reserialized["commands"].as_array().expect("cmds").len(), 2);
+}
+
+#[test]
+fn batch_without_trace_omits_field() {
+    let raw = serde_json::json!({
+        "type": "batch",
+        "requestId": "txn-no-trace",
+        "commands": [
+            {"type": "setInput", "text": "test"}
+        ]
+    });
+    let msg: Message = serde_json::from_value(raw).expect("parse");
+    let reserialized = serde_json::to_value(&msg).expect("reserialize");
+
+    assert!(
+        reserialized.get("trace").is_none(),
+        "trace field should be omitted when off (default)"
+    );
+}
+
+// ---------- batchResult with trace receipt ----------
+
+#[test]
+fn batch_result_failure_with_trace_receipt() {
+    use script_kit_gpui::protocol::{
+        TransactionCommandTrace, TransactionError, TransactionErrorCode, TransactionTrace,
+        TransactionTraceStatus, UiStateSnapshot,
+    };
+
+    let trace = TransactionTrace {
+        request_id: "txn-fail-trace".to_string(),
+        status: TransactionTraceStatus::Failed,
+        started_at_ms: 100,
+        total_elapsed_ms: 1003,
+        failed_at: Some(1),
+        commands: vec![
+            TransactionCommandTrace {
+                index: 0,
+                command: "setInput".to_string(),
+                started_at_ms: 100,
+                elapsed_ms: 2,
+                before: UiStateSnapshot::default(),
+                after: UiStateSnapshot {
+                    window_visible: true,
+                    window_focused: true,
+                    input_value: Some("apple".to_string()),
+                    ..Default::default()
+                },
+                polls: vec![],
+                error: None,
+            },
+            TransactionCommandTrace {
+                index: 1,
+                command: "waitFor".to_string(),
+                started_at_ms: 102,
+                elapsed_ms: 1001,
+                before: UiStateSnapshot {
+                    window_visible: true,
+                    window_focused: true,
+                    input_value: Some("apple".to_string()),
+                    ..Default::default()
+                },
+                after: UiStateSnapshot {
+                    window_visible: true,
+                    window_focused: true,
+                    input_value: Some("apple".to_string()),
+                    choice_count: 0,
+                    ..Default::default()
+                },
+                polls: vec![],
+                error: Some(TransactionError {
+                    code: TransactionErrorCode::WaitConditionTimeout,
+                    message: "Timeout after 1000ms waiting for choicesRendered".to_string(),
+                    suggestion: Some("No choices were visible at timeout.".to_string()),
+                }),
+            },
+        ],
+    };
+
+    let msg = Message::batch_result_with_trace(
+        "txn-fail-trace".to_string(),
+        false,
+        vec![
+            script_kit_gpui::protocol::BatchResultEntry {
+                index: 0,
+                success: true,
+                command: "setInput".to_string(),
+                elapsed: Some(2),
+                value: None,
+                error: None,
+            },
+            script_kit_gpui::protocol::BatchResultEntry {
+                index: 1,
+                success: false,
+                command: "waitFor".to_string(),
+                elapsed: Some(1001),
+                value: None,
+                error: Some(TransactionError {
+                    code: TransactionErrorCode::WaitConditionTimeout,
+                    message: "Timeout after 1000ms waiting for choicesRendered".to_string(),
+                    suggestion: Some("No choices were visible at timeout.".to_string()),
+                }),
+            },
+        ],
+        Some(1),
+        1003,
+        Some(trace),
+    );
+    let json = serde_json::to_value(&msg).expect("serialize batch with trace");
+
+    assert_eq!(json["type"], "batchResult");
+    assert_eq!(json["success"], false);
+    assert_eq!(json["failedAt"], 1);
+    assert_eq!(json["totalElapsed"], 1003);
+
+    // Per-command structured errors
+    let results = json["results"].as_array().expect("results");
+    assert_eq!(results[0]["success"], true);
+    assert!(results[0].get("error").is_none());
+    assert_eq!(results[1]["success"], false);
+    assert_eq!(results[1]["error"]["code"], "wait_condition_timeout");
+    assert!(results[1]["error"]["suggestion"].is_string());
+
+    // Trace receipt
+    let trace_json = &json["trace"];
+    assert_eq!(trace_json["requestId"], "txn-fail-trace");
+    assert_eq!(trace_json["status"], "failed");
+    assert_eq!(trace_json["failedAt"], 1);
+    assert_eq!(trace_json["commands"].as_array().expect("cmds").len(), 2);
+    assert_eq!(trace_json["commands"][0]["command"], "setInput");
+    assert_eq!(trace_json["commands"][1]["command"], "waitFor");
+    assert!(trace_json["commands"][1]["error"]["suggestion"].is_string());
+
+    // Round-trip
+    let back: Message = serde_json::from_value(json).expect("round-trip batch with trace");
+    let re = serde_json::to_value(&back).expect("re-serialize");
+    assert_eq!(re["trace"]["status"], "failed");
+}
+
+#[test]
+fn batch_result_success_with_trace_omits_when_absent() {
+    let msg = Message::batch_result(
+        "txn-ok".to_string(),
+        true,
+        vec![script_kit_gpui::protocol::BatchResultEntry {
+            index: 0,
+            success: true,
+            command: "setInput".to_string(),
+            elapsed: Some(1),
+            value: None,
+            error: None,
+        }],
+        None,
+        1,
+    );
+    let json = serde_json::to_value(&msg).expect("serialize");
+
+    assert!(
+        json.get("trace").is_none(),
+        "trace should be omitted when not provided"
+    );
 }

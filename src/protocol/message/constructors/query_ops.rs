@@ -298,6 +298,24 @@ impl Message {
             condition,
             timeout,
             poll_interval,
+            trace: TransactionTraceMode::Off,
+        }
+    }
+
+    /// Create a waitFor request with trace mode
+    pub fn wait_for_with_trace(
+        request_id: String,
+        condition: WaitCondition,
+        timeout: Option<u64>,
+        poll_interval: Option<u64>,
+        trace: TransactionTraceMode,
+    ) -> Self {
+        Message::WaitFor {
+            request_id,
+            condition,
+            timeout,
+            poll_interval,
+            trace,
         }
     }
 
@@ -306,13 +324,31 @@ impl Message {
         request_id: String,
         success: bool,
         elapsed: u64,
-        error: Option<String>,
+        error: Option<TransactionError>,
     ) -> Self {
         Message::WaitForResult {
             request_id,
             success,
             elapsed,
             error,
+            trace: None,
+        }
+    }
+
+    /// Create a waitFor result with embedded trace receipt
+    pub fn wait_for_result_with_trace(
+        request_id: String,
+        success: bool,
+        elapsed: u64,
+        error: Option<TransactionError>,
+        trace: Option<TransactionTrace>,
+    ) -> Self {
+        Message::WaitForResult {
+            request_id,
+            success,
+            elapsed,
+            error,
+            trace,
         }
     }
 
@@ -326,6 +362,22 @@ impl Message {
             request_id,
             commands,
             options,
+            trace: TransactionTraceMode::Off,
+        }
+    }
+
+    /// Create a batch request with trace mode
+    pub fn batch_with_trace(
+        request_id: String,
+        commands: Vec<BatchCommand>,
+        options: Option<BatchOptions>,
+        trace: TransactionTraceMode,
+    ) -> Self {
+        Message::Batch {
+            request_id,
+            commands,
+            options,
+            trace,
         }
     }
 
@@ -343,6 +395,26 @@ impl Message {
             results,
             failed_at,
             total_elapsed,
+            trace: None,
+        }
+    }
+
+    /// Create a batch result with embedded trace receipt
+    pub fn batch_result_with_trace(
+        request_id: String,
+        success: bool,
+        results: Vec<BatchResultEntry>,
+        failed_at: Option<usize>,
+        total_elapsed: u64,
+        trace: Option<TransactionTrace>,
+    ) -> Self {
+        Message::BatchResult {
+            request_id,
+            success,
+            results,
+            failed_at,
+            total_elapsed,
+            trace,
         }
     }
 }

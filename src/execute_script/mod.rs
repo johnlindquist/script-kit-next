@@ -1529,6 +1529,7 @@ impl ScriptListApp {
                                         condition,
                                         timeout,
                                         poll_interval,
+                                        ..
                                     } = &msg
                                     {
                                         tracing::info!(
@@ -1557,6 +1558,7 @@ impl ScriptListApp {
                                         request_id,
                                         commands,
                                         options,
+                                        ..
                                     } = &msg
                                     {
                                         tracing::info!(

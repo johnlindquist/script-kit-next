@@ -39,15 +39,15 @@ pub enum WaitNamedCondition {
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum WaitDetailedCondition {
     ElementExists {
-        #[serde(rename = "semanticId")]
+        #[serde(rename = "semanticId", alias = "semantic_id")]
         semantic_id: String,
     },
     ElementVisible {
-        #[serde(rename = "semanticId")]
+        #[serde(rename = "semanticId", alias = "semantic_id")]
         semantic_id: String,
     },
     ElementFocused {
-        #[serde(rename = "semanticId")]
+        #[serde(rename = "semanticId", alias = "semantic_id")]
         semantic_id: String,
     },
     StateMatch { state: StateMatchSpec },
@@ -115,6 +115,141 @@ pub struct BatchOptions {
     pub timeout: u64,
 }
 
+/// Trace mode for transaction requests.
+///
+/// Controls whether trace receipts are included in results:
+/// - `off`: no trace (default)
+/// - `on`: always include trace
+/// - `onFailure`: include trace only when the transaction fails
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum TransactionTraceMode {
+    #[default]
+    Off,
+    On,
+    OnFailure,
+}
+
+/// Machine-readable error code for transaction failures.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TransactionErrorCode {
+    WaitConditionTimeout,
+    ElementNotFound,
+    SelectionNotFound,
+    InvalidCondition,
+    UnsupportedCommand,
+    ActionFailed,
+}
+
+/// Structured error with machine-readable code and actionable suggestion.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionError {
+    pub code: TransactionErrorCode,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub suggestion: Option<String>,
+}
+
+impl TransactionError {
+    /// Create an action-failed error from a message string.
+    pub fn action_failed(message: impl Into<String>) -> Self {
+        Self {
+            code: TransactionErrorCode::ActionFailed,
+            message: message.into(),
+            suggestion: None,
+        }
+    }
+
+    /// Create a wait-condition-timeout error from a message string.
+    pub fn wait_timeout(message: impl Into<String>) -> Self {
+        Self {
+            code: TransactionErrorCode::WaitConditionTimeout,
+            message: message.into(),
+            suggestion: None,
+        }
+    }
+
+    /// Create a selection-not-found error from a message string.
+    pub fn selection_not_found(message: impl Into<String>) -> Self {
+        Self {
+            code: TransactionErrorCode::SelectionNotFound,
+            message: message.into(),
+            suggestion: None,
+        }
+    }
+}
+
+/// Snapshot of UI state at a point in time during a transaction.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UiStateSnapshot {
+    pub window_visible: bool,
+    pub window_focused: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_value: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_value: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub focused_semantic_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub visible_semantic_ids: Vec<String>,
+    #[serde(default)]
+    pub choice_count: usize,
+}
+
+/// A single poll observation during a waitFor command.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WaitPollObservation {
+    pub attempt: usize,
+    pub elapsed_ms: u64,
+    pub condition_satisfied: bool,
+    pub snapshot: UiStateSnapshot,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub matched_semantic_ids: Vec<String>,
+}
+
+/// Status of a completed transaction trace.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TransactionTraceStatus {
+    Ok,
+    Failed,
+    Timeout,
+}
+
+/// Trace data for a single command within a transaction.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionCommandTrace {
+    pub index: usize,
+    pub command: String,
+    pub started_at_ms: u64,
+    pub elapsed_ms: u64,
+    pub before: UiStateSnapshot,
+    pub after: UiStateSnapshot,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub polls: Vec<WaitPollObservation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<TransactionError>,
+}
+
+/// Full transaction trace receipt, optionally embedded in results.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionTrace {
+    pub request_id: String,
+    pub status: TransactionTraceStatus,
+    pub started_at_ms: u64,
+    pub total_elapsed_ms: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failed_at: Option<usize>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub commands: Vec<TransactionCommandTrace>,
+}
+
 /// Result entry for a single command within a batch.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -131,9 +266,14 @@ pub struct BatchResultEntry {
     /// The value produced by this command, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub value: Option<String>,
-    /// Error message if the command failed.
+    /// Structured error if the command failed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
+    pub error: Option<TransactionError>,
+}
+
+/// Helper for serde skip_serializing_if — returns true when trace mode is Off (default).
+pub fn is_trace_off(mode: &TransactionTraceMode) -> bool {
+    *mode == TransactionTraceMode::Off
 }
 
 fn default_stop_on_error() -> bool {

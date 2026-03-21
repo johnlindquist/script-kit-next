@@ -60,6 +60,8 @@
 mod io;
 mod message;
 mod semantic_id;
+pub mod transaction_executor;
+pub mod transaction_trace;
 mod types;
 
 #[allow(unused_imports)]
@@ -78,5 +80,8 @@ pub use types::{
     GridOptions, LayoutBounds, LayoutComponentInfo, LayoutComponentType, LayoutInfo,
     MenuBarItemData, MouseAction, MouseData, ProtocolAction, ScriptErrorData, ScriptletData,
     ScriptletMetadataData, StateMatchSpec, SubmitValue, SystemWindowInfo, TargetWindowBounds,
-    TilePosition, WaitCondition, WaitDetailedCondition, WaitNamedCondition, WindowActionType,
+    TilePosition, TransactionCommandTrace, TransactionError, TransactionErrorCode,
+    TransactionTrace, TransactionTraceMode, TransactionTraceStatus, UiStateSnapshot,
+    WaitCondition, WaitDetailedCondition, WaitNamedCondition, WaitPollObservation,
+    WindowActionType,
 };
