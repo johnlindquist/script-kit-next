@@ -1490,6 +1490,411 @@ impl ScriptListApp {
                     );
                 }
             }
+            PromptMessage::WaitFor {
+                request_id,
+                condition,
+                timeout,
+                poll_interval,
+            } => {
+                let timeout_ms = timeout.unwrap_or(5_000);
+                let poll_ms = poll_interval.unwrap_or(25);
+                let rid = request_id.clone();
+
+                tracing::info!(
+                    category = "WAIT",
+                    request_id = %rid,
+                    timeout_ms = timeout_ms,
+                    poll_ms = poll_ms,
+                    "wait_for.start"
+                );
+
+                // Check if condition is already satisfied
+                if self.wait_condition_satisfied(&condition, cx) {
+                    tracing::info!(
+                        category = "WAIT",
+                        request_id = %rid,
+                        "wait_for.immediate"
+                    );
+                    let response = Message::wait_for_result(
+                        request_id.clone(),
+                        true,
+                        0,
+                        None,
+                    );
+                    if let Some(ref sender) = self.response_sender {
+                        let _ = sender.try_send(response);
+                    }
+                } else {
+                    // Poll asynchronously
+                    let sender = self.response_sender.clone();
+                    let condition = condition.clone();
+                    cx.spawn(async move |this, cx| {
+                        let start = std::time::Instant::now();
+                        let timeout_dur = std::time::Duration::from_millis(timeout_ms);
+                        let poll_dur = std::time::Duration::from_millis(poll_ms);
+                        loop {
+                            cx.background_executor().timer(poll_dur).await;
+                            if start.elapsed() >= timeout_dur {
+                                tracing::info!(
+                                    category = "WAIT",
+                                    request_id = %rid,
+                                    elapsed_ms = start.elapsed().as_millis() as u64,
+                                    "wait_for.timeout"
+                                );
+                                if let Some(ref s) = sender {
+                                    let _ = s.try_send(Message::wait_for_result(
+                                        rid.clone(),
+                                        false,
+                                        start.elapsed().as_millis() as u64,
+                                        Some(format!("Timeout after {}ms", timeout_ms)),
+                                    ));
+                                }
+                                break;
+                            }
+                            match this.update(cx, |this, cx| {
+                                this.wait_condition_satisfied(&condition, cx)
+                            }) {
+                                Ok(true) => {
+                                    tracing::info!(
+                                        category = "WAIT",
+                                        request_id = %rid,
+                                        elapsed_ms = start.elapsed().as_millis() as u64,
+                                        "wait_for.satisfied"
+                                    );
+                                    if let Some(ref s) = sender {
+                                        let _ = s.try_send(Message::wait_for_result(
+                                            rid.clone(),
+                                            true,
+                                            start.elapsed().as_millis() as u64,
+                                            None,
+                                        ));
+                                    }
+                                    break;
+                                }
+                                Ok(false) => continue,
+                                Err(_) => {
+                                    tracing::info!(
+                                        category = "WAIT",
+                                        request_id = %rid,
+                                        "wait_for.entity_dropped"
+                                    );
+                                    if let Some(ref s) = sender {
+                                        let _ = s.try_send(Message::wait_for_result(
+                                            rid.clone(),
+                                            false,
+                                            start.elapsed().as_millis() as u64,
+                                            Some("Entity dropped during WaitFor".to_string()),
+                                        ));
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    })
+                    .detach();
+                }
+            }
+
+            PromptMessage::Batch {
+                request_id,
+                commands,
+                options,
+            } => {
+                let opts = options.unwrap_or(protocol::BatchOptions {
+                    stop_on_error: true,
+                    rollback_on_error: false,
+                    timeout: 5_000,
+                });
+                let rid = request_id.clone();
+                let sender = self.response_sender.clone();
+
+                tracing::info!(
+                    category = "BATCH",
+                    request_id = %rid,
+                    command_count = commands.len(),
+                    "batch.start"
+                );
+
+                cx.spawn(async move |this, cx| {
+                    let batch_start = std::time::Instant::now();
+                    let batch_timeout = std::time::Duration::from_millis(opts.timeout);
+                    let mut results: Vec<protocol::BatchResultEntry> = Vec::new();
+                    let mut failed = false;
+
+                    for (index, cmd) in commands.iter().enumerate() {
+                        // Check batch timeout
+                        if batch_start.elapsed() >= batch_timeout {
+                            let entry = protocol::BatchResultEntry {
+                                index,
+                                success: false,
+                                command: batch_command_name(cmd),
+                                elapsed: Some(0),
+                                value: None,
+                                error: Some("Batch timeout exceeded".to_string()),
+                            };
+                            results.push(entry);
+                            failed = true;
+                            break;
+                        }
+
+                        let cmd_start = std::time::Instant::now();
+                        match cmd {
+                            protocol::BatchCommand::SetInput { text } => {
+                                match this.update(cx, |this, cx| {
+                                    this.set_input_text(text, cx);
+                                }) {
+                                    Ok(()) => {
+                                        tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "setInput", "batch.step.ok");
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: true,
+                                            command: "setInput".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: None,
+                                            error: None,
+                                        });
+                                    }
+                                    Err(e) => {
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: false,
+                                            command: "setInput".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: None,
+                                            error: Some(format!("{e}")),
+                                        });
+                                        failed = true;
+                                        if opts.stop_on_error { break; }
+                                    }
+                                }
+                            }
+                            protocol::BatchCommand::SelectByValue { value, submit } => {
+                                let submit = *submit;
+                                let value = value.clone();
+                                match this.update(cx, |this, cx| {
+                                    this.select_choice_by_value(&value, submit, cx)
+                                }) {
+                                    Ok(Ok(v)) => {
+                                        tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "selectByValue", value = %v, "batch.step.ok");
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: true,
+                                            command: "selectByValue".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: Some(v),
+                                            error: None,
+                                        });
+                                    }
+                                    Ok(Err(e)) => {
+                                        tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "selectByValue", error = %e, "batch.step.error");
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: false,
+                                            command: "selectByValue".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: None,
+                                            error: Some(format!("{e}")),
+                                        });
+                                        failed = true;
+                                        if opts.stop_on_error { break; }
+                                    }
+                                    Err(e) => {
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: false,
+                                            command: "selectByValue".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: None,
+                                            error: Some(format!("{e}")),
+                                        });
+                                        failed = true;
+                                        if opts.stop_on_error { break; }
+                                    }
+                                }
+                            }
+                            protocol::BatchCommand::FilterAndSelect { filter, select_first, submit } => {
+                                let filter = filter.clone();
+                                let select_first = *select_first;
+                                let submit = *submit;
+                                match this.update(cx, |this, cx| {
+                                    this.set_input_text(&filter, cx);
+                                    if select_first {
+                                        this.select_first_choice(submit, cx)
+                                    } else {
+                                        Ok(None)
+                                    }
+                                }) {
+                                    Ok(Ok(selected_value)) => {
+                                        tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "filterAndSelect", filter = %filter, selected = ?selected_value, "batch.step.ok");
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: true,
+                                            command: "filterAndSelect".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: selected_value,
+                                            error: None,
+                                        });
+                                    }
+                                    Ok(Err(e)) | Err(e) => {
+                                        tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "filterAndSelect", error = %e, "batch.step.error");
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: false,
+                                            command: "filterAndSelect".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: None,
+                                            error: Some(format!("{e}")),
+                                        });
+                                        failed = true;
+                                        if opts.stop_on_error { break; }
+                                    }
+                                }
+                            }
+                            protocol::BatchCommand::TypeAndSubmit { text } => {
+                                let text = text.clone();
+                                match this.update(cx, |this, cx| {
+                                    this.set_input_text(&text, cx);
+                                    this.submit_current_value(cx);
+                                }) {
+                                    Ok(()) => {
+                                        tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "typeAndSubmit", "batch.step.ok");
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: true,
+                                            command: "typeAndSubmit".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: None,
+                                            error: None,
+                                        });
+                                    }
+                                    Err(e) => {
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: false,
+                                            command: "typeAndSubmit".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: None,
+                                            error: Some(format!("{e}")),
+                                        });
+                                        failed = true;
+                                        if opts.stop_on_error { break; }
+                                    }
+                                }
+                            }
+                            protocol::BatchCommand::WaitFor { condition, timeout, poll_interval } => {
+                                let wait_timeout = std::time::Duration::from_millis(timeout.unwrap_or(5_000));
+                                let wait_poll = std::time::Duration::from_millis(poll_interval.unwrap_or(25));
+                                let wait_start = std::time::Instant::now();
+
+                                // Check if already satisfied
+                                let already = this.update(cx, |this, cx| {
+                                    this.wait_condition_satisfied(condition, cx)
+                                });
+                                match already {
+                                    Ok(true) => {
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: true,
+                                            command: "waitFor".to_string(),
+                                            elapsed: Some(0),
+                                            value: None,
+                                            error: None,
+                                        });
+                                    }
+                                    Ok(false) => {
+                                        // Poll loop
+                                        let mut wait_result: Result<Option<String>, String> = Err(format!("WaitFor timeout after {}ms", wait_timeout.as_millis()));
+                                        loop {
+                                            cx.background_executor().timer(wait_poll).await;
+                                            if wait_start.elapsed() >= wait_timeout {
+                                                break;
+                                            }
+                                            match this.update(cx, |this, cx| {
+                                                this.wait_condition_satisfied(condition, cx)
+                                            }) {
+                                                Ok(true) => { wait_result = Ok(None); break; }
+                                                Ok(false) => continue,
+                                                _ => { wait_result = Err("Entity dropped during WaitFor".to_string()); break; }
+                                            }
+                                        }
+                                        match wait_result {
+                                            Ok(_) => {
+                                                results.push(protocol::BatchResultEntry {
+                                                    index,
+                                                    success: true,
+                                                    command: "waitFor".to_string(),
+                                                    elapsed: Some(wait_start.elapsed().as_millis() as u64),
+                                                    value: None,
+                                                    error: None,
+                                                });
+                                            }
+                                            Err(e) => {
+                                                tracing::info!(
+                                                    category = "BATCH",
+                                                    request_id = %rid,
+                                                    index = index,
+                                                    command = %batch_command_name(cmd),
+                                                    error = %e,
+                                                    "batch.step.error"
+                                                );
+                                                results.push(protocol::BatchResultEntry {
+                                                    index,
+                                                    success: false,
+                                                    command: "waitFor".to_string(),
+                                                    elapsed: Some(wait_start.elapsed().as_millis() as u64),
+                                                    value: None,
+                                                    error: Some(e),
+                                                });
+                                                failed = true;
+                                                if opts.stop_on_error { break; }
+                                            }
+                                        }
+                                    }
+                                    Err(_) => {
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: false,
+                                            command: "waitFor".to_string(),
+                                            elapsed: Some(wait_start.elapsed().as_millis() as u64),
+                                            value: None,
+                                            error: Some("Entity dropped".to_string()),
+                                        });
+                                        failed = true;
+                                        if opts.stop_on_error { break; }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    let total_elapsed = batch_start.elapsed().as_millis() as u64;
+                    let failed_at = if failed {
+                        results.iter().position(|r| !r.success)
+                    } else {
+                        None
+                    };
+
+                    tracing::info!(
+                        category = "BATCH",
+                        request_id = %rid,
+                        success = !failed,
+                        total_elapsed = total_elapsed,
+                        "batch.complete"
+                    );
+
+                    if let Some(ref s) = sender {
+                        let _ = s.try_send(Message::batch_result(
+                            rid.clone(),
+                            !failed,
+                            results,
+                            failed_at,
+                            total_elapsed,
+                        ));
+                    }
+                })
+                .detach();
+            }
+
             PromptMessage::ForceSubmit { value } => {
                 tracing::info!(
                     category = "UI",
@@ -2472,6 +2877,242 @@ impl ScriptListApp {
                 self.hide_grid(cx);
             }
         }
+    }
+
+    /// Check if a wait condition is currently satisfied.
+    fn wait_condition_satisfied(
+        &self,
+        condition: &protocol::WaitCondition,
+        cx: &Context<Self>,
+    ) -> bool {
+        match condition {
+            protocol::WaitCondition::Named(named) => match named {
+                protocol::WaitNamedCondition::ChoicesRendered => {
+                    let elements = self.collect_visible_elements(100, cx);
+                    elements
+                        .elements
+                        .iter()
+                        .any(|el| el.element_type == protocol::ElementType::Choice)
+                }
+                protocol::WaitNamedCondition::InputEmpty => {
+                    let input = self.current_input_value();
+                    input.is_empty()
+                }
+                protocol::WaitNamedCondition::WindowVisible => {
+                    script_kit_gpui::is_main_window_visible()
+                }
+                protocol::WaitNamedCondition::WindowFocused => {
+                    let visible = script_kit_gpui::is_main_window_visible();
+                    visible && self.focused_input != FocusedInput::None
+                }
+            },
+            protocol::WaitCondition::Detailed(detailed) => match detailed {
+                protocol::WaitDetailedCondition::ElementExists { semantic_id }
+                | protocol::WaitDetailedCondition::ElementVisible { semantic_id } => {
+                    let elements = self.collect_visible_elements(1000, cx);
+                    elements
+                        .elements
+                        .iter()
+                        .any(|el| el.semantic_id == *semantic_id)
+                }
+                protocol::WaitDetailedCondition::ElementFocused { semantic_id } => {
+                    let elements = self.collect_visible_elements(1000, cx);
+                    elements
+                        .elements
+                        .iter()
+                        .any(|el| el.semantic_id == *semantic_id && el.focused == Some(true))
+                }
+                protocol::WaitDetailedCondition::StateMatch { state: expected } => {
+                    let prompt_type = self.current_prompt_type();
+                    let input_value = self.current_input_value();
+                    let selected_value = self.current_selected_value();
+                    let window_visible = script_kit_gpui::is_main_window_visible();
+
+                    expected
+                        .prompt_type
+                        .as_deref()
+                        .is_none_or(|v| v == prompt_type)
+                        && expected
+                            .input_value
+                            .as_deref()
+                            .is_none_or(|v| v == input_value)
+                        && expected
+                            .selected_value
+                            .as_deref()
+                            .is_none_or(|v| selected_value.as_deref() == Some(v))
+                        && expected
+                            .window_visible
+                            .is_none_or(|v| v == window_visible)
+                }
+            },
+        }
+    }
+
+    /// Get the current prompt type as a string.
+    fn current_prompt_type(&self) -> String {
+        match &self.current_view {
+            AppView::ScriptList => "none".to_string(),
+            AppView::ArgPrompt { .. } => "arg".to_string(),
+            AppView::DivPrompt { .. } => "div".to_string(),
+            AppView::FormPrompt { .. } => "form".to_string(),
+            AppView::EditorPrompt { .. } => "editor".to_string(),
+            AppView::TermPrompt { .. } => "term".to_string(),
+            AppView::ChatPrompt { .. } => "chat".to_string(),
+            AppView::MiniPrompt { .. } => "mini".to_string(),
+            AppView::MicroPrompt { .. } => "micro".to_string(),
+            _ => "unknown".to_string(),
+        }
+    }
+
+    /// Get the current input/filter value.
+    fn current_input_value(&self) -> String {
+        match &self.current_view {
+            AppView::ScriptList => self.filter_text.clone(),
+            AppView::ArgPrompt { .. } => self.arg_input.text().to_string(),
+            AppView::MiniPrompt { .. } => self.arg_input.text().to_string(),
+            AppView::MicroPrompt { .. } => self.arg_input.text().to_string(),
+            _ => String::new(),
+        }
+    }
+
+    /// Get the currently selected value if any.
+    fn current_selected_value(&self) -> Option<String> {
+        match &self.current_view {
+            AppView::ArgPrompt { choices, .. }
+            | AppView::MiniPrompt { choices, .. }
+            | AppView::MicroPrompt { choices, .. } => {
+                let filtered = self.get_filtered_arg_choices(choices);
+                filtered
+                    .get(self.arg_selected_index)
+                    .map(|c| c.value.clone())
+            }
+            _ => None,
+        }
+    }
+
+    /// Set the input text for the current prompt.
+    fn set_input_text(&mut self, text: &str, cx: &mut Context<Self>) {
+        match &self.current_view {
+            AppView::ArgPrompt { .. }
+            | AppView::MiniPrompt { .. }
+            | AppView::MicroPrompt { .. } => {
+                self.arg_input.set_text(text);
+                self.arg_selected_index = 0;
+                cx.notify();
+            }
+            AppView::ScriptList => {
+                self.filter_text = text.to_string();
+                self.selected_index = 0;
+                cx.notify();
+            }
+            _ => {
+                tracing::warn!(
+                    category = "BATCH",
+                    "setInput not supported for current view"
+                );
+            }
+        }
+    }
+
+    /// Select a choice by its value from the filtered list.
+    fn select_choice_by_value(
+        &mut self,
+        value: &str,
+        submit: bool,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<String> {
+        let choices = match &self.current_view {
+            AppView::ArgPrompt { choices, .. }
+            | AppView::MiniPrompt { choices, .. }
+            | AppView::MicroPrompt { choices, .. } => choices.clone(),
+            _ => anyhow::bail!("selectByValue only supports choice-backed prompts"),
+        };
+
+        let filtered = self.get_filtered_arg_choices(&choices);
+        let Some(index) = filtered.iter().position(|choice| choice.value == value) else {
+            anyhow::bail!("No visible choice matched value '{value}'");
+        };
+
+        self.arg_selected_index = index;
+        cx.notify();
+
+        let selected = filtered[index].value.clone();
+
+        if submit {
+            self.submit_current_value(cx);
+        }
+
+        Ok(selected)
+    }
+
+    /// Select the first choice in the filtered list.
+    fn select_first_choice(
+        &mut self,
+        submit: bool,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<Option<String>> {
+        let choices = match &self.current_view {
+            AppView::ArgPrompt { choices, .. }
+            | AppView::MiniPrompt { choices, .. }
+            | AppView::MicroPrompt { choices, .. } => choices.clone(),
+            _ => anyhow::bail!("selectFirst only supports choice-backed prompts"),
+        };
+
+        let filtered = self.get_filtered_arg_choices(&choices);
+        if filtered.is_empty() {
+            anyhow::bail!("No visible choices to select");
+        }
+
+        self.arg_selected_index = 0;
+        cx.notify();
+
+        let selected = filtered[0].value.clone();
+
+        if submit {
+            self.submit_current_value(cx);
+        }
+
+        Ok(Some(selected))
+    }
+
+    /// Submit the currently selected value.
+    fn submit_current_value(&mut self, cx: &mut Context<Self>) {
+        match &self.current_view {
+            AppView::ArgPrompt { id, choices, .. }
+            | AppView::MiniPrompt { id, choices, .. }
+            | AppView::MicroPrompt { id, choices, .. } => {
+                let filtered = self.get_filtered_arg_choices(choices);
+                let value = if self.arg_selected_index < filtered.len() {
+                    filtered[self.arg_selected_index].value.clone()
+                } else {
+                    self.arg_input.text().to_string()
+                };
+                if let Some(ref sender) = self.response_sender {
+                    let _ = sender.try_send(Message::Submit {
+                        id: id.clone(),
+                        value: Some(value),
+                    });
+                }
+                cx.notify();
+            }
+            _ => {
+                tracing::warn!(
+                    category = "BATCH",
+                    "submit not supported for current view"
+                );
+            }
+        }
+    }
+}
+
+/// Get the wire name for a batch command.
+fn batch_command_name(cmd: &protocol::BatchCommand) -> String {
+    match cmd {
+        protocol::BatchCommand::SetInput { .. } => "setInput".to_string(),
+        protocol::BatchCommand::WaitFor { .. } => "waitFor".to_string(),
+        protocol::BatchCommand::SelectByValue { .. } => "selectByValue".to_string(),
+        protocol::BatchCommand::FilterAndSelect { .. } => "filterAndSelect".to_string(),
+        protocol::BatchCommand::TypeAndSubmit { .. } => "typeAndSubmit".to_string(),
     }
 }
 

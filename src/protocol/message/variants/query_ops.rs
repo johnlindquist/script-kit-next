@@ -378,6 +378,73 @@ macro_rules! protocol_message_variants_query_ops {
         error: Option<String>,
     },
 
+    // ============================================================
+    // WAIT / BATCH — Deterministic Transaction Layer
+    // ============================================================
+    /// Poll until a UI condition is satisfied or timeout expires.
+    ///
+    /// The app will check the condition at `pollInterval` (default 25 ms)
+    /// and reply with `waitForResult` when satisfied or after `timeout` ms.
+    #[serde(rename = "waitFor")]
+    WaitFor {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// The condition to wait for
+        condition: WaitCondition,
+        /// Timeout in milliseconds (default: 5000)
+        #[serde(skip_serializing_if = "Option::is_none")]
+        timeout: Option<u64>,
+        /// Poll interval in milliseconds (default: 25)
+        #[serde(rename = "pollInterval", skip_serializing_if = "Option::is_none")]
+        poll_interval: Option<u64>,
+    },
+
+    /// Result of a waitFor request.
+    #[serde(rename = "waitForResult")]
+    WaitForResult {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// Whether the condition was satisfied before timeout
+        success: bool,
+        /// Wall-clock time elapsed in milliseconds
+        elapsed: u64,
+        /// Error message if the wait failed (e.g., timeout)
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+    },
+
+    /// Execute a sequence of atomic UI commands as a transaction.
+    ///
+    /// Commands run in order. If `options.stop_on_error` is true (default),
+    /// execution halts on the first failure and `failed_at` is set.
+    #[serde(rename = "batch")]
+    Batch {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// Ordered list of commands to execute
+        commands: Vec<BatchCommand>,
+        /// Execution options (stop-on-error, timeout)
+        #[serde(skip_serializing_if = "Option::is_none")]
+        options: Option<BatchOptions>,
+    },
+
+    /// Result of a batch execution.
+    #[serde(rename = "batchResult")]
+    BatchResult {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// True if all commands succeeded
+        success: bool,
+        /// Per-command results
+        results: Vec<BatchResultEntry>,
+        /// Index of the first failed command, if any
+        #[serde(rename = "failedAt", skip_serializing_if = "Option::is_none")]
+        failed_at: Option<usize>,
+        /// Total wall-clock time for the entire batch, in milliseconds
+        #[serde(rename = "totalElapsed")]
+        total_elapsed: u64,
+    },
+
         }
     };
 }

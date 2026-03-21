@@ -1,0 +1,306 @@
+//! Integration tests for the `batch` / `batchResult` protocol messages.
+//!
+//! Validates wire-level compatibility: parsing batch requests with multiple
+//! commands, stop-on-error behavior, and `selectByValue` against choices.
+
+use script_kit_gpui::protocol::Message;
+
+// ---------- batch request parsing ----------
+
+#[test]
+fn batch_full_transaction_parses_from_raw_json() {
+    let raw = serde_json::json!({
+        "type": "batch",
+        "requestId": "txn-1",
+        "commands": [
+            {"type": "setInput", "text": "apple"},
+            {"type": "waitFor", "condition": "choicesRendered", "timeout": 1000},
+            {"type": "selectByValue", "value": "apple", "submit": true}
+        ]
+    });
+    let msg: Message = serde_json::from_value(raw).expect("should parse batch");
+    let reserialized = serde_json::to_value(&msg).expect("should reserialize");
+
+    assert_eq!(reserialized["type"], "batch");
+    assert_eq!(reserialized["requestId"], "txn-1");
+
+    let commands = reserialized["commands"].as_array().expect("commands array");
+    assert_eq!(commands.len(), 3);
+    assert_eq!(commands[0]["type"], "setInput");
+    assert_eq!(commands[0]["text"], "apple");
+    assert_eq!(commands[1]["type"], "waitFor");
+    assert_eq!(commands[1]["condition"], "choicesRendered");
+    assert_eq!(commands[2]["type"], "selectByValue");
+    assert_eq!(commands[2]["value"], "apple");
+    assert_eq!(commands[2]["submit"], true);
+}
+
+#[test]
+fn batch_with_options_parses() {
+    let raw = serde_json::json!({
+        "type": "batch",
+        "requestId": "txn-opts",
+        "commands": [
+            {"type": "typeAndSubmit", "text": "hello"}
+        ],
+        "options": {
+            "stopOnError": false,
+            "timeout": 10000
+        }
+    });
+    let msg: Message = serde_json::from_value(raw).expect("should parse batch with options");
+    let reserialized = serde_json::to_value(&msg).expect("should reserialize");
+
+    assert_eq!(reserialized["options"]["stopOnError"], false);
+    assert_eq!(reserialized["options"]["timeout"], 10000);
+}
+
+#[test]
+fn batch_without_options_omits_field() {
+    let raw = serde_json::json!({
+        "type": "batch",
+        "requestId": "txn-no-opts",
+        "commands": [
+            {"type": "setInput", "text": "test"}
+        ]
+    });
+    let msg: Message = serde_json::from_value(raw).expect("should parse");
+    let reserialized = serde_json::to_value(&msg).expect("should reserialize");
+
+    assert!(
+        reserialized.get("options").is_none(),
+        "options should be omitted when absent"
+    );
+}
+
+// ---------- batchResult response shapes ----------
+
+#[test]
+fn batch_result_success_shape_with_apple_selection() {
+    let msg = Message::batch_result(
+        "txn-1".to_string(),
+        true,
+        vec![
+            script_kit_gpui::protocol::BatchResultEntry {
+                index: 0,
+                success: true,
+                command: "setInput".to_string(),
+                elapsed: Some(1),
+                value: None,
+                error: None,
+            },
+            script_kit_gpui::protocol::BatchResultEntry {
+                index: 1,
+                success: true,
+                command: "waitFor".to_string(),
+                elapsed: Some(17),
+                value: None,
+                error: None,
+            },
+            script_kit_gpui::protocol::BatchResultEntry {
+                index: 2,
+                success: true,
+                command: "selectByValue".to_string(),
+                elapsed: Some(2),
+                value: Some("apple".to_string()),
+                error: None,
+            },
+        ],
+        None,
+        24,
+    );
+    let json = serde_json::to_value(&msg).expect("serialize batchResult");
+
+    assert_eq!(json["type"], "batchResult");
+    assert_eq!(json["requestId"], "txn-1");
+    assert_eq!(json["success"], true);
+    assert_eq!(json["totalElapsed"], 24);
+    assert!(
+        json.get("failedAt").is_none(),
+        "failedAt should be absent on full success"
+    );
+
+    let results = json["results"].as_array().expect("results array");
+    assert_eq!(results.len(), 3);
+    assert_eq!(results[0]["command"], "setInput");
+    assert_eq!(results[1]["command"], "waitFor");
+    assert_eq!(results[1]["elapsed"], 17);
+    assert_eq!(results[2]["command"], "selectByValue");
+    assert_eq!(results[2]["value"], "apple");
+}
+
+// ---------- stop-on-error behavior ----------
+
+#[test]
+fn batch_result_stop_on_error_sets_failed_at() {
+    let msg = Message::batch_result(
+        "txn-fail".to_string(),
+        false,
+        vec![
+            script_kit_gpui::protocol::BatchResultEntry {
+                index: 0,
+                success: true,
+                command: "setInput".to_string(),
+                elapsed: Some(1),
+                value: None,
+                error: None,
+            },
+            script_kit_gpui::protocol::BatchResultEntry {
+                index: 1,
+                success: false,
+                command: "selectByValue".to_string(),
+                elapsed: Some(3),
+                value: None,
+                error: Some("No visible choice matched value 'grape'".to_string()),
+            },
+        ],
+        Some(1),
+        4,
+    );
+    let json = serde_json::to_value(&msg).expect("serialize failed batch");
+
+    assert_eq!(json["type"], "batchResult");
+    assert_eq!(json["success"], false);
+    assert_eq!(json["failedAt"], 1);
+    assert_eq!(json["totalElapsed"], 4);
+
+    let results = json["results"].as_array().expect("results array");
+    assert_eq!(results.len(), 2, "stop-on-error should include results up to and including failure");
+    assert_eq!(results[0]["success"], true);
+    assert_eq!(results[1]["success"], false);
+    assert_eq!(results[1]["error"], "No visible choice matched value 'grape'");
+}
+
+#[test]
+fn batch_result_stop_on_error_preserves_successful_prefix() {
+    // When stop_on_error is true and command 2 fails, commands 0 and 1 should
+    // still appear in results with success: true.
+    let msg = Message::batch_result(
+        "txn-prefix".to_string(),
+        false,
+        vec![
+            script_kit_gpui::protocol::BatchResultEntry {
+                index: 0,
+                success: true,
+                command: "setInput".to_string(),
+                elapsed: Some(1),
+                value: None,
+                error: None,
+            },
+            script_kit_gpui::protocol::BatchResultEntry {
+                index: 1,
+                success: true,
+                command: "waitFor".to_string(),
+                elapsed: Some(50),
+                value: None,
+                error: None,
+            },
+            script_kit_gpui::protocol::BatchResultEntry {
+                index: 2,
+                success: false,
+                command: "selectByValue".to_string(),
+                elapsed: Some(2),
+                value: None,
+                error: Some("No visible choice matched value 'mango'".to_string()),
+            },
+        ],
+        Some(2),
+        53,
+    );
+    let json = serde_json::to_value(&msg).expect("serialize");
+
+    assert_eq!(json["failedAt"], 2);
+    let results = json["results"].as_array().expect("results");
+    assert_eq!(results[0]["success"], true);
+    assert_eq!(results[1]["success"], true);
+    assert_eq!(results[2]["success"], false);
+}
+
+// ---------- batchResult round-trip ----------
+
+#[test]
+fn batch_result_round_trips_through_serde() {
+    let msg = Message::batch_result(
+        "txn-rt".to_string(),
+        true,
+        vec![script_kit_gpui::protocol::BatchResultEntry {
+            index: 0,
+            success: true,
+            command: "setInput".to_string(),
+            elapsed: Some(1),
+            value: None,
+            error: None,
+        }],
+        None,
+        1,
+    );
+    let serialized = serde_json::to_string(&msg).expect("serialize");
+    let back: Message = serde_json::from_str(&serialized).expect("deserialize");
+    let re = serde_json::to_value(&back).expect("re-serialize");
+
+    assert_eq!(re["type"], "batchResult");
+    assert_eq!(re["success"], true);
+    assert_eq!(re["totalElapsed"], 1);
+}
+
+// ---------- selectByValue in batch context ----------
+
+#[test]
+fn batch_select_by_value_against_filtered_choices_shape() {
+    // Verifies the wire shape for a transaction that filters, waits, and selects
+    let raw = serde_json::json!({
+        "type": "batch",
+        "requestId": "txn-filter-select",
+        "commands": [
+            {"type": "setInput", "text": "app"},
+            {"type": "waitFor", "condition": "choicesRendered", "timeout": 2000},
+            {"type": "selectByValue", "value": "apple", "submit": true}
+        ],
+        "options": {"stopOnError": true, "timeout": 5000}
+    });
+
+    let msg: Message = serde_json::from_value(raw).expect("parse filter+select batch");
+    let reserialized = serde_json::to_value(&msg).expect("reserialize");
+
+    // Verify the full transaction structure
+    let cmds = reserialized["commands"].as_array().expect("commands");
+    assert_eq!(cmds.len(), 3);
+
+    // Step 1: set filter text
+    assert_eq!(cmds[0]["type"], "setInput");
+    assert_eq!(cmds[0]["text"], "app");
+
+    // Step 2: wait for choices to appear
+    assert_eq!(cmds[1]["type"], "waitFor");
+    assert_eq!(cmds[1]["condition"], "choicesRendered");
+
+    // Step 3: select the matching choice
+    assert_eq!(cmds[2]["type"], "selectByValue");
+    assert_eq!(cmds[2]["value"], "apple");
+    assert_eq!(cmds[2]["submit"], true);
+
+    // Options
+    assert_eq!(reserialized["options"]["stopOnError"], true);
+}
+
+// ---------- filterAndSelect batch command ----------
+
+#[test]
+fn batch_filter_and_select_round_trips() {
+    let raw = serde_json::json!({
+        "type": "batch",
+        "requestId": "txn-fas",
+        "commands": [
+            {"type": "filterAndSelect", "filter": "app", "selectFirst": true, "submit": true}
+        ]
+    });
+
+    let msg: Message = serde_json::from_value(raw).expect("parse filterAndSelect batch");
+    let reserialized = serde_json::to_value(&msg).expect("reserialize");
+
+    let cmd = &reserialized["commands"][0];
+    assert_eq!(cmd["type"], "filterAndSelect");
+    assert_eq!(cmd["filter"], "app");
+    assert_eq!(cmd["selectFirst"], true);
+    assert_eq!(cmd["submit"], true);
+}

@@ -440,6 +440,42 @@ Context parts can also be file attachments. All parts are resolved at submit tim
 }
 ```
 
+### Deterministic Transactions (`waitFor` + `batch`)
+
+AI agents can execute verifiable UI transactions without sleeps or polling loops. The `waitFor` command polls a condition until satisfied, and `batch` chains multiple atomic commands into a single request.
+
+**Agent workflow:** set input → wait for choices to render → select by value → submit. No timing guesses required.
+
+```json
+{
+  "type": "batch",
+  "requestId": "txn-1",
+  "commands": [
+    {"type": "setInput", "text": "apple"},
+    {"type": "waitFor", "condition": "choicesRendered", "timeout": 1000},
+    {"type": "selectByValue", "value": "apple", "submit": true}
+  ]
+}
+```
+
+The app replies with per-command results including elapsed time and selected values:
+
+```json
+{
+  "type": "batchResult",
+  "requestId": "txn-1",
+  "success": true,
+  "results": [
+    {"index": 0, "success": true, "command": "setInput"},
+    {"index": 1, "success": true, "command": "waitFor", "elapsed": 17},
+    {"index": 2, "success": true, "command": "selectByValue", "value": "apple"}
+  ],
+  "totalElapsed": 24
+}
+```
+
+Available wait conditions: `choicesRendered`, `inputEmpty`, `windowVisible`, `windowFocused`, plus detailed conditions like `elementExists`, `elementFocused`, and `stateMatch`. See [`docs/PROTOCOL.md`](docs/PROTOCOL.md) for the full reference.
+
 ## Contributing
 
 1. Fork the repository

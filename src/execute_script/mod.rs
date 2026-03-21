@@ -1523,6 +1523,63 @@ impl ScriptListApp {
                                         continue;
                                     }
 
+                                    // Handle WaitFor - needs UI state polling, forward to UI thread
+                                    if let Message::WaitFor {
+                                        request_id,
+                                        condition,
+                                        timeout,
+                                        poll_interval,
+                                    } = &msg
+                                    {
+                                        tracing::info!(
+                                            category = "EXEC",
+                                            request_id = %request_id,
+                                            "WaitFor request"
+                                        );
+                                        let prompt_msg = PromptMessage::WaitFor {
+                                            request_id: request_id.clone(),
+                                            condition: condition.clone(),
+                                            timeout: *timeout,
+                                            poll_interval: *poll_interval,
+                                        };
+                                        if tx.send_blocking(prompt_msg).is_err() {
+                                            tracing::info!(
+                                                category = "EXEC",
+                                                "Prompt channel closed, reader exiting"
+                                            );
+                                            break;
+                                        }
+                                        continue;
+                                    }
+
+                                    // Handle Batch - needs UI thread for command execution
+                                    if let Message::Batch {
+                                        request_id,
+                                        commands,
+                                        options,
+                                    } = &msg
+                                    {
+                                        tracing::info!(
+                                            category = "EXEC",
+                                            request_id = %request_id,
+                                            command_count = commands.len(),
+                                            "Batch request"
+                                        );
+                                        let prompt_msg = PromptMessage::Batch {
+                                            request_id: request_id.clone(),
+                                            commands: commands.clone(),
+                                            options: options.clone(),
+                                        };
+                                        if tx.send_blocking(prompt_msg).is_err() {
+                                            tracing::info!(
+                                                category = "EXEC",
+                                                "Prompt channel closed, reader exiting"
+                                            );
+                                            break;
+                                        }
+                                        continue;
+                                    }
+
                                     // Handle CaptureScreenshot directly (no UI needed)
                                     if let Message::CaptureScreenshot { request_id, hi_dpi } = &msg
                                     {

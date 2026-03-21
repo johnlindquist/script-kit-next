@@ -30,6 +30,7 @@ This document provides a comprehensive reference for the JSONL protocol used in 
    - [Element Introspection](#element-introspection)
    - [MCP Context Resources](#mcp-context-resources)
    - [AI Context Parts](#ai-context-parts)
+   - [Deterministic Transactions](#deterministic-transactions)
 6. [Data Types](#data-types)
 7. [Graceful Error Handling](#graceful-error-handling)
 8. [SDK Integration](#sdk-integration)
@@ -1621,6 +1622,137 @@ Unreadable files produce a metadata-only tag:
 }
 ```
 
+### Deterministic Transactions
+
+The `waitFor` / `batch` layer lets AI agents execute verifiable UI transactions without sleeps or guessing. Instead of multi-round-trip flows, agents can set input, poll for readiness, select deterministically, and submit — all in a single request.
+
+#### `waitFor` — Poll Until Ready
+
+Poll a condition at regular intervals until satisfied or timeout.
+
+**Request:**
+```json
+{"type": "waitFor", "requestId": "wait-1", "condition": "choicesRendered", "timeout": 1000, "pollInterval": 25}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `requestId` | string | required | Correlation ID |
+| `condition` | WaitCondition | required | What to wait for |
+| `timeout` | number | 5000 | Max wait in ms |
+| `pollInterval` | number | 25 | Check interval in ms |
+
+**Named conditions** (bare strings):
+
+| Condition | Satisfied when |
+|-----------|---------------|
+| `choicesRendered` | At least one `Choice` element is visible |
+| `inputEmpty` | The input field value is empty |
+| `windowVisible` | The app window is visible |
+| `windowFocused` | The app window has keyboard focus |
+
+**Detailed conditions** (objects with `type` field):
+
+| Type | Fields | Satisfied when |
+|------|--------|---------------|
+| `elementExists` | `semanticId` | Element with that ID is in the element list |
+| `elementVisible` | `semanticId` | Same as `elementExists` (visibility implied by presence) |
+| `elementFocused` | `semanticId` | Element exists and has `focused: true` |
+| `stateMatch` | `state: StateMatchSpec` | All present state fields match live values |
+
+**StateMatchSpec** — all fields optional, omitted fields are "don't care":
+```json
+{"promptType": "arg", "inputValue": "apple", "selectedValue": "apple", "windowVisible": true}
+```
+
+**Success response:**
+```json
+{"type": "waitForResult", "requestId": "wait-1", "success": true, "elapsed": 17}
+```
+
+**Timeout response:**
+```json
+{"type": "waitForResult", "requestId": "wait-1", "success": false, "elapsed": 5000, "error": "Timeout after 5000ms"}
+```
+
+#### `batch` — Transactional Command Sequence
+
+Execute a sequence of atomic UI commands. Commands run in order; if `stopOnError` is true (default), execution halts on first failure.
+
+**Request:**
+```json
+{
+  "type": "batch",
+  "requestId": "txn-1",
+  "commands": [
+    {"type": "setInput", "text": "apple"},
+    {"type": "waitFor", "condition": "choicesRendered", "timeout": 1000},
+    {"type": "selectByValue", "value": "apple", "submit": true}
+  ]
+}
+```
+
+**Batch commands:**
+
+| Command | Fields | Effect |
+|---------|--------|--------|
+| `setInput` | `text` | Set the input/filter field value |
+| `waitFor` | `condition`, `timeout?`, `pollInterval?` | Poll until condition is met (same as standalone `waitFor`) |
+| `selectByValue` | `value`, `submit?` | Select a visible choice by its value; optionally submit |
+| `filterAndSelect` | `filter`, `selectFirst?`, `submit?` | Set filter text, optionally select first match, optionally submit |
+| `typeAndSubmit` | `text` | Set input text and submit immediately |
+
+**Options:**
+```json
+{"stopOnError": true, "rollbackOnError": false, "timeout": 5000}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `stopOnError` | boolean | `true` | Stop on first command failure |
+| `rollbackOnError` | boolean | `false` | Reserved for future use |
+| `timeout` | number | 5000 | Overall batch timeout in ms |
+
+**Success response:**
+```json
+{
+  "type": "batchResult",
+  "requestId": "txn-1",
+  "success": true,
+  "results": [
+    {"index": 0, "success": true, "command": "setInput", "elapsed": 1},
+    {"index": 1, "success": true, "command": "waitFor", "elapsed": 17},
+    {"index": 2, "success": true, "command": "selectByValue", "elapsed": 2, "value": "apple"}
+  ],
+  "totalElapsed": 24
+}
+```
+
+**Failure response** (stop-on-error):
+```json
+{
+  "type": "batchResult",
+  "requestId": "txn-1",
+  "success": false,
+  "results": [
+    {"index": 0, "success": true, "command": "setInput", "elapsed": 1},
+    {"index": 1, "success": false, "command": "selectByValue", "elapsed": 3, "error": "No visible choice matched value 'grape'"}
+  ],
+  "failedAt": 1,
+  "totalElapsed": 4
+}
+```
+
+**Logging:** When `SCRIPT_KIT_AI_LOG=1`, the runtime emits structured log lines at `info` level for every state transition:
+- `wait_for.start` — request received with condition and timeout
+- `wait_for.immediate` — condition already satisfied (no polling needed)
+- `wait_for.satisfied` — condition met after polling
+- `wait_for.timeout` — timeout expired
+- `batch.start` — batch request received with command count
+- `batch.step.ok` — individual command succeeded
+- `batch.step.error` — individual command failed
+- `batch.complete` — batch finished with success/failure summary
+
 ---
 
 ## Data Types
@@ -1861,7 +1993,8 @@ try {
 | File Search | 2 | fileSearch, fileSearchResult |
 | Screenshot | 2 | captureScreenshot, screenshotResult |
 | Error | 1 | setError |
-| **Total** | **59** | |
+| Deterministic Transactions | 4 | waitFor, waitForResult, batch, batchResult |
+| **Total** | **63** | |
 
 ---
 
@@ -1882,3 +2015,5 @@ try {
 | `windowAction` | `windowActionResult` |
 | `fileSearch` | `fileSearchResult` |
 | `captureScreenshot` | `screenshotResult` |
+| `waitFor` | `waitForResult` |
+| `batch` | `batchResult` |

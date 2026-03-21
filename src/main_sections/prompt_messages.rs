@@ -251,4 +251,17 @@ enum PromptMessage {
     },
     /// Hide the debug grid overlay
     HideGrid,
+    /// Wait for a UI condition to be satisfied (polling)
+    WaitFor {
+        request_id: String,
+        condition: protocol::WaitCondition,
+        timeout: Option<u64>,
+        poll_interval: Option<u64>,
+    },
+    /// Execute a batch of atomic UI commands as a transaction
+    Batch {
+        request_id: String,
+        commands: Vec<protocol::BatchCommand>,
+        options: Option<protocol::BatchOptions>,
+    },
 }
