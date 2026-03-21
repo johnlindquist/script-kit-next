@@ -70,7 +70,26 @@ impl AiApp {
                 }
                 AiCommand::AddAttachment { path } => {
                     self.add_attachment(path.clone(), cx);
-                    tracing::info!(target: "ai", path = %path, "Added attachment");
+
+                    let label = std::path::Path::new(&path)
+                        .file_name()
+                        .map(|name| name.to_string_lossy().to_string())
+                        .unwrap_or_else(|| path.clone());
+
+                    self.pending_context_parts.push(
+                        crate::ai::message_parts::AiContextPart::FilePath {
+                            path: path.clone(),
+                            label: label.clone(),
+                        },
+                    );
+
+                    tracing::info!(
+                        target: "ai",
+                        kind = "file_path",
+                        label = %label,
+                        path_or_uri = %path,
+                        "Enqueued context part"
+                    );
                 }
                 AiCommand::InitializeWithPendingChat => {
                     self.initialize_with_pending_chat(window, cx);
@@ -111,6 +130,7 @@ impl AiApp {
                 AiCommand::StartChat {
                     chat_id,
                     message,
+                    parts,
                     image,
                     system_prompt,
                     model_id,
@@ -121,6 +141,7 @@ impl AiApp {
                     self.handle_start_chat(
                         chat_id,
                         message,
+                        parts,
                         image,
                         system_prompt,
                         model_id,

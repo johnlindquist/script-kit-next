@@ -183,6 +183,10 @@ pub struct AiApp {
     /// List of pending attachments (file paths)
     pub(super) pending_attachments: Vec<String>,
 
+    /// Pending context parts (file paths and resource URIs) that will be resolved
+    /// into prompt blocks at submit time.
+    pub(super) pending_context_parts: Vec<crate::ai::message_parts::AiContextPart>,
+
     /// Whether the mouse cursor is currently hidden (hidden on keyboard, shown on mouse move)
     pub(super) mouse_cursor_hidden: bool,
 

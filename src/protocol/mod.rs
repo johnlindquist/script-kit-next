@@ -70,7 +70,8 @@ pub use message::{capabilities, Message};
 pub use semantic_id::{generate_semantic_id, generate_semantic_id_named, value_to_slug};
 #[allow(unused_imports)]
 pub use types::{
-    AiChatInfo, AiMessageInfo, BoxModelSides, ChatMessagePosition, ChatMessageRole,
+    AiChatInfo, AiContextPartInput, AiMessageInfo, BoxModelSides, ChatMessagePosition,
+    ChatMessageRole,
     ChatPromptConfig, ChatPromptMessage, Choice, ClipboardAction, ClipboardEntryType,
     ClipboardFormat, ClipboardHistoryAction, ClipboardHistoryEntryData, ComputedBoxModel,
     ComputedFlexStyle, DisplayInfo, ElementInfo, ElementType, ExecOptions, Field,

@@ -90,7 +90,12 @@ impl AiApp {
             move |this, _, ev: &InputEvent, window, cx| match ev {
                 InputEvent::Change => this.on_input_change(cx),
                 // Plain Enter → submit; Shift+Enter (secondary) inserted a newline already
-                InputEvent::PressEnter { secondary: false } => this.submit_message(window, cx),
+                InputEvent::PressEnter { secondary: false } => {
+                    // Intercept slash commands before normal submission
+                    if !this.try_handle_slash_command(window, cx) {
+                        this.submit_message(window, cx);
+                    }
+                }
                 InputEvent::PressEnter { secondary: true } => {
                     // Newline was inserted by the Input component; just notify for resize
                     cx.notify();
@@ -258,6 +263,7 @@ impl AiApp {
             // Attachments state
             showing_attachments_picker: false,
             pending_attachments: Vec::new(),
+            pending_context_parts: Vec::new(),
             // Mouse cursor state
             mouse_cursor_hidden: false,
             input_mode: InputMode::Mouse,

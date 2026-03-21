@@ -313,17 +313,44 @@ impl AiApp {
     pub(super) fn remove_attachment(&mut self, index: usize, cx: &mut Context<Self>) {
         if index < self.pending_attachments.len() {
             let removed = self.pending_attachments.remove(index);
+            // Also remove the matching context part
+            self.pending_context_parts.retain(|part| {
+                !matches!(part, crate::ai::message_parts::AiContextPart::FilePath { path, .. } if path == &removed)
+            });
             tracing::info!(index = index, path = %removed, remaining = self.pending_attachments.len(), "attachment_removed");
             cx.notify();
         }
     }
 
-    /// Clear all attachments
+    /// Remove a pending context part by index.
+    pub(super) fn remove_context_part(&mut self, index: usize, cx: &mut Context<Self>) {
+        if index < self.pending_context_parts.len() {
+            let removed = self.pending_context_parts.remove(index);
+            tracing::info!(
+                index = index,
+                kind = %match &removed {
+                    crate::ai::message_parts::AiContextPart::ResourceUri { .. } => "resource_uri",
+                    crate::ai::message_parts::AiContextPart::FilePath { .. } => "file_path",
+                },
+                label = %removed.label(),
+                "context_part_removed"
+            );
+            cx.notify();
+        }
+    }
+
+    /// Clear all attachments and context parts
     pub(super) fn clear_attachments(&mut self, cx: &mut Context<Self>) {
-        let count = self.pending_attachments.len();
+        let attach_count = self.pending_attachments.len();
+        let parts_count = self.pending_context_parts.len();
         self.pending_attachments.clear();
-        if count > 0 {
-            tracing::info!(cleared_count = count, "attachments_cleared");
+        self.pending_context_parts.clear();
+        if attach_count > 0 || parts_count > 0 {
+            tracing::info!(
+                cleared_attachments = attach_count,
+                cleared_context_parts = parts_count,
+                "attachments_and_context_parts_cleared"
+            );
         }
         cx.notify();
     }

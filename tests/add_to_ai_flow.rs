@@ -87,3 +87,21 @@ fn test_add_to_ai_flow_forwards_file_reference_to_ai_chat_window_when_file_attac
         "AI window should consume AddAttachment commands so the file reference appears in chat UI"
     );
 }
+
+#[test]
+fn test_add_to_ai_flow_creates_context_part_from_attachment() {
+    let ai_render_root = read_source("src/ai/window/render_root.rs");
+
+    assert!(
+        ai_render_root.contains("pending_context_parts.push"),
+        "AddAttachment should create a real context part"
+    );
+    assert!(
+        ai_render_root.contains("AiContextPart::FilePath"),
+        "AddAttachment should produce a FilePath context part variant"
+    );
+    assert!(
+        ai_render_root.contains("Enqueued context part"),
+        "AddAttachment should log structured context part enqueue event"
+    );
+}

@@ -187,8 +187,12 @@ pub(super) fn should_retry_existing_user_turn(messages: &[Message]) -> bool {
         .unwrap_or(false)
 }
 
-pub(super) fn ai_window_can_submit_message(content: &str, has_pending_image: bool) -> bool {
-    !content.trim().is_empty() || has_pending_image
+pub(super) fn ai_window_can_submit_message(
+    content: &str,
+    has_pending_image: bool,
+    has_pending_context_parts: bool,
+) -> bool {
+    !content.trim().is_empty() || has_pending_image || has_pending_context_parts
 }
 
 pub(super) fn ai_window_prune_deleted_message_ui_state(
@@ -560,6 +564,7 @@ pub(super) enum AiCommand {
     StartChat {
         chat_id: ChatId,
         message: String,
+        parts: Vec<crate::ai::message_parts::AiContextPart>,
         image: Option<String>,
         system_prompt: Option<String>,
         model_id: Option<String>,

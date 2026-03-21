@@ -18,7 +18,7 @@ mod menu_bar;
 mod primitives;
 mod system;
 
-pub use ai::{AiChatInfo, AiMessageInfo};
+pub use ai::{AiChatInfo, AiContextPartInput, AiMessageInfo};
 pub use chat::{ChatMessagePosition, ChatMessageRole, ChatPromptConfig, ChatPromptMessage};
 pub use elements_actions_scriptlets::{
     ElementInfo, ElementType, ProtocolAction, ScriptletData, ScriptletMetadataData,

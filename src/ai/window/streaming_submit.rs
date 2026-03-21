@@ -76,10 +76,26 @@ impl AiApp {
     pub(super) fn submit_message(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let content = self.input_state.read(cx).value().to_string();
         let has_pending_image = self.pending_image.is_some();
+        let has_pending_context_parts = !self.pending_context_parts.is_empty();
 
-        if !ai_window_can_submit_message(&content, has_pending_image) {
+        if !ai_window_can_submit_message(&content, has_pending_image, has_pending_context_parts) {
+            tracing::debug!(
+                checkpoint = "submit_guard",
+                content_empty = content.trim().is_empty(),
+                has_pending_image,
+                has_pending_context_parts,
+                "submit_guard: rejected — no submittable content"
+            );
             return;
         }
+
+        tracing::info!(
+            checkpoint = "submit_guard",
+            content_len = content.len(),
+            has_pending_image,
+            has_pending_context_parts,
+            "submit_guard: passed"
+        );
 
         // If we are in editing mode, delegate to the edit-submit flow
         if self.editing_message_id.is_some() {
@@ -123,11 +139,78 @@ impl AiApp {
             tracing::info!(target: "ai", image_size_kb = image_size_kb, "Message includes attached image");
         }
 
+        // Resolve pending context parts into a prompt prefix just-in-time.
+        let pending_parts = std::mem::take(&mut self.pending_context_parts);
+        self.pending_attachments.clear();
+
+        let final_user_content = if pending_parts.is_empty() {
+            tracing::info!(
+                checkpoint = "resolution_success",
+                parts_count = 0,
+                "submit_context: no pending context parts to resolve"
+            );
+            content.clone()
+        } else {
+            let scripts = crate::scripts::read_scripts();
+            let scriptlets = crate::scripts::load_scriptlets();
+
+            match crate::ai::message_parts::resolve_context_parts_to_prompt_prefix(
+                &pending_parts,
+                &scripts,
+                &scriptlets,
+            ) {
+                Ok(prefix) if !prefix.is_empty() && !content.trim().is_empty() => {
+                    tracing::info!(
+                        checkpoint = "resolution_success",
+                        parts_count = pending_parts.len(),
+                        prefix_len = prefix.len(),
+                        content_len = content.len(),
+                        "submit_context: resolved context parts with user text"
+                    );
+                    format!("{prefix}\n\n{content}")
+                }
+                Ok(prefix) if !prefix.is_empty() => {
+                    tracing::info!(
+                        checkpoint = "resolution_success",
+                        parts_count = pending_parts.len(),
+                        prefix_len = prefix.len(),
+                        "submit_context: resolved context parts (no user text)"
+                    );
+                    prefix
+                }
+                Ok(_) => {
+                    tracing::info!(
+                        checkpoint = "resolution_success",
+                        parts_count = pending_parts.len(),
+                        "submit_context: resolved to empty prefix, using raw content"
+                    );
+                    content.clone()
+                }
+                Err(error) => {
+                    tracing::error!(
+                        checkpoint = "resolution_failure",
+                        error = %error,
+                        parts_count = pending_parts.len(),
+                        "submit_context: failed to resolve context parts, falling back to raw content"
+                    );
+                    content.clone()
+                }
+            }
+        };
+
+        tracing::info!(
+            checkpoint = "cleanup",
+            cleared_parts = pending_parts.len(),
+            "submit_context: cleared pending context parts and attachments"
+        );
+
         // Update chat title if this is the first message
         if let Some(chat) = self.chats.iter_mut().find(|c| c.id == chat_id) {
             if chat.title == "New Chat" {
                 let new_title = if content.trim().is_empty() && has_image {
                     "Image attachment".to_string()
+                } else if content.trim().is_empty() && !pending_parts.is_empty() {
+                    "Context attachment".to_string()
                 } else {
                     Chat::generate_title_from_content(&content)
                 };
@@ -140,8 +223,8 @@ impl AiApp {
             }
         }
 
-        // Create and save user message with optional image
-        let mut user_message = Message::user(chat_id, &content);
+        // Create and save user message with resolved content (context prefix + user text)
+        let mut user_message = Message::user(chat_id, &final_user_content);
 
         // Attach image if present
         if let Some(image_base64) = pending_image {
@@ -164,6 +247,8 @@ impl AiApp {
         // Update message preview and count cache
         let preview_source = if content.trim().is_empty() && has_image {
             "Image attachment"
+        } else if content.trim().is_empty() && !pending_parts.is_empty() {
+            "Context attachment"
         } else {
             content.as_str()
         };
@@ -811,7 +896,7 @@ mod tests {
         let has_pending_image = false;
 
         let should_delegate_to_edit_submit =
-            if !ai_window_can_submit_message(content, has_pending_image) {
+            if !ai_window_can_submit_message(content, has_pending_image, false) {
                 false
             } else {
                 editing_message_id.is_some()

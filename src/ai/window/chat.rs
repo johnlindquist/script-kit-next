@@ -390,6 +390,7 @@ impl AiApp {
         &mut self,
         chat_id: ChatId,
         message: String,
+        parts: Vec<crate::ai::message_parts::AiContextPart>,
         image: Option<String>,
         system_prompt: Option<String>,
         model_id: Option<String>,
@@ -407,6 +408,35 @@ impl AiApp {
         );
         let resolved_model_id = resolved.model_id.clone();
         let resolved_provider = resolved.provider.clone();
+        let has_parts = !parts.is_empty();
+
+        let final_user_content = if has_parts {
+            let scripts = crate::scripts::read_scripts();
+            let scriptlets = crate::scripts::load_scriptlets();
+
+            match crate::ai::message_parts::resolve_context_parts_to_prompt_prefix(
+                &parts,
+                &scripts,
+                &scriptlets,
+            ) {
+                Ok(prefix) if !prefix.is_empty() && !message.trim().is_empty() => {
+                    format!("{prefix}\n\n{message}")
+                }
+                Ok(prefix) if !prefix.is_empty() => prefix,
+                Ok(_) => message.clone(),
+                Err(error) => {
+                    tracing::error!(
+                        error = %error,
+                        chat_id = %chat_id,
+                        parts_count = parts.len(),
+                        "Failed to resolve aiStartChat context parts; falling back to raw message"
+                    );
+                    message.clone()
+                }
+            }
+        } else {
+            message.clone()
+        };
 
         if let Some(on_created) = on_created {
             on_created(resolved_model_id.clone(), resolved_provider.clone());
@@ -421,6 +451,8 @@ impl AiApp {
         let has_image = image.is_some();
         let title = if message.trim().is_empty() && has_image {
             "Image attachment".to_string()
+        } else if message.trim().is_empty() && has_parts {
+            "Context attachment".to_string()
         } else {
             Chat::generate_title_from_content(&message)
         };
@@ -442,7 +474,7 @@ impl AiApp {
         }
 
         // Create and save the user message with optional image
-        let mut user_message = Message::user(chat_id, &message);
+        let mut user_message = Message::user(chat_id, &final_user_content);
         if let Some(ref img_base64) = image {
             user_message
                 .images
@@ -474,6 +506,8 @@ impl AiApp {
         // Update preview and count caches
         let preview_source = if message.trim().is_empty() && has_image {
             "Image attachment"
+        } else if message.trim().is_empty() && has_parts {
+            "Context attachment"
         } else {
             message.as_str()
         };
@@ -498,6 +532,7 @@ impl AiApp {
             chat_id = %chat_id,
             submit = submit,
             has_image = has_image,
+            has_parts = has_parts,
             has_system_prompt = system_prompt.is_some(),
             message_len = message.len(),
             "ai_sdk.start_chat created"

@@ -482,6 +482,7 @@ pub fn start_ai_chat(
     cx: &mut App,
     chat_id: ChatId,
     message: &str,
+    parts: Vec<crate::ai::message_parts::AiContextPart>,
     image: Option<&str>,
     system_prompt: Option<&str>,
     model_id: Option<&str>,
@@ -504,6 +505,7 @@ pub fn start_ai_chat(
                 AiCommand::StartChat {
                     chat_id,
                     message: message.to_string(),
+                    parts,
                     image: image.map(|s| s.to_string()),
                     system_prompt: system_prompt.map(|s| s.to_string()),
                     model_id: model_id.map(|s| s.to_string()),

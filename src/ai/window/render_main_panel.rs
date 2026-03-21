@@ -4,8 +4,12 @@ use crate::theme::opacity::{
     OPACITY_TEXT_MUTED,
 };
 
-fn ai_main_panel_can_submit(input_value: &str, has_pending_image: bool) -> bool {
-    ai_window_can_submit_message(input_value, has_pending_image)
+fn ai_main_panel_can_submit(
+    input_value: &str,
+    has_pending_image: bool,
+    has_pending_context_parts: bool,
+) -> bool {
+    ai_window_can_submit_message(input_value, has_pending_image, has_pending_context_parts)
 }
 
 impl AiApp {
@@ -14,11 +18,14 @@ impl AiApp {
         // Row 1: single composer surface containing [+] and input text field
         // Row 2: model picker + word count on left, submit/actions on right
 
-        // Check if we have a pending image to show
+        // Check if we have a pending image or context parts to show
         let has_pending_image = self.pending_image.is_some();
+        let has_pending_context_parts = !self.pending_context_parts.is_empty();
+        let has_pending_content = has_pending_image || has_pending_context_parts;
         let is_editing = self.editing_message_id.is_some();
         let input_value = self.input_state.read(cx).value().to_string();
-        let input_is_empty = !ai_main_panel_can_submit(&input_value, has_pending_image);
+        let input_is_empty =
+            !ai_main_panel_can_submit(&input_value, has_pending_image, has_pending_context_parts);
         let input_word_count = if input_value.trim().is_empty() {
             0
         } else {
@@ -46,6 +53,10 @@ impl AiApp {
             }))
             // Editing indicator (shown above input when editing a message)
             .when(is_editing, |d| d.child(self.render_editing_indicator(cx)))
+            // Pending context part chips (shown above input when parts are attached)
+            .when(has_pending_context_parts, |d| {
+                d.child(self.render_pending_context_chips(cx))
+            })
             // Pending image preview (shown above input when image is attached)
             .when(has_pending_image, |d| {
                 d.child(self.render_pending_image_preview(cx))
@@ -78,7 +89,7 @@ impl AiApp {
                             .size(S6)
                             .rounded(R_MD)
                             .border_1()
-                            .border_color(if has_pending_image {
+                            .border_color(if has_pending_content {
                                 cx.theme().accent.opacity(OPACITY_ACCENT_MEDIUM)
                             } else {
                                 cx.theme().muted_foreground.opacity(OPACITY_BORDER)
@@ -99,14 +110,14 @@ impl AiApp {
                                 svg()
                                     .external_path(LocalIconName::Plus.external_path())
                                     .size(ICON_SM)
-                                    .text_color(if has_pending_image {
+                                    .text_color(if has_pending_content {
                                         cx.theme().accent
                                     } else {
                                         cx.theme().muted_foreground
                                     }),
                             )
-                            // Small accent dot when image is attached
-                            .when(has_pending_image, |d| {
+                            // Small accent dot when image or context part is attached
+                            .when(has_pending_content, |d| {
                                 d.child(
                                     div()
                                         .absolute()
@@ -238,6 +249,79 @@ impl AiApp {
             // Input area (fixed height, always visible at bottom)
             .child(input_area)
     }
+
+    /// Render chips representing pending context parts above the composer.
+    fn render_pending_context_chips(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let accent = cx.theme().accent;
+        let muted_fg = cx.theme().muted_foreground;
+
+        let chips: Vec<_> = self
+            .pending_context_parts
+            .iter()
+            .enumerate()
+            .map(|(idx, part)| {
+                let label: SharedString = part.label().to_string().into();
+                let icon_name = match part {
+                    crate::ai::message_parts::AiContextPart::ResourceUri { .. } => {
+                        LocalIconName::Code
+                    }
+                    crate::ai::message_parts::AiContextPart::FilePath { .. } => {
+                        LocalIconName::File
+                    }
+                };
+
+                div()
+                    .id(SharedString::from(format!("ctx-part-{}", idx)))
+                    .flex()
+                    .items_center()
+                    .gap(S1)
+                    .px(S2)
+                    .py(S1)
+                    .rounded(R_MD)
+                    .bg(accent.opacity(OPACITY_DISABLED))
+                    .border_1()
+                    .border_color(accent.opacity(OPACITY_BORDER))
+                    .child(
+                        svg()
+                            .external_path(icon_name.external_path())
+                            .size(ICON_XS)
+                            .text_color(accent),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().foreground)
+                            .overflow_hidden()
+                            .text_ellipsis()
+                            .max_w(px(160.0))
+                            .child(label),
+                    )
+                    .child(
+                        div()
+                            .id(SharedString::from(format!("ctx-remove-{}", idx)))
+                            .cursor_pointer()
+                            .hover(|el| el.text_color(cx.theme().danger))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.remove_context_part(idx, cx);
+                            }))
+                            .child(
+                                svg()
+                                    .external_path(LocalIconName::Close.external_path())
+                                    .size(ICON_XS)
+                                    .text_color(muted_fg),
+                            ),
+                    )
+            })
+            .collect();
+
+        div()
+            .id("pending-context-chips")
+            .flex()
+            .flex_row()
+            .flex_wrap()
+            .gap(S2)
+            .children(chips)
+    }
 }
 
 #[cfg(test)]
@@ -246,21 +330,31 @@ mod tests {
 
     #[test]
     fn test_ai_main_panel_can_submit_returns_true_when_text_present() {
-        assert!(ai_main_panel_can_submit("hello", false));
+        assert!(ai_main_panel_can_submit("hello", false, false));
     }
 
     #[test]
     fn test_ai_main_panel_can_submit_returns_true_when_pending_image_present_and_text_empty() {
-        assert!(ai_main_panel_can_submit("", true));
+        assert!(ai_main_panel_can_submit("", true, false));
     }
 
     #[test]
     fn test_ai_main_panel_can_submit_returns_false_when_text_empty_and_no_pending_image() {
-        assert!(!ai_main_panel_can_submit("", false));
+        assert!(!ai_main_panel_can_submit("", false, false));
     }
 
     #[test]
     fn test_ai_main_panel_can_submit_returns_false_for_whitespace_without_image() {
-        assert!(!ai_main_panel_can_submit("   ", false));
+        assert!(!ai_main_panel_can_submit("   ", false, false));
+    }
+
+    #[test]
+    fn test_ai_main_panel_can_submit_returns_true_when_context_parts_present() {
+        assert!(ai_main_panel_can_submit("", false, true));
+    }
+
+    #[test]
+    fn test_ai_main_panel_can_submit_returns_true_when_context_parts_and_text_present() {
+        assert!(ai_main_panel_can_submit("hello", false, true));
     }
 }

@@ -2289,6 +2289,7 @@ impl ScriptListApp {
                 image,
                 model_id,
                 no_response,
+                parts,
             } => {
                 tracing::info!(
                     category = "AI",
@@ -2330,6 +2331,17 @@ impl ScriptListApp {
                         crate::ai::ProviderRegistry::from_environment_with_config(Some(&self.config));
                     resolve_ai_start_chat_provider(&registry, selected_model_id)
                 });
+                let context_parts = parts
+                    .into_iter()
+                    .map(|part| match part {
+                        crate::protocol::AiContextPartInput::ResourceUri { uri, label } => {
+                            crate::ai::AiContextPart::ResourceUri { uri, label }
+                        }
+                        crate::protocol::AiContextPartInput::FilePath { path, label } => {
+                            crate::ai::AiContextPart::FilePath { path, label }
+                        }
+                    })
+                    .collect();
 
                 // Queue the StartChat command — the AI window will create the chat,
                 // save the user message (with optional image), and optionally stream.
@@ -2337,6 +2349,7 @@ impl ScriptListApp {
                     cx,
                     chat_id,
                     &message,
+                    context_parts,
                     image.as_deref(),
                     system_prompt.as_deref(),
                     model_id.as_deref(),
