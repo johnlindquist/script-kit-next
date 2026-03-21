@@ -653,7 +653,7 @@ mod tests {
             .get("resources")
             .and_then(|v| v.as_array())
             .context("missing resources array")?;
-        assert_eq!(resources.len(), 3, "Should have 3 resources");
+        assert_eq!(resources.len(), 4, "Should have 4 resources");
 
         // Verify expected resources are present
         let uris: Vec<&str> = resources

@@ -17,6 +17,9 @@ pub mod camera;
 pub mod components;
 pub mod config;
 
+// Deterministic AI-relevant desktop context snapshots
+pub mod context_snapshot;
+
 // Unified icon system - single API for all icon sources
 // Supports gpui_component IconName, embedded SVGs, SF Symbols, app bundles
 pub mod debug_grid;
