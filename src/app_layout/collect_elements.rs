@@ -2,9 +2,43 @@
 // Returns a bounded list of visible UI elements with semantic IDs.
 
 impl ScriptListApp {
+    /// Push an element into the vec only if it hasn't reached the limit.
+    /// Returns true if the element was added, false if capped.
+    #[inline]
+    fn push_limited_element(
+        elements: &mut Vec<protocol::ElementInfo>,
+        limit: usize,
+        element: protocol::ElementInfo,
+    ) -> bool {
+        if elements.len() >= limit {
+            return false;
+        }
+        elements.push(element);
+        true
+    }
+
+    /// Build an ElementInfo for a Choice, preferring its stable key for the semantic ID.
+    #[inline]
+    fn keyed_choice_element(
+        display_index: usize,
+        choice: &Choice,
+        selected: bool,
+    ) -> protocol::ElementInfo {
+        protocol::ElementInfo {
+            semantic_id: choice.generate_id(display_index),
+            element_type: protocol::ElementType::Choice,
+            text: Some(choice.name.clone()),
+            value: Some(choice.value.clone()),
+            selected: Some(selected),
+            focused: None,
+            index: Some(display_index),
+        }
+    }
+
     fn collect_visible_elements(
         &self,
         limit: usize,
+        cx: &Context<Self>,
     ) -> (Vec<protocol::ElementInfo>, usize) {
         match &self.current_view {
             AppView::ScriptList => self.collect_script_list_elements(limit),
@@ -167,101 +201,183 @@ impl ScriptListApp {
             }
 
             AppView::ThemeChooserView { filter, .. } => {
-                let elements = vec![
+                let total_count = 2;
+                let elements: Vec<protocol::ElementInfo> = vec![
                     protocol::ElementInfo::input(
                         "theme-filter",
                         Some(filter.as_str()),
                         true,
                     ),
                     protocol::ElementInfo::panel("theme-chooser"),
-                ];
-                (elements, 2)
+                ]
+                .into_iter()
+                .take(limit)
+                .collect();
+                (elements, total_count)
             }
 
             AppView::ActionsDialog => {
-                let elements = vec![protocol::ElementInfo::panel("actions-dialog")];
-                (elements, 1)
+                let total_count = 1;
+                let elements: Vec<protocol::ElementInfo> =
+                    vec![protocol::ElementInfo::panel("actions-dialog")]
+                        .into_iter()
+                        .take(limit)
+                        .collect();
+                (elements, total_count)
             }
 
             AppView::DivPrompt { .. } => {
-                let elements = vec![protocol::ElementInfo::panel("div-prompt")];
-                (elements, 1)
+                let total_count = 1;
+                let elements: Vec<protocol::ElementInfo> =
+                    vec![protocol::ElementInfo::panel("div-prompt")]
+                        .into_iter()
+                        .take(limit)
+                        .collect();
+                (elements, total_count)
             }
 
             AppView::FormPrompt { .. } => {
-                let elements = vec![protocol::ElementInfo::panel("form-prompt")];
-                (elements, 1)
+                let total_count = 1;
+                let elements: Vec<protocol::ElementInfo> =
+                    vec![protocol::ElementInfo::panel("form-prompt")]
+                        .into_iter()
+                        .take(limit)
+                        .collect();
+                (elements, total_count)
             }
 
             AppView::TermPrompt { .. } => {
-                let elements = vec![protocol::ElementInfo::panel("term-prompt")];
-                (elements, 1)
+                let total_count = 1;
+                let elements: Vec<protocol::ElementInfo> =
+                    vec![protocol::ElementInfo::panel("term-prompt")]
+                        .into_iter()
+                        .take(limit)
+                        .collect();
+                (elements, total_count)
             }
 
             AppView::EditorPrompt { .. } => {
-                let elements = vec![protocol::ElementInfo::panel("editor-prompt")];
-                (elements, 1)
+                let total_count = 1;
+                let elements: Vec<protocol::ElementInfo> =
+                    vec![protocol::ElementInfo::panel("editor-prompt")]
+                        .into_iter()
+                        .take(limit)
+                        .collect();
+                (elements, total_count)
             }
 
-            AppView::SelectPrompt { .. } => {
-                let elements = vec![protocol::ElementInfo::panel("select-prompt")];
-                (elements, 1)
+            AppView::SelectPrompt { entity, .. } => {
+                entity.read(cx).collect_elements(limit)
             }
 
             AppView::PathPrompt { .. } => {
-                let elements = vec![protocol::ElementInfo::panel("path-prompt")];
-                (elements, 1)
+                let total_count = 1;
+                let elements: Vec<protocol::ElementInfo> =
+                    vec![protocol::ElementInfo::panel("path-prompt")]
+                        .into_iter()
+                        .take(limit)
+                        .collect();
+                (elements, total_count)
             }
 
             AppView::ChatPrompt { .. } => {
-                let elements = vec![protocol::ElementInfo::panel("chat-prompt")];
-                (elements, 1)
+                let total_count = 1;
+                let elements: Vec<protocol::ElementInfo> =
+                    vec![protocol::ElementInfo::panel("chat-prompt")]
+                        .into_iter()
+                        .take(limit)
+                        .collect();
+                (elements, total_count)
             }
 
             AppView::EnvPrompt { .. } => {
-                let elements = vec![protocol::ElementInfo::panel("env-prompt")];
-                (elements, 1)
+                let total_count = 1;
+                let elements: Vec<protocol::ElementInfo> =
+                    vec![protocol::ElementInfo::panel("env-prompt")]
+                        .into_iter()
+                        .take(limit)
+                        .collect();
+                (elements, total_count)
             }
 
             AppView::DropPrompt { .. } => {
-                let elements = vec![protocol::ElementInfo::panel("drop-prompt")];
-                (elements, 1)
+                let total_count = 1;
+                let elements: Vec<protocol::ElementInfo> =
+                    vec![protocol::ElementInfo::panel("drop-prompt")]
+                        .into_iter()
+                        .take(limit)
+                        .collect();
+                (elements, total_count)
             }
 
             AppView::TemplatePrompt { .. } => {
-                let elements = vec![protocol::ElementInfo::panel("template-prompt")];
-                (elements, 1)
+                let total_count = 1;
+                let elements: Vec<protocol::ElementInfo> =
+                    vec![protocol::ElementInfo::panel("template-prompt")]
+                        .into_iter()
+                        .take(limit)
+                        .collect();
+                (elements, total_count)
             }
 
             AppView::NamingPrompt { .. } => {
-                let elements = vec![protocol::ElementInfo::panel("naming-prompt")];
-                (elements, 1)
+                let total_count = 1;
+                let elements: Vec<protocol::ElementInfo> =
+                    vec![protocol::ElementInfo::panel("naming-prompt")]
+                        .into_iter()
+                        .take(limit)
+                        .collect();
+                (elements, total_count)
             }
 
             AppView::CreationFeedback { .. } => {
-                let elements =
-                    vec![protocol::ElementInfo::panel("creation-feedback")];
-                (elements, 1)
+                let total_count = 1;
+                let elements: Vec<protocol::ElementInfo> =
+                    vec![protocol::ElementInfo::panel("creation-feedback")]
+                        .into_iter()
+                        .take(limit)
+                        .collect();
+                (elements, total_count)
             }
 
             AppView::WebcamView { .. } => {
-                let elements = vec![protocol::ElementInfo::panel("webcam")];
-                (elements, 1)
+                let total_count = 1;
+                let elements: Vec<protocol::ElementInfo> =
+                    vec![protocol::ElementInfo::panel("webcam")]
+                        .into_iter()
+                        .take(limit)
+                        .collect();
+                (elements, total_count)
             }
 
             AppView::ScratchPadView { .. } => {
-                let elements = vec![protocol::ElementInfo::panel("scratch-pad")];
-                (elements, 1)
+                let total_count = 1;
+                let elements: Vec<protocol::ElementInfo> =
+                    vec![protocol::ElementInfo::panel("scratch-pad")]
+                        .into_iter()
+                        .take(limit)
+                        .collect();
+                (elements, total_count)
             }
 
             AppView::QuickTerminalView { .. } => {
-                let elements = vec![protocol::ElementInfo::panel("quick-terminal")];
-                (elements, 1)
+                let total_count = 1;
+                let elements: Vec<protocol::ElementInfo> =
+                    vec![protocol::ElementInfo::panel("quick-terminal")]
+                        .into_iter()
+                        .take(limit)
+                        .collect();
+                (elements, total_count)
             }
 
             _ => {
-                let elements = vec![protocol::ElementInfo::panel("current-view")];
-                (elements, 1)
+                let total_count = 1;
+                let elements: Vec<protocol::ElementInfo> =
+                    vec![protocol::ElementInfo::panel("current-view")]
+                        .into_iter()
+                        .take(limit)
+                        .collect();
+                (elements, total_count)
             }
         }
     }
@@ -278,22 +394,31 @@ impl ScriptListApp {
         let total_count = filtered.len() + 2;
 
         let mut elements = Vec::with_capacity(limit.min(total_count));
-        elements.push(protocol::ElementInfo::input(
-            input_name,
-            Some(input_value.as_str()),
-            self.focused_input != FocusedInput::None,
-        ));
-        elements.push(protocol::ElementInfo::list("choices", filtered.len()));
 
-        for (index, choice) in filtered.iter().enumerate() {
+        Self::push_limited_element(
+            &mut elements,
+            limit,
+            protocol::ElementInfo::input(
+                input_name,
+                Some(input_value.as_str()),
+                self.focused_input != FocusedInput::None,
+            ),
+        );
+
+        Self::push_limited_element(
+            &mut elements,
+            limit,
+            protocol::ElementInfo::list("choices", filtered.len()),
+        );
+
+        for (display_index, choice) in filtered.iter().enumerate() {
             if elements.len() >= limit {
                 break;
             }
-            elements.push(protocol::ElementInfo::choice(
-                index,
-                &choice.name,
-                &choice.value,
-                index == selected_index,
+            elements.push(Self::keyed_choice_element(
+                display_index,
+                choice,
+                display_index == selected_index,
             ));
         }
 
@@ -312,23 +437,36 @@ impl ScriptListApp {
         let total_count = rows.len() + 2;
 
         let mut elements = Vec::with_capacity(limit.min(total_count));
-        elements.push(protocol::ElementInfo::input(
-            input_name,
-            Some(input_value.as_str()),
-            self.focused_input != FocusedInput::None,
-        ));
-        elements.push(protocol::ElementInfo::list(list_name, rows.len()));
+
+        Self::push_limited_element(
+            &mut elements,
+            limit,
+            protocol::ElementInfo::input(
+                input_name,
+                Some(input_value.as_str()),
+                self.focused_input != FocusedInput::None,
+            ),
+        );
+
+        Self::push_limited_element(
+            &mut elements,
+            limit,
+            protocol::ElementInfo::list(list_name, rows.len()),
+        );
 
         for (index, row) in rows.iter().enumerate() {
             if elements.len() >= limit {
                 break;
             }
-            elements.push(protocol::ElementInfo::choice(
-                index,
-                row,
-                row,
-                index == selected_index,
-            ));
+            elements.push(protocol::ElementInfo {
+                semantic_id: protocol::generate_semantic_id("choice", index, row),
+                element_type: protocol::ElementType::Choice,
+                text: Some(row.clone()),
+                value: Some(row.clone()),
+                selected: Some(index == selected_index),
+                focused: None,
+                index: Some(index),
+            });
         }
 
         (elements, total_count)

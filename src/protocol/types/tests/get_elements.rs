@@ -62,6 +62,9 @@ fn test_elements_result_contains_expected_semantic_ids() {
 
     // Must contain totalCount
     assert!(json.contains(r#""totalCount":4"#), "Missing totalCount");
+
+    // Not truncated when elements.len() == totalCount
+    assert!(json.contains(r#""truncated":false"#), "Should not be truncated");
 }
 
 #[test]
@@ -83,9 +86,11 @@ fn test_elements_result_roundtrip_preserves_structure() {
             request_id,
             elements: parsed_elements,
             total_count,
+            truncated,
         } => {
             assert_eq!(request_id, "rt-1");
             assert_eq!(total_count, 3);
+            assert!(!truncated);
             assert_eq!(parsed_elements.len(), 3);
 
             // Verify input element
@@ -196,8 +201,9 @@ fn test_simulated_choice_prompt_elements_structure() {
 
     match response {
         crate::protocol::Message::ElementsResult {
-            elements, total_count, ..
+            elements, total_count, truncated, ..
         } => {
+            assert!(!truncated, "Should not be truncated when all elements included");
             // Acceptance criteria: input:filter present
             assert!(
                 elements.iter().any(|e| e.semantic_id == "input:filter"),
@@ -220,4 +226,145 @@ fn test_simulated_choice_prompt_elements_structure() {
         }
         other => panic!("Expected ElementsResult, got: {:?}", other),
     }
+}
+
+// ============================================================
+// Limit enforcement and truncation
+// ============================================================
+
+#[test]
+fn test_elements_result_marks_truncated_when_elements_are_capped() {
+    let response = crate::protocol::Message::elements_result(
+        "elm-trunc".to_string(),
+        vec![ElementInfo::input("filter", Some("a"), true)],
+        3,
+    );
+
+    match response {
+        crate::protocol::Message::ElementsResult {
+            request_id,
+            total_count,
+            truncated,
+            ..
+        } => {
+            assert_eq!(request_id, "elm-trunc");
+            assert_eq!(total_count, 3);
+            assert!(truncated, "Must be truncated when elements.len() < totalCount");
+        }
+        other => panic!("Expected ElementsResult, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_elements_result_not_truncated_when_complete() {
+    let elements = vec![
+        ElementInfo::input("filter", Some(""), true),
+        ElementInfo::panel("div-prompt"),
+    ];
+    let response =
+        crate::protocol::Message::elements_result("elm-full".to_string(), elements, 2);
+
+    match response {
+        crate::protocol::Message::ElementsResult { truncated, .. } => {
+            assert!(!truncated, "Must not be truncated when elements.len() == totalCount");
+        }
+        other => panic!("Expected ElementsResult, got: {:?}", other),
+    }
+}
+
+// ============================================================
+// Choice key-based semantic ID stability
+// ============================================================
+
+#[test]
+fn test_choice_generate_id_prefers_stable_key() {
+    use crate::protocol::types::Choice;
+    let choice = Choice::new("Apple".to_string(), "apple".to_string())
+        .with_key("fruit-apple".to_string());
+
+    // Key-based ID should ignore the index entirely
+    assert_eq!(choice.generate_id(999), "choice:fruit-apple");
+}
+
+#[test]
+fn test_choice_generate_id_falls_back_to_index_value() {
+    use crate::protocol::types::Choice;
+    let choice = Choice::new("Banana".to_string(), "banana".to_string());
+
+    assert_eq!(choice.generate_id(0), "choice:0:banana");
+    assert_eq!(choice.generate_id(5), "choice:5:banana");
+}
+
+#[test]
+fn test_elements_result_truncated_field_serializes() {
+    let response = crate::protocol::Message::elements_result(
+        "ser-1".to_string(),
+        vec![ElementInfo::input("filter", Some("x"), true)],
+        5,
+    );
+    let json = serde_json::to_string(&response).expect("Should serialize");
+    assert!(
+        json.contains(r#""truncated":true"#),
+        "truncated field must appear in JSON: {json}"
+    );
+}
+
+#[test]
+fn test_select_prompt_scenario_elements_result_structure() {
+    // Simulate what SelectPrompt.collect_elements would produce
+    let elements = vec![
+        ElementInfo::input("select-filter", Some("app"), true),
+        ElementInfo::list("select-choices", 2),
+        ElementInfo::choice(0, "Apple", "apple", false),
+        ElementInfo::choice(1, "Application", "application", false),
+    ];
+
+    let total_count = elements.len();
+    let response =
+        crate::protocol::Message::elements_result("sel-1".to_string(), elements, total_count);
+
+    match response {
+        crate::protocol::Message::ElementsResult {
+            elements,
+            total_count,
+            truncated,
+            ..
+        } => {
+            assert!(!truncated);
+            assert_eq!(total_count, 4);
+
+            // Must include select-filter input
+            assert!(
+                elements.iter().any(|e| e.semantic_id == "input:select-filter"),
+                "Must contain input:select-filter"
+            );
+
+            // Must include select-choices list
+            assert!(
+                elements.iter().any(|e| e.semantic_id == "list:select-choices"),
+                "Must contain list:select-choices"
+            );
+
+            // Must include at least one choice row
+            assert!(
+                elements.iter().any(|e| e.semantic_id.starts_with("choice:")),
+                "Must contain at least one choice row"
+            );
+        }
+        other => panic!("Expected ElementsResult, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_elements_result_truncated_false_serializes() {
+    let response = crate::protocol::Message::elements_result(
+        "ser-2".to_string(),
+        vec![ElementInfo::panel("test")],
+        1,
+    );
+    let json = serde_json::to_string(&response).expect("Should serialize");
+    assert!(
+        json.contains(r#""truncated":false"#),
+        "truncated:false must appear in JSON: {json}"
+    );
 }

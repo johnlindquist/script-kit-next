@@ -119,6 +119,8 @@ macro_rules! protocol_message_variants_query_ops {
         /// Total number of elements (may be larger than returned if limit applied)
         #[serde(rename = "totalCount")]
         total_count: usize,
+        /// Whether the returned elements were capped by the limit
+        truncated: bool,
     },
 
     // ============================================================

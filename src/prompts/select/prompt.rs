@@ -1,5 +1,60 @@
 use super::*;
 
+/// Collect visible elements for a SelectPrompt's getElements protocol response.
+///
+/// Separated from the struct method so it can be tested without a GPUI context.
+pub(crate) fn collect_select_prompt_elements(
+    filter_text: &str,
+    choices: &[Choice],
+    filtered_choices: &[usize],
+    selected: &HashSet<usize>,
+    focused_index: usize,
+    limit: usize,
+) -> (Vec<crate::protocol::ElementInfo>, usize) {
+    let total_count = filtered_choices.len() + 2; // input + list + choices
+    let mut elements = Vec::with_capacity(limit.min(total_count));
+
+    // Filter input element
+    if elements.len() < limit {
+        elements.push(crate::protocol::ElementInfo::input(
+            "select-filter",
+            Some(filter_text),
+            true,
+        ));
+    }
+
+    // Choices list container
+    if elements.len() < limit {
+        elements.push(crate::protocol::ElementInfo::list(
+            "select-choices",
+            filtered_choices.len(),
+        ));
+    }
+
+    // Visible choice rows — use Choice.generate_id() for semantic IDs
+    for (display_idx, &choice_idx) in filtered_choices.iter().enumerate() {
+        if elements.len() >= limit {
+            break;
+        }
+
+        let choice = &choices[choice_idx];
+        let is_selected = selected.contains(&choice_idx);
+        let is_focused = display_idx == focused_index;
+
+        elements.push(crate::protocol::ElementInfo {
+            semantic_id: choice.generate_id(display_idx),
+            element_type: crate::protocol::ElementType::Choice,
+            text: Some(choice.name.clone()),
+            value: Some(choice.value.clone()),
+            selected: Some(is_selected),
+            focused: Some(is_focused),
+            index: Some(display_idx),
+        });
+    }
+
+    (elements, total_count)
+}
+
 /// SelectPrompt - Multi-select from choices
 ///
 /// Allows selecting multiple items from a list of choices.
@@ -212,6 +267,21 @@ impl SelectPrompt {
                 .scroll_to_item(0, ScrollStrategy::Top);
             cx.notify();
         }
+    }
+
+    /// Collect visible elements for getElements protocol introspection.
+    pub(crate) fn collect_elements(
+        &self,
+        limit: usize,
+    ) -> (Vec<crate::protocol::ElementInfo>, usize) {
+        collect_select_prompt_elements(
+            &self.filter_text,
+            &self.choices,
+            &self.filtered_choices,
+            &self.selected,
+            self.focused_index,
+            limit,
+        )
     }
 
     /// Select all choices (Ctrl+A)

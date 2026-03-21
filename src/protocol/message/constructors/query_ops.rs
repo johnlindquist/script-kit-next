@@ -123,10 +123,12 @@ impl Message {
         elements: Vec<ElementInfo>,
         total_count: usize,
     ) -> Self {
+        let truncated = elements.len() < total_count;
         Message::ElementsResult {
             request_id,
             elements,
             total_count,
+            truncated,
         }
     }
 
