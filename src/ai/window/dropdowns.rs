@@ -334,11 +334,11 @@ impl AiApp {
                 remaining_file_parts = remaining,
                 "attachment_removed"
             );
-            cx.notify();
+            self.notify_context_parts_changed(cx);
         }
     }
 
-    /// Remove a pending context part by index.
+    /// Remove a pending context part by index and schedule a preflight update.
     pub(super) fn remove_context_part(&mut self, index: usize, cx: &mut Context<Self>) {
         if index >= self.pending_context_parts.len() {
             return;
@@ -360,13 +360,15 @@ impl AiApp {
             remaining = self.pending_context_parts.len(),
             "ai_context_part_removed"
         );
-        cx.notify();
+        self.notify_context_parts_changed(cx);
     }
 
     /// Add a context part with deterministic dedup.
     ///
     /// If an identical part (same variant, URI/path, and label) is already
     /// present, the call is a no-op and a structured log checkpoint is emitted.
+    /// On successful add, schedules a context preflight so the UI shows an
+    /// up-to-date budget/provenance summary.
     pub(super) fn add_context_part(
         &mut self,
         part: crate::ai::message_parts::AiContextPart,
@@ -396,7 +398,7 @@ impl AiApp {
         );
 
         self.pending_context_parts.push(part);
-        cx.notify();
+        self.notify_context_parts_changed(cx);
     }
 
     /// Toggle the full prepared-message inspector panel (⌥⌘I).
@@ -411,7 +413,7 @@ impl AiApp {
         cx.notify();
     }
 
-    /// Clear all pending context parts (both ResourceUri and FilePath).
+    /// Clear all pending context parts (both ResourceUri and FilePath) and reset preflight.
     pub(super) fn clear_context_parts(&mut self, cx: &mut Context<Self>) {
         let cleared_count = self.pending_context_parts.len();
         if cleared_count == 0 {
@@ -425,12 +427,13 @@ impl AiApp {
             cleared_count,
             "ai_context_parts_cleared"
         );
-        cx.notify();
+        self.clear_context_preflight(cx);
     }
 
     /// Clear all file-path attachments from `pending_context_parts`.
     ///
     /// Only `FilePath` entries are removed; `ResourceUri` entries are preserved.
+    /// Schedules a preflight update if any resource URIs remain.
     pub(super) fn clear_attachments(&mut self, cx: &mut Context<Self>) {
         let before = crate::ai::message_parts::file_path_parts(&self.pending_context_parts).len();
         self.pending_context_parts.retain(|part| {
@@ -446,7 +449,23 @@ impl AiApp {
                 "file_path_attachments_cleared"
             );
         }
-        cx.notify();
+        self.notify_context_parts_changed(cx);
+    }
+
+    /// Centralized notification after any context parts mutation.
+    ///
+    /// Either schedules a preflight (if parts remain) or clears the
+    /// preflight state. Both paths call `cx.notify()` internally.
+    fn notify_context_parts_changed(&mut self, cx: &mut Context<Self>) {
+        if self.pending_context_parts.is_empty() {
+            self.clear_context_preflight(cx);
+        } else {
+            // Use empty string as raw_content — the preflight will pick up
+            // any @mentions from the actual composer input at submit time.
+            // For the preflight preview, we only care about the explicit
+            // pending parts that are already attached.
+            self.schedule_context_preflight(String::new(), cx);
+        }
     }
 
     /// Hide all dropdowns (including closing the command bar vibrancy window)

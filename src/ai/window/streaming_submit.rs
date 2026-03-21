@@ -190,6 +190,9 @@ impl AiApp {
             }
         };
 
+        // Clear preflight state since context parts have been consumed
+        self.clear_context_preflight(cx);
+
         tracing::info!(
             checkpoint = "cleanup",
             cleared_parts = pending_parts.len(),

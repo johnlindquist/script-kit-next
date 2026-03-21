@@ -292,6 +292,7 @@ impl AiApp {
             last_prepared_message_receipt: None,
             last_context_receipt: None,
             show_context_inspector: false,
+            context_preflight: super::context_preflight::ContextPreflightState::default(),
         }
     }
 
