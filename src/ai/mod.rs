@@ -46,7 +46,9 @@ pub(crate) mod window;
 // Re-export commonly used types
 pub use self::config::{DetectedKeys, ModelInfo, ProviderConfig};
 pub use self::message_parts::{
-    resolve_context_part_to_prompt_block, resolve_context_parts_to_prompt_prefix, AiContextPart,
+    file_path_parts, resolve_context_part_to_prompt_block,
+    resolve_context_parts_to_prompt_prefix, resolve_context_parts_with_receipt, AiContextPart,
+    ContextResolutionFailure, ContextResolutionReceipt,
 };
 pub use self::model::{Chat, ChatId, ChatSource, Message, MessageRole};
 pub use self::providers::{AiProvider, ProviderMessage, ProviderRegistry};

@@ -69,27 +69,8 @@ impl AiApp {
                     }
                 }
                 AiCommand::AddAttachment { path } => {
-                    self.add_attachment(path.clone(), cx);
-
-                    let label = std::path::Path::new(&path)
-                        .file_name()
-                        .map(|name| name.to_string_lossy().to_string())
-                        .unwrap_or_else(|| path.clone());
-
-                    self.pending_context_parts.push(
-                        crate::ai::message_parts::AiContextPart::FilePath {
-                            path: path.clone(),
-                            label: label.clone(),
-                        },
-                    );
-
-                    tracing::info!(
-                        target: "ai",
-                        kind = "file_path",
-                        label = %label,
-                        path_or_uri = %path,
-                        "Enqueued context part"
-                    );
+                    // add_attachment now handles both dedup and context-part creation
+                    self.add_attachment(path, cx);
                 }
                 AiCommand::InitializeWithPendingChat => {
                     self.initialize_with_pending_chat(window, cx);

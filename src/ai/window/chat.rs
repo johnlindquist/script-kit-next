@@ -191,14 +191,14 @@ impl AiApp {
 
         // Clear per-conversation transient state that select_chat does not cover
         let had_image = self.pending_image.is_some();
-        let attachment_count = self.pending_attachments.len();
+        let context_parts_count = self.pending_context_parts.len();
         self.pending_image = None;
-        self.pending_attachments.clear();
-        if had_image || attachment_count > 0 {
+        self.pending_context_parts.clear();
+        if had_image || context_parts_count > 0 {
             tracing::info!(
                 had_pending_image = had_image,
-                pending_attachments = attachment_count,
-                "chat_switch_cleared_attachments"
+                cleared_context_parts = context_parts_count,
+                "chat_switch_cleared_context_parts"
             );
         }
         self.collapsed_messages.clear();
@@ -414,23 +414,53 @@ impl AiApp {
             let scripts = crate::scripts::read_scripts();
             let scriptlets = crate::scripts::load_scriptlets();
 
-            match crate::ai::message_parts::resolve_context_parts_to_prompt_prefix(
+            let receipt = crate::ai::message_parts::resolve_context_parts_with_receipt(
                 &parts,
                 &scripts,
                 &scriptlets,
-            ) {
-                Ok(prefix) if !prefix.is_empty() && !message.trim().is_empty() => {
-                    format!("{prefix}\n\n{message}")
+            );
+
+            if receipt.has_failures() {
+                tracing::warn!(
+                    checkpoint = "resolution_partial",
+                    attempted = receipt.attempted,
+                    resolved = receipt.resolved,
+                    failures = ?receipt.failures,
+                    chat_id = %chat_id,
+                    "start_chat_context: partial resolution failure"
+                );
+
+                // If nothing resolved at all, surface the error deterministically
+                if receipt.resolved == 0 {
+                    let failure_summaries: Vec<String> = receipt
+                        .failures
+                        .iter()
+                        .map(|f| format!("{}: {}", f.label, f.error))
+                        .collect();
+                    self.streaming_error = Some(format!(
+                        "Failed to resolve context: {}",
+                        failure_summaries.join("; ")
+                    ));
+
+                    // Still create the chat with raw message so the SDK gets a valid chatId,
+                    // but surface the error so it's not silently swallowed.
+                    message.clone()
+                } else {
+                    // Partial success: use the resolved prefix with user text
+                    let prefix = &receipt.prompt_prefix;
+                    if !message.trim().is_empty() {
+                        format!("{prefix}\n\n{message}")
+                    } else {
+                        prefix.clone()
+                    }
                 }
-                Ok(prefix) if !prefix.is_empty() => prefix,
-                Ok(_) => message.clone(),
-                Err(error) => {
-                    tracing::error!(
-                        error = %error,
-                        chat_id = %chat_id,
-                        parts_count = parts.len(),
-                        "Failed to resolve aiStartChat context parts; falling back to raw message"
-                    );
+            } else {
+                let prefix = &receipt.prompt_prefix;
+                if !prefix.is_empty() && !message.trim().is_empty() {
+                    format!("{prefix}\n\n{message}")
+                } else if !prefix.is_empty() {
+                    prefix.clone()
+                } else {
                     message.clone()
                 }
             }
