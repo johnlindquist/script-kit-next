@@ -45,3 +45,7 @@ mod builders_tests;
 #[cfg(test)]
 #[path = "tests/core.rs"]
 mod core_tests;
+
+#[cfg(test)]
+#[path = "context_action_contract_tests.rs"]
+mod context_action_contract_tests;

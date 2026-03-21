@@ -184,6 +184,10 @@ pub struct AiApp {
     /// into prompt blocks at submit time.
     pub(super) pending_context_parts: Vec<crate::ai::message_parts::AiContextPart>,
 
+    /// Index of the pending context part whose preview panel is currently open.
+    /// `None` means no preview is shown. Toggled by clicking the info icon on a chip.
+    pub(super) context_preview_index: Option<usize>,
+
     /// Whether the mouse cursor is currently hidden (hidden on keyboard, shown on mouse move)
     pub(super) mouse_cursor_hidden: bool,
 

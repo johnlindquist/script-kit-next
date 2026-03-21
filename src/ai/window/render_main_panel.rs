@@ -300,9 +300,14 @@ impl AiApp {
     }
 
     /// Render chips representing pending context parts above the composer.
+    ///
+    /// Each ResourceUri chip includes an expand/collapse chevron that toggles
+    /// an inline preview panel showing the source URI, profile, and payload
+    /// summary. FilePath chips show only the close button (no preview needed).
     fn render_pending_context_chips(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let accent = cx.theme().accent;
         let muted_fg = cx.theme().muted_foreground;
+        let preview_idx = self.context_preview_index;
 
         let chips: Vec<_> = self
             .pending_context_parts
@@ -310,16 +315,25 @@ impl AiApp {
             .enumerate()
             .map(|(idx, part)| {
                 let label: SharedString = part.label().to_string().into();
-                let icon_name = match part {
-                    crate::ai::message_parts::AiContextPart::ResourceUri { .. } => {
-                        LocalIconName::Code
-                    }
-                    crate::ai::message_parts::AiContextPart::FilePath { .. } => {
-                        LocalIconName::File
-                    }
+                let is_resource = matches!(
+                    part,
+                    crate::ai::message_parts::AiContextPart::ResourceUri { .. }
+                );
+                let is_previewed = preview_idx == Some(idx);
+                let icon_name = if is_resource {
+                    LocalIconName::Code
+                } else {
+                    LocalIconName::File
                 };
 
-                div()
+                // Chip border highlights when its preview is open
+                let chip_border = if is_previewed {
+                    accent.opacity(OPACITY_SELECTED)
+                } else {
+                    accent.opacity(OPACITY_BORDER)
+                };
+
+                let mut chip = div()
                     .id(SharedString::from(format!("ctx-part-{}", idx)))
                     .flex()
                     .items_center()
@@ -329,7 +343,7 @@ impl AiApp {
                     .rounded(R_MD)
                     .bg(accent.opacity(OPACITY_DISABLED))
                     .border_1()
-                    .border_color(accent.opacity(OPACITY_BORDER))
+                    .border_color(chip_border)
                     .child(
                         svg()
                             .external_path(icon_name.external_path())
@@ -344,32 +358,184 @@ impl AiApp {
                             .text_ellipsis()
                             .max_w(px(160.0))
                             .child(label),
-                    )
-                    .child(
+                    );
+
+                // Preview toggle (chevron) — only for ResourceUri chips
+                if is_resource {
+                    let chevron_icon = if is_previewed {
+                        LocalIconName::ChevronDown
+                    } else {
+                        LocalIconName::ChevronRight
+                    };
+                    chip = chip.child(
                         div()
-                            .id(SharedString::from(format!("ctx-remove-{}", idx)))
+                            .id(SharedString::from(format!("ctx-preview-{}", idx)))
                             .cursor_pointer()
-                            .hover(|el| el.text_color(cx.theme().danger))
+                            .hover(|el| el.text_color(accent))
                             .on_click(cx.listener(move |this, _, _, cx| {
-                                this.remove_context_part(idx, cx);
+                                this.toggle_context_preview(idx, cx);
                             }))
                             .child(
                                 svg()
-                                    .external_path(LocalIconName::Close.external_path())
+                                    .external_path(chevron_icon.external_path())
                                     .size(ICON_XS)
                                     .text_color(muted_fg),
                             ),
-                    )
+                    );
+                }
+
+                // Close button
+                chip = chip.child(
+                    div()
+                        .id(SharedString::from(format!("ctx-remove-{}", idx)))
+                        .cursor_pointer()
+                        .hover(|el| el.text_color(cx.theme().danger))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            // Centralize preview index maintenance in remove_context_part().
+                            this.remove_context_part(idx, cx);
+                        }))
+                        .child(
+                            svg()
+                                .external_path(LocalIconName::Close.external_path())
+                                .size(ICON_XS)
+                                .text_color(muted_fg),
+                        ),
+                );
+
+                chip
             })
             .collect();
 
-        div()
+        let mut container = div()
             .id("pending-context-chips")
             .flex()
-            .flex_row()
-            .flex_wrap()
+            .flex_col()
             .gap(S2)
-            .children(chips)
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .flex_wrap()
+                    .gap(S2)
+                    .children(chips),
+            );
+
+        // Inline preview panel — shown below chips when a ResourceUri is expanded
+        if let Some((_, preview)) = self.active_context_preview() {
+            container = container.child(self.render_context_preview_panel(&preview, cx));
+        }
+
+        container
+    }
+
+    /// Render the inline preview panel for an expanded context chip.
+    fn render_context_preview_panel(
+        &self,
+        preview: &context_preview::ContextPreviewInfo,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let theme = cx.theme();
+        let accent = theme.accent;
+        let muted_fg = theme.muted_foreground;
+        let fg = theme.foreground;
+
+        let profile_label: SharedString = match preview.profile {
+            context_preview::ContextPreviewProfile::Minimal => "Profile: minimal".into(),
+            context_preview::ContextPreviewProfile::Full => "Profile: full".into(),
+            context_preview::ContextPreviewProfile::Custom => "Profile: custom".into(),
+            context_preview::ContextPreviewProfile::FilePath => "Type: file".into(),
+        };
+
+        // Visual distinction: full profile gets accent bg, minimal gets muted
+        let profile_bg = match preview.profile {
+            context_preview::ContextPreviewProfile::Full => accent.opacity(OPACITY_DISABLED),
+            _ => theme.muted.opacity(OPACITY_DISABLED),
+        };
+
+        let uri_label: SharedString = preview.source_uri.clone().into();
+        let desc_label: SharedString = preview.description.clone().into();
+
+        let mut panel = div()
+            .id("context-preview-panel")
+            .flex()
+            .flex_col()
+            .gap(S1)
+            .px(S3)
+            .py(S2)
+            .rounded(R_MD)
+            .border_1()
+            .border_color(accent.opacity(OPACITY_BORDER))
+            .bg(theme.background.opacity(OPACITY_SELECTED))
+            // Profile badge
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(S2)
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .px(S2)
+                            .py(S0)
+                            .rounded(R_SM)
+                            .bg(profile_bg)
+                            .text_color(fg)
+                            .child(profile_label),
+                    ),
+            )
+            // Source URI
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(S1)
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(muted_fg)
+                            .child(SharedString::from("URI:")),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(fg)
+                            .overflow_hidden()
+                            .text_ellipsis()
+                            .child(uri_label),
+                    ),
+            )
+            // Description
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(muted_fg)
+                    .child(desc_label),
+            );
+
+        // Diagnostics badge
+        if preview.has_diagnostics {
+            panel = panel.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(S1)
+                    .child(
+                        svg()
+                            .external_path(LocalIconName::Warning.external_path())
+                            .size(ICON_XS)
+                            .text_color(theme.warning),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.warning)
+                            .child(SharedString::from("Includes diagnostics")),
+                    ),
+            );
+        }
+
+        panel
     }
 }
 

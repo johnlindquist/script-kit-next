@@ -49,6 +49,7 @@ use state::*;
 mod chat;
 mod command_bar;
 mod context_commands;
+mod context_preview;
 mod dropdowns;
 mod images;
 mod init;

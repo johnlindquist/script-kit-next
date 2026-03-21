@@ -33,6 +33,7 @@
 #![allow(dead_code)]
 
 pub(crate) mod config;
+pub(crate) mod context_mentions;
 pub mod message_parts;
 pub(crate) mod model;
 pub(crate) mod presets;

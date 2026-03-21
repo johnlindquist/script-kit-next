@@ -9,7 +9,12 @@ impl AiApp {
                 .w_full()
                 .appearance(false) // No default styling - we provide our own
                 .bordered(false)
-                .focus_bordered(false),
+                .focus_bordered(false)
+                // Override Medium's default 8px vertical padding to 2px so the
+                // single-line Input height (~24px) matches the attachment button,
+                // giving items_center() a clean alignment target.
+                .pt(SP_1)
+                .pb(SP_1),
         )
     }
 

@@ -354,6 +354,14 @@ impl AiApp {
         if index >= self.pending_context_parts.len() {
             return;
         }
+        // Close preview if it references a stale index after removal
+        if let Some(pi) = self.context_preview_index {
+            if pi == index {
+                self.context_preview_index = None;
+            } else if pi > index {
+                self.context_preview_index = Some(pi - 1);
+            }
+        }
         let removed = self.pending_context_parts.remove(index);
         tracing::info!(
             target: "ai",
@@ -406,6 +414,7 @@ impl AiApp {
             return;
         }
 
+        self.context_preview_index = None;
         self.pending_context_parts.clear();
         tracing::info!(
             target: "ai",
