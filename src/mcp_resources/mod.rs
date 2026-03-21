@@ -7,6 +7,8 @@
 //!
 //! Resources are read-only data that clients can access without tool calls.
 
+mod transaction_resources;
+
 // --- merged from part_000.rs ---
 use crate::scripts::Script;
 use crate::scripts::Scriptlet;
@@ -116,7 +118,7 @@ impl From<&Scriptlet> for ScriptletResourceEntry {
 }
 /// Get all available MCP resources
 pub fn get_resource_definitions() -> Vec<McpResource> {
-    vec![
+    let mut resources = vec![
         McpResource {
             uri: "kit://state".to_string(),
             name: "App State".to_string(),
@@ -156,7 +158,9 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
             ),
             mime_type: "application/json".to_string(),
         },
-    ]
+    ];
+    resources.extend(transaction_resources::transaction_resource_definitions());
+    resources
 }
 /// Read a specific resource by URI
 ///
@@ -185,6 +189,9 @@ pub fn read_resource(
             || uri.starts_with("kit://context/schema?") =>
         {
             read_context_resource(uri)
+        }
+        _ if transaction_resources::is_transaction_resource_uri(uri) => {
+            transaction_resources::read_transaction_resource(uri)
         }
         _ => Err(format!("Resource not found: {}", uri)),
     }
@@ -872,7 +879,7 @@ mod tests {
         // REQUIREMENT: resources/list returns all three resources
         let resources = get_resource_definitions();
 
-        assert_eq!(resources.len(), 5, "Should have exactly 5 resources");
+        assert_eq!(resources.len(), 7, "Should have exactly 7 resources");
 
         let uris: Vec<&str> = resources.iter().map(|r| r.uri.as_str()).collect();
         assert!(uris.contains(&"kit://state"), "Should include kit://state");
@@ -880,6 +887,14 @@ mod tests {
         assert!(
             uris.contains(&"scriptlets://"),
             "Should include scriptlets://"
+        );
+        assert!(
+            uris.contains(&"kit://transactions/latest"),
+            "Should include kit://transactions/latest"
+        );
+        assert!(
+            uris.contains(&"kit://transactions/schema"),
+            "Should include kit://transactions/schema"
         );
 
         // Verify all have required fields
@@ -1052,7 +1067,7 @@ mod tests {
         assert!(resource_array.is_some());
 
         let resource_array = resource_array.unwrap();
-        assert_eq!(resource_array.len(), 5);
+        assert_eq!(resource_array.len(), 7);
 
         // First resource should have expected fields
         let first = &resource_array[0];
