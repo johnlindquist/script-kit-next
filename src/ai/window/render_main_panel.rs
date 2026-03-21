@@ -254,7 +254,8 @@ impl AiApp {
             .child(input_area)
     }
 
-    /// Render a compact context-resolution receipt summary after submit.
+    /// Render a compact context-resolution receipt summary after submit,
+    /// with an optional full inspector panel toggled via ⌥⌘I.
     fn render_context_receipt(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let receipt = match &self.last_context_receipt {
             Some(r) => r,
@@ -262,12 +263,26 @@ impl AiApp {
         };
 
         let has_failures = receipt.has_failures();
+        let duplicates_removed = self
+            .last_prepared_message_receipt
+            .as_ref()
+            .and_then(|r| r.assembly.as_ref())
+            .map(|a| a.duplicates_removed)
+            .unwrap_or(0);
+
         let summary: SharedString = if has_failures {
             format!(
-                "Context {} / {} resolved \u{00b7} {} failed",
+                "Context {} / {} resolved \u{00b7} {} failed \u{00b7} {} deduped",
                 receipt.resolved,
                 receipt.attempted,
-                receipt.failures.len()
+                receipt.failures.len(),
+                duplicates_removed
+            )
+            .into()
+        } else if duplicates_removed > 0 {
+            format!(
+                "Context {} attached \u{00b7} {} deduped",
+                receipt.resolved, duplicates_removed
             )
             .into()
         } else {
@@ -286,16 +301,65 @@ impl AiApp {
             )
         };
 
+        let shortcut_label: SharedString = "\u{2325}\u{2318}I".into();
+
         div()
             .id("context-receipt-summary")
             .flex()
-            .items_center()
+            .flex_col()
             .gap(S2)
-            .px(S4)
-            .py(S1)
-            .rounded(R_MD)
-            .bg(bg_color)
-            .child(div().text_xs().text_color(text_color).child(summary))
+            .child(
+                div()
+                    .id("context-receipt-toggle")
+                    .flex()
+                    .items_center()
+                    .gap(S2)
+                    .px(S4)
+                    .py(S1)
+                    .rounded(R_MD)
+                    .bg(bg_color)
+                    .cursor_pointer()
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.toggle_context_inspector(cx);
+                    }))
+                    .child(div().text_xs().text_color(text_color).child(summary))
+                    .child(
+                        div()
+                            .ml_auto()
+                            .text_xs()
+                            .text_color(text_color.opacity(OPACITY_TEXT_MUTED))
+                            .child(shortcut_label),
+                    ),
+            )
+            .when(self.show_context_inspector, |container| {
+                if let Some(prepared) = &self.last_prepared_message_receipt {
+                    let json = serde_json::to_string_pretty(prepared).unwrap_or_else(|error| {
+                        format!(
+                            "{{\"error\":\"failed to serialize PreparedMessageReceipt: {}\"}}",
+                            error
+                        )
+                    });
+                    let json_text: SharedString = json.into();
+                    container.child(
+                        div()
+                            .id("context-inspector")
+                            .px(S4)
+                            .py(S3)
+                            .rounded(R_MD)
+                            .bg(cx.theme().muted.opacity(OPACITY_DISABLED))
+                            .max_h(px(300.0))
+                            .overflow_y_scroll()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().foreground)
+                                    .child(json_text),
+                            ),
+                    )
+                } else {
+                    container
+                }
+            })
             .into_any_element()
     }
 

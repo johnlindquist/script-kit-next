@@ -4,6 +4,10 @@ use crate::ui_foundation::{
     is_key_tab, is_key_up,
 };
 
+pub(super) fn is_context_inspector_shortcut(key: &str, modifiers: &gpui::Modifiers) -> bool {
+    modifiers.platform && modifiers.alt && !modifiers.shift && !modifiers.control && key == "i"
+}
+
 impl AiApp {
     pub(super) fn handle_root_key_down(
         &mut self,
@@ -208,6 +212,11 @@ impl AiApp {
         // platform modifier = Cmd on macOS, Ctrl on Windows/Linux
         if modifiers.platform {
             match key {
+                k if is_context_inspector_shortcut(k, modifiers) => {
+                    self.toggle_context_inspector(cx);
+                    cx.stop_propagation();
+                    return;
+                }
                 // Cmd+K to toggle command bar (like Raycast)
                 k if is_key_k(k) => {
                     if self.command_bar.is_open() {

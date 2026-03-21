@@ -27,41 +27,25 @@ const CONTEXT_ACTION_IDS: &[&str] = &[
     "chat:add_browser_context",
     "chat:add_window_context",
     "chat:add_context_diagnostics",
+    "chat:inspect_context",
     "chat:clear_context",
 ];
 
-/// Mirror of command_bar.rs execute_action dispatch: maps short action suffix
-/// to the exact AiContextPart it produces. `None` means the action has a
-/// side-effect (clear) rather than producing a part.
+/// Resolves an action suffix to its dispatched AiContextPart via the
+/// canonical context contract. `None` means the action has a side-effect
+/// (clear/inspect) rather than producing a part.
 fn expected_dispatch(suffix: &str) -> Option<AiContextPart> {
-    match suffix {
-        "add_current_context" => Some(AiContextPart::ResourceUri {
-            uri: "kit://context?profile=minimal".to_string(),
-            label: "Current Context".to_string(),
-        }),
-        "add_context_full" => Some(AiContextPart::ResourceUri {
-            uri: "kit://context".to_string(),
-            label: "Current Context (Full)".to_string(),
-        }),
-        "add_selection_context" => Some(AiContextPart::ResourceUri {
-            uri: "kit://context?selectedText=1&frontmostApp=0&menuBar=0&browserUrl=0&focusedWindow=0".to_string(),
-            label: "Selection".to_string(),
-        }),
-        "add_browser_context" => Some(AiContextPart::ResourceUri {
-            uri: "kit://context?selectedText=0&frontmostApp=0&menuBar=0&browserUrl=1&focusedWindow=0".to_string(),
-            label: "Browser URL".to_string(),
-        }),
-        "add_window_context" => Some(AiContextPart::ResourceUri {
-            uri: "kit://context?selectedText=0&frontmostApp=1&menuBar=0&browserUrl=0&focusedWindow=1".to_string(),
-            label: "Focused Window".to_string(),
-        }),
-        "add_context_diagnostics" => Some(AiContextPart::ResourceUri {
-            uri: "kit://context?diagnostics=1".to_string(),
-            label: "Context Diagnostics".to_string(),
-        }),
-        "clear_context" => None,
-        other => panic!("unexpected context action suffix: {other}"),
+    use crate::ai::context_contract::{is_clear_context_action, ContextAttachmentKind};
+
+    if let Some(kind) = ContextAttachmentKind::from_action_id(suffix) {
+        return Some(kind.part());
     }
+
+    if is_clear_context_action(suffix) || suffix == "inspect_context" {
+        return None;
+    }
+
+    panic!("unexpected context action suffix: {suffix}");
 }
 
 /// Expected (id, title, section) triples for every context action.
@@ -72,6 +56,7 @@ const CONTEXT_ACTION_METADATA: &[(&str, &str, &str)] = &[
     ("chat:add_browser_context", "Attach Browser URL", "Context"),
     ("chat:add_window_context", "Attach Focused Window", "Context"),
     ("chat:add_context_diagnostics", "Attach Context Diagnostics", "Context"),
+    ("chat:inspect_context", "Inspect Context Receipt", "Context"),
     ("chat:clear_context", "Clear Context", "Context"),
 ];
 
@@ -79,7 +64,7 @@ const CONTEXT_ACTION_METADATA: &[(&str, &str, &str)] = &[
 // Tests
 // =========================================================================
 
-/// All seven context actions exist in the builder output with exact IDs.
+/// All 7 context actions exist in the builder output with exact IDs.
 #[test]
 fn context_action_contract_all_ids_present() {
     let actions = get_ai_command_bar_actions();
@@ -156,10 +141,10 @@ fn context_action_contract_dispatch_uri_parity() {
         let suffix = id.strip_prefix("chat:").expect("all context IDs start with chat:");
         let dispatch = expected_dispatch(suffix);
 
-        if suffix == "clear_context" {
+        if suffix == "clear_context" || suffix == "inspect_context" {
             assert!(
                 dispatch.is_none(),
-                "clear_context must not produce a context part"
+                "{suffix} must not produce a context part"
             );
         } else {
             let part = dispatch.unwrap_or_else(|| {
@@ -190,8 +175,8 @@ fn context_action_contract_count() {
 
     assert_eq!(
         context_actions.len(),
-        7,
-        "expected exactly 7 context actions, found {}: {:?}",
+        8,
+        "expected exactly 8 context actions, found {}: {:?}",
         context_actions.len(),
         context_actions.iter().map(|a| &a.id).collect::<Vec<_>>()
     );

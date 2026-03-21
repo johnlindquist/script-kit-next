@@ -215,34 +215,108 @@ pub fn resolve_context_parts_to_prompt_prefix(
     Ok(receipt.prompt_prefix)
 }
 
+/// Provenance tag for a context part in the assembly pipeline.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ContextAssemblyOrigin {
+    /// Part came from parsed `@context` / `@file` directives in the message text.
+    Mention,
+    /// Part came from the pending context chips (UI or SDK).
+    Pending,
+}
+
+/// A duplicate that was dropped during context assembly, with provenance.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextAssemblyDuplicate {
+    pub kept_from: ContextAssemblyOrigin,
+    pub dropped_from: ContextAssemblyOrigin,
+    pub label: String,
+    pub source: String,
+}
+
+/// Deterministic receipt from merging mention-derived and pending context parts.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextAssemblyReceipt {
+    pub mention_count: usize,
+    pub pending_count: usize,
+    pub merged_count: usize,
+    pub duplicates_removed: usize,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub duplicates: Vec<ContextAssemblyDuplicate>,
+    pub merged_parts: Vec<AiContextPart>,
+}
+
+/// Merge mention-derived and pending context parts with full provenance tracking.
+///
+/// Returns a [`ContextAssemblyReceipt`] recording which parts survived, which
+/// duplicates were dropped, and where each came from. Mentions are processed
+/// first so they take priority in first-seen deduplication.
+pub(crate) fn merge_context_parts_with_receipt(
+    mentions: &[AiContextPart],
+    pending: &[AiContextPart],
+) -> ContextAssemblyReceipt {
+    let mut merged = Vec::with_capacity(mentions.len() + pending.len());
+    let mut origins = Vec::with_capacity(mentions.len() + pending.len());
+    let mut duplicates = Vec::new();
+
+    for (origin, part) in mentions
+        .iter()
+        .map(|part| (ContextAssemblyOrigin::Mention, part))
+        .chain(
+            pending
+                .iter()
+                .map(|part| (ContextAssemblyOrigin::Pending, part)),
+        )
+    {
+        if let Some(existing_idx) = merged.iter().position(|existing| existing == part) {
+            duplicates.push(ContextAssemblyDuplicate {
+                kept_from: origins[existing_idx],
+                dropped_from: origin,
+                label: part.label().to_string(),
+                source: part.source().to_string(),
+            });
+            continue;
+        }
+
+        merged.push(part.clone());
+        origins.push(origin);
+    }
+
+    let receipt = ContextAssemblyReceipt {
+        mention_count: mentions.len(),
+        pending_count: pending.len(),
+        merged_count: merged.len(),
+        duplicates_removed: duplicates.len(),
+        duplicates,
+        merged_parts: merged,
+    };
+
+    tracing::info!(
+        target: "ai",
+        checkpoint = "context_assembly",
+        mention_count = receipt.mention_count,
+        pending_count = receipt.pending_count,
+        merged_count = receipt.merged_count,
+        duplicates_removed = receipt.duplicates_removed,
+        "context parts assembled"
+    );
+
+    receipt
+}
+
 /// Merge two slices of context parts into a single list with first-seen order
 /// preserved and duplicates removed by value equality.
 ///
-/// This is the canonical deduplication point for combining directive-derived
-/// parts (from parsed `@context` mentions) with explicit pending parts (from
-/// the composer UI or SDK). The merge is pure, deterministic, and side-effect
-/// free.
-pub(crate) fn merge_context_parts(
+/// This is a backward-compatible wrapper around [`merge_context_parts_with_receipt`].
+/// It treats `left` as mentions and `right` as pending parts, returning only the
+/// merged list without provenance metadata.
+pub fn merge_context_parts(
     left: &[AiContextPart],
     right: &[AiContextPart],
 ) -> Vec<AiContextPart> {
-    let mut merged = Vec::with_capacity(left.len() + right.len());
-
-    for part in left.iter().chain(right.iter()) {
-        if !merged.iter().any(|existing| existing == part) {
-            merged.push(part.clone());
-        }
-    }
-
-    tracing::info!(
-        left_count = left.len(),
-        right_count = right.len(),
-        merged_count = merged.len(),
-        duplicates_removed = (left.len() + right.len()) - merged.len(),
-        "merge_context_parts"
-    );
-
-    merged
+    merge_context_parts_with_receipt(left, right).merged_parts
 }
 
 // ---------------------------------------------------------------------------
@@ -285,6 +359,8 @@ pub struct PreparedMessageReceipt {
     pub raw_content: String,
     pub final_user_content: String,
     pub context: ContextResolutionReceipt,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub assembly: Option<ContextAssemblyReceipt>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub outcomes: Vec<ContextPartPreparationOutcome>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -483,10 +559,47 @@ pub fn prepare_user_message_with_receipt(
         raw_content: raw_content.to_string(),
         final_user_content,
         context,
+        assembly: None,
         outcomes,
         unresolved_parts,
         user_error,
     }
+}
+
+/// Canonical preflight function that assembles context from two sources.
+///
+/// 1. Merges `mention_parts` (from parsed directives) with `pending_parts`
+///    (from the composer UI / SDK), recording duplicate provenance.
+/// 2. Resolves the merged parts into prompt blocks via
+///    [`prepare_user_message_with_receipt`].
+/// 3. Attaches the assembly receipt so callers can inspect the full pipeline.
+pub fn prepare_user_message_from_sources_with_receipt(
+    raw_content: &str,
+    mention_parts: &[AiContextPart],
+    pending_parts: &[AiContextPart],
+    scripts: &[Arc<crate::scripts::Script>],
+    scriptlets: &[Arc<crate::scripts::Scriptlet>],
+) -> PreparedMessageReceipt {
+    let assembly = merge_context_parts_with_receipt(mention_parts, pending_parts);
+    let mut prepared =
+        prepare_user_message_with_receipt(raw_content, &assembly.merged_parts, scripts, scriptlets);
+    prepared.assembly = Some(assembly);
+
+    tracing::info!(
+        target: "ai",
+        checkpoint = "message_preflight",
+        decision = ?prepared.decision,
+        attempted = prepared.context.attempted,
+        resolved = prepared.context.resolved,
+        duplicates_removed = prepared
+            .assembly
+            .as_ref()
+            .map(|a| a.duplicates_removed)
+            .unwrap_or(0),
+        "ai message preflight complete"
+    );
+
+    prepared
 }
 
 #[cfg(test)]
@@ -839,6 +952,7 @@ mod tests {
                 failures: vec![],
                 prompt_prefix: "prefix".to_string(),
             },
+            assembly: None,
             outcomes: vec![ContextPartPreparationOutcome {
                 label: "note.txt".to_string(),
                 source: "/tmp/note.txt".to_string(),
@@ -859,5 +973,92 @@ mod tests {
         assert!(json.contains("\"rawContent\""));
         assert!(json.contains("\"finalUserContent\""));
         assert!(json.contains("\"fullContent\""));
+    }
+
+    #[test]
+    fn merge_context_parts_with_receipt_reports_duplicate_provenance() {
+        let selection = AiContextPart::ResourceUri {
+            uri: "kit://context?selectedText=1&frontmostApp=0&menuBar=0&browserUrl=0&focusedWindow=0"
+                .to_string(),
+            label: "Selection".to_string(),
+        };
+        let browser = AiContextPart::ResourceUri {
+            uri: "kit://context?selectedText=0&frontmostApp=0&menuBar=0&browserUrl=1&focusedWindow=0"
+                .to_string(),
+            label: "Browser URL".to_string(),
+        };
+
+        let receipt = merge_context_parts_with_receipt(
+            &[selection.clone(), browser.clone()],
+            std::slice::from_ref(&selection),
+        );
+
+        assert_eq!(receipt.merged_parts, vec![selection.clone(), browser]);
+        assert_eq!(receipt.duplicates_removed, 1);
+        assert_eq!(receipt.duplicates.len(), 1);
+        assert_eq!(
+            receipt.duplicates[0].kept_from,
+            ContextAssemblyOrigin::Mention
+        );
+        assert_eq!(
+            receipt.duplicates[0].dropped_from,
+            ContextAssemblyOrigin::Pending
+        );
+        assert_eq!(receipt.duplicates[0].label, "Selection");
+    }
+
+    #[test]
+    fn prepare_user_message_from_sources_with_receipt_attaches_assembly_receipt() {
+        let prepared = prepare_user_message_from_sources_with_receipt(
+            "ship it",
+            &[AiContextPart::ResourceUri {
+                uri: "kit://context?profile=minimal".to_string(),
+                label: "Current Context".to_string(),
+            }],
+            &[AiContextPart::ResourceUri {
+                uri: "kit://context?profile=minimal".to_string(),
+                label: "Current Context".to_string(),
+            }],
+            &[],
+            &[],
+        );
+
+        assert!(prepared.can_send_message());
+        let assembly = prepared
+            .assembly
+            .expect("assembly receipt must be present");
+        assert_eq!(assembly.mention_count, 1);
+        assert_eq!(assembly.pending_count, 1);
+        assert_eq!(assembly.merged_count, 1);
+        assert_eq!(assembly.duplicates_removed, 1);
+    }
+
+    #[test]
+    fn context_assembly_receipt_serde_roundtrip() {
+        let receipt = ContextAssemblyReceipt {
+            mention_count: 2,
+            pending_count: 1,
+            merged_count: 2,
+            duplicates_removed: 1,
+            duplicates: vec![ContextAssemblyDuplicate {
+                kept_from: ContextAssemblyOrigin::Mention,
+                dropped_from: ContextAssemblyOrigin::Pending,
+                label: "Selection".to_string(),
+                source: "kit://context?selectedText=1".to_string(),
+            }],
+            merged_parts: vec![AiContextPart::ResourceUri {
+                uri: "kit://context?profile=minimal".to_string(),
+                label: "Context".to_string(),
+            }],
+        };
+
+        let json = serde_json::to_string(&receipt).expect("serialize");
+        let deserialized: ContextAssemblyReceipt =
+            serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(receipt, deserialized);
+        assert!(json.contains("\"mentionCount\""));
+        assert!(json.contains("\"pendingCount\""));
+        assert!(json.contains("\"keptFrom\""));
+        assert!(json.contains("\"droppedFrom\""));
     }
 }

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-20T23:21:29.800Z",
+  "updatedAt": "2026-03-21T18:31:02.445Z",
   "agents": {
     "codex-actions-consistency": {
       "id": "codex-actions-consistency",
@@ -7700,6 +7700,30 @@
           "src/main_sections/window_visibility.rs",
           "src/platform/positioning.rs"
         ]
+      }
+    },
+    "codex-actions-add": {
+      "id": "codex-actions-add",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "In the AI chat's Cmd+K actions menu, replace the single 'Add Attachments...' action (chat:add_attachment) with two separate direct actions: 'Add File' (chat:add_file, icon: IconName::File, description: 'Browse for a file to attach') and 'Add Image' (chat:add_image, icon: IconName::Image, description: 'Browse for an image to attach'). Both should be in the 'Attachments' section. Keep the existing chat:paste_image and chat:capture_screen_area actions as-is. Then in src/ai/window/command_bar.rs, update the execute_action match block: replace the 'add_attachment' arm (which calls show_attachments_picker) with two new arms: 'add_file' => self.open_file_picker(window, cx) and 'add_image' => self.open_image_picker(window, cx). Both open_file_picker and open_image_picker already exist in src/ai/window/images.rs. Do NOT remove or modify any other code — another worker handles cleanup.",
+      "scope": "src/actions/builders/chat.rs,src/ai/window/command_bar.rs",
+      "readonly": false,
+      "status": "in_progress",
+      "claims": [
+        "src/actions/builders/chat.rs",
+        "src/ai/window/command_bar.rs"
+      ],
+      "createdAt": "2026-03-21T18:30:17.431Z",
+      "lastSeenAt": "2026-03-21T18:31:02.445Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "fba01c429697c8a48c67686d6660e832e081b987",
+      "notes": "Inspecting chat action builder and command bar routing for add_file/add_image split",
+      "pid": 70716,
+      "claimed_at": {
+        "src/actions/builders/chat.rs": "2026-03-21T18:30:28.374Z",
+        "src/ai/window/command_bar.rs": "2026-03-21T18:30:28.495Z"
       }
     }
   }

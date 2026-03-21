@@ -419,7 +419,7 @@ mod from_dialog_builtin_action_validation_tests {
     
     #[test]
     fn ai_command_bar_action_count_is_exactly_twelve() {
-        assert_eq!(get_ai_command_bar_actions().len(), 20);
+        assert_eq!(get_ai_command_bar_actions().len(), 21);
     }
     
     // =========================================================================
@@ -5619,8 +5619,8 @@ mod from_dialog_builtin_action_validation_tests_3 {
     fn ai_command_bar_has_exactly_13_actions() {
         let count = get_ai_command_bar_actions().len();
         assert_eq!(
-            count, 20,
-            "AI command bar should have exactly 20 actions, got {}",
+            count, 21,
+            "AI command bar should have exactly 21 actions, got {}",
             count
         );
     }
@@ -8455,7 +8455,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
         #[test]
         fn ai_command_bar_total_is_12() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 20);
+            assert_eq!(actions.len(), 21);
         }
     
         #[test]
@@ -11908,9 +11908,9 @@ mod from_dialog_builtin_action_validation_tests_6 {
         #[test]
         fn ai_command_bar_has_exactly_12_actions() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 20);
+            assert_eq!(actions.len(), 21);
         }
-    
+
         #[test]
         fn ai_command_bar_response_section_actions() {
             let actions = get_ai_command_bar_actions();
@@ -13550,7 +13550,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
         #[test]
         fn ai_command_bar_exactly_12_actions() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 20);
+            assert_eq!(actions.len(), 21);
         }
     
         #[test]
@@ -17519,7 +17519,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
     //! 8. Notes command bar conditional section groups (section strings)
     //! 9. ScriptInfo mixed agent+scriptlet flag precedence
     //! 10. Clipboard save_snippet/save_file always present for both text and image
-    //! 11. AI command bar section completeness (20 actions across 7 sections)
+    //! 11. AI command bar section completeness (21 actions across 7 sections)
     //! 12. Path context open_in_finder/editor/terminal descriptions
     //! 13. Note switcher empty notes placeholder action
     //! 14. New chat action icon/section consistency
@@ -17612,13 +17612,13 @@ mod from_dialog_builtin_action_validation_tests_9 {
         }
     
         // ============================================================
-        // 1. AI command bar expanded actions (20 actions, 7 sections)
+        // 1. AI command bar expanded actions (21 actions, 7 sections)
         // ============================================================
     
         #[test]
         fn ai_command_bar_has_exactly_12_actions() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 20, "AI command bar should have 20 actions");
+            assert_eq!(actions.len(), 21, "AI command bar should have 21 actions");
         }
     
         #[test]

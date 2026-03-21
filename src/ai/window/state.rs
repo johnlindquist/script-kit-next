@@ -264,6 +264,9 @@ pub struct AiApp {
     /// Cleared when submitting with no pending context parts; set when parts are resolved.
     pub(super) last_context_receipt:
         Option<crate::ai::message_parts::ContextResolutionReceipt>,
+
+    /// Whether the full prepared-message inspector is visible (toggled via ⌥⌘I).
+    pub(super) show_context_inspector: bool,
 }
 
 #[cfg(test)]

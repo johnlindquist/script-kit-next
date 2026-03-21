@@ -6,6 +6,7 @@ use crate::ui_foundation::{
 
 impl AiApp {
     pub(super) fn show_command_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        tracing::info!(target: "ai", "show_command_bar: opening actions menu");
         // Open the command bar (CommandBar handles window creation internally)
         self.command_bar.open(window, cx);
 
@@ -32,8 +33,8 @@ impl AiApp {
     }
 
     /// Hide the command bar (closes the vibrancy window) and refocus the input
-    #[tracing::instrument(skip(self, cx))]
     pub(super) fn hide_command_bar(&mut self, cx: &mut Context<Self>) {
+        tracing::info!(target: "ai", "hide_command_bar: closing and restoring focus");
         self.command_bar.close(cx);
         // Refocus the chat input after closing the command bar
         self.request_focus(cx);
@@ -66,7 +67,12 @@ impl AiApp {
         cx: &mut Context<Self>,
     ) {
         if let Some(action_id) = self.command_bar.execute_selected_action(cx) {
+            tracing::info!(target: "ai", action = %action_id, "execute_command_bar_action: executing action");
             self.execute_action(&action_id, window, cx);
+            // Refocus the chat input after action execution
+            // execute_selected_action closes the command bar but doesn't restore focus
+            tracing::info!(target: "ai", "execute_command_bar_action: restoring focus to chat input");
+            self.request_focus(cx);
         }
     }
 
@@ -233,6 +239,21 @@ impl AiApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        tracing::info!(target: "ai", action = %action_id, "execute_action: dispatching");
+
+        // Context attachment actions — resolved via the canonical contract
+        if let Some(kind) =
+            crate::ai::context_contract::ContextAttachmentKind::from_action_id(action_id)
+        {
+            self.add_context_part(kind.part(), cx);
+            return;
+        }
+
+        if crate::ai::context_contract::is_clear_context_action(action_id) {
+            self.clear_context_parts(cx);
+            return;
+        }
+
         let action_id = action_id.strip_prefix("chat:").unwrap_or(action_id);
 
         match action_id {
@@ -254,66 +275,10 @@ impl AiApp {
                 self.capture_screen_area_attachment(cx);
             }
             "change_model" => {
-                // Model selection now available via Actions (Cmd+K)
-                // Cycle to next model as a convenience
                 self.cycle_model(cx);
             }
-            "add_current_context" => {
-                self.add_context_part(
-                    crate::ai::message_parts::AiContextPart::ResourceUri {
-                        uri: "kit://context?profile=minimal".to_string(),
-                        label: "Current Context".to_string(),
-                    },
-                    cx,
-                );
-            }
-            "add_context_full" => {
-                self.add_context_part(
-                    crate::ai::message_parts::AiContextPart::ResourceUri {
-                        uri: "kit://context".to_string(),
-                        label: "Current Context (Full)".to_string(),
-                    },
-                    cx,
-                );
-            }
-            "add_selection_context" => {
-                self.add_context_part(
-                    crate::ai::message_parts::AiContextPart::ResourceUri {
-                        uri: "kit://context?selectedText=1&frontmostApp=0&menuBar=0&browserUrl=0&focusedWindow=0".to_string(),
-                        label: "Selection".to_string(),
-                    },
-                    cx,
-                );
-            }
-            "add_browser_context" => {
-                self.add_context_part(
-                    crate::ai::message_parts::AiContextPart::ResourceUri {
-                        uri: "kit://context?selectedText=0&frontmostApp=0&menuBar=0&browserUrl=1&focusedWindow=0".to_string(),
-                        label: "Browser URL".to_string(),
-                    },
-                    cx,
-                );
-            }
-            "add_window_context" => {
-                self.add_context_part(
-                    crate::ai::message_parts::AiContextPart::ResourceUri {
-                        uri: "kit://context?selectedText=0&frontmostApp=1&menuBar=0&browserUrl=0&focusedWindow=1".to_string(),
-                        label: "Focused Window".to_string(),
-                    },
-                    cx,
-                );
-            }
-            "add_context_diagnostics" => {
-                self.add_context_part(
-                    crate::ai::message_parts::AiContextPart::ResourceUri {
-                        uri: "kit://context?diagnostics=1".to_string(),
-                        label: "Context Diagnostics".to_string(),
-                    },
-                    cx,
-                );
-            }
-            "clear_context" => {
-                self.clear_context_parts(cx);
+            "inspect_context" => {
+                self.toggle_context_inspector(cx);
             }
             _ => {
                 tracing::warn!(action = action_id, "Unknown action");

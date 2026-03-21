@@ -53,30 +53,13 @@ pub(crate) fn parse_context_mentions(raw_content: &str) -> ParsedContextMentions
 fn parse_context_mention_line(line: &str) -> Option<AiContextPart> {
     let trimmed = line.trim();
 
-    match trimmed {
-        "@context" => Some(resource("kit://context?profile=minimal", "Current Context")),
-        "@context-full" => Some(resource(
-            "kit://context",
-            "Current Context (Full)",
-        )),
-        "@selection" => Some(resource(
-            "kit://context?selectedText=1&frontmostApp=0&menuBar=0&browserUrl=0&focusedWindow=0",
-            "Selection",
-        )),
-        "@browser" => Some(resource(
-            "kit://context?selectedText=0&frontmostApp=0&menuBar=0&browserUrl=1&focusedWindow=0",
-            "Browser URL",
-        )),
-        "@window" => Some(resource(
-            "kit://context?selectedText=0&frontmostApp=1&menuBar=0&browserUrl=0&focusedWindow=1",
-            "Focused Window",
-        )),
-        "@diagnostics" => Some(resource(
-            "kit://context?diagnostics=1",
-            "Context Diagnostics",
-        )),
-        _ => parse_file_mention(trimmed),
+    if let Some(kind) =
+        crate::ai::context_contract::ContextAttachmentKind::from_mention_line(trimmed)
+    {
+        return Some(kind.part());
     }
+
+    parse_file_mention(trimmed)
 }
 
 fn parse_file_mention(trimmed: &str) -> Option<AiContextPart> {
@@ -100,12 +83,6 @@ fn parse_file_mention(trimmed: &str) -> Option<AiContextPart> {
     })
 }
 
-fn resource(uri: &str, label: &str) -> AiContextPart {
-    AiContextPart::ResourceUri {
-        uri: uri.to_string(),
-        label: label.to_string(),
-    }
-}
 
 #[cfg(test)]
 mod tests;

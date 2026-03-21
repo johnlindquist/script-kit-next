@@ -28,9 +28,7 @@ impl AiApp {
         explicit_parts: &[crate::ai::message_parts::AiContextPart],
     ) -> OutboundUserMessagePreparation {
         let parsed_mentions = crate::ai::context_mentions::parse_context_mentions(raw_content);
-        let effective_parts =
-            crate::ai::message_parts::merge_context_parts(explicit_parts, &parsed_mentions.parts);
-        let has_context_parts = !effective_parts.is_empty();
+        let has_any_parts = !explicit_parts.is_empty() || parsed_mentions.has_parts();
 
         tracing::info!(
             target: "ai",
@@ -38,17 +36,17 @@ impl AiApp {
             authored_len = parsed_mentions.cleaned_content.len(),
             explicit_parts = explicit_parts.len(),
             directive_parts = parsed_mentions.parts.len(),
-            merged_parts = effective_parts.len(),
             "ai_context_mentions_compiled"
         );
 
-        let receipt = if has_context_parts {
+        let receipt = if has_any_parts {
             let scripts = crate::scripts::read_scripts();
             let scriptlets = crate::scripts::load_scriptlets();
 
-            crate::ai::message_parts::prepare_user_message_with_receipt(
+            crate::ai::message_parts::prepare_user_message_from_sources_with_receipt(
                 &parsed_mentions.cleaned_content,
-                &effective_parts,
+                &parsed_mentions.parts,
+                explicit_parts,
                 &scripts,
                 &scriptlets,
             )
@@ -60,6 +58,12 @@ impl AiApp {
                 &[],
             )
         };
+
+        let has_context_parts = receipt
+            .assembly
+            .as_ref()
+            .map(|a| a.merged_count > 0)
+            .unwrap_or(false);
 
         self.last_prepared_message_receipt = Some(receipt.clone());
 

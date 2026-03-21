@@ -292,6 +292,7 @@ impl AiApp {
             search_debounce_task: None,
             last_prepared_message_receipt: None,
             last_context_receipt: None,
+            show_context_inspector: false,
         }
     }
 

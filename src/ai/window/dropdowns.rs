@@ -407,6 +407,18 @@ impl AiApp {
         cx.notify();
     }
 
+    /// Toggle the full prepared-message inspector panel (⌥⌘I).
+    pub(super) fn toggle_context_inspector(&mut self, cx: &mut Context<Self>) {
+        self.show_context_inspector = !self.show_context_inspector;
+        tracing::info!(
+            target: "ai",
+            visible = self.show_context_inspector,
+            has_receipt = self.last_prepared_message_receipt.is_some(),
+            "context_inspector_toggled"
+        );
+        cx.notify();
+    }
+
     /// Clear all pending context parts (both ResourceUri and FilePath).
     pub(super) fn clear_context_parts(&mut self, cx: &mut Context<Self>) {
         let cleared_count = self.pending_context_parts.len();
