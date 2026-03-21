@@ -1,4 +1,8 @@
 use super::types::{Action, ActionCategory};
+use crate::ai::context_contract::{
+    context_attachment_specs, ContextAttachmentKind, CLEAR_CONTEXT_ACTION_ID,
+    CLEAR_CONTEXT_ACTION_TITLE, CONTEXT_SECTION,
+};
 use crate::designs::icon_variations::IconName;
 
 /// Information about a chat prompt for action building
@@ -132,10 +136,67 @@ pub fn get_chat_context_actions(info: &ChatPromptInfo) -> Vec<Action> {
     actions
 }
 
+fn context_description(kind: ContextAttachmentKind) -> &'static str {
+    match kind {
+        ContextAttachmentKind::Current => "Adds minimal desktop context",
+        ContextAttachmentKind::Full => "Adds full desktop context snapshot",
+        ContextAttachmentKind::Selection => "Adds only the current selection",
+        ContextAttachmentKind::Browser => "Adds the focused browser tab URL",
+        ContextAttachmentKind::Window => "Adds focused window metadata",
+        ContextAttachmentKind::Diagnostics => "Adds capture diagnostics for debugging",
+    }
+}
+
+fn context_icon(kind: ContextAttachmentKind) -> IconName {
+    match kind {
+        ContextAttachmentKind::Current => IconName::Code,
+        ContextAttachmentKind::Full => IconName::FileCode,
+        ContextAttachmentKind::Selection => IconName::File,
+        ContextAttachmentKind::Browser => IconName::MagnifyingGlass,
+        ContextAttachmentKind::Window => IconName::File,
+        ContextAttachmentKind::Diagnostics => IconName::Settings,
+    }
+}
+
+/// Build the Context section actions from the canonical contract.
+///
+/// Returns exactly 7 actions: one per `ContextAttachmentSpec` (6) plus
+/// Clear Context. The inspect action is deliberately excluded from the
+/// command-bar surface — it remains reachable via its keyboard shortcut.
+fn context_actions() -> Vec<Action> {
+    let mut actions = Vec::with_capacity(7);
+
+    for spec in context_attachment_specs() {
+        actions.push(
+            Action::new(
+                spec.action_id,
+                spec.action_title,
+                Some(context_description(spec.kind).to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(context_icon(spec.kind))
+            .with_section(CONTEXT_SECTION),
+        );
+    }
+
+    actions.push(
+        Action::new(
+            CLEAR_CONTEXT_ACTION_ID,
+            CLEAR_CONTEXT_ACTION_TITLE,
+            Some("Removes all pending context chips".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::Trash)
+        .with_section(CONTEXT_SECTION),
+    );
+
+    actions
+}
+
 /// Get actions for the AI chat command bar (Cmd+K menu).
 #[allow(dead_code)]
 pub fn get_ai_command_bar_actions() -> Vec<Action> {
-    vec![
+    let mut actions = vec![
         Action::new(
             "chat:copy_response",
             "Copy Response",
@@ -225,63 +286,25 @@ pub fn get_ai_command_bar_actions() -> Vec<Action> {
         .with_shortcut("⇧⌘E")
         .with_icon(IconName::FileCode)
         .with_section("Export"),
-        // === Context Section ===
+    ];
+
+    // === Context Section — derived from the canonical contract ===
+    actions.extend(context_actions());
+
+    // Inspect action: toggle for the context preflight inspector panel.
+    actions.push(
         Action::new(
-            "chat:add_current_context",
-            "Attach Current Context",
-            Some("Adds minimal desktop context".to_string()),
+            "chat:inspect_context",
+            "Inspect Context Receipt",
+            Some("Shows the exact merged and resolved context payload".to_string()),
             ActionCategory::ScriptContext,
         )
-        .with_icon(IconName::Code)
-        .with_section("Context"),
-        Action::new(
-            "chat:add_context_full",
-            "Attach Full Context",
-            Some("Adds full desktop context snapshot".to_string()),
-            ActionCategory::ScriptContext,
-        )
+        .with_shortcut("\u{2325}\u{2318}I")
         .with_icon(IconName::FileCode)
-        .with_section("Context"),
-        Action::new(
-            "chat:add_selection_context",
-            "Attach Selected Text",
-            Some("Adds only the current selection".to_string()),
-            ActionCategory::ScriptContext,
-        )
-        .with_icon(IconName::File)
-        .with_section("Context"),
-        Action::new(
-            "chat:add_browser_context",
-            "Attach Browser URL",
-            Some("Adds the focused browser tab URL".to_string()),
-            ActionCategory::ScriptContext,
-        )
-        .with_icon(IconName::MagnifyingGlass)
-        .with_section("Context"),
-        Action::new(
-            "chat:add_window_context",
-            "Attach Focused Window",
-            Some("Adds focused window metadata".to_string()),
-            ActionCategory::ScriptContext,
-        )
-        .with_icon(IconName::File)
-        .with_section("Context"),
-        Action::new(
-            "chat:add_context_diagnostics",
-            "Attach Context Diagnostics",
-            Some("Adds capture diagnostics for debugging".to_string()),
-            ActionCategory::ScriptContext,
-        )
-        .with_icon(IconName::Settings)
-        .with_section("Context"),
-        Action::new(
-            "chat:clear_context",
-            "Clear Context",
-            Some("Removes all pending context chips".to_string()),
-            ActionCategory::ScriptContext,
-        )
-        .with_icon(IconName::Trash)
-        .with_section("Context"),
+        .with_section(CONTEXT_SECTION),
+    );
+
+    actions.extend([
         Action::new(
             "chat:branch_from_last",
             "Branch from Last Message",
@@ -307,7 +330,9 @@ pub fn get_ai_command_bar_actions() -> Vec<Action> {
         )
         .with_icon(IconName::Settings)
         .with_section("Settings"),
-    ]
+    ]);
+
+    actions
 }
 
 #[cfg(test)]

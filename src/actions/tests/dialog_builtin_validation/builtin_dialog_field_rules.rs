@@ -577,7 +577,7 @@ mod from_dialog_builtin_action_validation_tests_11 {
     #[test]
     fn cat13_ai_command_bar_has_12_actions() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 20);
+        assert_eq!(actions.len(), 21);
     }
     
     #[test]
@@ -2237,7 +2237,7 @@ mod from_dialog_builtin_action_validation_tests_12 {
     
         #[test]
         fn cat06_ai_total_12_actions() {
-            assert_eq!(get_ai_command_bar_actions().len(), 20);
+            assert_eq!(get_ai_command_bar_actions().len(), 21);
         }
     
     
@@ -9403,7 +9403,7 @@ mod from_dialog_builtin_action_validation_tests_15 {
     
         #[test]
         fn cat24_ai_total_13() {
-            assert_eq!(get_ai_command_bar_actions().len(), 20);
+            assert_eq!(get_ai_command_bar_actions().len(), 21);
         }
     
         #[test]
@@ -12069,8 +12069,8 @@ mod from_dialog_builtin_action_validation_tests_17 {
         fn cat05_actions_with_shortcuts_count() {
             let actions = get_ai_command_bar_actions();
             let with_shortcuts = actions.iter().filter(|a| a.shortcut.is_some()).count();
-            // branch_from_last and change_model lack shortcuts => 12 - 2 = 10
-            assert_eq!(with_shortcuts, 10);
+            // branch_from_last and change_model lack shortcuts => 13 - 2 = 11
+            assert_eq!(with_shortcuts, 11);
         }
     
         // ================================================================
@@ -15057,7 +15057,7 @@ mod from_dialog_builtin_action_validation_tests_18 {
         #[test]
         fn cat27_total_ai_actions_is_12() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 20);
+            assert_eq!(actions.len(), 21);
         }
     
         // =========================================================================

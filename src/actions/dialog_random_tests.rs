@@ -969,11 +969,12 @@ fn ai_command_bar_all_twelve_ids() {
         "chat:branch_from_last",
         "chat:toggle_shortcuts_help",
         "chat:capture_screen_area",
+        "chat:inspect_context",
     ];
     for id in &expected {
         assert!(ids.contains(id), "Missing AI action: {}", id);
     }
-    assert_eq!(actions.len(), 20);
+    assert_eq!(actions.len(), 21);
 }
 
 #[test]

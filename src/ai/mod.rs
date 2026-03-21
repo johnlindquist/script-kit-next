@@ -33,6 +33,9 @@
 #![allow(dead_code)]
 
 pub(crate) mod config;
+pub(crate) mod context_contract;
+#[cfg(test)]
+mod context_contract_integration_tests;
 pub(crate) mod context_mentions;
 pub mod message_parts;
 pub(crate) mod model;
@@ -47,11 +50,11 @@ pub(crate) mod window;
 // Re-export commonly used types
 pub use self::config::{DetectedKeys, ModelInfo, ProviderConfig};
 pub use self::message_parts::{
-    file_path_parts, prepare_user_message_with_receipt, resolve_context_part_to_prompt_block,
-    resolve_context_parts_to_prompt_prefix, resolve_context_parts_with_receipt, AiContextPart,
-    ContextPartPreparationOutcome, ContextPartPreparationOutcomeKind, ContextResolutionFailure,
-    ContextResolutionReceipt, PreparedMessageDecision, PreparedMessageReceipt,
-    AI_MESSAGE_PREPARATION_SCHEMA_VERSION,
+    file_path_parts, merge_context_parts, prepare_user_message_with_receipt,
+    resolve_context_part_to_prompt_block, resolve_context_parts_to_prompt_prefix,
+    resolve_context_parts_with_receipt, AiContextPart, ContextPartPreparationOutcome,
+    ContextPartPreparationOutcomeKind, ContextResolutionFailure, ContextResolutionReceipt,
+    PreparedMessageDecision, PreparedMessageReceipt, AI_MESSAGE_PREPARATION_SCHEMA_VERSION,
 };
 pub use self::model::{Chat, ChatId, ChatSource, Message, MessageRole};
 pub use self::providers::{AiProvider, ProviderMessage, ProviderRegistry};

@@ -1,6 +1,55 @@
 use super::*;
 
 #[test]
+fn test_context_inspector_shortcut_requires_cmd_alt_i_only() {
+    let enabled = crate::ai::window::render_keydown::is_context_inspector_shortcut(
+        "i",
+        &gpui::Modifiers {
+            platform: true,
+            alt: true,
+            ..Default::default()
+        },
+    );
+    assert!(enabled, "Cmd+Alt+I should toggle the context inspector");
+
+    let wrong_key = crate::ai::window::render_keydown::is_context_inspector_shortcut(
+        "k",
+        &gpui::Modifiers {
+            platform: true,
+            alt: true,
+            ..Default::default()
+        },
+    );
+    assert!(!wrong_key, "Cmd+Alt+K must not toggle the context inspector");
+
+    let missing_alt = crate::ai::window::render_keydown::is_context_inspector_shortcut(
+        "i",
+        &gpui::Modifiers {
+            platform: true,
+            ..Default::default()
+        },
+    );
+    assert!(
+        !missing_alt,
+        "Cmd+I without Alt must not toggle the context inspector"
+    );
+
+    let extra_shift = crate::ai::window::render_keydown::is_context_inspector_shortcut(
+        "i",
+        &gpui::Modifiers {
+            platform: true,
+            alt: true,
+            shift: true,
+            ..Default::default()
+        },
+    );
+    assert!(
+        !extra_shift,
+        "Cmd+Alt+Shift+I must not match the dedicated inspector shortcut"
+    );
+}
+
+#[test]
 fn test_streaming_generation_guard_logic() {
     // Simulate the guard check logic used in streaming updates
     let update_chat_id = ChatId::new();
@@ -1223,63 +1272,21 @@ impl ContextPartState {
         cleared_count
     }
 
-    /// Simulate execute_action dispatch from command_bar.rs:261-317.
+    /// Simulate execute_action dispatch using the canonical context contract.
     fn execute_action(&mut self, action_id: &str) {
-        let action_id = action_id.strip_prefix("chat:").unwrap_or(action_id);
-        match action_id {
-            "add_current_context" => {
-                self.add_context_part(
-                    crate::ai::message_parts::AiContextPart::ResourceUri {
-                        uri: "kit://context?profile=minimal".to_string(),
-                        label: "Current Context".to_string(),
-                    },
-                );
-            }
-            "add_context_full" => {
-                self.add_context_part(
-                    crate::ai::message_parts::AiContextPart::ResourceUri {
-                        uri: "kit://context".to_string(),
-                        label: "Current Context (Full)".to_string(),
-                    },
-                );
-            }
-            "add_selection_context" => {
-                self.add_context_part(
-                    crate::ai::message_parts::AiContextPart::ResourceUri {
-                        uri: "kit://context?selectedText=1&frontmostApp=0&menuBar=0&browserUrl=0&focusedWindow=0".to_string(),
-                        label: "Selection".to_string(),
-                    },
-                );
-            }
-            "add_browser_context" => {
-                self.add_context_part(
-                    crate::ai::message_parts::AiContextPart::ResourceUri {
-                        uri: "kit://context?selectedText=0&frontmostApp=0&menuBar=0&browserUrl=1&focusedWindow=0".to_string(),
-                        label: "Browser URL".to_string(),
-                    },
-                );
-            }
-            "add_window_context" => {
-                self.add_context_part(
-                    crate::ai::message_parts::AiContextPart::ResourceUri {
-                        uri: "kit://context?selectedText=0&frontmostApp=1&menuBar=0&browserUrl=0&focusedWindow=1".to_string(),
-                        label: "Focused Window".to_string(),
-                    },
-                );
-            }
-            "add_context_diagnostics" => {
-                self.add_context_part(
-                    crate::ai::message_parts::AiContextPart::ResourceUri {
-                        uri: "kit://context?diagnostics=1".to_string(),
-                        label: "Context Diagnostics".to_string(),
-                    },
-                );
-            }
-            "clear_context" => {
-                self.clear_context_parts();
-            }
-            _ => panic!("unexpected action: {action_id}"),
+        if let Some(kind) =
+            crate::ai::context_contract::ContextAttachmentKind::from_action_id(action_id)
+        {
+            self.add_context_part(kind.part());
+            return;
         }
+
+        if crate::ai::context_contract::is_clear_context_action(action_id) {
+            self.clear_context_parts();
+            return;
+        }
+
+        panic!("unexpected action: {action_id}");
     }
 }
 

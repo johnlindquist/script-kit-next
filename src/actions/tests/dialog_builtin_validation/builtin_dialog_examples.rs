@@ -247,7 +247,7 @@ mod from_dialog_builtin_action_validation_tests_21 {
     #[test]
     fn batch21_ai_command_bar_total_12_actions() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 20);
+        assert_eq!(actions.len(), 21);
     }
     
     #[test]
@@ -2311,7 +2311,7 @@ mod from_dialog_builtin_action_validation_tests_22 {
     #[test]
     fn batch22_ai_command_bar_total_is_12() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 20);
+        assert_eq!(actions.len(), 21);
     }
     
     #[test]
@@ -5461,13 +5461,13 @@ mod from_dialog_builtin_action_validation_tests_24 {
     }
     
     // ============================================================
-    // 14. AI command bar: all 20 actions present
+    // 14. AI command bar: all 21 actions present
     // ============================================================
     
     #[test]
     fn batch24_ai_command_bar_total_12() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 20);
+        assert_eq!(actions.len(), 21);
     }
     
     #[test]
@@ -8798,7 +8798,7 @@ mod from_dialog_builtin_action_validation_tests_27 {
     #[test]
     fn cat27_22_ai_total_is_12() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 20);
+        assert_eq!(actions.len(), 21);
     }
     
     // ─────────────────────────────────────────────
@@ -12424,21 +12424,21 @@ mod from_dialog_builtin_action_validation_tests_30 {
     }
     
     // ---------------------------------------------------------------------------
-    // 7. AI command bar: all 20 actions have unique IDs
+    // 7. AI command bar: all 21 actions have unique IDs
     // ---------------------------------------------------------------------------
     #[test]
     fn batch30_ai_bar_12_actions() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 20);
+        assert_eq!(actions.len(), 21);
     }
-    
+
     #[test]
     fn batch30_ai_bar_all_ids_unique() {
         let actions = get_ai_command_bar_actions();
         let mut ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
         ids.sort();
         ids.dedup();
-        assert_eq!(ids.len(), 20, "All 20 AI bar action IDs must be unique");
+        assert_eq!(ids.len(), 21, "All 21 AI bar action IDs must be unique");
     }
     
     #[test]
