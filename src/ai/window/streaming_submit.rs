@@ -147,6 +147,7 @@ impl AiApp {
             let prepared =
                 crate::ai::message_parts::prepare_user_message_with_receipt(&content, &[], &[], &[]);
             self.last_prepared_message_receipt = Some(prepared.clone());
+            self.last_context_receipt = None;
             self.streaming_error = None;
             tracing::info!(
                 checkpoint = "message_prepare",
@@ -169,6 +170,15 @@ impl AiApp {
             );
 
             self.last_prepared_message_receipt = Some(prepared.clone());
+            self.last_context_receipt = Some(prepared.context.clone());
+
+            tracing::info!(
+                checkpoint = "context_receipt_persisted",
+                attempted = prepared.context.attempted,
+                resolved = prepared.context.resolved,
+                failures = prepared.context.failures.len(),
+                "submit_context: context resolution receipt stored"
+            );
 
             match prepared.decision {
                 crate::ai::message_parts::PreparedMessageDecision::Ready => {

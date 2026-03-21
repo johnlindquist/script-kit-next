@@ -233,7 +233,6 @@ impl AiApp {
                     .w_full()
                     .px(MSG_PX)
                     .py(MSG_PY)
-                    .rounded(MSG_RADIUS)
                     .child(content_element),
             )
     }

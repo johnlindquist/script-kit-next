@@ -1008,7 +1008,7 @@ fn test_ai_command_bar_has_expected_ids() {
     assert!(ids.contains(&"chat:branch_from_last"));
     assert!(ids.contains(&"chat:toggle_shortcuts_help"));
     assert!(ids.contains(&"chat:capture_screen_area"));
-    assert_eq!(ids.len(), 13);
+    assert_eq!(ids.len(), 20);
 }
 
 // =========================================================================

@@ -225,6 +225,63 @@ pub fn get_ai_command_bar_actions() -> Vec<Action> {
         .with_shortcut("⇧⌘E")
         .with_icon(IconName::FileCode)
         .with_section("Export"),
+        // === Context Section ===
+        Action::new(
+            "chat:add_current_context",
+            "Attach Current Context",
+            Some("Adds minimal desktop context".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::Code)
+        .with_section("Context"),
+        Action::new(
+            "chat:add_context_full",
+            "Attach Full Context",
+            Some("Adds full desktop context snapshot".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::FileCode)
+        .with_section("Context"),
+        Action::new(
+            "chat:add_selection_context",
+            "Attach Selected Text",
+            Some("Adds only the current selection".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::File)
+        .with_section("Context"),
+        Action::new(
+            "chat:add_browser_context",
+            "Attach Browser URL",
+            Some("Adds the focused browser tab URL".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::MagnifyingGlass)
+        .with_section("Context"),
+        Action::new(
+            "chat:add_window_context",
+            "Attach Focused Window",
+            Some("Adds focused window metadata".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::File)
+        .with_section("Context"),
+        Action::new(
+            "chat:add_context_diagnostics",
+            "Attach Context Diagnostics",
+            Some("Adds capture diagnostics for debugging".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::Settings)
+        .with_section("Context"),
+        Action::new(
+            "chat:clear_context",
+            "Clear Context",
+            Some("Removes all pending context chips".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::Trash)
+        .with_section("Context"),
         Action::new(
             "chat:branch_from_last",
             "Branch from Last Message",

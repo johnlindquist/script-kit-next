@@ -225,6 +225,44 @@ fn removing_non_file_context_part_does_not_corrupt_file_path_rendering() {
     assert_eq!(parts.len(), 1);
 }
 
+// ---------- Middle-removal order preservation ----------
+
+#[test]
+fn remove_context_part_preserves_order_of_remaining_parts() {
+    let mut parts = vec![
+        AiContextPart::ResourceUri {
+            uri: "kit://context?profile=minimal".to_string(),
+            label: "Current Context".to_string(),
+        },
+        AiContextPart::ResourceUri {
+            uri: "kit://context?browserUrl=1".to_string(),
+            label: "Browser URL".to_string(),
+        },
+        AiContextPart::FilePath {
+            path: "/tmp/demo.txt".to_string(),
+            label: "demo.txt".to_string(),
+        },
+    ];
+
+    // Remove the middle element (index 1)
+    parts.remove(1);
+
+    assert_eq!(parts.len(), 2);
+    assert_eq!(
+        parts,
+        vec![
+            AiContextPart::ResourceUri {
+                uri: "kit://context?profile=minimal".to_string(),
+                label: "Current Context".to_string(),
+            },
+            AiContextPart::FilePath {
+                path: "/tmp/demo.txt".to_string(),
+                label: "demo.txt".to_string(),
+            },
+        ]
+    );
+}
+
 // ---------- Dedup contract ----------
 
 /// Mirrors the dedup logic from `AiApp::add_attachment`.

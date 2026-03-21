@@ -4,6 +4,13 @@ use crate::theme::opacity::{
     OPACITY_TEXT_MUTED,
 };
 
+/// Icon container size for suggestion cards (provides consistent hit area around the icon).
+const SUGGESTION_ICON_CONTAINER: Pixels = px(36.);
+/// Icon size within suggestion cards.
+const SUGGESTION_ICON_SIZE: Pixels = px(18.);
+/// Maximum width of the suggestion card column.
+const SUGGESTION_MAX_W: Pixels = px(540.);
+
 /// Script Kit-specific welcome suggestions shown on the AI chat welcome screen.
 /// Each tuple: (title, description, icon).
 fn script_kit_welcome_suggestions() -> [(&'static str, &'static str, LocalIconName); 4] {
@@ -49,14 +56,14 @@ impl AiApp {
             .items_center()
             .justify_center()
             .flex_1()
-            .gap(S6)
-            .px(S4)
+            .gap(S7)
+            .px(S6)
             .child(
                 div()
                     .flex()
                     .flex_col()
                     .items_center()
-                    .gap(S3)
+                    .gap(S2)
                     .child(
                         div()
                             .text_xl()
@@ -89,9 +96,9 @@ impl AiApp {
                 div()
                     .flex()
                     .flex_col()
-                    .gap(S2)
+                    .gap(S1)
                     .w_full()
-                    .max_w(px(400.))
+                    .max_w(SUGGESTION_MAX_W)
                     .children(suggestions.into_iter().enumerate().map(
                         |(i, (title, desc, icon))| {
                             let prompt_text = SharedString::from(format!("{} {}", title, desc));
@@ -102,10 +109,10 @@ impl AiApp {
                                 .flex()
                                 .items_center()
                                 .gap(S3)
-                                .px(S4)
+                                .pl(S3)
+                                .pr(S4)
                                 .py(S3)
-                                .rounded(R_SM)
-                                .bg(suggestion_bg)
+                                .rounded(R_LG)
                                 .cursor_pointer()
                                 .hover(move |s| s.bg(suggestion_hover_bg))
                                 .on_click(cx.listener(move |this, _, window, cx| {
@@ -116,21 +123,33 @@ impl AiApp {
                                     this.set_composer_value(prompt_text.to_string(), window, cx);
                                     this.submit_message(window, cx);
                                 }))
+                                // Icon container — fixed size for consistent alignment
                                 .child(
-                                    svg()
-                                        .external_path(icon.external_path())
-                                        .size(ICON_MD)
-                                        .text_color(
-                                            cx.theme().accent.opacity(OPACITY_ACCENT_MEDIUM),
-                                        )
-                                        .flex_shrink_0(),
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .size(SUGGESTION_ICON_CONTAINER)
+                                        .rounded(R_SM)
+                                        .bg(suggestion_bg)
+                                        .flex_shrink_0()
+                                        .child(
+                                            svg()
+                                                .external_path(icon.external_path())
+                                                .size(SUGGESTION_ICON_SIZE)
+                                                .text_color(
+                                                    cx.theme()
+                                                        .accent
+                                                        .opacity(OPACITY_ACCENT_MEDIUM),
+                                                ),
+                                        ),
                                 )
                                 .child(
                                     div()
                                         .flex()
                                         .flex_col()
                                         .flex_1()
-                                        .gap(S1)
+                                        .gap(SP_1)
                                         .child(
                                             div()
                                                 .text_sm()

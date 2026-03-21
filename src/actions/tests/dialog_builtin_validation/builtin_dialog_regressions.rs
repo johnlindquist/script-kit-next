@@ -1974,7 +1974,7 @@ mod from_dialog_builtin_action_validation_tests_33 {
     #[test]
     fn ai_command_bar_total_is_12() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 13);
+        assert_eq!(actions.len(), 20);
     }
     
     // =====================================================================
@@ -3103,20 +3103,20 @@ mod from_dialog_builtin_action_validation_tests_34 {
     }
     
     #[test]
-    fn ai_bar_total_section_count_is_six() {
+    fn ai_bar_total_section_count_is_seven() {
         let actions = get_ai_command_bar_actions();
         let mut sections: Vec<&str> = actions
             .iter()
             .filter_map(|a| a.section.as_deref())
             .collect();
         sections.dedup();
-        // Response, Actions, Attachments, Export, Actions(again), Help, Settings
-        // Unique sections: Response, Actions, Attachments, Export, Help, Settings = 6
+        // Response, Actions, Attachments, Export, Context, Actions(again), Help, Settings
+        // Unique sections: Response, Actions, Attachments, Export, Context, Help, Settings = 7
         let unique: std::collections::HashSet<&str> = actions
             .iter()
             .filter_map(|a| a.section.as_deref())
             .collect();
-        assert_eq!(unique.len(), 6);
+        assert_eq!(unique.len(), 7);
     }
     
     // =====================================================================
@@ -4839,7 +4839,7 @@ mod from_dialog_builtin_action_validation_tests_35 {
     #[test]
     fn ai_bar_count_is_12() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 13);
+        assert_eq!(actions.len(), 20);
     }
     
     // =====================================================================
@@ -6584,7 +6584,7 @@ mod from_dialog_builtin_action_validation_tests_36 {
     #[test]
     fn ai_bar_total_is_12() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 13);
+        assert_eq!(actions.len(), 20);
     }
     
     // =====================================================================
@@ -10276,7 +10276,7 @@ mod from_dialog_builtin_action_validation_tests_40 {
     //! - Scriptlet context: with_custom copy_deeplink URL uses to_deeplink_name
     //! - AI bar: toggle_shortcuts_help details
     //! - AI bar: change_model has no shortcut
-    //! - AI bar: unique IDs across all 12 actions
+    //! - AI bar: unique IDs across all 20 actions
     //! - Notes: export action requires selection and not trash
     //! - Notes: browse_notes always present
     //! - Chat context: copy_response only when has_response
@@ -11256,13 +11256,13 @@ mod from_dialog_builtin_action_validation_tests_40 {
         }
     
         // =========================================================================
-        // 20. AI bar: unique IDs across all 12 actions
+        // 20. AI bar: unique IDs across all 20 actions
         // =========================================================================
     
         #[test]
         fn ai_bar_has_12_actions() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 13);
+            assert_eq!(actions.len(), 20);
         }
     
         #[test]
@@ -15779,7 +15779,7 @@ mod from_dialog_builtin_action_validation_tests_45 {
     #[test]
     fn ai_bar_count_is_12() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 13);
+        assert_eq!(actions.len(), 20);
     }
     
     #[test]

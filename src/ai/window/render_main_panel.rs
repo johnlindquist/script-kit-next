@@ -51,6 +51,10 @@ impl AiApp {
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _window, cx| {
                 this.handle_file_drop(paths, cx);
             }))
+            // Context resolution receipt (shown after submit when parts were resolved)
+            .when(self.last_context_receipt.is_some(), |d| {
+                d.child(self.render_context_receipt(cx))
+            })
             // Editing indicator (shown above input when editing a message)
             .when(is_editing, |d| d.child(self.render_editing_indicator(cx)))
             // Pending context part chips (shown above input when parts are attached)
@@ -248,6 +252,51 @@ impl AiApp {
             )
             // Input area (fixed height, always visible at bottom)
             .child(input_area)
+    }
+
+    /// Render a compact context-resolution receipt summary after submit.
+    fn render_context_receipt(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let receipt = match &self.last_context_receipt {
+            Some(r) => r,
+            None => return div().id("context-receipt-empty").into_any_element(),
+        };
+
+        let has_failures = receipt.has_failures();
+        let summary: SharedString = if has_failures {
+            format!(
+                "Context {} / {} resolved \u{00b7} {} failed",
+                receipt.resolved,
+                receipt.attempted,
+                receipt.failures.len()
+            )
+            .into()
+        } else {
+            format!("Context {} attached", receipt.resolved).into()
+        };
+
+        let (bg_color, text_color) = if has_failures {
+            (
+                cx.theme().danger.opacity(OPACITY_DISABLED),
+                cx.theme().danger,
+            )
+        } else {
+            (
+                cx.theme().accent.opacity(OPACITY_DISABLED),
+                cx.theme().accent,
+            )
+        };
+
+        div()
+            .id("context-receipt-summary")
+            .flex()
+            .items_center()
+            .gap(S2)
+            .px(S4)
+            .py(S1)
+            .rounded(R_MD)
+            .bg(bg_color)
+            .child(div().text_xs().text_color(text_color).child(summary))
+            .into_any_element()
     }
 
     /// Render chips representing pending context parts above the composer.
