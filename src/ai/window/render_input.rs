@@ -2,24 +2,15 @@ use super::*;
 
 impl AiApp {
     pub(super) fn render_input_with_cursor(&self, _cx: &mut Context<Self>) -> impl IntoElement {
-        // Keep this focused on text alignment; the outer composer surface owns border/radius.
-        // The input uses auto_grow(1,6) so it expands vertically with content.
-        // min_h keeps at least one line visible; max_h caps growth.
-        div()
-            .flex_1()
-            .min_h(COMPOSER_H)
-            .max_h(COMPOSER_MAX_H)
-            .pl(S3)
-            .rounded(R_MD)
-            .flex()
-            .items_start()
-            .child(
-                Input::new(&self.input_state)
-                    .w_full()
-                    .appearance(false) // No default styling - we provide our own
-                    .bordered(false)
-                    .focus_bordered(false),
-            )
+        // Thin wrapper only for max_h constraint (caps multi-line growth).
+        // No padding — the composer surface owns all spacing.
+        div().flex_1().max_h(COMPOSER_MAX_H).child(
+            Input::new(&self.input_state)
+                .w_full()
+                .appearance(false) // No default styling - we provide our own
+                .bordered(false)
+                .focus_bordered(false),
+        )
     }
 
     /// Render the model picker button

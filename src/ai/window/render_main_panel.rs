@@ -55,7 +55,8 @@ impl AiApp {
                 div()
                     .id("ai-composer")
                     .flex()
-                    .items_start()
+                    .flex_row()
+                    .items_center()
                     .w_full()
                     .min_h(COMPOSER_H)
                     .px(S3)
@@ -65,7 +66,7 @@ impl AiApp {
                     .border_1()
                     .border_color(cx.theme().border.opacity(OPACITY_SELECTED))
                     .bg(cx.theme().muted.opacity(OPACITY_DISABLED))
-                    // Plus button on the left - opens attachments picker
+                    // Plus button on the left
                     .child(
                         div()
                             .id("attachments-btn")
@@ -73,6 +74,7 @@ impl AiApp {
                             .flex()
                             .items_center()
                             .justify_center()
+                            .flex_shrink_0()
                             .size(S6)
                             .rounded(R_MD)
                             .border_1()

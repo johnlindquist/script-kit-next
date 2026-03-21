@@ -6,24 +6,6 @@ use crate::theme::opacity::{
 };
 
 impl AiApp {
-    pub(super) fn render_shortcut_hint_chip(
-        &self,
-        keys: &'static str,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        div()
-            .flex_shrink_0()
-            .px(S1)
-            .py(px(2.))
-            .rounded(R_SM)
-            .border_1()
-            .border_color(cx.theme().border.opacity(OPACITY_DISABLED))
-            .bg(cx.theme().muted.opacity(OPACITY_HOVER))
-            .text_xs()
-            .text_color(cx.theme().muted_foreground.opacity(OPACITY_SELECTED))
-            .child(keys)
-    }
-
     pub(super) fn sidebar_list_splice_plan(
         old_count: usize,
         item_count: usize,
@@ -78,7 +60,6 @@ impl AiApp {
                             .text_color(icon_color),
                     ),
             )
-            .child(self.render_shortcut_hint_chip("\u{2318}B", cx))
     }
 
     pub(super) fn sync_sidebar_list_item_count(&mut self, item_count: usize) {
@@ -173,8 +154,7 @@ impl AiApp {
                                             .on_click(cx.listener(|this, _, window, cx| {
                                                 this.new_conversation(window, cx);
                                             })),
-                                    )
-                                    .child(self.render_shortcut_hint_chip("\u{2318}N", cx)),
+                                    ),
                             )
                             // Presets dropdown trigger - use svg directly for better tooltip control
                             .child(
@@ -218,8 +198,7 @@ impl AiApp {
                             .flex()
                             .items_center()
                             .gap(S2)
-                            .child(div().flex_1().child(self.render_search(cx)))
-                            .child(self.render_shortcut_hint_chip("\u{2318}\u{21e7}F", cx)),
+                            .child(div().flex_1().child(self.render_search(cx))),
                     )
                     // Search result count (shown when there's an active search query with results)
                     .when(

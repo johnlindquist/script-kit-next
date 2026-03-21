@@ -62,16 +62,10 @@ impl AppChromeColors {
                 colors.background.search_box,
                 opacity.input_inactive,
             ),
-            badge_border_rgba: hex_to_rgba_with_opacity(
-                colors.ui.border,
-                opacity.border_inactive,
-            ),
+            badge_border_rgba: hex_to_rgba_with_opacity(colors.ui.border, opacity.border_inactive),
             badge_text_hex: colors.text.secondary,
 
-            accent_badge_bg_rgba: hex_to_rgba_with_opacity(
-                colors.accent.selected,
-                opacity.hover,
-            ),
+            accent_badge_bg_rgba: hex_to_rgba_with_opacity(colors.accent.selected, opacity.hover),
             accent_badge_border_rgba: hex_to_rgba_with_opacity(
                 colors.accent.selected,
                 opacity.selected,

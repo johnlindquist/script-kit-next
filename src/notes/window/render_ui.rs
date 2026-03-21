@@ -29,11 +29,7 @@ fn notes_apply_bullet_list(app: &mut NotesApp, window: &mut Window, cx: &mut Con
     app.toggle_bullet_list(window, cx);
 }
 
-fn notes_apply_numbered_list(
-    app: &mut NotesApp,
-    window: &mut Window,
-    cx: &mut Context<NotesApp>,
-) {
+fn notes_apply_numbered_list(app: &mut NotesApp, window: &mut Window, cx: &mut Context<NotesApp>) {
     app.toggle_numbered_list(window, cx);
 }
 
@@ -45,11 +41,7 @@ fn notes_apply_code_block(app: &mut NotesApp, window: &mut Window, cx: &mut Cont
     app.insert_formatting("\n```\n", "\n```", window, cx);
 }
 
-fn notes_apply_strikethrough(
-    app: &mut NotesApp,
-    window: &mut Window,
-    cx: &mut Context<NotesApp>,
-) {
+fn notes_apply_strikethrough(app: &mut NotesApp, window: &mut Window, cx: &mut Context<NotesApp>) {
     app.insert_formatting("~~", "~~", window, cx);
 }
 
