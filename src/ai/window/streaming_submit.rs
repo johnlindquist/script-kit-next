@@ -196,8 +196,9 @@ impl AiApp {
                     "submit_context: partial resolution failure"
                 );
                 self.pending_context_parts = receipt.unresolved_parts;
-                self.streaming_error = crate::ai::build_actionable_preflight_error(&preflight_audit)
-                    .or_else(|| receipt.user_error.clone());
+                self.streaming_error =
+                    crate::ai::build_actionable_preflight_error(&preflight_audit)
+                        .or_else(|| receipt.user_error.clone());
                 receipt.final_user_content
             }
             crate::ai::message_parts::PreparedMessageDecision::Blocked => {
@@ -211,8 +212,9 @@ impl AiApp {
                     "submit_context: blocked due to unresolved context"
                 );
                 self.pending_context_parts = receipt.unresolved_parts;
-                self.streaming_error = crate::ai::build_actionable_preflight_error(&preflight_audit)
-                    .or_else(|| receipt.user_error.clone());
+                self.streaming_error =
+                    crate::ai::build_actionable_preflight_error(&preflight_audit)
+                        .or_else(|| receipt.user_error.clone());
                 cx.notify();
                 return;
             }

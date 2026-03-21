@@ -152,13 +152,12 @@ fn latest_resource_reads_persisted_trace() {
 
     // Read directly via the transaction_trace module since read_resource
     // uses the default log path. This validates the persistence layer.
-    let loaded =
-        script_kit_gpui::protocol::transaction_trace::read_latest_transaction_trace(
-            Some(&log_path),
-            Some("resource-test-1"),
-        )
-        .expect("read should succeed")
-        .expect("trace should exist");
+    let loaded = script_kit_gpui::protocol::transaction_trace::read_latest_transaction_trace(
+        Some(&log_path),
+        Some("resource-test-1"),
+    )
+    .expect("read should succeed")
+    .expect("trace should exist");
 
     assert_eq!(loaded.request_id, "resource-test-1");
     assert_eq!(loaded.status, TransactionTraceStatus::Ok);
@@ -191,23 +190,21 @@ fn latest_resource_filters_by_request_id() {
     append_transaction_trace(Some(&log_path), &trace_b).expect("append b");
 
     // Without filter, should get the latest (txn-b)
-    let latest =
-        script_kit_gpui::protocol::transaction_trace::read_latest_transaction_trace(
-            Some(&log_path),
-            None,
-        )
-        .expect("read should succeed")
-        .expect("trace should exist");
+    let latest = script_kit_gpui::protocol::transaction_trace::read_latest_transaction_trace(
+        Some(&log_path),
+        None,
+    )
+    .expect("read should succeed")
+    .expect("trace should exist");
     assert_eq!(latest.request_id, "txn-b");
 
     // With filter, should get the specific one (txn-a)
-    let filtered =
-        script_kit_gpui::protocol::transaction_trace::read_latest_transaction_trace(
-            Some(&log_path),
-            Some("txn-a"),
-        )
-        .expect("read should succeed")
-        .expect("trace should exist");
+    let filtered = script_kit_gpui::protocol::transaction_trace::read_latest_transaction_trace(
+        Some(&log_path),
+        Some("txn-a"),
+    )
+    .expect("read should succeed")
+    .expect("trace should exist");
     assert_eq!(filtered.request_id, "txn-a");
 }
 

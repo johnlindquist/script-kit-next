@@ -61,12 +61,6 @@ impl AiApp {
                     .map(|p| p.display_name().to_string());
                 if let Some(ref name) = provider_name {
                     if !name.is_empty() {
-                        tracing::info!(
-                            model_id = %m.id,
-                            provider = %m.provider,
-                            provider_display = %name,
-                            "model_picker_label: showing provider in label"
-                        );
                         return format!("{} · {}", m.display_name, name);
                     }
                 }

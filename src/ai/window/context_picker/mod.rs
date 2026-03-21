@@ -47,11 +47,7 @@ impl AiApp {
     }
 
     /// Update the picker query and re-rank results.
-    pub(super) fn update_context_picker_query(
-        &mut self,
-        query: String,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn update_context_picker_query(&mut self, query: String, cx: &mut Context<Self>) {
         let items = build_picker_items(&query);
         if let Some(picker) = self.context_picker.as_mut() {
             picker.query = query.clone();
@@ -202,11 +198,7 @@ pub fn build_picker_items(query: &str) -> Vec<ContextPickerItem> {
                 label: spec.label.into(),
                 subtitle,
                 kind: ContextPickerItemKind::BuiltIn(spec.kind),
-                score: if query_lower.is_empty() {
-                    100
-                } else {
-                    score
-                },
+                score: if query_lower.is_empty() { 100 } else { score },
             });
         }
     }
@@ -284,11 +276,7 @@ pub fn score_builtin(
 }
 
 /// Collect file and folder items from the given directory matching the query.
-fn collect_file_items(
-    dir: &std::path::Path,
-    query: &str,
-    items: &mut Vec<ContextPickerItem>,
-) {
+fn collect_file_items(dir: &std::path::Path, query: &str, items: &mut Vec<ContextPickerItem>) {
     let entries = match std::fs::read_dir(dir) {
         Ok(e) => e,
         Err(_) => return,

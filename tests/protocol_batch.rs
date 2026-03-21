@@ -151,9 +151,11 @@ fn batch_result_stop_on_error_sets_failed_at() {
                 command: "selectByValue".to_string(),
                 elapsed: Some(3),
                 value: None,
-                error: Some(script_kit_gpui::protocol::TransactionError::selection_not_found(
-                    "No visible choice matched value 'grape'",
-                )),
+                error: Some(
+                    script_kit_gpui::protocol::TransactionError::selection_not_found(
+                        "No visible choice matched value 'grape'",
+                    ),
+                ),
             },
         ],
         Some(1),
@@ -167,11 +169,18 @@ fn batch_result_stop_on_error_sets_failed_at() {
     assert_eq!(json["totalElapsed"], 4);
 
     let results = json["results"].as_array().expect("results array");
-    assert_eq!(results.len(), 2, "stop-on-error should include results up to and including failure");
+    assert_eq!(
+        results.len(),
+        2,
+        "stop-on-error should include results up to and including failure"
+    );
     assert_eq!(results[0]["success"], true);
     assert_eq!(results[1]["success"], false);
     assert_eq!(results[1]["error"]["code"], "selection_not_found");
-    assert_eq!(results[1]["error"]["message"], "No visible choice matched value 'grape'");
+    assert_eq!(
+        results[1]["error"]["message"],
+        "No visible choice matched value 'grape'"
+    );
 }
 
 #[test]
@@ -204,9 +213,11 @@ fn batch_result_stop_on_error_preserves_successful_prefix() {
                 command: "selectByValue".to_string(),
                 elapsed: Some(2),
                 value: None,
-                error: Some(script_kit_gpui::protocol::TransactionError::selection_not_found(
-                    "No visible choice matched value 'mango'",
-                )),
+                error: Some(
+                    script_kit_gpui::protocol::TransactionError::selection_not_found(
+                        "No visible choice matched value 'mango'",
+                    ),
+                ),
             },
         ],
         Some(2),

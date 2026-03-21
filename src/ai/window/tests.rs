@@ -1768,7 +1768,10 @@ fn composer_receipt_pending_chip_plus_identical_mention_deduplicates() {
     );
     assert_eq!(assembly.duplicates_removed, 1);
     assert_eq!(assembly.duplicates.len(), 1);
-    assert_eq!(assembly.duplicates[0].kept_from, ContextAssemblyOrigin::Mention);
+    assert_eq!(
+        assembly.duplicates[0].kept_from,
+        ContextAssemblyOrigin::Mention
+    );
     assert_eq!(
         assembly.duplicates[0].dropped_from,
         ContextAssemblyOrigin::Pending
@@ -1908,7 +1911,10 @@ fn composer_receipt_empty_message_with_valid_parts_is_sendable() {
     let receipt = prepare_user_message_with_receipt("", &parts, &[], &[]);
 
     assert_eq!(receipt.decision, PreparedMessageDecision::Ready);
-    assert!(receipt.can_send_message(), "empty text + valid parts must be sendable");
+    assert!(
+        receipt.can_send_message(),
+        "empty text + valid parts must be sendable"
+    );
     assert!(
         !receipt.final_user_content.is_empty(),
         "final content must be non-empty when parts resolve"
@@ -2099,7 +2105,10 @@ fn test_context_palette_shortcut_requires_cmd_shift_a() {
             ..Default::default()
         },
     );
-    assert!(correct, "Cmd+Shift+A should match the context palette shortcut");
+    assert!(
+        correct,
+        "Cmd+Shift+A should match the context palette shortcut"
+    );
 
     let wrong_key = crate::ai::window::render_keydown::is_context_palette_shortcut(
         "b",
@@ -2207,7 +2216,10 @@ fn test_picker_snapshot_is_serializable_and_consistent() {
 
     // Must serialize to JSON
     let json = serde_json::to_string_pretty(&snapshot).expect("snapshot must serialize");
-    assert!(json.contains("\"query\": \"sel\""), "snapshot must contain query");
+    assert!(
+        json.contains("\"query\": \"sel\""),
+        "snapshot must contain query"
+    );
     assert!(
         json.contains("\"selected_index\": 0"),
         "snapshot must contain selected_index"
@@ -2227,9 +2239,7 @@ fn test_picker_snapshot_is_serializable_and_consistent() {
         snapshot.items[0].label,
     );
 
-    println!(
-        "--- PICKER_SNAPSHOT_JSON ---\n{json}\n--- END_PICKER_SNAPSHOT_JSON ---"
-    );
+    println!("--- PICKER_SNAPSHOT_JSON ---\n{json}\n--- END_PICKER_SNAPSHOT_JSON ---");
 }
 
 /// Preflight snapshot is machine-readable.
@@ -2260,14 +2270,15 @@ fn test_preflight_snapshot_is_serializable() {
     let snapshot = state.snapshot();
 
     let json = serde_json::to_string_pretty(&snapshot).expect("preflight snapshot must serialize");
-    assert!(json.contains("\"generation\": 7"), "must contain generation");
+    assert!(
+        json.contains("\"generation\": 7"),
+        "must contain generation"
+    );
     assert!(json.contains("\"Ready\""), "must contain Ready status");
     assert!(json.contains("\"attempted\": 2"), "must contain attempted");
     assert!(json.contains("\"resolved\": 2"), "must contain resolved");
 
-    println!(
-        "--- PREFLIGHT_SNAPSHOT_JSON ---\n{json}\n--- END_PREFLIGHT_SNAPSHOT_JSON ---"
-    );
+    println!("--- PREFLIGHT_SNAPSHOT_JSON ---\n{json}\n--- END_PREFLIGHT_SNAPSHOT_JSON ---");
 }
 
 /// The send button is enabled when context parts are attached (no text needed).
@@ -2291,9 +2302,7 @@ fn test_send_button_enabled_by_context_parts_alone() {
 #[test]
 fn test_palette_to_preflight_to_send_end_to_end() {
     use crate::ai::context_contract::ContextAttachmentKind;
-    use crate::ai::message_parts::{
-        prepare_user_message_with_receipt, PreparedMessageDecision,
-    };
+    use crate::ai::message_parts::{prepare_user_message_with_receipt, PreparedMessageDecision};
     use crate::ai::window::context_picker::{build_picker_items, types::ContextPickerItemKind};
     use crate::ai::window::context_preflight::preflight_state_from_receipt;
 
@@ -2316,12 +2325,7 @@ fn test_palette_to_preflight_to_send_end_to_end() {
     };
 
     // Step 3: Run preflight with the pending part
-    let receipt = prepare_user_message_with_receipt(
-        "What do you see?",
-        &[part],
-        &[],
-        &[],
-    );
+    let receipt = prepare_user_message_with_receipt("What do you see?", &[part], &[], &[]);
 
     assert_eq!(
         receipt.decision,
@@ -2346,10 +2350,17 @@ fn test_palette_to_preflight_to_send_end_to_end() {
         preflight.status,
         crate::ai::window::context_preflight::ContextPreflightStatus::Ready
     );
-    assert!(preflight.approx_tokens > 0, "resolved context should have tokens");
+    assert!(
+        preflight.approx_tokens > 0,
+        "resolved context should have tokens"
+    );
 
     // Step 5: Verify send button would be enabled
-    assert!(ai_window_can_submit_message("What do you see?", false, true));
+    assert!(ai_window_can_submit_message(
+        "What do you see?",
+        false,
+        true
+    ));
 }
 
 /// Duplicate attachment via palette + mention deduplicates correctly.
@@ -2376,7 +2387,10 @@ fn test_palette_plus_mention_deduplication() {
         assembly.duplicates_removed, 1,
         "identical parts from mention + palette should dedup"
     );
-    assert_eq!(assembly.merged_count, 1, "should have exactly one unique part");
+    assert_eq!(
+        assembly.merged_count, 1,
+        "should have exactly one unique part"
+    );
 
     // Full pipeline should still work
     let receipt = prepare_user_message_with_receipt(
@@ -2415,7 +2429,11 @@ fn test_mixed_valid_invalid_parts_yield_partial() {
         "mixed valid+invalid should be Partial, not Ready or Blocked"
     );
     assert_eq!(receipt.context.resolved, 1, "valid part should resolve");
-    assert_eq!(receipt.context.failures.len(), 1, "invalid part should fail");
+    assert_eq!(
+        receipt.context.failures.len(),
+        1,
+        "invalid part should fail"
+    );
     assert!(
         receipt.final_user_content.contains("kit://context"),
         "valid part content should be present"

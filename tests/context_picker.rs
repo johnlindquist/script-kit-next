@@ -49,11 +49,7 @@ fn empty_query_returns_all_builtins_deterministically() {
             ContextPickerItemKind::BuiltIn(kind) => *kind == spec.kind,
             _ => false,
         });
-        assert!(
-            found,
-            "Built-in item for {:?} should be present",
-            spec.kind
-        );
+        assert!(found, "Built-in item for {:?} should be present", spec.kind);
     }
 }
 
@@ -217,10 +213,7 @@ fn all_builtin_items_produce_resource_uri_parts() {
                         "Built-in part URI should start with kit://, got: {}",
                         uri
                     );
-                    assert!(
-                        !label.is_empty(),
-                        "Built-in part label should not be empty"
-                    );
+                    assert!(!label.is_empty(), "Built-in part label should not be empty");
                 }
                 _ => panic!(
                     "Built-in {:?} should produce ResourceUri, got FilePath",
@@ -266,12 +259,12 @@ fn every_context_attachment_kind_has_a_spec() {
 
     for kind in &kinds {
         let spec = kind.spec();
-        assert!(!spec.label.is_empty(), "{:?} spec should have a label", kind);
         assert!(
-            !spec.uri.is_empty(),
-            "{:?} spec should have a URI",
+            !spec.label.is_empty(),
+            "{:?} spec should have a label",
             kind
         );
+        assert!(!spec.uri.is_empty(), "{:?} spec should have a URI", kind);
         let part = kind.part();
         assert!(
             !part.label().is_empty(),

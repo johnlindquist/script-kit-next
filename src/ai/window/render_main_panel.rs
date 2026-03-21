@@ -18,8 +18,7 @@ fn should_show_context_bar(
     preflight: &context_preflight::ContextPreflightState,
     last_receipt: &Option<crate::ai::message_parts::ContextResolutionReceipt>,
 ) -> bool {
-    preflight.status != context_preflight::ContextPreflightStatus::Idle
-        || last_receipt.is_some()
+    preflight.status != context_preflight::ContextPreflightStatus::Idle || last_receipt.is_some()
 }
 
 /// Build the human-readable summary line for the context bar.
@@ -121,8 +120,7 @@ impl AiApp {
             crate::components::ButtonColors::from_theme(&crate::theme::get_cached_theme());
         let entity = cx.entity();
 
-        let show_bar =
-            should_show_context_bar(&self.context_preflight, &self.last_context_receipt);
+        let show_bar = should_show_context_bar(&self.context_preflight, &self.last_context_receipt);
 
         let input_area = div()
             .id("ai-input-area")
@@ -576,15 +574,12 @@ impl AiApp {
             if let Some(json) = json_source {
                 let json_text: SharedString = json.into();
                 drawer = drawer.child(
-                    div()
-                        .id("context-inspector")
-                        .pt(S2)
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(cx.theme().foreground)
-                                .child(json_text),
-                        ),
+                    div().id("context-inspector").pt(S2).child(
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().foreground)
+                            .child(json_text),
+                    ),
                 );
             }
         }
