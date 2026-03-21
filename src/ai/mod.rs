@@ -55,7 +55,8 @@ pub use self::message_parts::{
     resolve_context_part_to_prompt_block, resolve_context_parts_to_prompt_prefix,
     resolve_context_parts_with_receipt, AiContextPart, ContextPartPreparationOutcome,
     ContextPartPreparationOutcomeKind, ContextResolutionFailure, ContextResolutionReceipt,
-    PreparedMessageDecision, PreparedMessageReceipt, AI_MESSAGE_PREPARATION_SCHEMA_VERSION,
+    ContextAssemblyReceipt, PreparedMessageDecision, PreparedMessageReceipt,
+    AI_MESSAGE_PREPARATION_SCHEMA_VERSION,
 };
 pub use self::model::{Chat, ChatId, ChatSource, Message, MessageRole};
 pub use self::preflight_audit::{
@@ -75,4 +76,17 @@ pub use self::window::{
     open_ai_window, open_ai_window_with_chat, reload_ai_presets, set_ai_input,
     set_ai_input_with_image, set_ai_search, show_ai_command_bar, simulate_ai_key, start_ai_chat,
     PendingChatMessage,
+};
+
+// Re-export context-composer types for integration tests
+pub use self::window::context_preflight::{
+    estimate_tokens_from_text, preflight_state_from_receipt, status_from_decision,
+    ContextPreflightState, ContextPreflightStatus,
+};
+pub use self::window::context_picker::{build_picker_items, score_builtin};
+pub use self::window::context_picker::types::{
+    ContextPickerItem, ContextPickerItemKind, ContextPickerSection, ContextPickerState,
+};
+pub use self::context_contract::{
+    context_attachment_specs, ContextAttachmentKind, ContextAttachmentSpec,
 };

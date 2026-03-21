@@ -2,7 +2,7 @@ use gpui::SharedString;
 
 /// The kind of item in the context picker.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum ContextPickerItemKind {
+pub enum ContextPickerItemKind {
     /// A built-in context attachment (seeded from `context_attachment_specs()`).
     BuiltIn(crate::ai::context_contract::ContextAttachmentKind),
     /// A local file attachment.
@@ -13,18 +13,18 @@ pub(crate) enum ContextPickerItemKind {
 
 /// A single row in the context picker.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ContextPickerItem {
+pub struct ContextPickerItem {
     /// Unique identifier for this row (e.g. `"builtin:selection"`, `"file:/path"`).
-    pub(crate) id: SharedString,
+    pub id: SharedString,
     /// Display label (e.g. `"Selection"`, `"chat.rs"`).
-    pub(crate) label: SharedString,
+    pub label: SharedString,
     /// Secondary text (e.g. URI, file path, description).
-    pub(crate) subtitle: SharedString,
+    pub subtitle: SharedString,
     /// The kind of item — determines how acceptance creates a context part.
-    pub(crate) kind: ContextPickerItemKind,
+    pub kind: ContextPickerItemKind,
     /// Relevance score used for deterministic ranking (higher = better match).
     /// Ties are broken by insertion order.
-    pub(crate) score: u32,
+    pub score: u32,
 }
 
 /// Mutable state for the inline context picker overlay.
@@ -32,17 +32,17 @@ pub(crate) struct ContextPickerItem {
 /// Created when the user types `@` in the composer; dropped on Escape,
 /// Enter (accept), or when the composer loses focus.
 #[derive(Debug, Clone)]
-pub(in crate::ai::window) struct ContextPickerState {
+pub struct ContextPickerState {
     /// The raw query string after the `@` trigger (e.g. `"sel"` from `@sel`).
-    pub(in crate::ai::window) query: String,
+    pub query: String,
     /// Ranked items matching the current query.
-    pub(in crate::ai::window) items: Vec<ContextPickerItem>,
+    pub items: Vec<ContextPickerItem>,
     /// Currently highlighted row index (keyboard navigation).
-    pub(in crate::ai::window) selected_index: usize,
+    pub selected_index: usize,
 }
 
 impl ContextPickerState {
-    pub(in crate::ai::window) fn new(query: String, items: Vec<ContextPickerItem>) -> Self {
+    pub fn new(query: String, items: Vec<ContextPickerItem>) -> Self {
         Self {
             query,
             items,
@@ -53,14 +53,14 @@ impl ContextPickerState {
 
 /// Section header for grouped picker results.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ContextPickerSection {
+pub enum ContextPickerSection {
     BuiltIn,
     Files,
     Folders,
 }
 
 impl ContextPickerSection {
-    pub(crate) fn label(self) -> &'static str {
+    pub fn label(self) -> &'static str {
         match self {
             Self::BuiltIn => "Context",
             Self::Files => "Files",

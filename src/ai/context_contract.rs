@@ -5,7 +5,7 @@ pub(crate) const CLEAR_CONTEXT_ACTION_ID: &str = "chat:clear_context";
 pub(crate) const CLEAR_CONTEXT_ACTION_TITLE: &str = "Clear Context";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) enum ContextAttachmentKind {
+pub enum ContextAttachmentKind {
     Current,
     Full,
     Selection,
@@ -15,14 +15,14 @@ pub(crate) enum ContextAttachmentKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct ContextAttachmentSpec {
-    pub(crate) kind: ContextAttachmentKind,
-    pub(crate) action_id: &'static str,
-    pub(crate) action_title: &'static str,
-    pub(crate) slash_command: Option<&'static str>,
-    pub(crate) mention: Option<&'static str>,
-    pub(crate) uri: &'static str,
-    pub(crate) label: &'static str,
+pub struct ContextAttachmentSpec {
+    pub kind: ContextAttachmentKind,
+    pub action_id: &'static str,
+    pub action_title: &'static str,
+    pub slash_command: Option<&'static str>,
+    pub mention: Option<&'static str>,
+    pub uri: &'static str,
+    pub label: &'static str,
 }
 
 const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 6] = [
@@ -82,7 +82,7 @@ const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 6] = [
     },
 ];
 
-pub(crate) fn context_attachment_specs() -> &'static [ContextAttachmentSpec] {
+pub fn context_attachment_specs() -> &'static [ContextAttachmentSpec] {
     &CONTEXT_ATTACHMENT_SPECS
 }
 
@@ -94,7 +94,7 @@ impl ContextAttachmentKind {
     /// Cannot fail at runtime because the const array is exhaustive over
     /// all `ContextAttachmentKind` variants — this is verified by the
     /// `context_attachment_specs_are_unique_and_roundtrip` test.
-    pub(crate) fn spec(self) -> &'static ContextAttachmentSpec {
+    pub fn spec(self) -> &'static ContextAttachmentSpec {
         // Iterate with index so we can return without expect/unwrap.
         let specs = context_attachment_specs();
         let mut i = 0;
@@ -109,7 +109,7 @@ impl ContextAttachmentKind {
         unreachable!("missing ContextAttachmentSpec for {self:?}")
     }
 
-    pub(crate) fn part(self) -> AiContextPart {
+    pub fn part(self) -> AiContextPart {
         let spec = self.spec();
         AiContextPart::ResourceUri {
             uri: spec.uri.to_string(),

@@ -620,6 +620,7 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
         last_preflight_audit: bool,
         last_context_receipt: bool,
         show_context_inspector: bool,
+        show_context_drawer: bool,
     }
 
     impl ConversationTransientState {
@@ -640,6 +641,7 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
             self.last_preflight_audit = false;
             self.last_context_receipt = false;
             self.show_context_inspector = false;
+            self.show_context_drawer = false;
         }
     }
 
@@ -663,6 +665,7 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
         last_preflight_audit: true,
         last_context_receipt: true,
         show_context_inspector: true,
+        show_context_drawer: true,
     };
 
     // Verify dirty state is non-default
@@ -681,6 +684,7 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
     assert!(state.last_preflight_audit);
     assert!(state.last_context_receipt);
     assert!(state.show_context_inspector);
+    assert!(state.show_context_drawer);
 
     // Apply reset
     state.reset();
@@ -745,6 +749,10 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
     assert!(
         !state.show_context_inspector,
         "show_context_inspector must be cleared on new conversation"
+    );
+    assert!(
+        !state.show_context_drawer,
+        "show_context_drawer must be cleared on new conversation"
     );
 }
 

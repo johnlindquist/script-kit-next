@@ -11,6 +11,94 @@ fn ai_main_panel_can_submit(
     ai_window_can_submit_message(input_value, has_pending_image, has_pending_context_parts)
 }
 
+/// Check whether the unified context bar should be visible.
+///
+/// Shown whenever there is pre-submit preflight data **or** a post-submit receipt.
+fn should_show_context_bar(
+    preflight: &context_preflight::ContextPreflightState,
+    last_receipt: &Option<crate::ai::message_parts::ContextResolutionReceipt>,
+) -> bool {
+    preflight.status != context_preflight::ContextPreflightStatus::Idle
+        || last_receipt.is_some()
+}
+
+/// Build the human-readable summary line for the context bar.
+///
+/// Uses preflight state when available (pre-submit), falls back to
+/// post-submit receipt data. This ensures the same data shape drives
+/// both preview and post-send display.
+fn build_context_bar_summary(
+    preflight: &context_preflight::ContextPreflightState,
+    last_receipt: &Option<crate::ai::message_parts::ContextResolutionReceipt>,
+    last_prepared: &Option<crate::ai::message_parts::PreparedMessageReceipt>,
+) -> (String, usize, usize, usize, usize) {
+    // Returns (summary_text, resolved, failures, duplicates, approx_tokens)
+    if preflight.status != context_preflight::ContextPreflightStatus::Idle {
+        // Pre-submit: use preflight state
+        (
+            String::new(), // built by caller
+            preflight.resolved,
+            preflight.failures,
+            preflight.duplicates_removed,
+            preflight.approx_tokens,
+        )
+    } else if let Some(receipt) = last_receipt {
+        // Post-submit: use last receipt
+        let duplicates = last_prepared
+            .as_ref()
+            .and_then(|r| r.assembly.as_ref())
+            .map(|a| a.duplicates_removed)
+            .unwrap_or(0);
+        let approx_tokens = context_preflight::estimate_tokens_from_text(&receipt.prompt_prefix);
+        (
+            String::new(),
+            receipt.resolved,
+            receipt.failures.len(),
+            duplicates,
+            approx_tokens,
+        )
+    } else {
+        (String::new(), 0, 0, 0, 0)
+    }
+}
+
+/// Format a context count, token estimate, dedup and failure count into
+/// a compact summary string like `Context 3 · ~1.8k tokens · 1 deduped`.
+fn format_context_summary(
+    resolved: usize,
+    failures: usize,
+    duplicates: usize,
+    approx_tokens: usize,
+    is_loading: bool,
+) -> String {
+    let mut parts = Vec::with_capacity(4);
+
+    if is_loading {
+        parts.push("Context resolving\u{2026}".to_string());
+    } else {
+        parts.push(format!("Context {resolved}"));
+    }
+
+    if approx_tokens > 0 {
+        if approx_tokens >= 1000 {
+            let k = approx_tokens as f64 / 1000.0;
+            parts.push(format!("~{k:.1}k tokens"));
+        } else {
+            parts.push(format!("~{approx_tokens} tokens"));
+        }
+    }
+
+    if duplicates > 0 {
+        parts.push(format!("{duplicates} deduped"));
+    }
+
+    if failures > 0 {
+        parts.push(format!("{failures} failed"));
+    }
+
+    parts.join(" \u{00b7} ")
+}
+
 impl AiApp {
     pub(super) fn render_main_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
         // Build input area at bottom:
@@ -33,6 +121,9 @@ impl AiApp {
             crate::components::ButtonColors::from_theme(&crate::theme::get_cached_theme());
         let entity = cx.entity();
 
+        let show_bar =
+            should_show_context_bar(&self.context_preflight, &self.last_context_receipt);
+
         let input_area = div()
             .id("ai-input-area")
             .flex()
@@ -48,10 +139,8 @@ impl AiApp {
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _window, cx| {
                 this.handle_file_drop(paths, cx);
             }))
-            // Context resolution receipt (shown after submit when parts were resolved)
-            .when(self.last_context_receipt.is_some(), |d| {
-                d.child(self.render_context_receipt(cx))
-            })
+            // Unified context bar (pre-submit preflight or post-submit receipt)
+            .when(show_bar, |d| d.child(self.render_context_bar(cx)))
             // Editing indicator (shown above input when editing a message)
             .when(is_editing, |d| d.child(self.render_editing_indicator(cx)))
             // Context picker overlay (shown above input when @ trigger is active)
@@ -203,41 +292,24 @@ impl AiApp {
             .child(input_area)
     }
 
-    /// Render a compact context-resolution receipt summary after submit,
-    /// with an optional full inspector panel toggled via ⌥⌘I.
-    fn render_context_receipt(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let receipt = match &self.last_context_receipt {
-            Some(r) => r,
-            None => return div().id("context-receipt-empty").into_any_element(),
-        };
+    /// Render the unified context bar: a compact summary line that opens
+    /// a drawer with per-part provenance rows. Works both pre-submit
+    /// (from preflight state) and post-submit (from resolution receipt).
+    fn render_context_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let is_loading =
+            self.context_preflight.status == context_preflight::ContextPreflightStatus::Loading;
 
-        let has_failures = receipt.has_failures();
-        let duplicates_removed = self
-            .last_prepared_message_receipt
-            .as_ref()
-            .and_then(|r| r.assembly.as_ref())
-            .map(|a| a.duplicates_removed)
-            .unwrap_or(0);
+        let (_, resolved, failures, duplicates, approx_tokens) = build_context_bar_summary(
+            &self.context_preflight,
+            &self.last_context_receipt,
+            &self.last_prepared_message_receipt,
+        );
 
-        let summary: SharedString = if has_failures {
-            format!(
-                "Context {} / {} resolved \u{00b7} {} failed \u{00b7} {} deduped",
-                receipt.resolved,
-                receipt.attempted,
-                receipt.failures.len(),
-                duplicates_removed
-            )
-            .into()
-        } else if duplicates_removed > 0 {
-            format!(
-                "Context {} attached \u{00b7} {} deduped",
-                receipt.resolved, duplicates_removed
-            )
-            .into()
-        } else {
-            format!("Context {} attached", receipt.resolved).into()
-        };
+        let summary_text: SharedString =
+            format_context_summary(resolved, failures, duplicates, approx_tokens, is_loading)
+                .into();
 
+        let has_failures = failures > 0;
         let (bg_color, text_color) = if has_failures {
             (
                 cx.theme().danger.opacity(OPACITY_DISABLED),
@@ -250,28 +322,41 @@ impl AiApp {
             )
         };
 
+        let chevron_icon = if self.show_context_drawer {
+            LocalIconName::ChevronDown
+        } else {
+            LocalIconName::ChevronRight
+        };
+
         let shortcut_label: SharedString = "\u{2325}\u{2318}I".into();
 
         div()
-            .id("context-receipt-summary")
+            .id("context-bar")
             .flex()
             .flex_col()
             .gap(S2)
+            // Summary line — clickable to toggle the drawer
             .child(
                 div()
-                    .id("context-receipt-toggle")
+                    .id("context-bar-summary")
                     .flex()
                     .items_center()
                     .gap(S2)
-                    .px(S4)
+                    .px(S3)
                     .py(S1)
                     .rounded(R_MD)
                     .bg(bg_color)
                     .cursor_pointer()
                     .on_click(cx.listener(|this, _, _, cx| {
-                        this.toggle_context_inspector(cx);
+                        this.toggle_context_drawer(cx);
                     }))
-                    .child(div().text_xs().text_color(text_color).child(summary))
+                    .child(
+                        svg()
+                            .external_path(chevron_icon.external_path())
+                            .size(ICON_XS)
+                            .text_color(text_color),
+                    )
+                    .child(div().text_xs().text_color(text_color).child(summary_text))
                     .child(
                         div()
                             .ml_auto()
@@ -280,57 +365,242 @@ impl AiApp {
                             .child(shortcut_label),
                     ),
             )
-            .when(self.show_context_inspector, |container| {
-                if let Some(audit) = &self.last_preflight_audit {
-                    let json = serde_json::to_string_pretty(audit).unwrap_or_else(|error| {
-                        format!("{{\"error\":\"failed to serialize AiPreflightAudit: {}\"}}", error)
-                    });
-                    let json_text: SharedString = json.into();
-                    container.child(
-                        div()
-                            .id("context-inspector")
-                            .px(S4)
-                            .py(S3)
-                            .rounded(R_MD)
-                            .bg(cx.theme().muted.opacity(OPACITY_DISABLED))
-                            .max_h(px(300.0))
-                            .overflow_y_scroll()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(cx.theme().foreground)
-                                    .child(json_text),
-                            ),
-                    )
-                } else if let Some(prepared) = &self.last_prepared_message_receipt {
-                    let json = serde_json::to_string_pretty(prepared).unwrap_or_else(|error| {
-                        format!(
-                            "{{\"error\":\"failed to serialize PreparedMessageReceipt: {}\"}}",
-                            error
-                        )
-                    });
-                    let json_text: SharedString = json.into();
-                    container.child(
-                        div()
-                            .id("context-inspector")
-                            .px(S4)
-                            .py(S3)
-                            .rounded(R_MD)
-                            .bg(cx.theme().muted.opacity(OPACITY_DISABLED))
-                            .max_h(px(300.0))
-                            .overflow_y_scroll()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(cx.theme().foreground)
-                                    .child(json_text),
-                            ),
-                    )
-                } else {
-                    container
-                }
+            // Drawer — per-part rows with provenance, then optional raw JSON
+            .when(self.show_context_drawer, |container| {
+                container.child(self.render_context_drawer(cx))
             })
             .into_any_element()
+    }
+
+    /// Render the context drawer: human-readable per-part rows with
+    /// provenance and status indicators, followed by an optional raw
+    /// JSON inspector toggle.
+    fn render_context_drawer(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme();
+        let fg = theme.foreground;
+        let muted_fg = theme.muted_foreground;
+
+        let mut drawer = div()
+            .id("context-drawer")
+            .flex()
+            .flex_col()
+            .gap(S1)
+            .px(S3)
+            .py(S2)
+            .rounded(R_MD)
+            .bg(theme.muted.opacity(OPACITY_DISABLED))
+            .max_h(px(300.0))
+            .overflow_y_scroll();
+
+        // Build rows from outcomes if we have a receipt (preflight or post-submit)
+        let receipt = self
+            .context_preflight
+            .receipt
+            .as_ref()
+            .or(self.last_prepared_message_receipt.as_ref());
+
+        if let Some(prepared) = receipt {
+            for (idx, outcome) in prepared.outcomes.iter().enumerate() {
+                let row_id = SharedString::from(format!("drawer-row-{idx}"));
+                let label: SharedString = outcome.label.clone().into();
+                let source: SharedString = outcome.source.clone().into();
+
+                let (status_label, status_color) = match outcome.kind {
+                    crate::ai::message_parts::ContextPartPreparationOutcomeKind::FullContent => {
+                        ("resolved", theme.accent)
+                    }
+                    crate::ai::message_parts::ContextPartPreparationOutcomeKind::MetadataOnly => {
+                        ("truncated", theme.warning)
+                    }
+                    crate::ai::message_parts::ContextPartPreparationOutcomeKind::Failed => {
+                        ("failed", theme.danger)
+                    }
+                };
+                let status_text: SharedString = status_label.into();
+
+                let mut row = div()
+                    .id(row_id)
+                    .flex()
+                    .items_center()
+                    .gap(S2)
+                    .py(S1)
+                    // Label
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .text_color(fg)
+                            .overflow_hidden()
+                            .text_ellipsis()
+                            .max_w(px(140.0))
+                            .child(label),
+                    )
+                    // Source (URI or path)
+                    .child(
+                        div()
+                            .flex_1()
+                            .text_xs()
+                            .text_color(muted_fg)
+                            .overflow_hidden()
+                            .text_ellipsis()
+                            .child(source),
+                    )
+                    // Status pill
+                    .child(
+                        div()
+                            .text_xs()
+                            .px(S2)
+                            .rounded(R_SM)
+                            .bg(status_color.opacity(OPACITY_DISABLED))
+                            .text_color(status_color)
+                            .flex_shrink_0()
+                            .child(status_text),
+                    );
+
+                // Detail (truncation reason, error message)
+                if let Some(detail) = &outcome.detail {
+                    let detail_text: SharedString = detail.clone().into();
+                    row = row.child(
+                        div()
+                            .text_xs()
+                            .text_color(muted_fg.opacity(OPACITY_TEXT_MUTED))
+                            .overflow_hidden()
+                            .text_ellipsis()
+                            .max_w(px(200.0))
+                            .child(detail_text),
+                    );
+                }
+
+                drawer = drawer.child(row);
+            }
+
+            // Show failures from the resolution receipt that may not appear in outcomes
+            for failure in &prepared.context.failures {
+                let fail_label: SharedString = failure.label.clone().into();
+                let fail_error: SharedString = failure.error.clone().into();
+                drawer = drawer.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(S2)
+                        .py(S1)
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_weight(gpui::FontWeight::MEDIUM)
+                                .text_color(theme.danger)
+                                .child(fail_label),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .text_xs()
+                                .text_color(muted_fg)
+                                .overflow_hidden()
+                                .text_ellipsis()
+                                .child(fail_error),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .px(S2)
+                                .rounded(R_SM)
+                                .bg(theme.danger.opacity(OPACITY_DISABLED))
+                                .text_color(theme.danger)
+                                .flex_shrink_0()
+                                .child(SharedString::from("failed")),
+                        ),
+                );
+            }
+        } else if self.last_context_receipt.is_some() {
+            // Fallback: show from the resolution receipt when no prepared receipt exists
+            if let Some(receipt) = &self.last_context_receipt {
+                let summary_line: SharedString = format!(
+                    "{} resolved, {} failed",
+                    receipt.resolved,
+                    receipt.failures.len()
+                )
+                .into();
+                drawer = drawer.child(div().text_xs().text_color(muted_fg).child(summary_line));
+            }
+        }
+
+        // Raw JSON toggle — reuses existing ⌥⌘I inspector behavior
+        drawer = drawer.child(
+            div()
+                .id("drawer-json-toggle")
+                .flex()
+                .items_center()
+                .gap(S1)
+                .pt(S2)
+                .cursor_pointer()
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.toggle_context_inspector(cx);
+                }))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(muted_fg)
+                        .child(SharedString::from(if self.show_context_inspector {
+                            "Hide raw JSON"
+                        } else {
+                            "Show raw JSON"
+                        })),
+                ),
+        );
+
+        // Raw JSON inspector panel
+        if self.show_context_inspector {
+            let json_source = self
+                .last_preflight_audit
+                .as_ref()
+                .map(|audit| {
+                    serde_json::to_string_pretty(audit).unwrap_or_else(|error| {
+                        format!(
+                            "{{\"error\":\"failed to serialize AiPreflightAudit: {}\"}}",
+                            error
+                        )
+                    })
+                })
+                .or_else(|| {
+                    self.last_prepared_message_receipt.as_ref().map(|prepared| {
+                        serde_json::to_string_pretty(prepared).unwrap_or_else(|error| {
+                            format!(
+                                "{{\"error\":\"failed to serialize PreparedMessageReceipt: {}\"}}",
+                                error
+                            )
+                        })
+                    })
+                });
+
+            if let Some(json) = json_source {
+                let json_text: SharedString = json.into();
+                drawer = drawer.child(
+                    div()
+                        .id("context-inspector")
+                        .pt(S2)
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().foreground)
+                                .child(json_text),
+                        ),
+                );
+            }
+        }
+
+        drawer
+    }
+
+    /// Toggle the context drawer open/closed.
+    pub(super) fn toggle_context_drawer(&mut self, cx: &mut Context<Self>) {
+        self.show_context_drawer = !self.show_context_drawer;
+        tracing::info!(
+            target: "ai",
+            visible = self.show_context_drawer,
+            "ai_context_drawer_toggled"
+        );
+        cx.notify();
     }
 
     /// Render chips representing pending context parts above the composer.
@@ -559,7 +829,7 @@ impl AiApp {
 
 #[cfg(test)]
 mod tests {
-    use super::ai_main_panel_can_submit;
+    use super::*;
 
     #[test]
     fn test_ai_main_panel_can_submit_returns_true_when_text_present() {
@@ -589,5 +859,105 @@ mod tests {
     #[test]
     fn test_ai_main_panel_can_submit_returns_true_when_context_parts_and_text_present() {
         assert!(ai_main_panel_can_submit("hello", false, true));
+    }
+
+    #[test]
+    fn test_should_show_context_bar_idle_no_receipt() {
+        let preflight = context_preflight::ContextPreflightState::default();
+        assert!(!should_show_context_bar(&preflight, &None));
+    }
+
+    #[test]
+    fn test_should_show_context_bar_loading_preflight() {
+        let preflight = context_preflight::ContextPreflightState {
+            status: context_preflight::ContextPreflightStatus::Loading,
+            ..Default::default()
+        };
+        assert!(should_show_context_bar(&preflight, &None));
+    }
+
+    #[test]
+    fn test_should_show_context_bar_ready_preflight() {
+        let preflight = context_preflight::ContextPreflightState {
+            status: context_preflight::ContextPreflightStatus::Ready,
+            resolved: 2,
+            ..Default::default()
+        };
+        assert!(should_show_context_bar(&preflight, &None));
+    }
+
+    #[test]
+    fn test_should_show_context_bar_post_submit_receipt() {
+        let preflight = context_preflight::ContextPreflightState::default();
+        let receipt = Some(crate::ai::message_parts::ContextResolutionReceipt {
+            attempted: 1,
+            resolved: 1,
+            failures: vec![],
+            prompt_prefix: "test".to_string(),
+        });
+        assert!(should_show_context_bar(&preflight, &receipt));
+    }
+
+    #[test]
+    fn test_format_context_summary_basic() {
+        let s = format_context_summary(3, 0, 0, 1800, false);
+        assert!(s.contains("Context 3"));
+        assert!(s.contains("~1.8k tokens"));
+    }
+
+    #[test]
+    fn test_format_context_summary_with_dedup_and_failures() {
+        let s = format_context_summary(2, 1, 1, 500, false);
+        assert!(s.contains("Context 2"));
+        assert!(s.contains("~500 tokens"));
+        assert!(s.contains("1 deduped"));
+        assert!(s.contains("1 failed"));
+    }
+
+    #[test]
+    fn test_format_context_summary_loading() {
+        let s = format_context_summary(0, 0, 0, 0, true);
+        assert!(s.contains("resolving"));
+    }
+
+    #[test]
+    fn test_format_context_summary_zero_tokens_omitted() {
+        let s = format_context_summary(1, 0, 0, 0, false);
+        assert!(s.contains("Context 1"));
+        assert!(!s.contains("tokens"));
+    }
+
+    #[test]
+    fn test_build_context_bar_summary_preflight_takes_precedence() {
+        let preflight = context_preflight::ContextPreflightState {
+            status: context_preflight::ContextPreflightStatus::Ready,
+            resolved: 3,
+            failures: 1,
+            duplicates_removed: 2,
+            approx_tokens: 750,
+            ..Default::default()
+        };
+        let (_, resolved, failures, duplicates, tokens) =
+            build_context_bar_summary(&preflight, &None, &None);
+        assert_eq!(resolved, 3);
+        assert_eq!(failures, 1);
+        assert_eq!(duplicates, 2);
+        assert_eq!(tokens, 750);
+    }
+
+    #[test]
+    fn test_build_context_bar_summary_falls_back_to_receipt() {
+        let preflight = context_preflight::ContextPreflightState::default();
+        let receipt = Some(crate::ai::message_parts::ContextResolutionReceipt {
+            attempted: 2,
+            resolved: 2,
+            failures: vec![],
+            prompt_prefix: "abcdefgh".to_string(), // 8 chars → 2 tokens
+        });
+        let (_, resolved, failures, _, tokens) =
+            build_context_bar_summary(&preflight, &receipt, &None);
+        assert_eq!(resolved, 2);
+        assert_eq!(failures, 0);
+        assert_eq!(tokens, 2);
     }
 }
