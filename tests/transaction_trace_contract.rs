@@ -167,11 +167,16 @@ fn wait_for_on_failure_trace_included_on_timeout() {
     .expect("waitFor should complete");
 
     assert!(!result.success);
-    let trace = result.trace.expect("trace should be present on failure with onFailure mode");
+    let trace = result
+        .trace
+        .expect("trace should be present on failure with onFailure mode");
     assert_eq!(trace.status, TransactionTraceStatus::Timeout);
     assert_eq!(trace.failed_at, Some(0));
     assert!(!trace.commands.is_empty());
-    assert!(!trace.commands[0].polls.is_empty(), "should have poll observations");
+    assert!(
+        !trace.commands[0].polls.is_empty(),
+        "should have poll observations"
+    );
 }
 
 #[test]
@@ -371,8 +376,7 @@ fn trace_log_round_trips_through_jsonl() {
         commands: Vec::new(),
     };
 
-    let written_path =
-        append_transaction_trace(Some(&path), &trace).expect("should append trace");
+    let written_path = append_transaction_trace(Some(&path), &trace).expect("should append trace");
     assert_eq!(written_path, path);
 
     let loaded = read_latest_transaction_trace(Some(&path), Some("txn-rt"))

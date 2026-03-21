@@ -22,8 +22,9 @@ impl AiApp {
                     selected_index = 0,
                     "ai_context_picker_opened"
                 );
-                self.context_picker =
-                    Some(super::context_picker::types::ContextPickerState::new(at_query, items));
+                self.context_picker = Some(super::context_picker::types::ContextPickerState::new(
+                    at_query, items,
+                ));
                 cx.notify();
             }
         } else if self.is_context_picker_open() {
@@ -591,10 +592,7 @@ mod at_query_tests {
 
     #[test]
     fn extract_at_query_returns_query_after_at() {
-        assert_eq!(
-            extract_at_query("hello @sel"),
-            Some("sel".to_string())
-        );
+        assert_eq!(extract_at_query("hello @sel"), Some("sel".to_string()));
     }
 
     #[test]

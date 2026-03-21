@@ -41,7 +41,11 @@ fn context_picker_ranking_is_deterministic() {
     let items_a = build_picker_items("con");
     let items_b = build_picker_items("con");
 
-    assert_eq!(items_a.len(), items_b.len(), "Same query must produce same count");
+    assert_eq!(
+        items_a.len(),
+        items_b.len(),
+        "Same query must produce same count"
+    );
 
     for (a, b) in items_a.iter().zip(items_b.iter()) {
         assert_eq!(a.id, b.id, "Same query must produce same order");
@@ -71,7 +75,12 @@ fn context_picker_accept_creates_correct_part_for_selection() {
     let items = build_picker_items("selection");
     let selection_item = items
         .iter()
-        .find(|i| matches!(i.kind, ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Selection)))
+        .find(|i| {
+            matches!(
+                i.kind,
+                ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Selection)
+            )
+        })
         .expect("Selection should be in results");
 
     // Verify the item produces the correct part

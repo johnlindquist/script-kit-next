@@ -1,6 +1,8 @@
 use super::super::*;
 use super::types::{ContextPickerItemKind, ContextPickerSection};
-use crate::theme::opacity::{OPACITY_BORDER, OPACITY_DISABLED, OPACITY_SELECTED, OPACITY_TEXT_MUTED};
+use crate::theme::opacity::{
+    OPACITY_BORDER, OPACITY_DISABLED, OPACITY_SELECTED, OPACITY_TEXT_MUTED,
+};
 
 /// Layout constants for the context picker overlay.
 const PICKER_MAX_H: f32 = 260.0;

@@ -202,10 +202,7 @@ mod tests {
             parse_request_id_param("kit://transactions/latest?requestId=txn-1"),
             Some("txn-1".to_string())
         );
-        assert_eq!(
-            parse_request_id_param("kit://transactions/latest"),
-            None
-        );
+        assert_eq!(parse_request_id_param("kit://transactions/latest"), None);
         assert_eq!(
             parse_request_id_param("kit://transactions/latest?requestId="),
             None
@@ -214,8 +211,8 @@ mod tests {
 
     #[test]
     fn schema_resource_returns_valid_json() {
-        let content = read_transaction_resource("kit://transactions/schema")
-            .expect("schema should resolve");
+        let content =
+            read_transaction_resource("kit://transactions/schema").expect("schema should resolve");
         assert_eq!(content.mime_type, "application/json");
 
         let value: serde_json::Value =
@@ -228,8 +225,9 @@ mod tests {
 
     #[test]
     fn latest_resource_returns_empty_payload_when_no_traces() {
-        let content = read_transaction_resource("kit://transactions/latest?requestId=definitely-missing")
-            .expect("latest should resolve even when the request ID is absent");
+        let content =
+            read_transaction_resource("kit://transactions/latest?requestId=definitely-missing")
+                .expect("latest should resolve even when the request ID is absent");
         let value: serde_json::Value =
             serde_json::from_str(&content.text).expect("should be valid JSON");
         assert_eq!(value["status"], "empty");

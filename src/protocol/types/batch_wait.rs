@@ -50,7 +50,9 @@ pub enum WaitDetailedCondition {
         #[serde(rename = "semanticId", alias = "semantic_id")]
         semantic_id: String,
     },
-    StateMatch { state: StateMatchSpec },
+    StateMatch {
+        state: StateMatchSpec,
+    },
 }
 
 /// Union of named and detailed wait conditions.

@@ -36,14 +36,14 @@ pub(crate) mod config;
 pub(crate) mod context_contract;
 #[cfg(test)]
 mod context_contract_integration_tests;
-#[cfg(test)]
-mod public_contract_tests;
 pub(crate) mod context_mentions;
 pub mod message_parts;
 pub(crate) mod model;
 pub(crate) mod preflight_audit;
 pub(crate) mod presets;
 pub(crate) mod providers;
+#[cfg(test)]
+mod public_contract_tests;
 pub(crate) mod script_generation;
 pub(crate) mod sdk_handlers;
 pub(crate) mod session;
@@ -55,9 +55,9 @@ pub use self::config::{DetectedKeys, ModelInfo, ProviderConfig};
 pub use self::message_parts::{
     file_path_parts, merge_context_parts, prepare_user_message_with_receipt,
     resolve_context_part_to_prompt_block, resolve_context_parts_to_prompt_prefix,
-    resolve_context_parts_with_receipt, AiContextPart, ContextPartPreparationOutcome,
-    ContextPartPreparationOutcomeKind, ContextResolutionFailure, ContextResolutionReceipt,
-    ContextAssemblyReceipt, PreparedMessageDecision, PreparedMessageReceipt,
+    resolve_context_parts_with_receipt, AiContextPart, ContextAssemblyReceipt,
+    ContextPartPreparationOutcome, ContextPartPreparationOutcomeKind, ContextResolutionFailure,
+    ContextResolutionReceipt, PreparedMessageDecision, PreparedMessageReceipt,
     AI_MESSAGE_PREPARATION_SCHEMA_VERSION,
 };
 pub use self::model::{Chat, ChatId, ChatSource, Message, MessageRole};
@@ -81,15 +81,15 @@ pub use self::window::{
 };
 
 // Re-export context-composer types for integration tests
-pub use self::window::context_preflight::{
-    estimate_tokens_from_text, preflight_state_from_receipt, status_from_decision,
-    ContextPreflightSnapshot, ContextPreflightState, ContextPreflightStatus,
+pub use self::context_contract::{
+    context_attachment_specs, ContextAttachmentKind, ContextAttachmentSpec,
 };
-pub use self::window::context_picker::{build_picker_items, score_builtin};
 pub use self::window::context_picker::types::{
     ContextPickerItem, ContextPickerItemKind, ContextPickerItemSnapshot, ContextPickerSection,
     ContextPickerSnapshot, ContextPickerState,
 };
-pub use self::context_contract::{
-    context_attachment_specs, ContextAttachmentKind, ContextAttachmentSpec,
+pub use self::window::context_picker::{build_picker_items, score_builtin};
+pub use self::window::context_preflight::{
+    estimate_tokens_from_text, preflight_state_from_receipt, status_from_decision,
+    ContextPreflightSnapshot, ContextPreflightState, ContextPreflightStatus,
 };

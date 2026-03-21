@@ -101,7 +101,10 @@ fn batch_options_defaults_applied() {
     let json = serde_json::json!({});
     let opts: BatchOptions = serde_json::from_value(json).expect("deserialize empty options");
     assert!(opts.stop_on_error, "stop_on_error should default to true");
-    assert!(!opts.rollback_on_error, "rollback_on_error should default to false");
+    assert!(
+        !opts.rollback_on_error,
+        "rollback_on_error should default to false"
+    );
     assert_eq!(opts.timeout, 5000, "timeout should default to 5000");
 }
 
@@ -139,8 +142,14 @@ fn batch_result_entry_success_round_trips() {
     assert_eq!(json["success"], true);
     assert_eq!(json["command"], "setInput");
     assert_eq!(json["elapsed"], 2);
-    assert!(json.get("value").is_none(), "value should be omitted when None");
-    assert!(json.get("error").is_none(), "error should be omitted when None");
+    assert!(
+        json.get("value").is_none(),
+        "value should be omitted when None"
+    );
+    assert!(
+        json.get("error").is_none(),
+        "error should be omitted when None"
+    );
 
     let back: BatchResultEntry = serde_json::from_value(json).expect("deserialize");
     assert_eq!(back, entry);
@@ -196,8 +205,16 @@ fn batch_request_parses_full_transaction() {
 
             // Verify command types
             assert!(matches!(&commands[0], BatchCommand::SetInput { text } if text == "apple"));
-            assert!(matches!(&commands[1], BatchCommand::WaitFor { condition: WaitCondition::Named(WaitNamedCondition::ChoicesRendered), .. }));
-            assert!(matches!(&commands[2], BatchCommand::SelectByValue { value, submit: true } if value == "apple"));
+            assert!(matches!(
+                &commands[1],
+                BatchCommand::WaitFor {
+                    condition: WaitCondition::Named(WaitNamedCondition::ChoicesRendered),
+                    ..
+                }
+            ));
+            assert!(
+                matches!(&commands[2], BatchCommand::SelectByValue { value, submit: true } if value == "apple")
+            );
         }
         other => panic!("Expected Batch, got: {:?}", other),
     }
@@ -216,7 +233,8 @@ fn batch_request_parses_with_options() {
             "timeout": 10000
         }
     });
-    let msg: crate::protocol::Message = serde_json::from_value(json).expect("parse batch with options");
+    let msg: crate::protocol::Message =
+        serde_json::from_value(json).expect("parse batch with options");
 
     match msg {
         crate::protocol::Message::Batch { options, .. } => {
@@ -272,7 +290,10 @@ fn batch_result_success_serializes_correctly() {
     assert_eq!(json["requestId"], "txn-1");
     assert_eq!(json["success"], true);
     assert_eq!(json["totalElapsed"], 24);
-    assert!(json.get("failedAt").is_none(), "failedAt should be omitted on success");
+    assert!(
+        json.get("failedAt").is_none(),
+        "failedAt should be omitted on success"
+    );
 
     let results = json["results"].as_array().expect("results array");
     assert_eq!(results.len(), 3);
@@ -312,7 +333,10 @@ fn batch_result_stop_on_error_serializes_failed_at() {
     assert_eq!(json["success"], false);
     assert_eq!(json["failedAt"], 1);
     assert_eq!(json["results"][1]["error"]["code"], "selection_not_found");
-    assert_eq!(json["results"][1]["error"]["message"], "No visible choice matched value 'grape'");
+    assert_eq!(
+        json["results"][1]["error"]["message"],
+        "No visible choice matched value 'grape'"
+    );
 }
 
 #[test]
@@ -320,16 +344,14 @@ fn batch_result_round_trips() {
     let msg = crate::protocol::Message::batch_result(
         "txn-rt".to_string(),
         true,
-        vec![
-            BatchResultEntry {
-                index: 0,
-                success: true,
-                command: "setInput".to_string(),
-                elapsed: Some(1),
-                value: None,
-                error: None,
-            },
-        ],
+        vec![BatchResultEntry {
+            index: 0,
+            success: true,
+            command: "setInput".to_string(),
+            elapsed: Some(1),
+            value: None,
+            error: None,
+        }],
         None,
         1,
     );

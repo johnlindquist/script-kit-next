@@ -81,7 +81,6 @@ pub use types::{
     MenuBarItemData, MouseAction, MouseData, ProtocolAction, ScriptErrorData, ScriptletData,
     ScriptletMetadataData, StateMatchSpec, SubmitValue, SystemWindowInfo, TargetWindowBounds,
     TilePosition, TransactionCommandTrace, TransactionError, TransactionErrorCode,
-    TransactionTrace, TransactionTraceMode, TransactionTraceStatus, UiStateSnapshot,
-    WaitCondition, WaitDetailedCondition, WaitNamedCondition, WaitPollObservation,
-    WindowActionType,
+    TransactionTrace, TransactionTraceMode, TransactionTraceStatus, UiStateSnapshot, WaitCondition,
+    WaitDetailedCondition, WaitNamedCondition, WaitPollObservation, WindowActionType,
 };

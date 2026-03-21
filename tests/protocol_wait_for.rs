@@ -44,7 +44,9 @@ fn wait_for_detailed_condition_from_raw_json() {
     assert_eq!(reserialized["condition"]["state"]["windowVisible"], true);
     // selectedValue should be absent (not serialized when None)
     assert!(
-        reserialized["condition"]["state"].get("selectedValue").is_none(),
+        reserialized["condition"]["state"]
+            .get("selectedValue")
+            .is_none(),
         "selectedValue should be omitted"
     );
 }
@@ -100,7 +102,12 @@ fn wait_for_result_timeout_shape() {
 
 #[test]
 fn wait_for_all_named_conditions_parse() {
-    let conditions = ["choicesRendered", "inputEmpty", "windowVisible", "windowFocused"];
+    let conditions = [
+        "choicesRendered",
+        "inputEmpty",
+        "windowVisible",
+        "windowFocused",
+    ];
 
     for cond_str in &conditions {
         let raw = serde_json::json!({
@@ -139,8 +146,7 @@ fn wait_for_all_detailed_conditions_parse() {
             .unwrap_or_else(|e| panic!("should parse detailed condition {i}: {e}"));
         let reserialized = serde_json::to_value(&msg).expect("should reserialize");
         assert_eq!(
-            reserialized["condition"]["type"],
-            cond["type"],
+            reserialized["condition"]["type"], cond["type"],
             "detailed condition type should preserve"
         );
     }
@@ -285,9 +291,7 @@ fn wait_for_result_with_trace_receipt_serializes() {
 
 #[test]
 fn wait_for_result_success_receipt_with_trace() {
-    use script_kit_gpui::protocol::{
-        TransactionTrace, TransactionTraceStatus,
-    };
+    use script_kit_gpui::protocol::{TransactionTrace, TransactionTraceStatus};
 
     let trace = TransactionTrace {
         request_id: "w-ok".to_string(),
@@ -298,13 +302,7 @@ fn wait_for_result_success_receipt_with_trace() {
         commands: vec![],
     };
 
-    let msg = Message::wait_for_result_with_trace(
-        "w-ok".to_string(),
-        true,
-        17,
-        None,
-        Some(trace),
-    );
+    let msg = Message::wait_for_result_with_trace("w-ok".to_string(), true, 17, None, Some(trace));
     let json = serde_json::to_value(&msg).expect("serialize success with trace");
 
     assert_eq!(json["success"], true);

@@ -118,7 +118,10 @@ fn state_match_spec_omits_none_fields() {
     };
     let json = serde_json::to_value(&spec).expect("serialize empty spec");
     let obj = json.as_object().expect("should be object");
-    assert!(obj.is_empty(), "All-None spec should serialize to empty object");
+    assert!(
+        obj.is_empty(),
+        "All-None spec should serialize to empty object"
+    );
 }
 
 // ============================================================
@@ -139,7 +142,10 @@ fn wait_for_request_parses_with_named_condition() {
             ..
         } => {
             assert_eq!(request_id, "wait-1");
-            assert_eq!(condition, WaitCondition::Named(WaitNamedCondition::ChoicesRendered));
+            assert_eq!(
+                condition,
+                WaitCondition::Named(WaitNamedCondition::ChoicesRendered)
+            );
             assert_eq!(timeout, Some(1000));
             assert_eq!(poll_interval, Some(25));
         }
@@ -157,7 +163,8 @@ fn wait_for_request_parses_with_detailed_condition() {
             "semanticId": "choice:0:apple"
         }
     });
-    let msg: crate::protocol::Message = serde_json::from_value(json).expect("parse waitFor detailed");
+    let msg: crate::protocol::Message =
+        serde_json::from_value(json).expect("parse waitFor detailed");
 
     match msg {
         crate::protocol::Message::WaitFor {
@@ -205,20 +212,21 @@ fn wait_for_request_defaults_omitted_timeout_and_poll_interval() {
 
 #[test]
 fn wait_for_result_success_serializes_correctly() {
-    let msg = crate::protocol::Message::wait_for_result(
-        "wait-1".to_string(),
-        true,
-        17,
-        None,
-    );
+    let msg = crate::protocol::Message::wait_for_result("wait-1".to_string(), true, 17, None);
     let json = serde_json::to_value(&msg).expect("serialize waitForResult");
 
     assert_eq!(json["type"], "waitForResult");
     assert_eq!(json["requestId"], "wait-1");
     assert_eq!(json["success"], true);
     assert_eq!(json["elapsed"], 17);
-    assert!(json.get("error").is_none(), "error should be omitted on success");
-    assert!(json.get("trace").is_none(), "trace should be omitted when absent");
+    assert!(
+        json.get("error").is_none(),
+        "error should be omitted on success"
+    );
+    assert!(
+        json.get("trace").is_none(),
+        "trace should be omitted when absent"
+    );
 }
 
 #[test]
@@ -227,7 +235,9 @@ fn wait_for_result_timeout_serializes_correctly() {
         "wait-1".to_string(),
         false,
         5000,
-        Some(crate::protocol::TransactionError::wait_timeout("Timeout after 5000ms")),
+        Some(crate::protocol::TransactionError::wait_timeout(
+            "Timeout after 5000ms",
+        )),
     );
     let json = serde_json::to_value(&msg).expect("serialize waitForResult timeout");
 
@@ -241,12 +251,7 @@ fn wait_for_result_timeout_serializes_correctly() {
 
 #[test]
 fn wait_for_result_round_trips() {
-    let msg = crate::protocol::Message::wait_for_result(
-        "wait-rt".to_string(),
-        true,
-        42,
-        None,
-    );
+    let msg = crate::protocol::Message::wait_for_result("wait-rt".to_string(), true, 42, None);
     let json = serde_json::to_string(&msg).expect("serialize");
     let back: crate::protocol::Message = serde_json::from_str(&json).expect("deserialize");
 

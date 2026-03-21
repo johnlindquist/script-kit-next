@@ -64,11 +64,7 @@ fn matches_condition(snapshot: &UiStateSnapshot, condition: &WaitCondition) -> (
             (snapshot.choice_count > 0, Vec::new())
         }
         WaitCondition::Named(WaitNamedCondition::InputEmpty) => (
-            snapshot
-                .input_value
-                .as_deref()
-                .unwrap_or("")
-                .is_empty(),
+            snapshot.input_value.as_deref().unwrap_or("").is_empty(),
             Vec::new(),
         ),
         WaitCondition::Named(WaitNamedCondition::WindowVisible) => {
@@ -104,14 +100,9 @@ fn matches_condition(snapshot: &UiStateSnapshot, condition: &WaitCondition) -> (
     }
 }
 
-fn build_wait_suggestion(
-    condition: &WaitCondition,
-    snapshot: &UiStateSnapshot,
-) -> Option<String> {
+fn build_wait_suggestion(condition: &WaitCondition, snapshot: &UiStateSnapshot) -> Option<String> {
     match condition {
-        WaitCondition::Named(WaitNamedCondition::ChoicesRendered)
-            if snapshot.choice_count == 0 =>
-        {
+        WaitCondition::Named(WaitNamedCondition::ChoicesRendered) if snapshot.choice_count == 0 => {
             Some(
                 "No choices were visible at timeout. Verify the preceding setInput \
                  changed the filter, or inspect getAccessibilityTree before selecting."
@@ -454,9 +445,7 @@ pub fn execute_batch<P: TransactionStateProvider>(
                     Ok(None) => {
                         error = Some(TransactionError {
                             code: TransactionErrorCode::SelectionNotFound,
-                            message: format!(
-                                "selectByValue could not find value '{value}'"
-                            ),
+                            message: format!("selectByValue could not find value '{value}'"),
                             suggestion: Some(
                                 "Run waitFor choicesRendered before selecting, or \
                                  inspect getAccessibilityTree to confirm the value \
