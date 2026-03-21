@@ -1481,6 +1481,28 @@ impl ScriptListApp {
                                         continue;
                                     }
 
+                                    // Handle GetElements - needs UI state, forward to UI thread
+                                    if let Message::GetElements { request_id, limit } = &msg {
+                                        tracing::info!(
+                                            category = "EXEC",
+                                            request_id = %request_id,
+                                            limit = ?limit,
+                                            "GetElements request"
+                                        );
+                                        let prompt_msg = PromptMessage::GetElements {
+                                            request_id: request_id.clone(),
+                                            limit: *limit,
+                                        };
+                                        if tx.send_blocking(prompt_msg).is_err() {
+                                            tracing::info!(
+                                                category = "EXEC",
+                                                "Prompt channel closed, reader exiting"
+                                            );
+                                            break;
+                                        }
+                                        continue;
+                                    }
+
                                     // Handle GetLayoutInfo - needs UI state, forward to UI thread
                                     if let Message::GetLayoutInfo { request_id } = &msg {
                                         tracing::info!(

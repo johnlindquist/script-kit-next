@@ -1381,6 +1381,51 @@ impl ScriptListApp {
                 }
             }
 
+            PromptMessage::GetElements { request_id, limit } => {
+                tracing::info!(
+                    category = "UI",
+                    request_id = %request_id,
+                    limit = ?limit,
+                    "Collecting visible elements for request"
+                );
+
+                let max_elements = limit.unwrap_or(50).clamp(1, 1000);
+                let (elements, total_count) = self.collect_visible_elements(max_elements);
+
+                tracing::info!(
+                    category = "UI",
+                    request_id = %request_id,
+                    element_count = elements.len(),
+                    total_count = total_count,
+                    "Sending elements result"
+                );
+
+                let response = Message::elements_result(request_id.clone(), elements, total_count);
+
+                if let Some(ref sender) = self.response_sender {
+                    match sender.try_send(response) {
+                        Ok(()) => {}
+                        Err(std::sync::mpsc::TrySendError::Full(_)) => {
+                            tracing::warn!(
+                                category = "WARN",
+                                "Response channel full - elements result dropped"
+                            );
+                        }
+                        Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
+                            tracing::info!(
+                                category = "UI",
+                                "Response channel disconnected - script exited"
+                            );
+                        }
+                    }
+                } else {
+                    tracing::error!(
+                        category = "ERROR",
+                        "No response sender available for elements result"
+                    );
+                }
+            }
+
             PromptMessage::GetLayoutInfo { request_id } => {
                 tracing::info!(
                     category = "UI",
