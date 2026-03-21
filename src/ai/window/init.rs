@@ -262,7 +262,6 @@ impl AiApp {
             last_used_settings,
             // Attachments state
             showing_attachments_picker: false,
-            pending_attachments: Vec::new(),
             pending_context_parts: Vec::new(),
             // Mouse cursor state
             mouse_cursor_hidden: false,

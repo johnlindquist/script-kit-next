@@ -301,23 +301,64 @@ impl AiApp {
         cx.notify();
     }
 
-    /// Add a file attachment
+    /// Add a file attachment.
+    ///
+    /// Checks `pending_context_parts` (the single source of truth) for duplicates.
     pub(super) fn add_attachment(&mut self, path: String, cx: &mut Context<Self>) {
-        if !self.pending_attachments.contains(&path) {
-            self.pending_attachments.push(path);
+        let already_present = self.pending_context_parts.iter().any(|part| {
+            matches!(part, crate::ai::message_parts::AiContextPart::FilePath { path: p, .. } if p == &path)
+        });
+        if !already_present {
+            let label = std::path::Path::new(&path)
+                .file_name()
+                .map(|name| name.to_string_lossy().to_string())
+                .unwrap_or_else(|| path.clone());
+
+            self.pending_context_parts.push(
+                crate::ai::message_parts::AiContextPart::FilePath {
+                    path: path.clone(),
+                    label: label.clone(),
+                },
+            );
+            tracing::info!(
+                kind = "file_path",
+                label = %label,
+                path = %path,
+                "attachment_added_via_context_part"
+            );
             cx.notify();
         }
     }
 
-    /// Remove a file attachment — the item disappearing from the list is the feedback.
-    pub(super) fn remove_attachment(&mut self, index: usize, cx: &mut Context<Self>) {
-        if index < self.pending_attachments.len() {
-            let removed = self.pending_attachments.remove(index);
-            // Also remove the matching context part
-            self.pending_context_parts.retain(|part| {
-                !matches!(part, crate::ai::message_parts::AiContextPart::FilePath { path, .. } if path == &removed)
-            });
-            tracing::info!(index = index, path = %removed, remaining = self.pending_attachments.len(), "attachment_removed");
+    /// Remove a file attachment by its index in the file-path subset of `pending_context_parts`.
+    ///
+    /// The index corresponds to the position within the `FilePath` entries only
+    /// (matching the order returned by `file_path_parts()`), not the overall
+    /// `pending_context_parts` index. This removes exactly one matching `FilePath`
+    /// context part and leaves all other parts (including `ResourceUri`) intact.
+    pub(super) fn remove_attachment(&mut self, file_index: usize, cx: &mut Context<Self>) {
+        // Find the absolute index of the Nth FilePath entry
+        let abs_index = self
+            .pending_context_parts
+            .iter()
+            .enumerate()
+            .filter(|(_, part)| {
+                matches!(part, crate::ai::message_parts::AiContextPart::FilePath { .. })
+            })
+            .nth(file_index)
+            .map(|(i, _)| i);
+
+        if let Some(idx) = abs_index {
+            let removed = self.pending_context_parts.remove(idx);
+            let remaining =
+                crate::ai::message_parts::file_path_parts(&self.pending_context_parts).len();
+            tracing::info!(
+                file_index = file_index,
+                abs_index = idx,
+                path = %removed.source(),
+                remaining_file_parts = remaining,
+                "attachment_removed"
+            );
             cx.notify();
         }
     }
@@ -339,17 +380,20 @@ impl AiApp {
         }
     }
 
-    /// Clear all attachments and context parts
+    /// Clear all file-path attachments from `pending_context_parts`.
+    ///
+    /// Only `FilePath` entries are removed; `ResourceUri` entries are preserved.
     pub(super) fn clear_attachments(&mut self, cx: &mut Context<Self>) {
-        let attach_count = self.pending_attachments.len();
-        let parts_count = self.pending_context_parts.len();
-        self.pending_attachments.clear();
-        self.pending_context_parts.clear();
-        if attach_count > 0 || parts_count > 0 {
+        let before =
+            crate::ai::message_parts::file_path_parts(&self.pending_context_parts).len();
+        self.pending_context_parts.retain(|part| {
+            !matches!(part, crate::ai::message_parts::AiContextPart::FilePath { .. })
+        });
+        if before > 0 {
             tracing::info!(
-                cleared_attachments = attach_count,
-                cleared_context_parts = parts_count,
-                "attachments_and_context_parts_cleared"
+                cleared_file_path_parts = before,
+                remaining_context_parts = self.pending_context_parts.len(),
+                "file_path_attachments_cleared"
             );
         }
         cx.notify();

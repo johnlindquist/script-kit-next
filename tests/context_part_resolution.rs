@@ -4,7 +4,8 @@
 //! resolution produces deterministic, well-structured prompt blocks.
 
 use script_kit_gpui::ai::message_parts::{
-    resolve_context_part_to_prompt_block, resolve_context_parts_to_prompt_prefix, AiContextPart,
+    resolve_context_part_to_prompt_block, resolve_context_parts_to_prompt_prefix,
+    resolve_context_parts_with_receipt, AiContextPart, ContextResolutionReceipt,
 };
 use std::sync::Arc;
 
@@ -234,5 +235,108 @@ fn context_part_resolution_mixed_resource_and_file() {
     assert!(
         prefix.contains("let x = 42;"),
         "should contain file content"
+    );
+}
+
+// ---------- Receipt-based resolution ----------
+
+#[test]
+fn receipt_reports_all_successes_for_two_readable_files() {
+    let dir = tempfile::tempdir().expect("create temp dir");
+    let file_a = dir.path().join("alpha.rs");
+    let file_b = dir.path().join("beta.rs");
+    std::fs::write(&file_a, "fn alpha() {}").expect("write a");
+    std::fs::write(&file_b, "fn beta() {}").expect("write b");
+
+    let parts = vec![
+        AiContextPart::FilePath {
+            path: file_a.to_string_lossy().to_string(),
+            label: "alpha.rs".to_string(),
+        },
+        AiContextPart::FilePath {
+            path: file_b.to_string_lossy().to_string(),
+            label: "beta.rs".to_string(),
+        },
+    ];
+
+    let receipt: ContextResolutionReceipt =
+        resolve_context_parts_with_receipt(&parts, &[], &[]);
+
+    assert_eq!(receipt.attempted, 2);
+    assert_eq!(receipt.resolved, 2);
+    assert!(!receipt.has_failures());
+    assert!(receipt.failures.is_empty());
+    assert!(receipt.prompt_prefix.contains("fn alpha() {}"));
+    assert!(receipt.prompt_prefix.contains("fn beta() {}"));
+    assert!(
+        receipt.prompt_prefix.contains("</attachment>\n\n<attachment"),
+        "blocks should be separated by double newline"
+    );
+}
+
+#[test]
+fn receipt_reports_partial_failure_for_missing_file() {
+    let dir = tempfile::tempdir().expect("create temp dir");
+    let good_file = dir.path().join("good.rs");
+    std::fs::write(&good_file, "fn good() {}").expect("write");
+
+    let parts = vec![
+        AiContextPart::FilePath {
+            path: good_file.to_string_lossy().to_string(),
+            label: "good.rs".to_string(),
+        },
+        AiContextPart::FilePath {
+            path: "/nonexistent/ghost.txt".to_string(),
+            label: "ghost.txt".to_string(),
+        },
+    ];
+
+    let receipt = resolve_context_parts_with_receipt(&parts, &[], &[]);
+
+    assert_eq!(receipt.attempted, 2);
+    assert_eq!(receipt.resolved, 1);
+    assert!(receipt.has_failures());
+    assert_eq!(receipt.failures.len(), 1);
+    assert_eq!(receipt.failures[0].label, "ghost.txt");
+    assert_eq!(receipt.failures[0].source, "/nonexistent/ghost.txt");
+    assert!(
+        receipt.failures[0].error.contains("Failed to stat attachment"),
+        "error should mention stat failure, got: {}",
+        receipt.failures[0].error
+    );
+}
+
+#[test]
+fn receipt_preserves_successful_prefix_when_one_part_fails() {
+    let dir = tempfile::tempdir().expect("create temp dir");
+    let good_file = dir.path().join("survivor.rs");
+    std::fs::write(&good_file, "fn survivor() {}").expect("write");
+
+    let parts = vec![
+        AiContextPart::FilePath {
+            path: good_file.to_string_lossy().to_string(),
+            label: "survivor.rs".to_string(),
+        },
+        AiContextPart::FilePath {
+            path: "/nonexistent/missing.txt".to_string(),
+            label: "missing.txt".to_string(),
+        },
+    ];
+
+    let receipt = resolve_context_parts_with_receipt(&parts, &[], &[]);
+
+    // The successful block must survive even though the second part failed
+    assert!(
+        receipt.prompt_prefix.contains("<attachment path="),
+        "prompt_prefix should contain the successful attachment block"
+    );
+    assert!(
+        receipt.prompt_prefix.contains("fn survivor() {}"),
+        "prompt_prefix should contain the successful file content"
+    );
+    // The failed file should NOT appear in the prefix
+    assert!(
+        !receipt.prompt_prefix.contains("missing.txt"),
+        "prompt_prefix should not contain the failed file"
     );
 }

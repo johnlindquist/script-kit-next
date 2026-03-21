@@ -21,6 +21,60 @@ impl AiContextPart {
             Self::ResourceUri { label, .. } | Self::FilePath { label, .. } => label,
         }
     }
+
+    /// Returns the originating URI or file path for this context part.
+    pub fn source(&self) -> &str {
+        match self {
+            Self::ResourceUri { uri, .. } => uri,
+            Self::FilePath { path, .. } => path,
+        }
+    }
+}
+
+/// Extract file paths from a slice of context parts.
+///
+/// Returns only the `path` values from `AiContextPart::FilePath` variants,
+/// preserving order. This is the canonical way to derive the attachment list
+/// from the single source of truth (`pending_context_parts`).
+pub fn file_path_parts(parts: &[AiContextPart]) -> Vec<String> {
+    parts
+        .iter()
+        .filter_map(|part| match part {
+            AiContextPart::FilePath { path, .. } => Some(path.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Records a single context part that failed to resolve.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextResolutionFailure {
+    pub label: String,
+    pub source: String,
+    pub error: String,
+}
+
+/// A deterministic receipt produced by resolving a set of context parts.
+///
+/// Captures how many parts were attempted, how many resolved successfully,
+/// any failures encountered, and the concatenated prompt prefix from all
+/// successful resolutions. Successful blocks are never dropped when another
+/// part fails.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextResolutionReceipt {
+    pub attempted: usize,
+    pub resolved: usize,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub failures: Vec<ContextResolutionFailure>,
+    pub prompt_prefix: String,
+}
+
+impl ContextResolutionReceipt {
+    pub fn has_failures(&self) -> bool {
+        !self.failures.is_empty()
+    }
 }
 
 /// Resolve a single context part into a prompt block string.
@@ -84,19 +138,81 @@ pub fn resolve_context_part_to_prompt_block(
     }
 }
 
+/// Resolve multiple context parts, returning a machine-readable receipt.
+///
+/// Successful resolutions are never dropped when another part fails.
+/// The `prompt_prefix` contains all successfully resolved blocks joined
+/// by double newlines.
+pub fn resolve_context_parts_with_receipt(
+    parts: &[AiContextPart],
+    scripts: &[Arc<crate::scripts::Script>],
+    scriptlets: &[Arc<crate::scripts::Scriptlet>],
+) -> ContextResolutionReceipt {
+    let attempted = parts.len();
+    let mut blocks = Vec::new();
+    let mut failures = Vec::new();
+
+    for part in parts {
+        match resolve_context_part_to_prompt_block(part, scripts, scriptlets) {
+            Ok(block) => {
+                tracing::info!(
+                    checkpoint = "resolution_ok",
+                    source = %part.source(),
+                    label = %part.label(),
+                    "context part resolved successfully"
+                );
+                blocks.push(block);
+            }
+            Err(err) => {
+                tracing::warn!(
+                    checkpoint = "resolution_failed",
+                    source = %part.source(),
+                    label = %part.label(),
+                    error = %err,
+                    "context part resolution failed"
+                );
+                failures.push(ContextResolutionFailure {
+                    label: part.label().to_string(),
+                    source: part.source().to_string(),
+                    error: format!("{err:#}"),
+                });
+            }
+        }
+    }
+
+    let resolved = blocks.len();
+    let prompt_prefix = blocks.join("\n\n");
+
+    ContextResolutionReceipt {
+        attempted,
+        resolved,
+        failures,
+        prompt_prefix,
+    }
+}
+
 /// Resolve multiple context parts into a single prompt prefix string.
+///
+/// This is a compatibility wrapper around [`resolve_context_parts_with_receipt`].
+/// It returns the prompt prefix from all successfully resolved parts. If any
+/// part fails, the error is returned and successful blocks are lost — prefer
+/// the receipt-based API for partial-failure tolerance.
 pub fn resolve_context_parts_to_prompt_prefix(
     parts: &[AiContextPart],
     scripts: &[Arc<crate::scripts::Script>],
     scriptlets: &[Arc<crate::scripts::Scriptlet>],
 ) -> Result<String> {
-    let mut blocks = Vec::new();
-
-    for part in parts {
-        blocks.push(resolve_context_part_to_prompt_block(part, scripts, scriptlets)?);
+    let receipt = resolve_context_parts_with_receipt(parts, scripts, scriptlets);
+    if receipt.has_failures() {
+        let first = &receipt.failures[0];
+        anyhow::bail!(
+            "Failed to resolve context part '{}' ({}): {}",
+            first.label,
+            first.source,
+            first.error
+        );
     }
-
-    Ok(blocks.join("\n\n"))
+    Ok(receipt.prompt_prefix)
 }
 
 #[cfg(test)]

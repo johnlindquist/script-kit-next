@@ -140,8 +140,8 @@ impl AiApp {
         }
 
         // Resolve pending context parts into a prompt prefix just-in-time.
+        // pending_context_parts is the single source of truth — no separate attachments vec.
         let pending_parts = std::mem::take(&mut self.pending_context_parts);
-        self.pending_attachments.clear();
 
         let final_user_content = if pending_parts.is_empty() {
             tracing::info!(
@@ -154,12 +154,56 @@ impl AiApp {
             let scripts = crate::scripts::read_scripts();
             let scriptlets = crate::scripts::load_scriptlets();
 
-            match crate::ai::message_parts::resolve_context_parts_to_prompt_prefix(
+            let receipt = crate::ai::message_parts::resolve_context_parts_with_receipt(
                 &pending_parts,
                 &scripts,
                 &scriptlets,
-            ) {
-                Ok(prefix) if !prefix.is_empty() && !content.trim().is_empty() => {
+            );
+
+            if receipt.has_failures() {
+                tracing::warn!(
+                    checkpoint = "resolution_partial",
+                    attempted = receipt.attempted,
+                    resolved = receipt.resolved,
+                    failures = ?receipt.failures,
+                    "submit_context: partial resolution failure"
+                );
+
+                // Restore unresolved parts back to composer state
+                let failed_sources: std::collections::HashSet<&str> =
+                    receipt.failures.iter().map(|f| f.source.as_str()).collect();
+                let unresolved: Vec<_> = pending_parts
+                    .iter()
+                    .filter(|p| failed_sources.contains(p.source()))
+                    .cloned()
+                    .collect();
+                self.pending_context_parts = unresolved;
+
+                // Build a user-visible error summary
+                let failure_summaries: Vec<String> = receipt
+                    .failures
+                    .iter()
+                    .map(|f| format!("{}: {}", f.label, f.error))
+                    .collect();
+                self.streaming_error =
+                    Some(format!("Failed to resolve context: {}", failure_summaries.join("; ")));
+
+                // If nothing resolved at all, do not save any message
+                if receipt.resolved == 0 {
+                    cx.notify();
+                    return;
+                }
+
+                // Partial success: use the resolved prefix with user text
+                let prefix = &receipt.prompt_prefix;
+                if !content.trim().is_empty() {
+                    format!("{prefix}\n\n{content}")
+                } else {
+                    prefix.clone()
+                }
+            } else {
+                let prefix = &receipt.prompt_prefix;
+                if !prefix.is_empty() && !content.trim().is_empty() {
                     tracing::info!(
                         checkpoint = "resolution_success",
                         parts_count = pending_parts.len(),
@@ -168,30 +212,19 @@ impl AiApp {
                         "submit_context: resolved context parts with user text"
                     );
                     format!("{prefix}\n\n{content}")
-                }
-                Ok(prefix) if !prefix.is_empty() => {
+                } else if !prefix.is_empty() {
                     tracing::info!(
                         checkpoint = "resolution_success",
                         parts_count = pending_parts.len(),
                         prefix_len = prefix.len(),
                         "submit_context: resolved context parts (no user text)"
                     );
-                    prefix
-                }
-                Ok(_) => {
+                    prefix.clone()
+                } else {
                     tracing::info!(
                         checkpoint = "resolution_success",
                         parts_count = pending_parts.len(),
                         "submit_context: resolved to empty prefix, using raw content"
-                    );
-                    content.clone()
-                }
-                Err(error) => {
-                    tracing::error!(
-                        checkpoint = "resolution_failure",
-                        error = %error,
-                        parts_count = pending_parts.len(),
-                        "submit_context: failed to resolve context parts, falling back to raw content"
                     );
                     content.clone()
                 }

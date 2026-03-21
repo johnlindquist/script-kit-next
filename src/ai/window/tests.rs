@@ -532,7 +532,7 @@ fn test_message_body_content_does_not_truncate_long_messages() {
 ///
 /// new_conversation() clears these fields before calling create_chat():
 ///   - pending_image
-///   - pending_attachments
+///   - pending_context_parts (single source of truth for attachments + context)
 ///   - collapsed_messages
 ///   - expanded_messages
 ///   - copied_message_id / copied_at
@@ -551,7 +551,7 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
     /// new_conversation() must reset.
     struct ConversationTransientState {
         pending_image: Option<String>,
-        pending_attachments: Vec<String>,
+        pending_context_parts: Vec<crate::ai::message_parts::AiContextPart>,
         collapsed_messages: std::collections::HashSet<String>,
         expanded_messages: std::collections::HashSet<String>,
         copied_message_id: Option<String>,
@@ -567,7 +567,7 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
         /// Apply the same reset logic as AiApp::new_conversation()
         fn reset(&mut self) {
             self.pending_image = None;
-            self.pending_attachments.clear();
+            self.pending_context_parts.clear();
             self.collapsed_messages.clear();
             self.expanded_messages.clear();
             self.copied_message_id = None;
@@ -583,7 +583,12 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
     // Build dirty state (simulates mid-conversation)
     let mut state = ConversationTransientState {
         pending_image: Some("base64data".to_string()),
-        pending_attachments: vec!["/tmp/file.txt".to_string()],
+        pending_context_parts: vec![
+            crate::ai::message_parts::AiContextPart::FilePath {
+                path: "/tmp/file.txt".to_string(),
+                label: "file.txt".to_string(),
+            },
+        ],
         collapsed_messages: ["msg-1".to_string()].into_iter().collect(),
         expanded_messages: ["msg-2".to_string()].into_iter().collect(),
         copied_message_id: Some("msg-1".to_string()),
@@ -597,7 +602,7 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
 
     // Verify dirty state is non-default
     assert!(state.pending_image.is_some());
-    assert!(!state.pending_attachments.is_empty());
+    assert!(!state.pending_context_parts.is_empty());
     assert!(!state.collapsed_messages.is_empty());
     assert!(!state.expanded_messages.is_empty());
     assert!(state.copied_message_id.is_some());
@@ -617,8 +622,8 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
         "pending_image must be cleared on new conversation"
     );
     assert!(
-        state.pending_attachments.is_empty(),
-        "pending_attachments must be cleared on new conversation"
+        state.pending_context_parts.is_empty(),
+        "pending_context_parts must be cleared on new conversation"
     );
     assert!(
         state.collapsed_messages.is_empty(),

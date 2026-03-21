@@ -79,9 +79,9 @@ impl AiApp {
             })
             .collect();
 
-        // Show pending attachments if any
-        let pending_items: Vec<_> = self
-            .pending_attachments
+        // Show pending file-path attachments derived from the single source of truth
+        let file_paths = crate::ai::message_parts::file_path_parts(&self.pending_context_parts);
+        let pending_items: Vec<_> = file_paths
             .iter()
             .enumerate()
             .map(|(idx, path)| {
@@ -177,8 +177,8 @@ impl AiApp {
                             .text_color(fg)
                             .child("Add Attachment"),
                     )
-                    // Pending attachments (if any)
-                    .when(!self.pending_attachments.is_empty(), |el| {
+                    // Pending attachments derived from context parts (if any)
+                    .when(!file_paths.is_empty(), |el| {
                         el.child(
                             div()
                                 .px(S2)

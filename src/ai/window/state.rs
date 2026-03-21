@@ -180,9 +180,6 @@ pub struct AiApp {
     /// Whether the attachments picker is visible
     pub(super) showing_attachments_picker: bool,
 
-    /// List of pending attachments (file paths)
-    pub(super) pending_attachments: Vec<String>,
-
     /// Pending context parts (file paths and resource URIs) that will be resolved
     /// into prompt blocks at submit time.
     pub(super) pending_context_parts: Vec<crate::ai::message_parts::AiContextPart>,
