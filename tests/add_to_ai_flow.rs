@@ -115,7 +115,7 @@ fn test_deferred_ai_handoff_checks_window_ready_before_success() {
     let helper_body = slice_from(&handler, "fn open_ai_window_after_already_hidden(");
 
     assert!(
-        helper_body.contains("ai::is_ai_window_ready(cx)"),
+        helper_body.contains("ai::is_ai_window_ready"),
         "deferred AI handoff should verify the AI window is truly ready before showing success"
     );
 }

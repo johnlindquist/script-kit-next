@@ -229,7 +229,7 @@ impl ScriptListApp {
             });
 
             if open_result.is_ok() {
-                let ready_now = cx.update(|cx| ai::is_ai_window_ready(cx));
+                let ready_now = cx.update(ai::is_ai_window_ready);
                 if !ready_now {
                     cx.background_executor()
                         .timer(std::time::Duration::from_millis(16))
