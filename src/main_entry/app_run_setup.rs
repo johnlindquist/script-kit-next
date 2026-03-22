@@ -2098,13 +2098,78 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     }
                                 }
                             }
-                            ExternalCommand::SetAiSearch { text, .. } => {
-                                logging::log("STDIN", &format!("Setting AI search filter to: {}", text));
-                                ai::set_ai_search(ctx, &text);
+                            ExternalCommand::SetAiSearch { text, ref request_id } => {
+                                let request_id = request_id.as_ref().map(|id| id.as_str());
+                                tracing::info!(
+                                    category = "STDIN",
+                                    event = "stdin_ai_command_received",
+                                    command = "setAiSearch",
+                                    request_id = ?request_id,
+                                    text_len = text.len(),
+                                    "STDIN AI command received"
+                                );
+                                match ai::set_ai_search(ctx, &text) {
+                                    Ok(()) => {
+                                        tracing::info!(
+                                            category = "STDIN",
+                                            event = "stdin_ai_command_finished",
+                                            command = "setAiSearch",
+                                            request_id = ?request_id,
+                                            status = "success",
+                                            "STDIN AI command finished"
+                                        );
+                                    }
+                                    Err(error) => {
+                                        logging::log("STDIN", &format!("Failed to set AI search filter: {}", error));
+                                        tracing::error!(
+                                            category = "STDIN",
+                                            event = "stdin_ai_command_finished",
+                                            command = "setAiSearch",
+                                            request_id = ?request_id,
+                                            status = "error",
+                                            error = %error,
+                                            "STDIN AI command finished"
+                                        );
+                                    }
+                                }
                             }
-                            ExternalCommand::SetAiInput { text, submit, .. } => {
-                                logging::log("STDIN", &format!("Setting AI input to: {} (submit={})", text, submit));
-                                let _ = ai::set_ai_input(ctx, &text, submit);
+                            ExternalCommand::SetAiInput { text, submit, ref request_id } => {
+                                let request_id = request_id.as_ref().map(|id| id.as_str());
+                                tracing::info!(
+                                    category = "STDIN",
+                                    event = "stdin_ai_command_received",
+                                    command = "setAiInput",
+                                    request_id = ?request_id,
+                                    submit,
+                                    text_len = text.len(),
+                                    "STDIN AI command received"
+                                );
+                                match ai::set_ai_input(ctx, &text, submit) {
+                                    Ok(()) => {
+                                        tracing::info!(
+                                            category = "STDIN",
+                                            event = "stdin_ai_command_finished",
+                                            command = "setAiInput",
+                                            request_id = ?request_id,
+                                            submit,
+                                            status = "success",
+                                            "STDIN AI command finished"
+                                        );
+                                    }
+                                    Err(error) => {
+                                        logging::log("STDIN", &format!("Failed to set AI input: {}", error));
+                                        tracing::error!(
+                                            category = "STDIN",
+                                            event = "stdin_ai_command_finished",
+                                            command = "setAiInput",
+                                            request_id = ?request_id,
+                                            submit,
+                                            status = "error",
+                                            error = %error,
+                                            "STDIN AI command finished"
+                                        );
+                                    }
+                                }
                             }
                             ExternalCommand::ShowGrid { grid_size, show_bounds, show_box_model, show_alignment_guides, show_dimensions, ref depth, .. } => {
                                 logging::log("STDIN", &format!(

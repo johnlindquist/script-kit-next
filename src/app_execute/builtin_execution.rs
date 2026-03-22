@@ -16,6 +16,7 @@ fn ai_command_uses_hide_then_capture_flow(cmd_type: &builtins::AiCommandType) ->
         builtins::AiCommandType::GenerateScriptFromCurrentApp
             | builtins::AiCommandType::SendScreenToAi
             | builtins::AiCommandType::SendFocusedWindowToAi
+            | builtins::AiCommandType::SendScreenAreaToAi
     )
 }
 
@@ -327,6 +328,117 @@ impl ScriptListApp {
                         "Failed to capture focused window for AI"
                     );
                     let message = format!("Failed to capture window: {}", error);
+                    this.update(cx, |this, cx| {
+                        this.show_error_toast(message, cx);
+                    })
+                    .ok();
+                }
+            }
+        })
+        .detach();
+    }
+
+    fn spawn_send_screen_area_to_ai_after_hide(&mut self, trace_id: &str, cx: &mut Context<Self>) {
+        let trace_id = trace_id.to_string();
+
+        tracing::info!(
+            category = "AI",
+            event = "ai_capture_scheduled",
+            source_action = "SendScreenAreaToAi",
+            trace_id = %trace_id,
+            hide_settle_ms = AI_CAPTURE_HIDE_SETTLE_MS,
+            "Deferring main window hide and scheduling screen area capture for AI"
+        );
+
+        platform::defer_hide_main_window(cx);
+
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(ai_capture_hide_settle_duration())
+                .await;
+
+            let capture_result = cx
+                .background_executor()
+                .spawn(async { platform::capture_screen_area() })
+                .await;
+
+            match capture_result {
+                Ok(Some(capture)) => {
+                    let size_bytes = capture.png_data.len();
+                    if size_bytes > crate::prompts::chat::MAX_IMAGE_BYTES {
+                        tracing::warn!(
+                            category = "AI",
+                            event = "ai_capture_rejected",
+                            source_action = "SendScreenAreaToAi",
+                            trace_id = %trace_id,
+                            size_bytes,
+                            max_bytes = crate::prompts::chat::MAX_IMAGE_BYTES,
+                            "Rejecting screen area capture larger than 10 MB"
+                        );
+                        this.update(cx, |this, cx| {
+                            this.show_error_toast(
+                                "Screen area capture exceeds 10 MB limit".to_string(),
+                                cx,
+                            );
+                        })
+                        .ok();
+                        return;
+                    }
+
+                    let base64_data = base64::Engine::encode(
+                        &base64::engine::general_purpose::STANDARD,
+                        &capture.png_data,
+                    );
+                    let message = format!(
+                        "[Screen area captured: {}x{} pixels]\n\nPlease analyze this selected screen area.",
+                        capture.width, capture.height
+                    );
+
+                    tracing::info!(
+                        category = "AI",
+                        event = "ai_capture_completed",
+                        source_action = "SendScreenAreaToAi",
+                        trace_id = %trace_id,
+                        width = capture.width,
+                        height = capture.height,
+                        size_bytes,
+                        "Screen area captured for AI"
+                    );
+
+                    this.update(cx, |this, cx| {
+                        this.open_ai_window_after_already_hidden(
+                            "SendScreenAreaToAi",
+                            &trace_id,
+                            DeferredAiWindowAction::SetInputWithImage {
+                                text: message,
+                                image_base64: base64_data,
+                                submit: false,
+                            },
+                            "Sent to AI",
+                            cx,
+                        );
+                    })
+                    .ok();
+                }
+                Ok(None) => {
+                    tracing::info!(
+                        category = "AI",
+                        event = "ai_capture_cancelled",
+                        source_action = "SendScreenAreaToAi",
+                        trace_id = %trace_id,
+                        "Screen area selection cancelled by user"
+                    );
+                }
+                Err(error) => {
+                    tracing::error!(
+                        category = "AI",
+                        event = "ai_capture_failed",
+                        source_action = "SendScreenAreaToAi",
+                        trace_id = %trace_id,
+                        error = %error,
+                        "Failed to capture screen area for AI"
+                    );
+                    let message = format!("Failed to capture screen area: {}", error);
                     this.update(cx, |this, cx| {
                         this.show_error_toast(message, cx);
                     })
@@ -1450,60 +1562,8 @@ impl ScriptListApp {
                     }
 
                     AiCommandType::SendScreenAreaToAi => {
-                        match platform::capture_screen_area() {
-                            Ok(Some(capture)) => {
-                                let base64_data = base64::Engine::encode(
-                                    &base64::engine::general_purpose::STANDARD,
-                                    &capture.png_data,
-                                );
-                                let message = format!(
-                                    "[Screen area captured: {}x{} pixels]\n\nPlease analyze this selected screen area.",
-                                    capture.width, capture.height
-                                );
-                                tracing::info!(
-                                    action = "send_screen_area_to_ai",
-                                    trace_id = %dctx.trace_id,
-                                    width = capture.width,
-                                    height = capture.height,
-                                    file_size = capture.png_data.len(),
-                                    "Screen area captured, sending to AI"
-                                );
-                                self.open_ai_window_after_already_hidden(
-                                    "SendScreenAreaToAi",
-                                    &dctx.trace_id,
-                                    DeferredAiWindowAction::SetInputWithImage {
-                                        text: message,
-                                        image_base64: base64_data,
-                                        submit: false,
-                                    },
-                                    "Sent to AI",
-                                    cx,
-                                );
-                                Self::builtin_success(dctx, "ai_send_screen_area")
-                            }
-                            Ok(None) => {
-                                tracing::info!(
-                                    action = "send_screen_area_cancelled",
-                                    trace_id = %dctx.trace_id,
-                                    "Screen area selection cancelled by user"
-                                );
-                                cx.notify();
-                                crate::action_helpers::DispatchOutcome::cancelled()
-                                    .with_trace_id(dctx.trace_id.clone())
-                                    .with_detail("ai_send_screen_area_cancelled")
-                            }
-                            Err(e) => {
-                                let message = format!("Failed to capture screen area: {}", e);
-                                self.show_error_toast(message.clone(), cx);
-                                cx.notify();
-                                Self::builtin_error(
-                                    dctx,
-                                    crate::action_helpers::ERROR_ACTION_FAILED,
-                                    message,
-                                    "ai_send_screen_area_failed",
-                                )
-                            }
-                        }
+                        self.spawn_send_screen_area_to_ai_after_hide(&dctx.trace_id, cx);
+                        Self::builtin_success(dctx, "ai_send_screen_area_scheduled")
                     }
 
                     AiCommandType::CreateAiPreset => {
@@ -2275,7 +2335,7 @@ mod builtin_execution_ai_feedback_tests {
         assert!(ai_command_uses_hide_then_capture_flow(
             &AiCommandType::SendFocusedWindowToAi
         ));
-        assert!(!ai_command_uses_hide_then_capture_flow(
+        assert!(ai_command_uses_hide_then_capture_flow(
             &AiCommandType::SendScreenAreaToAi
         ));
         assert!(!ai_command_uses_hide_then_capture_flow(
