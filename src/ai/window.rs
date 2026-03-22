@@ -54,6 +54,7 @@ pub(crate) mod context_preflight;
 #[cfg(test)]
 mod context_preflight_tests;
 mod context_preview;
+pub(crate) mod prompt_compiler;
 mod dropdowns;
 mod images;
 mod init;

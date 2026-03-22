@@ -523,7 +523,7 @@ impl AiApp {
             }
         }
 
-        // Raw JSON toggle — reuses existing ⌥⌘I inspector behavior
+        // Prompt Compiler toggle — reuses existing ⌥⌘I inspector behavior
         drawer = drawer.child(
             div()
                 .id("drawer-json-toggle")
@@ -540,48 +540,16 @@ impl AiApp {
                         .text_xs()
                         .text_color(muted_fg)
                         .child(SharedString::from(if self.show_context_inspector {
-                            "Hide raw JSON"
+                            "Hide compiled prompt"
                         } else {
-                            "Show raw JSON"
+                            "Show compiled prompt"
                         })),
                 ),
         );
 
-        // Raw JSON inspector panel
+        // Prompt Compiler pane — human-readable view of the compiled outbound message
         if self.show_context_inspector {
-            let json_source = self
-                .last_preflight_audit
-                .as_ref()
-                .map(|audit| {
-                    serde_json::to_string_pretty(audit).unwrap_or_else(|error| {
-                        format!(
-                            "{{\"error\":\"failed to serialize AiPreflightAudit: {}\"}}",
-                            error
-                        )
-                    })
-                })
-                .or_else(|| {
-                    self.last_prepared_message_receipt.as_ref().map(|prepared| {
-                        serde_json::to_string_pretty(prepared).unwrap_or_else(|error| {
-                            format!(
-                                "{{\"error\":\"failed to serialize PreparedMessageReceipt: {}\"}}",
-                                error
-                            )
-                        })
-                    })
-                });
-
-            if let Some(json) = json_source {
-                let json_text: SharedString = json.into();
-                drawer = drawer.child(
-                    div().id("context-inspector").pt(S2).child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().foreground)
-                            .child(json_text),
-                    ),
-                );
-            }
+            drawer = drawer.child(self.render_prompt_compiler_pane(cx));
         }
 
         drawer
@@ -596,6 +564,235 @@ impl AiApp {
             "ai_context_drawer_toggled"
         );
         cx.notify();
+    }
+
+    /// Select the best available receipt for the prompt compiler pane.
+    ///
+    /// Prefers `context_preflight.receipt` (pre-send) and falls back to
+    /// `last_prepared_message_receipt` (post-send).
+    fn active_prompt_compiler_receipt(
+        &self,
+    ) -> Option<&crate::ai::message_parts::PreparedMessageReceipt> {
+        self.context_preflight
+            .receipt
+            .as_ref()
+            .or(self.last_prepared_message_receipt.as_ref())
+    }
+
+    /// Render the prompt compiler pane: a human-readable, keyboard-first
+    /// view of the compiled outbound message. Replaces raw JSON inspector.
+    fn render_prompt_compiler_pane(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme();
+        let fg = theme.foreground;
+        let muted_fg = theme.muted_foreground;
+
+        let receipt = self.active_prompt_compiler_receipt();
+        if let Some(receipt) = receipt {
+            let preview =
+                crate::ai::window::prompt_compiler::PromptCompilerPreview::from_receipt(receipt);
+
+            // Summary line
+            let summary: SharedString = format!(
+                "{} / {} resolved \u{00b7} {} failed \u{00b7} {} deduped \u{00b7} ~{} tokens (approx)",
+                preview.resolved,
+                preview.attempted,
+                preview.failures,
+                preview.duplicates_removed,
+                preview.approx_tokens,
+            )
+            .into();
+
+            let raw_text: SharedString = preview.raw_content.clone().into();
+            let final_text: SharedString = preview.final_user_content.clone().into();
+
+            let decision_label: SharedString = match preview.decision {
+                crate::ai::window::prompt_compiler::PromptCompilerDecision::Ready => {
+                    "Ready".into()
+                }
+                crate::ai::window::prompt_compiler::PromptCompilerDecision::Partial => {
+                    "Partial".into()
+                }
+                crate::ai::window::prompt_compiler::PromptCompilerDecision::Blocked => {
+                    "Blocked".into()
+                }
+            };
+            let decision_color = match preview.decision {
+                crate::ai::window::prompt_compiler::PromptCompilerDecision::Ready => theme.accent,
+                crate::ai::window::prompt_compiler::PromptCompilerDecision::Partial => {
+                    theme.warning
+                }
+                crate::ai::window::prompt_compiler::PromptCompilerDecision::Blocked => {
+                    theme.danger
+                }
+            };
+
+            let mut pane = div()
+                .id("prompt-compiler")
+                .flex()
+                .flex_col()
+                .gap(S2)
+                .pt(S2)
+                .max_h(px(320.0))
+                .overflow_y_scroll()
+                // Decision + summary
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(S2)
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_weight(gpui::FontWeight::BOLD)
+                                .px(S2)
+                                .rounded(R_SM)
+                                .bg(decision_color.opacity(OPACITY_DISABLED))
+                                .text_color(decision_color)
+                                .child(decision_label),
+                        )
+                        .child(div().text_xs().text_color(muted_fg).child(summary)),
+                )
+                // Authored text section
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(muted_fg)
+                        .child(SharedString::from("Authored text")),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(fg)
+                        .px(S2)
+                        .py(S1)
+                        .rounded(R_SM)
+                        .bg(theme.muted.opacity(OPACITY_DISABLED))
+                        .child(raw_text),
+                )
+                // Exact outbound message section
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(muted_fg)
+                        .child(SharedString::from("Exact outbound message")),
+                )
+                .child(
+                    div()
+                        .id("compiler-outbound")
+                        .text_xs()
+                        .text_color(fg)
+                        .px(S2)
+                        .py(S1)
+                        .rounded(R_SM)
+                        .bg(theme.muted.opacity(OPACITY_DISABLED))
+                        .max_h(px(160.0))
+                        .overflow_y_scroll()
+                        .child(final_text),
+                );
+
+            // Semantic rows for context parts
+            if !preview.rows.is_empty() {
+                pane = pane.child(
+                    div()
+                        .text_xs()
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(muted_fg)
+                        .pt(S1)
+                        .child(SharedString::from("Context parts")),
+                );
+
+                for (idx, row) in preview.rows.iter().enumerate() {
+                    let row_id = SharedString::from(format!("compiler-row-{idx}"));
+                    let label: SharedString = row.label.clone().into();
+                    let source: SharedString = row.source.clone().into();
+
+                    let (kind_label, kind_color) = match row.kind {
+                        crate::ai::window::prompt_compiler::PromptCompilerRowKind::FullContent => {
+                            ("resolved", theme.accent)
+                        }
+                        crate::ai::window::prompt_compiler::PromptCompilerRowKind::MetadataOnly => {
+                            ("metadata-only", theme.warning)
+                        }
+                        crate::ai::window::prompt_compiler::PromptCompilerRowKind::Failed => {
+                            ("failed", theme.danger)
+                        }
+                        crate::ai::window::prompt_compiler::PromptCompilerRowKind::DuplicateDropped => {
+                            ("deduped", muted_fg)
+                        }
+                        crate::ai::window::prompt_compiler::PromptCompilerRowKind::UnresolvedPart => {
+                            ("unresolved", theme.danger)
+                        }
+                    };
+                    let kind_text: SharedString = kind_label.into();
+
+                    let mut row_el = div()
+                        .id(row_id)
+                        .flex()
+                        .items_center()
+                        .gap(S2)
+                        .py(S1)
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_weight(gpui::FontWeight::MEDIUM)
+                                .text_color(fg)
+                                .overflow_hidden()
+                                .text_ellipsis()
+                                .max_w(px(140.0))
+                                .child(label),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .text_xs()
+                                .text_color(muted_fg)
+                                .overflow_hidden()
+                                .text_ellipsis()
+                                .child(source),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .px(S2)
+                                .rounded(R_SM)
+                                .bg(kind_color.opacity(OPACITY_DISABLED))
+                                .text_color(kind_color)
+                                .flex_shrink_0()
+                                .child(kind_text),
+                        );
+
+                    if let Some(detail) = &row.detail {
+                        let detail_text: SharedString = detail.clone().into();
+                        row_el = row_el.child(
+                            div()
+                                .text_xs()
+                                .text_color(muted_fg.opacity(OPACITY_TEXT_MUTED))
+                                .overflow_hidden()
+                                .text_ellipsis()
+                                .max_w(px(200.0))
+                                .child(detail_text),
+                        );
+                    }
+
+                    pane = pane.child(row_el);
+                }
+            }
+
+            pane.into_any_element()
+        } else {
+            div()
+                .id("prompt-compiler")
+                .pt(S2)
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(muted_fg)
+                        .child(SharedString::from("No compiled prompt available.")),
+                )
+                .into_any_element()
+        }
     }
 
     /// Render chips representing pending context parts above the composer.
