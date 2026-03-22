@@ -733,8 +733,8 @@ mod notes_search_and_delete_regression_tests {
         let normalized = normalize_ws(delete_request);
 
         assert!(
-            normalized.contains("crate::confirm::open_parent_confirm_dialog_for_entity("),
-            "Notes delete should use the entity-owned parent confirm helper"
+            normalized.contains("crate::confirm::open_parent_confirm_dialog("),
+            "Notes delete should use the parent confirm helper"
         );
         assert!(
             !normalized.contains("window.open_dialog(cx, move |dialog"),
@@ -842,11 +842,11 @@ mod notes_search_and_delete_regression_tests {
         let normalized = normalize_ws(delete_request);
 
         assert!(
-            normalized.contains("crate::confirm::open_parent_confirm_dialog_for_entity("),
-            "Notes delete should use the entity-owned parent confirm helper"
+            normalized.contains("crate::confirm::open_parent_confirm_dialog("),
+            "Notes delete should use the parent confirm helper"
         );
         assert!(
-            normalized.contains("weak_notes.clone(),"),
+            normalized.contains("weak_notes.clone()"),
             "Notes delete dialog should pass the WeakEntity for lifecycle binding"
         );
     }

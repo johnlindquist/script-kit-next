@@ -79,8 +79,8 @@ mod tests {
         let normalized: String = source.split_whitespace().collect::<Vec<_>>().join(" ");
 
         assert!(
-            normalized.contains("crate::confirm::open_parent_confirm_dialog_for_entity("),
-            "Notes delete should use the entity-owned parent confirm helper"
+            normalized.contains("crate::confirm::open_parent_confirm_dialog("),
+            "Notes delete should use the parent confirm helper"
         );
     }
 }

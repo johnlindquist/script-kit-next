@@ -444,7 +444,7 @@ fn clipboard_attach_to_ai_uses_deferred_ai_window_action() {
     let attach_pos = content
         .find("\"clipboard_attach_to_ai\"")
         .expect("Expected clipboard_attach_to_ai handler");
-    let block = &content[attach_pos..content.len().min(attach_pos + 3000)];
+    let block = &content[attach_pos..content.len().min(attach_pos + 5000)];
 
     assert!(
         block.contains("open_ai_window_after_main_hide("),

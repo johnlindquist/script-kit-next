@@ -252,7 +252,7 @@ fn ai_open_and_new_conversation_use_deferred_helper() {
     let block = &content[ai_command_section_start..ai_command_section_start + 800];
 
     assert!(
-        block.contains("open_ai_window_after_main_hide("),
+        block.contains("open_ai_window_after_already_hidden("),
         "Expected OpenAi/NewConversation to use deferred AI window helper"
     );
     assert!(
@@ -271,7 +271,7 @@ fn ai_clear_conversation_uses_deferred_helper() {
     let block = &content[clear_section_start..clear_section_start + 1200];
 
     assert!(
-        block.contains("open_ai_window_after_main_hide("),
+        block.contains("open_ai_window_after_already_hidden("),
         "Expected ClearConversation to use deferred AI window helper after clearing"
     );
     assert!(
