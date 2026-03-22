@@ -103,9 +103,9 @@ fn test_generate_script_from_current_app_routes_to_shared_dispatch() {
 
     assert!(
         builtin_execution
-            .contains("self.dispatch_ai_script_generation_from_query(prompt, cx);"),
-        "GenerateScriptFromCurrentApp must route through dispatch_ai_script_generation_from_query, \
-         not a separate UI path"
+            .contains("app.dispatch_ai_script_generation_from_query(prompt, cx);"),
+        "GenerateScriptFromCurrentApp must route through dispatch_ai_script_generation_from_query \
+         (in async capture closure), not a separate UI path"
     );
 }
 

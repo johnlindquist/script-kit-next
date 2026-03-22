@@ -65,6 +65,25 @@ impl FrontmostMenuSnapshot {
 }
 
 // ---------------------------------------------------------------------------
+// Label normalization
+// ---------------------------------------------------------------------------
+
+/// The human-readable label used in the main command list.
+pub const GENERATE_SCRIPT_FROM_CURRENT_APP_LABEL: &str = "Generate Script from Current App";
+
+/// Returns `None` when the raw input is empty, whitespace-only, or matches the
+/// built-in label (case-insensitive). Otherwise returns the trimmed input.
+pub fn normalize_generate_script_from_current_app_request(raw: Option<&str>) -> Option<&str> {
+    let raw = raw.map(str::trim).filter(|text| !text.is_empty())?;
+
+    if raw.eq_ignore_ascii_case(GENERATE_SCRIPT_FROM_CURRENT_APP_LABEL) {
+        None
+    } else {
+        Some(raw)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Script prompt builder
 // ---------------------------------------------------------------------------
 
@@ -479,6 +498,60 @@ mod tests {
             prompt.contains("(⌘T)"),
             "Prompt should include shortcut suffix, got:\n{}",
             prompt
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // normalize_generate_script_from_current_app_request
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn normalize_generate_script_from_current_app_request_drops_builtin_label() {
+        assert_eq!(
+            normalize_generate_script_from_current_app_request(Some(
+                GENERATE_SCRIPT_FROM_CURRENT_APP_LABEL
+            )),
+            None
+        );
+        assert_eq!(
+            normalize_generate_script_from_current_app_request(Some(
+                "  generate script from current app  "
+            )),
+            None
+        );
+        assert_eq!(
+            normalize_generate_script_from_current_app_request(Some("close duplicate tabs")),
+            Some("close duplicate tabs")
+        );
+        assert_eq!(
+            normalize_generate_script_from_current_app_request(Some("   ")),
+            None
+        );
+        assert_eq!(
+            normalize_generate_script_from_current_app_request(None),
+            None
+        );
+    }
+
+    #[test]
+    fn generate_script_prompt_omits_builtin_label_request() {
+        let snap = FrontmostMenuSnapshot {
+            app_name: "Safari".into(),
+            bundle_id: "com.apple.Safari".into(),
+            items: vec![apple_menu()],
+        };
+
+        let request = normalize_generate_script_from_current_app_request(Some(
+            GENERATE_SCRIPT_FROM_CURRENT_APP_LABEL,
+        ));
+
+        let (prompt, receipt) =
+            build_generate_script_prompt_from_snapshot(snap, request, None, None);
+
+        assert!(!receipt.included_user_request);
+        assert!(
+            !prompt.contains("User Request:"),
+            "Prompt should omit User Request when input matches the built-in label"
         );
     }
 }

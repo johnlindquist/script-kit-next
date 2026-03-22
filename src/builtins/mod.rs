@@ -16,6 +16,7 @@
 //!
 
 use crate::config::BuiltInConfig;
+use crate::menu_bar::current_app_commands::GENERATE_SCRIPT_FROM_CURRENT_APP_LABEL;
 use crate::menu_bar::MenuBarItem;
 use tracing::debug;
 // ============================================================================
@@ -896,7 +897,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin-generate-script-from-current-app",
-            "Generate Script from Current App",
+            GENERATE_SCRIPT_FROM_CURRENT_APP_LABEL,
             "Generate a Script Kit script using the frontmost app's menu, selection, and browser context",
             vec![
                 "generate",
@@ -2706,5 +2707,24 @@ mod tests {
         assert_eq!(receipt.matched_entries, 1);
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].1.name, "File → New Tab");
+    }
+    #[test]
+    fn test_generate_script_from_current_app_builtin_is_registered() {
+        let entries = get_builtin_entries(&BuiltInConfig::default());
+
+        let entry = entries
+            .iter()
+            .find(|e| e.id == "builtin-generate-script-from-current-app")
+            .expect("builtin-generate-script-from-current-app must exist");
+
+        assert_eq!(entry.name, "Generate Script from Current App");
+        assert_eq!(
+            entry.feature,
+            BuiltInFeature::AiCommand(AiCommandType::GenerateScriptFromCurrentApp)
+        );
+        assert!(entry.keywords.contains(&"current".to_string()));
+        assert!(entry.keywords.contains(&"app".to_string()));
+        assert!(entry.keywords.contains(&"menu".to_string()));
+        assert!(entry.keywords.contains(&"browser".to_string()));
     }
 }

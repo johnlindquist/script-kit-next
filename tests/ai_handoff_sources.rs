@@ -149,25 +149,21 @@ fn non_streaming_ai_handoffs_remain_submit_false() {
     let builtins = read_source("src/app_execute/builtin_execution.rs");
 
     let clipboard_block = slice_from(&handler, "\"clipboard_attach_to_ai\" => {");
-    let selected_text_block = slice_from(&builtins, "AiCommandType::SendSelectedTextToAi => {");
-    let browser_tab_block = slice_from(&builtins, "AiCommandType::SendBrowserTabToAi => {");
     let send_screen_helper = slice_from(&builtins, "fn spawn_send_screen_to_ai_after_hide(");
     let send_window_helper =
         slice_from(&builtins, "fn spawn_send_focused_window_to_ai_after_hide(");
     let send_screen_area_helper =
         slice_from(&builtins, "fn spawn_send_screen_area_to_ai_after_hide(");
+    let text_capture_helper =
+        slice_from(&builtins, "fn spawn_capture_text_to_ai_after_already_hidden<");
 
     assert!(
         clipboard_block.contains("submit: false"),
         "clipboard_attach_to_ai must use submit: false"
     );
     assert!(
-        selected_text_block.contains("submit: false"),
-        "SendSelectedTextToAi must use submit: false"
-    );
-    assert!(
-        browser_tab_block.contains("submit: false"),
-        "SendBrowserTabToAi must use submit: false"
+        text_capture_helper.contains("submit: false"),
+        "selected text/browser tab deferred capture must use submit: false"
     );
     assert!(
         send_screen_area_helper.contains("submit: false"),
@@ -462,5 +458,61 @@ fn continue_in_chat_uses_pending_chat_api_after_open() {
     assert!(
         block.contains("ai::set_ai_pending_chat(cx, messages)"),
         "continue-in-chat should queue the transferred conversation through set_ai_pending_chat"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Selected text / browser tab — use deferred capture helpers
+// ---------------------------------------------------------------------------
+
+#[test]
+fn selected_text_and_browser_tab_use_deferred_capture_helpers() {
+    let source = read_source("src/app_execute/builtin_execution.rs");
+    let ai_branch = slice_from(&source, "builtins::BuiltInFeature::AiCommand(cmd_type) => {");
+    let selected_arm = slice_from(&source, "AiCommandType::SendSelectedTextToAi => {");
+    let browser_arm = slice_from(&source, "AiCommandType::SendBrowserTabToAi => {");
+    let capture_helper =
+        slice_from(&source, "fn spawn_capture_text_to_ai_after_already_hidden<");
+    let selected_helper =
+        slice_from(&source, "fn spawn_send_selected_text_to_ai_after_hide(");
+    let browser_helper =
+        slice_from(&source, "fn spawn_send_browser_tab_to_ai_after_hide(");
+
+    assert!(
+        ai_branch.contains("self.spawn_send_selected_text_to_ai_after_hide(&dctx.trace_id, cx);"),
+        "SendSelectedTextToAi must delegate to the deferred capture helper"
+    );
+    assert!(
+        ai_branch.contains("self.spawn_send_browser_tab_to_ai_after_hide(&dctx.trace_id, cx);"),
+        "SendBrowserTabToAi must delegate to the deferred capture helper"
+    );
+
+    let selected_inline_block = &selected_arm[..selected_arm.len().min(500)];
+    assert!(
+        !selected_inline_block.contains("crate::selected_text::get_selected_text()"),
+        "SendSelectedTextToAi must not capture selected text inline on the action path"
+    );
+
+    let browser_inline_block = &browser_arm[..browser_arm.len().min(500)];
+    assert!(
+        !browser_inline_block.contains("platform::get_focused_browser_tab_url()"),
+        "SendBrowserTabToAi must not capture browser URL inline on the action path"
+    );
+
+    assert!(
+        capture_helper.contains("event = \"ai_capture_scheduled\"")
+            && capture_helper.contains("event = \"ai_capture_completed\"")
+            && capture_helper.contains("DeferredAiWindowAction::SetInput")
+            && capture_helper.contains("submit: false"),
+        "Deferred text capture helper must emit capture logs and enqueue non-streaming SetInput"
+    );
+
+    assert!(
+        selected_helper.contains("crate::selected_text::get_selected_text()"),
+        "selected text helper must own the selected-text capture call"
+    );
+    assert!(
+        browser_helper.contains("platform::get_focused_browser_tab_url()"),
+        "browser tab helper must own the browser URL capture call"
     );
 }

@@ -6,8 +6,18 @@ fn ai_open_failure_message(error: impl std::fmt::Display) -> String {
     format!("Failed to open AI: {}", error)
 }
 
+#[derive(Debug)]
+enum DeferredAiCapturedText {
+    Ready(String),
+    Empty(String),
+}
+
 fn ai_capture_hide_settle_duration() -> std::time::Duration {
     std::time::Duration::from_millis(AI_CAPTURE_HIDE_SETTLE_MS)
+}
+
+fn ai_command_keeps_main_window_visible(cmd_type: &builtins::AiCommandType) -> bool {
+    matches!(cmd_type, builtins::AiCommandType::GenerateScript)
 }
 
 fn ai_command_uses_hide_then_capture_flow(cmd_type: &builtins::AiCommandType) -> bool {
@@ -17,6 +27,8 @@ fn ai_command_uses_hide_then_capture_flow(cmd_type: &builtins::AiCommandType) ->
             | builtins::AiCommandType::SendScreenToAi
             | builtins::AiCommandType::SendFocusedWindowToAi
             | builtins::AiCommandType::SendScreenAreaToAi
+            | builtins::AiCommandType::SendSelectedTextToAi
+            | builtins::AiCommandType::SendBrowserTabToAi
     )
 }
 
@@ -445,6 +457,281 @@ impl ScriptListApp {
                     .ok();
                 }
             }
+        })
+        .detach();
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn spawn_capture_text_to_ai_after_already_hidden<C, F>(
+        &mut self,
+        source_action: &'static str,
+        trace_id: &str,
+        capture_kind: &'static str,
+        success_message: &'static str,
+        capture_fn: C,
+        format_fn: F,
+        cx: &mut Context<Self>,
+    ) where
+        C: FnOnce() -> Result<DeferredAiCapturedText, String> + Send + 'static,
+        F: FnOnce(String) -> String + Send + 'static,
+    {
+        let trace_id = trace_id.to_string();
+
+        tracing::info!(
+            category = "AI",
+            event = "ai_capture_scheduled",
+            source_action,
+            trace_id = %trace_id,
+            capture_kind,
+            hide_settle_ms = AI_CAPTURE_HIDE_SETTLE_MS,
+            "Scheduled deferred AI text capture"
+        );
+
+        platform::defer_hide_main_window(cx);
+
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(ai_capture_hide_settle_duration())
+                .await;
+
+            let (result_tx, result_rx) =
+                async_channel::bounded::<Result<DeferredAiCapturedText, String>>(1);
+
+            let trace_id_for_thread = trace_id.clone();
+            std::thread::spawn(move || {
+                let started_at = std::time::Instant::now();
+                let result = capture_fn();
+
+                let (success, result_state) = match &result {
+                    Ok(DeferredAiCapturedText::Ready(_)) => (true, "ready"),
+                    Ok(DeferredAiCapturedText::Empty(_)) => (true, "empty"),
+                    Err(_) => (false, "error"),
+                };
+
+                tracing::info!(
+                    category = "AI",
+                    event = "ai_capture_completed",
+                    source_action,
+                    trace_id = %trace_id_for_thread,
+                    capture_kind,
+                    result_state,
+                    success,
+                    duration_ms = started_at.elapsed().as_millis() as u64,
+                    "Deferred AI text capture finished"
+                );
+
+                let _ = result_tx.send_blocking(result);
+            });
+
+            let Ok(result) = result_rx.recv().await else {
+                return;
+            };
+
+            let _ = this.update(cx, |this, cx| match result {
+                Ok(DeferredAiCapturedText::Ready(captured)) => {
+                    this.open_ai_window_after_already_hidden(
+                        source_action,
+                        &trace_id,
+                        DeferredAiWindowAction::SetInput {
+                            text: format_fn(captured),
+                            submit: false,
+                        },
+                        success_message,
+                        cx,
+                    );
+                }
+                Ok(DeferredAiCapturedText::Empty(message)) => {
+                    this.toast_manager.push(
+                        components::toast::Toast::info(message, &this.theme)
+                            .duration_ms(Some(TOAST_INFO_MS)),
+                    );
+                    cx.notify();
+                }
+                Err(error) => {
+                    tracing::error!(
+                        category = "AI",
+                        event = "ai_capture_failed",
+                        source_action,
+                        trace_id = %trace_id,
+                        capture_kind,
+                        error = %error,
+                        "Deferred AI text capture failed"
+                    );
+                    let message = format!("Failed to capture content for AI Chat: {}", error);
+                    this.toast_manager.push(
+                        components::toast::Toast::error(message, &this.theme)
+                            .duration_ms(Some(TOAST_CRITICAL_MS)),
+                    );
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+    }
+
+    fn spawn_send_selected_text_to_ai_after_hide(
+        &mut self,
+        trace_id: &str,
+        cx: &mut Context<Self>,
+    ) {
+        self.spawn_capture_text_to_ai_after_already_hidden(
+            "SendSelectedTextToAi",
+            trace_id,
+            "selected_text",
+            "Sent to AI",
+            || {
+                crate::selected_text::get_selected_text()
+                    .map_err(|error| error.to_string())
+                    .map(|text| {
+                        let trimmed = text.trim().to_string();
+                        if trimmed.is_empty() {
+                            DeferredAiCapturedText::Empty(
+                                "No text selected. Select some text first.".to_string(),
+                            )
+                        } else {
+                            DeferredAiCapturedText::Ready(trimmed)
+                        }
+                    })
+            },
+            |text| {
+                format!(
+                    "I've selected the following text:\n\n```\n{}\n```\n\nPlease help me with this.",
+                    text
+                )
+            },
+            cx,
+        );
+    }
+
+    fn spawn_send_browser_tab_to_ai_after_hide(
+        &mut self,
+        trace_id: &str,
+        cx: &mut Context<Self>,
+    ) {
+        self.spawn_capture_text_to_ai_after_already_hidden(
+            "SendBrowserTabToAi",
+            trace_id,
+            "browser_url",
+            "Sent to AI",
+            || {
+                platform::get_focused_browser_tab_url()
+                    .map_err(|error| error.to_string())
+                    .map(|url| {
+                        let trimmed = url.trim().to_string();
+                        if trimmed.is_empty() {
+                            DeferredAiCapturedText::Empty(
+                                "No browser URL found in the frontmost tab.".to_string(),
+                            )
+                        } else {
+                            DeferredAiCapturedText::Ready(trimmed)
+                        }
+                    })
+            },
+            |url| {
+                format!(
+                    "I'm looking at this webpage:\n\n{}\n\nPlease help me analyze or understand its content.",
+                    url
+                )
+            },
+            cx,
+        );
+    }
+
+    fn spawn_generate_script_from_current_app_after_hide(
+        &mut self,
+        trace_id: String,
+        query_override: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let fallback_query = query_override.unwrap_or_else(|| self.filter_text.clone());
+
+        tracing::info!(
+            category = "AI",
+            event = "ai_capture_scheduled",
+            source_action = "GenerateScriptFromCurrentApp",
+            trace_id = %trace_id,
+            hide_settle_ms = AI_CAPTURE_HIDE_SETTLE_MS,
+            "Deferring main window hide and scheduling context capture for script generation"
+        );
+
+        platform::defer_hide_main_window(cx);
+
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(ai_capture_hide_settle_duration())
+                .await;
+
+            let snapshot_result = cx
+                .background_executor()
+                .spawn(async { crate::menu_bar::load_frontmost_menu_snapshot() })
+                .await;
+
+            let selected_text = match crate::selected_text::get_selected_text() {
+                Ok(text) if !text.trim().is_empty() => Some(text),
+                Ok(_) => None,
+                Err(error) => {
+                    tracing::warn!(
+                        trace_id = %trace_id,
+                        error = %error,
+                        "ai_generate_script_from_current_app.selected_text_unavailable"
+                    );
+                    None
+                }
+            };
+
+            let browser_url = match platform::get_focused_browser_tab_url() {
+                Ok(url) if !url.trim().is_empty() => Some(url),
+                Ok(_) => None,
+                Err(error) => {
+                    tracing::warn!(
+                        trace_id = %trace_id,
+                        error = %error,
+                        "ai_generate_script_from_current_app.browser_url_unavailable"
+                    );
+                    None
+                }
+            };
+
+            let _ = this.update(cx, |app, cx| match snapshot_result {
+                Ok(snapshot) => {
+                    let user_request =
+                        crate::menu_bar::current_app_commands::normalize_generate_script_from_current_app_request(
+                            Some(fallback_query.as_str()),
+                        );
+
+                    let (prompt, receipt) =
+                        crate::menu_bar::current_app_commands::build_generate_script_prompt_from_snapshot(
+                            snapshot,
+                            user_request,
+                            selected_text.as_deref(),
+                            browser_url.as_deref(),
+                        );
+
+                    tracing::info!(
+                        trace_id = %trace_id,
+                        app_name = %receipt.app_name,
+                        bundle_id = %receipt.bundle_id,
+                        total_menu_items = receipt.total_menu_items,
+                        included_menu_items = receipt.included_menu_items,
+                        included_user_request = receipt.included_user_request,
+                        included_selected_text = receipt.included_selected_text,
+                        included_browser_url = receipt.included_browser_url,
+                        "ai_generate_script_from_current_app.prompt_ready"
+                    );
+
+                    script_kit_gpui::set_main_window_visible(true);
+                    app.dispatch_ai_script_generation_from_query(prompt, cx);
+                }
+                Err(error) => {
+                    let message = format!("Failed to capture current app context: {}", error);
+                    app.show_error_toast(message.clone(), cx);
+                    tracing::error!(
+                        trace_id = %trace_id,
+                        error = %error,
+                        "ai_generate_script_from_current_app.capture_failed"
+                    );
+                }
+            });
         })
         .detach();
     }
@@ -1339,13 +1626,9 @@ impl ScriptListApp {
 
                 use builtins::AiCommandType;
 
-                let is_generate_script = matches!(
-                    cmd_type,
-                    AiCommandType::GenerateScript
-                        | AiCommandType::GenerateScriptFromCurrentApp
-                );
+                let keeps_main_window_visible = ai_command_keeps_main_window_visible(cmd_type);
                 let uses_hide_then_capture_flow = ai_command_uses_hide_then_capture_flow(cmd_type);
-                if !is_generate_script {
+                if !keeps_main_window_visible {
                     script_kit_gpui::set_main_window_visible(false);
                     self.reset_to_script_list(cx);
                     if uses_hide_then_capture_flow {
@@ -1404,67 +1687,15 @@ impl ScriptListApp {
                     }
 
                     AiCommandType::GenerateScriptFromCurrentApp => {
-                        match crate::menu_bar::load_frontmost_menu_snapshot() {
-                            Ok(snapshot) => {
-                                let raw_user_request =
-                                    query_override.unwrap_or(&self.filter_text).trim();
-                                let user_request = if raw_user_request.is_empty()
-                                    || raw_user_request
-                                        .eq_ignore_ascii_case("generate script from current app")
-                                {
-                                    None
-                                } else {
-                                    Some(raw_user_request)
-                                };
-
-                                let selected_text = crate::selected_text::get_selected_text()
-                                    .ok()
-                                    .filter(|text| !text.trim().is_empty());
-
-                                let browser_url = platform::get_focused_browser_tab_url()
-                                    .ok()
-                                    .filter(|url| !url.trim().is_empty());
-
-                                let (prompt, receipt) =
-                                    crate::menu_bar::current_app_commands::build_generate_script_prompt_from_snapshot(
-                                        snapshot,
-                                        user_request,
-                                        selected_text.as_deref(),
-                                        browser_url.as_deref(),
-                                    );
-
-                                tracing::info!(
-                                    trace_id = %dctx.trace_id,
-                                    app_name = %receipt.app_name,
-                                    bundle_id = %receipt.bundle_id,
-                                    total_menu_items = receipt.total_menu_items,
-                                    included_menu_items = receipt.included_menu_items,
-                                    included_user_request = receipt.included_user_request,
-                                    included_selected_text = receipt.included_selected_text,
-                                    included_browser_url = receipt.included_browser_url,
-                                    "ai_generate_script_from_current_app.prompt_ready"
-                                );
-
-                                self.dispatch_ai_script_generation_from_query(prompt, cx);
-                                Self::builtin_success(
-                                    dctx,
-                                    "ai_generate_script_from_current_app_dispatched",
-                                )
-                            }
-                            Err(e) => {
-                                let message = format!(
-                                    "Failed to capture current app context: {}",
-                                    e
-                                );
-                                self.show_error_toast(message.clone(), cx);
-                                Self::builtin_error(
-                                    dctx,
-                                    crate::action_helpers::ERROR_ACTION_FAILED,
-                                    message,
-                                    "ai_generate_script_from_current_app_failed",
-                                )
-                            }
-                        }
+                        self.spawn_generate_script_from_current_app_after_hide(
+                            dctx.trace_id.to_string(),
+                            query_override.map(|s| s.to_string()),
+                            cx,
+                        );
+                        Self::builtin_success(
+                            dctx,
+                            "ai_generate_script_from_current_app_scheduled",
+                        )
                     }
 
                     AiCommandType::SendScreenToAi => {
@@ -1478,87 +1709,13 @@ impl ScriptListApp {
                     }
 
                     AiCommandType::SendSelectedTextToAi => {
-                        match crate::selected_text::get_selected_text() {
-                            Ok(text) if !text.is_empty() => {
-                                let message = format!(
-                                    "I've selected the following text:\n\n```\n{}\n```\n\nPlease help me with this.",
-                                    text
-                                );
-                                tracing::info!(
-                                    trace_id = %dctx.trace_id,
-                                    text_len = text.len(),
-                                    "Selected text captured"
-                                );
-                                self.open_ai_window_after_already_hidden(
-                                    "SendSelectedTextToAi",
-                                    &dctx.trace_id,
-                                    DeferredAiWindowAction::SetInput {
-                                        text: message,
-                                        submit: false,
-                                    },
-                                    "Sent to AI",
-                                    cx,
-                                );
-                                Self::builtin_success(dctx, "ai_send_selected_text")
-                            }
-                            Ok(_) => {
-                                self.toast_manager.push(
-                                    components::toast::Toast::info(
-                                        "No text selected. Select some text first.",
-                                        &self.theme,
-                                    )
-                                    .duration_ms(Some(TOAST_INFO_MS)),
-                                );
-                                cx.notify();
-                                Self::builtin_success(dctx, "ai_send_selected_text_empty")
-                            }
-                            Err(e) => {
-                                let message = format!("Failed to get selected text: {}", e);
-                                self.show_error_toast(message.clone(), cx);
-                                Self::builtin_error(
-                                    dctx,
-                                    crate::action_helpers::ERROR_ACTION_FAILED,
-                                    message,
-                                    "ai_send_selected_text_failed",
-                                )
-                            }
-                        }
+                        self.spawn_send_selected_text_to_ai_after_hide(&dctx.trace_id, cx);
+                        Self::builtin_success(dctx, "ai_send_selected_text_scheduled")
                     }
 
                     AiCommandType::SendBrowserTabToAi => {
-                        match platform::get_focused_browser_tab_url() {
-                            Ok(url) => {
-                                let message = format!(
-                                    "I'm looking at this webpage:\n\n{}\n\nPlease help me analyze or understand its content.",
-                                    url
-                                );
-                                tracing::info!(
-                                    trace_id = %dctx.trace_id,
-                                    "Browser URL captured"
-                                );
-                                self.open_ai_window_after_already_hidden(
-                                    "SendBrowserTabToAi",
-                                    &dctx.trace_id,
-                                    DeferredAiWindowAction::SetInput {
-                                        text: message,
-                                        submit: false,
-                                    },
-                                    "Sent to AI",
-                                    cx,
-                                );
-                                Self::builtin_success(dctx, "ai_send_browser_tab")
-                            }
-                            Err(e) => {
-                                let message = format!("Failed to get browser URL: {}", e);
-                                self.show_error_toast(message.clone(), cx);
-                                Self::builtin_error(
-                                    dctx,
-                                    crate::action_helpers::ERROR_ACTION_FAILED,
-                                    message,
-                                    "ai_send_browser_tab_failed",
-                                )
-                            }
-                        }
+                        self.spawn_send_browser_tab_to_ai_after_hide(&dctx.trace_id, cx);
+                        Self::builtin_success(dctx, "ai_send_browser_tab_scheduled")
                     }
 
                     AiCommandType::SendScreenAreaToAi => {
@@ -2299,12 +2456,29 @@ impl ScriptListApp {
 mod builtin_execution_ai_feedback_tests {
     use super::{
         AI_CAPTURE_HIDE_SETTLE_MS, ai_capture_hide_settle_duration,
-        ai_command_uses_hide_then_capture_flow, ai_open_failure_message,
-        created_file_path_for_feedback, emoji_picker_label, favorites_loaded_message,
+        ai_command_keeps_main_window_visible, ai_command_uses_hide_then_capture_flow,
+        ai_open_failure_message, created_file_path_for_feedback, emoji_picker_label,
+        favorites_loaded_message,
     };
     use crate::builtins::AiCommandType;
     use script_kit_gpui::emoji::{Emoji, EmojiCategory};
     use std::path::PathBuf;
+
+    #[test]
+    fn only_plain_generate_script_keeps_main_window_visible() {
+        assert!(ai_command_keeps_main_window_visible(
+            &AiCommandType::GenerateScript
+        ));
+        assert!(!ai_command_keeps_main_window_visible(
+            &AiCommandType::GenerateScriptFromCurrentApp
+        ));
+        assert!(!ai_command_keeps_main_window_visible(
+            &AiCommandType::SendScreenToAi
+        ));
+        assert!(!ai_command_keeps_main_window_visible(
+            &AiCommandType::OpenAi
+        ));
+    }
 
     #[test]
     fn test_ai_open_failure_message_includes_error_details() {
@@ -2338,8 +2512,11 @@ mod builtin_execution_ai_feedback_tests {
         assert!(ai_command_uses_hide_then_capture_flow(
             &AiCommandType::SendScreenAreaToAi
         ));
-        assert!(!ai_command_uses_hide_then_capture_flow(
+        assert!(ai_command_uses_hide_then_capture_flow(
             &AiCommandType::SendSelectedTextToAi
+        ));
+        assert!(ai_command_uses_hide_then_capture_flow(
+            &AiCommandType::SendBrowserTabToAi
         ));
     }
 
