@@ -1,32 +1,10 @@
-use gpui::{div, prelude::*, px, rgb, rgba, AnyElement, FontWeight};
+use gpui::{div, prelude::*, px, rgb, AnyElement, FontWeight};
 
 pub(crate) fn render_main_window_preflight_receipt(
     app: &crate::ScriptListApp,
     receipt: &crate::main_window_preflight::MainWindowPreflightReceipt,
 ) -> AnyElement {
     let chrome = crate::theme::AppChromeColors::from_theme(&app.theme);
-
-    let mut chips = div().flex().flex_row().flex_wrap().gap(px(6.));
-    for item in &receipt.context_items {
-        chips = chips.child(
-            div()
-                .px(px(8.))
-                .py(px(3.))
-                .rounded(px(4.))
-                .bg(if item.enabled {
-                    rgba(chrome.accent_badge_bg_rgba)
-                } else {
-                    rgba(chrome.badge_bg_rgba)
-                })
-                .text_xs()
-                .text_color(if item.enabled {
-                    rgb(chrome.accent_badge_text_hex)
-                } else {
-                    rgb(chrome.badge_text_hex)
-                })
-                .child(item.label.clone()),
-        );
-    }
 
     let mut warnings_el = div().flex().flex_col().gap(px(4.));
     for warning in &receipt.warnings {
@@ -92,10 +70,6 @@ pub(crate) fn render_main_window_preflight_receipt(
                     ),
             )
         })
-        .when(
-            !receipt.context_items.is_empty(),
-            |d: gpui::Stateful<gpui::Div>| d.child(chips),
-        )
         .when(
             !receipt.warnings.is_empty(),
             |d: gpui::Stateful<gpui::Div>| d.child(warnings_el),

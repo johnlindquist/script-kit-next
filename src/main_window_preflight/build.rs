@@ -1,6 +1,5 @@
 use crate::main_window_preflight::types::{
-    MainWindowPreflightAction, MainWindowPreflightActionKind, MainWindowPreflightContextItem,
-    MainWindowPreflightReceipt,
+    MainWindowPreflightAction, MainWindowPreflightActionKind, MainWindowPreflightReceipt,
 };
 use crate::{AppView, GroupedListItem};
 
@@ -48,27 +47,6 @@ fn build_tab_action(app: &crate::ScriptListApp) -> Option<MainWindowPreflightAct
     })
 }
 
-fn build_context_items() -> Vec<MainWindowPreflightContextItem> {
-    use crate::ai::context_contract::ContextAttachmentKind;
-
-    [
-        ContextAttachmentKind::Current,
-        ContextAttachmentKind::Selection,
-        ContextAttachmentKind::Browser,
-        ContextAttachmentKind::Window,
-    ]
-    .into_iter()
-    .map(|kind| {
-        let spec = kind.spec();
-        MainWindowPreflightContextItem {
-            label: spec.label.to_string(),
-            source: spec.uri.to_string(),
-            enabled: false,
-        }
-    })
-    .collect()
-}
-
 pub(crate) fn build_main_window_preflight_receipt(
     app: &crate::ScriptListApp,
 ) -> Option<MainWindowPreflightReceipt> {
@@ -103,7 +81,6 @@ pub(crate) fn build_main_window_preflight_receipt(
         selected_index: app.selected_index,
         enter_action,
         tab_action: build_tab_action(app),
-        context_items: build_context_items(),
         warnings,
     })
 }
@@ -116,45 +93,7 @@ pub(crate) fn log_main_window_preflight_receipt(receipt: &MainWindowPreflightRec
         enter_subject = %receipt.enter_action.subject,
         enter_type = %receipt.enter_action.type_label,
         tab_enabled = receipt.tab_action.is_some(),
-        enabled_context_count = receipt
-            .context_items
-            .iter()
-            .filter(|item| item.enabled)
-            .count(),
         warnings = ?receipt.warnings,
         "Built main window preflight receipt"
     );
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn build_context_items_exposes_default_main_window_contract_sources() {
-        let items = build_context_items();
-
-        assert_eq!(items.len(), 4, "main-window rail should expose 4 context items");
-        assert_eq!(items[0].label, "Current Context");
-        assert_eq!(items[0].source, "kit://context?profile=minimal");
-        assert_eq!(items[1].label, "Selection");
-        assert_eq!(
-            items[1].source,
-            "kit://context?selectedText=1&frontmostApp=0&menuBar=0&browserUrl=0&focusedWindow=0"
-        );
-        assert_eq!(items[2].label, "Browser URL");
-        assert_eq!(
-            items[2].source,
-            "kit://context?selectedText=0&frontmostApp=0&menuBar=0&browserUrl=1&focusedWindow=0"
-        );
-        assert_eq!(items[3].label, "Focused Window");
-        assert_eq!(
-            items[3].source,
-            "kit://context?selectedText=0&frontmostApp=1&menuBar=0&browserUrl=0&focusedWindow=1"
-        );
-        assert!(
-            items.iter().all(|item| !item.enabled),
-            "contract rail should not claim context is attached when the main window has no toggle state"
-        );
-    }
 }

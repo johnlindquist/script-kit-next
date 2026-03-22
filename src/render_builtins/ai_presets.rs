@@ -224,18 +224,18 @@ impl ScriptListApp {
     }
 
     /// Select a preset from the search view and apply it in AI chat.
-    fn select_ai_preset(&mut self, preset_id: &str, window: &mut Window, cx: &mut Context<Self>) {
+    fn select_ai_preset(&mut self, preset_id: &str, _window: &mut Window, cx: &mut Context<Self>) {
         tracing::info!(preset_id = %preset_id, action = "select_ai_preset", "User selected AI preset from search");
-        match ai::open_ai_window(cx) {
-            Ok(()) => {
-                ai::apply_ai_preset(cx, preset_id);
-                self.go_back_or_close(window, cx);
-            }
-            Err(e) => {
-                tracing::error!(error = %e, "Failed to open AI window for preset");
-                self.show_error_toast(format!("Failed to open AI: {}", e), cx);
-            }
-        }
+        let trace_id = uuid::Uuid::new_v4().to_string();
+        self.open_ai_window_after_main_hide(
+            "select_ai_preset",
+            &trace_id,
+            DeferredAiWindowAction::ApplyPreset {
+                preset_id: preset_id.to_string(),
+            },
+            "Preset applied",
+            cx,
+        );
     }
 
     /// Handle keyboard input for the Create AI Preset form.

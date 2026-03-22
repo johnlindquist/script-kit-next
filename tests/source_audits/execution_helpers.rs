@@ -235,7 +235,7 @@ fn enable_claude_code_in_config_shows_install_instructions_when_cli_missing() {
 }
 
 // ---------------------------------------------------------------------------
-// AI command dispatch — error paths use ai_open_failure_message
+// AI command dispatch — all user-facing branches use deferred helper
 // ---------------------------------------------------------------------------
 
 fn builtin_execution_content() -> String {
@@ -243,27 +243,26 @@ fn builtin_execution_content() -> String {
 }
 
 #[test]
-fn ai_open_failure_message_is_used_for_open_ai_errors() {
+fn ai_open_and_new_conversation_use_deferred_helper() {
     let content = builtin_execution_content();
 
-    // OpenAi and NewConversation both use ai_open_failure_message on error
     let ai_command_section_start = content
         .find("AiCommandType::OpenAi | AiCommandType::NewConversation")
         .expect("Expected OpenAi/NewConversation match arm");
     let block = &content[ai_command_section_start..ai_command_section_start + 800];
 
     assert!(
-        block.contains("ai_open_failure_message"),
-        "Expected OpenAi/NewConversation error path to use ai_open_failure_message"
+        block.contains("open_ai_window_after_main_hide("),
+        "Expected OpenAi/NewConversation to use deferred AI window helper"
     );
     assert!(
-        block.contains("show_error_toast("),
-        "Expected OpenAi/NewConversation error to show error toast"
+        block.contains("DeferredAiWindowAction::OpenOnly"),
+        "Expected OpenAi/NewConversation to use OpenOnly deferred action"
     );
 }
 
 #[test]
-fn ai_clear_conversation_uses_ai_open_failure_message_on_reopen_error() {
+fn ai_clear_conversation_uses_deferred_helper() {
     let content = builtin_execution_content();
 
     let clear_section_start = content
@@ -271,10 +270,13 @@ fn ai_clear_conversation_uses_ai_open_failure_message_on_reopen_error() {
         .expect("Expected ClearConversation match arm");
     let block = &content[clear_section_start..clear_section_start + 1200];
 
-    // After clearing, if reopening fails, should show error toast
     assert!(
-        block.contains("show_error_toast("),
-        "Expected ClearConversation reopen-failure path to show error toast"
+        block.contains("open_ai_window_after_main_hide("),
+        "Expected ClearConversation to use deferred AI window helper after clearing"
+    );
+    assert!(
+        block.contains("close_ai_window(cx)"),
+        "Expected ClearConversation to close AI window before deferred reopen"
     );
 }
 
@@ -290,10 +292,6 @@ fn ai_clear_conversation_shows_hud_on_success() {
     assert!(
         block.contains("Cleared AI conversations"),
         "Expected ClearConversation success to show HUD with confirmation message"
-    );
-    assert!(
-        block.contains("HUD_MEDIUM_MS"),
-        "Expected ClearConversation success HUD to use HUD_MEDIUM_MS"
     );
 }
 
@@ -313,14 +311,19 @@ fn ai_clear_conversation_shows_toast_when_clear_fails() {
 }
 
 #[test]
-fn ai_open_failure_message_count_is_consistent() {
+fn no_direct_ai_open_window_in_user_facing_branches() {
     let content = builtin_execution_content();
 
-    // ai_open_failure_message should be used in multiple AI command error paths
-    let usage_count = count(&content, "ai_open_failure_message");
+    // The only allowed `ai::open_ai_window` usage is inside internal helpers
+    // (spawn_send_screen_to_ai_after_hide etc.), not in user-facing match arms.
+    // Count direct calls outside the helper functions.
+    let ai_chat_section = content
+        .find("BuiltInFeature::AiChat")
+        .expect("Expected AiChat arm");
+    let ai_chat_block = &content[ai_chat_section..ai_chat_section + 600];
     assert!(
-        usage_count >= 5,
-        "Expected ai_open_failure_message to be used in at least 5 error paths (found {usage_count})"
+        !ai_chat_block.contains("ai::open_ai_window("),
+        "AiChat should not directly call ai::open_ai_window — use deferred helper"
     );
 }
 

@@ -32,10 +32,9 @@ impl AiApp {
             self.close_context_picker(cx);
         }
 
-        // Re-run preflight so recommendations update as the user types.
-        // Only when there are pending parts or non-empty input — otherwise
-        // the fast path inside schedule_context_preflight will clear state.
-        self.schedule_context_preflight_for_current_draft(cx);
+        // Context preflight is intentionally NOT run per-keystroke.
+        // It only runs when the user explicitly adds context parts
+        // (via /context slash commands or the context picker).
     }
 
     /// Handle paste event - check for clipboard images

@@ -1,8 +1,7 @@
-/// Small async yield (in ms) before opening the AI window to let pending GPUI operations complete.
-const AI_WINDOW_ASYNC_YIELD_MS: u64 = 1;
 /// Delay between hiding the main window and starting a synchronous screenshot capture.
 const AI_CAPTURE_HIDE_SETTLE_MS: u64 = 150;
 
+#[cfg(test)]
 fn ai_open_failure_message(error: impl std::fmt::Display) -> String {
     format!("Failed to open AI: {}", error)
 }
@@ -173,17 +172,17 @@ impl ScriptListApp {
                     );
 
                     this.update(cx, |this, cx| {
-                        if let Err(error) = ai::open_ai_window(cx) {
-                            let message = ai_open_failure_message(&error);
-                            tracing::error!(
-                                action = "send_screen_to_ai_open_failed",
-                                error = %error,
-                                "Failed to open AI window after screen capture"
-                            );
-                            this.show_error_toast(message, cx);
-                        } else {
-                            ai::set_ai_input_with_image(cx, &message, &base64_data, false);
-                        }
+                        this.open_ai_window_after_main_hide(
+                            "SendScreenToAi",
+                            "send_screen_to_ai",
+                            DeferredAiWindowAction::SetInputWithImage {
+                                text: message,
+                                image_base64: base64_data,
+                                submit: false,
+                            },
+                            "Sent to AI",
+                            cx,
+                        );
                     })
                     .ok();
                 }
@@ -277,17 +276,17 @@ impl ScriptListApp {
                             cx.notify();
                         }
 
-                        if let Err(error) = ai::open_ai_window(cx) {
-                            let message = ai_open_failure_message(&error);
-                            tracing::error!(
-                                action = "send_focused_window_to_ai_open_failed",
-                                error = %error,
-                                "Failed to open AI window after focused window capture"
-                            );
-                            this.show_error_toast(message, cx);
-                        } else {
-                            ai::set_ai_input_with_image(cx, &message, &base64_data, false);
-                        }
+                        this.open_ai_window_after_main_hide(
+                            "SendFocusedWindowToAi",
+                            "send_focused_window_to_ai",
+                            DeferredAiWindowAction::SetInputWithImage {
+                                text: message,
+                                image_base64: base64_data,
+                                submit: false,
+                            },
+                            "Sent to AI",
+                            cx,
+                        );
                     })
                     .ok();
                 }
@@ -1038,27 +1037,14 @@ impl ScriptListApp {
                     trace_id = %dctx.trace_id,
                     "Opening AI Chat window"
                 );
-                script_kit_gpui::set_main_window_visible(false);
-                self.reset_to_script_list(cx);
-                platform::defer_hide_main_window(cx);
+                self.open_ai_window_after_main_hide(
+                    "AiChat",
+                    &dctx.trace_id,
+                    DeferredAiWindowAction::OpenOnly,
+                    "AI Chat opened",
+                    cx,
+                );
 
-                cx.spawn(async move |this, cx| {
-                    cx.background_executor()
-                        .timer(std::time::Duration::from_millis(AI_WINDOW_ASYNC_YIELD_MS))
-                        .await;
-
-                    cx.update(|cx| {
-                        if let Err(e) = ai::open_ai_window(cx) {
-                            tracing::error!(message = %&format!("Failed to open AI window: {}", e));
-                            let _ = this.update(cx, |this, cx| {
-                                this.show_error_toast(ai_open_failure_message(&e), cx);
-                            });
-                        }
-                    });
-                })
-                .detach();
-
-                // Async — outcome tracked in spawned task
                 Self::builtin_success(dctx, "open_ai_chat_dispatched")
             }
             builtins::BuiltInFeature::Notes => {
@@ -1229,41 +1215,27 @@ impl ScriptListApp {
 
                 match cmd_type {
                     AiCommandType::OpenAi | AiCommandType::NewConversation => {
-                        if let Err(e) = ai::open_ai_window(cx) {
-                            let message = ai_open_failure_message(&e);
-                            self.show_error_toast(message.clone(), cx);
-                            Self::builtin_error(
-                                dctx,
-                                crate::action_helpers::ERROR_LAUNCH_FAILED,
-                                message,
-                                format!("ai_command::{cmd_type:?}"),
-                            )
-                        } else {
-                            Self::builtin_success(dctx, format!("ai_command::{cmd_type:?}"))
-                        }
+                        self.open_ai_window_after_main_hide(
+                            &format!("ai_command::{cmd_type:?}"),
+                            &dctx.trace_id,
+                            DeferredAiWindowAction::OpenOnly,
+                            "AI Chat opened",
+                            cx,
+                        );
+                        Self::builtin_success(dctx, format!("ai_command::{cmd_type:?}"))
                     }
 
                     AiCommandType::ClearConversation => {
                         match ai::clear_all_chats() {
                             Ok(()) => {
                                 ai::close_ai_window(cx);
-                                if let Err(e) = ai::open_ai_window(cx) {
-                                    tracing::error!(
-                                        trace_id = %dctx.trace_id,
-                                        error = %e,
-                                        "AI history cleared but failed to reopen AI window"
-                                    );
-                                    self.show_error_toast(
-                                        format!("AI history cleared, but failed to open AI: {}", e),
-                                        cx,
-                                    );
-                                } else {
-                                    self.show_hud(
-                                        "Cleared AI conversations".to_string(),
-                                        Some(HUD_MEDIUM_MS),
-                                        cx,
-                                    );
-                                }
+                                self.open_ai_window_after_main_hide(
+                                    "ClearConversation",
+                                    &dctx.trace_id,
+                                    DeferredAiWindowAction::OpenOnly,
+                                    "Cleared AI conversations",
+                                    cx,
+                                );
                                 Self::builtin_success(dctx, "ai_clear_conversation")
                             }
                             Err(e) => {
@@ -1307,11 +1279,16 @@ impl ScriptListApp {
                                     text_len = text.len(),
                                     "Selected text captured"
                                 );
-                                if let Err(e) = ai::open_ai_window(cx) {
-                                    self.show_error_toast(ai_open_failure_message(&e), cx);
-                                } else {
-                                    ai::set_ai_input(cx, &message, false);
-                                }
+                                self.open_ai_window_after_main_hide(
+                                    "SendSelectedTextToAi",
+                                    &dctx.trace_id,
+                                    DeferredAiWindowAction::SetInput {
+                                        text: message,
+                                        submit: false,
+                                    },
+                                    "Sent to AI",
+                                    cx,
+                                );
                                 Self::builtin_success(dctx, "ai_send_selected_text")
                             }
                             Ok(_) => {
@@ -1349,11 +1326,16 @@ impl ScriptListApp {
                                     trace_id = %dctx.trace_id,
                                     "Browser URL captured"
                                 );
-                                if let Err(e) = ai::open_ai_window(cx) {
-                                    self.show_error_toast(ai_open_failure_message(&e), cx);
-                                } else {
-                                    ai::set_ai_input(cx, &message, false);
-                                }
+                                self.open_ai_window_after_main_hide(
+                                    "SendBrowserTabToAi",
+                                    &dctx.trace_id,
+                                    DeferredAiWindowAction::SetInput {
+                                        text: message,
+                                        submit: false,
+                                    },
+                                    "Sent to AI",
+                                    cx,
+                                );
                                 Self::builtin_success(dctx, "ai_send_browser_tab")
                             }
                             Err(e) => {
@@ -1388,12 +1370,17 @@ impl ScriptListApp {
                                     file_size = capture.png_data.len(),
                                     "Screen area captured, sending to AI"
                                 );
-                                if let Err(e) = ai::open_ai_window(cx) {
-                                    self.show_error_toast(ai_open_failure_message(&e), cx);
-                                } else {
-                                    ai::set_ai_input_with_image(cx, &message, &base64_data, false);
-                                }
-                                cx.notify();
+                                self.open_ai_window_after_main_hide(
+                                    "SendScreenAreaToAi",
+                                    &dctx.trace_id,
+                                    DeferredAiWindowAction::SetInputWithImage {
+                                        text: message,
+                                        image_base64: base64_data,
+                                        submit: false,
+                                    },
+                                    "Sent to AI",
+                                    cx,
+                                );
                                 Self::builtin_success(dctx, "ai_send_screen_area")
                             }
                             Ok(None) => {

@@ -166,6 +166,8 @@ impl ScriptListApp {
                         "show_info" => crate::file_search::show_info(&path),
                         "attach_to_ai" => {
                             self.open_ai_window_after_main_hide(
+                                action_id,
+                                &dctx.trace_id,
                                 DeferredAiWindowAction::AddAttachment {
                                     path: path.clone(),
                                 },

@@ -1,6 +1,5 @@
 use crate::main_window_preflight::types::{
-    MainWindowPreflightAction, MainWindowPreflightActionKind, MainWindowPreflightContextItem,
-    MainWindowPreflightReceipt,
+    MainWindowPreflightAction, MainWindowPreflightActionKind, MainWindowPreflightReceipt,
 };
 
 #[test]
@@ -17,11 +16,6 @@ fn receipt_serializes_with_camel_case_keys() {
             description: Some("Batch resize images".to_string()),
         },
         tab_action: None,
-        context_items: vec![MainWindowPreflightContextItem {
-            label: "Current Context".to_string(),
-            source: "kit://context?profile=minimal".to_string(),
-            enabled: true,
-        }],
         warnings: vec![],
     };
 
@@ -34,10 +28,6 @@ fn receipt_serializes_with_camel_case_keys() {
     assert!(
         value.get("enterAction").is_some(),
         "expected camelCase enterAction key"
-    );
-    assert!(
-        value.get("contextItems").is_some(),
-        "expected camelCase contextItems key"
     );
 }
 
@@ -94,7 +84,6 @@ fn receipt_with_tab_action_serializes_correctly() {
             source_name: None,
             description: Some("Opens the AI window".to_string()),
         }),
-        context_items: vec![],
         warnings: vec![],
     };
 
@@ -126,7 +115,6 @@ fn receipt_with_warnings_serializes_correctly() {
             description: None,
         },
         tab_action: None,
-        context_items: vec![],
         warnings: vec![
             "Agent execution is not fully implemented.".to_string(),
             "Tab-to-AI is inactive.".to_string(),
