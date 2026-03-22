@@ -206,6 +206,25 @@ impl ScriptListApp {
                 ).into()
             }
 
+            AppView::CurrentAppCommandsView {
+                filter,
+                selected_index,
+            } => {
+                let rows: Vec<String> = self
+                    .cached_current_app_entries
+                    .iter()
+                    .map(|e| e.name.clone())
+                    .collect();
+                self.collect_named_rows(
+                    "current-app-commands-filter",
+                    filter.clone(),
+                    "menu-commands",
+                    &rows,
+                    *selected_index,
+                    limit,
+                ).into()
+            }
+
             AppView::EmojiPickerView {
                 ref filter,
                 selected_index,

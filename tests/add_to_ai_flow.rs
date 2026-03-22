@@ -83,8 +83,8 @@ fn test_add_to_ai_flow_forwards_file_reference_to_ai_chat_window_when_file_attac
         "attach_to_ai should pass the selected file path into deferred AI file-reference action"
     );
     assert!(
-        handler.contains("Self::AddAttachment { path } => ai::add_ai_attachment(cx, &path),"),
-        "deferred helper should map file-reference actions to ai::add_ai_attachment"
+        handler.contains("ai::add_ai_attachment(cx, &path)?;"),
+        "deferred helper should map file-reference actions to ai::add_ai_attachment and propagate errors"
     );
     assert!(
         ai_window_api.contains("AiCommand::AddAttachment {")
@@ -115,8 +115,8 @@ fn test_deferred_ai_handoff_checks_window_ready_before_success() {
     let helper_body = slice_from(&handler, "fn open_ai_window_after_already_hidden(");
 
     assert!(
-        helper_body.contains("ai::is_ai_window_open()"),
-        "deferred AI handoff should verify the AI window is truly open before showing success"
+        helper_body.contains("ai::is_ai_window_ready(cx)"),
+        "deferred AI handoff should verify the AI window is truly ready before showing success"
     );
 }
 

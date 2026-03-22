@@ -13,6 +13,7 @@ impl ScriptListApp {
                 | AppView::ThemeChooserView { .. }
                 | AppView::FileSearchView { .. }
                 | AppView::ProcessManagerView { .. }
+                | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }
         )
     }

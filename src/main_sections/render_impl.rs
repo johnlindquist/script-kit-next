@@ -151,6 +151,7 @@ impl Render for ScriptListApp {
                 | AppView::FileSearchView { .. }
                 | AppView::ThemeChooserView { .. }
                 | AppView::ProcessManagerView { .. }
+                | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }
         ) {
             self.sync_filter_input_if_needed(window, cx);
@@ -299,6 +300,12 @@ impl Render for ScriptListApp {
                 selected_index,
             } => self
                 .render_process_manager(filter, selected_index, cx)
+                .into_any_element(),
+            AppView::CurrentAppCommandsView {
+                filter,
+                selected_index,
+            } => self
+                .render_current_app_commands(filter, selected_index, cx)
                 .into_any_element(),
             AppView::SearchAiPresetsView {
                 filter,

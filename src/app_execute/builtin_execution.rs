@@ -115,9 +115,14 @@ fn emoji_picker_label(emoji: &script_kit_gpui::emoji::Emoji) -> String {
 
 
 impl ScriptListApp {
-    fn spawn_send_screen_to_ai_after_hide(&mut self, cx: &mut Context<Self>) {
+    fn spawn_send_screen_to_ai_after_hide(&mut self, trace_id: &str, cx: &mut Context<Self>) {
+        let trace_id = trace_id.to_string();
+
         tracing::info!(
-            action = "send_screen_to_ai_scheduled",
+            category = "AI",
+            event = "ai_capture_scheduled",
+            source_action = "SendScreenToAi",
+            trace_id = %trace_id,
             hide_settle_ms = AI_CAPTURE_HIDE_SETTLE_MS,
             "Deferring main window hide and scheduling screen capture for AI"
         );
@@ -139,7 +144,10 @@ impl ScriptListApp {
                     let size_bytes = png_data.len();
                     if size_bytes > crate::prompts::chat::MAX_IMAGE_BYTES {
                         tracing::warn!(
-                            action = "send_screen_to_ai_rejected",
+                            category = "AI",
+                            event = "ai_capture_rejected",
+                            source_action = "SendScreenToAi",
+                            trace_id = %trace_id,
                             size_bytes,
                             max_bytes = crate::prompts::chat::MAX_IMAGE_BYTES,
                             "Rejecting screen capture larger than 10 MB"
@@ -164,7 +172,10 @@ impl ScriptListApp {
                     );
 
                     tracing::info!(
-                        action = "send_screen_to_ai_captured",
+                        category = "AI",
+                        event = "ai_capture_completed",
+                        source_action = "SendScreenToAi",
+                        trace_id = %trace_id,
                         width,
                         height,
                         size_bytes,
@@ -174,7 +185,7 @@ impl ScriptListApp {
                     this.update(cx, |this, cx| {
                         this.open_ai_window_after_already_hidden(
                             "SendScreenToAi",
-                            "send_screen_to_ai",
+                            &trace_id,
                             DeferredAiWindowAction::SetInputWithImage {
                                 text: message,
                                 image_base64: base64_data,
@@ -188,7 +199,10 @@ impl ScriptListApp {
                 }
                 Err(error) => {
                     tracing::error!(
-                        action = "send_screen_to_ai_capture_failed",
+                        category = "AI",
+                        event = "ai_capture_failed",
+                        source_action = "SendScreenToAi",
+                        trace_id = %trace_id,
                         error = %error,
                         "Failed to capture screen for AI"
                     );
@@ -203,9 +217,14 @@ impl ScriptListApp {
         .detach();
     }
 
-    fn spawn_send_focused_window_to_ai_after_hide(&mut self, cx: &mut Context<Self>) {
+    fn spawn_send_focused_window_to_ai_after_hide(&mut self, trace_id: &str, cx: &mut Context<Self>) {
+        let trace_id = trace_id.to_string();
+
         tracing::info!(
-            action = "send_focused_window_to_ai_scheduled",
+            category = "AI",
+            event = "ai_capture_scheduled",
+            source_action = "SendFocusedWindowToAi",
+            trace_id = %trace_id,
             hide_settle_ms = AI_CAPTURE_HIDE_SETTLE_MS,
             "Deferring main window hide and scheduling focused window capture for AI"
         );
@@ -227,7 +246,10 @@ impl ScriptListApp {
                     let size_bytes = capture.png_data.len();
                     if size_bytes > crate::prompts::chat::MAX_IMAGE_BYTES {
                         tracing::warn!(
-                            action = "send_focused_window_to_ai_rejected",
+                            category = "AI",
+                            event = "ai_capture_rejected",
+                            source_action = "SendFocusedWindowToAi",
+                            trace_id = %trace_id,
                             size_bytes,
                             max_bytes = crate::prompts::chat::MAX_IMAGE_BYTES,
                             "Rejecting window capture larger than 10 MB"
@@ -258,7 +280,10 @@ impl ScriptListApp {
                     );
 
                     tracing::info!(
-                        action = "send_focused_window_to_ai_captured",
+                        category = "AI",
+                        event = "ai_capture_completed",
+                        source_action = "SendFocusedWindowToAi",
+                        trace_id = %trace_id,
                         window_title = %capture.window_title,
                         width = capture.width,
                         height = capture.height,
@@ -278,7 +303,7 @@ impl ScriptListApp {
 
                         this.open_ai_window_after_already_hidden(
                             "SendFocusedWindowToAi",
-                            "send_focused_window_to_ai",
+                            &trace_id,
                             DeferredAiWindowAction::SetInputWithImage {
                                 text: message,
                                 image_base64: base64_data,
@@ -292,7 +317,10 @@ impl ScriptListApp {
                 }
                 Err(error) => {
                     tracing::error!(
-                        action = "send_focused_window_to_ai_capture_failed",
+                        category = "AI",
+                        event = "ai_capture_failed",
+                        source_action = "SendFocusedWindowToAi",
+                        trace_id = %trace_id,
                         error = %error,
                         "Failed to capture focused window for AI"
                     );
@@ -1258,13 +1286,13 @@ impl ScriptListApp {
                     }
 
                     AiCommandType::SendScreenToAi => {
-                        self.spawn_send_screen_to_ai_after_hide(cx);
-                        Self::builtin_success(dctx, "ai_send_screen_dispatched")
+                        self.spawn_send_screen_to_ai_after_hide(&dctx.trace_id, cx);
+                        Self::builtin_success(dctx, "ai_send_screen_scheduled")
                     }
 
                     AiCommandType::SendFocusedWindowToAi => {
-                        self.spawn_send_focused_window_to_ai_after_hide(cx);
-                        Self::builtin_success(dctx, "ai_send_focused_window_dispatched")
+                        self.spawn_send_focused_window_to_ai_after_hide(&dctx.trace_id, cx);
+                        Self::builtin_success(dctx, "ai_send_focused_window_scheduled")
                     }
 
                     AiCommandType::SendSelectedTextToAi => {
@@ -1896,6 +1924,71 @@ impl ScriptListApp {
                             self.close_and_reset_window(cx);
                         }
                         Self::builtin_success(dctx, "stop_all_processes")
+                    }
+                    UtilityCommandType::CurrentAppCommands => {
+                        tracing::info!(
+                            trace_id = %dctx.trace_id,
+                            "current_app_commands.open_requested"
+                        );
+                        match crate::menu_bar::load_frontmost_menu_snapshot() {
+                            Ok(snapshot) => {
+                                let placeholder = snapshot.placeholder();
+                                let app_name = snapshot.app_name.clone();
+                                let entries = snapshot.into_entries();
+
+                                if entries.is_empty() {
+                                    let message = format!(
+                                        "No enabled menu bar commands found for {}",
+                                        app_name
+                                    );
+                                    tracing::warn!(
+                                        trace_id = %dctx.trace_id,
+                                        app_name = %app_name,
+                                        "current_app_commands.no_entries"
+                                    );
+                                    self.show_error_toast(message.clone(), cx);
+                                    Self::builtin_error(
+                                        dctx,
+                                        crate::action_helpers::ERROR_ACTION_FAILED,
+                                        message,
+                                        "current_app_commands_empty",
+                                    )
+                                } else {
+                                    tracing::info!(
+                                        trace_id = %dctx.trace_id,
+                                        app_name = %app_name,
+                                        entry_count = entries.len(),
+                                        "current_app_commands.loaded"
+                                    );
+                                    self.cached_current_app_entries = entries;
+                                    self.open_builtin_filterable_view(
+                                        AppView::CurrentAppCommandsView {
+                                            filter: String::new(),
+                                            selected_index: 0,
+                                        },
+                                        &placeholder,
+                                        cx,
+                                    );
+                                    Self::builtin_success(dctx, "open_current_app_commands")
+                                }
+                            }
+                            Err(e) => {
+                                let message =
+                                    format!("Failed to load frontmost app menu bar: {}", e);
+                                tracing::warn!(
+                                    trace_id = %dctx.trace_id,
+                                    error = %e,
+                                    "current_app_commands.capture_failed"
+                                );
+                                self.show_error_toast(message.clone(), cx);
+                                Self::builtin_error(
+                                    dctx,
+                                    crate::action_helpers::ERROR_ACTION_FAILED,
+                                    message,
+                                    "current_app_commands_capture_failed",
+                                )
+                            }
+                        }
                     }
                 }
             }

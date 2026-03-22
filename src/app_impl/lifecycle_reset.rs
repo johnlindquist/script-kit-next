@@ -209,6 +209,9 @@ impl ScriptListApp {
             AppView::ProcessManagerView { filter, .. } if !filter.is_empty() => {
                 Some("ProcessManager filter")
             }
+            AppView::CurrentAppCommandsView { filter, .. } if !filter.is_empty() => {
+                Some("CurrentAppCommands filter")
+            }
             AppView::SearchAiPresetsView { filter, .. } if !filter.is_empty() => {
                 Some("SearchAiPresets filter")
             }
@@ -276,6 +279,14 @@ impl ScriptListApp {
             } => {
                 Self::clear_builtin_query_state(filter, selected_index);
                 self.process_list_scroll_handle
+                    .scroll_to_item(0, ScrollStrategy::Top);
+            }
+            AppView::CurrentAppCommandsView {
+                filter,
+                selected_index,
+            } => {
+                Self::clear_builtin_query_state(filter, selected_index);
+                self.current_app_commands_scroll_handle
                     .scroll_to_item(0, ScrollStrategy::Top);
             }
             AppView::SearchAiPresetsView {

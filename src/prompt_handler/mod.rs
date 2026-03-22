@@ -1282,6 +1282,34 @@ impl ScriptListApp {
                             None,
                         )
                     }
+                    AppView::CurrentAppCommandsView {
+                        filter,
+                        selected_index,
+                    } => {
+                        let total = self.cached_current_app_entries.len();
+                        let filtered_count = if filter.is_empty() {
+                            total
+                        } else {
+                            let filter_lower = filter.to_lowercase();
+                            self.cached_current_app_entries
+                                .iter()
+                                .filter(|e| {
+                                    e.name.to_lowercase().contains(&filter_lower)
+                                        || e.keywords.iter().any(|k| k.contains(&filter_lower))
+                                })
+                                .count()
+                        };
+                        (
+                            "currentAppCommands".to_string(),
+                            None,
+                            None,
+                            filter.clone(),
+                            total,
+                            filtered_count,
+                            *selected_index as i32,
+                            None,
+                        )
+                    }
                     AppView::SearchAiPresetsView {
                         filter,
                         selected_index,

@@ -188,7 +188,7 @@ impl ScriptListApp {
                         if bm.entry.should_exclude_from_frecency(excluded) {
                             None
                         } else {
-                            Some(format!("builtin:{}", bm.entry.name))
+                            Some(format!("builtin:{}", bm.entry.id))
                         }
                     }
                     scripts::SearchResult::Scriptlet(sm) => {

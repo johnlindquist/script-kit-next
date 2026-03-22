@@ -59,6 +59,12 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
     use crate::logging;
 
     if OPENING.swap(true, Ordering::SeqCst) {
+        tracing::info!(
+            category = "AI",
+            event = "ai_window_open",
+            status = "already_opening",
+            "AI window open already in progress"
+        );
         return Ok(());
     }
 
@@ -86,7 +92,12 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
             .is_ok();
 
         if window_valid {
-            logging::log("AI", "AI window exists - bringing to front and focusing");
+            tracing::info!(
+                category = "AI",
+                event = "ai_window_open",
+                status = "existing_window_activated",
+                "AI window exists - bringing to front and focusing"
+            );
 
             // Ensure regular app mode (in case it was switched back to accessory)
             crate::platform::set_regular_app_mode();
@@ -117,8 +128,12 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
     }
 
     // Create new window
-    logging::log("AI", "Creating new AI window");
-    info!("Opening new AI window");
+    tracing::info!(
+        category = "AI",
+        event = "ai_window_open",
+        status = "create_new_begin",
+        "Creating new AI window"
+    );
 
     // Load theme to determine window background appearance (vibrancy)
     let theme = crate::theme::get_cached_theme();
@@ -229,6 +244,13 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
     // (crate::theme::service::ensure_theme_service) which is started once at app init.
     // This eliminates per-window theme watcher tasks and their potential for leaks.
 
+    tracing::info!(
+        category = "AI",
+        event = "ai_window_open",
+        status = "create_new_success",
+        "AI window created"
+    );
+
     Ok(())
 }
 
@@ -332,6 +354,89 @@ pub fn is_ai_window_open() -> bool {
     guard.is_some()
 }
 
+/// Check if the AI window handle is present **and** still valid.
+///
+/// Unlike `is_ai_window_open()` which only checks handle presence, this
+/// validates the stored handle via `handle.update(...)`. Use this before
+/// queueing commands to avoid false-success when the window has been
+/// closed but the handle has not yet been cleared.
+pub fn is_ai_window_ready(cx: &mut App) -> bool {
+    let handle = {
+        let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
+    };
+
+    let Some(handle) = handle else {
+        return false;
+    };
+
+    handle.update(cx, |_root, _window, _cx| {}).is_ok()
+}
+
+/// Centralized AI command enqueue helper.
+///
+/// Queues an `AiCommand` and notifies the AI window. Returns `Ok(())` on
+/// success or `Err(reason)` with an actionable message on failure.
+/// Emits structured `ai_command_enqueue` logs for every outcome.
+fn enqueue_ai_window_command(
+    cx: &mut App,
+    command: &'static str,
+    ai_command: AiCommand,
+) -> Result<(), String> {
+    let handle = {
+        let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
+    };
+    let window_is_open = handle.is_some();
+
+    let command_queued = get_pending_commands()
+        .lock()
+        .ok()
+        .map(|mut commands| {
+            ai_window_queue_command_if_open(&mut commands, window_is_open, ai_command)
+        })
+        .unwrap_or(false);
+
+    if !command_queued {
+        tracing::warn!(
+            category = "AI",
+            event = "ai_command_enqueue",
+            command,
+            status = "rejected",
+            "AI window not open"
+        );
+        return Err("AI window not open".to_string());
+    }
+
+    if let Some(handle) = handle {
+        if handle
+            .update(cx, |_root, _window, cx| {
+                cx.notify();
+            })
+            .is_err()
+        {
+            tracing::warn!(
+                category = "AI",
+                event = "ai_command_enqueue",
+                command,
+                status = "notify_failed",
+                "AI window closed before command notify"
+            );
+            return Err("notify-failed".to_string());
+        }
+    }
+
+    tracing::info!(
+        category = "AI",
+        event = "ai_command_enqueue",
+        command,
+        status = "queued",
+        "AI command queued"
+    );
+
+    Ok(())
+}
+
 /// Check if the given window handle matches the AI window
 ///
 /// Returns true if the window is the AI window.
@@ -385,39 +490,15 @@ pub fn set_ai_search(cx: &mut App, query: &str) {
 
 /// Set the main input text in the AI window and optionally submit.
 /// Used for testing the streaming functionality via stdin commands.
-pub fn set_ai_input(cx: &mut App, text: &str, submit: bool) {
-    use crate::logging;
-
-    let handle = {
-        let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
-        slot.lock().ok().and_then(|g| *g)
-    };
-    let window_is_open = handle.is_some();
-    let command_queued = get_pending_commands()
-        .lock()
-        .ok()
-        .map(|mut commands| {
-            ai_window_queue_command_if_open(
-                &mut commands,
-                window_is_open,
-                AiCommand::SetInput {
-                    text: text.to_string(),
-                    submit,
-                },
-            )
-        })
-        .unwrap_or(false);
-
-    if !command_queued {
-        logging::log("AI", "Cannot set input - AI window not open");
-        return;
-    }
-
-    if let Some(handle) = handle {
-        let _ = handle.update(cx, |_root, _window, cx| {
-            cx.notify();
-        });
-    }
+pub fn set_ai_input(cx: &mut App, text: &str, submit: bool) -> Result<(), String> {
+    enqueue_ai_window_command(
+        cx,
+        "set_input",
+        AiCommand::SetInput {
+            text: text.to_string(),
+            submit,
+        },
+    )
 }
 
 /// Set the main input text with an attached image in the AI window and optionally submit.
@@ -426,50 +507,21 @@ pub fn set_ai_input(cx: &mut App, text: &str, submit: bool) {
 ///
 /// Guards against window-close races: if the window handle becomes invalid between
 /// the open check and the notify, a warning is logged and the command is not silently lost.
-pub fn set_ai_input_with_image(cx: &mut App, text: &str, image_base64: &str, submit: bool) {
-    let handle = {
-        let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
-        slot.lock().ok().and_then(|g| *g)
-    };
-    let window_is_open = handle.is_some();
-    let command_queued = get_pending_commands()
-        .lock()
-        .ok()
-        .map(|mut commands| {
-            ai_window_queue_command_if_open(
-                &mut commands,
-                window_is_open,
-                AiCommand::SetInputWithImage {
-                    text: text.to_string(),
-                    image_base64: image_base64.to_string(),
-                    submit,
-                },
-            )
-        })
-        .unwrap_or(false);
-
-    if !command_queued {
-        tracing::warn!(
-            action = "set_ai_input_with_image",
-            "Cannot set input with image — AI window not open"
-        );
-        return;
-    }
-
-    if let Some(handle) = handle {
-        // Validate the window handle is still valid before notifying.
-        // If the window closed between the is_some() check above and now,
-        // handle.update() will return Err and the queued command would be orphaned.
-        let notify_result = handle.update(cx, |_root, _window, cx| {
-            cx.notify();
-        });
-        if notify_result.is_err() {
-            tracing::warn!(
-                action = "set_ai_input_with_image",
-                "AI window closed between queue and notify — command may be lost"
-            );
-        }
-    }
+pub fn set_ai_input_with_image(
+    cx: &mut App,
+    text: &str,
+    image_base64: &str,
+    submit: bool,
+) -> Result<(), String> {
+    enqueue_ai_window_command(
+        cx,
+        "set_input_with_image",
+        AiCommand::SetInputWithImage {
+            text: text.to_string(),
+            image_base64: image_base64.to_string(),
+            submit,
+        },
+    )
 }
 
 /// Start a new AI chat with a user message.
@@ -543,39 +595,14 @@ pub fn start_ai_chat(
 
 /// Add a file attachment to the AI window.
 /// Used by file-reference actions like file search context menus.
-pub fn add_ai_attachment(cx: &mut App, path: &str) {
-    use crate::logging;
-
-    let handle = {
-        let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
-        slot.lock().ok().and_then(|g| *g)
-    };
-    let window_is_open = handle.is_some();
-    let command_queued = get_pending_commands()
-        .lock()
-        .ok()
-        .map(|mut commands| {
-            ai_window_queue_command_if_open(
-                &mut commands,
-                window_is_open,
-                AiCommand::AddAttachment {
-                    path: path.to_string(),
-                },
-            )
-        })
-        .unwrap_or(false);
-
-    if !command_queued {
-        logging::log("AI", "Cannot add attachment - AI window not open");
-        return;
-    }
-
-    if let Some(handle) = handle {
-        let _ = handle.update(cx, |_root, _window, cx| {
-            cx.notify();
-        });
-        logging::log("AI", &format!("Queued AI attachment: {}", path));
-    }
+pub fn add_ai_attachment(cx: &mut App, path: &str) -> Result<(), String> {
+    enqueue_ai_window_command(
+        cx,
+        "add_attachment",
+        AiCommand::AddAttachment {
+            path: path.to_string(),
+        },
+    )
 }
 
 /// Show the AI command bar (Cmd+K menu) in the AI window.

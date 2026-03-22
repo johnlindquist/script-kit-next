@@ -39,14 +39,14 @@ fn deferred_ai_handoff_supports_prefill_and_submit_variants() {
     );
 
     assert!(
-        source.contains("Self::SetInput { text, submit } => ai::set_ai_input(cx, &text, submit)"),
-        "SetInput should forward submit"
+        source.contains("ai::set_ai_input(cx, &text, submit)?;"),
+        "SetInput should forward submit and propagate errors"
     );
 
     assert!(
         source
-            .contains("ai::set_ai_input_with_image(cx, &text, &image_base64, submit);"),
-        "SetInputWithImage should forward submit"
+            .contains("ai::set_ai_input_with_image(cx, &text, &image_base64, submit)?;"),
+        "SetInputWithImage should forward submit and propagate errors"
     );
 }
 
@@ -89,8 +89,8 @@ fn deferred_ai_handoff_emits_failure_log_on_open_error() {
         "helper should emit a failure log event when AI window open fails"
     );
     assert!(
-        helper.contains("show_error_toast(\"Failed to open AI window\""),
-        "helper should show an error toast on failure"
+        helper.contains("Failed to send to AI Chat: {}"),
+        "helper should show an error toast with the underlying reason on failure"
     );
 }
 
@@ -191,9 +191,9 @@ fn open_only_handoffs_keep_open_only_variant() {
     let handler = read_action_sources();
     let builtins = read_source("src/app_execute/builtin_execution.rs");
 
-    // OpenOnly must remain a no-payload apply path
+    // OpenOnly must remain a no-payload apply path that returns Ok
     assert!(
-        handler.contains("Self::OpenOnly => {}"),
+        handler.contains("Self::OpenOnly => Ok(\"open_only\")"),
         "DeferredAiWindowAction::OpenOnly should remain a no-payload open path"
     );
 
@@ -251,5 +251,92 @@ fn file_attach_to_ai_uses_deferred_helper() {
     assert!(
         attach_section.contains("DeferredAiWindowAction::AddAttachment"),
         "attach_to_ai file action should use AddAttachment variant"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Capture helpers thread real dispatch trace IDs
+// ---------------------------------------------------------------------------
+
+#[test]
+fn capture_helpers_thread_real_dispatch_trace_id() {
+    let source = read_source("src/app_execute/builtin_execution.rs");
+    let ai_branch = slice_from(&source, "builtins::BuiltInFeature::AiCommand(cmd_type) => {");
+    let send_screen_helper = slice_from(&source, "fn spawn_send_screen_to_ai_after_hide(");
+    let send_window_helper =
+        slice_from(&source, "fn spawn_send_focused_window_to_ai_after_hide(");
+
+    assert!(
+        send_screen_helper.contains("trace_id: &str"),
+        "spawn_send_screen_to_ai_after_hide should accept the real dispatch trace_id"
+    );
+    assert!(
+        send_window_helper.contains("trace_id: &str"),
+        "spawn_send_focused_window_to_ai_after_hide should accept the real dispatch trace_id"
+    );
+    assert!(
+        ai_branch.contains("self.spawn_send_screen_to_ai_after_hide(&dctx.trace_id, cx);"),
+        "SendScreenToAi should pass dctx.trace_id into the async capture helper"
+    );
+    assert!(
+        ai_branch.contains("self.spawn_send_focused_window_to_ai_after_hide(&dctx.trace_id, cx);"),
+        "SendFocusedWindowToAi should pass dctx.trace_id into the async capture helper"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Result-bearing queueing and real readiness
+// ---------------------------------------------------------------------------
+
+#[test]
+fn deferred_ai_window_action_apply_returns_result() {
+    let source = read_action_sources();
+    let helper = slice_from(&source, "impl DeferredAiWindowAction {");
+
+    assert!(
+        helper.contains("fn apply(self, cx: &mut App) -> Result<&'static str, String>"),
+        "DeferredAiWindowAction::apply should return a result so queue rejection can fail the handoff"
+    );
+}
+
+#[test]
+fn window_api_queue_helpers_return_result_and_log_structured_enqueue_status() {
+    let source = read_source("src/ai/window/window_api.rs");
+
+    assert!(
+        source.contains("pub fn is_ai_window_ready(cx: &mut App) -> bool"),
+        "window_api should expose a real ready check"
+    );
+    assert!(
+        source.contains("fn enqueue_ai_window_command("),
+        "window_api should centralize AI command queueing"
+    );
+    assert!(
+        source.contains("pub fn set_ai_input(cx: &mut App, text: &str, submit: bool) -> Result<(), String>"),
+        "set_ai_input should return Result<(), String>"
+    );
+    assert!(
+        source.contains("pub fn set_ai_input_with_image(")
+            && source.contains("-> Result<(), String>"),
+        "set_ai_input_with_image should return Result<(), String>"
+    );
+    assert!(
+        source.contains("pub fn add_ai_attachment(cx: &mut App, path: &str) -> Result<(), String>"),
+        "add_ai_attachment should return Result<(), String>"
+    );
+    assert!(
+        source.contains("event = \"ai_command_enqueue\""),
+        "queue helpers should emit structured ai_command_enqueue logs"
+    );
+}
+
+#[test]
+fn deferred_handoff_failure_toast_includes_real_reason() {
+    let source = read_action_sources();
+    let helper = slice_from(&source, "fn open_ai_window_after_already_hidden(");
+
+    assert!(
+        helper.contains("Failed to send to AI Chat: {}"),
+        "handoff failure toast should include the underlying reason"
     );
 }

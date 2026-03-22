@@ -2104,7 +2104,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                             }
                             ExternalCommand::SetAiInput { text, submit, .. } => {
                                 logging::log("STDIN", &format!("Setting AI input to: {} (submit={})", text, submit));
-                                ai::set_ai_input(ctx, &text, submit);
+                                let _ = ai::set_ai_input(ctx, &text, submit);
                             }
                             ExternalCommand::ShowGrid { grid_size, show_bounds, show_box_model, show_alignment_guides, show_dimensions, ref depth, .. } => {
                                 logging::log("STDIN", &format!(

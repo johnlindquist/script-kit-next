@@ -59,6 +59,7 @@ impl ScriptListApp {
             AppView::BrowseKitsView { .. } => "BrowseKits",
             AppView::InstalledKitsView { .. } => "InstalledKits",
             AppView::ProcessManagerView { .. } => "ProcessManager",
+            AppView::CurrentAppCommandsView { .. } => "CurrentAppCommands",
             AppView::SearchAiPresetsView { .. } => "SearchAiPresets",
             AppView::CreateAiPresetView { .. } => "CreateAiPreset",
             AppView::SettingsView { .. } => "Settings",
