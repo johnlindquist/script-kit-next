@@ -230,3 +230,75 @@ fn test_preflight_duplicates_removed_from_assembly_receipt() {
         "Preflight should surface duplicates_removed from the assembly receipt"
     );
 }
+
+#[test]
+fn test_preflight_snapshot_reports_recommendation_count_and_live_snapshot() {
+    use super::context_recommendations::{
+        ContextRecommendation, ContextRecommendationPriority,
+    };
+    use crate::ai::context_contract::ContextAttachmentKind;
+
+    let receipt = crate::ai::message_parts::PreparedMessageReceipt {
+        schema_version: crate::ai::message_parts::AI_MESSAGE_PREPARATION_SCHEMA_VERSION,
+        decision: crate::ai::message_parts::PreparedMessageDecision::Ready,
+        raw_content: "test".to_string(),
+        final_user_content: "test".to_string(),
+        context: crate::ai::message_parts::ContextResolutionReceipt {
+            attempted: 0,
+            resolved: 0,
+            failures: vec![],
+            prompt_prefix: String::new(),
+        },
+        assembly: None,
+        outcomes: vec![],
+        unresolved_parts: vec![],
+        user_error: None,
+    };
+
+    let snapshot = crate::context_snapshot::AiContextSnapshot::default();
+    let recommendations = vec![
+        ContextRecommendation {
+            kind: ContextAttachmentKind::Selection,
+            reason: "test reason".to_string(),
+            priority: ContextRecommendationPriority::High,
+        },
+        ContextRecommendation {
+            kind: ContextAttachmentKind::Browser,
+            reason: "another reason".to_string(),
+            priority: ContextRecommendationPriority::Medium,
+        },
+    ];
+
+    let state = preflight_state_from_analysis(7, receipt, Some(snapshot), recommendations);
+    let snap = state.snapshot();
+
+    assert_eq!(snap.recommendation_count, 2, "Should report 2 recommendations");
+    assert!(snap.has_live_snapshot, "Should report live snapshot is present");
+    assert_eq!(snap.generation, 7);
+}
+
+#[test]
+fn test_preflight_snapshot_without_live_snapshot_reports_false() {
+    let receipt = crate::ai::message_parts::PreparedMessageReceipt {
+        schema_version: crate::ai::message_parts::AI_MESSAGE_PREPARATION_SCHEMA_VERSION,
+        decision: crate::ai::message_parts::PreparedMessageDecision::Ready,
+        raw_content: String::new(),
+        final_user_content: String::new(),
+        context: crate::ai::message_parts::ContextResolutionReceipt {
+            attempted: 0,
+            resolved: 0,
+            failures: vec![],
+            prompt_prefix: String::new(),
+        },
+        assembly: None,
+        outcomes: vec![],
+        unresolved_parts: vec![],
+        user_error: None,
+    };
+
+    let state = preflight_state_from_analysis(1, receipt, None, Vec::new());
+    let snap = state.snapshot();
+
+    assert_eq!(snap.recommendation_count, 0);
+    assert!(!snap.has_live_snapshot, "Should report no live snapshot");
+}

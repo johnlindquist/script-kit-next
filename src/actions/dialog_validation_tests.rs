@@ -1001,7 +1001,8 @@ fn test_ai_command_bar_has_expected_ids() {
     assert!(ids.contains(&"chat:submit"));
     assert!(ids.contains(&"chat:new_chat"));
     assert!(ids.contains(&"chat:delete_chat"));
-    assert!(ids.contains(&"chat:add_attachment"));
+    assert!(ids.contains(&"chat:add_file"));
+    assert!(ids.contains(&"chat:add_image"));
     assert!(ids.contains(&"chat:paste_image"));
     assert!(ids.contains(&"chat:change_model"));
     assert!(ids.contains(&"chat:export_markdown"));
@@ -1009,7 +1010,7 @@ fn test_ai_command_bar_has_expected_ids() {
     assert!(ids.contains(&"chat:toggle_shortcuts_help"));
     assert!(ids.contains(&"chat:capture_screen_area"));
     assert!(ids.contains(&"chat:inspect_context"));
-    assert_eq!(ids.len(), 21);
+    assert_eq!(ids.len(), 22);
 }
 
 // =========================================================================

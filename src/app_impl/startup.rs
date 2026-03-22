@@ -520,13 +520,8 @@ impl ScriptListApp {
             mouse_cursor_hidden: false,
             // Cached provider registry - built in background, None until ready
             cached_provider_registry: None,
-            // Main window context rail state (ScriptList only)
-            main_window_context_parts: Self::default_main_window_context_parts(),
-            main_window_context_preview_index: None,
-            main_window_context_last_snapshot: None,
-            main_window_context_error: None,
-            main_window_context_capture_task: None,
-            main_window_context_gen: 0,
+            cached_main_window_preflight: None,
+            main_window_preflight_cache_key: String::from("\0_UNINITIALIZED_\0"),
         };
 
         // Build initial alias/shortcut registries (conflicts logged, not shown via HUD on startup)
@@ -1626,6 +1621,7 @@ impl ScriptListApp {
         // because main_list_state starts with 0 items.
         app.sync_list_state();
         app.validate_selection_bounds(cx);
+        app.rebuild_main_window_preflight_if_needed();
 
         app
     }

@@ -1,6 +1,6 @@
 use super::*;
 use crate::theme::opacity::{
-    OPACITY_BORDER, OPACITY_DISABLED, OPACITY_SELECTED, OPACITY_TEXT_MUTED,
+    OPACITY_BORDER, OPACITY_DISABLED, OPACITY_HOVER, OPACITY_SELECTED, OPACITY_TEXT_MUTED,
 };
 
 fn ai_main_panel_can_submit(
@@ -150,6 +150,10 @@ impl AiApp {
             }))
             // Unified context bar (pre-submit preflight or post-submit receipt)
             .when(show_bar, |d| d.child(self.render_context_bar(cx)))
+            // Context recommendations (shown when preflight suggests missing attachments)
+            .when(!self.context_preflight.recommendations.is_empty(), |d| {
+                d.child(self.render_context_recommendations(cx))
+            })
             // Editing indicator (shown above input when editing a message)
             .when(is_editing, |d| d.child(self.render_editing_indicator(cx)))
             // Context picker overlay (shown above input when @ trigger is active)
@@ -804,6 +808,90 @@ impl AiApp {
                 )
                 .into_any_element()
         }
+    }
+
+    /// Render the context recommendation strip: one row per suggested
+    /// attachment with a reason and a one-click "Attach" button.
+    fn render_context_recommendations(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme();
+        let mut column = div()
+            .id("context-recommendations")
+            .flex()
+            .flex_col()
+            .gap(S1);
+
+        for recommendation in &self.context_preflight.recommendations {
+            let kind = recommendation.kind;
+            let label: SharedString = format!("Attach {}", recommendation.label()).into();
+            let reason: SharedString = recommendation.reason.clone().into();
+
+            let accent = match recommendation.priority {
+                context_recommendations::ContextRecommendationPriority::High => theme.accent,
+                context_recommendations::ContextRecommendationPriority::Medium => theme.warning,
+                context_recommendations::ContextRecommendationPriority::Low => {
+                    theme.muted_foreground
+                }
+            };
+
+            column = column.child(
+                div()
+                    .id(SharedString::from(format!(
+                        "context-recommendation-{}",
+                        recommendation.action_id()
+                    )))
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(S2)
+                    .px(S2)
+                    .py(S1)
+                    .rounded(R_SM)
+                    .bg(accent.opacity(OPACITY_DISABLED))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(S1)
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .text_color(theme.foreground)
+                                    .child(label),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.muted_foreground)
+                                    .child(reason),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .id(SharedString::from(format!(
+                                "context-recommendation-attach-{}",
+                                recommendation.action_id()
+                            )))
+                            .cursor_pointer()
+                            .rounded(R_SM)
+                            .px(S2)
+                            .py(S1)
+                            .bg(accent.opacity(OPACITY_HOVER))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.apply_context_recommendation(kind, cx);
+                            }))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .text_color(accent)
+                                    .child(SharedString::from("Attach")),
+                            ),
+                    ),
+            );
+        }
+
+        column
     }
 
     /// Render chips representing pending context parts above the composer.

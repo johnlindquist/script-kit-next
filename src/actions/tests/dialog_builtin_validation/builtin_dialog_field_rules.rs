@@ -577,9 +577,9 @@ mod from_dialog_builtin_action_validation_tests_11 {
     #[test]
     fn cat13_ai_command_bar_has_12_actions() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 21);
+        assert_eq!(actions.len(), 22);
     }
-    
+
     #[test]
     fn cat13_ai_sections_present() {
         let actions = get_ai_command_bar_actions();
@@ -2202,7 +2202,7 @@ mod from_dialog_builtin_action_validation_tests_12 {
                 .iter()
                 .filter(|a| a.section.as_deref() == Some("Attachments"))
                 .count();
-            assert_eq!(count, 3, "Attachments section should have 2 actions");
+            assert_eq!(count, 4, "Attachments section should have 4 actions");
         }
     
         #[test]
@@ -2237,10 +2237,10 @@ mod from_dialog_builtin_action_validation_tests_12 {
     
         #[test]
         fn cat06_ai_total_12_actions() {
-            assert_eq!(get_ai_command_bar_actions().len(), 21);
+            assert_eq!(get_ai_command_bar_actions().len(), 22);
         }
-    
-    
+
+
         // --- merged from tests_part_02.rs ---
         #[test]
         fn cat06_ai_7_unique_sections() {
@@ -5991,7 +5991,7 @@ mod from_dialog_builtin_action_validation_tests_14 {
                 .iter()
                 .filter(|a| a.section.as_deref() == Some("Attachments"))
                 .collect();
-            assert_eq!(section_actions.len(), 3);
+            assert_eq!(section_actions.len(), 4);
         }
     
         #[test]
@@ -8441,7 +8441,7 @@ mod from_dialog_builtin_action_validation_tests_15 {
                 .filter(|a| a.section.as_deref() == Some("Attachments"))
                 .map(|a| a.id.as_str())
                 .collect();
-            assert_eq!(att_ids, vec!["chat:add_attachment", "chat:paste_image", "chat:capture_screen_area"]);
+            assert_eq!(att_ids, vec!["chat:add_file", "chat:add_image", "chat:paste_image", "chat:capture_screen_area"]);
         }
     
         #[test]
@@ -9403,7 +9403,7 @@ mod from_dialog_builtin_action_validation_tests_15 {
     
         #[test]
         fn cat24_ai_total_13() {
-            assert_eq!(get_ai_command_bar_actions().len(), 21);
+            assert_eq!(get_ai_command_bar_actions().len(), 22);
         }
     
         #[test]
@@ -15021,7 +15021,7 @@ mod from_dialog_builtin_action_validation_tests_18 {
                 .iter()
                 .filter(|a| a.section.as_ref() == Some(&"Attachments".to_string()))
                 .count();
-            assert_eq!(count, 3);
+            assert_eq!(count, 4);
         }
     
         #[test]
@@ -15057,7 +15057,7 @@ mod from_dialog_builtin_action_validation_tests_18 {
         #[test]
         fn cat27_total_ai_actions_is_12() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 21);
+            assert_eq!(actions.len(), 22);
         }
     
         // =========================================================================
@@ -16041,7 +16041,7 @@ mod from_dialog_builtin_action_validation_tests_19 {
                 .filter(|a| a.section.as_deref() == Some("Attachments"))
                 .map(|a| a.id.as_str())
                 .collect();
-            assert_eq!(attachment_ids, vec!["chat:add_attachment", "chat:paste_image", "chat:capture_screen_area"]);
+            assert_eq!(attachment_ids, vec!["chat:add_file", "chat:add_image", "chat:paste_image", "chat:capture_screen_area"]);
         }
     
         #[test]

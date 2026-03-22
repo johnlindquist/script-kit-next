@@ -53,27 +53,6 @@ impl AiApp {
                         tracing::info!(target: "ai", "Message submitted - streaming started");
                     }
                 }
-                AiCommand::SetInputWithContextParts {
-                    text,
-                    parts,
-                    submit,
-                } => {
-                    self.set_composer_value(&text, window, cx);
-                    self.pending_context_parts.clear();
-                    for part in parts {
-                        self.add_context_part(part, cx);
-                    }
-                    tracing::info!(
-                        target: "ai",
-                        input_len = text.len(),
-                        context_parts = self.pending_context_parts.len(),
-                        "Input set with context parts"
-                    );
-                    if submit {
-                        self.submit_message(window, cx);
-                        tracing::info!(target: "ai", "Message with context parts submitted - streaming started");
-                    }
-                }
                 AiCommand::SetInputWithImage {
                     text,
                     image_base64,

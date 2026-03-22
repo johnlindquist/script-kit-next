@@ -247,7 +247,7 @@ mod from_dialog_builtin_action_validation_tests_21 {
     #[test]
     fn batch21_ai_command_bar_total_12_actions() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 21);
+        assert_eq!(actions.len(), 22);
     }
     
     #[test]
@@ -277,7 +277,7 @@ mod from_dialog_builtin_action_validation_tests_21 {
             .iter()
             .filter(|a| a.section.as_deref() == Some("Attachments"))
             .count();
-        assert_eq!(count, 3);
+        assert_eq!(count, 4);
     }
     
     #[test]
@@ -357,7 +357,7 @@ mod from_dialog_builtin_action_validation_tests_21 {
     #[test]
     fn batch21_ai_add_attachment_shortcut() {
         let actions = get_ai_command_bar_actions();
-        let a = actions.iter().find(|a| a.id == "chat:add_attachment").unwrap();
+        let a = actions.iter().find(|a| a.id == "chat:add_file").unwrap();
         assert_eq!(a.shortcut.as_deref(), Some("⇧⌘A"));
     }
     
@@ -2311,7 +2311,7 @@ mod from_dialog_builtin_action_validation_tests_22 {
     #[test]
     fn batch22_ai_command_bar_total_is_12() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 21);
+        assert_eq!(actions.len(), 22);
     }
     
     #[test]
@@ -5467,7 +5467,7 @@ mod from_dialog_builtin_action_validation_tests_24 {
     #[test]
     fn batch24_ai_command_bar_total_12() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 21);
+        assert_eq!(actions.len(), 22);
     }
     
     #[test]
@@ -8792,13 +8792,13 @@ mod from_dialog_builtin_action_validation_tests_27 {
             .iter()
             .filter(|a| a.section.as_deref() == Some("Attachments"))
             .count();
-        assert_eq!(attach_count, 3);
+        assert_eq!(attach_count, 4);
     }
-    
+
     #[test]
     fn cat27_22_ai_total_is_12() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 21);
+        assert_eq!(actions.len(), 22);
     }
     
     // ─────────────────────────────────────────────
@@ -12429,7 +12429,7 @@ mod from_dialog_builtin_action_validation_tests_30 {
     #[test]
     fn batch30_ai_bar_12_actions() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 21);
+        assert_eq!(actions.len(), 22);
     }
 
     #[test]
@@ -12438,7 +12438,7 @@ mod from_dialog_builtin_action_validation_tests_30 {
         let mut ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
         ids.sort();
         ids.dedup();
-        assert_eq!(ids.len(), 21, "All 21 AI bar action IDs must be unique");
+        assert_eq!(ids.len(), 22, "All 22 AI bar action IDs must be unique");
     }
     
     #[test]

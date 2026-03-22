@@ -1968,13 +1968,13 @@ mod from_dialog_builtin_action_validation_tests_33 {
             .iter()
             .filter(|a| a.section.as_deref() == Some("Attachments"))
             .count();
-        assert_eq!(count, 3);
+        assert_eq!(count, 4);
     }
     
     #[test]
     fn ai_command_bar_total_is_12() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 21);
+        assert_eq!(actions.len(), 22);
     }
     
     // =====================================================================
@@ -4839,9 +4839,9 @@ mod from_dialog_builtin_action_validation_tests_35 {
     #[test]
     fn ai_bar_count_is_12() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 21);
+        assert_eq!(actions.len(), 22);
     }
-    
+
     // =====================================================================
     // 10. Chat context: select_model ID format
     // =====================================================================
@@ -6584,7 +6584,7 @@ mod from_dialog_builtin_action_validation_tests_36 {
     #[test]
     fn ai_bar_total_is_12() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 21);
+        assert_eq!(actions.len(), 22);
     }
     
     // =====================================================================
@@ -9601,7 +9601,7 @@ mod from_dialog_builtin_action_validation_tests_39 {
                 .iter()
                 .filter(|a| a.section.as_deref() == Some("Attachments"))
                 .count();
-            assert_eq!(att_count, 3);
+            assert_eq!(att_count, 4);
         }
     
         // =========================================================================
@@ -11262,7 +11262,7 @@ mod from_dialog_builtin_action_validation_tests_40 {
         #[test]
         fn ai_bar_has_12_actions() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 21);
+            assert_eq!(actions.len(), 22);
         }
     
         #[test]
@@ -15779,9 +15779,9 @@ mod from_dialog_builtin_action_validation_tests_45 {
     #[test]
     fn ai_bar_count_is_12() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 21);
+        assert_eq!(actions.len(), 22);
     }
-    
+
     #[test]
     fn ai_bar_all_have_icons() {
         let actions = get_ai_command_bar_actions();

@@ -322,4 +322,33 @@ impl ScriptListApp {
             state.focus(window, cx);
         });
     }
+
+    /// Clear the cached preflight receipt so it is rebuilt on the next
+    /// call to `rebuild_main_window_preflight_if_needed`.
+    /// Kept as explicit API for context-chip toggles and view transitions.
+    #[allow(dead_code)]
+    pub(crate) fn invalidate_main_window_preflight(&mut self) {
+        self.cached_main_window_preflight = None;
+        self.main_window_preflight_cache_key.clear();
+    }
+
+    /// Rebuild the preflight receipt when the cache key has changed.
+    /// Call this from mutation paths (filter change, selection change)
+    /// — never from `render()`.
+    pub(crate) fn rebuild_main_window_preflight_if_needed(&mut self) {
+        let new_key = format!(
+            "{}:{}:{:?}",
+            self.filter_text, self.selected_index, self.current_view
+        );
+        if new_key == self.main_window_preflight_cache_key {
+            return;
+        }
+        self.main_window_preflight_cache_key = new_key;
+        let receipt =
+            crate::main_window_preflight::build_main_window_preflight_receipt(self);
+        if let Some(ref r) = receipt {
+            crate::main_window_preflight::log_main_window_preflight_receipt(r);
+        }
+        self.cached_main_window_preflight = receipt;
+    }
 }

@@ -56,6 +56,12 @@ pub struct ContextPreflightState {
 
     /// The full receipt, stored for drawer/inspector views.
     pub receipt: Option<crate::ai::message_parts::PreparedMessageReceipt>,
+
+    /// Live desktop snapshot captured during the preflight run.
+    pub live_snapshot: Option<crate::context_snapshot::AiContextSnapshot>,
+
+    /// Context recommendations derived from the draft + snapshot.
+    pub recommendations: Vec<super::context_recommendations::ContextRecommendation>,
 }
 
 /// Rough token estimate: divide character count by 4 (the widely-used
@@ -89,6 +95,17 @@ pub fn preflight_state_from_receipt(
     generation: u64,
     receipt: crate::ai::message_parts::PreparedMessageReceipt,
 ) -> ContextPreflightState {
+    preflight_state_from_analysis(generation, receipt, None, Vec::new())
+}
+
+/// Derive a [`ContextPreflightState`] from a receipt plus optional
+/// live snapshot and context recommendations.
+pub fn preflight_state_from_analysis(
+    generation: u64,
+    receipt: crate::ai::message_parts::PreparedMessageReceipt,
+    live_snapshot: Option<crate::context_snapshot::AiContextSnapshot>,
+    recommendations: Vec<super::context_recommendations::ContextRecommendation>,
+) -> ContextPreflightState {
     let duplicates_removed = receipt
         .assembly
         .as_ref()
@@ -108,6 +125,8 @@ pub fn preflight_state_from_receipt(
         approx_tokens,
         prompt_chars,
         receipt: Some(receipt),
+        live_snapshot,
+        recommendations,
     }
 }
 
@@ -122,6 +141,8 @@ pub struct ContextPreflightSnapshot {
     pub duplicates_removed: usize,
     pub approx_tokens: usize,
     pub prompt_chars: usize,
+    pub recommendation_count: usize,
+    pub has_live_snapshot: bool,
 }
 
 impl ContextPreflightState {
@@ -136,6 +157,8 @@ impl ContextPreflightState {
             duplicates_removed: self.duplicates_removed,
             approx_tokens: self.approx_tokens,
             prompt_chars: self.prompt_chars,
+            recommendation_count: self.recommendations.len(),
+            has_live_snapshot: self.live_snapshot.is_some(),
         }
     }
 }
@@ -181,27 +204,51 @@ impl AiApp {
         self.context_preflight.status = ContextPreflightStatus::Loading;
         cx.notify();
 
+        // Capture a lightweight live snapshot for the recommendation engine.
+        // This runs on the main thread (fast) because it only reads cached
+        // accessibility state, not full menu bar traversal.
+        let live_snapshot = crate::context_snapshot::capture_context_snapshot(
+            &crate::context_snapshot::CaptureContextOptions::recommendation(),
+        );
+
         // Spawn the resolution work so it doesn't block the UI thread.
         // The resolution pipeline (file reads, MCP resource queries) is
         // the same code path used at submit time. We run it in a
         // background task and apply results via cx.update(), guarding
         // against stale generations.
         cx.spawn(async move |this, cx| {
+            let live_snapshot_for_worker = live_snapshot.clone();
+
             // Run the expensive resolution on the background executor
-            let receipt = cx
+            let (receipt, recommendations) = cx
                 .background_executor()
                 .spawn(async move {
                     let parsed = crate::ai::context_mentions::parse_context_mentions(&raw_content);
                     let scripts = crate::scripts::read_scripts();
                     let scriptlets = crate::scripts::load_scriptlets();
 
-                    crate::ai::message_parts::prepare_user_message_from_sources_with_receipt(
-                        &parsed.cleaned_content,
-                        &parsed.parts,
-                        &parts_snapshot,
-                        &scripts,
-                        &scriptlets,
-                    )
+                    let receipt =
+                        crate::ai::message_parts::prepare_user_message_from_sources_with_receipt(
+                            &parsed.cleaned_content,
+                            &parsed.parts,
+                            &parts_snapshot,
+                            &scripts,
+                            &scriptlets,
+                        );
+
+                    let recommendations =
+                        super::context_recommendations::recommend_context_parts(
+                            &parsed.cleaned_content,
+                            &live_snapshot_for_worker,
+                            receipt
+                                .assembly
+                                .as_ref()
+                                .map(|assembly| assembly.merged_parts.as_slice())
+                                .unwrap_or(&[]),
+                        )
+                        .recommendations;
+
+                    (receipt, recommendations)
                 })
                 .await;
 
@@ -218,7 +265,12 @@ impl AiApp {
                         return;
                     }
 
-                    app.context_preflight = preflight_state_from_receipt(generation, receipt);
+                    app.context_preflight = preflight_state_from_analysis(
+                        generation,
+                        receipt,
+                        Some(live_snapshot),
+                        recommendations,
+                    );
 
                     tracing::info!(
                         target: "ai",
@@ -227,6 +279,7 @@ impl AiApp {
                         resolved = app.context_preflight.resolved,
                         failures = app.context_preflight.failures,
                         approx_tokens = app.context_preflight.approx_tokens,
+                        recommendation_count = app.context_preflight.recommendations.len(),
                         "ai_context_preflight_applied"
                     );
 
@@ -235,6 +288,27 @@ impl AiApp {
             });
         })
         .detach();
+    }
+
+    /// Schedule a preflight using the current composer draft text.
+    pub(super) fn schedule_context_preflight_for_current_draft(&mut self, cx: &mut Context<Self>) {
+        let raw_content = self.input_state.read(cx).value().to_string();
+        self.schedule_context_preflight(raw_content, cx);
+    }
+
+    /// Accept a context recommendation: add the part and log the action.
+    pub(super) fn apply_context_recommendation(
+        &mut self,
+        kind: crate::ai::context_contract::ContextAttachmentKind,
+        cx: &mut Context<Self>,
+    ) {
+        tracing::info!(
+            target: "ai",
+            action_id = kind.spec().action_id,
+            label = kind.spec().label,
+            "ai_context_recommendation_applied"
+        );
+        self.add_context_part(kind.part(), cx);
     }
 
     /// Reset the preflight state to `Idle` and bump the generation so any
