@@ -260,7 +260,10 @@ impl AiApp {
         self.chats.insert(0, chat);
         self.selected_chat_id = Some(chat_id);
         publish_active_chat_id(Some(&chat_id));
-        self.defer_cache_message_images(saved_messages.clone(), cx);
+        self.defer_cache_message_images(
+            Self::collect_message_image_payloads(&saved_messages),
+            cx,
+        );
         self.current_messages = saved_messages;
 
         // Force scroll to bottom when initializing with a transferred conversation
@@ -392,7 +395,10 @@ impl AiApp {
                 storage_error_message = Some(message);
             }
         }
-        self.defer_cache_message_images(self.current_messages.clone(), cx);
+        self.defer_cache_message_images(
+            Self::collect_message_image_payloads(&self.current_messages),
+            cx,
+        );
 
         // Sync selected_model with the chat's stored model (BYOK per chat)
         if let Some(chat) = self.chats.iter().find(|c| c.id == id) {
@@ -618,7 +624,10 @@ impl AiApp {
         // Load messages for display (includes system prompt if any)
         match storage::get_chat_messages(&chat_id) {
             Ok(messages) => {
-                self.defer_cache_message_images(messages.clone(), cx);
+                self.defer_cache_message_images(
+                    Self::collect_message_image_payloads(&messages),
+                    cx,
+                );
                 self.current_messages = messages;
             }
             Err(e) => {

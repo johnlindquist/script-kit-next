@@ -340,3 +340,65 @@ fn deferred_handoff_failure_toast_includes_real_reason() {
         "handoff failure toast should include the underlying reason"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Readiness gate — window must be ready before reporting success
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_deferred_ai_handoff_checks_window_ready_before_success() {
+    let handler = read_action_sources();
+    let helper_body = slice_from(&handler, "fn open_ai_window_after_already_hidden(");
+
+    assert!(
+        helper_body.contains("ai::is_ai_window_ready"),
+        "deferred AI handoff should verify the AI window is truly ready before showing success"
+    );
+    assert!(
+        helper_body.contains("if !ai::is_ai_window_ready(cx)"),
+        "deferred AI handoff should gate on is_ai_window_ready before applying the deferred action"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Failure toast — propagated error, not hardcoded message
+// ---------------------------------------------------------------------------
+
+#[test]
+fn deferred_ai_handoff_emits_actionable_failure_toast_on_open_error() {
+    let source = read_action_sources();
+    let helper = slice_from(&source, "fn open_ai_window_after_already_hidden(");
+
+    assert!(
+        helper.contains("event = \"ai_handoff_defer_open_failed\""),
+        "helper should emit a failure log event when AI handoff fails"
+    );
+    assert!(
+        helper.contains("format!(\"Failed to send to AI Chat: {}\", error)"),
+        "helper should surface the propagated handoff error in the toast"
+    );
+    // Ensure we do NOT use a hardcoded open-window message
+    assert!(
+        !helper.contains("show_error_toast(\"Failed to open AI window\")"),
+        "helper must not use a hardcoded 'Failed to open AI window' toast"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Continue in chat — uses set_ai_pending_chat API
+// ---------------------------------------------------------------------------
+
+#[test]
+fn continue_in_chat_uses_pending_chat_api_after_open() {
+    let source = read_source("src/prompts/chat/actions.rs");
+    let block = slice_from(&source, "fn handle_continue_in_chat(");
+
+    assert!(
+        block.contains("ai::open_ai_window(cx)"),
+        "continue-in-chat should open or focus the AI window first"
+    );
+    assert!(
+        block.contains("ai::set_ai_pending_chat(cx, messages)"),
+        "continue-in-chat should queue the transferred conversation through set_ai_pending_chat"
+    );
+}
