@@ -302,3 +302,134 @@ fn test_preflight_snapshot_without_live_snapshot_reports_false() {
     assert_eq!(snap.recommendation_count, 0);
     assert!(!snap.has_live_snapshot, "Should report no live snapshot");
 }
+
+#[test]
+fn test_recommendation_engine_feeds_nonzero_count_into_preflight_snapshot() {
+    // Acceptance criterion: a recommendation-carrying preflight snapshot
+    // reports non-zero recommendation_count when draft and snapshot imply
+    // missing context.
+    use super::context_recommendations::recommend_context_parts;
+    use crate::context_snapshot::{
+        AiContextSnapshot, BrowserContext, FocusedWindowContext, FrontmostAppContext,
+    };
+
+    let snapshot = AiContextSnapshot {
+        selected_text: Some("fn main() {}".to_string()),
+        frontmost_app: Some(FrontmostAppContext {
+            pid: 1,
+            bundle_id: "com.apple.Safari".to_string(),
+            name: "Safari".to_string(),
+        }),
+        browser: Some(BrowserContext {
+            url: "https://example.com".to_string(),
+        }),
+        focused_window: Some(FocusedWindowContext {
+            title: "Safari".to_string(),
+            width: 1440,
+            height: 900,
+            used_fallback: false,
+        }),
+        ..Default::default()
+    };
+
+    // Draft implies selection context is missing
+    let recommendation_receipt = recommend_context_parts(
+        "Rewrite this selected text in a friendlier tone",
+        &snapshot,
+        &[],
+    );
+
+    assert!(
+        !recommendation_receipt.recommendations.is_empty(),
+        "Engine should produce recommendations when draft implies missing context"
+    );
+
+    // Wire recommendations into a preflight state
+    let receipt = crate::ai::message_parts::PreparedMessageReceipt {
+        schema_version: crate::ai::message_parts::AI_MESSAGE_PREPARATION_SCHEMA_VERSION,
+        decision: crate::ai::message_parts::PreparedMessageDecision::Ready,
+        raw_content: "test".to_string(),
+        final_user_content: "test".to_string(),
+        context: crate::ai::message_parts::ContextResolutionReceipt {
+            attempted: 0,
+            resolved: 0,
+            failures: vec![],
+            prompt_prefix: String::new(),
+        },
+        assembly: None,
+        outcomes: vec![],
+        unresolved_parts: vec![],
+        user_error: None,
+    };
+
+    let state = preflight_state_from_analysis(
+        42,
+        receipt,
+        Some(snapshot),
+        recommendation_receipt.recommendations,
+    );
+    let snap = state.snapshot();
+
+    assert!(
+        snap.recommendation_count > 0,
+        "Preflight snapshot must report non-zero recommendation_count when draft implies missing context"
+    );
+    assert!(snap.has_live_snapshot);
+}
+
+#[test]
+fn test_recommendation_determinism_same_input_same_output() {
+    // Acceptance criterion: applying or skipping recommendations is
+    // deterministic for the same (draft, snapshot, attached) input.
+    use super::context_recommendations::recommend_context_parts;
+    use crate::context_snapshot::{
+        AiContextSnapshot, BrowserContext, FocusedWindowContext, FrontmostAppContext,
+    };
+
+    let draft = "Summarize this page and explain the current window";
+    let snapshot = AiContextSnapshot {
+        selected_text: Some("let x = 1;".to_string()),
+        frontmost_app: Some(FrontmostAppContext {
+            pid: 99,
+            bundle_id: "com.apple.Safari".to_string(),
+            name: "Safari".to_string(),
+        }),
+        browser: Some(BrowserContext {
+            url: "https://docs.rs".to_string(),
+        }),
+        focused_window: Some(FocusedWindowContext {
+            title: "docs.rs".to_string(),
+            width: 1920,
+            height: 1080,
+            used_fallback: false,
+        }),
+        ..Default::default()
+    };
+    let attached: Vec<crate::ai::message_parts::AiContextPart> = vec![];
+
+    let run_a = recommend_context_parts(draft, &snapshot, &attached);
+    let run_b = recommend_context_parts(draft, &snapshot, &attached);
+
+    assert_eq!(
+        run_a.recommendations.len(),
+        run_b.recommendations.len(),
+        "Same input must produce same number of recommendations"
+    );
+
+    for (a, b) in run_a.recommendations.iter().zip(run_b.recommendations.iter()) {
+        assert_eq!(a.kind, b.kind, "Recommendation kinds must match across runs");
+        assert_eq!(
+            a.priority, b.priority,
+            "Recommendation priorities must match across runs"
+        );
+        assert_eq!(
+            a.reason, b.reason,
+            "Recommendation reasons must match across runs"
+        );
+    }
+
+    assert_eq!(
+        run_a, run_b,
+        "Full recommendation receipts must be identical for the same input"
+    );
+}
