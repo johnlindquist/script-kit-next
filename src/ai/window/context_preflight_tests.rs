@@ -303,16 +303,35 @@ fn test_preflight_snapshot_without_live_snapshot_reports_false() {
     assert!(!snap.has_live_snapshot, "Should report no live snapshot");
 }
 
+fn ready_preflight_receipt(
+    raw_content: &str,
+) -> crate::ai::message_parts::PreparedMessageReceipt {
+    crate::ai::message_parts::PreparedMessageReceipt {
+        schema_version: crate::ai::message_parts::AI_MESSAGE_PREPARATION_SCHEMA_VERSION,
+        decision: crate::ai::message_parts::PreparedMessageDecision::Ready,
+        raw_content: raw_content.to_string(),
+        final_user_content: raw_content.to_string(),
+        context: crate::ai::message_parts::ContextResolutionReceipt {
+            attempted: 0,
+            resolved: 0,
+            failures: vec![],
+            prompt_prefix: String::new(),
+        },
+        assembly: None,
+        outcomes: vec![],
+        unresolved_parts: vec![],
+        user_error: None,
+    }
+}
+
 #[test]
-fn test_recommendation_engine_feeds_nonzero_count_into_preflight_snapshot() {
-    // Acceptance criterion: a recommendation-carrying preflight snapshot
-    // reports non-zero recommendation_count when draft and snapshot imply
-    // missing context.
+fn test_preflight_snapshot_reports_exact_recommendation_count() {
     use super::context_recommendations::recommend_context_parts;
     use crate::context_snapshot::{
         AiContextSnapshot, BrowserContext, FocusedWindowContext, FrontmostAppContext,
     };
 
+    let draft = "Rewrite this selected text in a friendlier tone";
     let snapshot = AiContextSnapshot {
         selected_text: Some("fn main() {}".to_string()),
         frontmost_app: Some(FrontmostAppContext {
@@ -332,55 +351,128 @@ fn test_recommendation_engine_feeds_nonzero_count_into_preflight_snapshot() {
         ..Default::default()
     };
 
-    // Draft implies selection context is missing
-    let recommendation_receipt = recommend_context_parts(
-        "Rewrite this selected text in a friendlier tone",
-        &snapshot,
-        &[],
-    );
+    let recommendation_receipt = recommend_context_parts(draft, &snapshot, &[]);
 
     assert!(
         !recommendation_receipt.recommendations.is_empty(),
-        "Engine should produce recommendations when draft implies missing context"
+        "Sanity check: fixture should yield at least one recommendation"
     );
 
-    // Wire recommendations into a preflight state
-    let receipt = crate::ai::message_parts::PreparedMessageReceipt {
-        schema_version: crate::ai::message_parts::AI_MESSAGE_PREPARATION_SCHEMA_VERSION,
-        decision: crate::ai::message_parts::PreparedMessageDecision::Ready,
-        raw_content: "test".to_string(),
-        final_user_content: "test".to_string(),
-        context: crate::ai::message_parts::ContextResolutionReceipt {
-            attempted: 0,
-            resolved: 0,
-            failures: vec![],
-            prompt_prefix: String::new(),
-        },
-        assembly: None,
-        outcomes: vec![],
-        unresolved_parts: vec![],
-        user_error: None,
-    };
+    let checkpoint_before = serde_json::json!({
+        "checkpoint": "before",
+        "test": "test_preflight_snapshot_reports_exact_recommendation_count",
+        "contract": "recommendation_count == recommendations.len()"
+    });
+    tracing::info!(
+        target: "ai",
+        checkpoint = %checkpoint_before,
+        "test_checkpoint"
+    );
 
     let state = preflight_state_from_analysis(
         42,
-        receipt,
+        ready_preflight_receipt(draft),
         Some(snapshot),
+        recommendation_receipt.recommendations.clone(),
+    );
+    let snap = state.snapshot();
+
+    assert!(snap.has_live_snapshot);
+    assert_eq!(
+        snap.recommendation_count,
+        recommendation_receipt.recommendations.len(),
+        "Preflight snapshot must report the exact surfaced recommendation count"
+    );
+
+    let checkpoint_after = serde_json::json!({
+        "checkpoint": "after",
+        "test": "test_preflight_snapshot_reports_exact_recommendation_count",
+        "contract": "recommendation_count == recommendations.len()",
+        "recommendation_count": snap.recommendation_count
+    });
+    tracing::info!(
+        target: "ai",
+        checkpoint = %checkpoint_after,
+        "test_checkpoint"
+    );
+}
+
+#[test]
+fn test_preflight_snapshot_without_live_snapshot_suppresses_recommendations() {
+    use super::context_recommendations::recommend_context_parts;
+    use crate::context_snapshot::{
+        AiContextSnapshot, BrowserContext, FocusedWindowContext, FrontmostAppContext,
+    };
+
+    let draft = "Rewrite this selected text in a friendlier tone";
+    let snapshot = AiContextSnapshot {
+        selected_text: Some("fn main() {}".to_string()),
+        frontmost_app: Some(FrontmostAppContext {
+            pid: 1,
+            bundle_id: "com.apple.Safari".to_string(),
+            name: "Safari".to_string(),
+        }),
+        browser: Some(BrowserContext {
+            url: "https://example.com".to_string(),
+        }),
+        focused_window: Some(FocusedWindowContext {
+            title: "Safari".to_string(),
+            width: 1440,
+            height: 900,
+            used_fallback: false,
+        }),
+        ..Default::default()
+    };
+
+    let recommendation_receipt = recommend_context_parts(draft, &snapshot, &[]);
+
+    assert!(
+        !recommendation_receipt.recommendations.is_empty(),
+        "Sanity check: this fixture should yield recommendations before the live snapshot is removed"
+    );
+
+    let checkpoint_before = serde_json::json!({
+        "checkpoint": "before",
+        "test": "test_preflight_snapshot_without_live_snapshot_suppresses_recommendations",
+        "contract": "has_live_snapshot == false implies recommendation_count == 0"
+    });
+    tracing::info!(
+        target: "ai",
+        checkpoint = %checkpoint_before,
+        "test_checkpoint"
+    );
+
+    let state = preflight_state_from_analysis(
+        43,
+        ready_preflight_receipt(draft),
+        None,
         recommendation_receipt.recommendations,
     );
     let snap = state.snapshot();
 
-    assert!(
-        snap.recommendation_count > 0,
-        "Preflight snapshot must report non-zero recommendation_count when draft implies missing context"
+    assert!(!snap.has_live_snapshot);
+    assert_eq!(
+        snap.recommendation_count,
+        0,
+        "Recommendations must not surface when there is no live snapshot backing them"
     );
-    assert!(snap.has_live_snapshot);
+
+    let checkpoint_after = serde_json::json!({
+        "checkpoint": "after",
+        "test": "test_preflight_snapshot_without_live_snapshot_suppresses_recommendations",
+        "contract": "has_live_snapshot == false implies recommendation_count == 0",
+        "recommendation_count": snap.recommendation_count,
+        "has_live_snapshot": snap.has_live_snapshot
+    });
+    tracing::info!(
+        target: "ai",
+        checkpoint = %checkpoint_after,
+        "test_checkpoint"
+    );
 }
 
 #[test]
 fn test_recommendation_determinism_same_input_same_output() {
-    // Acceptance criterion: applying or skipping recommendations is
-    // deterministic for the same (draft, snapshot, attached) input.
     use super::context_recommendations::recommend_context_parts;
     use crate::context_snapshot::{
         AiContextSnapshot, BrowserContext, FocusedWindowContext, FrontmostAppContext,
@@ -399,37 +491,88 @@ fn test_recommendation_determinism_same_input_same_output() {
         }),
         focused_window: Some(FocusedWindowContext {
             title: "docs.rs".to_string(),
-            width: 1920,
-            height: 1080,
+            width: 1440,
+            height: 900,
             used_fallback: false,
         }),
         ..Default::default()
     };
-    let attached: Vec<crate::ai::message_parts::AiContextPart> = vec![];
 
-    let run_a = recommend_context_parts(draft, &snapshot, &attached);
-    let run_b = recommend_context_parts(draft, &snapshot, &attached);
-
-    assert_eq!(
-        run_a.recommendations.len(),
-        run_b.recommendations.len(),
-        "Same input must produce same number of recommendations"
+    let checkpoint_before = serde_json::json!({
+        "checkpoint": "before",
+        "test": "test_recommendation_determinism_same_input_same_output",
+        "contract": "identical (draft, snapshot, attached) => identical recommendations"
+    });
+    tracing::info!(
+        target: "ai",
+        checkpoint = %checkpoint_before,
+        "test_checkpoint"
     );
 
-    for (a, b) in run_a.recommendations.iter().zip(run_b.recommendations.iter()) {
-        assert_eq!(a.kind, b.kind, "Recommendation kinds must match across runs");
-        assert_eq!(
-            a.priority, b.priority,
-            "Recommendation priorities must match across runs"
-        );
-        assert_eq!(
-            a.reason, b.reason,
-            "Recommendation reasons must match across runs"
-        );
-    }
+    let first = recommend_context_parts(draft, &snapshot, &[]);
+    let second = recommend_context_parts(draft, &snapshot, &[]);
 
     assert_eq!(
-        run_a, run_b,
-        "Full recommendation receipts must be identical for the same input"
+        first.recommendations,
+        second.recommendations,
+        "Recommendations must be exactly deterministic for the same draft, live snapshot, and attached parts"
+    );
+
+    let checkpoint_after = serde_json::json!({
+        "checkpoint": "after",
+        "test": "test_recommendation_determinism_same_input_same_output",
+        "contract": "identical (draft, snapshot, attached) => identical recommendations",
+        "first_count": first.recommendations.len(),
+        "second_count": second.recommendations.len(),
+        "exact_match": first == second
+    });
+    tracing::info!(
+        target: "ai",
+        checkpoint = %checkpoint_after,
+        "test_checkpoint"
+    );
+}
+
+#[test]
+fn test_has_surfaced_recommendations_requires_live_snapshot() {
+    use super::context_recommendations::{ContextRecommendation, ContextRecommendationPriority};
+    use crate::ai::context_contract::ContextAttachmentKind;
+
+    let recommendations = vec![ContextRecommendation {
+        kind: ContextAttachmentKind::Selection,
+        reason: "test".to_string(),
+        priority: ContextRecommendationPriority::High,
+    }];
+
+    // With live snapshot: canonical method returns true
+    let with_snapshot = preflight_state_from_analysis(
+        1,
+        ready_preflight_receipt("test"),
+        Some(crate::context_snapshot::AiContextSnapshot::default()),
+        recommendations.clone(),
+    );
+    assert!(
+        with_snapshot.has_surfaced_recommendations(),
+        "has_surfaced_recommendations must be true when live snapshot is present and recommendations exist"
+    );
+
+    // Without live snapshot: canonical method returns false (recommendations suppressed)
+    let without_snapshot =
+        preflight_state_from_analysis(2, ready_preflight_receipt("test"), None, recommendations);
+    assert!(
+        !without_snapshot.has_surfaced_recommendations(),
+        "has_surfaced_recommendations must be false when there is no live snapshot"
+    );
+
+    // With live snapshot but no recommendations: canonical method returns false
+    let no_recs = preflight_state_from_analysis(
+        3,
+        ready_preflight_receipt("hello"),
+        Some(crate::context_snapshot::AiContextSnapshot::default()),
+        Vec::new(),
+    );
+    assert!(
+        !no_recs.has_surfaced_recommendations(),
+        "has_surfaced_recommendations must be false when there are no recommendations"
     );
 }
