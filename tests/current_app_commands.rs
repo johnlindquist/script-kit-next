@@ -4,10 +4,13 @@
 //! without requiring a live frontmost app or Accessibility permission.
 
 use script_kit_gpui::builtins::{
-    self, BuiltInEntry, BuiltInFeature, BuiltInGroup, MenuBarActionInfo, UtilityCommandType,
+    self, AiCommandType, BuiltInEntry, BuiltInFeature, BuiltInGroup, MenuBarActionInfo,
+    UtilityCommandType,
 };
 use script_kit_gpui::config::BuiltInConfig;
-use script_kit_gpui::menu_bar::current_app_commands::FrontmostMenuSnapshot;
+use script_kit_gpui::menu_bar::current_app_commands::{
+    build_generate_script_prompt_from_snapshot, FrontmostMenuSnapshot,
+};
 use script_kit_gpui::menu_bar::{KeyboardShortcut, MenuBarItem, ModifierFlags};
 
 // ---------------------------------------------------------------------------
@@ -268,4 +271,155 @@ fn menu_bar_entry_query_matching_supports_multi_term_queries() {
     assert!(!script_kit_gpui::builtins::menu_bar_entry_matches_query(
         entry, "close all"
     ));
+}
+
+// ---------------------------------------------------------------------------
+// Generate Script from Current App: registration
+// ---------------------------------------------------------------------------
+
+#[test]
+fn generate_script_from_current_app_builtin_is_registered() {
+    let entries = builtins::get_builtin_entries(&BuiltInConfig::default());
+    let entry = entries
+        .iter()
+        .find(|e| e.id == "builtin-generate-script-from-current-app")
+        .expect("builtin-generate-script-from-current-app must be in the registry");
+
+    assert_eq!(
+        entry.feature,
+        BuiltInFeature::AiCommand(AiCommandType::GenerateScriptFromCurrentApp)
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Generate Script from Current App: prompt shaping (integration)
+// ---------------------------------------------------------------------------
+
+fn safari_snapshot_with_menus() -> FrontmostMenuSnapshot {
+    FrontmostMenuSnapshot {
+        app_name: "Safari".into(),
+        bundle_id: "com.apple.Safari".into(),
+        items: vec![
+            // Apple menu (skipped)
+            MenuBarItem {
+                title: "Apple".into(),
+                enabled: true,
+                shortcut: None,
+                children: vec![],
+                ax_element_path: vec![0],
+            },
+            MenuBarItem {
+                title: "File".into(),
+                enabled: true,
+                shortcut: None,
+                children: vec![
+                    MenuBarItem {
+                        title: "New Tab".into(),
+                        enabled: true,
+                        shortcut: Some(KeyboardShortcut::new("T".into(), ModifierFlags::COMMAND)),
+                        children: vec![],
+                        ax_element_path: vec![1, 0],
+                    },
+                    MenuBarItem {
+                        title: "Close Window".into(),
+                        enabled: true,
+                        shortcut: Some(KeyboardShortcut::new("W".into(), ModifierFlags::COMMAND)),
+                        children: vec![],
+                        ax_element_path: vec![1, 1],
+                    },
+                ],
+                ax_element_path: vec![1],
+            },
+        ],
+    }
+}
+
+#[test]
+fn prompt_shaping_includes_user_request_selected_text_and_browser_url() {
+    let (prompt, receipt) = build_generate_script_prompt_from_snapshot(
+        safari_snapshot_with_menus(),
+        Some("close duplicate tabs"),
+        Some("some selected text"),
+        Some("https://example.com/page"),
+    );
+
+    assert_eq!(receipt.app_name, "Safari");
+    assert_eq!(receipt.bundle_id, "com.apple.Safari");
+    assert!(receipt.included_user_request);
+    assert!(receipt.included_selected_text);
+    assert!(receipt.included_browser_url);
+
+    assert!(prompt.contains("User Request:\nclose duplicate tabs"));
+    assert!(prompt.contains("Frontmost App: Safari"));
+    assert!(prompt.contains("Bundle ID: com.apple.Safari"));
+    assert!(prompt.contains("Selected Text:\n```text\nsome selected text\n```"));
+    assert!(prompt.contains("Focused Browser URL:\nhttps://example.com/page"));
+}
+
+#[test]
+fn prompt_shaping_includes_menu_shortcut_formatting() {
+    let (prompt, receipt) = build_generate_script_prompt_from_snapshot(
+        safari_snapshot_with_menus(),
+        None,
+        None,
+        None,
+    );
+
+    // Receipt tracks correct menu item count (Apple menu items are skipped)
+    assert_eq!(receipt.included_menu_items, 2);
+    assert!(!receipt.included_user_request);
+    assert!(!receipt.included_selected_text);
+    assert!(!receipt.included_browser_url);
+
+    // Shortcuts should be formatted in parentheses
+    assert!(
+        prompt.contains("(⌘T)"),
+        "Prompt should contain ⌘T shortcut, got:\n{}",
+        prompt
+    );
+    assert!(
+        prompt.contains("(⌘W)"),
+        "Prompt should contain ⌘W shortcut, got:\n{}",
+        prompt
+    );
+}
+
+#[test]
+fn prompt_shaping_truncates_to_20_menu_items() {
+    let children: Vec<MenuBarItem> = (0..30)
+        .map(|idx| MenuBarItem {
+            title: format!("Action {}", idx),
+            enabled: true,
+            shortcut: None,
+            children: vec![],
+            ax_element_path: vec![1, idx],
+        })
+        .collect();
+
+    let snapshot = FrontmostMenuSnapshot {
+        app_name: "BigApp".into(),
+        bundle_id: "com.example.BigApp".into(),
+        items: vec![
+            MenuBarItem {
+                title: "Apple".into(),
+                enabled: true,
+                shortcut: None,
+                children: vec![],
+                ax_element_path: vec![0],
+            },
+            MenuBarItem {
+                title: "Edit".into(),
+                enabled: true,
+                shortcut: None,
+                children,
+                ax_element_path: vec![1],
+            },
+        ],
+    };
+
+    let (prompt, receipt) = build_generate_script_prompt_from_snapshot(snapshot, None, None, None);
+
+    assert_eq!(receipt.total_menu_items, 30);
+    assert_eq!(receipt.included_menu_items, 20);
+    assert!(prompt.contains("showing 20 of 30"));
 }

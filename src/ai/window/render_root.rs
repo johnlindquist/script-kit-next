@@ -103,12 +103,20 @@ impl AiApp {
                     submit,
                 } => {
                     self.set_composer_value(&text, window, cx);
-                    // Store the pending image immediately but defer the expensive
-                    // base64-decode + PNG-to-RenderImage conversion so the AI
-                    // window can paint its first frame without blocking.
-                    self.pending_image = Some(image_base64.clone());
-                    self.defer_cache_pending_image(image_base64.clone(), cx);
-                    tracing::info!(target: "ai", text_len = text.len(), image_base64_len = image_base64.len(), "Input set with image (cache deferred)");
+                    // Move the original String into pending_image and clone only once for
+                    // deferred cache work. The old code cloned twice.
+                    let cache_image = image_base64.clone();
+                    self.pending_image = Some(image_base64);
+                    self.defer_cache_pending_image(cache_image, cx);
+
+                    tracing::info!(
+                        category = "AI",
+                        event = "ai_pending_image_received",
+                        text_len = text.len(),
+                        submit,
+                        "Input set with image (cache deferred)"
+                    );
+
                     if submit {
                         self.submit_message(window, cx);
                         tracing::info!(target: "ai", "Message with image submitted - streaming started");

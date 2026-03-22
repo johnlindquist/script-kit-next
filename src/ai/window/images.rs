@@ -1,12 +1,58 @@
 use super::*;
 use crate::theme::opacity::{OPACITY_HOVER, OPACITY_SELECTED};
 
+#[derive(Clone, Debug)]
+pub(super) enum ImageCacheSource {
+    ChatHistory,
+    PendingInput,
+}
+
+impl ImageCacheSource {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::ChatHistory => "chat_history",
+            Self::PendingInput => "pending_input",
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct ImageCacheRequest {
+    pub source: ImageCacheSource,
+    pub source_id: String,
+    pub base64_data: String,
+}
+
+impl ImageCacheRequest {
+    pub fn new(
+        source: ImageCacheSource,
+        source_id: impl Into<String>,
+        base64_data: String,
+    ) -> Self {
+        Self {
+            source,
+            source_id: source_id.into(),
+            base64_data,
+        }
+    }
+
+    pub fn cache_key(&self) -> String {
+        AiApp::image_cache_key(&self.base64_data)
+    }
+
+    pub fn base64_len(&self) -> usize {
+        self.base64_data.len()
+    }
+}
+
 /// Intermediate result from background image preparation.
-/// Contains a fully prepared render image and cache key, ready for insertion.
+/// Contains decoded PNG bytes plus structured provenance for logging.
 struct PreparedImageCacheWork {
+    source: ImageCacheSource,
+    source_id: String,
     cache_key: String,
-    byte_len: usize,
-    render_image: std::sync::Arc<RenderImage>,
+    base64_len: usize,
+    png_bytes: Vec<u8>,
 }
 
 impl AiApp {
@@ -176,142 +222,237 @@ impl AiApp {
         }
     }
 
-    /// Extract only the base64 image payloads from a collection of messages,
-    /// avoiding the need to clone entire `Message` structs for cache work.
-    pub(super) fn collect_message_image_payloads(messages: &[Message]) -> Vec<String> {
+    /// Extract image payloads with provenance instead of bare Strings.
+    pub(super) fn collect_message_image_payloads(
+        messages: &[Message],
+    ) -> Vec<ImageCacheRequest> {
         let mut images = Vec::new();
         for message in messages {
-            for attachment in &message.images {
-                images.push(attachment.data.clone());
+            for (attachment_index, attachment) in message.images.iter().enumerate() {
+                images.push(ImageCacheRequest::new(
+                    ImageCacheSource::ChatHistory,
+                    format!("message:{}#{}", message.id, attachment_index),
+                    attachment.data.clone(),
+                ));
             }
         }
         images
     }
 
-    /// Decode base64 and build a render image on a background thread.
-    fn prepare_image_cache_work(base64_data: &str) -> Option<PreparedImageCacheWork> {
-        let cache_key = Self::image_cache_key(base64_data);
+    /// Decode base64 to PNG bytes on a background thread.
+    fn prepare_image_cache_work(
+        request: ImageCacheRequest,
+    ) -> Option<PreparedImageCacheWork> {
+        let started_at = std::time::Instant::now();
+        let cache_key = request.cache_key();
+        let base64_len = request.base64_len();
 
         use base64::Engine;
-        let png_bytes = match base64::engine::general_purpose::STANDARD.decode(base64_data) {
+        let png_bytes = match base64::engine::general_purpose::STANDARD
+            .decode(&request.base64_data)
+        {
             Ok(bytes) => bytes,
             Err(error) => {
-                tracing::warn!(error = %error, "Failed to decode base64 image data");
+                tracing::warn!(
+                    category = "AI",
+                    event = "ai_image_cache_prepare",
+                    source = request.source.as_str(),
+                    source_id = %request.source_id,
+                    cache_key = %cache_key,
+                    base64_len,
+                    status = "decode_failed",
+                    error = %error,
+                    duration_ms = started_at.elapsed().as_millis() as u64,
+                    "Failed to decode base64 image data"
+                );
                 return None;
             }
         };
 
-        let byte_len = png_bytes.len();
-        let render_image =
-            match crate::list_item::decode_png_to_render_image_with_bgra_conversion(&png_bytes) {
-                Ok(render_image) => render_image,
-                Err(error) => {
-                    tracing::warn!(error = %error, "Failed to decode PNG image for thumbnail");
-                    return None;
-                }
-            };
+        tracing::info!(
+            category = "AI",
+            event = "ai_image_cache_prepare",
+            source = request.source.as_str(),
+            source_id = %request.source_id,
+            cache_key = %cache_key,
+            base64_len,
+            png_bytes = png_bytes.len(),
+            status = "decoded",
+            duration_ms = started_at.elapsed().as_millis() as u64,
+            "Prepared image cache work"
+        );
 
         Some(PreparedImageCacheWork {
+            source: request.source,
+            source_id: request.source_id,
             cache_key,
-            byte_len,
-            render_image,
+            base64_len,
+            png_bytes,
         })
     }
 
     /// Insert a pre-decoded image into the cache. Returns true if inserted.
     fn insert_prepared_render_image(&mut self, work: PreparedImageCacheWork) -> bool {
+        let started_at = std::time::Instant::now();
+
         if self.image_cache.contains_key(&work.cache_key) {
+            tracing::debug!(
+                category = "AI",
+                event = "ai_image_cache_insert",
+                source = work.source.as_str(),
+                source_id = %work.source_id,
+                cache_key = %work.cache_key,
+                status = "skipped_cached",
+                "Image already cached before insert"
+            );
             return false;
         }
 
-        tracing::info!(
-            category = "AI",
-            event = "ai_image_cache_inserted",
-            cache_key_prefix = %&work.cache_key[..work.cache_key.len().min(30)],
-            byte_len = work.byte_len,
-            "Inserted prepared image into cache"
-        );
-        self.image_cache.insert(work.cache_key, work.render_image);
-        true
+        match crate::list_item::decode_png_to_render_image_with_bgra_conversion(&work.png_bytes) {
+            Ok(render_image) => {
+                self.image_cache.insert(work.cache_key.clone(), render_image);
+                tracing::info!(
+                    category = "AI",
+                    event = "ai_image_cache_insert",
+                    source = work.source.as_str(),
+                    source_id = %work.source_id,
+                    cache_key = %work.cache_key,
+                    base64_len = work.base64_len,
+                    png_bytes = work.png_bytes.len(),
+                    status = "inserted",
+                    duration_ms = started_at.elapsed().as_millis() as u64,
+                    "Inserted prepared image into cache"
+                );
+                true
+            }
+            Err(error) => {
+                tracing::warn!(
+                    category = "AI",
+                    event = "ai_image_cache_insert",
+                    source = work.source.as_str(),
+                    source_id = %work.source_id,
+                    cache_key = %work.cache_key,
+                    base64_len = work.base64_len,
+                    png_bytes = work.png_bytes.len(),
+                    status = "render_decode_failed",
+                    error = %error,
+                    duration_ms = started_at.elapsed().as_millis() as u64,
+                    "Failed to convert PNG bytes into render image"
+                );
+                false
+            }
+        }
     }
 
-    /// Schedule image cache population off the UI thread so the AI window can
-    /// paint immediately without blocking on base64 decode + PNG conversion.
     pub(super) fn defer_cache_pending_image(
         &mut self,
         image_base64: String,
         cx: &mut Context<Self>,
     ) {
-        cx.spawn(async move |this, cx| {
-            let started_at = std::time::Instant::now();
-
-            let prepared: Option<PreparedImageCacheWork> = cx
-                .background_executor()
-                .spawn(async move { Self::prepare_image_cache_work(&image_base64) })
-                .await;
-
-            tracing::info!(
-                category = "AI",
-                event = "ai_image_cache_prepare_done",
-                source = "pending_image",
-                success = prepared.is_some(),
-                duration_ms = started_at.elapsed().as_millis() as u64,
-                "Prepared pending image cache work off the UI thread"
-            );
-
-            let _ = this.update(cx, |app, cx| {
-                if let Some(work) = prepared {
-                    if app.insert_prepared_render_image(work) {
-                        cx.notify();
-                    }
-                }
-            });
-        })
-        .detach();
+        self.defer_cache_requests(
+            vec![ImageCacheRequest::new(
+                ImageCacheSource::PendingInput,
+                "pending_input#0",
+                image_base64,
+            )],
+            cx,
+        );
     }
 
-    /// Schedule message image cache population off the UI thread.
-    /// Accepts pre-extracted base64 payloads instead of full Message structs.
     pub(super) fn defer_cache_message_images(
         &mut self,
-        base64_images: Vec<String>,
+        requests: Vec<ImageCacheRequest>,
         cx: &mut Context<Self>,
     ) {
-        if base64_images.is_empty() {
+        self.defer_cache_requests(requests, cx);
+    }
+
+    fn defer_cache_requests(
+        &mut self,
+        requests: Vec<ImageCacheRequest>,
+        cx: &mut Context<Self>,
+    ) {
+        use std::collections::HashSet;
+
+        let mut queued_keys = HashSet::new();
+
+        let requests: Vec<ImageCacheRequest> = requests
+            .into_iter()
+            .filter_map(|request| {
+                let cache_key = request.cache_key();
+
+                if self.image_cache.contains_key(&cache_key) {
+                    tracing::debug!(
+                        category = "AI",
+                        event = "ai_image_cache_enqueue",
+                        source = request.source.as_str(),
+                        source_id = %request.source_id,
+                        cache_key = %cache_key,
+                        status = "skipped_cached",
+                        "Image already cached"
+                    );
+                    return None;
+                }
+
+                if !queued_keys.insert(cache_key.clone()) {
+                    tracing::debug!(
+                        category = "AI",
+                        event = "ai_image_cache_enqueue",
+                        source = request.source.as_str(),
+                        source_id = %request.source_id,
+                        cache_key = %cache_key,
+                        status = "skipped_duplicate_in_batch",
+                        "Duplicate image request skipped in batch"
+                    );
+                    return None;
+                }
+
+                tracing::info!(
+                    category = "AI",
+                    event = "ai_image_cache_enqueue",
+                    source = request.source.as_str(),
+                    source_id = %request.source_id,
+                    cache_key = %cache_key,
+                    base64_len = request.base64_len(),
+                    status = "queued",
+                    "Queued image cache request"
+                );
+
+                Some(request)
+            })
+            .collect();
+
+        if requests.is_empty() {
             return;
         }
 
+        let request_count = requests.len();
+        let (result_tx, result_rx) =
+            async_channel::bounded::<PreparedImageCacheWork>(request_count);
+
+        cx.background_executor()
+            .spawn(async move {
+                for request in requests {
+                    if let Some(work) = AiApp::prepare_image_cache_work(request) {
+                        let _ = result_tx.send(work).await;
+                    }
+                }
+            })
+            .detach();
+
         cx.spawn(async move |this, cx| {
-            let started_at = std::time::Instant::now();
-
-            let prepared_items: Vec<PreparedImageCacheWork> = cx
-                .background_executor()
-                .spawn(async move {
-                    base64_images
-                        .into_iter()
-                        .filter_map(|base64_data| Self::prepare_image_cache_work(&base64_data))
-                        .collect::<Vec<_>>()
-                })
-                .await;
-
-            tracing::info!(
-                category = "AI",
-                event = "ai_image_cache_prepare_done",
-                source = "message_images",
-                prepared_count = prepared_items.len(),
-                duration_ms = started_at.elapsed().as_millis() as u64,
-                "Prepared message image cache work off the UI thread"
-            );
-
-            let _ = this.update(cx, |app, cx| {
-                let mut inserted_any = false;
-                for work in prepared_items {
-                    inserted_any |= app.insert_prepared_render_image(work);
+            while let Ok(work) = result_rx.recv().await {
+                if this
+                    .update(cx, |this, cx| {
+                        if this.insert_prepared_render_image(work) {
+                            cx.notify();
+                        }
+                    })
+                    .is_err()
+                {
+                    break;
                 }
-                if inserted_any {
-                    cx.notify();
-                }
-            });
+            }
         })
         .detach();
     }
