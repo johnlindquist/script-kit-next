@@ -110,18 +110,12 @@ impl ChatPrompt {
             "Transferring conversation to AI window"
         );
 
-        // Open AI window with the chat history
-        if let Err(e) = ai::open_ai_window_with_chat(cx, messages) {
-            tracing::error!(error = %e, "Failed to open AI window for continue-in-chat");
-            return;
-        }
-
-        // Save conversation before clearing
+        // Save conversation before clearing inline state
         if self.save_history {
             self.save_to_database();
         }
 
-        // Reset the inline prompt to empty state
+        // Reset the inline prompt to empty state BEFORE the deferred AI open
         self.messages.clear();
         self.streaming_message_id = None;
         self.user_has_scrolled_up = false;
@@ -137,6 +131,33 @@ impl ChatPrompt {
         if let Some(ref callback) = self.on_escape {
             callback(self.id.clone());
         }
+
+        // Defer AI window open so the inline prompt dismisses first,
+        // avoiding synchronous image transfer work on the original prompt path.
+        cx.spawn(async move |_this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(1))
+                .await;
+
+            let open_result = cx.update(|cx| {
+                ai::open_ai_window(cx).map_err(|error| error.to_string())?;
+                ai::set_ai_pending_chat(cx, messages)?;
+                Ok::<(), String>(())
+            });
+
+            match open_result {
+                Ok(()) => {
+                    tracing::info!(
+                        action = "continue_in_chat",
+                        "AI window opened with deferred pending chat"
+                    );
+                }
+                Err(error) => {
+                    tracing::error!(error = %error, "Failed to open AI window for continue-in-chat");
+                }
+            }
+        })
+        .detach();
     }
 
     pub fn handle_copy_last_response(&mut self, cx: &mut Context<Self>) {

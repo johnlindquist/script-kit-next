@@ -594,6 +594,26 @@ pub(super) enum AiCommand {
     },
 }
 
+impl AiCommand {
+    pub(super) fn name(&self) -> &'static str {
+        match self {
+            Self::SetSearch(_) => "set_search",
+            Self::SetInput { submit: true, .. } => "set_input_submit",
+            Self::SetInput { submit: false, .. } => "set_input",
+            Self::SetInputWithImage { submit: true, .. } => "set_input_with_image_submit",
+            Self::SetInputWithImage { submit: false, .. } => "set_input_with_image",
+            Self::AddAttachment { .. } => "add_attachment",
+            Self::InitializeWithPendingChat => "initialize_with_pending_chat",
+            Self::ShowCommandBar => "show_command_bar",
+            Self::ApplyPreset { .. } => "apply_preset",
+            Self::ReloadPresets => "reload_presets",
+            Self::SimulateKey { .. } => "simulate_key",
+            Self::StartChat { submit: true, .. } => "start_chat_submit",
+            Self::StartChat { submit: false, .. } => "start_chat",
+        }
+    }
+}
+
 pub(super) fn get_pending_commands() -> &'static std::sync::Mutex<Vec<AiCommand>> {
     AI_PENDING_COMMANDS.get_or_init(|| std::sync::Mutex::new(Vec::new()))
 }

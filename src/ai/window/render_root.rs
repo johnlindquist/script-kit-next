@@ -71,6 +71,16 @@ impl AiApp {
         cx: &mut Context<Self>,
     ) {
         for cmd in take_ai_commands() {
+            let command_name = cmd.name();
+            let started_at = std::time::Instant::now();
+
+            tracing::info!(
+                category = "AI",
+                event = "ai_command_apply_start",
+                command = command_name,
+                "Applying AI command"
+            );
+
             match cmd {
                 AiCommand::SetSearch(query) => {
                     self.search_state.update(cx, |state, cx| {
@@ -93,10 +103,12 @@ impl AiApp {
                     submit,
                 } => {
                     self.set_composer_value(&text, window, cx);
-                    // Store the pending image to be included with the next message
-                    self.cache_image_from_base64(&image_base64);
+                    // Store the pending image immediately but defer the expensive
+                    // base64-decode + PNG-to-RenderImage conversion so the AI
+                    // window can paint its first frame without blocking.
                     self.pending_image = Some(image_base64.clone());
-                    tracing::info!(target: "ai", text_len = text.len(), image_base64_len = image_base64.len(), "Input set with image");
+                    self.defer_cache_pending_image(image_base64.clone(), cx);
+                    tracing::info!(target: "ai", text_len = text.len(), image_base64_len = image_base64.len(), "Input set with image (cache deferred)");
                     if submit {
                         self.submit_message(window, cx);
                         tracing::info!(target: "ai", "Message with image submitted - streaming started");
@@ -167,6 +179,14 @@ impl AiApp {
                     );
                 }
             }
+
+            tracing::info!(
+                category = "AI",
+                event = "ai_command_apply_finish",
+                command = command_name,
+                duration_ms = started_at.elapsed().as_millis() as u64,
+                "Applied AI command"
+            );
         }
     }
 }

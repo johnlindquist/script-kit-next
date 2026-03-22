@@ -271,6 +271,41 @@ pub(super) fn get_pending_chat() -> &'static std::sync::Mutex<Option<Vec<Pending
     AI_PENDING_CHAT.get_or_init(|| std::sync::Mutex::new(None))
 }
 
+/// Stash pending chat messages and enqueue `InitializeWithPendingChat`.
+///
+/// Call this *after* the AI window is already open. The caller is responsible
+/// for opening the window first (e.g. via `open_ai_window`).
+///
+/// Returns `Err` if the pending chat lock cannot be acquired or the command
+/// cannot be enqueued (window not open).
+pub fn set_ai_pending_chat(
+    cx: &mut App,
+    messages: Vec<PendingChatMessage>,
+) -> Result<(), String> {
+    let message_count = messages.len();
+    let image_count = messages.iter().filter(|m| m.image_base64.is_some()).count();
+
+    tracing::info!(
+        category = "AI",
+        event = "set_ai_pending_chat",
+        message_count,
+        image_count,
+        "Stashing pending chat messages for AI window"
+    );
+
+    if let Ok(mut pending) = get_pending_chat().lock() {
+        *pending = Some(messages);
+    } else {
+        return Err("Failed to acquire pending chat lock".to_string());
+    }
+
+    enqueue_ai_window_command(
+        cx,
+        "initialize_with_pending_chat",
+        AiCommand::InitializeWithPendingChat,
+    )
+}
+
 /// Open the AI window with an existing conversation.
 ///
 /// This function:
@@ -291,28 +326,12 @@ pub fn open_ai_window_with_chat(cx: &mut App, messages: Vec<PendingChatMessage>)
         ),
     );
 
-    // Store the pending chat messages
-    if let Ok(mut pending) = get_pending_chat().lock() {
-        *pending = Some(messages);
-    }
-
     // Open or bring the window to front
     open_ai_window(cx)?;
 
-    // Queue a command to initialize the chat with pending messages
-    push_ai_command(AiCommand::InitializeWithPendingChat);
-
-    // Notify the window to process the command
-    let handle = {
-        let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
-        slot.lock().ok().and_then(|g| *g)
-    };
-
-    if let Some(handle) = handle {
-        let _ = handle.update(cx, |_root, _window, cx| {
-            cx.notify();
-        });
-    }
+    // Stash messages and enqueue the initialize command
+    set_ai_pending_chat(cx, messages)
+        .map_err(|error| anyhow::anyhow!("failed to enqueue pending chat after open: {error}"))?;
 
     Ok(())
 }
