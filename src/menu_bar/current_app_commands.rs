@@ -65,6 +65,126 @@ impl FrontmostMenuSnapshot {
 }
 
 // ---------------------------------------------------------------------------
+// Script prompt builder
+// ---------------------------------------------------------------------------
+
+/// Maximum number of menu items to include in AI script-generation prompts.
+const MAX_SCRIPT_PROMPT_MENU_ITEMS: usize = 20;
+
+/// Maximum number of characters of selected text to include in the prompt.
+const MAX_SELECTED_TEXT_CHARS: usize = 1_500;
+
+/// A machine-readable receipt for a script-generation prompt built from the
+/// frontmost app snapshot.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CurrentAppScriptPromptReceipt {
+    pub app_name: String,
+    pub bundle_id: String,
+    pub total_menu_items: usize,
+    pub included_menu_items: usize,
+    pub included_user_request: bool,
+    pub included_selected_text: bool,
+    pub included_browser_url: bool,
+}
+
+/// Build a deterministic AI prompt for script generation from a frontmost-app
+/// snapshot plus optional user request, selected text, and browser URL.
+///
+/// Returns the assembled prompt string and a structured receipt for logging.
+/// This function is side-effect free and reuses `snapshot.into_entries_with_receipt()`
+/// rather than re-walking platform state.
+pub fn build_generate_script_prompt_from_snapshot(
+    snapshot: FrontmostMenuSnapshot,
+    user_request: Option<&str>,
+    selected_text: Option<&str>,
+    browser_url: Option<&str>,
+) -> (String, CurrentAppScriptPromptReceipt) {
+    let (entries, snapshot_receipt) = snapshot.into_entries_with_receipt();
+
+    let user_request = user_request
+        .map(str::trim)
+        .filter(|text| !text.is_empty());
+
+    let selected_text = selected_text
+        .map(str::trim)
+        .filter(|text| !text.is_empty());
+
+    let browser_url = browser_url
+        .map(str::trim)
+        .filter(|url| !url.is_empty());
+
+    let menu_lines: Vec<String> = entries
+        .iter()
+        .take(MAX_SCRIPT_PROMPT_MENU_ITEMS)
+        .map(|entry| {
+            let shortcut_suffix = match &entry.feature {
+                crate::builtins::BuiltInFeature::MenuBarAction(info) => info
+                    .shortcut
+                    .as_ref()
+                    .map(|shortcut| format!(" ({shortcut})"))
+                    .unwrap_or_default(),
+                _ => String::new(),
+            };
+            format!("- {}{}", entry.name, shortcut_suffix)
+        })
+        .collect();
+
+    let mut sections = Vec::new();
+    sections.push(
+        "Generate a Script Kit script that automates what I am doing in the current app."
+            .to_string(),
+    );
+
+    if let Some(request) = user_request {
+        sections.push(format!("User Request:\n{}", request));
+    }
+
+    sections.push(format!("Frontmost App: {}", snapshot_receipt.app_name));
+    sections.push(format!("Bundle ID: {}", snapshot_receipt.bundle_id));
+
+    if !menu_lines.is_empty() {
+        sections.push(format!(
+            "Enabled Menu Commands (showing {} of {}):\n{}",
+            menu_lines.len(),
+            snapshot_receipt.leaf_entry_count,
+            menu_lines.join("\n")
+        ));
+    }
+
+    if let Some(text) = selected_text {
+        let truncated: String = text.chars().take(MAX_SELECTED_TEXT_CHARS).collect();
+        sections.push(format!("Selected Text:\n```text\n{}\n```", truncated));
+    }
+
+    if let Some(url) = browser_url {
+        sections.push(format!("Focused Browser URL:\n{}", url));
+    }
+
+    sections.push(
+        "Requirements:\n\
+         - Prefer the smallest useful working script.\n\
+         - Reuse existing app or menu semantics when possible.\n\
+         - Call out required permissions.\n\
+         - If the task is ambiguous, pick the safest reasonable default and say what you assumed."
+            .to_string(),
+    );
+
+    let prompt = sections.join("\n\n");
+
+    let receipt = CurrentAppScriptPromptReceipt {
+        app_name: snapshot_receipt.app_name,
+        bundle_id: snapshot_receipt.bundle_id,
+        total_menu_items: snapshot_receipt.leaf_entry_count,
+        included_menu_items: menu_lines.len(),
+        included_user_request: user_request.is_some(),
+        included_selected_text: selected_text.is_some(),
+        included_browser_url: browser_url.is_some(),
+    };
+
+    (prompt, receipt)
+}
+
+// ---------------------------------------------------------------------------
 // Platform loader
 // ---------------------------------------------------------------------------
 
@@ -108,7 +228,7 @@ pub fn load_frontmost_menu_snapshot() -> anyhow::Result<FrontmostMenuSnapshot> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::menu_bar::MenuBarItem;
+    use crate::menu_bar::{KeyboardShortcut, MenuBarItem, ModifierFlags};
 
     fn apple_menu() -> MenuBarItem {
         MenuBarItem {
@@ -125,6 +245,16 @@ mod tests {
             title: title.into(),
             enabled: true,
             shortcut: None,
+            children: vec![],
+            ax_element_path: path,
+        }
+    }
+
+    fn leaf_with_shortcut(title: &str, key: &str, path: Vec<usize>) -> MenuBarItem {
+        MenuBarItem {
+            title: title.into(),
+            enabled: true,
+            shortcut: Some(KeyboardShortcut::new(key.into(), ModifierFlags::COMMAND)),
             children: vec![],
             ax_element_path: path,
         }
@@ -222,6 +352,133 @@ mod tests {
             err.to_string().contains("macOS"),
             "Expected macOS-specific error, got: {}",
             err
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Script prompt builder tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn generate_script_prompt_includes_user_request_and_optional_context() {
+        let snap = FrontmostMenuSnapshot {
+            app_name: "Safari".into(),
+            bundle_id: "com.apple.Safari".into(),
+            items: vec![
+                apple_menu(),
+                menu(
+                    "File",
+                    vec![leaf_with_shortcut("New Tab", "T", vec![1, 0])],
+                    vec![1],
+                ),
+            ],
+        };
+
+        let (prompt, receipt) = build_generate_script_prompt_from_snapshot(
+            snap,
+            Some("close duplicate tabs"),
+            Some("pricing"),
+            Some("https://example.com/pricing"),
+        );
+
+        assert_eq!(receipt.app_name, "Safari");
+        assert_eq!(receipt.bundle_id, "com.apple.Safari");
+        assert_eq!(receipt.total_menu_items, 1);
+        assert_eq!(receipt.included_menu_items, 1);
+        assert!(receipt.included_user_request);
+        assert!(receipt.included_selected_text);
+        assert!(receipt.included_browser_url);
+
+        assert!(prompt.contains("User Request:\nclose duplicate tabs"));
+        assert!(prompt.contains("Frontmost App: Safari"));
+        assert!(prompt.contains("Bundle ID: com.apple.Safari"));
+        assert!(prompt.contains("Selected Text:\n```text\npricing\n```"));
+        assert!(prompt.contains("Focused Browser URL:\nhttps://example.com/pricing"));
+    }
+
+    #[test]
+    fn generate_script_prompt_omits_empty_optional_inputs() {
+        let snap = FrontmostMenuSnapshot {
+            app_name: "Finder".into(),
+            bundle_id: "com.apple.finder".into(),
+            items: vec![],
+        };
+
+        let (prompt, receipt) =
+            build_generate_script_prompt_from_snapshot(snap, None, Some("  "), Some(""));
+
+        assert!(!receipt.included_user_request);
+        assert!(!receipt.included_selected_text);
+        assert!(!receipt.included_browser_url);
+        assert!(!prompt.contains("User Request:"));
+        assert!(!prompt.contains("Selected Text:"));
+        assert!(!prompt.contains("Focused Browser URL:"));
+    }
+
+    #[test]
+    fn generate_script_prompt_truncates_selected_text() {
+        let long_text: String = "x".repeat(2_000);
+        let snap = FrontmostMenuSnapshot {
+            app_name: "TextEdit".into(),
+            bundle_id: "com.apple.TextEdit".into(),
+            items: vec![],
+        };
+
+        let (prompt, receipt) =
+            build_generate_script_prompt_from_snapshot(snap, None, Some(&long_text), None);
+
+        assert!(receipt.included_selected_text);
+        // The truncated text should be exactly MAX_SELECTED_TEXT_CHARS characters
+        let expected_truncated: String = "x".repeat(MAX_SELECTED_TEXT_CHARS);
+        assert!(prompt.contains(&expected_truncated));
+        // But not the full 2000
+        assert!(!prompt.contains(&long_text));
+    }
+
+    #[test]
+    fn generate_script_prompt_truncates_long_menu_lists() {
+        let children: Vec<MenuBarItem> = (0..25)
+            .map(|idx| leaf(&format!("Item {}", idx), vec![1, idx]))
+            .collect();
+
+        let snap = FrontmostMenuSnapshot {
+            app_name: "BigApp".into(),
+            bundle_id: "com.example.BigApp".into(),
+            items: vec![apple_menu(), menu("File", children, vec![1])],
+        };
+
+        let (prompt, receipt) =
+            build_generate_script_prompt_from_snapshot(snap, None, None, None);
+
+        assert_eq!(receipt.total_menu_items, 25);
+        assert_eq!(receipt.included_menu_items, MAX_SCRIPT_PROMPT_MENU_ITEMS);
+        assert!(prompt.contains("Enabled Menu Commands (showing 20 of 25):"));
+    }
+
+    #[test]
+    fn generate_script_prompt_includes_shortcut_suffix() {
+        let snap = FrontmostMenuSnapshot {
+            app_name: "Safari".into(),
+            bundle_id: "com.apple.Safari".into(),
+            items: vec![
+                apple_menu(),
+                menu(
+                    "File",
+                    vec![leaf_with_shortcut("New Tab", "T", vec![1, 0])],
+                    vec![1],
+                ),
+            ],
+        };
+
+        let (prompt, _receipt) =
+            build_generate_script_prompt_from_snapshot(snap, None, None, None);
+
+        // The entry name from menu_bar_items_to_entries includes the path,
+        // and the shortcut should be appended in parentheses
+        assert!(
+            prompt.contains("(⌘T)"),
+            "Prompt should include shortcut suffix, got:\n{}",
+            prompt
         );
     }
 }

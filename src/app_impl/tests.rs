@@ -91,6 +91,25 @@ fn test_tab_interceptor_matches_both_tab_key_variants() {
 }
 
 #[test]
+fn test_generate_script_from_current_app_routes_to_shared_dispatch() {
+    let builtin_execution = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read src/app_execute/builtin_execution.rs");
+
+    assert!(
+        builtin_execution
+            .contains("AiCommandType::GenerateScriptFromCurrentApp =>"),
+        "GenerateScriptFromCurrentApp must have a dedicated match arm in builtin_execution.rs"
+    );
+
+    assert!(
+        builtin_execution
+            .contains("self.dispatch_ai_script_generation_from_query(prompt, cx);"),
+        "GenerateScriptFromCurrentApp must route through dispatch_ai_script_generation_from_query, \
+         not a separate UI path"
+    );
+}
+
+#[test]
 fn test_emoji_picker_arrow_interceptor_consumes_left_right_keys_before_input() {
     let startup = fs::read_to_string("src/app_impl/startup.rs")
         .expect("Failed to read src/app_impl/startup.rs");

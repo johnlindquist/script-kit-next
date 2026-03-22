@@ -115,6 +115,8 @@ pub enum AiCommandType {
     ClearConversation,
     /// Generate a new Script Kit script from the main prompt text
     GenerateScript,
+    /// Generate a new Script Kit script using the frontmost app's live context
+    GenerateScriptFromCurrentApp,
     /// Send a screenshot of the entire screen to AI Chat
     SendScreenToAi,
     /// Send a screenshot of the focused window to AI Chat
@@ -890,6 +892,27 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             ],
             BuiltInFeature::AiCommand(AiCommandType::GenerateScript),
             "🧠",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-generate-script-from-current-app",
+            "Generate Script from Current App",
+            "Generate a Script Kit script using the frontmost app's menu, selection, and browser context",
+            vec![
+                "generate",
+                "script",
+                "current",
+                "app",
+                "automation",
+                "menu",
+                "frontmost",
+                "context",
+                "browser",
+                "selection",
+                "ai",
+            ],
+            BuiltInFeature::AiCommand(AiCommandType::GenerateScriptFromCurrentApp),
+            "🪄",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(

@@ -13,7 +13,9 @@ fn ai_capture_hide_settle_duration() -> std::time::Duration {
 fn ai_command_uses_hide_then_capture_flow(cmd_type: &builtins::AiCommandType) -> bool {
     matches!(
         cmd_type,
-        builtins::AiCommandType::SendScreenToAi | builtins::AiCommandType::SendFocusedWindowToAi
+        builtins::AiCommandType::GenerateScriptFromCurrentApp
+            | builtins::AiCommandType::SendScreenToAi
+            | builtins::AiCommandType::SendFocusedWindowToAi
     )
 }
 
@@ -1225,7 +1227,11 @@ impl ScriptListApp {
 
                 use builtins::AiCommandType;
 
-                let is_generate_script = matches!(cmd_type, AiCommandType::GenerateScript);
+                let is_generate_script = matches!(
+                    cmd_type,
+                    AiCommandType::GenerateScript
+                        | AiCommandType::GenerateScriptFromCurrentApp
+                );
                 let uses_hide_then_capture_flow = ai_command_uses_hide_then_capture_flow(cmd_type);
                 if !is_generate_script {
                     script_kit_gpui::set_main_window_visible(false);
@@ -1283,6 +1289,70 @@ impl ScriptListApp {
                         let query = query_override.unwrap_or(&self.filter_text).to_string();
                         self.dispatch_ai_script_generation_from_query(query, cx);
                         Self::builtin_success(dctx, "ai_generate_script_dispatched")
+                    }
+
+                    AiCommandType::GenerateScriptFromCurrentApp => {
+                        match crate::menu_bar::load_frontmost_menu_snapshot() {
+                            Ok(snapshot) => {
+                                let raw_user_request =
+                                    query_override.unwrap_or(&self.filter_text).trim();
+                                let user_request = if raw_user_request.is_empty()
+                                    || raw_user_request
+                                        .eq_ignore_ascii_case("generate script from current app")
+                                {
+                                    None
+                                } else {
+                                    Some(raw_user_request)
+                                };
+
+                                let selected_text = crate::selected_text::get_selected_text()
+                                    .ok()
+                                    .filter(|text| !text.trim().is_empty());
+
+                                let browser_url = platform::get_focused_browser_tab_url()
+                                    .ok()
+                                    .filter(|url| !url.trim().is_empty());
+
+                                let (prompt, receipt) =
+                                    crate::menu_bar::current_app_commands::build_generate_script_prompt_from_snapshot(
+                                        snapshot,
+                                        user_request,
+                                        selected_text.as_deref(),
+                                        browser_url.as_deref(),
+                                    );
+
+                                tracing::info!(
+                                    trace_id = %dctx.trace_id,
+                                    app_name = %receipt.app_name,
+                                    bundle_id = %receipt.bundle_id,
+                                    total_menu_items = receipt.total_menu_items,
+                                    included_menu_items = receipt.included_menu_items,
+                                    included_user_request = receipt.included_user_request,
+                                    included_selected_text = receipt.included_selected_text,
+                                    included_browser_url = receipt.included_browser_url,
+                                    "ai_generate_script_from_current_app.prompt_ready"
+                                );
+
+                                self.dispatch_ai_script_generation_from_query(prompt, cx);
+                                Self::builtin_success(
+                                    dctx,
+                                    "ai_generate_script_from_current_app_dispatched",
+                                )
+                            }
+                            Err(e) => {
+                                let message = format!(
+                                    "Failed to capture current app context: {}",
+                                    e
+                                );
+                                self.show_error_toast(message.clone(), cx);
+                                Self::builtin_error(
+                                    dctx,
+                                    crate::action_helpers::ERROR_ACTION_FAILED,
+                                    message,
+                                    "ai_generate_script_from_current_app_failed",
+                                )
+                            }
+                        }
                     }
 
                     AiCommandType::SendScreenToAi => {
@@ -2196,6 +2266,9 @@ mod builtin_execution_ai_feedback_tests {
 
     #[test]
     fn test_ai_capture_commands_use_hide_then_capture_flow_only_for_sync_screenshots() {
+        assert!(ai_command_uses_hide_then_capture_flow(
+            &AiCommandType::GenerateScriptFromCurrentApp
+        ));
         assert!(ai_command_uses_hide_then_capture_flow(
             &AiCommandType::SendScreenToAi
         ));
