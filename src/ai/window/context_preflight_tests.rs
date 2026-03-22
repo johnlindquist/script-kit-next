@@ -534,6 +534,111 @@ fn test_recommendation_determinism_same_input_same_output() {
 }
 
 #[test]
+fn test_preflight_state_suppresses_recommendations_without_live_snapshot() {
+    use super::context_recommendations::{ContextRecommendation, ContextRecommendationPriority};
+    use crate::ai::context_contract::ContextAttachmentKind;
+
+    let receipt = ready_preflight_receipt("Rewrite this selected text in a friendlier tone");
+
+    let state = preflight_state_from_analysis(
+        7,
+        receipt,
+        None,
+        vec![ContextRecommendation {
+            kind: ContextAttachmentKind::Selection,
+            reason: "You referenced selected/highlighted content.".to_string(),
+            priority: ContextRecommendationPriority::High,
+        }],
+    );
+
+    assert_eq!(state.recommendations.len(), 0);
+    assert!(!state.has_surfaced_recommendations());
+
+    assert_eq!(
+        state.recommendation_resolution.input_recommendation_count,
+        1
+    );
+    assert_eq!(
+        state
+            .recommendation_resolution
+            .surfaced_recommendation_count,
+        0
+    );
+    assert_eq!(
+        state
+            .recommendation_resolution
+            .suppressed_recommendation_count,
+        1
+    );
+    assert_eq!(
+        state
+            .recommendation_resolution
+            .suppression_reason
+            .as_deref(),
+        Some("recommendations_suppressed_missing_live_snapshot")
+    );
+}
+
+#[test]
+fn test_preflight_state_surfaces_recommendations_with_live_snapshot() {
+    use super::context_recommendations::{ContextRecommendation, ContextRecommendationPriority};
+    use crate::ai::context_contract::ContextAttachmentKind;
+    use crate::context_snapshot::AiContextSnapshot;
+
+    let receipt = ready_preflight_receipt("Rewrite this selected text in a friendlier tone");
+
+    let state = preflight_state_from_analysis(
+        8,
+        receipt,
+        Some(AiContextSnapshot::default()),
+        vec![ContextRecommendation {
+            kind: ContextAttachmentKind::Selection,
+            reason: "You referenced selected/highlighted content.".to_string(),
+            priority: ContextRecommendationPriority::High,
+        }],
+    );
+
+    assert_eq!(state.recommendations.len(), 1);
+    assert!(state.has_surfaced_recommendations());
+
+    assert_eq!(
+        state.recommendation_resolution.input_recommendation_count,
+        1
+    );
+    assert_eq!(
+        state
+            .recommendation_resolution
+            .surfaced_recommendation_count,
+        1
+    );
+    assert_eq!(
+        state
+            .recommendation_resolution
+            .suppressed_recommendation_count,
+        0
+    );
+    assert_eq!(state.recommendation_resolution.suppression_reason, None);
+}
+
+#[test]
+fn test_preflight_decision_ledger_matches_snapshot_counts() {
+    let receipt = ready_preflight_receipt("hello");
+    let state = preflight_state_from_analysis(9, receipt, None, vec![]);
+
+    let snapshot = state.snapshot();
+    let ledger = state.decision_ledger();
+
+    assert_eq!(
+        snapshot.recommendation_count,
+        ledger.recommendations.surfaced_recommendation_count
+    );
+    assert_eq!(
+        snapshot.has_live_snapshot,
+        ledger.recommendations.live_snapshot_present
+    );
+}
+
+#[test]
 fn test_has_surfaced_recommendations_requires_live_snapshot() {
     use super::context_recommendations::{ContextRecommendation, ContextRecommendationPriority};
     use crate::ai::context_contract::ContextAttachmentKind;

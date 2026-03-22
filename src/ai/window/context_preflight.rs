@@ -19,6 +19,50 @@ pub enum ContextPreflightStatus {
     Blocked,
 }
 
+/// Serializable snapshot of a single surfaced recommendation.
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextRecommendationSnapshot {
+    pub action_id: String,
+    pub label: String,
+    pub reason: String,
+    pub priority: String,
+}
+
+/// Machine-readable resolution of the recommendation visibility decision.
+///
+/// This is the canonical explanation for why recommendation UI is present
+/// or absent. It records inputs, surfaced outputs, suppressed count, and
+/// the reason for suppression (if any).
+#[derive(Debug, Clone, Default, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextRecommendationResolution {
+    pub input_recommendation_count: usize,
+    pub surfaced_recommendation_count: usize,
+    pub suppressed_recommendation_count: usize,
+    pub live_snapshot_present: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub suppression_reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub surfaced: Vec<ContextRecommendationSnapshot>,
+}
+
+/// Full decision ledger for a preflight run, suitable for agent
+/// verification and bug-report export.
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextDecisionLedger {
+    pub generation: u64,
+    pub status: String,
+    pub attempted: usize,
+    pub resolved: usize,
+    pub failures: usize,
+    pub duplicates_removed: usize,
+    pub approx_tokens: usize,
+    pub prompt_chars: usize,
+    pub recommendations: ContextRecommendationResolution,
+}
+
 /// Snapshot of a pre-submit context preflight run.
 ///
 /// This is derived entirely from [`PreparedMessageReceipt`] so it can
@@ -62,6 +106,10 @@ pub struct ContextPreflightState {
 
     /// Context recommendations derived from the draft + snapshot.
     pub recommendations: Vec<super::context_recommendations::ContextRecommendation>,
+
+    /// Machine-readable recommendation visibility resolution.
+    /// This is the canonical explanation for why recommendation UI is present or absent.
+    pub recommendation_resolution: ContextRecommendationResolution,
 }
 
 /// Rough token estimate: divide character count by 4 (the widely-used
@@ -98,6 +146,16 @@ pub fn preflight_state_from_receipt(
     preflight_state_from_analysis(generation, receipt, None, Vec::new())
 }
 
+fn recommendation_priority_label(
+    priority: super::context_recommendations::ContextRecommendationPriority,
+) -> &'static str {
+    match priority {
+        super::context_recommendations::ContextRecommendationPriority::High => "high",
+        super::context_recommendations::ContextRecommendationPriority::Medium => "medium",
+        super::context_recommendations::ContextRecommendationPriority::Low => "low",
+    }
+}
+
 /// Derive a [`ContextPreflightState`] from a receipt plus optional
 /// live snapshot and context recommendations.
 pub fn preflight_state_from_analysis(
@@ -126,12 +184,44 @@ pub fn preflight_state_from_analysis(
         Vec::new()
     };
 
+    let surfaced_recommendation_count = effective_recommendations.len();
+    let suppressed_recommendation_count =
+        input_recommendation_count.saturating_sub(surfaced_recommendation_count);
+
+    let suppression_reason = if !live_snapshot_present && input_recommendation_count > 0 {
+        Some("recommendations_suppressed_missing_live_snapshot".to_string())
+    } else {
+        None
+    };
+
+    let recommendation_resolution = ContextRecommendationResolution {
+        input_recommendation_count,
+        surfaced_recommendation_count,
+        suppressed_recommendation_count,
+        live_snapshot_present,
+        suppression_reason: suppression_reason.clone(),
+        surfaced: effective_recommendations
+            .iter()
+            .map(|item| ContextRecommendationSnapshot {
+                action_id: item.action_id().to_string(),
+                label: item.label().to_string(),
+                reason: item.reason.clone(),
+                priority: recommendation_priority_label(item.priority).to_string(),
+            })
+            .collect(),
+    };
+
     tracing::info!(
         target: "ai",
         generation,
         live_snapshot_present,
         input_recommendation_count,
-        effective_recommendation_count = effective_recommendations.len(),
+        surfaced_recommendation_count,
+        suppressed_recommendation_count,
+        suppression_reason = recommendation_resolution
+            .suppression_reason
+            .as_deref()
+            .unwrap_or("none"),
         "ai_context_preflight_recommendations_resolved"
     );
 
@@ -147,6 +237,7 @@ pub fn preflight_state_from_analysis(
         receipt: Some(receipt),
         live_snapshot,
         recommendations: effective_recommendations,
+        recommendation_resolution,
     }
 }
 
@@ -172,7 +263,8 @@ impl ContextPreflightState {
     /// Render code must use this method — never check `recommendations.is_empty()`
     /// directly — so that the live-snapshot guard cannot be bypassed.
     pub fn has_surfaced_recommendations(&self) -> bool {
-        self.live_snapshot.is_some() && !self.recommendations.is_empty()
+        self.recommendation_resolution.live_snapshot_present
+            && self.recommendation_resolution.surfaced_recommendation_count > 0
     }
 
     /// Machine-readable snapshot for agent verification.
@@ -186,8 +278,23 @@ impl ContextPreflightState {
             duplicates_removed: self.duplicates_removed,
             approx_tokens: self.approx_tokens,
             prompt_chars: self.prompt_chars,
-            recommendation_count: self.recommendations.len(),
-            has_live_snapshot: self.live_snapshot.is_some(),
+            recommendation_count: self.recommendation_resolution.surfaced_recommendation_count,
+            has_live_snapshot: self.recommendation_resolution.live_snapshot_present,
+        }
+    }
+
+    /// Full decision ledger for agent verification and bug-report export.
+    pub fn decision_ledger(&self) -> ContextDecisionLedger {
+        ContextDecisionLedger {
+            generation: self.generation,
+            status: format!("{:?}", self.status),
+            attempted: self.attempted,
+            resolved: self.resolved,
+            failures: self.failures,
+            duplicates_removed: self.duplicates_removed,
+            approx_tokens: self.approx_tokens,
+            prompt_chars: self.prompt_chars,
+            recommendations: self.recommendation_resolution.clone(),
         }
     }
 }

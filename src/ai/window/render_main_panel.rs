@@ -568,7 +568,107 @@ impl AiApp {
             drawer = drawer.child(self.render_prompt_compiler_pane(cx));
         }
 
+        // Decision ledger — recommendation visibility explanation
+        drawer = drawer.child(self.render_context_decision_ledger(cx));
+
         drawer
+    }
+
+    /// Render the recommendation decision ledger inside the context drawer.
+    ///
+    /// Shows a machine-readable summary of input/surfaced/suppressed counts
+    /// and the suppression reason (if any). When surfaced recommendations
+    /// exist, lists each item with label, priority, action_id, and reason.
+    /// Reads only from `self.context_preflight.decision_ledger()`.
+    fn render_context_decision_ledger(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme();
+        let muted_fg = theme.muted_foreground;
+        let fg = theme.foreground;
+        let ledger = self.context_preflight.decision_ledger();
+
+        let mut column = div()
+            .id("context-decision-ledger")
+            .flex()
+            .flex_col()
+            .gap(S1)
+            .pt(S2);
+
+        column = column.child(
+            div()
+                .text_xs()
+                .font_weight(gpui::FontWeight::MEDIUM)
+                .text_color(muted_fg)
+                .child(SharedString::from("Recommendation decision")),
+        );
+
+        let summary = SharedString::from(format!(
+            "input={} surfaced={} suppressed={} liveSnapshot={}",
+            ledger.recommendations.input_recommendation_count,
+            ledger.recommendations.surfaced_recommendation_count,
+            ledger.recommendations.suppressed_recommendation_count,
+            ledger.recommendations.live_snapshot_present,
+        ));
+
+        column = column.child(
+            div()
+                .text_xs()
+                .text_color(fg)
+                .px(S2)
+                .py(S1)
+                .rounded(R_SM)
+                .bg(theme.muted.opacity(OPACITY_DISABLED))
+                .child(summary),
+        );
+
+        if let Some(reason) = &ledger.recommendations.suppression_reason {
+            column = column.child(
+                div()
+                    .text_xs()
+                    .text_color(theme.warning)
+                    .child(SharedString::from(format!(
+                        "suppression_reason={reason}"
+                    ))),
+            );
+        }
+
+        for (idx, item) in ledger.recommendations.surfaced.iter().enumerate() {
+            let row_id = SharedString::from(format!("ledger-rec-{idx}"));
+            column = column.child(
+                div()
+                    .id(row_id)
+                    .flex()
+                    .flex_col()
+                    .gap(S0)
+                    .px(S2)
+                    .py(S1)
+                    .rounded(R_SM)
+                    .bg(theme.muted.opacity(OPACITY_DISABLED))
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .text_color(fg)
+                            .child(SharedString::from(item.label.clone())),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(muted_fg)
+                            .child(SharedString::from(format!(
+                                "priority={} action_id={}",
+                                item.priority, item.action_id
+                            ))),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(muted_fg)
+                            .child(SharedString::from(item.reason.clone())),
+                    ),
+            );
+        }
+
+        column
     }
 
     /// Toggle the context drawer open/closed.
