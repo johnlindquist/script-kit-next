@@ -85,6 +85,7 @@ impl ScriptListApp {
                 | AppView::EmojiPickerView { .. }
                 | AppView::CreateAiPresetView { .. }
                 | AppView::ProcessManagerView { .. }
+                | AppView::CurrentAppCommandsView { .. }
         )
     }
 

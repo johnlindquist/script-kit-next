@@ -354,7 +354,7 @@ fn test_get_grouped_results_builtin_with_frecency_vs_script_frecency() {
     let mut frecency_store = FrecencyStore::new();
 
     // Record builtin usage once (older)
-    frecency_store.record_use("builtin:Clipboard History");
+    frecency_store.record_use("builtin:builtin-clipboard-history");
 
     // Record script usage multiple times (more frequent, should have higher score)
     frecency_store.record_use("/my-frequent-script.ts");

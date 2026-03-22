@@ -331,6 +331,7 @@ impl ScriptListApp {
             cached_file_results: Vec::new(),
             cached_processes: Vec::new(),
             process_manager_refresh_task: None,
+            cached_current_app_entries: Vec::new(),
             selected_index: 0,
             filter_text: String::new(),
             inline_calculator: None,
@@ -367,6 +368,7 @@ impl ScriptListApp {
             emoji_scroll_handle: UniformListScrollHandle::new(),
             window_list_scroll_handle: UniformListScrollHandle::new(),
             process_list_scroll_handle: UniformListScrollHandle::new(),
+            current_app_commands_scroll_handle: UniformListScrollHandle::new(),
             design_gallery_scroll_handle: UniformListScrollHandle::new(),
             file_search_scroll_handle: UniformListScrollHandle::new(),
             theme_chooser_scroll_handle: UniformListScrollHandle::new(),
@@ -1069,6 +1071,28 @@ impl ScriptListApp {
                                     } else if is_down && *selected_index + 1 < filtered_len {
                                         *selected_index += 1;
                                         this.process_list_scroll_handle.scroll_to_item(
+                                            *selected_index,
+                                            gpui::ScrollStrategy::Nearest,
+                                        );
+                                        cx.notify();
+                                    }
+                                    cx.stop_propagation();
+                                }
+                                AppView::CurrentAppCommandsView {
+                                    selected_index,
+                                    filter: _,
+                                } => {
+                                    let filtered_len = this.cached_current_app_entries.len();
+                                    if is_up && *selected_index > 0 {
+                                        *selected_index -= 1;
+                                        this.current_app_commands_scroll_handle.scroll_to_item(
+                                            *selected_index,
+                                            gpui::ScrollStrategy::Nearest,
+                                        );
+                                        cx.notify();
+                                    } else if is_down && *selected_index + 1 < filtered_len {
+                                        *selected_index += 1;
+                                        this.current_app_commands_scroll_handle.scroll_to_item(
                                             *selected_index,
                                             gpui::ScrollStrategy::Nearest,
                                         );

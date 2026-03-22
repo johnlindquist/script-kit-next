@@ -38,7 +38,7 @@ pub(super) fn build_grouped_view_results(
         match result {
             SearchResult::Script(sm) => Some(sm.script.path.to_string_lossy().to_string()),
             SearchResult::App(am) => Some(am.app.path.to_string_lossy().to_string()),
-            SearchResult::BuiltIn(bm) => Some(format!("builtin:{}", bm.entry.name)),
+            SearchResult::BuiltIn(bm) => Some(format!("builtin:{}", bm.entry.id)),
             SearchResult::Scriptlet(sm) => Some(format!("scriptlet:{}", sm.scriptlet.name)),
             SearchResult::Window(wm) => {
                 Some(format!("window:{}:{}", wm.window.app, wm.window.title))

@@ -174,6 +174,28 @@ impl ScriptListApp {
                 }
                 return; // Don't run main menu filter logic
             }
+            AppView::CurrentAppCommandsView {
+                filter,
+                selected_index,
+            } => {
+                self.filter_text = new_text.clone();
+                if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
+                    let input_mode = if self.input_mode == InputMode::Keyboard {
+                        "keyboard"
+                    } else {
+                        "mouse"
+                    };
+                    Self::scroll_builtin_to_top_with_log(
+                        &self.current_app_commands_scroll_handle,
+                        "current_app_commands",
+                        self.cached_current_app_entries.len(),
+                        &new_text,
+                        input_mode,
+                    );
+                    cx.notify();
+                }
+                return; // Don't run main menu filter logic
+            }
             AppView::SearchAiPresetsView {
                 filter,
                 selected_index,

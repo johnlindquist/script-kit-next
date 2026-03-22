@@ -324,7 +324,7 @@ fn test_get_grouped_results_no_default_suggestions_when_frecency_exists() {
         uuid::Uuid::new_v4()
     ));
     let mut frecency_store = FrecencyStore::with_path(temp_path.clone());
-    frecency_store.record_use("builtin:Notes"); // Record usage for Notes
+    frecency_store.record_use("builtin:builtin-notes"); // Record usage for Notes
 
     let (grouped, results) = get_grouped_results(
         &scripts,

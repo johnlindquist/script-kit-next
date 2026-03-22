@@ -289,6 +289,50 @@
                                     }
                                     cx.stop_propagation();
                                 }
+                                AppView::CurrentAppCommandsView {
+                                    selected_index,
+                                    filter,
+                                } => {
+                                    let filtered_len = if filter.is_empty() {
+                                        this.cached_current_app_entries.len()
+                                    } else {
+                                        let filter_lower = filter.to_lowercase();
+                                        this.cached_current_app_entries
+                                            .iter()
+                                            .filter(|e| {
+                                                e.name.to_lowercase().contains(&filter_lower)
+                                                    || e.keywords.iter().any(|k| k.contains(&filter_lower))
+                                            })
+                                            .count()
+                                    };
+
+                                    if filtered_len == 0 {
+                                        *selected_index = 0;
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+
+                                    if *selected_index >= filtered_len {
+                                        *selected_index = filtered_len - 1;
+                                    }
+
+                                    if is_up && *selected_index > 0 {
+                                        *selected_index -= 1;
+                                        this.current_app_commands_scroll_handle.scroll_to_item(
+                                            *selected_index,
+                                            gpui::ScrollStrategy::Nearest,
+                                        );
+                                        cx.notify();
+                                    } else if is_down && *selected_index + 1 < filtered_len {
+                                        *selected_index += 1;
+                                        this.current_app_commands_scroll_handle.scroll_to_item(
+                                            *selected_index,
+                                            gpui::ScrollStrategy::Nearest,
+                                        );
+                                        cx.notify();
+                                    }
+                                    cx.stop_propagation();
+                                }
                                 AppView::SearchAiPresetsView {
                                     selected_index,
                                     filter,

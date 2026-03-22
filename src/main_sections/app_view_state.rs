@@ -195,6 +195,12 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
+    /// Showing menu bar commands from the frontmost application
+    /// Data comes from cached_current_app_entries populated on open
+    CurrentAppCommandsView {
+        filter: String,
+        selected_index: usize,
+    },
 }
 
 /// Wrapper to hold a script session that can be shared across async boundaries

@@ -155,6 +155,21 @@ impl ScriptListApp {
                 };
                 Some((ViewType::ScriptList, filtered_count))
             }
+            AppView::CurrentAppCommandsView { filter, .. } => {
+                let filtered_count = if filter.is_empty() {
+                    self.cached_current_app_entries.len()
+                } else {
+                    let filter_lower = filter.to_lowercase();
+                    self.cached_current_app_entries
+                        .iter()
+                        .filter(|e| {
+                            e.name.to_lowercase().contains(&filter_lower)
+                                || e.keywords.iter().any(|k| k.contains(&filter_lower))
+                        })
+                        .count()
+                };
+                Some((ViewType::ScriptList, filtered_count))
+            }
             AppView::ScratchPadView { .. } => Some((ViewType::EditorPrompt, 0)),
             AppView::QuickTerminalView { .. } => Some((ViewType::TermPrompt, 0)),
             AppView::WebcamView { .. } => Some((ViewType::DivPrompt, 0)),

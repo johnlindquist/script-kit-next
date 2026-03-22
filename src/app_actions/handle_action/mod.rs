@@ -33,15 +33,25 @@ impl DeferredAiWindowAction {
         }
     }
 
-    fn apply(self, cx: &mut App) {
+    fn apply(self, cx: &mut App) -> Result<&'static str, String> {
         match self {
-            Self::OpenOnly => {}
-            Self::SetInput { text, submit } => ai::set_ai_input(cx, &text, submit),
-            Self::SetInputWithImage { text, image_base64, submit } => {
-                ai::set_ai_input_with_image(cx, &text, &image_base64, submit);
+            Self::OpenOnly => Ok("open_only"),
+            Self::SetInput { text, submit } => {
+                ai::set_ai_input(cx, &text, submit)?;
+                Ok("set_input")
             }
-            Self::AddAttachment { path } => ai::add_ai_attachment(cx, &path),
-            Self::ApplyPreset { preset_id } => ai::apply_ai_preset(cx, &preset_id),
+            Self::SetInputWithImage { text, image_base64, submit } => {
+                ai::set_ai_input_with_image(cx, &text, &image_base64, submit)?;
+                Ok("set_input_with_image")
+            }
+            Self::AddAttachment { path } => {
+                ai::add_ai_attachment(cx, &path)?;
+                Ok("add_attachment")
+            }
+            Self::ApplyPreset { preset_id } => {
+                ai::apply_ai_preset(cx, &preset_id);
+                Ok("apply_preset")
+            }
         }
     }
 }
@@ -211,29 +221,33 @@ impl ScriptListApp {
                 .timer(std::time::Duration::from_millis(1))
                 .await;
 
+            let started_at = std::time::Instant::now();
+
             let open_result = cx.update(|cx| {
                 ai::open_ai_window(cx).map_err(|error| error.to_string())?;
                 Ok::<(), String>(())
             });
 
-            if open_result.is_ok() && !ai::is_ai_window_open() {
-                cx.background_executor()
-                    .timer(std::time::Duration::from_millis(16))
-                    .await;
+            if open_result.is_ok() {
+                let ready_now = cx.update(|cx| ai::is_ai_window_ready(cx));
+                if !ready_now {
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_millis(16))
+                        .await;
+                }
             }
 
-            let open_result = open_result.and_then(|()| {
+            let handoff_result = open_result.and_then(|()| {
                 cx.update(|cx| {
-                    if !ai::is_ai_window_open() {
+                    if !ai::is_ai_window_ready(cx) {
                         return Err("AI window not ready after open".to_string());
                     }
-                    deferred_action.apply(cx);
-                    Ok::<(), String>(())
+                    deferred_action.apply(cx)
                 })
             });
 
-            match open_result {
-                Ok(()) => {
+            match handoff_result {
+                Ok(apply_stage) => {
                     let _ = this.update(cx, |this, cx| {
                         tracing::info!(
                             category = "AI",
@@ -241,6 +255,8 @@ impl ScriptListApp {
                             source_action = %source_action,
                             trace_id = %trace_id,
                             deferred_action = deferred_action_name,
+                            apply_stage,
+                            duration_ms = started_at.elapsed().as_millis() as u64,
                             "AI handoff completed"
                         );
                         this.show_hud(success_message.to_string(), Some(HUD_SHORT_MS), cx);
@@ -256,9 +272,13 @@ impl ScriptListApp {
                             trace_id = %trace_id,
                             deferred_action = deferred_action_name,
                             error = %error,
+                            duration_ms = started_at.elapsed().as_millis() as u64,
                             "Failed to open AI window after hiding main window"
                         );
-                        this.show_error_toast("Failed to open AI window", cx);
+                        this.show_error_toast(
+                            format!("Failed to send to AI Chat: {}", error),
+                            cx,
+                        );
                     });
                 }
             }

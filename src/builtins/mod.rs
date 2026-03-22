@@ -177,6 +177,8 @@ pub enum UtilityCommandType {
     ProcessManager,
     /// Terminate all actively running Script Kit child processes
     StopAllProcesses,
+    /// Search and run menu bar commands from the frontmost app
+    CurrentAppCommands,
 }
 /// Kit Store command types for browsing and managing kits
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1273,6 +1275,24 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "square-stop",
         ));
 
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-current-app-commands",
+            "Current App Commands",
+            "Search and run menu bar commands from the frontmost app",
+            vec![
+                "current",
+                "app",
+                "commands",
+                "menu",
+                "menubar",
+                "frontmost",
+                "actions",
+                "shortcut",
+            ],
+            BuiltInFeature::UtilityCommand(UtilityCommandType::CurrentAppCommands),
+            "☰",
+        ));
+
         // =========================================================================
         // Kit Store Commands (debug-only stubs)
         // =========================================================================
@@ -2209,5 +2229,255 @@ mod tests {
             sparse_keywords.is_empty(),
             "Builtin entries need at least 3 keywords: {sparse_keywords:?}"
         );
+    }
+
+    // =====================================================================
+    // Current App Commands tests
+    // =====================================================================
+
+    #[test]
+    fn current_app_commands_builtin_is_registered() {
+        let entries = get_builtin_entries(&BuiltInConfig::default());
+        let found = entries
+            .iter()
+            .find(|e| e.id == "builtin-current-app-commands");
+        assert!(
+            found.is_some(),
+            "builtin-current-app-commands must be registered"
+        );
+        let entry = found.expect("just asserted");
+        assert_eq!(entry.name, "Current App Commands");
+        assert_eq!(
+            entry.feature,
+            BuiltInFeature::UtilityCommand(UtilityCommandType::CurrentAppCommands)
+        );
+    }
+
+    #[test]
+    fn menu_bar_leaf_name_returns_last_segment() {
+        let entry = BuiltInEntry::new_with_group(
+            "menubar-com.apple.Safari-file-new-tab",
+            "File → New Tab",
+            "Safari  ⌘T",
+            vec![
+                "file".to_string(),
+                "new".to_string(),
+                "tab".to_string(),
+            ],
+            BuiltInFeature::MenuBarAction(MenuBarActionInfo {
+                bundle_id: "com.apple.Safari".into(),
+                menu_path: vec!["File".into(), "New Tab".into()],
+                enabled: true,
+                shortcut: Some("⌘T".into()),
+            }),
+            Some("📁".into()),
+            BuiltInGroup::MenuBar,
+        );
+
+        assert_eq!(entry.leaf_name(), "New Tab");
+    }
+
+    #[test]
+    fn leaf_name_single_segment() {
+        let entry = BuiltInEntry::new_with_group(
+            "menubar-com.apple.Safari-quit",
+            "Quit",
+            "Safari",
+            vec!["quit".to_string()],
+            BuiltInFeature::MenuBarAction(MenuBarActionInfo {
+                bundle_id: "com.apple.Safari".into(),
+                menu_path: vec!["Quit".into()],
+                enabled: true,
+                shortcut: None,
+            }),
+            Some("📌".into()),
+            BuiltInGroup::MenuBar,
+        );
+
+        assert_eq!(entry.leaf_name(), "Quit");
+    }
+
+    #[test]
+    fn leaf_name_core_builtin_returns_full_name() {
+        let entry = BuiltInEntry::new_with_icon(
+            "builtin-clipboard-history",
+            "Clipboard History",
+            "View and paste from clipboard",
+            vec!["clipboard"],
+            BuiltInFeature::ClipboardHistory,
+            "📋",
+        );
+        // Core group → leaf_name returns full name unchanged
+        assert_eq!(entry.leaf_name(), "Clipboard History");
+    }
+
+    #[test]
+    fn builtin_frecency_key_uses_id() {
+        let entry = BuiltInEntry::new_with_group(
+            "menubar-com.apple.Safari-file-new-tab",
+            "File → New Tab",
+            "Safari  ⌘T",
+            vec![
+                "file".to_string(),
+                "new".to_string(),
+                "tab".to_string(),
+            ],
+            BuiltInFeature::MenuBarAction(MenuBarActionInfo {
+                bundle_id: "com.apple.Safari".into(),
+                menu_path: vec!["File".into(), "New Tab".into()],
+                enabled: true,
+                shortcut: Some("⌘T".into()),
+            }),
+            Some("📁".into()),
+            BuiltInGroup::MenuBar,
+        );
+
+        let frecency_key = format!("builtin:{}", entry.id);
+        assert_eq!(
+            frecency_key,
+            "builtin:menubar-com.apple.Safari-file-new-tab"
+        );
+        // Key is derived from id, not from name
+        assert_ne!(frecency_key, format!("builtin:{}", entry.name));
+    }
+
+    #[test]
+    fn menu_bar_items_to_entries_representative_path() {
+        use crate::menu_bar::{KeyboardShortcut, MenuBarItem, ModifierFlags};
+
+        let items = vec![
+            // Apple menu (index 0) — should be skipped
+            MenuBarItem {
+                title: "Apple".into(),
+                enabled: true,
+                shortcut: None,
+                children: vec![],
+                ax_element_path: vec![0],
+            },
+            // File menu with children
+            MenuBarItem {
+                title: "File".into(),
+                enabled: true,
+                shortcut: None,
+                children: vec![
+                    MenuBarItem {
+                        title: "New Tab".into(),
+                        enabled: true,
+                        shortcut: Some(KeyboardShortcut::new(
+                            "T".into(),
+                            ModifierFlags::COMMAND,
+                        )),
+                        children: vec![],
+                        ax_element_path: vec![1, 0],
+                    },
+                    // Separator — should be skipped
+                    MenuBarItem::separator(vec![1, 1]),
+                    // Disabled item — should be skipped
+                    MenuBarItem {
+                        title: "Close All".into(),
+                        enabled: false,
+                        shortcut: None,
+                        children: vec![],
+                        ax_element_path: vec![1, 2],
+                    },
+                    MenuBarItem {
+                        title: "New Window".into(),
+                        enabled: true,
+                        shortcut: Some(KeyboardShortcut::new(
+                            "N".into(),
+                            ModifierFlags::COMMAND,
+                        )),
+                        children: vec![],
+                        ax_element_path: vec![1, 3],
+                    },
+                ],
+                ax_element_path: vec![1],
+            },
+        ];
+
+        let entries =
+            menu_bar_items_to_entries(&items, "com.apple.Safari", "Safari");
+
+        // Should have exactly 2 entries (New Tab, New Window) — separator and disabled skipped
+        assert_eq!(entries.len(), 2, "expected 2 entries, got: {entries:?}");
+
+        // First entry: File → New Tab
+        let new_tab = &entries[0];
+        assert_eq!(new_tab.name, "File → New Tab");
+        assert_eq!(
+            new_tab.id,
+            "menubar-com.apple.Safari-file-new-tab"
+        );
+        assert!(
+            new_tab.description.contains("Safari"),
+            "description should contain app name"
+        );
+        assert!(
+            new_tab.description.contains("⌘T"),
+            "description should contain shortcut"
+        );
+        assert_eq!(new_tab.group, BuiltInGroup::MenuBar);
+
+        // Verify MenuBarAction info
+        if let BuiltInFeature::MenuBarAction(ref info) = new_tab.feature {
+            assert_eq!(info.bundle_id, "com.apple.Safari");
+            assert_eq!(info.menu_path, vec!["File", "New Tab"]);
+            assert!(info.enabled);
+            assert_eq!(info.shortcut, Some("⌘T".into()));
+        } else {
+            panic!("expected MenuBarAction feature");
+        }
+
+        // Second entry: File → New Window
+        let new_window = &entries[1];
+        assert_eq!(new_window.name, "File → New Window");
+        assert_eq!(
+            new_window.id,
+            "menubar-com.apple.Safari-file-new-window"
+        );
+    }
+
+    #[test]
+    fn menu_bar_items_to_entries_no_shortcut() {
+        use crate::menu_bar::MenuBarItem;
+
+        let items = vec![
+            // Apple menu — skipped
+            MenuBarItem {
+                title: "Apple".into(),
+                enabled: true,
+                shortcut: None,
+                children: vec![],
+                ax_element_path: vec![0],
+            },
+            // Edit menu with one child, no shortcut
+            MenuBarItem {
+                title: "Edit".into(),
+                enabled: true,
+                shortcut: None,
+                children: vec![MenuBarItem {
+                    title: "Paste".into(),
+                    enabled: true,
+                    shortcut: None,
+                    children: vec![],
+                    ax_element_path: vec![1, 0],
+                }],
+                ax_element_path: vec![1],
+            },
+        ];
+
+        let entries =
+            menu_bar_items_to_entries(&items, "com.apple.Finder", "Finder");
+
+        assert_eq!(entries.len(), 1);
+        // No shortcut → description is just the app name
+        assert_eq!(entries[0].description, "Finder");
+    }
+
+    #[test]
+    fn menu_bar_items_to_entries_empty_items() {
+        let entries: Vec<BuiltInEntry> =
+            menu_bar_items_to_entries(&[], "com.example.App", "Example");
+        assert!(entries.is_empty());
     }
 }

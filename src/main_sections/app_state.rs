@@ -22,6 +22,8 @@ struct ScriptListApp {
     cached_processes: Vec<crate::process_manager::ProcessInfo>,
     /// Background refresh task for ProcessManagerView (dropped on view change)
     process_manager_refresh_task: Option<gpui::Task<()>>,
+    /// Cached menu bar entries for CurrentAppCommandsView (populated on open)
+    cached_current_app_entries: Vec<builtins::BuiltInEntry>,
     selected_index: usize,
     /// Main menu filter text (mirrors gpui-component input state)
     filter_text: String,
@@ -84,6 +86,8 @@ struct ScriptListApp {
     window_list_scroll_handle: UniformListScrollHandle,
     // Scroll handle for process manager list
     process_list_scroll_handle: UniformListScrollHandle,
+    // Scroll handle for current app commands list
+    current_app_commands_scroll_handle: UniformListScrollHandle,
     // Scroll handle for design gallery list
     design_gallery_scroll_handle: UniformListScrollHandle,
     // Scroll handle for file search list

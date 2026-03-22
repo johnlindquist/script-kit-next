@@ -31,7 +31,7 @@ impl ScriptListApp {
                         if m.entry.should_exclude_from_frecency(excluded) {
                             None
                         } else {
-                            Some(format!("builtin:{}", m.entry.name))
+                            Some(format!("builtin:{}", m.entry.id))
                         }
                     }
                     scripts::SearchResult::App(m) => Some(m.app.path.to_string_lossy().to_string()),
