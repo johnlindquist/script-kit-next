@@ -1384,6 +1384,77 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 // Menu Bar Item Conversion
 // ============================================================================
 
+/// Expand a macOS shortcut display string (e.g. `⌘T`) into searchable aliases.
+///
+/// Returns normalized forms including the lowercased original, a compact form
+/// (`cmdt`), a spaced form (`cmd t`), and a chord form (`cmd+t`).
+pub fn shortcut_search_tokens(display: &str) -> Vec<String> {
+    let display_lower = display.to_lowercase();
+    let mut chord_parts: Vec<String> = Vec::new();
+
+    for ch in display_lower.chars() {
+        match ch {
+            '⌘' => chord_parts.push("cmd".into()),
+            '⌥' => chord_parts.push("option".into()),
+            '⌃' => chord_parts.push("ctrl".into()),
+            '⇧' => chord_parts.push("shift".into()),
+            '↩' | '⏎' => chord_parts.push("return".into()),
+            '⌫' => chord_parts.push("delete".into()),
+            '←' => chord_parts.push("left".into()),
+            '→' => chord_parts.push("right".into()),
+            '↑' => chord_parts.push("up".into()),
+            '↓' => chord_parts.push("down".into()),
+            '+' | ' ' => {}
+            other => chord_parts.push(other.to_string()),
+        }
+    }
+
+    let compact = chord_parts.join("");
+    let spaced = chord_parts.join(" ");
+    let chord = chord_parts.join("+");
+
+    let mut tokens = vec![display_lower];
+    if !compact.is_empty() {
+        tokens.push(compact);
+    }
+    if !spaced.is_empty() {
+        tokens.push(spaced);
+    }
+    if !chord.is_empty() {
+        tokens.push(chord);
+    }
+
+    tokens.sort();
+    tokens.dedup();
+    tokens
+}
+
+/// Match a menu-bar entry against a user query.
+///
+/// Returns `true` for an empty query. Otherwise applies AND semantics across
+/// whitespace-delimited terms, searching the entry's name, description, and
+/// keywords.
+pub fn menu_bar_entry_matches_query(entry: &BuiltInEntry, query: &str) -> bool {
+    let normalized = query.trim().to_lowercase();
+    if normalized.is_empty() {
+        return true;
+    }
+
+    let mut blob = String::new();
+    blob.push_str(&entry.name.to_lowercase());
+    blob.push(' ');
+    blob.push_str(&entry.description.to_lowercase());
+
+    for keyword in &entry.keywords {
+        blob.push(' ');
+        blob.push_str(&keyword.to_lowercase());
+    }
+
+    normalized
+        .split_whitespace()
+        .all(|term| blob.contains(term))
+}
+
 /// Convert menu bar items to built-in entries for search
 ///
 /// This flattens the menu hierarchy into searchable entries, skipping the
@@ -1447,7 +1518,15 @@ fn flatten_menu_item(
         } else {
             app_name.to_string()
         };
-        let keywords: Vec<String> = current_path.iter().map(|s| s.to_lowercase()).collect();
+        let mut keywords: Vec<String> = current_path.iter().map(|s| s.to_lowercase()).collect();
+        keywords.push(app_name.to_lowercase());
+
+        if let Some(ref shortcut) = item.shortcut {
+            keywords.extend(shortcut_search_tokens(&shortcut.to_display_string()));
+        }
+
+        keywords.sort();
+        keywords.dedup();
         let icon = get_menu_icon(&current_path[0]);
 
         entries.push(BuiltInEntry {

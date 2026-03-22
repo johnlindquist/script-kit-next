@@ -180,3 +180,92 @@ fn snapshot_empty_items_yields_empty_entries() {
 
     assert!(snapshot.into_entries().is_empty());
 }
+
+// ---------------------------------------------------------------------------
+// Keyword enrichment: app name + shortcut aliases
+// ---------------------------------------------------------------------------
+
+#[test]
+fn menu_bar_items_to_entries_skips_disabled_items_and_separators() {
+    let entries = script_kit_gpui::builtins::menu_bar_items_to_entries(
+        &sample_safari_items(),
+        "com.apple.Safari",
+        "Safari",
+    );
+
+    let names: Vec<&str> = entries.iter().map(|entry| entry.name.as_str()).collect();
+    assert_eq!(names, vec!["File → New Tab"]);
+}
+
+#[test]
+fn menu_bar_entry_keywords_include_app_name_and_shortcut_aliases() {
+    let entries = script_kit_gpui::builtins::menu_bar_items_to_entries(
+        &sample_safari_items(),
+        "com.apple.Safari",
+        "Safari",
+    );
+
+    let entry = entries
+        .iter()
+        .find(|entry| entry.name == "File → New Tab")
+        .expect("New Tab entry should exist");
+
+    assert!(
+        entry.keywords.contains(&"safari".to_string()),
+        "keywords should contain app name; got: {:?}",
+        entry.keywords
+    );
+    assert!(
+        entry.keywords.contains(&"⌘t".to_string()),
+        "keywords should contain ⌘t; got: {:?}",
+        entry.keywords
+    );
+    assert!(
+        entry.keywords.contains(&"cmd+t".to_string()),
+        "keywords should contain cmd+t; got: {:?}",
+        entry.keywords
+    );
+    assert!(
+        entry.keywords.contains(&"cmd t".to_string()),
+        "keywords should contain 'cmd t'; got: {:?}",
+        entry.keywords
+    );
+    assert!(
+        entry.keywords.contains(&"cmdt".to_string()),
+        "keywords should contain cmdt; got: {:?}",
+        entry.keywords
+    );
+}
+
+#[test]
+fn menu_bar_entry_query_matching_supports_multi_term_queries() {
+    let entries = script_kit_gpui::builtins::menu_bar_items_to_entries(
+        &sample_safari_items(),
+        "com.apple.Safari",
+        "Safari",
+    );
+
+    let entry = entries
+        .iter()
+        .find(|entry| entry.name == "File → New Tab")
+        .expect("New Tab entry should exist");
+
+    assert!(script_kit_gpui::builtins::menu_bar_entry_matches_query(
+        entry, "new tab"
+    ));
+    assert!(script_kit_gpui::builtins::menu_bar_entry_matches_query(
+        entry, "safari"
+    ));
+    assert!(script_kit_gpui::builtins::menu_bar_entry_matches_query(
+        entry, "⌘t"
+    ));
+    assert!(script_kit_gpui::builtins::menu_bar_entry_matches_query(
+        entry, "cmd+t"
+    ));
+    assert!(script_kit_gpui::builtins::menu_bar_entry_matches_query(
+        entry, "safari cmd+t"
+    ));
+    assert!(!script_kit_gpui::builtins::menu_bar_entry_matches_query(
+        entry, "close all"
+    ));
+}

@@ -16,19 +16,12 @@ impl ScriptListApp {
         let ui_border = self.theme.colors.ui.border;
 
         // Filter entries from cached data
-        let filtered_entries: Vec<(usize, &builtins::BuiltInEntry)> = if filter.is_empty() {
-            self.cached_current_app_entries.iter().enumerate().collect()
-        } else {
-            let filter_lower = filter.to_lowercase();
-            self.cached_current_app_entries
-                .iter()
-                .enumerate()
-                .filter(|(_, e)| {
-                    e.name.to_lowercase().contains(&filter_lower)
-                        || e.keywords.iter().any(|k| k.contains(&filter_lower))
-                })
-                .collect()
-        };
+        let filtered_entries: Vec<(usize, &builtins::BuiltInEntry)> = self
+            .cached_current_app_entries
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| builtins::menu_bar_entry_matches_query(e, &filter))
+            .collect();
         let filtered_len = filtered_entries.len();
 
         // Key handler
@@ -78,20 +71,12 @@ impl ScriptListApp {
                 };
 
                 // Compute filtered list
-                let filtered: Vec<(usize, &builtins::BuiltInEntry)> = if current_filter.is_empty()
-                {
-                    this.cached_current_app_entries.iter().enumerate().collect()
-                } else {
-                    let filter_lower = current_filter.to_lowercase();
-                    this.cached_current_app_entries
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, e)| {
-                            e.name.to_lowercase().contains(&filter_lower)
-                                || e.keywords.iter().any(|k| k.contains(&filter_lower))
-                        })
-                        .collect()
-                };
+                let filtered: Vec<(usize, &builtins::BuiltInEntry)> = this
+                    .cached_current_app_entries
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, e)| builtins::menu_bar_entry_matches_query(e, &current_filter))
+                    .collect();
                 let current_filtered_len = filtered.len();
 
                 if is_key_up(key) {
