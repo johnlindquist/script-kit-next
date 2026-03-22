@@ -627,7 +627,7 @@ fn ai_command_bar_has_all_expected_actions() {
         "chat:submit",
         "chat:new_chat",
         "chat:delete_chat",
-        "chat:add_attachment",
+        "chat:add_file",
         "chat:paste_image",
         "chat:change_model",
     ];

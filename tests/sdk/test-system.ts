@@ -323,18 +323,25 @@ try {
 		throw new Error("keyboard.tap is not a function");
 	}
 
-	// Test keyboard.type (fire-and-forget)
-	await keyboard.type("Hello World");
-
-	// Test keyboard.tap with multiple keys (fire-and-forget)
-	await keyboard.tap("command", "c");
-	await keyboard.tap("command", "shift", "p");
-
-	debug("Test 9 completed - keyboard messages sent");
-	logTest(test9, "pass", {
-		result: { methods: ["type", "tap"] },
-		duration_ms: Date.now() - start9,
-	});
+	// DISABLED: These send real keystrokes to the OS, interfering with
+	// whatever the user is doing (e.g. Cmd+C triggers copy).
+	// Run with INCLUDE_SYSTEM_INPUT=1 to enable.
+	if (process.env.INCLUDE_SYSTEM_INPUT === "1") {
+		await keyboard.type("Hello World");
+		await keyboard.tap("command", "c");
+		await keyboard.tap("command", "shift", "p");
+		debug("Test 9 completed - keyboard messages sent");
+		logTest(test9, "pass", {
+			result: { methods: ["type", "tap"] },
+			duration_ms: Date.now() - start9,
+		});
+	} else {
+		debug("Test 9 skipped - sends real keystrokes (set INCLUDE_SYSTEM_INPUT=1 to enable)");
+		logTest(test9, "skip", {
+			result: { reason: "sends real keystrokes" },
+			duration_ms: Date.now() - start9,
+		});
+	}
 } catch (err) {
 	logTest(test9, "fail", {
 		error: String(err),
@@ -373,27 +380,30 @@ try {
 		throw new Error("mouse.setPosition is not a function");
 	}
 
-	// Test mouse.move with path (fire-and-forget)
-	await mouse.move([
-		{ x: 100, y: 100 },
-		{ x: 200, y: 200 },
-		{ x: 300, y: 150 },
-	]);
-
-	// Test mouse.setPosition (fire-and-forget)
-	await mouse.setPosition({ x: 500, y: 500 });
-
-	// Test mouse.leftClick (fire-and-forget)
-	await mouse.leftClick();
-
-	// Test mouse.rightClick (fire-and-forget)
-	await mouse.rightClick();
-
-	debug("Test 10 completed - mouse messages sent");
-	logTest(test10, "pass", {
-		result: { methods: ["move", "leftClick", "rightClick", "setPosition"] },
-		duration_ms: Date.now() - start10,
-	});
+	// DISABLED: These send real mouse events to the OS, interfering with
+	// whatever the user is doing.
+	// Run with INCLUDE_SYSTEM_INPUT=1 to enable.
+	if (process.env.INCLUDE_SYSTEM_INPUT === "1") {
+		await mouse.move([
+			{ x: 100, y: 100 },
+			{ x: 200, y: 200 },
+			{ x: 300, y: 150 },
+		]);
+		await mouse.setPosition({ x: 500, y: 500 });
+		await mouse.leftClick();
+		await mouse.rightClick();
+		debug("Test 10 completed - mouse messages sent");
+		logTest(test10, "pass", {
+			result: { methods: ["move", "leftClick", "rightClick", "setPosition"] },
+			duration_ms: Date.now() - start10,
+		});
+	} else {
+		debug("Test 10 skipped - sends real mouse events (set INCLUDE_SYSTEM_INPUT=1 to enable)");
+		logTest(test10, "skip", {
+			result: { reason: "sends real mouse events" },
+			duration_ms: Date.now() - start10,
+		});
+	}
 } catch (err) {
 	logTest(test10, "fail", {
 		error: String(err),

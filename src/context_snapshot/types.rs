@@ -26,6 +26,19 @@ impl CaptureContextOptions {
         }
     }
 
+    /// Lightweight live probe for composer recommendations.
+    /// Includes selected text because recommendation quality depends on knowing
+    /// whether a selection exists, but still skips menu bar capture.
+    pub const fn recommendation() -> Self {
+        Self {
+            include_selected_text: true,
+            include_frontmost_app: true,
+            include_menu_bar: false,
+            include_browser_url: true,
+            include_focused_window: true,
+        }
+    }
+
     /// Lightweight capture — omits selected text and menu bar for lower
     /// token cost and reduced permission surface.
     pub const fn minimal() -> Self {

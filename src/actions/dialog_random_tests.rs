@@ -962,7 +962,8 @@ fn ai_command_bar_all_twelve_ids() {
         "chat:submit",
         "chat:new_chat",
         "chat:delete_chat",
-        "chat:add_attachment",
+        "chat:add_file",
+        "chat:add_image",
         "chat:paste_image",
         "chat:change_model",
         "chat:export_markdown",
@@ -974,7 +975,7 @@ fn ai_command_bar_all_twelve_ids() {
     for id in &expected {
         assert!(ids.contains(id), "Missing AI action: {}", id);
     }
-    assert_eq!(actions.len(), 21);
+    assert_eq!(actions.len(), 22);
 }
 
 #[test]

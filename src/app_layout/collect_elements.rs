@@ -87,22 +87,7 @@ impl ScriptListApp {
         match &self.current_view {
             AppView::ScriptList => {
                 let (elements, total_count) = self.collect_script_list_elements(limit);
-                let mut outcome = ElementCollectionOutcome::new(elements, total_count);
-                let context_strip_present = outcome
-                    .elements
-                    .iter()
-                    .any(|element| element.semantic_id == "panel:context-strip");
-                // Structured warning if context strip elements were truncated by the limit
-                if !context_strip_present && total_count > outcome.elements.len() {
-                    tracing::info!(
-                        event = "context_strip_truncated",
-                        limit,
-                        total_count,
-                        "Context strip omitted from elements due to limit"
-                    );
-                    outcome = outcome.with_warning("context_strip_truncated_by_limit");
-                }
-                outcome
+                ElementCollectionOutcome::new(elements, total_count)
             }
 
             AppView::ArgPrompt { choices, .. } => self.collect_choice_view_elements(
@@ -569,7 +554,7 @@ impl ScriptListApp {
             })
             .collect();
 
-        let (mut elements, base_total) = self.collect_named_rows(
+        let (elements, total_count) = self.collect_named_rows(
             "filter",
             self.filter_text.clone(),
             "results",
@@ -578,52 +563,17 @@ impl ScriptListApp {
             limit,
         );
 
-        // Append context strip elements
-        let strip_labels = ["Current Context", "Selection", "Browser URL", "Focused Window"];
-        let default_parts = Self::default_main_window_context_parts();
-        // +1 for the panel, +4 chips, +1 "Ask AI with Context" button
-        let strip_element_count = 1 + strip_labels.len() + 1;
-        let total_count = base_total + strip_element_count;
-
-        Self::push_limited_element(
-            &mut elements,
-            limit,
-            protocol::ElementInfo::panel("context-strip"),
-        );
-
-        for (i, (label, part)) in strip_labels.iter().zip(default_parts.iter()).enumerate() {
-            let is_selected = self.main_window_context_parts.contains(part);
-            let mut btn = protocol::ElementInfo::button(i, label);
-            btn.selected = Some(is_selected);
-            Self::push_limited_element(&mut elements, limit, btn);
-        }
-
-        let mut ai_btn = protocol::ElementInfo::button(4, "Ask AI with Context");
-        ai_btn.selected = Some(!self.main_window_context_parts.is_empty());
-        Self::push_limited_element(&mut elements, limit, ai_btn);
-
         // Emit JSON snapshot of all collected semantic IDs for agent introspection
         let semantic_ids: Vec<&str> = elements
             .iter()
             .map(|e| e.semantic_id.as_str())
             .collect();
-        let active_context_labels: Vec<&str> = self
-            .main_window_context_parts
-            .iter()
-            .map(|p| p.label())
-            .collect();
-        let context_strip_present = elements
-            .iter()
-            .any(|element| element.semantic_id == "panel:context-strip");
         tracing::debug!(
             event = "collect_script_list_elements",
             total_count,
             returned = elements.len(),
             limit,
             truncated = total_count > elements.len(),
-            context_strip_present,
-            active_context_count = self.main_window_context_parts.len(),
-            active_context_labels = ?active_context_labels,
             semantic_ids = ?semantic_ids,
             "ScriptList element collection complete"
         );

@@ -160,6 +160,7 @@ impl ScriptListApp {
         {
             if resolved_index != self.selected_index {
                 self.selected_index = resolved_index;
+                self.rebuild_main_window_preflight_if_needed();
             }
 
             if let Some(formatted_value) = self

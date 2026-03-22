@@ -31,6 +31,11 @@ impl AiApp {
             // No @ query detected — close the picker
             self.close_context_picker(cx);
         }
+
+        // Re-run preflight so recommendations update as the user types.
+        // Only when there are pending parts or non-empty input — otherwise
+        // the fast path inside schedule_context_preflight will clear state.
+        self.schedule_context_preflight_for_current_draft(cx);
     }
 
     /// Handle paste event - check for clipboard images

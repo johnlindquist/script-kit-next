@@ -11,6 +11,7 @@
  *   bun run scripts/test-runner.ts --parallel         # Run tests concurrently
  *   bun run scripts/test-runner.ts --filter "arg|div" # Run tests matching pattern
  *   bun run scripts/test-runner.ts --parallel --filter "editor"
+ *   bun run scripts/test-runner.ts --include-system  # Include tests that send real keystrokes
  * 
  * Environment:
  *   SDK_TEST_TIMEOUT=10    # Max seconds per test (default: 30)
@@ -115,7 +116,13 @@ const TIMEOUT_MS = parseInt(process.env.SDK_TEST_TIMEOUT || '5', 10) * 1000;
 const VERBOSE = process.env.SDK_TEST_VERBOSE === 'true';
 const JSON_ONLY = process.argv.includes('--json');
 const PARALLEL = process.argv.includes('--parallel');
+const INCLUDE_SYSTEM = process.argv.includes('--include-system');
 const CONCURRENCY = parseInt(process.env.SDK_TEST_CONCURRENCY || '4', 10);
+
+// Tests that send real keystrokes/clipboard writes to the OS.
+// Excluded by default to avoid interfering with the user's desktop.
+// Pass --include-system to run them.
+const SYSTEM_INPUT_TESTS = new Set(['test-system.ts']);
 
 // Parse --filter pattern
 function getFilterPattern(): RegExp | null {
@@ -384,7 +391,17 @@ async function findTestFiles(specificTest?: string): Promise<string[]> {
     let testFiles = files
       .filter(f => f.startsWith('test-') && f.endsWith('.ts'))
       .sort();
-    
+
+    // Exclude tests that send real system input (keystrokes, clipboard)
+    // unless --include-system is passed
+    if (!INCLUDE_SYSTEM) {
+      const before = testFiles.length;
+      testFiles = testFiles.filter(f => !SYSTEM_INPUT_TESTS.has(f));
+      if (testFiles.length < before) {
+        log(`Skipping ${before - testFiles.length} system-input test(s) (use --include-system to include)`);
+      }
+    }
+
     // Apply filter pattern if specified
     if (FILTER_PATTERN) {
       testFiles = testFiles.filter(f => FILTER_PATTERN!.test(f));

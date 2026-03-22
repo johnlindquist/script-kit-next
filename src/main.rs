@@ -179,6 +179,9 @@ mod hud_manager;
 // Debug grid overlay for visual testing
 mod debug_grid;
 
+// Main-window Execution Contract preflight rail
+mod main_window_preflight;
+
 // MCP Server modules for AI agent integration
 mod mcp_kit_tools;
 mod mcp_protocol;

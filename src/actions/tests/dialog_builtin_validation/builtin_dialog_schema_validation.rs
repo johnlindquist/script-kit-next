@@ -419,7 +419,7 @@ mod from_dialog_builtin_action_validation_tests {
     
     #[test]
     fn ai_command_bar_action_count_is_exactly_twelve() {
-        assert_eq!(get_ai_command_bar_actions().len(), 21);
+        assert_eq!(get_ai_command_bar_actions().len(), 22);
     }
     
     // =========================================================================
@@ -3798,8 +3798,8 @@ mod from_dialog_builtin_action_validation_tests_3 {
             .filter(|a| a.section.as_deref() == Some("Attachments"))
             .count();
         assert_eq!(
-            attachments_count, 3,
-            "Attachments section should have 3 actions"
+            attachments_count, 4,
+            "Attachments section should have 4 actions"
         );
     }
     
@@ -5619,8 +5619,8 @@ mod from_dialog_builtin_action_validation_tests_3 {
     fn ai_command_bar_has_exactly_13_actions() {
         let count = get_ai_command_bar_actions().len();
         assert_eq!(
-            count, 21,
-            "AI command bar should have exactly 21 actions, got {}",
+            count, 22,
+            "AI command bar should have exactly 22 actions, got {}",
             count
         );
     }
@@ -8439,9 +8439,9 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 .iter()
                 .filter(|a| a.section.as_deref() == Some("Attachments"))
                 .count();
-            assert_eq!(attach_count, 3);
+            assert_eq!(attach_count, 4);
         }
-    
+
         #[test]
         fn ai_command_bar_settings_section_has_1_action() {
             let actions = get_ai_command_bar_actions();
@@ -8455,7 +8455,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
         #[test]
         fn ai_command_bar_total_is_12() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 21);
+            assert_eq!(actions.len(), 22);
         }
     
         #[test]
@@ -11908,7 +11908,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
         #[test]
         fn ai_command_bar_has_exactly_12_actions() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 21);
+            assert_eq!(actions.len(), 22);
         }
 
         #[test]
@@ -11947,7 +11947,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 .iter()
                 .filter(|a| a.section.as_deref() == Some("Attachments"))
                 .collect();
-            assert_eq!(att_actions.len(), 3);
+            assert_eq!(att_actions.len(), 4);
         }
     
         #[test]
@@ -13550,7 +13550,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
         #[test]
         fn ai_command_bar_exactly_12_actions() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 21);
+            assert_eq!(actions.len(), 22);
         }
     
         #[test]
@@ -17618,7 +17618,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
         #[test]
         fn ai_command_bar_has_exactly_12_actions() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 21, "AI command bar should have 21 actions");
+            assert_eq!(actions.len(), 22, "AI command bar should have 22 actions");
         }
     
         #[test]
@@ -19840,7 +19840,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
         #[test]
         fn ai_cmd_bar_add_attachment_shortcut() {
             let actions = get_ai_command_bar_actions();
-            let a = find_action(&actions, "chat:add_attachment").unwrap();
+            let a = find_action(&actions, "chat:add_file").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⇧⌘A"));
         }
     

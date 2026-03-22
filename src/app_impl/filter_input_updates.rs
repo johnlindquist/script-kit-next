@@ -36,6 +36,7 @@ impl ScriptListApp {
                                 app.main_list_state
                                     .scroll_to_reveal_item(app.selected_index);
                                 app.last_scrolled_index = Some(app.selected_index);
+                                app.rebuild_main_window_preflight_if_needed();
                                 // This will trigger window resize
                                 app.update_window_size();
                                 let coalesce_elapsed = coalesce_start.elapsed();
@@ -107,6 +108,7 @@ impl ScriptListApp {
             }
         }
 
+        self.rebuild_main_window_preflight_if_needed();
         self.update_window_size_deferred(window, cx);
         cx.notify();
     }

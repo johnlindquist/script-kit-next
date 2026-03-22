@@ -13,6 +13,7 @@ impl ScriptListApp {
         }
 
         self.selected_index = ix;
+        self.rebuild_main_window_preflight_if_needed();
         self.scroll_to_selected_if_needed(reason);
         self.trigger_scroll_activity(cx);
         cx.notify();

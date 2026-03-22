@@ -456,15 +456,12 @@ impl AiApp {
     ///
     /// Either schedules a preflight (if parts remain) or clears the
     /// preflight state. Both paths call `cx.notify()` internally.
+    /// Uses the current composer draft so recommendations stay accurate.
     fn notify_context_parts_changed(&mut self, cx: &mut Context<Self>) {
         if self.pending_context_parts.is_empty() {
             self.clear_context_preflight(cx);
         } else {
-            // Use empty string as raw_content — the preflight will pick up
-            // any @mentions from the actual composer input at submit time.
-            // For the preflight preview, we only care about the explicit
-            // pending parts that are already attached.
-            self.schedule_context_preflight(String::new(), cx);
+            self.schedule_context_preflight_for_current_draft(cx);
         }
     }
 
