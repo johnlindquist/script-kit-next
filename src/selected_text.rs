@@ -439,6 +439,7 @@ mod system_tests {
     }
 
     #[test]
+    #[ignore] // Calls get_selected_text which may simulate Cmd+C via clipboard fallback
     fn test_get_selected_text_without_permission_returns_error() {
         // If we don't have permission, we should get an error
         // This test is tricky because we can't easily revoke permission
@@ -458,6 +459,7 @@ mod system_tests {
     }
 
     #[test]
+    #[ignore] // Calls set_selected_text which simulates Cmd+V via clipboard fallback
     fn test_set_selected_text_empty_string() {
         // Test setting empty text (edge case)
         // This will fail without permission, but shouldn't panic

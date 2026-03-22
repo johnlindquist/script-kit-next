@@ -150,8 +150,9 @@ impl AiApp {
             }))
             // Unified context bar (pre-submit preflight or post-submit receipt)
             .when(show_bar, |d| d.child(self.render_context_bar(cx)))
-            // Context recommendations (shown when preflight suggests missing attachments)
-            .when(!self.context_preflight.recommendations.is_empty(), |d| {
+            // Context recommendations (shown only when canonical preflight has
+            // surfaced recommendations backed by a live snapshot).
+            .when(self.context_preflight.has_surfaced_recommendations(), |d| {
                 d.child(self.render_context_recommendations(cx))
             })
             // Editing indicator (shown above input when editing a message)

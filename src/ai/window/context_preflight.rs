@@ -115,6 +115,26 @@ pub fn preflight_state_from_analysis(
     let approx_tokens = estimate_tokens_from_text(&receipt.context.prompt_prefix);
     let status = status_from_decision(&receipt.decision);
 
+    // Suppress recommendations when there is no live snapshot backing them.
+    // Without a snapshot, the recommendation engine's output is unverifiable
+    // and should not surface in the UI.
+    let live_snapshot_present = live_snapshot.is_some();
+    let input_recommendation_count = recommendations.len();
+    let effective_recommendations = if live_snapshot_present {
+        recommendations
+    } else {
+        Vec::new()
+    };
+
+    tracing::info!(
+        target: "ai",
+        generation,
+        live_snapshot_present,
+        input_recommendation_count,
+        effective_recommendation_count = effective_recommendations.len(),
+        "ai_context_preflight_recommendations_resolved"
+    );
+
     ContextPreflightState {
         generation,
         status,
@@ -126,7 +146,7 @@ pub fn preflight_state_from_analysis(
         prompt_chars,
         receipt: Some(receipt),
         live_snapshot,
-        recommendations,
+        recommendations: effective_recommendations,
     }
 }
 
@@ -146,6 +166,15 @@ pub struct ContextPreflightSnapshot {
 }
 
 impl ContextPreflightState {
+    /// Whether there are surfaced recommendations backed by a live snapshot.
+    ///
+    /// This is the **canonical** visibility gate for the recommendation strip.
+    /// Render code must use this method — never check `recommendations.is_empty()`
+    /// directly — so that the live-snapshot guard cannot be bypassed.
+    pub fn has_surfaced_recommendations(&self) -> bool {
+        self.live_snapshot.is_some() && !self.recommendations.is_empty()
+    }
+
     /// Machine-readable snapshot for agent verification.
     pub fn snapshot(&self) -> ContextPreflightSnapshot {
         ContextPreflightSnapshot {
