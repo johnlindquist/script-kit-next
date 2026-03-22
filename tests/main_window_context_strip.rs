@@ -195,6 +195,114 @@ fn launch_parts_serde_roundtrip() {
     assert_eq!(parts, round_trip);
 }
 
+// ---------- Ask AI with Context flow: parts → receipt ----------
+
+#[test]
+fn ask_ai_with_context_preserves_parts_through_resolution() {
+    use script_kit_gpui::ai::message_parts::{
+        resolve_context_parts_with_receipt, ContextResolutionReceipt,
+    };
+
+    // Start with default parts, toggle off "Selection", keep 3
+    let mut parts = default_parts();
+    let selection = parts[1].clone();
+    toggle(&mut parts, selection);
+    assert_eq!(parts.len(), 3);
+
+    // Resolve — uses kit://context URIs which resolve deterministically
+    let receipt: ContextResolutionReceipt =
+        resolve_context_parts_with_receipt(&parts, &[], &[]);
+
+    // Receipt must account for all attempted parts
+    assert_eq!(
+        receipt.attempted, 3,
+        "attempted count must match selected parts: {}",
+        serde_json::to_string(&receipt).unwrap_or_default()
+    );
+    assert_eq!(
+        receipt.resolved, 3,
+        "all kit://context URIs should resolve: {}",
+        serde_json::to_string(&receipt).unwrap_or_default()
+    );
+    assert!(
+        !receipt.has_failures(),
+        "no failures expected: {:?}",
+        receipt.failures
+    );
+    assert!(
+        !receipt.prompt_prefix.is_empty(),
+        "prompt_prefix must contain resolved context blocks"
+    );
+
+    // Verify the prompt_prefix contains context blocks from the resolved URIs
+    assert!(
+        receipt
+            .prompt_prefix
+            .contains("kit://context?profile=minimal"),
+        "prompt_prefix must include minimal context URI"
+    );
+
+    // Structured JSON summary for agent verification
+    let summary = serde_json::json!({
+        "test": "ask_ai_with_context_preserves_parts_through_resolution",
+        "attempted": receipt.attempted,
+        "resolved": receipt.resolved,
+        "failures": receipt.failures.len(),
+        "prompt_prefix_len": receipt.prompt_prefix.len(),
+        "part_labels": parts.iter().map(|p| p.label()).collect::<Vec<_>>(),
+    });
+    eprintln!("{}", serde_json::to_string(&summary).expect("json summary"));
+}
+
+#[test]
+fn ask_ai_with_context_all_defaults_yields_complete_receipt() {
+    use script_kit_gpui::ai::message_parts::{
+        resolve_context_parts_with_receipt, ContextResolutionReceipt,
+    };
+
+    let parts = default_parts();
+    let receipt: ContextResolutionReceipt =
+        resolve_context_parts_with_receipt(&parts, &[], &[]);
+
+    assert_eq!(receipt.attempted, 4);
+    assert_eq!(receipt.resolved, 4);
+    assert!(!receipt.has_failures());
+
+    // Each resolved URI should produce a <context source="..."> block
+    for part in &parts {
+        assert!(
+            receipt.prompt_prefix.contains(part.source()),
+            "prompt_prefix missing source: {}",
+            part.source()
+        );
+    }
+
+    let summary = serde_json::json!({
+        "test": "ask_ai_with_context_all_defaults_yields_complete_receipt",
+        "attempted": receipt.attempted,
+        "resolved": receipt.resolved,
+        "has_failures": receipt.has_failures(),
+        "prompt_prefix_sources": parts.iter().map(|p| p.source()).collect::<Vec<_>>(),
+    });
+    eprintln!("{}", serde_json::to_string(&summary).expect("json summary"));
+}
+
+#[test]
+fn ask_ai_with_context_empty_parts_yields_zero_receipt() {
+    use script_kit_gpui::ai::message_parts::{
+        resolve_context_parts_with_receipt, ContextResolutionReceipt,
+    };
+
+    let parts: Vec<AiContextPart> = vec![];
+    let receipt: ContextResolutionReceipt =
+        resolve_context_parts_with_receipt(&parts, &[], &[]);
+
+    assert_eq!(receipt.attempted, 0);
+    assert_eq!(receipt.resolved, 0);
+    assert!(!receipt.has_failures());
+    assert!(receipt.prompt_prefix.is_empty());
+}
+
 #[test]
 fn launch_parts_json_structure_matches_spec() {
     let parts = vec![

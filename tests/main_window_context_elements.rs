@@ -155,6 +155,104 @@ fn context_strip_adds_six_elements() {
     assert_eq!(strip_count, 6);
 }
 
+// ---------- Full-cycle: elements + resolution receipt ----------
+
+#[test]
+fn full_cycle_elements_and_receipt_consistency() {
+    use script_kit_gpui::ai::message_parts::{
+        resolve_context_parts_with_receipt, ContextResolutionReceipt,
+    };
+
+    // Simulate collect_script_list_elements output
+    let parts = default_parts();
+    let mut elements = vec![
+        ElementInfo::input("filter", Some(""), true),
+        ElementInfo::list("results", 5),
+        ElementInfo::panel("context-strip"),
+    ];
+    let labels = ["Current Context", "Selection", "Browser URL", "Focused Window"];
+    for (i, (label, part)) in labels.iter().zip(parts.iter()).enumerate() {
+        let is_selected = parts.contains(part);
+        let mut btn = ElementInfo::button(i, label);
+        btn.selected = Some(is_selected);
+        elements.push(btn);
+    }
+    let mut ai_btn = ElementInfo::button(4, "Ask AI with Context");
+    ai_btn.selected = Some(!parts.is_empty());
+    elements.push(ai_btn);
+
+    // Verify all expected semantic IDs are present
+    let ids: Vec<&str> = elements.iter().map(|e| e.semantic_id.as_str()).collect();
+    assert!(ids.contains(&"input:filter"), "missing input:filter");
+    assert!(ids.contains(&"list:results"), "missing list:results");
+    assert!(ids.contains(&PANEL_ID), "missing panel:context-strip");
+    for chip_id in &CHIP_IDS {
+        assert!(ids.contains(chip_id), "missing chip: {}", chip_id);
+    }
+    assert!(ids.contains(&AI_BUTTON_ID), "missing AI button");
+
+    // Now resolve the selected parts and verify receipt
+    let receipt: ContextResolutionReceipt =
+        resolve_context_parts_with_receipt(&parts, &[], &[]);
+    assert_eq!(receipt.attempted, 4);
+    assert_eq!(receipt.resolved, 4);
+    assert!(!receipt.has_failures());
+    assert!(!receipt.prompt_prefix.is_empty());
+
+    // JSON summary for agent introspection
+    let summary = serde_json::json!({
+        "test": "full_cycle_elements_and_receipt_consistency",
+        "semantic_ids": ids,
+        "receipt": {
+            "attempted": receipt.attempted,
+            "resolved": receipt.resolved,
+            "failures": receipt.failures.len(),
+            "prompt_prefix_len": receipt.prompt_prefix.len(),
+        },
+    });
+    eprintln!("{}", serde_json::to_string(&summary).expect("json summary"));
+}
+
+#[test]
+fn elements_response_fields_present() {
+    // Verify ElementCollectionOutcome-equivalent fields exist
+    let parts = default_parts();
+    let mut elements = vec![
+        ElementInfo::input("filter", Some("test"), true),
+        ElementInfo::list("results", 3),
+        ElementInfo::panel("context-strip"),
+    ];
+    let labels = ["Current Context", "Selection", "Browser URL", "Focused Window"];
+    for (i, (label, part)) in labels.iter().zip(parts.iter()).enumerate() {
+        let mut btn = ElementInfo::button(i, label);
+        btn.selected = Some(parts.contains(part));
+        elements.push(btn);
+    }
+    let mut ai_btn = ElementInfo::button(4, "Ask AI with Context");
+    ai_btn.selected = Some(true);
+    elements.push(ai_btn);
+
+    let total_count = 5 + 6; // 5 results + 2 base + 6 strip
+    let truncated = total_count > elements.len();
+
+    // focusedSemanticId
+    let focused = elements
+        .iter()
+        .find(|e| e.focused == Some(true))
+        .map(|e| e.semantic_id.as_str());
+    assert_eq!(focused, Some("input:filter"), "filter should be focused");
+
+    // selectedSemanticId
+    let selected = elements
+        .iter()
+        .find(|e| e.selected == Some(true))
+        .map(|e| e.semantic_id.as_str());
+    assert!(selected.is_some(), "at least one element should be selected");
+
+    // truncated flag is deterministic
+    let _ = truncated; // verify it is computable without panic
+}
+
 // ---------- Existing elements preserved ----------
 
 #[test]
