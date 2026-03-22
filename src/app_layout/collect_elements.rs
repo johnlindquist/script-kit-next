@@ -551,13 +551,39 @@ impl ScriptListApp {
             })
             .collect();
 
-        self.collect_named_rows(
+        let (mut elements, base_total) = self.collect_named_rows(
             "filter",
             self.filter_text.clone(),
             "results",
             &row_names,
             self.selected_index,
             limit,
-        )
+        );
+
+        // Append context strip elements
+        let strip_labels = ["Current Context", "Selection", "Browser URL", "Focused Window"];
+        let default_parts = Self::default_main_window_context_parts();
+        // +1 for the panel, +4 chips, +1 "Ask AI with Context" button
+        let strip_element_count = 1 + strip_labels.len() + 1;
+        let total_count = base_total + strip_element_count;
+
+        Self::push_limited_element(
+            &mut elements,
+            limit,
+            protocol::ElementInfo::panel("context-strip"),
+        );
+
+        for (i, (label, part)) in strip_labels.iter().zip(default_parts.iter()).enumerate() {
+            let is_selected = self.main_window_context_parts.contains(part);
+            let mut btn = protocol::ElementInfo::button(i, label);
+            btn.selected = Some(is_selected);
+            Self::push_limited_element(&mut elements, limit, btn);
+        }
+
+        let mut ai_btn = protocol::ElementInfo::button(4, "Ask AI with Context");
+        ai_btn.selected = Some(!self.main_window_context_parts.is_empty());
+        Self::push_limited_element(&mut elements, limit, ai_btn);
+
+        (elements, total_count)
     }
 }

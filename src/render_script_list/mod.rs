@@ -119,7 +119,165 @@ fn render_inline_calc_list_item(
         .into_any_element()
 }
 
+/// Chip height for context rail buttons (px).
+const CONTEXT_STRIP_CHIP_HEIGHT: f32 = 24.0;
+/// Horizontal padding inside each chip.
+const CONTEXT_STRIP_CHIP_PX: f32 = 8.0;
+/// Vertical padding inside each chip.
+const CONTEXT_STRIP_CHIP_PY: f32 = 2.0;
+/// Border radius for chips.
+const CONTEXT_STRIP_CHIP_RADIUS: f32 = 4.0;
+/// Gap between chips.
+const CONTEXT_STRIP_GAP: f32 = 6.0;
+/// Horizontal padding of the strip container.
+const CONTEXT_STRIP_PX: f32 = 16.0;
+/// Vertical padding of the strip container.
+const CONTEXT_STRIP_PY: f32 = 4.0;
+
 impl ScriptListApp {
+    /// Renders the main window context rail: four toggleable context chips
+    /// plus an "Ask AI with Context" action button.
+    ///
+    /// Semantic IDs:
+    /// - `panel:context-strip`
+    /// - `button:0:Current Context`, `button:1:Selection`, `button:2:Browser URL`, `button:3:Focused Window`
+    /// - `button:4:Ask AI with Context`
+    fn render_main_window_context_strip(
+        &self,
+        cx: &mut Context<Self>,
+        chrome: &crate::theme::AppChromeColors,
+    ) -> AnyElement {
+        let default_parts = Self::default_main_window_context_parts();
+        let selected_parts = &self.main_window_context_parts;
+
+        let chip_labels = ["Current Context", "Selection", "Browser URL", "Focused Window"];
+
+        let mut strip = div()
+            .id("context-strip")
+            .w_full()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(CONTEXT_STRIP_GAP))
+            .px(px(CONTEXT_STRIP_PX))
+            .py(px(CONTEXT_STRIP_PY));
+
+        // Render each context chip
+        for (i, (label, part)) in chip_labels.iter().zip(default_parts.iter()).enumerate() {
+            let is_selected = selected_parts.contains(part);
+            let part_clone = part.clone();
+
+            let chip = div()
+                .id(ElementId::NamedInteger("context-chip".into(), i as u64))
+                .h(px(CONTEXT_STRIP_CHIP_HEIGHT))
+                .px(px(CONTEXT_STRIP_CHIP_PX))
+                .py(px(CONTEXT_STRIP_CHIP_PY))
+                .rounded(px(CONTEXT_STRIP_CHIP_RADIUS))
+                .cursor_pointer()
+                .text_xs()
+                .flex()
+                .items_center()
+                .when(is_selected, |d| {
+                    d.bg(rgba(chrome.accent_badge_bg_rgba))
+                        .text_color(rgb(chrome.accent_badge_text_hex))
+                })
+                .when(!is_selected, |d| {
+                    d.bg(rgba(chrome.badge_bg_rgba))
+                        .text_color(rgb(chrome.badge_text_hex))
+                })
+                .on_click(cx.listener(move |this, _event: &gpui::ClickEvent, _window, cx| {
+                    this.toggle_main_window_context_part(part_clone.clone(), cx);
+                }))
+                .child(*label);
+
+            tracing::trace!(
+                event = "context_strip_chip_render",
+                index = i,
+                label = *label,
+                selected = is_selected,
+                visible = true,
+                focusable = true,
+                semantic_id = %format!("button:{}:{}", i, label),
+                "Rendered context strip chip"
+            );
+
+            strip = strip.child(chip);
+        }
+
+        // "Ask AI with Context" action button
+        let has_selected = !selected_parts.is_empty();
+        let ai_button = div()
+            .id("context-strip-ask-ai")
+            .h(px(CONTEXT_STRIP_CHIP_HEIGHT))
+            .px(px(CONTEXT_STRIP_CHIP_PX))
+            .py(px(CONTEXT_STRIP_CHIP_PY))
+            .rounded(px(CONTEXT_STRIP_CHIP_RADIUS))
+            .cursor_pointer()
+            .text_xs()
+            .font_weight(FontWeight::SEMIBOLD)
+            .flex()
+            .items_center()
+            .when(has_selected, |d| {
+                d.bg(rgba(chrome.accent_badge_bg_rgba))
+                    .text_color(rgb(chrome.accent_badge_text_hex))
+            })
+            .when(!has_selected, |d| {
+                d.bg(rgba(chrome.badge_bg_rgba))
+                    .text_color(rgb(chrome.text_muted_hex))
+            })
+            .on_click(cx.listener(|this, _event: &gpui::ClickEvent, _window, cx| {
+                if let Some(request) = this.build_main_window_ai_launch_request(
+                    this.filter_text.clone(),
+                    false,
+                ) {
+                    tracing::info!(
+                        event = "context_strip_ask_ai_click",
+                        part_count = request.parts.len(),
+                        message_len = request.message.len(),
+                        "Ask AI with Context clicked"
+                    );
+                    // Open AI window with context parts
+                    if let Err(e) = ai::open_ai_window(cx) {
+                        tracing::error!(event = "context_strip_ai_open_error", error = %e, "Failed to open AI window");
+                    } else {
+                        ai::set_ai_input_with_context_parts(
+                            cx,
+                            &request.message,
+                            &request.parts,
+                            request.submit,
+                        );
+                    }
+                } else {
+                    tracing::info!(
+                        event = "context_strip_ask_ai_no_parts",
+                        "Ask AI clicked but no context parts selected"
+                    );
+                }
+            }))
+            .child("Ask AI with Context");
+
+        tracing::trace!(
+            event = "context_strip_ai_button_render",
+            selected = has_selected,
+            visible = true,
+            focusable = true,
+            semantic_id = "button:4:Ask AI with Context",
+            "Rendered Ask AI with Context button"
+        );
+
+        strip = strip.child(ai_button);
+
+        tracing::trace!(
+            event = "context_strip_render",
+            chip_count = chip_labels.len(),
+            selected_count = selected_parts.len(),
+            semantic_id = "panel:context-strip",
+            "Rendered context strip panel"
+        );
+
+        strip.into_any_element()
+    }
+
     fn render_script_list(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let render_list_start = std::time::Instant::now();
         let filter_for_log = self.filter_text.clone();
@@ -1087,7 +1245,9 @@ impl ScriptListApp {
                     .mx(px(divider_margin))
                     .h(px(border_width))
                     .bg(rgba(chrome.divider_rgba))
-            });
+            })
+            // Context rail: toggleable context chips + "Ask AI with Context" action
+            .child(self.render_main_window_context_strip(cx, &chrome));
 
         // Main content area - 50/50 split: List on left, Preview on right
         main_div = main_div

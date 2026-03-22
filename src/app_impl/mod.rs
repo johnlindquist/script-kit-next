@@ -42,6 +42,8 @@ mod registries_state;
 mod prompt_ai;
 #[path = "naming_dialog.rs"]
 mod naming_dialog;
+#[path = "main_window_context.rs"]
+mod main_window_context;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod app_impl_state_sync_tests;

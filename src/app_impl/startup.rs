@@ -520,6 +520,13 @@ impl ScriptListApp {
             mouse_cursor_hidden: false,
             // Cached provider registry - built in background, None until ready
             cached_provider_registry: None,
+            // Main window context rail state (ScriptList only)
+            main_window_context_parts: Self::default_main_window_context_parts(),
+            main_window_context_preview_index: None,
+            main_window_context_last_snapshot: None,
+            main_window_context_error: None,
+            main_window_context_capture_task: None,
+            main_window_context_gen: 0,
         };
 
         // Build initial alias/shortcut registries (conflicts logged, not shown via HUD on startup)
