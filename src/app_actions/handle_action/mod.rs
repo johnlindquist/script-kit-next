@@ -175,6 +175,24 @@ impl ScriptListApp {
         success_message: &'static str,
         cx: &mut Context<Self>,
     ) {
+        self.hide_main_and_reset(cx);
+        self.open_ai_window_after_already_hidden(
+            source_action,
+            trace_id,
+            deferred_action,
+            success_message,
+            cx,
+        );
+    }
+
+    fn open_ai_window_after_already_hidden(
+        &mut self,
+        source_action: &str,
+        trace_id: &str,
+        deferred_action: DeferredAiWindowAction,
+        success_message: &'static str,
+        cx: &mut Context<Self>,
+    ) {
         let source_action = source_action.to_string();
         let trace_id = trace_id.to_string();
         let deferred_action_name = deferred_action.name();
@@ -185,10 +203,8 @@ impl ScriptListApp {
             source_action = %source_action,
             trace_id = %trace_id,
             deferred_action = deferred_action_name,
-            "Hiding main window before opening AI window"
+            "Opening AI window after main window already hidden"
         );
-
-        self.hide_main_and_reset(cx);
 
         cx.spawn(async move |this, cx| {
             cx.background_executor()
@@ -197,8 +213,23 @@ impl ScriptListApp {
 
             let open_result = cx.update(|cx| {
                 ai::open_ai_window(cx).map_err(|error| error.to_string())?;
-                deferred_action.apply(cx);
                 Ok::<(), String>(())
+            });
+
+            if open_result.is_ok() && !ai::is_ai_window_open() {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(16))
+                    .await;
+            }
+
+            let open_result = open_result.and_then(|()| {
+                cx.update(|cx| {
+                    if !ai::is_ai_window_open() {
+                        return Err("AI window not ready after open".to_string());
+                    }
+                    deferred_action.apply(cx);
+                    Ok::<(), String>(())
+                })
             });
 
             match open_result {
