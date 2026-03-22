@@ -670,7 +670,9 @@ pub fn get_menu_bar_for_pid(pid: i32) -> Result<Vec<MenuBarItem>> {
 pub mod current_app_commands;
 
 #[allow(unused_imports)] // Will be used when CurrentAppCommands execution is wired
-pub use current_app_commands::{load_frontmost_menu_snapshot, FrontmostMenuSnapshot};
+pub use current_app_commands::{
+    load_frontmost_menu_snapshot, FrontmostMenuSnapshot, FrontmostMenuSnapshotReceipt,
+};
 
 #[cfg(test)]
 mod tests;

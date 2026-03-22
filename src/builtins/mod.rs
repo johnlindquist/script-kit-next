@@ -1429,14 +1429,20 @@ pub fn shortcut_search_tokens(display: &str) -> Vec<String> {
     tokens
 }
 
-/// Match a menu-bar entry against a user query.
-///
-/// Returns `true` for an empty query. Otherwise applies AND semantics across
-/// whitespace-delimited terms, searching the entry's name, description, and
-/// keywords.
-pub fn menu_bar_entry_matches_query(entry: &BuiltInEntry, query: &str) -> bool {
-    let normalized = query.trim().to_lowercase();
-    if normalized.is_empty() {
+/// A machine-readable receipt for a menu-bar filter operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MenuBarFilterReceipt {
+    pub query: String,
+    pub normalized_query: String,
+    pub total_entries: usize,
+    pub matched_entries: usize,
+}
+
+fn menu_bar_entry_matches_normalized_query(
+    entry: &BuiltInEntry,
+    normalized_query: &str,
+) -> bool {
+    if normalized_query.is_empty() {
         return true;
     }
 
@@ -1450,9 +1456,43 @@ pub fn menu_bar_entry_matches_query(entry: &BuiltInEntry, query: &str) -> bool {
         blob.push_str(&keyword.to_lowercase());
     }
 
-    normalized
+    normalized_query
         .split_whitespace()
         .all(|term| blob.contains(term))
+}
+
+/// Match a menu-bar entry against a user query.
+///
+/// Returns `true` for an empty query. Otherwise applies AND semantics across
+/// whitespace-delimited terms, searching the entry's name, description, and
+/// keywords.
+#[allow(dead_code)] // Used by integration tests via lib.rs
+pub fn menu_bar_entry_matches_query(entry: &BuiltInEntry, query: &str) -> bool {
+    menu_bar_entry_matches_normalized_query(entry, &query.trim().to_lowercase())
+}
+
+/// Filter menu-bar entries and return a machine-readable receipt for logging.
+pub fn filter_menu_bar_entries<'a>(
+    entries: &'a [BuiltInEntry],
+    query: &str,
+) -> (Vec<(usize, &'a BuiltInEntry)>, MenuBarFilterReceipt) {
+    let normalized_query = query.trim().to_lowercase();
+    let filtered: Vec<(usize, &'a BuiltInEntry)> = entries
+        .iter()
+        .enumerate()
+        .filter(|(_, entry)| {
+            menu_bar_entry_matches_normalized_query(entry, &normalized_query)
+        })
+        .collect();
+
+    let receipt = MenuBarFilterReceipt {
+        query: query.to_string(),
+        normalized_query,
+        total_entries: entries.len(),
+        matched_entries: filtered.len(),
+    };
+
+    (filtered, receipt)
 }
 
 /// Convert menu bar items to built-in entries for search
@@ -2558,5 +2598,90 @@ mod tests {
         let entries: Vec<BuiltInEntry> =
             menu_bar_items_to_entries(&[], "com.example.App", "Example");
         assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn shortcut_search_tokens_expands_symbolic_shortcuts() {
+        let tokens = shortcut_search_tokens("⌘⇧T");
+
+        assert!(tokens.contains(&"⌘⇧t".to_string()));
+        assert!(tokens.contains(&"cmdshiftt".to_string()));
+        assert!(tokens.contains(&"cmd shift t".to_string()));
+        assert!(tokens.contains(&"cmd+shift+t".to_string()));
+    }
+
+    #[test]
+    fn menu_bar_entry_matches_shortcut_aliases() {
+        let entry = BuiltInEntry::new_with_group(
+            "menubar-com.apple.Safari-file-new-tab",
+            "File → New Tab",
+            "Safari  ⌘T",
+            vec![
+                "file".into(),
+                "new".into(),
+                "tab".into(),
+                "safari".into(),
+                "⌘t".into(),
+                "cmdt".into(),
+                "cmd t".into(),
+                "cmd+t".into(),
+            ],
+            BuiltInFeature::MenuBarAction(MenuBarActionInfo {
+                bundle_id: "com.apple.Safari".into(),
+                menu_path: vec!["File".into(), "New Tab".into()],
+                enabled: true,
+                shortcut: Some("⌘T".into()),
+            }),
+            Some("📁".into()),
+            BuiltInGroup::MenuBar,
+        );
+
+        assert!(menu_bar_entry_matches_query(&entry, "cmd+t"));
+        assert!(menu_bar_entry_matches_query(&entry, "cmd t"));
+        assert!(menu_bar_entry_matches_query(&entry, "safari new"));
+        assert!(!menu_bar_entry_matches_query(&entry, "cmd+p"));
+    }
+
+    #[test]
+    fn filter_menu_bar_entries_reports_counts() {
+        let entries = vec![
+            BuiltInEntry::new_with_group(
+                "menubar-com.apple.Safari-file-new-tab",
+                "File → New Tab",
+                "Safari  ⌘T",
+                vec!["file".into(), "new".into(), "tab".into(), "cmd+t".into()],
+                BuiltInFeature::MenuBarAction(MenuBarActionInfo {
+                    bundle_id: "com.apple.Safari".into(),
+                    menu_path: vec!["File".into(), "New Tab".into()],
+                    enabled: true,
+                    shortcut: Some("⌘T".into()),
+                }),
+                Some("📁".into()),
+                BuiltInGroup::MenuBar,
+            ),
+            BuiltInEntry::new_with_group(
+                "menubar-com.apple.Safari-file-new-window",
+                "File → New Window",
+                "Safari  ⌘N",
+                vec!["file".into(), "new".into(), "window".into(), "cmd+n".into()],
+                BuiltInFeature::MenuBarAction(MenuBarActionInfo {
+                    bundle_id: "com.apple.Safari".into(),
+                    menu_path: vec!["File".into(), "New Window".into()],
+                    enabled: true,
+                    shortcut: Some("⌘N".into()),
+                }),
+                Some("📁".into()),
+                BuiltInGroup::MenuBar,
+            ),
+        ];
+
+        let (filtered, receipt) = filter_menu_bar_entries(&entries, "cmd+t");
+
+        assert_eq!(receipt.query, "cmd+t");
+        assert_eq!(receipt.normalized_query, "cmd+t");
+        assert_eq!(receipt.total_entries, 2);
+        assert_eq!(receipt.matched_entries, 1);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].1.name, "File → New Tab");
     }
 }

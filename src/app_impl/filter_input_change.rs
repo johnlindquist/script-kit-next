@@ -185,6 +185,19 @@ impl ScriptListApp {
                     } else {
                         "mouse"
                     };
+
+                    let (_filtered, receipt) =
+                        crate::builtins::filter_menu_bar_entries(&self.cached_current_app_entries, &new_text);
+
+                    tracing::debug!(
+                        query = %receipt.query,
+                        normalized_query = %receipt.normalized_query,
+                        total_entries = receipt.total_entries,
+                        matched_entries = receipt.matched_entries,
+                        input_mode = %input_mode,
+                        "current_app_commands.filter_updated"
+                    );
+
                     Self::scroll_builtin_to_top_with_log(
                         &self.current_app_commands_scroll_handle,
                         "current_app_commands",

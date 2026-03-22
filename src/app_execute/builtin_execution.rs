@@ -1932,9 +1932,20 @@ impl ScriptListApp {
                         );
                         match crate::menu_bar::load_frontmost_menu_snapshot() {
                             Ok(snapshot) => {
-                                let placeholder = snapshot.placeholder();
-                                let app_name = snapshot.app_name.clone();
-                                let entries = snapshot.into_entries();
+                                let (entries, receipt) = snapshot.into_entries_with_receipt();
+                                let placeholder = receipt.placeholder.clone();
+                                let app_name = receipt.app_name.clone();
+
+                                tracing::info!(
+                                    trace_id = %dctx.trace_id,
+                                    app_name = %receipt.app_name,
+                                    bundle_id = %receipt.bundle_id,
+                                    top_level_menu_count = receipt.top_level_menu_count,
+                                    leaf_entry_count = receipt.leaf_entry_count,
+                                    placeholder = %receipt.placeholder,
+                                    source = receipt.source,
+                                    "current_app_commands.snapshot_ready"
+                                );
 
                                 if entries.is_empty() {
                                     let message = format!(
