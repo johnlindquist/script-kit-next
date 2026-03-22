@@ -2,6 +2,40 @@ use super::*;
 use crate::theme::opacity::OPACITY_SELECTED;
 
 impl AiApp {
+    /// Add a file attachment by enqueuing a `FilePath` context part with dedup.
+    pub(super) fn add_attachment(&mut self, path: String, cx: &mut Context<Self>) {
+        let label = std::path::Path::new(&path)
+            .file_name()
+            .map(|name| name.to_string_lossy().to_string())
+            .unwrap_or_else(|| path.clone());
+        let part = crate::ai::message_parts::AiContextPart::FilePath { path, label };
+        let already_present = self
+            .pending_context_parts
+            .iter()
+            .any(|existing| existing == &part);
+
+        if already_present {
+            tracing::info!(
+                target: "ai",
+                label = %part.label(),
+                source = %part.source(),
+                "ai_context_part_add_skipped_duplicate"
+            );
+            return;
+        }
+
+        tracing::info!(
+            target: "ai",
+            label = %part.label(),
+            source = %part.source(),
+            count_before = self.pending_context_parts.len(),
+            "Enqueued context part"
+        );
+
+        self.pending_context_parts.push(part);
+        self.notify_context_parts_changed(cx);
+    }
+
     pub(super) fn process_render_focus_requests(
         &mut self,
         window: &mut Window,
@@ -69,8 +103,7 @@ impl AiApp {
                     }
                 }
                 AiCommand::AddAttachment { path } => {
-                    // add_attachment now handles both dedup and context-part creation
-                    self.add_attachment(path, cx);
+                    self.add_attachment(path.clone(), cx);
                 }
                 AiCommand::InitializeWithPendingChat => {
                     self.initialize_with_pending_chat(window, cx);

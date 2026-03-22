@@ -13,27 +13,35 @@ use crate::action_helpers::{ActionOutcomeStatus, DispatchContext, DispatchOutcom
 const CLIPBOARD_CACHE_SIZE: usize = 100;
 
 enum DeferredAiWindowAction {
-    SetInput { text: String },
-    SetInputWithImage { text: String, image_base64: String },
+    OpenOnly,
+    SetInput { text: String, submit: bool },
+    SetInputWithImage { text: String, image_base64: String, submit: bool },
     AddAttachment { path: String },
+    ApplyPreset { preset_id: String },
 }
 
 impl DeferredAiWindowAction {
     fn name(&self) -> &'static str {
         match self {
-            Self::SetInput { .. } => "set_input",
-            Self::SetInputWithImage { .. } => "set_input_with_image",
+            Self::OpenOnly => "open_only",
+            Self::SetInput { submit: true, .. } => "set_input_submit",
+            Self::SetInput { submit: false, .. } => "set_input",
+            Self::SetInputWithImage { submit: true, .. } => "set_input_with_image_submit",
+            Self::SetInputWithImage { submit: false, .. } => "set_input_with_image",
             Self::AddAttachment { .. } => "add_attachment",
+            Self::ApplyPreset { .. } => "apply_preset",
         }
     }
 
     fn apply(self, cx: &mut App) {
         match self {
-            Self::SetInput { text } => ai::set_ai_input(cx, &text, false),
-            Self::SetInputWithImage { text, image_base64 } => {
-                ai::set_ai_input_with_image(cx, &text, &image_base64, false);
+            Self::OpenOnly => {}
+            Self::SetInput { text, submit } => ai::set_ai_input(cx, &text, submit),
+            Self::SetInputWithImage { text, image_base64, submit } => {
+                ai::set_ai_input_with_image(cx, &text, &image_base64, submit);
             }
             Self::AddAttachment { path } => ai::add_ai_attachment(cx, &path),
+            Self::ApplyPreset { preset_id } => ai::apply_ai_preset(cx, &preset_id),
         }
     }
 }
@@ -161,14 +169,21 @@ impl ScriptListApp {
 
     fn open_ai_window_after_main_hide(
         &mut self,
+        source_action: &str,
+        trace_id: &str,
         deferred_action: DeferredAiWindowAction,
         success_message: &'static str,
         cx: &mut Context<Self>,
     ) {
+        let source_action = source_action.to_string();
+        let trace_id = trace_id.to_string();
         let deferred_action_name = deferred_action.name();
+
         tracing::info!(
             category = "AI",
-            event = "action_attach_to_ai_defer_open_start",
+            event = "ai_handoff_defer_open_start",
+            source_action = %source_action,
+            trace_id = %trace_id,
             deferred_action = deferred_action_name,
             "Hiding main window before opening AI window"
         );
@@ -189,6 +204,14 @@ impl ScriptListApp {
             match open_result {
                 Ok(()) => {
                     let _ = this.update(cx, |this, cx| {
+                        tracing::info!(
+                            category = "AI",
+                            event = "ai_handoff_defer_open_success",
+                            source_action = %source_action,
+                            trace_id = %trace_id,
+                            deferred_action = deferred_action_name,
+                            "AI handoff completed"
+                        );
                         this.show_hud(success_message.to_string(), Some(HUD_SHORT_MS), cx);
                         cx.notify();
                     });
@@ -197,8 +220,9 @@ impl ScriptListApp {
                     let _ = this.update(cx, |this, cx| {
                         tracing::error!(
                             category = "AI",
-                            event = "action_attach_to_ai_defer_open_failed",
-                            attempted = "open_ai_window_after_main_hide",
+                            event = "ai_handoff_defer_open_failed",
+                            source_action = %source_action,
+                            trace_id = %trace_id,
                             deferred_action = deferred_action_name,
                             error = %error,
                             "Failed to open AI window after hiding main window"

@@ -31,19 +31,10 @@ pub(crate) struct MainWindowPreflightAction {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct MainWindowPreflightContextItem {
-    pub label: String,
-    pub source: String,
-    pub enabled: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
 pub(crate) struct MainWindowPreflightReceipt {
     pub filter_text: String,
     pub selected_index: usize,
     pub enter_action: MainWindowPreflightAction,
     pub tab_action: Option<MainWindowPreflightAction>,
-    pub context_items: Vec<MainWindowPreflightContextItem>,
     pub warnings: Vec<String>,
 }

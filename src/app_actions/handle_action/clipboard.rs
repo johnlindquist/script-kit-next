@@ -236,7 +236,7 @@ impl ScriptListApp {
                     clipboard_history::ContentType::Text
                     | clipboard_history::ContentType::Link
                     | clipboard_history::ContentType::Color => {
-                        DeferredAiWindowAction::SetInput { text: content }
+                        DeferredAiWindowAction::SetInput { text: content, submit: false }
                     }
                     clipboard_history::ContentType::File => {
                         let attachment_path =
@@ -264,11 +264,18 @@ impl ScriptListApp {
                         DeferredAiWindowAction::SetInputWithImage {
                             text: String::new(),
                             image_base64: base64_data,
+                            submit: false,
                         }
                     }
                 };
 
-                self.open_ai_window_after_main_hide(deferred_action, "Attached to AI", cx);
+                self.open_ai_window_after_main_hide(
+                    action_id,
+                    &dctx.trace_id,
+                    deferred_action,
+                    "Attached to AI",
+                    cx,
+                );
                 DispatchOutcome::success()
             }
             // Copy to clipboard without pasting (Cmd+Enter)

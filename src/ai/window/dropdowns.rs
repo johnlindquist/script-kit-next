@@ -287,21 +287,6 @@ impl AiApp {
         self.new_conversation(window, cx);
     }
 
-    /// Add a file attachment.
-    ///
-    /// Delegates to `add_context_part` for dedup and structured logging.
-    pub(super) fn add_attachment(&mut self, path: String, cx: &mut Context<Self>) {
-        let label = std::path::Path::new(&path)
-            .file_name()
-            .map(|name| name.to_string_lossy().to_string())
-            .unwrap_or_else(|| path.clone());
-
-        self.add_context_part(
-            crate::ai::message_parts::AiContextPart::FilePath { path, label },
-            cx,
-        );
-    }
-
     /// Remove a file attachment by its index in the file-path subset of `pending_context_parts`.
     ///
     /// The index corresponds to the position within the `FilePath` entries only
@@ -457,7 +442,7 @@ impl AiApp {
     /// Either schedules a preflight (if parts remain) or clears the
     /// preflight state. Both paths call `cx.notify()` internally.
     /// Uses the current composer draft so recommendations stay accurate.
-    fn notify_context_parts_changed(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn notify_context_parts_changed(&mut self, cx: &mut Context<Self>) {
         if self.pending_context_parts.is_empty() {
             self.clear_context_preflight(cx);
         } else {
