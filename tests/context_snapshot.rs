@@ -128,3 +128,58 @@ fn minimal_profile_omits_selected_text_and_menu_bar_from_json() {
         script_kit_gpui::context_snapshot::AI_CONTEXT_SNAPSHOT_SCHEMA_VERSION
     );
 }
+
+#[test]
+fn inspect_current_context_builtin_is_registered() {
+    let entries = script_kit_gpui::builtins::get_builtin_entries(
+        &script_kit_gpui::config::BuiltInConfig::default(),
+    );
+
+    let entry = entries
+        .iter()
+        .find(|entry| entry.id == "builtin-inspect-current-context")
+        .expect("builtin-inspect-current-context must be in the registry");
+
+    assert_eq!(
+        entry.feature,
+        script_kit_gpui::builtins::BuiltInFeature::UtilityCommand(
+            script_kit_gpui::builtins::UtilityCommandType::InspectCurrentContext,
+        )
+    );
+
+    assert!(
+        entry.keywords.iter().any(|keyword| keyword == "json"),
+        "Inspect Current Context must be discoverable by 'json'"
+    );
+    assert!(
+        entry.keywords.iter().any(|keyword| keyword == "inspect"),
+        "Inspect Current Context must be discoverable by 'inspect'"
+    );
+    assert!(
+        entry.keywords.iter().any(|keyword| keyword == "clipboard"),
+        "Inspect Current Context must be discoverable by 'clipboard'"
+    );
+    assert!(
+        entry.keywords.iter().any(|keyword| keyword == "context"),
+        "Inspect Current Context must be discoverable by 'context'"
+    );
+}
+
+#[test]
+fn context_snapshot_inspection_receipt_is_stable() {
+    let snapshot = script_kit_gpui::context_snapshot::AiContextSnapshot::default();
+    let receipt = script_kit_gpui::context_snapshot::build_inspection_receipt(&snapshot, 64);
+
+    assert_eq!(
+        receipt.schema_version,
+        script_kit_gpui::context_snapshot::AI_CONTEXT_SNAPSHOT_SCHEMA_VERSION
+    );
+    assert_eq!(receipt.warning_count, 0);
+    assert_eq!(receipt.status, "ok");
+    assert_eq!(receipt.json_bytes, 64);
+    assert!(!receipt.has_selected_text);
+    assert!(!receipt.has_frontmost_app);
+    assert!(!receipt.has_browser);
+    assert!(!receipt.has_focused_window);
+    assert_eq!(receipt.top_level_menu_count, 0);
+}

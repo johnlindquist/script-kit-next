@@ -182,6 +182,8 @@ pub enum UtilityCommandType {
     StopAllProcesses,
     /// Search and run menu bar commands from the frontmost app
     CurrentAppCommands,
+    /// Capture a deterministic JSON snapshot of current desktop context and copy to clipboard
+    InspectCurrentContext,
 }
 /// Kit Store command types for browsing and managing kits
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1315,6 +1317,27 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             ],
             BuiltInFeature::UtilityCommand(UtilityCommandType::CurrentAppCommands),
             "☰",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-inspect-current-context",
+            "Inspect Current Context",
+            "Capture a deterministic JSON snapshot of what Script Kit can currently see and copy it to the clipboard",
+            vec![
+                "inspect",
+                "current",
+                "context",
+                "snapshot",
+                "json",
+                "diagnostics",
+                "debug",
+                "clipboard",
+                "mcp",
+                "agent",
+                "ai",
+            ],
+            BuiltInFeature::UtilityCommand(UtilityCommandType::InspectCurrentContext),
+            "🧭",
         ));
 
         // =========================================================================
