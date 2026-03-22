@@ -1,6 +1,14 @@
 use super::*;
 use crate::theme::opacity::{OPACITY_HOVER, OPACITY_SELECTED};
 
+/// Intermediate result from background image preparation.
+/// Contains a fully prepared render image and cache key, ready for insertion.
+struct PreparedImageCacheWork {
+    cache_key: String,
+    byte_len: usize,
+    render_image: std::sync::Arc<RenderImage>,
+}
+
 impl AiApp {
     pub(super) fn on_input_change(&mut self, cx: &mut Context<Self>) {
         let value = self.input_state.read(cx).value().to_string();
@@ -168,7 +176,66 @@ impl AiApp {
         }
     }
 
-    /// Schedule image cache population on the next frame so the AI window can
+    /// Extract only the base64 image payloads from a collection of messages,
+    /// avoiding the need to clone entire `Message` structs for cache work.
+    pub(super) fn collect_message_image_payloads(messages: &[Message]) -> Vec<String> {
+        let mut images = Vec::new();
+        for message in messages {
+            for attachment in &message.images {
+                images.push(attachment.data.clone());
+            }
+        }
+        images
+    }
+
+    /// Decode base64 and build a render image on a background thread.
+    fn prepare_image_cache_work(base64_data: &str) -> Option<PreparedImageCacheWork> {
+        let cache_key = Self::image_cache_key(base64_data);
+
+        use base64::Engine;
+        let png_bytes = match base64::engine::general_purpose::STANDARD.decode(base64_data) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                tracing::warn!(error = %error, "Failed to decode base64 image data");
+                return None;
+            }
+        };
+
+        let byte_len = png_bytes.len();
+        let render_image =
+            match crate::list_item::decode_png_to_render_image_with_bgra_conversion(&png_bytes) {
+                Ok(render_image) => render_image,
+                Err(error) => {
+                    tracing::warn!(error = %error, "Failed to decode PNG image for thumbnail");
+                    return None;
+                }
+            };
+
+        Some(PreparedImageCacheWork {
+            cache_key,
+            byte_len,
+            render_image,
+        })
+    }
+
+    /// Insert a pre-decoded image into the cache. Returns true if inserted.
+    fn insert_prepared_render_image(&mut self, work: PreparedImageCacheWork) -> bool {
+        if self.image_cache.contains_key(&work.cache_key) {
+            return false;
+        }
+
+        tracing::info!(
+            category = "AI",
+            event = "ai_image_cache_inserted",
+            cache_key_prefix = %&work.cache_key[..work.cache_key.len().min(30)],
+            byte_len = work.byte_len,
+            "Inserted prepared image into cache"
+        );
+        self.image_cache.insert(work.cache_key, work.render_image);
+        true
+    }
+
+    /// Schedule image cache population off the UI thread so the AI window can
     /// paint immediately without blocking on base64 decode + PNG conversion.
     pub(super) fn defer_cache_pending_image(
         &mut self,
@@ -176,32 +243,74 @@ impl AiApp {
         cx: &mut Context<Self>,
     ) {
         cx.spawn(async move |this, cx| {
-            cx.background_executor()
-                .timer(std::time::Duration::from_millis(1))
+            let started_at = std::time::Instant::now();
+
+            let prepared: Option<PreparedImageCacheWork> = cx
+                .background_executor()
+                .spawn(async move { Self::prepare_image_cache_work(&image_base64) })
                 .await;
 
+            tracing::info!(
+                category = "AI",
+                event = "ai_image_cache_prepare_done",
+                source = "pending_image",
+                success = prepared.is_some(),
+                duration_ms = started_at.elapsed().as_millis() as u64,
+                "Prepared pending image cache work off the UI thread"
+            );
+
             let _ = this.update(cx, |app, cx| {
-                app.cache_image_from_base64(&image_base64);
-                cx.notify();
+                if let Some(work) = prepared {
+                    if app.insert_prepared_render_image(work) {
+                        cx.notify();
+                    }
+                }
             });
         })
         .detach();
     }
 
-    /// Schedule message image cache population on the next frame.
+    /// Schedule message image cache population off the UI thread.
+    /// Accepts pre-extracted base64 payloads instead of full Message structs.
     pub(super) fn defer_cache_message_images(
         &mut self,
-        messages: Vec<Message>,
+        base64_images: Vec<String>,
         cx: &mut Context<Self>,
     ) {
+        if base64_images.is_empty() {
+            return;
+        }
+
         cx.spawn(async move |this, cx| {
-            cx.background_executor()
-                .timer(std::time::Duration::from_millis(1))
+            let started_at = std::time::Instant::now();
+
+            let prepared_items: Vec<PreparedImageCacheWork> = cx
+                .background_executor()
+                .spawn(async move {
+                    base64_images
+                        .into_iter()
+                        .filter_map(|base64_data| Self::prepare_image_cache_work(&base64_data))
+                        .collect::<Vec<_>>()
+                })
                 .await;
 
+            tracing::info!(
+                category = "AI",
+                event = "ai_image_cache_prepare_done",
+                source = "message_images",
+                prepared_count = prepared_items.len(),
+                duration_ms = started_at.elapsed().as_millis() as u64,
+                "Prepared message image cache work off the UI thread"
+            );
+
             let _ = this.update(cx, |app, cx| {
-                app.cache_message_images(&messages);
-                cx.notify();
+                let mut inserted_any = false;
+                for work in prepared_items {
+                    inserted_any |= app.insert_prepared_render_image(work);
+                }
+                if inserted_any {
+                    cx.notify();
+                }
             });
         })
         .detach();
