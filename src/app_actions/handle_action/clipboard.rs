@@ -251,21 +251,70 @@ impl ScriptListApp {
                         }
                     }
                     clipboard_history::ContentType::Image => {
-                        let Some(png_bytes) =
-                            clipboard_history::content_to_png_bytes(&content)
-                        else {
-                            self.show_error_toast("Failed to decode clipboard image", cx);
-                            return DispatchOutcome::success();
-                        };
+                        // Offload PNG decode + base64 encode to a background thread
+                        // to avoid blocking the UI during large image processing.
+                        let (result_tx, result_rx) =
+                            async_channel::bounded::<Result<String, String>>(1);
+                        let trace_id = dctx.trace_id.clone();
+                        let action_id_owned = action_id.to_string();
 
-                        use base64::Engine;
-                        let base64_data =
-                            base64::engine::general_purpose::STANDARD.encode(&png_bytes);
-                        DeferredAiWindowAction::SetInputWithImage {
-                            text: String::new(),
-                            image_base64: base64_data,
-                            submit: false,
-                        }
+                        std::thread::spawn(move || {
+                            let started_at = std::time::Instant::now();
+                            let result = (|| {
+                                let png_bytes =
+                                    clipboard_history::content_to_png_bytes(&content)
+                                        .ok_or_else(|| {
+                                            "Failed to decode clipboard image".to_string()
+                                        })?;
+                                use base64::Engine;
+                                Ok(base64::engine::general_purpose::STANDARD
+                                    .encode(&png_bytes))
+                            })();
+                            tracing::info!(
+                                category = "AI",
+                                event = "clipboard_image_prep_done",
+                                trace_id = %trace_id,
+                                duration_ms = started_at.elapsed().as_millis() as u64,
+                                success = result.is_ok(),
+                                "Clipboard image preparation finished"
+                            );
+                            let _ = result_tx.send_blocking(result);
+                        });
+
+                        let trace_id = dctx.trace_id.clone();
+                        let action_id_owned2 = action_id.to_string();
+                        cx.spawn(async move |this, cx| {
+                            let Ok(result) = result_rx.recv().await else {
+                                return;
+                            };
+                            let _ = this.update(cx, |this, cx| match result {
+                                Ok(image_base64) => {
+                                    this.open_ai_window_after_main_hide(
+                                        &action_id_owned2,
+                                        &trace_id,
+                                        DeferredAiWindowAction::SetInputWithImage {
+                                            text: String::new(),
+                                            image_base64,
+                                            submit: false,
+                                        },
+                                        "Attached to AI",
+                                        cx,
+                                    );
+                                }
+                                Err(message) => {
+                                    tracing::error!(
+                                        category = "AI",
+                                        action = %action_id_owned,
+                                        error = %message,
+                                        "Clipboard image decode failed"
+                                    );
+                                    this.show_error_toast(message, cx);
+                                }
+                            });
+                        })
+                        .detach();
+
+                        return DispatchOutcome::success();
                     }
                 };
 

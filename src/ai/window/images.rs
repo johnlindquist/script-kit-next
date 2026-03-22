@@ -168,6 +168,45 @@ impl AiApp {
         }
     }
 
+    /// Schedule image cache population on the next frame so the AI window can
+    /// paint immediately without blocking on base64 decode + PNG conversion.
+    pub(super) fn defer_cache_pending_image(
+        &mut self,
+        image_base64: String,
+        cx: &mut Context<Self>,
+    ) {
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(1))
+                .await;
+
+            let _ = this.update(cx, |app, cx| {
+                app.cache_image_from_base64(&image_base64);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    /// Schedule message image cache population on the next frame.
+    pub(super) fn defer_cache_message_images(
+        &mut self,
+        messages: Vec<Message>,
+        cx: &mut Context<Self>,
+    ) {
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(1))
+                .await;
+
+            let _ = this.update(cx, |app, cx| {
+                app.cache_message_images(&messages);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
     /// Handle file drop - if it's an image, set it as pending image
     pub(super) fn handle_file_drop(&mut self, paths: &ExternalPaths, cx: &mut Context<Self>) {
         let paths = paths.paths();
