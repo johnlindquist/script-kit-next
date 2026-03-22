@@ -151,10 +151,11 @@ fn non_streaming_ai_handoffs_remain_submit_false() {
     let clipboard_block = slice_from(&handler, "\"clipboard_attach_to_ai\" => {");
     let selected_text_block = slice_from(&builtins, "AiCommandType::SendSelectedTextToAi => {");
     let browser_tab_block = slice_from(&builtins, "AiCommandType::SendBrowserTabToAi => {");
-    let screen_area_block = slice_from(&builtins, "AiCommandType::SendScreenAreaToAi => {");
     let send_screen_helper = slice_from(&builtins, "fn spawn_send_screen_to_ai_after_hide(");
     let send_window_helper =
         slice_from(&builtins, "fn spawn_send_focused_window_to_ai_after_hide(");
+    let send_screen_area_helper =
+        slice_from(&builtins, "fn spawn_send_screen_area_to_ai_after_hide(");
 
     assert!(
         clipboard_block.contains("submit: false"),
@@ -169,8 +170,8 @@ fn non_streaming_ai_handoffs_remain_submit_false() {
         "SendBrowserTabToAi must use submit: false"
     );
     assert!(
-        screen_area_block.contains("submit: false"),
-        "SendScreenAreaToAi must use submit: false"
+        send_screen_area_helper.contains("submit: false"),
+        "spawn_send_screen_area_to_ai_after_hide must use submit: false"
     );
     assert!(
         send_screen_helper.contains("submit: false"),
@@ -265,6 +266,8 @@ fn capture_helpers_thread_real_dispatch_trace_id() {
     let send_screen_helper = slice_from(&source, "fn spawn_send_screen_to_ai_after_hide(");
     let send_window_helper =
         slice_from(&source, "fn spawn_send_focused_window_to_ai_after_hide(");
+    let send_screen_area_helper =
+        slice_from(&source, "fn spawn_send_screen_area_to_ai_after_hide(");
 
     assert!(
         send_screen_helper.contains("trace_id: &str"),
@@ -275,12 +278,20 @@ fn capture_helpers_thread_real_dispatch_trace_id() {
         "spawn_send_focused_window_to_ai_after_hide should accept the real dispatch trace_id"
     );
     assert!(
+        send_screen_area_helper.contains("trace_id: &str"),
+        "spawn_send_screen_area_to_ai_after_hide should accept the real dispatch trace_id"
+    );
+    assert!(
         ai_branch.contains("self.spawn_send_screen_to_ai_after_hide(&dctx.trace_id, cx);"),
         "SendScreenToAi should pass dctx.trace_id into the async capture helper"
     );
     assert!(
         ai_branch.contains("self.spawn_send_focused_window_to_ai_after_hide(&dctx.trace_id, cx);"),
         "SendFocusedWindowToAi should pass dctx.trace_id into the async capture helper"
+    );
+    assert!(
+        ai_branch.contains("self.spawn_send_screen_area_to_ai_after_hide(&dctx.trace_id, cx);"),
+        "SendScreenAreaToAi should pass dctx.trace_id into the async capture helper"
     );
 }
 
@@ -381,6 +392,57 @@ fn deferred_ai_handoff_emits_actionable_failure_toast_on_open_error() {
     assert!(
         !helper.contains("show_error_toast(\"Failed to open AI window\")"),
         "helper must not use a hardcoded 'Failed to open AI window' toast"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// SendScreenAreaToAi — uses the deferred hide-and-capture pattern
+// ---------------------------------------------------------------------------
+
+#[test]
+fn send_screen_area_to_ai_uses_deferred_capture_flow() {
+    let builtins = read_source("src/app_execute/builtin_execution.rs");
+
+    // The SendScreenAreaToAi arm must call the deferred helper, not inline capture
+    let screen_area_arm = slice_from(&builtins, "AiCommandType::SendScreenAreaToAi => {");
+    assert!(
+        screen_area_arm.contains("self.spawn_send_screen_area_to_ai_after_hide("),
+        "SendScreenAreaToAi must delegate to the deferred capture helper"
+    );
+    assert!(
+        !screen_area_arm.contains("platform::capture_screen_area()"),
+        "SendScreenAreaToAi must not perform inline synchronous capture"
+    );
+
+    // The helper must exist and use the same deferred pattern
+    let helper = slice_from(&builtins, "fn spawn_send_screen_area_to_ai_after_hide(");
+    assert!(
+        helper.contains("platform::defer_hide_main_window(cx);"),
+        "screen area capture helper must defer main window hide"
+    );
+    assert!(
+        helper.contains("ai_capture_hide_settle_duration()"),
+        "screen area capture helper must wait for hide settle before capturing"
+    );
+    assert!(
+        helper.contains("platform::capture_screen_area()"),
+        "screen area capture helper must call capture_screen_area on background executor"
+    );
+    assert!(
+        helper.contains("event = \"ai_capture_scheduled\""),
+        "screen area capture helper must log ai_capture_scheduled"
+    );
+    assert!(
+        helper.contains("event = \"ai_capture_completed\""),
+        "screen area capture helper must log ai_capture_completed"
+    );
+    assert!(
+        helper.contains("source_action = \"SendScreenAreaToAi\""),
+        "screen area capture helper must use SendScreenAreaToAi as source_action"
+    );
+    assert!(
+        helper.contains("open_ai_window_after_already_hidden("),
+        "screen area capture helper must use deferred AI window open"
     );
 }
 

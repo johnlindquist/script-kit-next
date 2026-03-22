@@ -408,15 +408,16 @@ fn enqueue_ai_window_command(
     };
     let window_is_open = handle.is_some();
 
-    let command_queued = get_pending_commands()
+    let queued_index = get_pending_commands()
         .lock()
         .ok()
-        .map(|mut commands| {
+        .and_then(|mut commands| {
+            let queued_index = commands.len();
             ai_window_queue_command_if_open(&mut commands, window_is_open, ai_command)
-        })
-        .unwrap_or(false);
+                .then_some(queued_index)
+        });
 
-    if !command_queued {
+    if queued_index.is_none() {
         tracing::warn!(
             category = "AI",
             event = "ai_command_enqueue",
@@ -434,6 +435,13 @@ fn enqueue_ai_window_command(
             })
             .is_err()
         {
+            if let Some(queued_index) = queued_index {
+                if let Ok(mut commands) = get_pending_commands().lock() {
+                    if queued_index < commands.len() {
+                        commands.remove(queued_index);
+                    }
+                }
+            }
             tracing::warn!(
                 category = "AI",
                 event = "ai_command_enqueue",
@@ -473,38 +481,13 @@ pub fn is_ai_window(window: &gpui::Window) -> bool {
 }
 
 /// Set the search filter text in the AI window.
-/// Used for testing the search functionality via stdin commands.
-pub fn set_ai_search(cx: &mut App, query: &str) {
-    use crate::logging;
-
-    let handle = {
-        let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
-        slot.lock().ok().and_then(|g| *g)
-    };
-    let window_is_open = handle.is_some();
-    let command_queued = get_pending_commands()
-        .lock()
-        .ok()
-        .map(|mut commands| {
-            ai_window_queue_command_if_open(
-                &mut commands,
-                window_is_open,
-                AiCommand::SetSearch(query.to_string()),
-            )
-        })
-        .unwrap_or(false);
-
-    if !command_queued {
-        logging::log("AI", "Cannot set search - AI window not found");
-        return;
-    }
-
-    if let Some(handle) = handle {
-        let _ = handle.update(cx, |_root, _window, cx| {
-            cx.notify();
-        });
-        logging::log("AI", &format!("Set AI search filter: {}", query));
-    }
+/// Returns an actionable error if the AI window is not ready.
+pub fn set_ai_search(cx: &mut App, query: &str) -> Result<(), String> {
+    enqueue_ai_window_command(
+        cx,
+        "set_search",
+        AiCommand::SetSearch(query.to_string()),
+    )
 }
 
 /// Set the main input text in the AI window and optionally submit.
