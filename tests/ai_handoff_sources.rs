@@ -57,7 +57,7 @@ fn deferred_ai_handoff_supports_prefill_and_submit_variants() {
 #[test]
 fn deferred_ai_handoff_logs_origin_and_defers_open() {
     let source = read_action_sources();
-    let helper = slice_from(&source, "fn open_ai_window_after_main_hide(");
+    let helper = slice_from(&source, "fn open_ai_window_after_already_hidden(");
 
     assert!(
         helper.contains("source_action: &str") && helper.contains("trace_id: &str"),
@@ -73,17 +73,16 @@ fn deferred_ai_handoff_logs_origin_and_defers_open() {
     );
 
     assert!(
-        helper.contains("self.hide_main_and_reset(cx);")
-            && helper.contains(".timer(std::time::Duration::from_millis(1))")
+        helper.contains(".timer(std::time::Duration::from_millis(1))")
             && helper.contains("ai::open_ai_window(cx)"),
-        "helper should hide main, defer one tick, then open AI"
+        "helper should defer one tick, then open AI"
     );
 }
 
 #[test]
 fn deferred_ai_handoff_emits_failure_log_on_open_error() {
     let source = read_action_sources();
-    let helper = slice_from(&source, "fn open_ai_window_after_main_hide(");
+    let helper = slice_from(&source, "fn open_ai_window_after_already_hidden(");
 
     assert!(
         helper.contains("event = \"ai_handoff_defer_open_failed\""),
@@ -104,8 +103,23 @@ fn builtin_execution_uses_deferred_ai_handoff_entrypoint() {
     let source = read_source("src/app_execute/builtin_execution.rs");
 
     assert!(
-        source.contains("open_ai_window_after_main_hide("),
-        "builtin send-to-ai branches should use the deferred helper"
+        source.contains("open_ai_window_after_already_hidden("),
+        "builtin send-to-ai branches should use the already-hidden deferred helper"
+    );
+}
+
+#[test]
+fn open_ai_window_after_main_hide_delegates_to_already_hidden() {
+    let source = read_action_sources();
+    let wrapper = slice_from(&source, "fn open_ai_window_after_main_hide(");
+
+    assert!(
+        wrapper.contains("self.hide_main_and_reset(cx);"),
+        "wrapper should hide the main window"
+    );
+    assert!(
+        wrapper.contains("self.open_ai_window_after_already_hidden("),
+        "wrapper should delegate to the already-hidden helper"
     );
 }
 
@@ -122,6 +136,85 @@ fn builtin_execution_does_not_inline_ai_open_in_chat_arm() {
     assert!(
         !ai_chat_block.contains("ai::open_ai_window("),
         "AiChat should not directly call ai::open_ai_window — use deferred helper"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Non-streaming handoffs must use submit: false
+// ---------------------------------------------------------------------------
+
+#[test]
+fn non_streaming_ai_handoffs_remain_submit_false() {
+    let handler = read_action_sources();
+    let builtins = read_source("src/app_execute/builtin_execution.rs");
+
+    let clipboard_block = slice_from(&handler, "\"clipboard_attach_to_ai\" => {");
+    let selected_text_block = slice_from(&builtins, "AiCommandType::SendSelectedTextToAi => {");
+    let browser_tab_block = slice_from(&builtins, "AiCommandType::SendBrowserTabToAi => {");
+    let screen_area_block = slice_from(&builtins, "AiCommandType::SendScreenAreaToAi => {");
+    let send_screen_helper = slice_from(&builtins, "fn spawn_send_screen_to_ai_after_hide(");
+    let send_window_helper =
+        slice_from(&builtins, "fn spawn_send_focused_window_to_ai_after_hide(");
+
+    assert!(
+        clipboard_block.contains("submit: false"),
+        "clipboard_attach_to_ai must use submit: false"
+    );
+    assert!(
+        selected_text_block.contains("submit: false"),
+        "SendSelectedTextToAi must use submit: false"
+    );
+    assert!(
+        browser_tab_block.contains("submit: false"),
+        "SendBrowserTabToAi must use submit: false"
+    );
+    assert!(
+        screen_area_block.contains("submit: false"),
+        "SendScreenAreaToAi must use submit: false"
+    );
+    assert!(
+        send_screen_helper.contains("submit: false"),
+        "spawn_send_screen_to_ai_after_hide must use submit: false"
+    );
+    assert!(
+        send_window_helper.contains("submit: false"),
+        "spawn_send_focused_window_to_ai_after_hide must use submit: false"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Open/new/clear AI flows must use DeferredAiWindowAction::OpenOnly
+// ---------------------------------------------------------------------------
+
+#[test]
+fn open_only_handoffs_keep_open_only_variant() {
+    let handler = read_action_sources();
+    let builtins = read_source("src/app_execute/builtin_execution.rs");
+
+    // OpenOnly must remain a no-payload apply path
+    assert!(
+        handler.contains("Self::OpenOnly => {}"),
+        "DeferredAiWindowAction::OpenOnly should remain a no-payload open path"
+    );
+
+    // Builtin execution must use OpenOnly for open/new/clear flows
+    assert!(
+        builtins.contains("DeferredAiWindowAction::OpenOnly"),
+        "open/new/clear AI flows should use OpenOnly rather than text/image payload variants"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// AI composer typing must not trigger context preflight
+// ---------------------------------------------------------------------------
+
+#[test]
+fn ai_images_typing_does_not_schedule_context_preflight() {
+    let source = read_source("src/ai/window/images.rs");
+
+    assert!(
+        !source.contains("schedule_context_preflight_for_current_draft(cx)"),
+        "typing in the AI composer should not trigger context preflight from images.rs"
     );
 }
 

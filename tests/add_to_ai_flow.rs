@@ -15,7 +15,7 @@ fn slice_from<'a>(source: &'a str, needle: &str) -> &'a str {
 fn test_add_to_ai_flow_defers_ai_window_open_when_file_attach_action_runs() {
     let handler = read_app_action_handler_source();
     let attach_branch = slice_from(&handler, "\"attach_to_ai\" => {");
-    let helper_body = slice_from(&handler, "fn open_ai_window_after_main_hide(");
+    let helper_body = slice_from(&handler, "fn open_ai_window_after_already_hidden(");
 
     assert!(
         attach_branch.contains("self.open_ai_window_after_main_hide("),
@@ -42,21 +42,31 @@ fn test_add_to_ai_flow_defers_ai_window_open_when_file_attach_action_runs() {
 #[test]
 fn test_add_to_ai_flow_hides_main_window_before_opening_ai_window_when_file_attach_action_runs() {
     let handler = read_app_action_handler_source();
-    let helper_body = slice_from(&handler, "fn open_ai_window_after_main_hide(");
+    let wrapper = slice_from(&handler, "fn open_ai_window_after_main_hide(");
 
-    let hide_idx = helper_body
+    let hide_idx = wrapper
         .find("self.hide_main_and_reset(cx);")
-        .expect("expected helper to hide the main window");
-    let spawn_idx = helper_body
-        .find("cx.spawn(async move |this, cx| {")
-        .expect("expected helper to defer work with cx.spawn");
-    let open_idx = helper_body
-        .find("ai::open_ai_window(cx)")
-        .expect("expected helper to open AI window");
+        .expect("expected wrapper to hide the main window");
+    let delegate_idx = wrapper
+        .find("self.open_ai_window_after_already_hidden(")
+        .expect("expected wrapper to delegate to the already-hidden helper");
 
     assert!(
-        hide_idx < spawn_idx && spawn_idx < open_idx,
-        "helper should hide main first, then spawn deferred work, then open AI"
+        hide_idx < delegate_idx,
+        "wrapper should hide main first, then delegate to already-hidden helper"
+    );
+
+    let inner = slice_from(&handler, "fn open_ai_window_after_already_hidden(");
+    let spawn_idx = inner
+        .find("cx.spawn(async move |this, cx| {")
+        .expect("expected inner helper to defer work with cx.spawn");
+    let open_idx = inner
+        .find("ai::open_ai_window(cx)")
+        .expect("expected inner helper to open AI window");
+
+    assert!(
+        spawn_idx < open_idx,
+        "inner helper should spawn deferred work, then open AI"
     );
 }
 
@@ -85,6 +95,28 @@ fn test_add_to_ai_flow_forwards_file_reference_to_ai_chat_window_when_file_attac
         ai_render_root.contains("AiCommand::AddAttachment { path } => {")
             && ai_render_root.contains("self.add_attachment(path.clone(), cx);"),
         "AI window should consume AddAttachment commands so the file reference appears in chat UI"
+    );
+}
+
+#[test]
+fn test_ai_builtins_use_already_hidden_helper_after_upstream_hide() {
+    let source = read_source("src/app_execute/builtin_execution.rs");
+    let ai_branch = slice_from(&source, "builtins::BuiltInFeature::AiCommand(cmd_type) => {");
+
+    assert!(
+        ai_branch.contains("open_ai_window_after_already_hidden("),
+        "AI builtin flows that hide first should use the already-hidden helper"
+    );
+}
+
+#[test]
+fn test_deferred_ai_handoff_checks_window_ready_before_success() {
+    let handler = read_app_action_handler_source();
+    let helper_body = slice_from(&handler, "fn open_ai_window_after_already_hidden(");
+
+    assert!(
+        helper_body.contains("ai::is_ai_window_open()"),
+        "deferred AI handoff should verify the AI window is truly open before showing success"
     );
 }
 

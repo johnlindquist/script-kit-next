@@ -172,7 +172,7 @@ impl ScriptListApp {
                     );
 
                     this.update(cx, |this, cx| {
-                        this.open_ai_window_after_main_hide(
+                        this.open_ai_window_after_already_hidden(
                             "SendScreenToAi",
                             "send_screen_to_ai",
                             DeferredAiWindowAction::SetInputWithImage {
@@ -276,7 +276,7 @@ impl ScriptListApp {
                             cx.notify();
                         }
 
-                        this.open_ai_window_after_main_hide(
+                        this.open_ai_window_after_already_hidden(
                             "SendFocusedWindowToAi",
                             "send_focused_window_to_ai",
                             DeferredAiWindowAction::SetInputWithImage {
@@ -1215,7 +1215,7 @@ impl ScriptListApp {
 
                 match cmd_type {
                     AiCommandType::OpenAi | AiCommandType::NewConversation => {
-                        self.open_ai_window_after_main_hide(
+                        self.open_ai_window_after_already_hidden(
                             &format!("ai_command::{cmd_type:?}"),
                             &dctx.trace_id,
                             DeferredAiWindowAction::OpenOnly,
@@ -1229,7 +1229,7 @@ impl ScriptListApp {
                         match ai::clear_all_chats() {
                             Ok(()) => {
                                 ai::close_ai_window(cx);
-                                self.open_ai_window_after_main_hide(
+                                self.open_ai_window_after_already_hidden(
                                     "ClearConversation",
                                     &dctx.trace_id,
                                     DeferredAiWindowAction::OpenOnly,
@@ -1279,7 +1279,7 @@ impl ScriptListApp {
                                     text_len = text.len(),
                                     "Selected text captured"
                                 );
-                                self.open_ai_window_after_main_hide(
+                                self.open_ai_window_after_already_hidden(
                                     "SendSelectedTextToAi",
                                     &dctx.trace_id,
                                     DeferredAiWindowAction::SetInput {
@@ -1326,7 +1326,7 @@ impl ScriptListApp {
                                     trace_id = %dctx.trace_id,
                                     "Browser URL captured"
                                 );
-                                self.open_ai_window_after_main_hide(
+                                self.open_ai_window_after_already_hidden(
                                     "SendBrowserTabToAi",
                                     &dctx.trace_id,
                                     DeferredAiWindowAction::SetInput {
@@ -1370,7 +1370,7 @@ impl ScriptListApp {
                                     file_size = capture.png_data.len(),
                                     "Screen area captured, sending to AI"
                                 );
-                                self.open_ai_window_after_main_hide(
+                                self.open_ai_window_after_already_hidden(
                                     "SendScreenAreaToAi",
                                     &dctx.trace_id,
                                     DeferredAiWindowAction::SetInputWithImage {
